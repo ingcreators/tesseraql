@@ -15,7 +15,7 @@
   <!--
     The stack's authorization server (docs/token-issuance.md): CXF's OAuth2 grant layer beneath
     TesseraQL's own endpoints, storage and signing. Same RuntimeExtension shape as tesseraql-oidc,
-    and the same boundary rule: never a dependency on tesseraql-camel-runtime
+    and the same boundary rule: never a dependency on tesseraql-runtime
     (docs/stack-architecture.md decision 15).
   -->
 

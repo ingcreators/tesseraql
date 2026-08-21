@@ -44,12 +44,12 @@ public final class KeyedReference {
 
     /** TQL-SQL-2114: the distinct key set exceeded maxKeys. */
     public static final TqlErrorCode TOO_MANY_KEYS = new TqlErrorCode(TqlDomain.SQL, 2114);
-    /** TQL-CAMEL-3113: a merge matched more than one reference row for one key. */
-    public static final TqlErrorCode AMBIGUOUS_MERGE = new TqlErrorCode(TqlDomain.CAMEL, 3113);
+    /** TQL-ROUTE-3113: a merge matched more than one reference row for one key. */
+    public static final TqlErrorCode AMBIGUOUS_MERGE = new TqlErrorCode(TqlDomain.ROUTE, 3113);
     /** TQL-LD-1: the reference returned more rows than the app's materialization cap. */
     public static final TqlErrorCode MATERIALIZATION_OVERFLOW = new TqlErrorCode(TqlDomain.LD, 1);
-    /** TQL-CAMEL-3114: an enrichment's source: names no result set. */
-    public static final TqlErrorCode NO_SIBLING = new TqlErrorCode(TqlDomain.CAMEL, 3114);
+    /** TQL-ROUTE-3114: an enrichment's source: names no result set. */
+    public static final TqlErrorCode NO_SIBLING = new TqlErrorCode(TqlDomain.ROUTE, 3114);
 
     /** SQL Server refuses a statement past this many parameters. */
     private static final int SQLSERVER_PARAMETERS = 2100;

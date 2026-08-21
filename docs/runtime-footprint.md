@@ -15,7 +15,7 @@ loads a manifest, compiles routes, or opens a database.
 **The defect is that the deployment artifact is the developer's toolchain.** The 2026-08-17 draft
 named a second defect — the runtime embedding development tooling of its own — and that one is
 fixed: [studio-shell.md](studio-shell.md) structural decision 3 extracted the workshop into
-`tesseraql-studio-runtime`, `tesseraql-camel-runtime` dropped its compile dependencies on
+`tesseraql-studio-runtime`, `tesseraql-runtime` dropped its compile dependencies on
 `tesseraql-studio` and `tesseraql-test-core`, and an enforcer rule
 (`no-workshop-on-the-runtime`) guards the boundary. What remains is the packaging problem, and
 this revision decides it.
@@ -28,10 +28,10 @@ Measured 2026-08-19 (`dependency:list`, runtime scope, 0.15.0-SNAPSHOT). The dep
 
 | | Runtime-classpath artifacts |
 | --- | --- |
-| `tesseraql-camel-runtime` | 195 |
+| `tesseraql-runtime` | 195 |
 | `tesseraql-cli` | 261 |
 
-The 66 artifacts only the CLI carries are `tesseraql-camel-runtime`'s own jar plus 65 additions,
+The 66 artifacts only the CLI carries are `tesseraql-runtime`'s own jar plus 65 additions,
 and the additions decompose into four clusters — the clusters are the whole story:
 
 | Cluster | Jars | Size | What it is | Who needs it |
@@ -47,7 +47,7 @@ starts the gateway directly; it never touches `ModulesInstaller`. An application
 *before* deployment, each runtime builds its own loader over what that resolve left on disk
 ([module-scope.md](module-scope.md)), and a `.tqlapp` ships the cache it was verified with
 ([module-channel.md](module-channel.md) decision 3, which is what made that clause true). So the
-deployment classpath is `tesseraql-camel-runtime`'s 195 artifacts plus picocli, apptasks, and the
+deployment classpath is `tesseraql-runtime`'s 195 artifacts plus picocli, apptasks, and the
 CLI jar itself — roughly 63 jars and 73 MB smaller than what ships today, with the zonky binaries
 alone accounting for 62 MB of that.
 
@@ -95,7 +95,7 @@ Windows).
 
 ### Problem 2 — the runtime carried Studio, and Studio carried a test framework — FIXED
 
-The chain measured on 2026-08-17 (`tesseraql-camel-runtime → tesseraql-test-core → greenmail →
+The chain measured on 2026-08-17 (`tesseraql-runtime → tesseraql-test-core → greenmail →
 junit:4.13.2`, all compile scope, because of `StudioTestService` alone) is gone.
 [studio-shell.md](studio-shell.md) structural decision 3 moved everything Studio-shaped out of the
 runtime module into `tesseraql-studio-runtime`, discovered through the `RuntimeExtension` SPI; the
@@ -299,7 +299,7 @@ own `verify`, and names the design document that explains it.
 
 | Module | Rule | Bans (compile/runtime, transitive) |
 | --- | --- | --- |
-| `tesseraql-camel-runtime` | `no-workshop-on-the-runtime` (exists) | studio, studio-runtime, test-core, greenmail, junit |
+| `tesseraql-runtime` | `no-workshop-on-the-runtime` (exists) | studio, studio-runtime, test-core, greenmail, junit |
 | `tesseraql-cli` | `no-bundled-database-binaries` (new) | `io.zonky.test.postgres:*` — the supervisor stays, binaries resolve on demand; the declared test-scope linux-amd64 is untouched |
 | `tesseraql-host` | `no-workshop-in-the-deployment` (new) | studio, studio-runtime, test-core, greenmail, junit, `io.zonky.test:*`, `io.zonky.test.postgres:*`, `org.jboss.shrinkwrap.resolver:*`, report, coverage-core — plus tripwire artifacts from the resolver closure (`org.apache.maven.resolver:maven-resolver-api`, `com.google.inject:guice`) so the stack cannot return under a different root |
 

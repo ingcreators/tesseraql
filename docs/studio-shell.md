@@ -74,11 +74,11 @@ the try-it console — forwards them as data.
 (`StudioService.java:76-120`), and database, field-masking and PDF access are inverted through
 four SAM interfaces the runtime implements (`FieldMask` `:304-309`, `PdfRender` `:317-322`,
 `RowSource` `:330-340`, `DdlDryRun` `:986-990`). The studio module's pom does not depend on
-`tesseraql-camel-runtime` — the Decision 15 boundary holds.
+`tesseraql-runtime` — the Decision 15 boundary holds.
 
-**The coupling is all in the runtime module, and it is large.** `tesseraql-camel-runtime`
+**The coupling is all in the runtime module, and it is large.** `tesseraql-runtime`
 declares compile dependencies on `tesseraql-studio` and `tesseraql-test-core`
-(`tesseraql-camel-runtime/pom.xml:117-127`) and carries: `StudioProviders` (2,067 lines,
+(`tesseraql-runtime/pom.xml:117-127`) and carries: `StudioProviders` (2,067 lines,
 83 `studio.*` providers, whose `Deps` record captures twenty boot-time objects,
 `StudioProviders.java:55-66`), `DocsProviders` (18 `docs.*` providers), `StudioRouteBuilder`
 (the bearer-gated JSON API), `StudioTestService` (393 lines — the **only** consumer of
@@ -260,7 +260,7 @@ member *services* in-process through the host** — Decision 15's explicit count
 ## Structural decision 3: the extraction — one workshop module, discovered, three faces
 
 **A new module, `tesseraql-studio-runtime`, carries everything Studio-shaped that lives in the
-runtime module today**, and `tesseraql-camel-runtime` drops its compile dependencies on
+runtime module today**, and `tesseraql-runtime` drops its compile dependencies on
 `tesseraql-studio` and `tesseraql-test-core`. What moves: `StudioProviders`, `DocsProviders`,
 `StudioRouteBuilder`, `StudioTestService`, `StudioScaffoldService`, `StudioDataService`, the
 Copilot wiring, `StudioDocCache`, and the new shell/workshop machinery of structural
@@ -292,7 +292,7 @@ by topology, which is the organizing sentence of the whole module:
   by the host from DevMode plus the stack's shape, structural decision 1), the runtime binds
   it as a bean beside `STACK_MEMBER_BEAN`, and the extension's three faces key on the beans it
   finds — the same one-bean-serves-fence-bounce-and-chrome pattern #870 established.
-- **The extension module depends on `tesseraql-camel-runtime`.** That is allowed and correct:
+- **The extension module depends on `tesseraql-runtime`.** That is allowed and correct:
   it is runtime-side machinery, like the CLI. The boundary that must hold is the other one —
   `tesseraql-studio` (the surface module) still depends on no runtime, and does.
 

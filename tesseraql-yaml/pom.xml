@@ -19,7 +19,7 @@
       <artifactId>thymeleaf</artifactId>
     </dependency>
     <!-- The mail channel's SMTP transport (docs/notifications.md): plain jakarta.mail, the
-         same one-sender symmetry as the webhook channel - no Camel component in between. -->
+         same one-sender symmetry as the webhook channel - no message broker in between. -->
     <dependency>
       <groupId>org.eclipse.angus</groupId>
       <artifactId>angus-mail</artifactId>

@@ -60,7 +60,7 @@ transaction rolls back. Each step publishes its result into the execution contex
 | `outbox.eventId` | the outbox event id, when the route declares `outbox:` |
 
 Steps default to `mode: update`. A step references only request sources and *earlier* steps;
-forward references fail at route build time (`TQL-CAMEL-3102`). A command with one statement is
+forward references fail at route build time (`TQL-ROUTE-3102`). A command with one statement is
 a one-step pipeline like any other — there is no second spelling — so it publishes
 `steps.<id>.affectedRows` under whatever id it was given.
 
@@ -253,7 +253,7 @@ The presence of the block enables idempotency; every key is optional. Reusing a 
 | `TQL-SQL-2602` | 500 | row-count expectation failed (`onMismatch: error`) |
 | `TQL-SQL-2610` | 500 | document-sequence allocation failed |
 | `TQL-SQL-2611` | 500 | sequence step without a configured allocator |
-| `TQL-CAMEL-3102` | — | invalid steps declaration (route build time) |
+| `TQL-ROUTE-3102` | — | invalid steps declaration (route build time) |
 | `TQL-SQL-2104` / `2105` | — | lint: optimistic-locking pairing nudges |
 | `TQL-FIELD-2009` | — | lint: a command step declares `enrich:`, which has no rows to fold into |
 

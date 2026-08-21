@@ -202,12 +202,19 @@ final class JobRules implements LintRule {
             findings.add(new LintFinding(LintCodes.INVALID_JOB_TRIGGER, ERROR, source,
                     "Poll trigger port " + poll.port() + " is outside 1-65535"));
         }
-        // The read lock the consumer carries is a write-stability check, and on the remote
-        // transports it is not even that: SftpChangedExclusiveReadLockStrategy implements the
-        // interface directly and takes no lock, so three replicas polling one drop directory each
-        // import every file. A warning rather than an error because a single-node deployment is a
-        // real deployment, and because turning it on changes what a re-sent file means.
-        if (poll.isRemote() && !poll.consumesOnce()) {
+        // The read lock a poll source carries is a write-stability check, not exclusion: a file
+        // is read once its fingerprint stops changing, which says nothing about whether another
+        // replica is reading it too. So three replicas polling one drop directory each import
+        // every file unless consumeOnce: claims it in the database first.
+        //
+        // This used to be scoped to the remote transports, because the library's local strategy
+        // extended its marker-file one and did write an atomic lock file. The connectors are the
+        // framework's own now (docs/camel-removal.md slice 1) and none of them writes a marker,
+        // so the exemption outlived its reason — and a local source is exactly where an author
+        // would least expect silent duplication. A warning rather than an error because a
+        // single-node deployment is a real deployment, and because turning it on changes what a
+        // re-sent file means.
+        if (!poll.consumesOnce()) {
             findings.add(new LintFinding(POLL_WITHOUT_EXCLUSIVE_CONSUMPTION, WARNING, source,
                     "Poll source '" + job.definition().id() + "' polls " + kind
                             + ", which has no server-side exclusion, and declares no"

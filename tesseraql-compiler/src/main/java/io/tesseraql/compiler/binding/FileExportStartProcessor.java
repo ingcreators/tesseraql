@@ -1,6 +1,5 @@
 package io.tesseraql.compiler.binding;
 
-import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
@@ -8,6 +7,7 @@ import io.tesseraql.core.files.FileTransferService;
 import io.tesseraql.core.files.FileWriteSpec;
 import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.pipeline.Step;
+import io.tesseraql.pipeline.TesseraqlProperties;
 import java.nio.file.Path;
 import java.util.Map;
 

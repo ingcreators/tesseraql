@@ -1,12 +1,12 @@
 package io.tesseraql.studio.runtime;
 
-import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.compiler.ext.ExtensionContext;
 import io.tesseraql.compiler.ext.RuntimeExtension;
 import io.tesseraql.core.expr.ExpressionFunctions;
 import io.tesseraql.core.service.ServiceProviders;
 import io.tesseraql.identity.RealmConfig;
 import io.tesseraql.pipeline.RuntimeContext;
+import io.tesseraql.pipeline.TesseraqlProperties;
 import io.tesseraql.runtime.RouteReloader;
 import io.tesseraql.runtime.RuntimeSeams;
 import io.tesseraql.security.policy.PolicyEngine;

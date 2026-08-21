@@ -1,6 +1,5 @@
 package io.tesseraql.compiler.binding;
 
-import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.core.attachment.AttachmentService;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
@@ -8,6 +7,7 @@ import io.tesseraql.core.error.TqlException;
 import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.pipeline.Headers;
 import io.tesseraql.pipeline.Step;
+import io.tesseraql.pipeline.TesseraqlProperties;
 import java.util.Optional;
 
 /**

@@ -3,12 +3,12 @@ package io.tesseraql.compiler.binding;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.compiler.binding.TenancySettings.ResolverType;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.tenant.TenantContext;
 import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.pipeline.RuntimeContext;
+import io.tesseraql.pipeline.TesseraqlProperties;
 import io.tesseraql.security.Principal;
 import java.util.List;
 import java.util.Map;

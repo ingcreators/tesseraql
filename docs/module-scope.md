@@ -146,7 +146,7 @@ practice. If a surprise surfaces, the capture can live outside the record's equa
 
 ## Structural decision 2: the runtime owns its module loader, and resolution stays out of `host`
 
-A new runtime-side class — **`AppModules`, in `tesseraql-camel-runtime`** — is the loader's one
+A new runtime-side class — **`AppModules`, in `tesseraql-runtime`** — is the loader's one
 owner:
 
 - Built by `TesseraqlRuntime.start` from `appHome` + config: a `URLClassLoader` over the sorted

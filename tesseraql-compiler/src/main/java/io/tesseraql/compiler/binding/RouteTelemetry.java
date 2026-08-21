@@ -1,6 +1,5 @@
 package io.tesseraql.compiler.binding;
 
-import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.core.telemetry.Meter;
 import io.tesseraql.core.telemetry.NoopMeter;
 import io.tesseraql.core.telemetry.NoopTracer;
@@ -10,6 +9,7 @@ import io.tesseraql.pipeline.Completion;
 import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.pipeline.Headers;
 import io.tesseraql.pipeline.Step;
+import io.tesseraql.pipeline.TesseraqlProperties;
 import java.util.Map;
 
 /**

@@ -1,7 +1,5 @@
 package io.tesseraql.compiler.binding;
 
-import io.tesseraql.camel.TesseraqlProperties;
-import io.tesseraql.camel.tenant.TenantRouting;
 import io.tesseraql.core.decision.DecisionTables;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
@@ -10,6 +8,8 @@ import io.tesseraql.core.expr.EvaluationContext;
 import io.tesseraql.core.sql.AmbientBinds;
 import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.pipeline.Step;
+import io.tesseraql.pipeline.TesseraqlProperties;
+import io.tesseraql.pipeline.tenant.TenantRouting;
 import io.tesseraql.yaml.workflow.TransitionExecutor;
 import java.sql.Connection;
 import java.util.ArrayList;

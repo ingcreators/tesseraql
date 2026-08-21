@@ -613,7 +613,7 @@ simply unbuilt.
 The ordering argument for doing it first was that it would *enforce* the discipline. **That
 enforcement already exists and was verified**: `tesseraql-studio`, `tesseraql-ops-ui` and
 `tesseraql-identity` depend on `tesseraql-core`, `tesseraql-yaml`, `tesseraql-operations` and
-`tesseraql-security` — **none of them depends on `tesseraql-camel-runtime`**, so none of them can
+`tesseraql-security` — **none of them depends on `tesseraql-runtime`**, so none of them can
 hold a runtime reference. It will not compile. The two framework applications that live inside the
 runtime module, `AuthUiAppProvider` and `AccountAppProvider`, are exactly the ones Decision 14 moves
 out, so the remaining boundary is created by the work itself.
@@ -631,7 +631,7 @@ failure is a state that exists and is tested from the first day, and process sep
 change of address rather than a change of design.
 
 Add a build check that the stack-application modules never acquire a dependency on
-`tesseraql-camel-runtime`. It is permanent, free, and states the rule where it will be read.
+`tesseraql-runtime`. It is permanent, free, and states the rule where it will be read.
 
 **Revisit when** a stack needs one application's failure not to take the others down; or per-
 application upgrade and canary reach production, where `AppUpgrader` and canary weights already

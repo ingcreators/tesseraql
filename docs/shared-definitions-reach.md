@@ -24,7 +24,7 @@ error it produces. `ValidationRule.isExpression()` and `isSql()` are both false 
 is set, so the compiler's arity check fires:
 
 ```
-TQL-CAMEL-3102: Route 'mcp.x': validation rule 'nameIsFree' must declare exactly
+TQL-ROUTE-3102: Route 'mcp.x': validation rule 'nameIsFree' must declare exactly
 one of rule: or file:
 ```
 
@@ -54,8 +54,8 @@ Reproduced live against `target/classes`:
   validate nameIsFree use=nameIsFree rule=null file=null isExpr=false isSql=false
   input name domain=items.name type=null maxLength=null      <-- domain constraints LOST
 == TOOLS ==   (identical)
-CONSUMER THROWS: TQL-CAMEL-3102 …
-TOOL THROWS:     TQL-CAMEL-3102 …
+CONSUMER THROWS: TQL-ROUTE-3102 …
+TOOL THROWS:     TQL-ROUTE-3102 …
 ```
 
 The `domain:` half is the dangerous one because it is **silent**. `InputBinder.coerce` and its

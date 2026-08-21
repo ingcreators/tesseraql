@@ -65,7 +65,7 @@ class StudioIntegrationTest {
     /** Creates browser sessions for an editor (ADMIN) and a read-only viewer, used by the UI tests. */
     private static void establishSessions() {
         io.tesseraql.security.session.SessionStore sessions = runtime.context().lookup(
-                io.tesseraql.camel.TesseraqlProperties.SESSION_STORE_BEAN,
+                io.tesseraql.pipeline.TesseraqlProperties.SESSION_STORE_BEAN,
                 io.tesseraql.security.session.SessionStore.class);
         String adminSid = sessions.create(
                 principal(List.of("ADMIN"), List.of("tql.studio.edit.*")),
@@ -3356,7 +3356,7 @@ class StudioIntegrationTest {
 
     private static io.tesseraql.security.policy.PolicyEngine currentPolicyEngine() {
         return runtime.context().lookup(
-                io.tesseraql.camel.TesseraqlProperties.POLICY_ENGINE_BEAN,
+                io.tesseraql.pipeline.TesseraqlProperties.POLICY_ENGINE_BEAN,
                 io.tesseraql.security.policy.PolicyEngine.class);
     }
 

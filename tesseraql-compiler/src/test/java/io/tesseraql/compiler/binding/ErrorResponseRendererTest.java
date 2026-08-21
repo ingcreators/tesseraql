@@ -2,13 +2,13 @@ package io.tesseraql.compiler.binding;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.pipeline.Headers;
 import io.tesseraql.pipeline.RuntimeContext;
+import io.tesseraql.pipeline.TesseraqlProperties;
 import io.tesseraql.yaml.i18n.I18nSettings;
 import io.tesseraql.yaml.model.ResponseSpec.OnError;
 import java.util.List;
@@ -204,7 +204,7 @@ class ErrorResponseRendererTest {
                         Map.of("field", "email", "code", "duplicate",
                                 "message", "members.email.duplicate"))))
                 .build());
-        exchange.setProperty(io.tesseraql.camel.TesseraqlProperties.LOCALE, "ja");
+        exchange.setProperty(io.tesseraql.pipeline.TesseraqlProperties.LOCALE, "ja");
 
         new ErrorResponseRenderer().process(exchange);
 
@@ -230,7 +230,7 @@ class ErrorResponseRendererTest {
                         Map.of("field", "qty", "code", "stock", "stock", 5,
                                 "message", "orders.qty.exceeds"))))
                 .build());
-        exchange.setProperty(io.tesseraql.camel.TesseraqlProperties.LOCALE, "ja");
+        exchange.setProperty(io.tesseraql.pipeline.TesseraqlProperties.LOCALE, "ja");
         exchange.getMessage().setHeader("HX-Request", "true");
 
         new ErrorResponseRenderer(i18n).process(exchange);
@@ -268,7 +268,7 @@ class ErrorResponseRendererTest {
                         "step", "header", "expectedRows", 1, "actualRows", 0,
                         "hint", "tql.conflict.stale")))
                 .build());
-        exchange.setProperty(io.tesseraql.camel.TesseraqlProperties.LOCALE, "ja");
+        exchange.setProperty(io.tesseraql.pipeline.TesseraqlProperties.LOCALE, "ja");
 
         new ErrorResponseRenderer().process(exchange);
 

@@ -1,7 +1,5 @@
 package io.tesseraql.compiler.binding;
 
-import io.tesseraql.camel.TesseraqlProperties;
-import io.tesseraql.camel.tenant.TenantRouting;
 import io.tesseraql.core.dialect.Dialect;
 import io.tesseraql.core.dialect.SqlErrorKind;
 import io.tesseraql.core.dialect.SqlErrors;
@@ -21,6 +19,8 @@ import io.tesseraql.core.workflow.WorkflowStore;
 import io.tesseraql.core.workflow.WorkflowTaskStore;
 import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.pipeline.Step;
+import io.tesseraql.pipeline.TesseraqlProperties;
+import io.tesseraql.pipeline.tenant.TenantRouting;
 import io.tesseraql.security.Principal;
 import io.tesseraql.yaml.model.Binding;
 import io.tesseraql.yaml.model.ErrorsSpec;
@@ -86,8 +86,8 @@ public final class TransactionalCommandProcessor implements Step {
     // The same code the route-level SQL path raises, because it is the same failure.
     /** TQL-LD-0001: result materialization exceeded the configured maxRows. */
     private static final TqlErrorCode MATERIALIZATION_OVERFLOW = new TqlErrorCode(TqlDomain.LD, 1);
-    /** TQL-CAMEL-3102: the route's steps declaration is invalid (fail fast at startup). */
-    private static final TqlErrorCode INVALID_STEPS = new TqlErrorCode(TqlDomain.CAMEL, 3102);
+    /** TQL-ROUTE-3102: the route's steps declaration is invalid (fail fast at startup). */
+    private static final TqlErrorCode INVALID_STEPS = new TqlErrorCode(TqlDomain.ROUTE, 3102);
     /** TQL-SQL-4092: a row-count expectation failed, reported as an optimistic-lock conflict. */
     private static final TqlErrorCode EXPECT_CONFLICT = new TqlErrorCode(TqlDomain.SQL, 4092);
     /** TQL-FIELD-4220: declarative validation rejected the input (HTTP 422). */

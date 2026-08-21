@@ -56,7 +56,7 @@ column names as headers, and `<route id>.csv` as the filename.
 
 Every recipe reads the same way: `export:` says how rows are written and never what to read, so
 the extraction is a source like any other. An `export.after` block on `query-export` is a
-compile-time error (`TQL-CAMEL-3101`) — follow-up statements need `file-export`.
+compile-time error (`TQL-ROUTE-3101`) — follow-up statements need `file-export`.
 
 ## The export: block
 
@@ -328,7 +328,7 @@ queries like any other query.
 
 | Code | Meaning |
 | --- | --- |
-| `TQL-CAMEL-3101` | A `query-export` route declares an `export.after:` block, which only `file-export` supports |
+| `TQL-ROUTE-3101` | A `query-export` route declares an `export.after:` block, which only `file-export` supports |
 | `TQL-LD-2801` | No codec for the declared format (the module is not installed) |
 | `TQL-LD-2810` | The transfer bookkeeping schema could not be created |
 | `TQL-LD-2820` | `file-import` received an empty request body |

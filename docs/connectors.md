@@ -312,10 +312,11 @@ relocate a live directory's contents into `.done`.
 
 ### One file, one replica
 
-Every poll consumer carries a write-stability check, so a file still being written is not read
-half-formed. That is not the same as deciding **which** replica gets it, and on `sftp` and `ftps`
-there is no server-side exclusion at all — three replicas polling one drop directory each import
-every file. The job claim does not cover this: it is per *firing*, not per file.
+Every poll source carries a write-stability check, so a file still being written is not read
+half-formed. That is not the same as deciding **which** replica gets it: on no transport —
+`local` included — is there any server-side exclusion, so three replicas polling one drop
+directory each import every file. The job claim does not cover this: it is per *firing*, not per
+file.
 
 `consumeOnce: true` puts a shared store behind the source, so the first replica to claim a file is
 the one that imports it:
@@ -329,7 +330,7 @@ the one that imports it:
     consumeOnce: true
 ```
 
-Lint warns (`TQL-YAML-1310`) when a remote source leaves it off.
+Lint warns (`TQL-YAML-1310`) when any source leaves it off, `local` included.
 
 **It changes what a re-sent file means, which is why it is opt-in.** A file is identified by name,
 size and modified time — not by path, which would suppress a partner's daily `orders.csv` forever

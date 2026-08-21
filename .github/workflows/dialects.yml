@@ -40,5 +40,5 @@ jobs:
 
       - name: Runtime portability (camel-runtime)
         run: >
-          ./mvnw -B -ntp -pl tesseraql-camel-runtime test -Dtesseraql.dialect.its=true
+          ./mvnw -B -ntp -pl tesseraql-runtime test -Dtesseraql.dialect.its=true
           -Dtest='OraclePortabilityIntegrationTest,SqlServerPortabilityIntegrationTest'

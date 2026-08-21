@@ -817,7 +817,7 @@ public final class ViewBinding {
     /** One catalog out of the {@code codes} object the {@link CatalogBinder} publishes. */
     private static io.tesseraql.core.catalog.CodeCatalog catalog(Map<String, Object> context,
             String name) {
-        Object catalogs = context.get(io.tesseraql.camel.TesseraqlProperties.CODES);
+        Object catalogs = context.get(io.tesseraql.pipeline.TesseraqlProperties.CODES);
         Object catalog = catalogs instanceof Map<?, ?> map ? map.get(name) : null;
         return catalog instanceof io.tesseraql.core.catalog.CodeCatalog codes ? codes : null;
     }

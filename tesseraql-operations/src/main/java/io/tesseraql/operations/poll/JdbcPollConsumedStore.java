@@ -18,18 +18,17 @@ import javax.sql.DataSource;
  * Records which files a poll source has already consumed, so one file is imported once across
  * every replica (docs/audit-hardening.md Decision 4).
  *
- * <p>The read lock the file consumer carries is {@code readLock=changed}, a write-stability check
- * rather than inter-process exclusion. On the local transport that is less bad than it sounds,
- * because Camel's changed strategy extends the marker-file one and does write an atomic
- * {@code .camelLock}; on {@code sftp} and {@code ftps} the remote strategy implements the interface
- * directly and takes <b>no lock at all</b>, so three replicas polling one drop directory each
- * import every file. Nothing else covered it: the job claim in {@code tql_job_claim} is per
- * <em>firing</em>, not per file.
+ * <p>The read lock a poll source carries is a write-stability check, not inter-process exclusion:
+ * a file is read once its fingerprint stops changing, which says nothing about whether another
+ * replica is reading it too. That gap is what this store closes, and it was worse before the
+ * connectors became the framework's own — the library's local strategy at least wrote an atomic
+ * marker file, while its remote strategies took <b>no lock at all</b>, so three replicas polling
+ * one drop directory each imported every file. Nothing else covered it: the job claim in
+ * {@code tql_job_claim} is per <em>firing</em>, not per file.
  *
  * <p>The arbitration is the same shape as that claim — an insert whose primary key decides the
- * winner — which is why this class carries no locking of its own. It is deliberately free of Camel
- * types: the Camel {@code IdempotentRepository} SPI is consumed by a thin adapter in the runtime
- * module, and this module has no Camel dependency to add.
+ * winner — which is why this class carries no locking of its own. The poll loop calls it through
+ * its own {@code Claim} interface, one method wide, so this module stays free of runtime types.
  */
 public final class JdbcPollConsumedStore {
 

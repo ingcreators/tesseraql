@@ -1,7 +1,7 @@
 package io.tesseraql.studio.runtime;
 
-import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.pipeline.RuntimeContext;
+import io.tesseraql.pipeline.TesseraqlProperties;
 import io.tesseraql.runtime.SecurityConfigFactory;
 import io.tesseraql.security.SecurityConfig;
 import io.tesseraql.security.policy.PolicyEngine;

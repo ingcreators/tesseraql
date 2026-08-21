@@ -1,9 +1,6 @@
 package io.tesseraql.studio.runtime;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.tesseraql.camel.HttpMounts;
-import io.tesseraql.camel.TesseraqlProperties;
-import io.tesseraql.camel.auth.AuthStep;
 import io.tesseraql.compiler.binding.ErrorResponseRenderer;
 import io.tesseraql.compiler.pipeline.Pipeline;
 import io.tesseraql.compiler.pipeline.Pipelines;
@@ -11,7 +8,10 @@ import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.service.ServiceProviders;
 import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.pipeline.Headers;
+import io.tesseraql.pipeline.HttpMounts;
 import io.tesseraql.pipeline.RuntimeContext;
+import io.tesseraql.pipeline.TesseraqlProperties;
+import io.tesseraql.pipeline.auth.AuthStep;
 import io.tesseraql.security.Principal;
 import java.util.LinkedHashMap;
 import java.util.Map;

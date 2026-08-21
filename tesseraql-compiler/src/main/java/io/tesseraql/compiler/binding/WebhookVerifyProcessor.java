@@ -1,6 +1,5 @@
 package io.tesseraql.compiler.binding;
 
-import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
@@ -8,6 +7,7 @@ import io.tesseraql.core.notify.HmacSignatures;
 import io.tesseraql.core.webhook.WebhookReplayStore;
 import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.pipeline.Step;
+import io.tesseraql.pipeline.TesseraqlProperties;
 import io.tesseraql.yaml.webhook.WebhookVerifiers;
 import java.time.Instant;
 
@@ -30,8 +30,8 @@ public final class WebhookVerifyProcessor implements Step {
     private static final TqlErrorCode STALE_TIMESTAMP = new TqlErrorCode(TqlDomain.SEC, 4013);
     /** TQL-SEC-4014: the webhook delivery was already seen — a replay (HTTP 409). */
     private static final TqlErrorCode REPLAYED = new TqlErrorCode(TqlDomain.SEC, 4014);
-    /** TQL-CAMEL-3110: the webhook replay store is not configured (HTTP 500). */
-    private static final TqlErrorCode NO_STORE = new TqlErrorCode(TqlDomain.CAMEL, 3110);
+    /** TQL-ROUTE-3110: the webhook replay store is not configured (HTTP 500). */
+    private static final TqlErrorCode NO_STORE = new TqlErrorCode(TqlDomain.ROUTE, 3110);
 
     private final String routeId;
     private final WebhookVerifiers.Verifier verifier;

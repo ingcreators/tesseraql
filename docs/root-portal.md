@@ -99,7 +99,7 @@ the framework's root claim is `/_tesseraql/`, `/assets/`, and every application 
 
 ### The portal application
 
-A new bundled application at `tesseraql-camel-runtime/src/main/resources/tesseraql/apps/portal/`
+A new bundled application at `tesseraql-runtime/src/main/resources/tesseraql/apps/portal/`
 (beside `auth-ui` and `account`, its co-residents), with the usual `.app-index`.
 
 **It is not an `AppSourceProvider`.** The SPI mounts a surface into every runtime, which is exactly

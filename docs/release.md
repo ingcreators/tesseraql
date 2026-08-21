@@ -19,7 +19,7 @@ TesseraQL itself.
 ```bash
 ./mvnw -pl tesseraql-coverage-core test -Dtesseraql.dialect.its=true \
   -Dtest='OraclePlanGuardIntegrationTest,SqlServerPlanGuardIntegrationTest'
-./mvnw -pl tesseraql-camel-runtime test -Dtesseraql.dialect.its=true \
+./mvnw -pl tesseraql-runtime test -Dtesseraql.dialect.its=true \
   -Dtest='OraclePortabilityIntegrationTest,SqlServerPortabilityIntegrationTest'
 ```
 

@@ -2118,16 +2118,20 @@ class AppLinterTest {
     }
 
     /**
-     * The exclusion warning is scoped to the transports that need it
-     * (docs/audit-hardening.md Decision 4).
+     * The exclusion warning fires for every transport that has not claimed its files
+     * (docs/audit-hardening.md Decision 4, docs/camel-removal.md slice 6c).
      *
-     * <p>A local source is not silent about exclusion by accident: Camel's changed strategy extends
-     * the marker-file one and writes an atomic {@code .camelLock}, so it does have inter-process
-     * exclusion. The remote strategy implements the interface directly and takes no lock, which is
-     * the whole reason this warning exists.
+     * <p>It used to skip local sources, and the reason was borrowed: the library's changed
+     * strategy extended its marker-file one and wrote an atomic lock file, so a local source did
+     * have inter-process exclusion without asking for it. The connectors are the framework's own
+     * now and none of them writes a marker, so a local source is in exactly the position the
+     * warning describes — and this test asserted the silence rather than the property, which is
+     * why nothing failed when the property went away. It now asserts both halves: a source that
+     * claims is quiet, and one that does not is warned about whatever its transport.
      */
     @Test
-    void theExclusionWarningSkipsLocalSourcesAndDeclaredOnes(@TempDir Path dir) throws Exception {
+    void theExclusionWarningSkipsDeclaredSourcesAndCatchesLocalOnes(@TempDir Path dir)
+            throws Exception {
         Files.createDirectories(dir.resolve("batch/local"));
         Files.writeString(dir.resolve("batch/local/job.yml"), """
                 version: tesseraql/v1
@@ -2167,7 +2171,12 @@ class AppLinterTest {
                 """);
 
         assertThat(new AppLinter().lint(dir))
-                .noneMatch(f -> f.code().equals("TQL-YAML-1310"));
+                .as("the sftp source claims its files, so it is quiet")
+                .noneMatch(f -> f.code().equals("TQL-YAML-1310")
+                        && f.message().contains("declared.intake"))
+                .as("the local source claims nothing, and nothing else excludes it any more")
+                .anyMatch(f -> f.code().equals("TQL-YAML-1310")
+                        && f.message().contains("local.intake"));
     }
 
     /**

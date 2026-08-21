@@ -1,8 +1,6 @@
 package io.tesseraql.oidc;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.tesseraql.camel.HttpMounts;
-import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.compiler.binding.ErrorResponseRenderer;
 import io.tesseraql.compiler.pipeline.Pipeline;
 import io.tesseraql.compiler.pipeline.Pipelines;
@@ -10,7 +8,9 @@ import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.pipeline.Headers;
+import io.tesseraql.pipeline.HttpMounts;
 import io.tesseraql.pipeline.RuntimeContext;
+import io.tesseraql.pipeline.TesseraqlProperties;
 import io.tesseraql.security.Principal;
 import io.tesseraql.security.federation.FederationErrors;
 import io.tesseraql.security.session.LoginRedirects;
@@ -72,7 +72,8 @@ final class OidcRouteBuilder {
         }
         String address = io.tesseraql.security.session.SessionStore.ClientInfo.of(null,
                 exchange.getMessage().getHeader("X-Forwarded-For", String.class),
-                exchange.getMessage().getHeader("CamelVertxPlatformHttpRemoteAddress",
+                exchange.getMessage().getHeader(
+                        io.tesseraql.pipeline.PlatformHttpHeaders.REMOTE_ADDRESS,
                         String.class))
                 .remoteAddr();
         if (throttle.retryAfter("oidc", null, address).isPresent()) {
@@ -121,7 +122,7 @@ final class OidcRouteBuilder {
             // Scoped to the OIDC endpoints, so this one follows the base path they are
             // mounted under rather than the session cookie's (docs/base-path.md).
             exchange.getMessage().setHeader("Set-Cookie", NEXT_COOKIE + "=" + encode(next)
-                    + "; Path=" + io.tesseraql.camel.BasePath.url(exchange, "/_tesseraql/oidc")
+                    + "; Path=" + io.tesseraql.pipeline.BasePath.url(exchange, "/_tesseraql/oidc")
                     + "; HttpOnly; SameSite=Lax; Max-Age=600");
         }
 
@@ -170,10 +171,10 @@ final class OidcRouteBuilder {
         // The deployment's sign-in allow-list applies however the session was established
         // (docs/access-governance.md structural decision 8, layer A).
         String sessionId = sessions.create(principal,
-                io.tesseraql.camel.auth.SignInAdmission.admitted(exchange));
+                io.tesseraql.pipeline.auth.SignInAdmission.admitted(exchange));
         exchange.getMessage().setHeader("Set-Cookie",
                 io.tesseraql.security.session.SessionCookie.issue(sessions.cookieName(),
-                        sessionId, io.tesseraql.camel.CookiePath.of(exchange)));
+                        sessionId, io.tesseraql.pipeline.CookiePath.of(exchange)));
         redirect(exchange, postLoginTarget(exchange));
     }
 
@@ -190,7 +191,7 @@ final class OidcRouteBuilder {
         sessions.invalidate(sessionId);
         exchange.getMessage().setHeader("Set-Cookie",
                 io.tesseraql.security.session.SessionCookie.expire(sessions.cookieName(),
-                        io.tesseraql.camel.CookiePath.of(exchange)));
+                        io.tesseraql.pipeline.CookiePath.of(exchange)));
         try {
             URI endSession = discovery.metadata().endSessionEndpoint();
             if (endSession != null) {
@@ -272,7 +273,7 @@ final class OidcRouteBuilder {
     private void redirect(Exchange exchange, String location) {
         exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 302);
         exchange.getMessage().setHeader("Location",
-                io.tesseraql.camel.BasePath.url(exchange, location));
+                io.tesseraql.pipeline.BasePath.url(exchange, location));
         exchange.getMessage().setBody(null);
     }
 

@@ -63,7 +63,7 @@ surface by context; neither is more capable than the other once command parity (
 - Add `distributionManagement` and a publish job. **GitHub Packages first** (covers the
   internal audience immediately), **Maven Central later** (fills the `release.md` "Publishing
   to Maven Central (later)" section, with signing).
-- Published set: `tesseraql-bom`, `tesseraql-maven-plugin`, `tesseraql-camel-runtime`,
+- Published set: `tesseraql-bom`, `tesseraql-maven-plugin`, `tesseraql-runtime`,
   `tesseraql-studio`, and every module an app resolves, **including the opt-in
   `tesseraql-pdf` / `tesseraql-excel` / `tesseraql-s3`**.
 - The BOM version-manages the opt-in codecs/connectors **and** the opt-in JDBC drivers
@@ -236,7 +236,7 @@ operational guide is [proxy.md](proxy.md); this section records the design and w
 - The CLI bridges `HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY` to the JVM proxy system properties at
   startup (never overwriting an explicit property) — see `ProxyEnvironment`.
 - The previously proxy-blind runtime clients in `tesseraql-oidc/OidcHttp`,
-  `tesseraql-operations/http/HttpCallClient`, and `tesseraql-camel-runtime/WebhookNotifier` now
+  `tesseraql-operations/http/HttpCallClient`, and `tesseraql-runtime/WebhookNotifier` now
   build `HttpClient` with `.proxy(ProxySelector.getDefault())`, so they honor the JVM proxy
   configuration (and the env bridge).
 - S3 (AWS SDK `UrlConnectionHttpClient`) honors `https.proxyHost` system properties.

@@ -31,8 +31,8 @@ that justifies an integration engine is almost entirely unused**, and what is le
 processors with an HTTP endpoint at the front.
 
 The coupling is also shallower than it looks: 110 of 934 main sources import Camel, in 8 modules,
-and 99 of those are in `tesseraql-compiler`, `tesseraql-camel-runtime` and
-`tesseraql-camel-components` — modules whose names already say so. `tesseraql-core`,
+and 99 of those are in `tesseraql-compiler`, `tesseraql-runtime` and
+`tesseraql-pipeline` — modules whose names already say so. `tesseraql-core`,
 `tesseraql-yaml`, `tesseraql-security`, `tesseraql-operations`, `tesseraql-identity` and the
 plugin SPI import none. **Camel is not in the contract an application programs against**, so
 moving it is not a breaking change.

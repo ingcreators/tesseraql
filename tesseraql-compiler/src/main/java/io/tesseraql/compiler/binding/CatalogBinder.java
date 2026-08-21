@@ -1,9 +1,9 @@
 package io.tesseraql.compiler.binding;
 
-import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.core.catalog.CatalogStore;
 import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.pipeline.Step;
+import io.tesseraql.pipeline.TesseraqlProperties;
 import java.util.Map;
 
 /**

@@ -105,13 +105,13 @@ class PolicyTemplateCompilationTest {
     }
 
     /** Every {@code tesseraql-auth:authorize} endpoint the fixture app compiles to. */
-    private static List<io.tesseraql.camel.auth.AuthStep> authorizeGates(Path dir)
+    private static List<io.tesseraql.pipeline.auth.AuthStep> authorizeGates(Path dir)
             throws Exception {
         AppManifest manifest = new ManifestLoader().load(dir);
         try (RuntimeContext context = new RuntimeContext()) {
             new RouteCompiler().appName("policy-template-test")
                     .compile(context, manifest, false, null);
-            return CompiledPipelines.steps(context, io.tesseraql.camel.auth.AuthStep.class)
+            return CompiledPipelines.steps(context, io.tesseraql.pipeline.auth.AuthStep.class)
                     .stream().filter(step -> "authorize".equals(step.operation())).toList();
         }
     }

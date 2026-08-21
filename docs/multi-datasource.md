@@ -162,7 +162,7 @@ checks against the state being written.
 | `TQL-SQL-2502`  | runtime  | the named datasource is not bound at execution time (existing)          |
 | `TQL-APP-4201`  | runtime  | a `db/<name>/migration` tree names an undeclared datasource (existing)  |
 
-The lint rules are backed by a compile-time guard (`TQL-CAMEL-3112`), so a
+The lint rules are backed by a compile-time guard (`TQL-ROUTE-3112`), so a
 hot-reloaded or hand-mounted route that skipped lint still cannot carry a
 main-anchored feature into a non-main transaction.
 

@@ -17,7 +17,7 @@ How a document acquires data is spelled five different ways: a privileged top-le
 extraction that lives at route level on one export recipe and inside `export:` on the other. Each
 spelling grew correctly in its own campaign; together they make one concept — *a named acquisition
 of rows* — carry five shapes, and every seam between two shapes is either a lint stitching them
-together (`TQL-CAMEL-3101`) or a capability hole (`enrich:` cannot reach an `http:` source). This
+together (`TQL-ROUTE-3101`) or a capability hole (`enrich:` cannot reach an `http:` source). This
 document unifies the acquisition vocabulary once, and re-derives the things that leaned on the old
 shapes — the primary result, enrichment placement, the export extraction, the command pipeline,
 and the execution-context names — from the unified model.
@@ -39,7 +39,7 @@ The evidence that the current shape is historical rather than principled:
   all"; an `http:`-only route compiles and serves today. The primary's specialness is a default
   referent, not a structural requirement.
 - **The extraction has two homes.** `query-export` reads the route's `sql:`; `file-export` and the
-  batch `export:` step read `export.sql:` — the wrong home on either recipe is `TQL-CAMEL-3101`.
+  batch `export:` step read `export.sql:` — the wrong home on either recipe is `TQL-ROUTE-3101`.
 - **Enrichment has two homes.** Routes declare a document-level `enrich:` map with `into:`
   back-references (default: the magic name `sql`); a chunk step embeds `enrich:` and *refuses*
   `into:`. The chunk shape — enrichment attached to the result it transforms — is the coherent
@@ -272,7 +272,7 @@ was empty while its data hid under `export:`. Output blocks do not read; `respon
 What this replaces: `export.sql:` (the file-export and step extraction) and `export.queries:`
 (the template's other data) both become ordinary entries of the document's or step's `sources:`.
 The `main` source is the rows the codec writes; the rest are what a template composes around
-them, addressed by the same envelope (`main.rows`, `header.first`). `TQL-CAMEL-3101` — the lint
+them, addressed by the same envelope (`main.rows`, `header.first`). `TQL-ROUTE-3101` — the lint
 that policed which of the two homes a recipe used — retires with the second home. `splitBy`
 narrowing is unchanged.
 
@@ -559,7 +559,7 @@ Confirmed alongside the decisions:
 
 ## Lints
 
-Retired: `TQL-YAML-1022` (http placement), `TQL-YAML-1045` (`into:` target), `TQL-CAMEL-3101`
+Retired: `TQL-YAML-1022` (http placement), `TQL-YAML-1045` (`into:` target), `TQL-ROUTE-3101`
 (extraction home). Redefined: `TQL-YAML-1046` (exactly one reference arm — now three arms).
 Kept: the gateway lints (`TQL-SEC-4070`/`4072`), `readOnly` on transactional recipes
 (`TQL-YAML-1050`), the enrich key-bind check (`TQL-YAML-1048`), the export lint family. New
@@ -646,7 +646,7 @@ and 17. Remaining:
    reference, and decision 19a is what made it expressible: spool the extract, load it into a
    table with a `chunk:` step, and reference that table with `enrich: { sql: … }`. The database
    does the join, the load is restartable, and no join engine has to grow on top of the spool.
-   The attempt fails loudly rather than quietly — `TQL-CAMEL-3114` names the spooled sibling and
+   The attempt fails loudly rather than quietly — `TQL-ROUTE-3114` names the spooled sibling and
    points at that path.
 2. The spool's second consumer — an `http` step body streaming spooled rows (NDJSON or a JSON
    array) to a partner API. Deferred until a real integration asks; the consumer contract from

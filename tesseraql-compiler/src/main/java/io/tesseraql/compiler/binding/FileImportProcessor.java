@@ -1,6 +1,5 @@
 package io.tesseraql.compiler.binding;
 
-import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
@@ -9,6 +8,7 @@ import io.tesseraql.core.files.FileTransferService;
 import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.pipeline.Headers;
 import io.tesseraql.pipeline.Step;
+import io.tesseraql.pipeline.TesseraqlProperties;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
@@ -106,7 +106,7 @@ public final class FileImportProcessor implements Step {
             boolean withFileUrl) {
         // The route's declared path is base-relative; what a caller is handed must be an address
         // this runtime answers at (docs/base-path.md).
-        String statusUrl = io.tesseraql.camel.BasePath.url(exchange, urlPath + "/" + transferId);
+        String statusUrl = io.tesseraql.pipeline.BasePath.url(exchange, urlPath + "/" + transferId);
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("transferId", transferId);
         body.put("statusUrl", statusUrl);

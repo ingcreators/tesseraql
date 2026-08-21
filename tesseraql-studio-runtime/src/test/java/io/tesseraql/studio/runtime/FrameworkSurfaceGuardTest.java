@@ -283,7 +283,7 @@ class FrameworkSurfaceGuardTest {
      */
     private static Map<String, Mounted> frameworkMounts() {
         Map<String, Mounted> framework = new LinkedHashMap<>();
-        for (io.tesseraql.camel.HttpMounts.Mount mount : io.tesseraql.camel.HttpMounts
+        for (io.tesseraql.pipeline.HttpMounts.Mount mount : io.tesseraql.pipeline.HttpMounts
                 .all(runtime.context())) {
             String path = java.net.URLDecoder.decode(mount.path(),
                     java.nio.charset.StandardCharsets.UTF_8);
@@ -319,7 +319,7 @@ class FrameworkSurfaceGuardTest {
             return found;
         }
         for (io.tesseraql.pipeline.Step step : compiled.steps()) {
-            if (step instanceof io.tesseraql.camel.auth.AuthStep gate) {
+            if (step instanceof io.tesseraql.pipeline.auth.AuthStep gate) {
                 found.add(gate.operation());
             }
         }

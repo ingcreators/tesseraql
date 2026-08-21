@@ -1,8 +1,8 @@
 package io.tesseraql.compiler.binding;
 
-import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.core.expr.EvaluationContext;
 import io.tesseraql.pipeline.Exchange;
+import io.tesseraql.pipeline.TesseraqlProperties;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;

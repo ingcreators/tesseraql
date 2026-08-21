@@ -1,10 +1,10 @@
 package io.tesseraql.oauth;
 
-import io.tesseraql.camel.HttpMounts;
 import io.tesseraql.compiler.pipeline.Pipeline;
 import io.tesseraql.compiler.pipeline.Pipelines;
 import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.pipeline.Headers;
+import io.tesseraql.pipeline.HttpMounts;
 import io.tesseraql.pipeline.RuntimeContext;
 import io.tesseraql.security.Principal;
 import io.tesseraql.security.session.SessionStore;

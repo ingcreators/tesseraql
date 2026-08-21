@@ -2,10 +2,10 @@ package io.tesseraql.compiler.binding;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.pipeline.Headers;
 import io.tesseraql.pipeline.RuntimeContext;
+import io.tesseraql.pipeline.TesseraqlProperties;
 import io.tesseraql.yaml.model.ResponseSpec.RedirectResponse;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -61,7 +61,7 @@ class RedirectRendererTest {
     @Test
     void aRedirectCarriesTheApplicationsBasePath() {
         RuntimeContext context = new RuntimeContext();
-        io.tesseraql.camel.BasePath.bind(context, "/apps/shop-a");
+        io.tesseraql.pipeline.BasePath.bind(context, "/apps/shop-a");
 
         Exchange plain = new Exchange(context.beans());
         plain.setProperty(TesseraqlProperties.CONTEXT, Map.of("params", Map.of("id", 42)));
@@ -79,7 +79,7 @@ class RedirectRendererTest {
     @Test
     void anAbsoluteRedirectIsLeftAlone() {
         RuntimeContext context = new RuntimeContext();
-        io.tesseraql.camel.BasePath.bind(context, "/apps/shop-a");
+        io.tesseraql.pipeline.BasePath.bind(context, "/apps/shop-a");
         Exchange exchange = new Exchange(context.beans());
         exchange.setProperty(TesseraqlProperties.CONTEXT, Map.of());
 

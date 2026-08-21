@@ -1,7 +1,6 @@
 package io.tesseraql.compiler.binding;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
@@ -9,6 +8,7 @@ import io.tesseraql.core.expr.EvaluationContext;
 import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.pipeline.Headers;
 import io.tesseraql.pipeline.Step;
+import io.tesseraql.pipeline.TesseraqlProperties;
 import io.tesseraql.yaml.model.Binding;
 import io.tesseraql.yaml.model.InputField;
 import io.tesseraql.yaml.model.InputPolicy;
@@ -85,9 +85,10 @@ public final class RequestBinder implements Step {
 
     @Override
     public void process(Exchange exchange) {
-        io.tesseraql.core.telemetry.Span span = io.tesseraql.camel.TesseraqlTracing.tracer(exchange)
+        io.tesseraql.core.telemetry.Span span = io.tesseraql.pipeline.TesseraqlTracing
+                .tracer(exchange)
                 .start("tesseraql.request.bind",
-                        io.tesseraql.camel.TesseraqlTracing.parent(exchange))
+                        io.tesseraql.pipeline.TesseraqlTracing.parent(exchange))
                 .attribute("routeId", route.id());
         try {
             bind(exchange);

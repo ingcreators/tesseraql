@@ -11,49 +11,49 @@ Keys are declared in `config/application.yml` and `config/tesseraql.yml`, overri
 
 | Key | Read by | Documented in |
 | --- | --- | --- |
-| `server.port` | [MultiAppHost.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/MultiAppHost.java), [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [hosting](hosting.md) |
+| `server.port` | [MultiAppHost.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/MultiAppHost.java), [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [hosting](hosting.md) |
 
 ## tesseraql.app
 
 | Key | Read by | Documented in |
 | --- | --- | --- |
-| `tesseraql.app.name` | [SecurityConfigFactory.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/SecurityConfigFactory.java), [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java), [JobCommand.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-cli/src/main/java/io/tesseraql/cli/JobCommand.java), +11 more | [deployment](deployment.md), [hosting](hosting.md) |
+| `tesseraql.app.name` | [JobCommand.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-cli/src/main/java/io/tesseraql/cli/JobCommand.java), [RouteCompiler.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-compiler/src/main/java/io/tesseraql/compiler/RouteCompiler.java), [AppInstaller.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-operations/src/main/java/io/tesseraql/operations/app/AppInstaller.java), +11 more | [deployment](deployment.md), [hosting](hosting.md) |
 | `tesseraql.app.requires.framework` | [AppInstaller.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-operations/src/main/java/io/tesseraql/operations/app/AppInstaller.java) | — |
-| `tesseraql.app.version` | [AppMcpServer.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/AppMcpServer.java), [AppDirectory.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-operations/src/main/java/io/tesseraql/operations/app/AppDirectory.java), [AppInstaller.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-operations/src/main/java/io/tesseraql/operations/app/AppInstaller.java) | — |
+| `tesseraql.app.version` | [AppDirectory.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-operations/src/main/java/io/tesseraql/operations/app/AppDirectory.java), [AppInstaller.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-operations/src/main/java/io/tesseraql/operations/app/AppInstaller.java), [AppMcpServer.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/AppMcpServer.java) | — |
 | `tesseraql.app.work` | [WorkHome.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/config/WorkHome.java) | — |
 
 ## tesseraql.apps
 
 | Key | Read by | Documented in |
 | --- | --- | --- |
-| `tesseraql.apps.account.enabled` | [AccountAppProvider.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/AccountAppProvider.java) | — |
+| `tesseraql.apps.account.enabled` | [AccountAppProvider.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/AccountAppProvider.java) | — |
 
 ## tesseraql.attachments
 
 | Key | Read by | Documented in |
 | --- | --- | --- |
 | `tesseraql.attachments.mode` | [AttachmentSettings.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/attachment/AttachmentSettings.java) | [attachments](attachments.md) |
-| `tesseraql.attachments.scan.interval` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
-| `tesseraql.attachments.scan.lease` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
-| `tesseraql.attachments.scan.maxAttempts` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
-| `tesseraql.attachments.scan.mode` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [attachments](attachments.md) |
+| `tesseraql.attachments.scan.interval` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
+| `tesseraql.attachments.scan.lease` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
+| `tesseraql.attachments.scan.maxAttempts` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
+| `tesseraql.attachments.scan.mode` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [attachments](attachments.md) |
 | `tesseraql.attachments.scan.onInfected` | [AttachmentSettings.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/attachment/AttachmentSettings.java) | [attachments](attachments.md) |
 
 ## tesseraql.audit
 
 | Key | Read by | Documented in |
 | --- | --- | --- |
-| `tesseraql.audit.routes.enabled` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java), [RouteCompiler.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-compiler/src/main/java/io/tesseraql/compiler/RouteCompiler.java) | [deployment](deployment.md), [ops-console](ops-console.md) |
+| `tesseraql.audit.routes.enabled` | [RouteCompiler.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-compiler/src/main/java/io/tesseraql/compiler/RouteCompiler.java), [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [deployment](deployment.md), [ops-console](ops-console.md) |
 
 ## tesseraql.batch
 
 | Key | Read by | Documented in |
 | --- | --- | --- |
-| `tesseraql.batch.heartbeat.interval` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
-| `tesseraql.batch.heartbeat.livenessWindow` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
-| `tesseraql.batch.nodeId` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
-| `tesseraql.batch.reaperInterval` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
-| `tesseraql.batch.slaSweepInterval` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [jobs](jobs.md), [notifications](notifications.md) |
+| `tesseraql.batch.heartbeat.interval` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
+| `tesseraql.batch.heartbeat.livenessWindow` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
+| `tesseraql.batch.nodeId` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
+| `tesseraql.batch.reaperInterval` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
+| `tesseraql.batch.slaSweepInterval` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [jobs](jobs.md), [notifications](notifications.md) |
 
 ## tesseraql.connectors
 
@@ -61,7 +61,7 @@ Keys are declared in `config/application.yml` and `config/tesseraql.yml`, overri
 | --- | --- | --- |
 | `tesseraql.connectors.poll.allowedHosts` | [OverlayEditor.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-studio/src/main/java/io/tesseraql/studio/OverlayEditor.java), [JobRules.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/JobRules.java) | [connectors](connectors.md), [troubleshooting](troubleshooting.md) |
 | `tesseraql.connectors.poll.allowedPaths` | [JobRules.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/JobRules.java) | — |
-| `tesseraql.connectors.poll.consumedRetention` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
+| `tesseraql.connectors.poll.consumedRetention` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
 | `tesseraql.connectors.poll.credentials` | [OverlayEditor.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-studio/src/main/java/io/tesseraql/studio/OverlayEditor.java) | [connectors](connectors.md) |
 | `tesseraql.connectors.poll.knownHostsFile` | [JobRules.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/JobRules.java) | [connectors](connectors.md) |
 | `tesseraql.connectors.poll.trustStore` | [JobRules.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/JobRules.java) | — |
@@ -73,8 +73,8 @@ Keys are declared in `config/application.yml` and `config/tesseraql.yml`, overri
 
 | Key | Read by | Documented in |
 | --- | --- | --- |
-| `tesseraql.console.login.enabled` | [AccountAppProvider.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/AccountAppProvider.java), [AuthUiAppProvider.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/AuthUiAppProvider.java) | [authentication](authentication.md) |
-| `tesseraql.console.login.password.enabled` | [LoginMethods.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/LoginMethods.java), [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java), [FirstAdminHint.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-cli/src/main/java/io/tesseraql/cli/FirstAdminHint.java) | [authentication](authentication.md), [saml](saml.md), [troubleshooting](troubleshooting.md) |
+| `tesseraql.console.login.enabled` | [AccountAppProvider.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/AccountAppProvider.java), [AuthUiAppProvider.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/AuthUiAppProvider.java) | [authentication](authentication.md) |
+| `tesseraql.console.login.password.enabled` | [FirstAdminHint.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-cli/src/main/java/io/tesseraql/cli/FirstAdminHint.java), [LoginMethods.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/LoginMethods.java), [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [authentication](authentication.md), [saml](saml.md), [troubleshooting](troubleshooting.md) |
 
 ## tesseraql.copilot
 
@@ -88,8 +88,8 @@ Keys are declared in `config/application.yml` and `config/tesseraql.yml`, overri
 
 | Key | Read by | Documented in |
 | --- | --- | --- |
-| `tesseraql.datasources` | [DataSources.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/DataSources.java), [FileScopes.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/FileScopes.java), [DuckDbCommand.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-cli/src/main/java/io/tesseraql/cli/DuckDbCommand.java), +2 more | [app-layout](app-layout.md), [deployment](deployment.md), [getting-started](getting-started.md), +3 more |
-| `tesseraql.datasources.main.jdbcUrl` | [MultiAppHost.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/MultiAppHost.java), [FirstAdminHint.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-cli/src/main/java/io/tesseraql/cli/FirstAdminHint.java), [McpDevTools.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-cli/src/main/java/io/tesseraql/cli/mcp/McpDevTools.java) | [deployment](deployment.md), [getting-started](getting-started.md), [troubleshooting](troubleshooting.md) |
+| `tesseraql.datasources` | [DuckDbCommand.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-cli/src/main/java/io/tesseraql/cli/DuckDbCommand.java), [DataSources.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/DataSources.java), [FileScopes.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/FileScopes.java), +2 more | [app-layout](app-layout.md), [deployment](deployment.md), [getting-started](getting-started.md), +3 more |
+| `tesseraql.datasources.main.jdbcUrl` | [FirstAdminHint.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-cli/src/main/java/io/tesseraql/cli/FirstAdminHint.java), [McpDevTools.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-cli/src/main/java/io/tesseraql/cli/mcp/McpDevTools.java), [MultiAppHost.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/MultiAppHost.java) | [deployment](deployment.md), [getting-started](getting-started.md), [troubleshooting](troubleshooting.md) |
 | `tesseraql.datasources.main.password` | [FirstAdminHint.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-cli/src/main/java/io/tesseraql/cli/FirstAdminHint.java), [McpDevTools.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-cli/src/main/java/io/tesseraql/cli/mcp/McpDevTools.java) | — |
 | `tesseraql.datasources.main.username` | [FirstAdminHint.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-cli/src/main/java/io/tesseraql/cli/FirstAdminHint.java), [McpDevTools.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-cli/src/main/java/io/tesseraql/cli/mcp/McpDevTools.java) | — |
 
@@ -97,16 +97,16 @@ Keys are declared in `config/application.yml` and `config/tesseraql.yml`, overri
 
 | Key | Read by | Documented in |
 | --- | --- | --- |
-| `tesseraql.diagnostics.batchFailureWarnPercent` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
-| `tesseraql.diagnostics.errorRateWarnPercent` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
-| `tesseraql.diagnostics.pinning.enabled` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
-| `tesseraql.diagnostics.pinning.thresholdMillis` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
-| `tesseraql.diagnostics.readinessTtl` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
-| `tesseraql.diagnostics.slowRateWarnPercent` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
-| `tesseraql.diagnostics.slowSpanMillis` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
-| `tesseraql.diagnostics.slowSqlCapacity` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
-| `tesseraql.diagnostics.slowSqlMillis` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
-| `tesseraql.diagnostics.traceRingCapacity` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
+| `tesseraql.diagnostics.batchFailureWarnPercent` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
+| `tesseraql.diagnostics.errorRateWarnPercent` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
+| `tesseraql.diagnostics.pinning.enabled` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
+| `tesseraql.diagnostics.pinning.thresholdMillis` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
+| `tesseraql.diagnostics.readinessTtl` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
+| `tesseraql.diagnostics.slowRateWarnPercent` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
+| `tesseraql.diagnostics.slowSpanMillis` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
+| `tesseraql.diagnostics.slowSqlCapacity` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
+| `tesseraql.diagnostics.slowSqlMillis` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
+| `tesseraql.diagnostics.traceRingCapacity` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
 
 ## tesseraql.docs
 
@@ -119,8 +119,8 @@ Keys are declared in `config/application.yml` and `config/tesseraql.yml`, overri
 
 | Key | Read by | Documented in |
 | --- | --- | --- |
-| `tesseraql.duckdb.extensionDirectory` | [DuckDbDatasources.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/DuckDbDatasources.java), [DuckDbCommand.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-cli/src/main/java/io/tesseraql/cli/DuckDbCommand.java) | [duckdb](duckdb.md) |
-| `tesseraql.duckdb.spoolDirectory` | [DuckDbDatasources.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/DuckDbDatasources.java) | [duckdb](duckdb.md) |
+| `tesseraql.duckdb.extensionDirectory` | [DuckDbCommand.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-cli/src/main/java/io/tesseraql/cli/DuckDbCommand.java), [DuckDbDatasources.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/DuckDbDatasources.java) | [duckdb](duckdb.md) |
+| `tesseraql.duckdb.spoolDirectory` | [DuckDbDatasources.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/DuckDbDatasources.java) | [duckdb](duckdb.md) |
 
 ## tesseraql.files
 
@@ -132,14 +132,14 @@ Keys are declared in `config/application.yml` and `config/tesseraql.yml`, overri
 
 | Key | Read by | Documented in |
 | --- | --- | --- |
-| `tesseraql.framework.datasource` | [MultiAppHost.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/MultiAppHost.java), [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [deployment](deployment.md), [hosting](hosting.md) |
+| `tesseraql.framework.datasource` | [MultiAppHost.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/MultiAppHost.java), [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [deployment](deployment.md), [hosting](hosting.md) |
 
 ## tesseraql.gateway
 
 | Key | Read by | Documented in |
 | --- | --- | --- |
-| `tesseraql.gateway.maxConcurrentPerMember` | [MultiAppGateway.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/MultiAppGateway.java) | [deployment](deployment.md) |
-| `tesseraql.gateway.readIdleTimeoutSeconds` | [MultiAppGateway.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/MultiAppGateway.java) | [deployment](deployment.md) |
+| `tesseraql.gateway.maxConcurrentPerMember` | [MultiAppGateway.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/MultiAppGateway.java) | [deployment](deployment.md) |
+| `tesseraql.gateway.readIdleTimeoutSeconds` | [MultiAppGateway.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/MultiAppGateway.java) | [deployment](deployment.md) |
 
 ## tesseraql.governance
 
@@ -152,22 +152,22 @@ Keys are declared in `config/application.yml` and `config/tesseraql.yml`, overri
 
 | Key | Read by | Documented in |
 | --- | --- | --- |
-| `tesseraql.http.basePath` | [RouteReloader.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/RouteReloader.java), [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java), [RouteCompiler.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-compiler/src/main/java/io/tesseraql/compiler/RouteCompiler.java), +2 more | — |
-| `tesseraql.http.eventLoopThreads` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [deployment](deployment.md) |
-| `tesseraql.http.maxInFlight` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [deployment](deployment.md) |
+| `tesseraql.http.basePath` | [RouteCompiler.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-compiler/src/main/java/io/tesseraql/compiler/RouteCompiler.java), [RouteReloader.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/RouteReloader.java), [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java), +2 more | — |
+| `tesseraql.http.eventLoopThreads` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [deployment](deployment.md) |
+| `tesseraql.http.maxInFlight` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [deployment](deployment.md) |
 | `tesseraql.http.outbound` | [HttpOutbound.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/http/HttpOutbound.java) | [connectors](connectors.md), [copilot](copilot.md), [notifications](notifications.md), +3 more |
 | `tesseraql.http.outbound.allowedHosts` | [OverlayEditor.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-studio/src/main/java/io/tesseraql/studio/OverlayEditor.java), [HttpOutbound.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/http/HttpOutbound.java), [HttpSourceRules.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/HttpSourceRules.java) | [connectors](connectors.md), [copilot](copilot.md), [notifications](notifications.md), +3 more |
 | `tesseraql.http.outbound.circuitBreaker.openDuration` | [HttpOutbound.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/http/HttpOutbound.java) | — |
 | `tesseraql.http.outbound.connectTimeout` | [HttpOutbound.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/http/HttpOutbound.java) | — |
 | `tesseraql.http.outbound.credentials` | [OverlayEditor.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-studio/src/main/java/io/tesseraql/studio/OverlayEditor.java), [HttpOutbound.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/http/HttpOutbound.java) | [connectors](connectors.md) |
 | `tesseraql.http.outbound.requestTimeout` | [HttpOutbound.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/http/HttpOutbound.java) | — |
-| `tesseraql.http.workerThreads` | [MultiAppGateway.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/MultiAppGateway.java), [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [deployment](deployment.md) |
+| `tesseraql.http.workerThreads` | [MultiAppGateway.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/MultiAppGateway.java), [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [deployment](deployment.md) |
 
 ## tesseraql.i18n
 
 | Key | Read by | Documented in |
 | --- | --- | --- |
-| `tesseraql.i18n.defaultLocale` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java), [I18nSettings.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/i18n/I18nSettings.java), [I18nRules.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/I18nRules.java) | — |
+| `tesseraql.i18n.defaultLocale` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java), [I18nSettings.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/i18n/I18nSettings.java), [I18nRules.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/I18nRules.java) | — |
 | `tesseraql.i18n.locales` | [I18nSettings.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/i18n/I18nSettings.java), [I18nRules.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/I18nRules.java) | [internationalization](internationalization.md) |
 | `tesseraql.i18n.preference` | [I18nSettings.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/i18n/I18nSettings.java) | — |
 
@@ -175,27 +175,27 @@ Keys are declared in `config/application.yml` and `config/tesseraql.yml`, overri
 
 | Key | Read by | Documented in |
 | --- | --- | --- |
-| `tesseraql.identity.defaultRealm` | [IdentityConfigFactory.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/IdentityConfigFactory.java) | — |
-| `tesseraql.identity.invite.channel` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
-| `tesseraql.identity.invite.ttlDays` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
-| `tesseraql.identity.invite.url` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
-| `tesseraql.identity.recovery.channel` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
-| `tesseraql.identity.recovery.enabled` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
-| `tesseraql.identity.recovery.ttlMinutes` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
-| `tesseraql.identity.recovery.url` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
+| `tesseraql.identity.defaultRealm` | [IdentityConfigFactory.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/IdentityConfigFactory.java) | — |
+| `tesseraql.identity.invite.channel` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
+| `tesseraql.identity.invite.ttlDays` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
+| `tesseraql.identity.invite.url` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
+| `tesseraql.identity.recovery.channel` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
+| `tesseraql.identity.recovery.enabled` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
+| `tesseraql.identity.recovery.ttlMinutes` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
+| `tesseraql.identity.recovery.url` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
 
 ## tesseraql.inbox
 
 | Key | Read by | Documented in |
 | --- | --- | --- |
-| `tesseraql.inbox.retentionDays` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [inbox](inbox.md) |
+| `tesseraql.inbox.retentionDays` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [inbox](inbox.md) |
 
 ## tesseraql.live
 
 | Key | Read by | Documented in |
 | --- | --- | --- |
-| `tesseraql.live.maxPerSubject` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [realtime](realtime.md) |
-| `tesseraql.live.maxTotal` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [realtime](realtime.md) |
+| `tesseraql.live.maxPerSubject` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [realtime](realtime.md) |
+| `tesseraql.live.maxTotal` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [realtime](realtime.md) |
 
 ## tesseraql.logging
 
@@ -207,43 +207,43 @@ Keys are declared in `config/application.yml` and `config/tesseraql.yml`, overri
 
 | Key | Read by | Documented in |
 | --- | --- | --- |
-| `tesseraql.mcp.auth` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
-| `tesseraql.mcp.enabled` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [app-mcp](app-mcp.md) |
-| `tesseraql.mcp.resource` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
+| `tesseraql.mcp.auth` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
+| `tesseraql.mcp.enabled` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [app-mcp](app-mcp.md) |
+| `tesseraql.mcp.resource` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
 
 ## tesseraql.messaging
 
 | Key | Read by | Documented in |
 | --- | --- | --- |
-| `tesseraql.messaging.backstop` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
+| `tesseraql.messaging.backstop` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
 | `tesseraql.messaging.channels` | [MessagingChannels.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/messaging/MessagingChannels.java) | [messaging](messaging.md) |
 
 ## tesseraql.metrics
 
 | Key | Read by | Documented in |
 | --- | --- | --- |
-| `tesseraql.metrics.enabled` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [deployment](deployment.md) |
-| `tesseraql.metrics.unauthenticated` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [deployment](deployment.md) |
+| `tesseraql.metrics.enabled` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [deployment](deployment.md) |
+| `tesseraql.metrics.unauthenticated` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [deployment](deployment.md) |
 
 ## tesseraql.migrations
 
 | Key | Read by | Documented in |
 | --- | --- | --- |
-| `tesseraql.migrations.enabled` | [AppMigrations.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/AppMigrations.java) | — |
+| `tesseraql.migrations.enabled` | [AppMigrations.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/AppMigrations.java) | — |
 | `tesseraql.migrations.historyName` | [SchemaHistoryName.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/migration/SchemaHistoryName.java) | [deployment](deployment.md) |
 
 ## tesseraql.modules
 
 | Key | Read by | Documented in |
 | --- | --- | --- |
-| `tesseraql.modules` | [PackagedModules.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-apptasks/src/main/java/io/tesseraql/apptasks/PackagedModules.java), [ModulesGuard.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/ModulesGuard.java), [ModuleDeclarationRules.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/ModuleDeclarationRules.java) | [admission](admission.md), [extending](extending.md), [getting-started](getting-started.md), +3 more |
+| `tesseraql.modules` | [PackagedModules.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-apptasks/src/main/java/io/tesseraql/apptasks/PackagedModules.java), [ModulesGuard.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/ModulesGuard.java), [ModuleDeclarationRules.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/ModuleDeclarationRules.java) | [admission](admission.md), [extending](extending.md), [getting-started](getting-started.md), +3 more |
 
 ## tesseraql.notifications
 
 | Key | Read by | Documented in |
 | --- | --- | --- |
-| `tesseraql.notifications.alerts.channel` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [jobs](jobs.md), [notifications](notifications.md) |
-| `tesseraql.notifications.alerts.checkInterval` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [notifications](notifications.md) |
+| `tesseraql.notifications.alerts.channel` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [jobs](jobs.md), [notifications](notifications.md) |
+| `tesseraql.notifications.alerts.checkInterval` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [notifications](notifications.md) |
 | `tesseraql.notifications.channels` | [MailRules.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/MailRules.java), [NotificationChannels.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/notify/NotificationChannels.java) | [account](account.md), [notifications](notifications.md) |
 
 ## tesseraql.object-storage
@@ -279,21 +279,21 @@ Keys are declared in `config/application.yml` and `config/tesseraql.yml`, overri
 
 | Key | Read by | Documented in |
 | --- | --- | --- |
-| `tesseraql.orgunit.mode` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java), [OrgUnitRules.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/OrgUnitRules.java), [OrgUnitSettings.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/org/OrgUnitSettings.java) | [data-scoping](data-scoping.md) |
+| `tesseraql.orgunit.mode` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java), [OrgUnitRules.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/OrgUnitRules.java), [OrgUnitSettings.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/org/OrgUnitSettings.java) | [data-scoping](data-scoping.md) |
 
 ## tesseraql.otel
 
 | Key | Read by | Documented in |
 | --- | --- | --- |
-| `tesseraql.otel.otlp.endpoint` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [deployment](deployment.md) |
-| `tesseraql.otel.serviceName` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
+| `tesseraql.otel.otlp.endpoint` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [deployment](deployment.md) |
+| `tesseraql.otel.serviceName` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
 
 ## tesseraql.outbox
 
 | Key | Read by | Documented in |
 | --- | --- | --- |
-| `tesseraql.outbox.dispatch.fixedDelay` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
-| `tesseraql.outbox.dispatch.maxAttempts` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [messaging](messaging.md) |
+| `tesseraql.outbox.dispatch.fixedDelay` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
+| `tesseraql.outbox.dispatch.maxAttempts` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [messaging](messaging.md) |
 
 ## tesseraql.plugins
 
@@ -308,115 +308,115 @@ Keys are declared in `config/application.yml` and `config/tesseraql.yml`, overri
 
 | Key | Read by | Documented in |
 | --- | --- | --- |
-| `tesseraql.resultMaterialization.maxRows` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java), [RouteCompiler.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-compiler/src/main/java/io/tesseraql/compiler/RouteCompiler.java) | [file-transfers](file-transfers.md) |
-| `tesseraql.resultMaterialization.onOverflow` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java), [RouteCompiler.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-compiler/src/main/java/io/tesseraql/compiler/RouteCompiler.java) | — |
+| `tesseraql.resultMaterialization.maxRows` | [RouteCompiler.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-compiler/src/main/java/io/tesseraql/compiler/RouteCompiler.java), [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [file-transfers](file-transfers.md) |
+| `tesseraql.resultMaterialization.onOverflow` | [RouteCompiler.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-compiler/src/main/java/io/tesseraql/compiler/RouteCompiler.java), [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
 
 ## tesseraql.retention
 
 | Key | Read by | Documented in |
 | --- | --- | --- |
-| `tesseraql.retention.attachments` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [attachments](attachments.md) |
-| `tesseraql.retention.jobs` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
-| `tesseraql.retention.outbox` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [notifications](notifications.md) |
-| `tesseraql.retention.sweep` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
+| `tesseraql.retention.attachments` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [attachments](attachments.md) |
+| `tesseraql.retention.jobs` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
+| `tesseraql.retention.outbox` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [notifications](notifications.md) |
+| `tesseraql.retention.sweep` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
 
 ## tesseraql.saml
 
 | Key | Read by | Documented in |
 | --- | --- | --- |
-| `tesseraql.saml.allowIdpInitiated` | [SamlRuntimeExtension.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-saml/src/main/java/io/tesseraql/saml/camel/SamlRuntimeExtension.java) | — |
-| `tesseraql.saml.attributes.displayName` | [SamlRuntimeExtension.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-saml/src/main/java/io/tesseraql/saml/camel/SamlRuntimeExtension.java) | — |
-| `tesseraql.saml.attributes.email` | [SamlRuntimeExtension.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-saml/src/main/java/io/tesseraql/saml/camel/SamlRuntimeExtension.java) | — |
-| `tesseraql.saml.attributes.groups` | [SamlRuntimeExtension.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-saml/src/main/java/io/tesseraql/saml/camel/SamlRuntimeExtension.java) | — |
-| `tesseraql.saml.attributes.loginId` | [SamlRuntimeExtension.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-saml/src/main/java/io/tesseraql/saml/camel/SamlRuntimeExtension.java) | — |
-| `tesseraql.saml.attributes.map` | [SamlRuntimeExtension.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-saml/src/main/java/io/tesseraql/saml/camel/SamlRuntimeExtension.java) | — |
-| `tesseraql.saml.attributes.roles` | [SamlRuntimeExtension.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-saml/src/main/java/io/tesseraql/saml/camel/SamlRuntimeExtension.java) | — |
-| `tesseraql.saml.attributes.tenant` | [SamlRuntimeExtension.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-saml/src/main/java/io/tesseraql/saml/camel/SamlRuntimeExtension.java) | — |
-| `tesseraql.saml.clockSkew` | [SamlRuntimeExtension.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-saml/src/main/java/io/tesseraql/saml/camel/SamlRuntimeExtension.java) | [saml](saml.md) |
-| `tesseraql.saml.enabled` | [SamlRuntimeExtension.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-saml/src/main/java/io/tesseraql/saml/camel/SamlRuntimeExtension.java) | [authentication](authentication.md), [saml](saml.md) |
-| `tesseraql.saml.idp.metadata` | [SamlRuntimeExtension.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-saml/src/main/java/io/tesseraql/saml/camel/SamlRuntimeExtension.java) | — |
-| `tesseraql.saml.idp.sloUrl` | [SamlRuntimeExtension.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-saml/src/main/java/io/tesseraql/saml/camel/SamlRuntimeExtension.java) | — |
-| `tesseraql.saml.idp.ssoUrl` | [SamlRuntimeExtension.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-saml/src/main/java/io/tesseraql/saml/camel/SamlRuntimeExtension.java) | — |
-| `tesseraql.saml.link.enabled` | [SamlRuntimeExtension.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-saml/src/main/java/io/tesseraql/saml/camel/SamlRuntimeExtension.java) | — |
-| `tesseraql.saml.link.provision` | [SamlRuntimeExtension.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-saml/src/main/java/io/tesseraql/saml/camel/SamlRuntimeExtension.java) | — |
-| `tesseraql.saml.link.subjectAttribute` | [SamlRuntimeExtension.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-saml/src/main/java/io/tesseraql/saml/camel/SamlRuntimeExtension.java) | — |
-| `tesseraql.saml.requireSignedLogout` | [SamlRuntimeExtension.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-saml/src/main/java/io/tesseraql/saml/camel/SamlRuntimeExtension.java) | — |
-| `tesseraql.saml.sp.acsUrl` | [SamlRuntimeExtension.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-saml/src/main/java/io/tesseraql/saml/camel/SamlRuntimeExtension.java) | — |
-| `tesseraql.saml.sp.nameIdFormat` | [SamlRuntimeExtension.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-saml/src/main/java/io/tesseraql/saml/camel/SamlRuntimeExtension.java) | — |
-| `tesseraql.saml.sp.signingKey` | [SamlRuntimeExtension.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-saml/src/main/java/io/tesseraql/saml/camel/SamlRuntimeExtension.java) | — |
+| `tesseraql.saml.allowIdpInitiated` | [SamlRuntimeExtension.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-saml/src/main/java/io/tesseraql/saml/routes/SamlRuntimeExtension.java) | — |
+| `tesseraql.saml.attributes.displayName` | [SamlRuntimeExtension.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-saml/src/main/java/io/tesseraql/saml/routes/SamlRuntimeExtension.java) | — |
+| `tesseraql.saml.attributes.email` | [SamlRuntimeExtension.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-saml/src/main/java/io/tesseraql/saml/routes/SamlRuntimeExtension.java) | — |
+| `tesseraql.saml.attributes.groups` | [SamlRuntimeExtension.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-saml/src/main/java/io/tesseraql/saml/routes/SamlRuntimeExtension.java) | — |
+| `tesseraql.saml.attributes.loginId` | [SamlRuntimeExtension.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-saml/src/main/java/io/tesseraql/saml/routes/SamlRuntimeExtension.java) | — |
+| `tesseraql.saml.attributes.map` | [SamlRuntimeExtension.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-saml/src/main/java/io/tesseraql/saml/routes/SamlRuntimeExtension.java) | — |
+| `tesseraql.saml.attributes.roles` | [SamlRuntimeExtension.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-saml/src/main/java/io/tesseraql/saml/routes/SamlRuntimeExtension.java) | — |
+| `tesseraql.saml.attributes.tenant` | [SamlRuntimeExtension.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-saml/src/main/java/io/tesseraql/saml/routes/SamlRuntimeExtension.java) | — |
+| `tesseraql.saml.clockSkew` | [SamlRuntimeExtension.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-saml/src/main/java/io/tesseraql/saml/routes/SamlRuntimeExtension.java) | [saml](saml.md) |
+| `tesseraql.saml.enabled` | [SamlRuntimeExtension.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-saml/src/main/java/io/tesseraql/saml/routes/SamlRuntimeExtension.java) | [authentication](authentication.md), [saml](saml.md) |
+| `tesseraql.saml.idp.metadata` | [SamlRuntimeExtension.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-saml/src/main/java/io/tesseraql/saml/routes/SamlRuntimeExtension.java) | — |
+| `tesseraql.saml.idp.sloUrl` | [SamlRuntimeExtension.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-saml/src/main/java/io/tesseraql/saml/routes/SamlRuntimeExtension.java) | — |
+| `tesseraql.saml.idp.ssoUrl` | [SamlRuntimeExtension.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-saml/src/main/java/io/tesseraql/saml/routes/SamlRuntimeExtension.java) | — |
+| `tesseraql.saml.link.enabled` | [SamlRuntimeExtension.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-saml/src/main/java/io/tesseraql/saml/routes/SamlRuntimeExtension.java) | — |
+| `tesseraql.saml.link.provision` | [SamlRuntimeExtension.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-saml/src/main/java/io/tesseraql/saml/routes/SamlRuntimeExtension.java) | — |
+| `tesseraql.saml.link.subjectAttribute` | [SamlRuntimeExtension.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-saml/src/main/java/io/tesseraql/saml/routes/SamlRuntimeExtension.java) | — |
+| `tesseraql.saml.requireSignedLogout` | [SamlRuntimeExtension.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-saml/src/main/java/io/tesseraql/saml/routes/SamlRuntimeExtension.java) | — |
+| `tesseraql.saml.sp.acsUrl` | [SamlRuntimeExtension.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-saml/src/main/java/io/tesseraql/saml/routes/SamlRuntimeExtension.java) | — |
+| `tesseraql.saml.sp.nameIdFormat` | [SamlRuntimeExtension.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-saml/src/main/java/io/tesseraql/saml/routes/SamlRuntimeExtension.java) | — |
+| `tesseraql.saml.sp.signingKey` | [SamlRuntimeExtension.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-saml/src/main/java/io/tesseraql/saml/routes/SamlRuntimeExtension.java) | — |
 
 ## tesseraql.scim
 
 | Key | Read by | Documented in |
 | --- | --- | --- |
-| `tesseraql.scim.attributes.map` | [ScimRuntimeExtension.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-scim/src/main/java/io/tesseraql/scim/camel/ScimRuntimeExtension.java) | [iam-admin](iam-admin.md) |
-| `tesseraql.scim.outbound.target.token` | [ScimRuntimeExtension.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-scim/src/main/java/io/tesseraql/scim/camel/ScimRuntimeExtension.java) | — |
+| `tesseraql.scim.attributes.map` | [ScimRuntimeExtension.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-scim/src/main/java/io/tesseraql/scim/routes/ScimRuntimeExtension.java) | [iam-admin](iam-admin.md) |
+| `tesseraql.scim.outbound.target.token` | [ScimRuntimeExtension.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-scim/src/main/java/io/tesseraql/scim/routes/ScimRuntimeExtension.java) | — |
 
 ## tesseraql.security
 
 | Key | Read by | Documented in |
 | --- | --- | --- |
 | `tesseraql.security.apiKeys` | [ApiKeyConfigRules.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/ApiKeyConfigRules.java) | [authentication](authentication.md) |
-| `tesseraql.security.apiKeys.clients` | [SecurityConfigFactory.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/SecurityConfigFactory.java), [ApiKeyConfigRules.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/ApiKeyConfigRules.java) | — |
-| `tesseraql.security.apiKeys.header` | [SecurityConfigFactory.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/SecurityConfigFactory.java) | — |
-| `tesseraql.security.conditions.zone` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [iam-admin](iam-admin.md) |
-| `tesseraql.security.credentialThrottle.addressAttempts` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
-| `tesseraql.security.credentialThrottle.addressWindow` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
-| `tesseraql.security.credentialThrottle.enabled` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
-| `tesseraql.security.credentialThrottle.loginAttempts` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
-| `tesseraql.security.credentialThrottle.loginWindow` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
+| `tesseraql.security.apiKeys.clients` | [SecurityConfigFactory.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/SecurityConfigFactory.java), [ApiKeyConfigRules.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/ApiKeyConfigRules.java) | — |
+| `tesseraql.security.apiKeys.header` | [SecurityConfigFactory.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/SecurityConfigFactory.java) | — |
+| `tesseraql.security.conditions.zone` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [iam-admin](iam-admin.md) |
+| `tesseraql.security.credentialThrottle.addressAttempts` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
+| `tesseraql.security.credentialThrottle.addressWindow` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
+| `tesseraql.security.credentialThrottle.enabled` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
+| `tesseraql.security.credentialThrottle.loginAttempts` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
+| `tesseraql.security.credentialThrottle.loginWindow` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
 | `tesseraql.security.defaults` | [SecurityDefaultRules.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/SecurityDefaultRules.java) | [authentication](authentication.md), [troubleshooting](troubleshooting.md) |
 | `tesseraql.security.defaults.mcp` | [McpSecurityDefaults.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/config/McpSecurityDefaults.java) | — |
 | `tesseraql.security.defaults.routes` | [SecurityDefaults.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/config/SecurityDefaults.java) | [authentication](authentication.md), [troubleshooting](troubleshooting.md) |
 | `tesseraql.security.jwt` | [BearerConfigRules.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/BearerConfigRules.java), [JwtConfigRules.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/JwtConfigRules.java) | [ai-mcp](ai-mcp.md), [authentication](authentication.md) |
-| `tesseraql.security.jwt.algorithm` | [SecurityConfigFactory.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/SecurityConfigFactory.java), [JwtConfigRules.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/JwtConfigRules.java) | — |
-| `tesseraql.security.jwt.audience` | [SecurityConfigFactory.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/SecurityConfigFactory.java), [TokenCommand.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-cli/src/main/java/io/tesseraql/cli/TokenCommand.java), [JwtConfigRules.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/JwtConfigRules.java) | — |
-| `tesseraql.security.jwt.groupsClaim` | [SecurityConfigFactory.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/SecurityConfigFactory.java) | — |
-| `tesseraql.security.jwt.issuer` | [SecurityConfigFactory.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/SecurityConfigFactory.java) | — |
-| `tesseraql.security.jwt.jwksUri` | [SecurityConfigFactory.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/SecurityConfigFactory.java), [JwtConfigRules.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/JwtConfigRules.java) | — |
-| `tesseraql.security.jwt.loginClaim` | [SecurityConfigFactory.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/SecurityConfigFactory.java) | — |
-| `tesseraql.security.jwt.nameClaim` | [SecurityConfigFactory.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/SecurityConfigFactory.java) | — |
-| `tesseraql.security.jwt.permissionsClaim` | [SecurityConfigFactory.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/SecurityConfigFactory.java), [TokenCommand.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-cli/src/main/java/io/tesseraql/cli/TokenCommand.java), [OAuthRuntimeExtension.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-oauth/src/main/java/io/tesseraql/oauth/OAuthRuntimeExtension.java) | — |
-| `tesseraql.security.jwt.publicKey` | [SecurityConfigFactory.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/SecurityConfigFactory.java), [JwtConfigRules.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/JwtConfigRules.java) | — |
-| `tesseraql.security.jwt.requireExpiration` | [SecurityConfigFactory.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/SecurityConfigFactory.java) | — |
-| `tesseraql.security.jwt.rolesClaim` | [SecurityConfigFactory.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/SecurityConfigFactory.java), [TokenCommand.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-cli/src/main/java/io/tesseraql/cli/TokenCommand.java), [OAuthRuntimeExtension.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-oauth/src/main/java/io/tesseraql/oauth/OAuthRuntimeExtension.java) | — |
-| `tesseraql.security.jwt.secret` | [SecurityConfigFactory.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/SecurityConfigFactory.java), [TokenCommand.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-cli/src/main/java/io/tesseraql/cli/TokenCommand.java), [JwtConfigRules.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/JwtConfigRules.java) | [authentication](authentication.md) |
-| `tesseraql.security.jwt.tenantClaim` | [SecurityConfigFactory.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/SecurityConfigFactory.java) | — |
+| `tesseraql.security.jwt.algorithm` | [SecurityConfigFactory.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/SecurityConfigFactory.java), [JwtConfigRules.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/JwtConfigRules.java) | — |
+| `tesseraql.security.jwt.audience` | [TokenCommand.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-cli/src/main/java/io/tesseraql/cli/TokenCommand.java), [SecurityConfigFactory.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/SecurityConfigFactory.java), [JwtConfigRules.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/JwtConfigRules.java) | — |
+| `tesseraql.security.jwt.groupsClaim` | [SecurityConfigFactory.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/SecurityConfigFactory.java) | — |
+| `tesseraql.security.jwt.issuer` | [SecurityConfigFactory.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/SecurityConfigFactory.java) | — |
+| `tesseraql.security.jwt.jwksUri` | [SecurityConfigFactory.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/SecurityConfigFactory.java), [JwtConfigRules.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/JwtConfigRules.java) | — |
+| `tesseraql.security.jwt.loginClaim` | [SecurityConfigFactory.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/SecurityConfigFactory.java) | — |
+| `tesseraql.security.jwt.nameClaim` | [SecurityConfigFactory.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/SecurityConfigFactory.java) | — |
+| `tesseraql.security.jwt.permissionsClaim` | [TokenCommand.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-cli/src/main/java/io/tesseraql/cli/TokenCommand.java), [OAuthRuntimeExtension.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-oauth/src/main/java/io/tesseraql/oauth/OAuthRuntimeExtension.java), [SecurityConfigFactory.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/SecurityConfigFactory.java) | — |
+| `tesseraql.security.jwt.publicKey` | [SecurityConfigFactory.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/SecurityConfigFactory.java), [JwtConfigRules.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/JwtConfigRules.java) | — |
+| `tesseraql.security.jwt.requireExpiration` | [SecurityConfigFactory.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/SecurityConfigFactory.java) | — |
+| `tesseraql.security.jwt.rolesClaim` | [TokenCommand.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-cli/src/main/java/io/tesseraql/cli/TokenCommand.java), [OAuthRuntimeExtension.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-oauth/src/main/java/io/tesseraql/oauth/OAuthRuntimeExtension.java), [SecurityConfigFactory.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/SecurityConfigFactory.java) | — |
+| `tesseraql.security.jwt.secret` | [TokenCommand.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-cli/src/main/java/io/tesseraql/cli/TokenCommand.java), [SecurityConfigFactory.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/SecurityConfigFactory.java), [JwtConfigRules.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/JwtConfigRules.java) | [authentication](authentication.md) |
+| `tesseraql.security.jwt.tenantClaim` | [SecurityConfigFactory.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/SecurityConfigFactory.java) | — |
 | `tesseraql.security.mtls` | [MtlsConfigRules.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/MtlsConfigRules.java) | [authentication](authentication.md) |
-| `tesseraql.security.mtls.clients` | [SecurityConfigFactory.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/SecurityConfigFactory.java), [MtlsConfigRules.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/MtlsConfigRules.java) | — |
-| `tesseraql.security.mtls.forwardedHeader` | [MultiAppHost.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/MultiAppHost.java), [SecurityConfigFactory.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/SecurityConfigFactory.java), [MtlsConfigRules.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/MtlsConfigRules.java) | — |
-| `tesseraql.security.mtls.trustBundle` | [SecurityConfigFactory.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/SecurityConfigFactory.java), [MtlsConfigRules.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/MtlsConfigRules.java) | — |
-| `tesseraql.security.network.allow` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [authentication](authentication.md), [iam-admin](iam-admin.md) |
+| `tesseraql.security.mtls.clients` | [SecurityConfigFactory.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/SecurityConfigFactory.java), [MtlsConfigRules.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/MtlsConfigRules.java) | — |
+| `tesseraql.security.mtls.forwardedHeader` | [MultiAppHost.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/MultiAppHost.java), [SecurityConfigFactory.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/SecurityConfigFactory.java), [MtlsConfigRules.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/MtlsConfigRules.java) | — |
+| `tesseraql.security.mtls.trustBundle` | [SecurityConfigFactory.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/SecurityConfigFactory.java), [MtlsConfigRules.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/MtlsConfigRules.java) | — |
+| `tesseraql.security.network.allow` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [authentication](authentication.md), [iam-admin](iam-admin.md) |
 | `tesseraql.security.oauth.accessTokenTtl` | [OAuthRuntimeExtension.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-oauth/src/main/java/io/tesseraql/oauth/OAuthRuntimeExtension.java) | — |
-| `tesseraql.security.oauth.enabled` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java), [OAuthRuntimeExtension.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-oauth/src/main/java/io/tesseraql/oauth/OAuthRuntimeExtension.java), [OAuthScopeRules.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/OAuthScopeRules.java) | — |
+| `tesseraql.security.oauth.enabled` | [OAuthRuntimeExtension.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-oauth/src/main/java/io/tesseraql/oauth/OAuthRuntimeExtension.java), [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java), [OAuthScopeRules.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/OAuthScopeRules.java) | — |
 | `tesseraql.security.oauth.refreshTokenTtl` | [OAuthRuntimeExtension.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-oauth/src/main/java/io/tesseraql/oauth/OAuthRuntimeExtension.java) | — |
-| `tesseraql.security.policies` | [SecurityConfigFactory.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/SecurityConfigFactory.java), [ScaffoldCommand.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-cli/src/main/java/io/tesseraql/cli/ScaffoldCommand.java), [SymbolsCommand.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-cli/src/main/java/io/tesseraql/cli/SymbolsCommand.java), +5 more | [deployment](deployment.md) |
-| `tesseraql.security.responseHeaders` | [SystemApps.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/SystemApps.java), [ResponseHeaderDefaults.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/config/ResponseHeaderDefaults.java) | — |
-| `tesseraql.security.roles` | [SecurityConfigFactory.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/SecurityConfigFactory.java), [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java), [DeclaredRoleRules.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/DeclaredRoleRules.java) | [iam-admin](iam-admin.md) |
-| `tesseraql.security.token.enabled` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
-| `tesseraql.security.token.ttl` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
+| `tesseraql.security.policies` | [ScaffoldCommand.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-cli/src/main/java/io/tesseraql/cli/ScaffoldCommand.java), [SymbolsCommand.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-cli/src/main/java/io/tesseraql/cli/SymbolsCommand.java), [SecurityConfigFactory.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/SecurityConfigFactory.java), +5 more | [deployment](deployment.md) |
+| `tesseraql.security.responseHeaders` | [SystemApps.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/SystemApps.java), [ResponseHeaderDefaults.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/config/ResponseHeaderDefaults.java) | — |
+| `tesseraql.security.roles` | [SecurityConfigFactory.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/SecurityConfigFactory.java), [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java), [DeclaredRoleRules.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/DeclaredRoleRules.java) | [iam-admin](iam-admin.md) |
+| `tesseraql.security.token.enabled` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
+| `tesseraql.security.token.ttl` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
 
 ## tesseraql.sessions
 
 | Key | Read by | Documented in |
 | --- | --- | --- |
-| `tesseraql.sessions.idleTimeout` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [authentication](authentication.md), [iam-admin](iam-admin.md) |
-| `tesseraql.sessions.maxPerSubject` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [authentication](authentication.md) |
-| `tesseraql.sessions.store` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [deployment](deployment.md) |
-| `tesseraql.sessions.ttl` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [authentication](authentication.md) |
+| `tesseraql.sessions.idleTimeout` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [authentication](authentication.md), [iam-admin](iam-admin.md) |
+| `tesseraql.sessions.maxPerSubject` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [authentication](authentication.md) |
+| `tesseraql.sessions.store` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [deployment](deployment.md) |
+| `tesseraql.sessions.ttl` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [authentication](authentication.md) |
 
 ## tesseraql.shutdown
 
 | Key | Read by | Documented in |
 | --- | --- | --- |
-| `tesseraql.shutdown.forceOnTimeout` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
-| `tesseraql.shutdown.timeout` | [MultiAppHost.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/MultiAppHost.java), [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [deployment](deployment.md), [hosting](hosting.md) |
+| `tesseraql.shutdown.forceOnTimeout` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
+| `tesseraql.shutdown.timeout` | [MultiAppHost.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/MultiAppHost.java), [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [deployment](deployment.md), [hosting](hosting.md) |
 
 ## tesseraql.sql
 
 | Key | Read by | Documented in |
 | --- | --- | --- |
-| `tesseraql.sql.timeoutSeconds` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java), [JobCommand.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-cli/src/main/java/io/tesseraql/cli/JobCommand.java), [RouteCompiler.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-compiler/src/main/java/io/tesseraql/compiler/RouteCompiler.java) | [deployment](deployment.md) |
+| `tesseraql.sql.timeoutSeconds` | [JobCommand.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-cli/src/main/java/io/tesseraql/cli/JobCommand.java), [RouteCompiler.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-compiler/src/main/java/io/tesseraql/compiler/RouteCompiler.java), [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [deployment](deployment.md) |
 
 ## tesseraql.studio
 
@@ -435,24 +435,24 @@ Keys are declared in `config/application.yml` and `config/tesseraql.yml`, overri
 
 | Key | Read by | Documented in |
 | --- | --- | --- |
-| `tesseraql.temp.bucket` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [deployment](deployment.md) |
-| `tesseraql.temp.maxBytes` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [deployment](deployment.md) |
-| `tesseraql.temp.store` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [file-transfers](file-transfers.md) |
+| `tesseraql.temp.bucket` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [deployment](deployment.md) |
+| `tesseraql.temp.maxBytes` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [deployment](deployment.md) |
+| `tesseraql.temp.store` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [file-transfers](file-transfers.md) |
 
 ## tesseraql.transfers
 
 | Key | Read by | Documented in |
 | --- | --- | --- |
-| `tesseraql.transfers.retentionDays` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
-| `tesseraql.transfers.sweepInterval` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
+| `tesseraql.transfers.retentionDays` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
+| `tesseraql.transfers.sweepInterval` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
 
 ## tesseraql.ui
 
 | Key | Read by | Documented in |
 | --- | --- | --- |
-| `tesseraql.ui.density` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
-| `tesseraql.ui.neutral` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [notifications](notifications.md) |
-| `tesseraql.ui.theme` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [account](account.md) |
+| `tesseraql.ui.density` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
+| `tesseraql.ui.neutral` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [notifications](notifications.md) |
+| `tesseraql.ui.theme` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [account](account.md) |
 
 ## tesseraql.workflow
 
