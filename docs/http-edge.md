@@ -216,6 +216,12 @@ something the consumer had been doing silently:
   302 with the page the caller was being redirected away from. A 200 where a 302 belonged, on the
   authentication path, from four lines that looked complete.
 
+- **An exchange has to be able to say which route it is.** `exchange.getFromRouteId()` is
+  something a route running on a route never has to be told, and two renderers ask: the redirect
+  renderer, and the HTML renderer, which publishes the Studio shell's member segment only for a
+  route under `tql.studio.`. Without it that segment left every link a shared template emits, and
+  thirty-one Studio assertions went with it — a page that rendered, looked right, and had lost its
+  own address.
 - **A request served here is still an in-flight exchange.** Camel's shutdown strategy drains by
   counting what the inflight repository holds, and a pipeline run outside a route is not in it —
   so replacing a runtime cut an edge request mid-answer while the drain contract held for every

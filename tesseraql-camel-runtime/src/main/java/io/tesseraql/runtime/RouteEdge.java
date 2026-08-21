@@ -201,7 +201,7 @@ final class RouteEdge {
             return;
         }
         Context connection = ctx.vertx().getOrCreateContext();
-        Exchange exchange = request(ctx);
+        Exchange exchange = request(ctx, routeId);
         // Counted where the drain already looks (docs/runtime-replace.md). A request served off a
         // route is not an in-flight exchange as far as Camel's shutdown strategy is concerned, so
         // replacing a runtime cut it mid-answer instead of waiting for it — the drain contract
@@ -245,9 +245,15 @@ final class RouteEdge {
      * assigned so a repeated name becomes a list, and path parameters land after query parameters
      * because that is the order a route already reads them in.
      */
-    private Exchange request(RoutingContext ctx) {
+    private Exchange request(RoutingContext ctx, String routeId) {
         HttpServerRequest request = ctx.request();
         Exchange exchange = new DefaultExchange(camelContext);
+        // Which route this is, which a route running on a route never has to be told. Two
+        // renderers ask: the redirect renderer, and the HTML renderer, which publishes the
+        // Studio shell's member segment only for a route under `tql.studio.` — so an exchange
+        // that cannot say which route it is drops that segment out of every link a shared
+        // template emits, and thirty-one Studio assertions with it.
+        exchange.getExchangeExtension().setFromRouteId(routeId);
         HttpMessage message = new HttpMessage(exchange, request, ctx.response());
         exchange.setMessage(message);
         Map<String, Object> headers = new java.util.LinkedHashMap<>();
