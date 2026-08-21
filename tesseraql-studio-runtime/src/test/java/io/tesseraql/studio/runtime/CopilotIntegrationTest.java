@@ -271,7 +271,7 @@ class CopilotIntegrationTest {
     private static void establishSession() {
         io.tesseraql.security.session.SessionStore sessions = runtime.context()
                 .lookup(
-                        io.tesseraql.camel.TesseraqlProperties.SESSION_STORE_BEAN,
+                        io.tesseraql.pipeline.TesseraqlProperties.SESSION_STORE_BEAN,
                         io.tesseraql.security.session.SessionStore.class);
         String sid = sessions.create(new io.tesseraql.security.Principal(
                 "copilot-user", "copilot-user", "Copilot User", null, List.of(),

@@ -20,7 +20,7 @@
     development-only clusters excluded, and contributes one class: the root command that lists
     only the operator verbs, so none of the dev-only command classes (whose dependencies the
     exclusions removed) is ever loaded. The enforcer rule below makes the boundary a build
-    failure, the same mechanism as tesseraql-camel-runtime's no-workshop-on-the-runtime.
+    failure, the same mechanism as tesseraql-runtime's no-workshop-on-the-runtime.
   -->
   <dependencies>
     <dependency>

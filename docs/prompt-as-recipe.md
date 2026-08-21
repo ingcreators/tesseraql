@@ -21,7 +21,7 @@ recipe", and this document is about what that sentence cost.
   tool pretending to be a prompt.
 - **A prompt cannot declare `security:` even where it wants to.** The MCP endpoint takes no
   transport-level gate by design —
-  [McpRouteBuilder](../tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/McpRouteBuilder.java)
+  [McpRouteBuilder](../tesseraql-runtime/src/main/java/io/tesseraql/runtime/McpRouteBuilder.java)
   says so: "each tool runs its own route security, so there is no transport-level auth gate".
   A prompt is therefore ungated, and not because prompts were decided to be public: because
   there is no route to hang a policy on. Most prompts want nothing here — the gap only matters

@@ -16,7 +16,7 @@
     The workshop's runtime-side machinery (docs/studio-shell.md structural decision 3): the
     Studio providers, JSON API, sandboxed test runner, scaffold and data services, and the
     Copilot transports, self-installed into a runtime through the RuntimeExtension SPI
-    (design ch. 47). This module exists so tesseraql-camel-runtime carries no compile-time
+    (design ch. 47). This module exists so tesseraql-runtime carries no compile-time
     dependency on tesseraql-studio or on the declarative test framework — the jar on the
     classpath is the whole install, and a deployment without it carries no test engine,
     no GreenMail and no JUnit 4.
@@ -25,7 +25,7 @@
   <dependencies>
     <dependency>
       <groupId>io.tesseraql</groupId>
-      <artifactId>tesseraql-camel-runtime</artifactId>
+      <artifactId>tesseraql-runtime</artifactId>
       <version>${project.version}</version>
     </dependency>
     <dependency>

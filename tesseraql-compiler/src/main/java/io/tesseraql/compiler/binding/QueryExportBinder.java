@@ -1,10 +1,10 @@
 package io.tesseraql.compiler.binding;
 
-import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.core.files.FileCodec;
 import io.tesseraql.core.files.FileWriteSpec;
 import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.pipeline.Step;
+import io.tesseraql.pipeline.TesseraqlProperties;
 
 /**
  * Binds the synchronous {@code query-export} route to the file-transfer encoding machinery

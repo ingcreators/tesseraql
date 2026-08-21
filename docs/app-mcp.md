@@ -275,7 +275,7 @@ that is the whole document minus the two blocks.
   what the binder enforces cannot drift.
 - **A prompt is a read.** `prompts/get` is a read in the protocol's own vocabulary, so a prompt
   declaring `steps:` or a source in `mode: update` is refused (`TQL-MCP-1016`, and
-  `TQL-CAMEL-3116` if it reaches the compiler). A prompt that writes is a tool.
+  `TQL-ROUTE-3116` if it reaches the compiler). A prompt that writes is a tool.
 - **Only the input keys a prompt can act on.** An argument is a full route `input:` field. The
   three keys with nothing to act on it here — `policy:`, `writable:`, `widget:` — are refused
   (`TQL-MCP-1015`) rather than silently accepted. A prompt renders a message rather than a form,

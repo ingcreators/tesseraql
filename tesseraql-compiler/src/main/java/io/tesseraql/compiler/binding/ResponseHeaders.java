@@ -29,7 +29,7 @@ import java.util.Map;
  */
 final class ResponseHeaders {
 
-    private static final TqlErrorCode RENDER_ERROR = new TqlErrorCode(TqlDomain.CAMEL, 3001);
+    private static final TqlErrorCode RENDER_ERROR = new TqlErrorCode(TqlDomain.ROUTE, 3001);
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 

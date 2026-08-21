@@ -152,7 +152,7 @@ per-application pages (`/_tesseraql/admin/applications/{name}`) are read-only vi
 store-wide grant.
 
 **The network substrate is shipped and unreachable from identity.** `TrustedProxies` in
-`tesseraql-camel-runtime` parses CIDR blocks and matches peer addresses correctly, and it
+`tesseraql-runtime` parses CIDR blocks and matches peer addresses correctly, and it
 is package-private in a module `tesseraql-identity` and `tesseraql-security` do not depend
 on. `SessionStore.ClientInfo` records `remoteAddr` at login, and its own javadoc says the
 value is informational — "an edge that does not strip inbound `X-Forwarded-For` lets a

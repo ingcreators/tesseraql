@@ -1,8 +1,8 @@
 package io.tesseraql.compiler.binding;
 
-import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.pipeline.Step;
+import io.tesseraql.pipeline.TesseraqlProperties;
 import io.tesseraql.yaml.i18n.I18nSettings;
 import java.util.List;
 import java.util.Locale;

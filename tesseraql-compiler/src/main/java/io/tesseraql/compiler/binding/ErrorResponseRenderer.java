@@ -1,13 +1,13 @@
 package io.tesseraql.compiler.binding;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.pipeline.Headers;
 import io.tesseraql.pipeline.Step;
+import io.tesseraql.pipeline.TesseraqlProperties;
 import io.tesseraql.yaml.i18n.I18nSettings;
 import io.tesseraql.yaml.i18n.MessageCatalog;
 import io.tesseraql.yaml.model.ResponseSpec.OnError;
@@ -38,10 +38,10 @@ import java.util.Map;
 public final class ErrorResponseRenderer implements Step {
 
     /**
-     * TQL-CAMEL-5000: an unexpected internal error — the failure carried no TesseraQL error
+     * TQL-ROUTE-5000: an unexpected internal error — the failure carried no TesseraQL error
      * code (HTTP 500).
      */
-    private static final TqlErrorCode INTERNAL_ERROR = new TqlErrorCode(TqlDomain.CAMEL, 5000);
+    private static final TqlErrorCode INTERNAL_ERROR = new TqlErrorCode(TqlDomain.ROUTE, 5000);
 
     private final ObjectMapper mapper = new ObjectMapper();
     private final I18nSettings i18n;
@@ -202,15 +202,15 @@ public final class ErrorResponseRenderer implements Step {
         // prefixes it again, so it is stored base-relative like every other URL inside the
         // runtime (docs/base-path.md).
         boolean hostedMember = exchange.beans()
-                .lookup(io.tesseraql.camel.TesseraqlProperties.STACK_MEMBER_BEAN) != null;
+                .lookup(io.tesseraql.pipeline.TesseraqlProperties.STACK_MEMBER_BEAN) != null;
         String target;
         String location;
         if (hostedMember) {
             target = wirePath + suffix;
             location = LOGIN_PATH;
         } else {
-            target = io.tesseraql.camel.BasePath.relative(exchange, wirePath) + suffix;
-            location = io.tesseraql.camel.BasePath.url(exchange, LOGIN_PATH);
+            target = io.tesseraql.pipeline.BasePath.relative(exchange, wirePath) + suffix;
+            location = io.tesseraql.pipeline.BasePath.url(exchange, LOGIN_PATH);
         }
         exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 302);
         exchange.getMessage().setHeader("Location", location + "?redirect="

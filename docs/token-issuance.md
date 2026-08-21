@@ -82,7 +82,7 @@ families this needs `code` and `refresh`.
 The new module is **`tesseraql-oauth`**, mirroring `tesseraql-oidc`'s shape: it depends on
 `tesseraql-core`, `tesseraql-compiler` (the `RuntimeExtension` seam), `tesseraql-identity`,
 `tesseraql-security`, plus CXF's `cxf-rt-rs-security-oauth2` and `jakarta.ws.rs-api`. **It must not
-depend on `tesseraql-camel-runtime`**, which is the rule `stack-architecture.md` Decision 15
+depend on `tesseraql-runtime`**, which is the rule `stack-architecture.md` Decision 15
 records; the three existing framework-surface modules already satisfy it, and `tesseraql-oidc`
 proves the extension seam can mount routes without it. This module joins them rather than becoming
 the exception.

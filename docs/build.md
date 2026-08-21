@@ -88,6 +88,6 @@ plan-guard tests use large container images and are opt-in:
   -Dtest='OraclePlanGuardIntegrationTest,SqlServerPlanGuardIntegrationTest'
 
 # Full runtime portability (framework migrations, stores, identity pack, a served route)
-./mvnw -pl tesseraql-camel-runtime test -Dtesseraql.dialect.its=true \
+./mvnw -pl tesseraql-runtime test -Dtesseraql.dialect.its=true \
   -Dtest='OraclePortabilityIntegrationTest,SqlServerPortabilityIntegrationTest'
 ```

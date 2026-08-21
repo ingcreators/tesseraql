@@ -94,7 +94,7 @@ sources:
 
 Each entry declares exactly one of `as:` or `merge:`. A parent that matches nothing still
 carries the merged columns, as nulls, so a client reads one row shape rather than two; a
-parent that matches more than one row fails with `TQL-CAMEL-3113` rather than picking one.
+parent that matches more than one row fails with `TQL-ROUTE-3113` rather than picking one.
 
 ### Composite join keys
 

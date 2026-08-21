@@ -1,13 +1,13 @@
 package io.tesseraql.compiler.binding;
 
-import io.tesseraql.camel.CookiePath;
-import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.core.account.PreferenceStore;
 import io.tesseraql.core.account.ShortcutStore;
 import io.tesseraql.core.expr.EvaluationContext;
 import io.tesseraql.core.inbox.InboxStore;
+import io.tesseraql.pipeline.CookiePath;
 import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.pipeline.Headers;
+import io.tesseraql.pipeline.TesseraqlProperties;
 import io.tesseraql.security.Principal;
 import io.tesseraql.yaml.menu.MenuSpec;
 import io.tesseraql.yaml.menu.MenuSpec.MenuItem;
@@ -135,12 +135,12 @@ final class ShellChrome {
                 } else if (exchange.beans()
                         .lookup(TesseraqlProperties.ACCOUNT_SURFACE_BEAN) != null) {
                     account.put("accountHref",
-                            io.tesseraql.camel.BasePath.url(exchange, "/_tesseraql/account"));
+                            io.tesseraql.pipeline.BasePath.url(exchange, "/_tesseraql/account"));
                 }
                 // Sign-out stays this runtime's own route: the member validates the same shared
                 // session either way, and a drained member must still be able to sign out.
                 account.put("logoutHref",
-                        io.tesseraql.camel.BasePath.url(exchange, "/_tesseraql/logout"));
+                        io.tesseraql.pipeline.BasePath.url(exchange, "/_tesseraql/logout"));
                 model.put("_account", account);
             }
         }
@@ -167,7 +167,7 @@ final class ShellChrome {
             return;
         }
         String active = io.tesseraql.security.Activation.actingRole(principal);
-        String base = io.tesseraql.camel.BasePath.of(exchange.beans());
+        String base = io.tesseraql.pipeline.BasePath.of(exchange.beans());
         String uri = exchange.getMessage().getHeader(Headers.HTTP_URI, String.class);
         String path = uri == null
                 ? "/"
@@ -185,7 +185,7 @@ final class ShellChrome {
             Map<String, Object> option = new LinkedHashMap<>();
             option.put("role", grant.role());
             option.put("href", base + "/_as/"
-                    + io.tesseraql.camel.BasePath.encodeSegment(grant.role()) + within + suffix);
+                    + io.tesseraql.pipeline.BasePath.encodeSegment(grant.role()) + within + suffix);
             options.add(option);
         }
         Map<String, Object> acting = new LinkedHashMap<>();
@@ -241,7 +241,7 @@ final class ShellChrome {
                         // hosted member, this runtime's own copy otherwise (see account()).
                         "href", hostedMember()
                                 ? "/_tesseraql/inbox"
-                                : io.tesseraql.camel.BasePath.url(exchange,
+                                : io.tesseraql.pipeline.BasePath.url(exchange,
                                         "/_tesseraql/inbox")));
             }
         }
@@ -283,7 +283,7 @@ final class ShellChrome {
                 // One store behind both, so a pin toggled at the origin shows here.
                 shortcuts.put("toggleHref", hostedMember()
                         ? "/_tesseraql/account/pins/toggle"
-                        : io.tesseraql.camel.BasePath.url(exchange,
+                        : io.tesseraql.pipeline.BasePath.url(exchange,
                                 "/_tesseraql/account/pins/toggle"));
                 model.put("_shortcuts", shortcuts);
                 // Recently viewed records (roadmap Phase 51 slice 2): a detail view render

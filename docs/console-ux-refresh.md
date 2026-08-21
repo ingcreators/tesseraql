@@ -9,7 +9,7 @@
 > taken deliberately (card headers are now the one heading idiom everywhere).
 > Originally: a template-by-template UX review of every TesseraQL-provided
 > surface outside Studio — the Operations Console (`tesseraql-ops-ui`, 7 templates), IAM
-> Admin (`tesseraql-identity`, 4), the account surface (`tesseraql-camel-runtime`
+> Admin (`tesseraql-identity`, 4), the account surface (`tesseraql-runtime`
 > `apps/account`, 2), and the standalone auth pages (`apps/auth-ui`, 4) — against the
 > patterns the Studio UX refresh (docs/studio-ux-refresh.md, #574–#585) established, and
 > the slice plan that follows from it. This is an internal design document (docs-site

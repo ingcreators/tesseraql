@@ -833,7 +833,7 @@ Proposed; exact numbers are reserved against `ErrorIndex` when each slice lands.
 | `TQL-FIELD-4615` | error | a catalog declares `language:` without `label:` |
 | `TQL-SEC-4142` | error | a cached child query reads `/*%scope … */` or ambient `principal.*` without those in the cache key |
 | `TQL-SQL-2114` | runtime | an enrichment exceeded `maxKeys:` |
-| `TQL-CAMEL-3113` | runtime | `merge:` found more than one row for a key (**taken, slice 1**) |
+| `TQL-ROUTE-3113` | runtime | `merge:` found more than one row for a key (**taken, slice 1**) |
 | `TQL-APP-4206` | runtime | a catalog refresh failed; the previous data is still serving |
 
 ## Risks

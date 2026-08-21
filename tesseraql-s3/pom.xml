@@ -132,7 +132,7 @@
             <!--
               docker-java defaults to an API version (1.32) older than the minimum required by
               recent Docker daemons. Pin a modern, widely supported version for Testcontainers
-              (matches tesseraql-camel-runtime).
+              (matches tesseraql-runtime).
             -->
             <api.version>1.43</api.version>
           </systemPropertyVariables>

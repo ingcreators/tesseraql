@@ -136,6 +136,25 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **A `local` poll source without `consumeOnce: true` is now warned about** (`TQL-YAML-1310`,
+  docs/camel-removal.md slice 6c). **This is a defect fix, not a lint tightening.** The warning
+  used to skip local sources because the file library's local read-lock strategy wrote an atomic
+  marker file, giving them inter-process exclusion nobody had asked for. The connectors became the
+  framework's own in slice 1 and none of them writes a marker, so **since then a local poll source
+  on more than one replica has imported every file on every replica**, with the lint silent
+  because its exemption did not know why it existed. Declare `consumeOnce: true` on any poll
+  source that more than one replica can reach.
+
+- **Renamed, with no behaviour attached** (docs/camel-removal.md slice 6c): the error domain
+  `TQL-CAMEL-*` is now **`TQL-ROUTE-*`** — the codes are about route compilation and the route
+  pipeline, which is what they now say. The modules `tesseraql-camel-runtime` and
+  `tesseraql-camel-components` are `tesseraql-runtime` and `tesseraql-pipeline`; the package
+  `io.tesseraql.camel` merged into `io.tesseraql.pipeline`; and the framework's internal message
+  headers carry a `tql.` namespace instead of Camel's. The header prefix is the one rename with a
+  trap in it: it is a dot rather than a hyphen because `HeaderFilter` drops the prefix in both
+  directions, and the framework sends hyphenated `Tesseraql-` headers between its own nodes that
+  must not be dropped.
+
 - **Apache Camel is out of the build** (docs/camel-removal.md slice 6b). The last two jobs it held
   were a registry keyed by name and a list of services started and stopped with the process: of
   the 64 calls this framework ever made on the Camel context, 63 were a lookup and the rest were
@@ -651,7 +670,7 @@ All notable changes to TesseraQL are documented here. The format follows
 
 - **Corporate identity travels with the runtime: OIDC, SAML and SCIM are no longer opt-in jars**
   (docs/module-channel.md decision 2, slice 2). `tesseraql-oidc`, `tesseraql-saml` and
-  `tesseraql-scim` join `tesseraql-camel-runtime`'s compile scope, so the developer CLI, the
+  `tesseraql-scim` join `tesseraql-runtime`'s compile scope, so the developer CLI, the
   deployment distribution and the host image all carry them: 195 runtime artifacts become 198,
   the host's 199 become 202, and the three jars total 168 KB with no third-party artifact
   behind them. Activation is unchanged — each is a `RuntimeExtension` whose `enabled` is false
@@ -981,7 +1000,7 @@ All notable changes to TesseraQL are documented here. The format follows
 - **Studio's runtime machinery moved to `tesseraql-studio-runtime`** (docs/studio-shell.md
   slice 1). The Studio providers, JSON API, sandboxed test runner, scaffold and data services,
   and the Copilot transports now live in a `RuntimeExtension` module the runtime discovers
-  from the classpath, exactly like SCIM/SAML/OIDC — and `tesseraql-camel-runtime` no longer
+  from the classpath, exactly like SCIM/SAML/OIDC — and `tesseraql-runtime` no longer
   depends on `tesseraql-studio` or on the declarative test framework, so a deployment
   assembling its classpath from the runtime carries no test engine, no GreenMail and no
   JUnit 4 (docs/runtime-footprint.md problem 2; an enforcer rule now guards the boundary).
@@ -4912,7 +4931,7 @@ pre-1.0 rendering-contract change** — see Changed.
   (zonky `EmbeddedPostgres`) loads the PostgreSQL JDBC driver at runtime to verify the embedded
   process is ready, but the CLI dist fat jar was missing it: `tesseraql-cli` re-declared
   `org.postgresql:postgresql` directly at `test` scope, which overrode the `compile`-scoped driver
-  it otherwise inherits transitively from `tesseraql-camel-runtime`, excluding it from the runtime
+  it otherwise inherits transitively from `tesseraql-runtime`, excluding it from the runtime
   classpath and the shaded jar. The driver is now declared explicitly at compile scope so the dist
   bundles it.
 

@@ -32,7 +32,7 @@ class TransactionalCommandProcessorTest {
 
         assertThatThrownBy(() -> processor(steps))
                 .isInstanceOf(TqlException.class)
-                .hasMessageContaining("TQL-CAMEL-3102")
+                .hasMessageContaining("TQL-ROUTE-3102")
                 .hasMessageContaining("references step 'header'");
     }
 
@@ -126,7 +126,7 @@ class TransactionalCommandProcessorTest {
         assertThatThrownBy(
                 () -> processor(Map.of("main", step(sql("single.sql"), Map.of())), validate))
                 .isInstanceOf(TqlException.class)
-                .hasMessageContaining("TQL-CAMEL-3102")
+                .hasMessageContaining("TQL-ROUTE-3102")
                 .hasMessageContaining("exactly one of rule: or file:");
     }
 

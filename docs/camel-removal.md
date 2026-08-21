@@ -207,7 +207,7 @@ per rule 10, no shim.
 
 ### 7. The module names follow
 
-`tesseraql-camel-runtime` and `tesseraql-camel-components` are renamed in the last slice, when the
+`tesseraql-runtime` and `tesseraql-pipeline` are renamed in the last slice, when the
 names would otherwise be false. The BOM, the CLI, the host and the distribution guards move with
 them.
 
@@ -279,9 +279,62 @@ header filter is written from the bytecode that specified it, the component guar
 mechanism it guarded, and **Apache Camel is out of the build**: 168 jars to 153, 44 MB to 38, and
 the only artifacts left with "camel" in the name are this repository's own two modules.
 
-**6c: the names** — the `tesseraql-camel-*` modules, the `io.tesseraql.camel` package, and the
-header *values*, which still read `CamelHttpResponseCode` because slice 3b changed where a name
-comes from and deliberately not what it is.
+**6c done: the names.** `tesseraql-camel-runtime` is `tesseraql-runtime` and
+`tesseraql-camel-components` is `tesseraql-pipeline`; `io.tesseraql.camel` merged into
+`io.tesseraql.pipeline`, and the `camel` sub-packages in the SAML and SCIM modules became
+`routes`; the `TQL-CAMEL-*` error domain is `TQL-ROUTE-*`; and the header values that still read
+`CamelHttpResponseCode` — deferred from slice 3b, which changed where a name comes from and
+deliberately not what it is — carry the framework's own namespace.
+
+## What slice 6c found
+
+**The header prefix is load-bearing, and the obvious rename would have broken a feature
+silently.** `Camel*` → `Tesseraql*` is the rename anyone would reach for. It disables acting roles
+everywhere. `HeaderFilter` drops every header carrying the framework's prefix **in both
+directions**, and `Tesseraql-Acting-Role` is a real wire header the stack relay mints and the
+member's `AuthStep` reads off the message — under a `Tesseraql` prefix it would be filtered out
+before anything could read it, and nothing about the header's name would say why roles stopped
+working. Internal headers are `tql.`-prefixed instead: a dot, so a hyphenated wire header cannot
+be confused for one. The reason is written next to the rule that depends on it, because that is
+the only place the next person will be standing.
+
+**A lint's exemption outlived the fact it was based on, and its test asserted the silence rather
+than the property.** `TQL-YAML-1310` warns that a poll source without `consumeOnce:` lets every
+replica import every file — and it skipped `local` sources, because the library's local read-lock
+strategy extended its marker-file one and wrote an atomic lock nobody asked it for. Slice 1
+replaced the connectors; none of ours writes a marker. So since slice 1, **a local poll source on
+more than one replica has imported every file on every replica, silently**, with the lint quiet
+because its exemption did not know why it existed. The warning now covers every transport.
+
+The test is the part worth keeping: `theExclusionWarningSkipsLocalSourcesAndDeclaredOnes` asserted
+`noneMatch(1310)`. Silence survives the loss of the property that justified it, so the test stayed
+green through the exact change that invalidated it. **A test that asserts an absence cannot notice
+when the reason for the absence disappears.** It now asserts both halves — claimed sources quiet,
+unclaimed ones warned — and what surfaced the defect was not a test at all but a *comment*
+explaining the exemption, read while renaming the word `Camel` out of it.
+
+**Then the same defect caught me, inside the slice that documented it.** The package rename was
+verified by a compiler across 146 source files — and left two `RuntimeExtension` descriptors
+naming the old package, because descriptors are resources. It surfaced as a
+`ServiceConfigurationError` in `DuckDbDatasetIntegrationTest`, a test with no connection to SCIM,
+since **a single unresolvable provider fails the whole `ServiceLoader` iteration** and takes app
+startup with it: the registration does not degrade to a missing feature, it stops the process.
+
+Twice in one slice is a guard. `ServiceDescriptorsResolveTest` asserts every descriptor this
+project ships names a class that loads, and asserts the scan found descriptors at all — a scan
+that matches nothing reports success. It was honesty-probed by breaking a descriptor: it fails and
+names the offending line, against an integration test failing somewhere unrelated.
+
+**Four dead service descriptors shipped inside the jar.**
+`META-INF/services/org/apache/camel/component/` still held four files naming classes deleted
+slices earlier (`TesseraqlSqlComponent`, `TesseraqlIamComponent`, …). Resources are not compiled,
+so nothing pointed at them: not the compiler, and — the irony worth recording — not the component
+guard either, whose whole subject was classpath component registration.
+
+**A header written on every multipart request that nothing reads.** `CamelAttachmentsSize` was set
+by the edge because the library's component set it; the three readers all read the attachments map
+instead. Deleted rather than renamed, which is the difference between porting a thing and
+inheriting it.
 
 ## What slice 1 found
 

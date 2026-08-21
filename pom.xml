@@ -64,8 +64,8 @@
     <module>tesseraql-core</module>
     <module>tesseraql-yaml</module>
     <module>tesseraql-compiler</module>
-    <module>tesseraql-camel-components</module>
-    <module>tesseraql-camel-runtime</module>
+    <module>tesseraql-pipeline</module>
+    <module>tesseraql-runtime</module>
     <module>tesseraql-security</module>
     <module>tesseraql-identity</module>
     <module>tesseraql-scim</module>
@@ -224,9 +224,10 @@
       </dependency>
 
       <!--
-        Vert.x, pinned as a pair: vertx-core is what camel-platform-http-vertx brings and
+        Vert.x, pinned as a pair: vertx-core is what the runtime's own HTTP edge serves on and
         vertx-http-proxy is what the gateway relays through. Managing both here means they cannot
-        drift apart silently when Camel moves.
+        drift apart silently — a proxy loaded beside a core it was not built against is the
+        failure this pin exists to prevent.
       -->
       <dependency>
         <groupId>io.vertx</groupId>

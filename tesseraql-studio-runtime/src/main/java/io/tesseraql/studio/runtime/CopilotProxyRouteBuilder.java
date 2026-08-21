@@ -1,14 +1,14 @@
 package io.tesseraql.studio.runtime;
 
-import io.tesseraql.camel.HttpMounts;
-import io.tesseraql.camel.auth.AuthStep;
 import io.tesseraql.compiler.binding.ErrorResponseRenderer;
 import io.tesseraql.compiler.pipeline.Pipeline;
 import io.tesseraql.compiler.pipeline.Pipelines;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.pipeline.Headers;
+import io.tesseraql.pipeline.HttpMounts;
 import io.tesseraql.pipeline.RuntimeContext;
+import io.tesseraql.pipeline.auth.AuthStep;
 import io.tesseraql.runtime.HostContext;
 import java.net.URI;
 import java.net.http.HttpClient;

@@ -82,7 +82,7 @@ class RequestBinderPathParameterTest {
     @SuppressWarnings("unchecked")
     private static Map<String, Object> namespace(Exchange exchange, String key) {
         Map<String, Object> context = (Map<String, Object>) exchange
-                .getProperty(io.tesseraql.camel.TesseraqlProperties.CONTEXT);
+                .getProperty(io.tesseraql.pipeline.TesseraqlProperties.CONTEXT);
         return (Map<String, Object>) context.get(key);
     }
 

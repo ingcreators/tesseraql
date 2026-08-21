@@ -2,10 +2,10 @@ package io.tesseraql.cli.logging;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.compiler.binding.RouteTelemetry;
 import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.pipeline.RuntimeContext;
+import io.tesseraql.pipeline.TesseraqlProperties;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.MDC;

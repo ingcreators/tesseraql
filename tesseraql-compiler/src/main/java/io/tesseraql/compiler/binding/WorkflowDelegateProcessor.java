@@ -1,12 +1,12 @@
 package io.tesseraql.compiler.binding;
 
-import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.workflow.WorkflowTaskStore;
 import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.pipeline.Step;
+import io.tesseraql.pipeline.TesseraqlProperties;
 import io.tesseraql.security.Principal;
 import java.sql.Connection;
 import java.sql.SQLException;
@@ -58,7 +58,7 @@ public final class WorkflowDelegateProcessor implements Step {
             throw new TqlException(NO_TASK_STORE,
                     "Workflow '" + workflowId + "' delegation needs a task store");
         }
-        DataSource dataSource = io.tesseraql.camel.tenant.TenantRouting
+        DataSource dataSource = io.tesseraql.pipeline.tenant.TenantRouting
                 .dataSource(exchange, datasourceName);
         try (Connection connection = dataSource.getConnection()) {
             boolean previousAutoCommit = connection.getAutoCommit();

@@ -146,8 +146,8 @@ browsable here under [docs/](docs/).
 | `tesseraql-core` | 2-way SQL engine, expression evaluator, file codecs, spool/outbox/telemetry/threading primitives (dependency-free) |
 | `tesseraql-yaml` | Route/job model, manifest loader, config, secrets SPI, OpenAPI & htmx contract generators, SBOM / evidence / governance |
 | `tesseraql-compiler` | Compiles route definitions into Camel routes (recipes, security, telemetry, transfers) |
-| `tesseraql-camel-components` | `tesseraql-sql`, `tesseraql-auth`, and related Camel components |
-| `tesseraql-camel-runtime` | Camel Main runtime: app mounting, migrations, scheduling, ops API, Studio, app MCP endpoints |
+| `tesseraql-pipeline` | `tesseraql-sql`, `tesseraql-auth`, and related Camel components |
+| `tesseraql-runtime` | Camel Main runtime: app mounting, migrations, scheduling, ops API, Studio, app MCP endpoints |
 | `tesseraql-security` | Policy engine, JWT/session auth, CSRF, principal model |
 | `tesseraql-identity` | Managed identity schema, Identity SQL Contracts, realm resolution |
 | `tesseraql-scim` / `tesseraql-saml` | SCIM provisioning and SAML SP federation |

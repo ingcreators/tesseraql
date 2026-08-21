@@ -1,7 +1,5 @@
 package io.tesseraql.compiler;
 
-import io.tesseraql.camel.TesseraqlProperties;
-import io.tesseraql.camel.auth.AuthStep;
 import io.tesseraql.compiler.binding.ConcurrencyLimiter;
 import io.tesseraql.compiler.binding.ErrorResponseRenderer;
 import io.tesseraql.compiler.binding.HtmlResponseRenderer;
@@ -18,6 +16,8 @@ import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.expr.ExpressionFunctions;
 import io.tesseraql.core.util.Durations;
 import io.tesseraql.pipeline.RuntimeContext;
+import io.tesseraql.pipeline.TesseraqlProperties;
+import io.tesseraql.pipeline.auth.AuthStep;
 import io.tesseraql.yaml.config.AppConfig;
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.ResourceFile;
@@ -40,15 +40,15 @@ import java.nio.file.Path;
  */
 public final class RouteCompiler {
 
-    private static final TqlErrorCode UNSUPPORTED_RECIPE = new TqlErrorCode(TqlDomain.CAMEL, 3100);
-    /** TQL-CAMEL-3101: a query-export route declares an after: hook, which needs file-export. */
-    private static final TqlErrorCode INVALID_EXPORT = new TqlErrorCode(TqlDomain.CAMEL, 3101);
-    /** TQL-CAMEL-3112: a non-main command transaction cannot carry main-anchored features. */
-    private static final TqlErrorCode MAIN_ANCHORED = new TqlErrorCode(TqlDomain.CAMEL, 3112);
-    /** TQL-CAMEL-3116: a prompt-text recipe declares command steps, and prompts/get is a read. */
-    private static final TqlErrorCode PROMPT_WRITES = new TqlErrorCode(TqlDomain.CAMEL, 3116);
-    /** TQL-CAMEL-3117: a prompt-text recipe declares no response.text: to render its message. */
-    private static final TqlErrorCode PROMPT_WITHOUT_TEXT = new TqlErrorCode(TqlDomain.CAMEL, 3117);
+    private static final TqlErrorCode UNSUPPORTED_RECIPE = new TqlErrorCode(TqlDomain.ROUTE, 3100);
+    /** TQL-ROUTE-3101: a query-export route declares an after: hook, which needs file-export. */
+    private static final TqlErrorCode INVALID_EXPORT = new TqlErrorCode(TqlDomain.ROUTE, 3101);
+    /** TQL-ROUTE-3112: a non-main command transaction cannot carry main-anchored features. */
+    private static final TqlErrorCode MAIN_ANCHORED = new TqlErrorCode(TqlDomain.ROUTE, 3112);
+    /** TQL-ROUTE-3116: a prompt-text recipe declares command steps, and prompts/get is a read. */
+    private static final TqlErrorCode PROMPT_WRITES = new TqlErrorCode(TqlDomain.ROUTE, 3116);
+    /** TQL-ROUTE-3117: a prompt-text recipe declares no response.text: to render its message. */
+    private static final TqlErrorCode PROMPT_WITHOUT_TEXT = new TqlErrorCode(TqlDomain.ROUTE, 3117);
     private static final String DEFAULT_DATASOURCE = "main";
     private static final int DEFAULT_MAX_ROWS = 10_000;
     private static final long DEFAULT_IDEMPOTENCY_TTL = java.time.Duration.ofHours(24).toMillis();
@@ -869,7 +869,7 @@ public final class RouteCompiler {
         // export exists to avoid.
         String exportDatasource = bindingDatasource(definition.main(),
                 definition.effectiveDatasource());
-        io.tesseraql.camel.sql.SqlStep exportSql = new io.tesseraql.camel.sql.SqlStep(
+        io.tesseraql.pipeline.sql.SqlStep exportSql = new io.tesseraql.pipeline.sql.SqlStep(
                 sqlPath.toString(), exportDatasource, "query-export", "main",
                 effectiveMaxRows(definition.main()), effectiveTimeoutSeconds(definition.main()),
                 effectiveOnOverflow(definition.main()), exportFilename(definition, codec),
@@ -1433,17 +1433,18 @@ public final class RouteCompiler {
     private io.tesseraql.pipeline.Step execution(Path sourceDir,
             io.tesseraql.yaml.model.Binding binding, String resultKey, String routeDatasource) {
         if (binding.isService()) {
-            return new io.tesseraql.camel.service.ServiceStep("call", binding.service(), resultKey);
+            return new io.tesseraql.pipeline.service.ServiceStep("call", binding.service(),
+                    resultKey);
         }
         if (binding.isContract()) {
-            return new io.tesseraql.camel.iam.IamStep("contract", binding.contract(),
+            return new io.tesseraql.pipeline.iam.IamStep("contract", binding.contract(),
                     binding.effectiveMode(), resultKey);
         }
         String datasource = bindingDatasource(binding, routeDatasource);
         Path sqlPath = sourceDir.resolve(binding.file()).normalize();
         // The dialect is the load-bearing setting: the step resolves foo.<dialect>.sql variants
         // from it, picks the dialect's streaming profile, and folds column labels with it.
-        return new io.tesseraql.camel.sql.SqlStep(sqlPath.toString(), datasource,
+        return new io.tesseraql.pipeline.sql.SqlStep(sqlPath.toString(), datasource,
                 binding.effectiveMode(), resultKey, effectiveMaxRows(binding),
                 effectiveTimeoutSeconds(binding), effectiveOnOverflow(binding), null,
                 datasourceDialect(datasource));
@@ -1890,7 +1891,7 @@ public final class RouteCompiler {
     private void mount(RuntimeContext context, String method, String path, String pipeline) {
         String wirePath = io.tesseraql.compiler.binding.WireNames.wirePath(path);
         switch (method) {
-            case "GET", "POST", "PUT", "PATCH", "DELETE" -> io.tesseraql.camel.HttpMounts
+            case "GET", "POST", "PUT", "PATCH", "DELETE" -> io.tesseraql.pipeline.HttpMounts
                     .mount(context, method, wirePath, pipeline);
             default ->
                 throw new TqlException(UNSUPPORTED_RECIPE, "Unsupported HTTP method: " + method);

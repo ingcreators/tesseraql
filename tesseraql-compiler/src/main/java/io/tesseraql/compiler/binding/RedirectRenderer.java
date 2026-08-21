@@ -1,10 +1,10 @@
 package io.tesseraql.compiler.binding;
 
-import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.core.expr.EvaluationContext;
 import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.pipeline.Headers;
 import io.tesseraql.pipeline.Step;
+import io.tesseraql.pipeline.TesseraqlProperties;
 import io.tesseraql.yaml.model.ResponseSpec.RedirectResponse;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -91,7 +91,7 @@ public final class RedirectRenderer implements Step {
      * place the prefix has to go.
      */
     public static void negotiate(Exchange exchange, int status, String location) {
-        String target = io.tesseraql.camel.BasePath.url(exchange,
+        String target = io.tesseraql.pipeline.BasePath.url(exchange,
                 withStudioMember(exchange, location));
         if (isHtmxRequest(exchange)) {
             exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 204);

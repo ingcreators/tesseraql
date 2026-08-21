@@ -1,6 +1,5 @@
 package io.tesseraql.oidc;
 
-import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.compiler.ext.ExtensionContext;
 import io.tesseraql.compiler.ext.RuntimeExtension;
 import io.tesseraql.core.error.TqlDomain;
@@ -9,6 +8,7 @@ import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.util.Durations;
 import io.tesseraql.identity.IdentityService;
 import io.tesseraql.identity.RealmConfig;
+import io.tesseraql.pipeline.TesseraqlProperties;
 import io.tesseraql.security.session.SessionStore;
 import io.tesseraql.yaml.config.AppConfig;
 import java.time.Duration;

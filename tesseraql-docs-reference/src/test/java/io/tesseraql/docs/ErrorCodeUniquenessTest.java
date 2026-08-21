@@ -46,7 +46,7 @@ class ErrorCodeUniquenessTest {
 
     /** Codes deliberately declared at more than one site — one meaning each. */
     private static final Map<String, String> SHARED = Map.ofEntries(
-            Map.entry("CAMEL-3001", "the response could not be rendered - the body would not"
+            Map.entry("ROUTE-3001", "the response could not be rendered - the body would not"
                     + " serialize, or a declared response header's value would not"),
             Map.entry("DECISION-4704", "miss policy disagrees with the rows (core compiles,"
                     + " yaml checks source defaults - the javadoc cross-references)"),

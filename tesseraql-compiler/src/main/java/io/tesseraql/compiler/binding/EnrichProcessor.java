@@ -1,13 +1,13 @@
 package io.tesseraql.compiler.binding;
 
-import io.tesseraql.camel.TesseraqlProperties;
-import io.tesseraql.camel.tenant.TenantRouting;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.sql.SqlNode;
 import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.pipeline.Step;
+import io.tesseraql.pipeline.TesseraqlProperties;
+import io.tesseraql.pipeline.tenant.TenantRouting;
 import io.tesseraql.yaml.enrich.KeyedReference;
 import io.tesseraql.yaml.model.EnrichSpec;
 import java.sql.Connection;
@@ -34,8 +34,8 @@ import javax.sql.DataSource;
  */
 public final class EnrichProcessor implements Step {
 
-    /** TQL-CAMEL-3115: the target of an enrich: is not a result set with rows. */
-    static final TqlErrorCode NO_TARGET = new TqlErrorCode(TqlDomain.CAMEL, 3115);
+    /** TQL-ROUTE-3115: the target of an enrich: is not a result set with rows. */
+    static final TqlErrorCode NO_TARGET = new TqlErrorCode(TqlDomain.ROUTE, 3115);
 
     /** The source whose rows this enrichment folds into: the one it is declared on. */
     private final String into;

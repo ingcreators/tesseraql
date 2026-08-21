@@ -19,7 +19,7 @@
       <artifactId>tesseraql-core</artifactId>
       <version>${project.version}</version>
     </dependency>
-    <!-- RuntimeExtension SPI + Camel/yaml, so the SCIM routes self-install (design ch. 47). -->
+    <!-- RuntimeExtension SPI + pipeline/yaml, so the SCIM routes self-install (design ch. 47). -->
     <dependency>
       <groupId>io.tesseraql</groupId>
       <artifactId>tesseraql-compiler</artifactId>

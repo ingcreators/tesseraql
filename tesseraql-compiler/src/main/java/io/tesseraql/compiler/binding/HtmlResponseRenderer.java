@@ -1,6 +1,5 @@
 package io.tesseraql.compiler.binding;
 
-import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
@@ -11,6 +10,7 @@ import io.tesseraql.core.expr.ExpressionParser;
 import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.pipeline.Headers;
 import io.tesseraql.pipeline.Step;
+import io.tesseraql.pipeline.TesseraqlProperties;
 import io.tesseraql.yaml.model.ResponseSpec.HtmlResponse;
 import io.tesseraql.yaml.template.Templates;
 import java.nio.file.Path;
@@ -227,7 +227,7 @@ public final class HtmlResponseRenderer implements Step {
         // structural decision 5), which is what keeps every emitted link in the tab's
         // capacity; framework assets resolve origin-absolute and never carry it.
         model.put("base",
-                basePath + io.tesseraql.camel.BasePath.activationSegment(exchange));
+                basePath + io.tesseraql.pipeline.BasePath.activationSegment(exchange));
         // The studio shell's member segment (docs/studio-shell.md structural decision 2):
         // a page under /_tesseraql/studio/<member>/ publishes it, and the link builder
         // rewrites the studio-addressed links the shared templates emit — so the studio

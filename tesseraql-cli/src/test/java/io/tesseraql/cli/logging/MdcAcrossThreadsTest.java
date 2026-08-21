@@ -2,7 +2,7 @@ package io.tesseraql.cli.logging;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.tesseraql.camel.Correlation;
+import io.tesseraql.pipeline.Correlation;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicReference;

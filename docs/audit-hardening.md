@@ -441,7 +441,7 @@ guaranteed boot-time blackout on exactly the file and SFTP sources the adoption 
 and consumer checks also duplicate each other, and `tesseraql-ops-ui` has no Camel dependency,
 so the projection needs a supplier hook rather than a direct reference.
 
-Separately: `camel-main` is declared at `tesseraql-camel-runtime/pom.xml:140-143` with zero
+Separately: `camel-main` is declared at `tesseraql-runtime/pom.xml:140-143` with zero
 references anywhere. Removing it is a clean subtraction that also closes the `camel.server.mcp*`
 door structurally — today the only thing keeping those properties inert is that camel-main's
 bootstrap never runs. Note the honesty limit: after this, the barely-used `camel-health` is

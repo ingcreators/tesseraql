@@ -18,7 +18,7 @@ dependency is never counted twice.
 
 | Channel | What travels on it | Where it ends up |
 | --- | --- | --- |
-| The runtime classpath | `tesseraql-camel-runtime`'s 195 artifacts: core, yaml, compiler, camel components, security, identity, oauth, operations, observability, ops-ui, mcp, every Flyway dialect adapter, the PostgreSQL driver, angus-mail, camel-ftp, zxing, the webjars | the deployment image |
+| The runtime classpath | `tesseraql-runtime`'s 195 artifacts: core, yaml, compiler, camel components, security, identity, oauth, operations, observability, ops-ui, mcp, every Flyway dialect adapter, the PostgreSQL driver, angus-mail, camel-ftp, zxing, the webjars | the deployment image |
 | The module channel (`tesseraql.modules` → `work/modules`) | `tesseraql-pdf`, `tesseraql-excel`, `tesseraql-s3`, `duckdb_jdbc`, the three non-PostgreSQL JDBC drivers, an application's own `ExpressionFunction` / `FileCodec` / `BlobStoreProvider` jars | resolved per application |
 | The base classpath, by hand | the framework database's JDBC driver, and anything else a stack-scoped pool needs | an operator copies a jar |
 | The workshop | studio, studio-runtime, test-core, report, coverage-core, docs-reference, maven-plugin | never deployed ([runtime-footprint.md](runtime-footprint.md) decision 1) |
@@ -161,10 +161,10 @@ The inventory is complete: no module other than those three satisfies the rule.
 
 ### 2. `oidc`, `saml` and `scim` join the runtime classpath
 
-They become compile dependencies of `tesseraql-camel-runtime`, so the developer CLI, the
+They become compile dependencies of `tesseraql-runtime`, so the developer CLI, the
 deployment distribution, and the host image all carry them.
 
-Verified before deciding: none of the three depends on `tesseraql-camel-runtime` (their poms carry
+Verified before deciding: none of the three depends on `tesseraql-runtime` (their poms carry
 `tesseraql-core`, `-compiler`, `-identity`, `-security`, and `jackson-databind`, which the runtime
 closure already contains), so the promotion introduces no dependency cycle and no third-party
 artifact.
@@ -380,7 +380,7 @@ them under a name the rule has not heard of — which is exactly how `apache5-cl
 | `tesseraql-oidc`, `-saml`, `-scim` | `weightless-on-the-runtime` (new enforcer rule, one per module) | any declared dependency outside `io.tesseraql:*` (plus Jackson for SCIM) at compile or runtime scope. The guard lives in the module whose invariant it is, as every other boundary rule does: what justifies the promotion is that these modules stay weightless, and that is checkable where a dependency would be added |
 | `tesseraql-s3` | `no-unused-http-clients` (new enforcer rule) | `software.amazon.awssdk:apache-client`, `software.amazon.awssdk:netty-nio-client` |
 | `tesseraql-apptasks` | `AppPackagerTest` (extended) | an archive missing a declared module; a declaration with no lock; a closure that disagrees with the lock |
-| `tesseraql-camel-runtime` | `AppModulesTest` (extended) | a bundled module set silently composed with, or shadowed by, a stale `work/modules` |
+| `tesseraql-runtime` | `AppModulesTest` (extended) | a bundled module set silently composed with, or shadowed by, a stale `work/modules` |
 | `tesseraql-cli` | dist smoke assertion | a `modules/` directory in the dist archive |
 | `tesseraql-cli` | launcher test (slice 4b) | a classpath change that leaves the CDS archive key untouched |
 

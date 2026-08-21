@@ -1,6 +1,5 @@
 package io.tesseraql.compiler.binding;
 
-import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
@@ -8,6 +7,7 @@ import io.tesseraql.core.expr.EvaluationContext;
 import io.tesseraql.core.messaging.EventChannelStore;
 import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.pipeline.Step;
+import io.tesseraql.pipeline.TesseraqlProperties;
 import java.util.Arrays;
 import java.util.Map;
 
@@ -28,8 +28,8 @@ import java.util.Map;
  */
 public final class QueueDedupProcessor implements Step {
 
-    /** TQL-CAMEL-3111: the event channel store backing a queue-consume route is not configured. */
-    private static final TqlErrorCode NO_STORE = new TqlErrorCode(TqlDomain.CAMEL, 3111);
+    /** TQL-ROUTE-3111: the event channel store backing a queue-consume route is not configured. */
+    private static final TqlErrorCode NO_STORE = new TqlErrorCode(TqlDomain.ROUTE, 3111);
 
     private final String channel;
     private final String topic;

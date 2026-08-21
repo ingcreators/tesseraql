@@ -4,10 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.pipeline.RuntimeContext;
+import io.tesseraql.pipeline.TesseraqlProperties;
 import io.tesseraql.yaml.model.ResponseSpec.HtmlResponse;
 import io.tesseraql.yaml.model.RouteDefinition;
 import io.tesseraql.yaml.template.Templates;

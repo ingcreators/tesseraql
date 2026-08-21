@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test;
  * Unit tests for the Phase 19 validation rule engine: cross-field expression rules, when-guards,
  * the stable violation shape (rule id, field path, rule code, message key), and the fail-fast
  * shape checks. SQL rules execute against a live database and are covered by the integration
- * tests in tesseraql-test-core and tesseraql-camel-runtime.
+ * tests in tesseraql-test-core and tesseraql-runtime.
  */
 class ValidationRulesTest {
 

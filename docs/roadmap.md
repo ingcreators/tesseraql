@@ -1002,7 +1002,7 @@ selection authoritative over tenant routing, `TQL-YAML-1035`/`1037`, proven by
 `MultiDatasourceReadIntegrationTest` on two real PostgreSQL databases); and
 projections (the transactional recipes retarget their single-connection
 transaction, main-anchored features refused by lint `TQL-YAML-1036` and the
-compile-time guard `TQL-CAMEL-3112`, proven by
+compile-time guard `TQL-ROUTE-3112`, proven by
 `MultiDatasourceProjectionIntegrationTest`: commit projects, rollback never does,
 a republished business key never doubles the projection). **Phase 53 is complete
 and milestone M18 is met.**

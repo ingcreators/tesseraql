@@ -100,7 +100,7 @@ class LiveRouteReloadIntegrationTest {
         // The code identifies the failure; the cause goes to the log, not the response —
         // the stub replaces the route's own security chain, so it can be reached without
         // credentials and must not hand out file paths, SQL, or column names.
-        assertThat(stub.body()).contains("TQL-CAMEL-3103").doesNotContain("no-such-recipe");
+        assertThat(stub.body()).contains("TQL-ROUTE-3103").doesNotContain("no-such-recipe");
         // A neighbor route is untouched by the failure.
         assertThat(get("/users?q=sato").statusCode()).isNotEqualTo(500);
 

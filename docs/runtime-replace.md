@@ -292,7 +292,7 @@ mid-canary already "works" today because boot is a reconciliation. The design ma
 continuous: **a running host converges to the same function of the same files that boot
 computes.** One protocol, two read points, no new channel.
 
-A new **`StackReconciler`** (tesseraql-camel-runtime, owned by the gateway — the gateway owns
+A new **`StackReconciler`** (tesseraql-runtime, owned by the gateway — the gateway owns
 both the host and the relay, and both change on a replace) watches the install root: a
 `WatchService` on the root (for `catalog.json`) and `.upgrade/`, events debounced onto **one
 serialized reconciler thread** — starting runtimes is heavy and blocking, and two concurrent

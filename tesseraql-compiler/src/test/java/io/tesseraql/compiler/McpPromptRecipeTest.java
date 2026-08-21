@@ -63,7 +63,7 @@ class McpPromptRecipeTest {
 
         assertThatThrownBy(() -> compile(dir))
                 .isInstanceOf(TqlException.class)
-                .hasMessageContaining("TQL-CAMEL-3116")
+                .hasMessageContaining("TQL-ROUTE-3116")
                 .hasMessageContaining("prompts/get is a read");
     }
 
@@ -83,7 +83,7 @@ class McpPromptRecipeTest {
 
         assertThatThrownBy(() -> compile(dir))
                 .isInstanceOf(TqlException.class)
-                .hasMessageContaining("TQL-CAMEL-3117")
+                .hasMessageContaining("TQL-ROUTE-3117")
                 .hasMessageContaining("response.text");
     }
 

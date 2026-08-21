@@ -2,9 +2,9 @@ package io.tesseraql.compiler.binding;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.pipeline.RuntimeContext;
+import io.tesseraql.pipeline.TesseraqlProperties;
 import io.tesseraql.security.Principal;
 import io.tesseraql.yaml.i18n.I18nSettings;
 import io.tesseraql.yaml.i18n.MessageCatalog;

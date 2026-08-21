@@ -1,8 +1,5 @@
 package io.tesseraql.studio.runtime;
 
-import io.tesseraql.camel.HttpMounts;
-import io.tesseraql.camel.TesseraqlProperties;
-import io.tesseraql.camel.auth.AuthStep;
 import io.tesseraql.compiler.binding.ErrorResponseRenderer;
 import io.tesseraql.compiler.pipeline.Pipeline;
 import io.tesseraql.compiler.pipeline.Pipelines;
@@ -11,7 +8,10 @@ import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.pipeline.Headers;
+import io.tesseraql.pipeline.HttpMounts;
 import io.tesseraql.pipeline.RuntimeContext;
+import io.tesseraql.pipeline.TesseraqlProperties;
+import io.tesseraql.pipeline.auth.AuthStep;
 import io.tesseraql.runtime.SseRoutes;
 import io.tesseraql.security.Principal;
 import io.tesseraql.studio.CopilotFragments;
@@ -76,7 +76,7 @@ final class CopilotRouteBuilder {
                         // app's prefix from here (docs/base-path.md).
                         exchange.getMessage().setBody(CopilotFragments.entryHtml(
                                 new CopilotService.Entry("user", message, null))
-                                + CopilotFragments.placeholder(io.tesseraql.camel.BasePath.url(
+                                + CopilotFragments.placeholder(io.tesseraql.pipeline.BasePath.url(
                                         exchange, page + "/stream?turn=" + turn))
                                 + CopilotFragments.messageInput(true));
                         return;

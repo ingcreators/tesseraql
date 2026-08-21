@@ -1,7 +1,6 @@
 package io.tesseraql.compiler.binding;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
@@ -9,6 +8,7 @@ import io.tesseraql.core.expr.EvaluationContext;
 import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.pipeline.Headers;
 import io.tesseraql.pipeline.Step;
+import io.tesseraql.pipeline.TesseraqlProperties;
 import io.tesseraql.security.Principal;
 import io.tesseraql.security.policy.PolicyEngine;
 import io.tesseraql.yaml.model.ResponseSpec;
@@ -28,7 +28,7 @@ import java.util.Map;
  */
 public final class JsonResponseRenderer implements Step {
 
-    private static final TqlErrorCode RENDER_ERROR = new TqlErrorCode(TqlDomain.CAMEL, 3001);
+    private static final TqlErrorCode RENDER_ERROR = new TqlErrorCode(TqlDomain.ROUTE, 3001);
 
     private final ResponseSpec.JsonResponse response;
     private final Object compiledBody;

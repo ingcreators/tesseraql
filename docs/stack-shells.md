@@ -76,7 +76,7 @@ per-user direct grants and acting-role activation for concurrent roles — is de
 ## What exists today, measured
 
 **Every framework surface mounts per member, by SPI.** Five `AppSourceProvider`s — `auth-ui`
-and `account` (`tesseraql-camel-runtime`), `iam-admin` (`tesseraql-identity`), `ops-console`
+and `account` (`tesseraql-runtime`), `iam-admin` (`tesseraql-identity`), `ops-console`
 (`tesseraql-ops-ui`), `studio` (`tesseraql-studio`) — are discovered by
 `ServiceLoader` (`AppSources.java:33-35`) and materialized into each runtime's `work/apps` by
 `SystemApps.load` (`SystemApps.java:50-64`); mounted apps run with the main application's
@@ -133,7 +133,7 @@ and no example or fixture uses a dotted name.
 stands: `RingTracer` is an in-memory ring inside each runtime, so no database connection can
 serve the trace pages. Decision 15 constrains the shape — delegation is **real HTTP over
 loopback even within one JVM**, and `tesseraql-studio`/`-ops-ui`/`-identity` must never
-depend on `tesseraql-camel-runtime` (the module boundary already holds; only the two
+depend on `tesseraql-runtime` (the module boundary already holds; only the two
 identity-surface providers live in the runtime module, and those are what Decision 11
 extracts). Decision 17 already reserves the addresses: `/_tesseraql/ops` and
 `/_tesseraql/studio` at the origin are "application switcher".
