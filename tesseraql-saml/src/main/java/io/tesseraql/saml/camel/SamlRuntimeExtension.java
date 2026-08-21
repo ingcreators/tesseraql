@@ -102,10 +102,11 @@ public final class SamlRuntimeExtension implements RuntimeExtension {
         boolean requireSignedLogout = config.getBoolean("tesseraql.saml.requireSignedLogout", true);
         SamlAcsRouteBuilder.SamlSecurity security = new SamlAcsRouteBuilder.SamlSecurity(
                 replayGuard, spKey, idpKey, allowIdpInitiated, requireSignedLogout);
-        context.camel().addRoutes(new SamlAcsRouteBuilder(
+        new SamlAcsRouteBuilder(
                 validator, mapping, sessions, linker, metadata, endpoints, security,
                 context.bean(TesseraqlProperties.CREDENTIAL_THROTTLE_BEAN,
-                        io.tesseraql.security.throttle.CredentialThrottle.class)));
+                        io.tesseraql.security.throttle.CredentialThrottle.class))
+                .install(context.camel());
     }
 
     /**

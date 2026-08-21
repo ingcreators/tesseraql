@@ -22,7 +22,7 @@ import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
-import org.apache.camel.builder.RouteBuilder;
+import org.apache.camel.CamelContext;
 
 /**
  * The OIDC relying-party web endpoints under {@code /_tesseraql/oidc} (design ch. 10.14, roadmap
@@ -30,7 +30,7 @@ import org.apache.camel.builder.RouteBuilder;
  * exchanges the code and issues a session, and {@code GET /logout} ends it. A failure returns 401
  * without leaking the code, token, or secret. Mirrors the SAML SP route builder.
  */
-final class OidcRouteBuilder extends RouteBuilder {
+final class OidcRouteBuilder {
 
     private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory
             .getLogger(OidcRouteBuilder.class);
@@ -89,21 +89,20 @@ final class OidcRouteBuilder extends RouteBuilder {
         throttle.recordFailure(null, address == null ? null : String.valueOf(address));
     }
 
-    @Override
-    public void configure() {
-        Pipelines.Compilation pipelines = Pipelines.of(getContext())
+    void install(CamelContext context) {
+        Pipelines.Compilation pipelines = Pipelines.of(context)
                 .compiling(java.util.List.of(
                         Pipeline.Handler.catching(OidcException.class, this::unauthorized),
                         Pipeline.Handler.catching(Exception.class, this::badRequest)));
 
-        HttpMounts.mount(getContext(), "GET", "/_tesseraql/oidc/login", "system.oidc.login");
+        HttpMounts.mount(context, "GET", "/_tesseraql/oidc/login", "system.oidc.login");
         pipelines.pipeline("system.oidc.login").process(this::login);
 
-        HttpMounts.mount(getContext(), "GET", "/_tesseraql/oidc/callback",
+        HttpMounts.mount(context, "GET", "/_tesseraql/oidc/callback",
                 "system.oidc.callback");
         pipelines.pipeline("system.oidc.callback").process(this::callback);
 
-        HttpMounts.mount(getContext(), "GET", "/_tesseraql/oidc/logout", "system.oidc.logout");
+        HttpMounts.mount(context, "GET", "/_tesseraql/oidc/logout", "system.oidc.logout");
         pipelines.pipeline("system.oidc.logout").process(this::logout);
     }
 

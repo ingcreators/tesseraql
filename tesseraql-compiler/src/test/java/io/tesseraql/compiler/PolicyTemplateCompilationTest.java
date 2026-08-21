@@ -109,8 +109,8 @@ class PolicyTemplateCompilationTest {
             throws Exception {
         AppManifest manifest = new ManifestLoader().load(dir);
         try (DefaultCamelContext context = new DefaultCamelContext()) {
-            context.addRoutes(new RouteCompiler().appName("policy-template-test")
-                    .compile(manifest, false, null));
+            new RouteCompiler().appName("policy-template-test")
+                    .compile(context, manifest, false, null);
             return CompiledPipelines.steps(context, io.tesseraql.camel.auth.AuthStep.class)
                     .stream().filter(step -> "authorize".equals(step.operation())).toList();
         }

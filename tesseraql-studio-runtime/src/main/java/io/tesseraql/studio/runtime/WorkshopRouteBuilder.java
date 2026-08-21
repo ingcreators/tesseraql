@@ -14,7 +14,7 @@ import io.tesseraql.pipeline.Headers;
 import io.tesseraql.security.Principal;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import org.apache.camel.builder.RouteBuilder;
+import org.apache.camel.CamelContext;
 
 /**
  * A member's workshop API (docs/studio-shell.md structural decision 2):
@@ -26,7 +26,7 @@ import org.apache.camel.builder.RouteBuilder;
  * door. The caller's own identity is what authorizes: {@code permissions} and {@code actor}
  * are stamped from the authenticated principal here, never trusted off the wire.
  */
-final class WorkshopRouteBuilder extends RouteBuilder {
+final class WorkshopRouteBuilder {
 
     private static final AuthStep BROWSER = new AuthStep("authenticate", "browser", null, null);
     private static final AuthStep CSRF = new AuthStep("csrf");
@@ -38,18 +38,17 @@ final class WorkshopRouteBuilder extends RouteBuilder {
         this.studioEdit = studioEdit;
     }
 
-    @Override
-    public void configure() {
-        Pipelines.Compilation pipelines = Pipelines.of(getContext())
+    void install(CamelContext context) {
+        Pipelines.Compilation pipelines = Pipelines.of(context)
                 .compiling(java.util.List.of(
                         Pipeline.Handler.catching(TqlException.class, new ErrorResponseRenderer()),
                         Pipeline.Handler.catching(Exception.class, new ErrorResponseRenderer())));
 
-        HttpMounts.mount(getContext(), "GET", "/_tesseraql/studio/data/{op}",
+        HttpMounts.mount(context, "GET", "/_tesseraql/studio/data/{op}",
                 "studio.workshop.read");
-        HttpMounts.mount(getContext(), "POST", "/_tesseraql/studio/data/{op}",
+        HttpMounts.mount(context, "POST", "/_tesseraql/studio/data/{op}",
                 "studio.workshop.act");
-        HttpMounts.mount(getContext(), "GET", "/_tesseraql/studio/data/public/{op}",
+        HttpMounts.mount(context, "GET", "/_tesseraql/studio/data/public/{op}",
                 "studio.workshop.public");
 
         pipelines.pipeline("studio.workshop.read")

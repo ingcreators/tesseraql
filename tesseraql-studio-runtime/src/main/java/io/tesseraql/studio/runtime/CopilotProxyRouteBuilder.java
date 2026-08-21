@@ -14,7 +14,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
-import org.apache.camel.builder.RouteBuilder;
+import org.apache.camel.CamelContext;
 
 /**
  * The surface's copilot send proxy (docs/studio-shell.md structural decision 2): the shell's
@@ -23,7 +23,7 @@ import org.apache.camel.builder.RouteBuilder;
  * names the member's prefixed stream address, which the browser reaches through the gateway
  * directly, so the SSE stream needs no second hop.
  */
-final class CopilotProxyRouteBuilder extends RouteBuilder {
+final class CopilotProxyRouteBuilder {
 
     private static final AuthStep BROWSER = new AuthStep("authenticate", "browser", null, null);
     private static final AuthStep CSRF = new AuthStep("csrf");
@@ -35,14 +35,13 @@ final class CopilotProxyRouteBuilder extends RouteBuilder {
         this.origins = origins;
     }
 
-    @Override
-    public void configure() {
-        Pipelines.Compilation pipelines = Pipelines.of(getContext())
+    void install(CamelContext context) {
+        Pipelines.Compilation pipelines = Pipelines.of(context)
                 .compiling(java.util.List.of(
                         Pipeline.Handler.catching(TqlException.class, new ErrorResponseRenderer()),
                         Pipeline.Handler.catching(Exception.class, new ErrorResponseRenderer())));
 
-        HttpMounts.mount(getContext(), "POST", "/_tesseraql/studio/{member}/ui/copilot/send",
+        HttpMounts.mount(context, "POST", "/_tesseraql/studio/{member}/ui/copilot/send",
                 "studio.shell.copilot.send");
 
         pipelines.pipeline("studio.shell.copilot.send")

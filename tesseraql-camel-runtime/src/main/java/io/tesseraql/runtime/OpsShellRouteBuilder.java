@@ -12,7 +12,7 @@ import io.tesseraql.pipeline.Headers;
 import io.tesseraql.security.Principal;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import org.apache.camel.builder.RouteBuilder;
+import org.apache.camel.CamelContext;
 
 /**
  * The one ops-shell surface that cannot be a service provider: a member's transfer-file
@@ -22,7 +22,7 @@ import org.apache.camel.builder.RouteBuilder;
  * proxies the member's own browser-face download with the caller's cookie, and on the unhosted
  * boot — where the one member is this runtime itself — it forwards to the local handler.
  */
-final class OpsShellRouteBuilder extends RouteBuilder {
+final class OpsShellRouteBuilder {
 
     private final OpsShellProviders.Targets targets;
 
@@ -30,14 +30,13 @@ final class OpsShellRouteBuilder extends RouteBuilder {
         this.targets = targets;
     }
 
-    @Override
-    public void configure() {
-        Pipelines.Compilation pipelines = Pipelines.of(getContext())
+    void install(CamelContext context) {
+        Pipelines.Compilation pipelines = Pipelines.of(context)
                 .compiling(java.util.List.of(
                         Pipeline.Handler.catching(TqlException.class, new ErrorResponseRenderer()),
                         Pipeline.Handler.catching(Exception.class, new ErrorResponseRenderer())));
 
-        HttpMounts.mount(getContext(), "GET",
+        HttpMounts.mount(context, "GET",
                 "/_tesseraql/ops/console/{member}/transfers/{id}/file",
                 "ops.shell.transferFile");
         pipelines.pipeline("ops.shell.transferFile")

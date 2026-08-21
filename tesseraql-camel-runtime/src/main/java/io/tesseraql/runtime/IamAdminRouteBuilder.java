@@ -20,7 +20,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import org.apache.camel.builder.RouteBuilder;
+import org.apache.camel.CamelContext;
 
 /**
  * The IAM Admin bulk endpoint (docs/hypermedia-ui.md, "Bulk actions"): one action against
@@ -34,18 +34,17 @@ import org.apache.camel.builder.RouteBuilder;
  * changed alongside what was selected, so a stale selection cannot read as a completed
  * action (docs/silent-tolerance.md O10).
  */
-final class IamAdminRouteBuilder extends RouteBuilder {
+final class IamAdminRouteBuilder {
 
     private static final String USERS = "/_tesseraql/admin/users";
 
-    @Override
-    public void configure() {
-        Pipelines.Compilation pipelines = Pipelines.of(getContext())
+    void install(CamelContext context) {
+        Pipelines.Compilation pipelines = Pipelines.of(context)
                 .compiling(java.util.List.of(
                         Pipeline.Handler.catching(TqlException.class, new ErrorResponseRenderer()),
                         Pipeline.Handler.catching(Exception.class, new ErrorResponseRenderer())));
 
-        HttpMounts.mount(getContext(), "POST", USERS + "/bulk", "tql.iamAdmin.users.bulk");
+        HttpMounts.mount(context, "POST", USERS + "/bulk", "tql.iamAdmin.users.bulk");
 
         // Post/redirect/get like the per-user disable: the no-JS-first shape of the
         // recipe (the htmx tbody-swap enhancement needs HX-Request negotiation and can

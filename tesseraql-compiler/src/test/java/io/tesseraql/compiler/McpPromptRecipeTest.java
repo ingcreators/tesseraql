@@ -91,8 +91,8 @@ class McpPromptRecipeTest {
     private static Map<String, List<String>> compile(Path dir) throws Exception {
         AppManifest manifest = new ManifestLoader().load(dir);
         try (DefaultCamelContext context = new DefaultCamelContext()) {
-            context.addRoutes(new RouteCompiler().appName("prompt-test")
-                    .compile(manifest, false, null));
+            new RouteCompiler().appName("prompt-test")
+                    .compile(context, manifest, false, null);
             return CompiledPipelines.stepsById(context);
         }
     }

@@ -71,7 +71,7 @@ public final class StudioRuntimeExtension implements RuntimeExtension {
             // machinery stays at the members, where its inputs live.
             StudioShellProviders.register(serviceProviders,
                     WorkshopTargets.of(seams.stackMembers(), seams.memberOrigins()));
-            context.addRoutes(new CopilotProxyRouteBuilder(seams.memberOrigins()));
+            new CopilotProxyRouteBuilder(seams.memberOrigins()).install(context);
             return;
         }
 
@@ -168,11 +168,11 @@ public final class StudioRuntimeExtension implements RuntimeExtension {
         io.tesseraql.studio.StudioService.PdfRender studioPdf = (export, routeDir,
                 rows) -> StudioSupport.renderExportPdf(export, routeDir, appHome, rows,
                         seams.modulesLoader());
-        context.addRoutes(new StudioRouteBuilder(studio, reloader, studioTests,
-                studioScaffold, studioEdit, studioMask, studioPdf));
+        new StudioRouteBuilder(studio, reloader, studioTests,
+                studioScaffold, studioEdit, studioMask, studioPdf).install(context);
         // The member's workshop API: what the studio shell delegates to
         // (docs/studio-shell.md structural decision 2).
-        context.addRoutes(new WorkshopRouteBuilder(studioEdit));
+        new WorkshopRouteBuilder(studioEdit).install(context);
         // The wizards render their .yml.tpl artifacts from the studio app's extracted tree;
         // the member mounts no studio app anymore, so the tree is materialized here — files
         // the wizard providers read, never routes.
@@ -185,8 +185,8 @@ public final class StudioRuntimeExtension implements RuntimeExtension {
         // route; the stream is an SseRoutes endpoint registered after start. Both live
         // at the member-shaped address the shell's page emits, so the unhosted boot and
         // the proxied hosted call land on one path.
-        context.addRoutes(new CopilotRouteBuilder(copilotService, studioEdit,
-                seams.appName()));
+        new CopilotRouteBuilder(copilotService, studioEdit,
+                seams.appName()).install(context);
         seams.postStart().accept(() -> CopilotRouteBuilder.registerStream(context,
                 seams.port(), copilotService, studioEdit, seams.appName()));
         // Providers backing the bundled studio app (design ch. 16, 47).

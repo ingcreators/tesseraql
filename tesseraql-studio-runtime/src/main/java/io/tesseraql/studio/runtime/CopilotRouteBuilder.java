@@ -19,7 +19,7 @@ import java.io.IOException;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
-import org.apache.camel.builder.RouteBuilder;
+import org.apache.camel.CamelContext;
 
 /**
  * The copilot panel's send and stream endpoints (docs/copilot.md, "Why these are Java
@@ -29,7 +29,7 @@ import org.apache.camel.builder.RouteBuilder;
  * app routes. Mounted whenever Studio is; an unconfigured copilot refuses with
  * TQL-STUDIO-4235 exactly like the YAML send route did.
  */
-final class CopilotRouteBuilder extends RouteBuilder {
+final class CopilotRouteBuilder {
 
     private static final AuthStep AUTH = new AuthStep("authenticate", "browser", null, null);
 
@@ -48,14 +48,13 @@ final class CopilotRouteBuilder extends RouteBuilder {
         return "/_tesseraql/studio/" + member + "/ui/copilot";
     }
 
-    @Override
-    public void configure() {
-        Pipelines.Compilation pipelines = Pipelines.of(getContext())
+    void install(CamelContext context) {
+        Pipelines.Compilation pipelines = Pipelines.of(context)
                 .compiling(java.util.List.of(
                         Pipeline.Handler.catching(TqlException.class, new ErrorResponseRenderer()),
                         Pipeline.Handler.catching(Exception.class, new ErrorResponseRenderer())));
 
-        HttpMounts.mount(getContext(), "POST", page + "/send", "tql.copilot.send");
+        HttpMounts.mount(context, "POST", page + "/send", "tql.copilot.send");
 
         // The chat-messages recipe's dual-path send: an htmx caller gets the user item, the
         // streaming placeholder, and an out-of-band composer clear; a no-JS post runs the

@@ -20,7 +20,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
-import org.apache.camel.builder.RouteBuilder;
+import org.apache.camel.CamelContext;
 
 /**
  * Password login/logout endpoints (design ch. 10.8, 11.2):
@@ -35,7 +35,7 @@ import org.apache.camel.builder.RouteBuilder;
  * OIDC and SAML logins (the optional extensions) create the <em>same</em> session, so any
  * {@code auth: browser} route is satisfied however the session was established.
  */
-final class LoginRouteBuilder extends RouteBuilder {
+final class LoginRouteBuilder {
 
     private static final String LOGIN_PATH = "/_tesseraql/login";
 
@@ -94,20 +94,19 @@ final class LoginRouteBuilder extends RouteBuilder {
                 "message", "Too many attempts; retry later"))));
     }
 
-    @Override
-    public void configure() {
-        Pipelines.Compilation pipelines = Pipelines.of(getContext())
+    void install(CamelContext context) {
+        Pipelines.Compilation pipelines = Pipelines.of(context)
                 .compiling(java.util.List.of(
                         Pipeline.Handler.catching(TqlException.class, new ErrorResponseRenderer()),
                         Pipeline.Handler.catching(Exception.class, new ErrorResponseRenderer())));
 
-        HttpMounts.mount(getContext(), "POST", LOGIN_PATH, "system.login");
+        HttpMounts.mount(context, "POST", LOGIN_PATH, "system.login");
         pipelines.pipeline("system.login").process(this::login);
 
         // Sign-out is a state change: a POST with the CSRF token, like its logout-device
         // and logout-others siblings — the CSRF-exempt GET is gone
         // (docs/vocabulary-cleanup.md slice 3).
-        HttpMounts.mount(getContext(), "POST", "/_tesseraql/logout", "system.logout");
+        HttpMounts.mount(context, "POST", "/_tesseraql/logout", "system.logout");
         pipelines.pipeline("system.logout").process(this::logout);
 
         // Sign out every session but this one (roadmap Phase 48, the account surface). A
@@ -116,12 +115,12 @@ final class LoginRouteBuilder extends RouteBuilder {
         // Per-device sign-out (docs/session-visibility.md): ends the caller's session
         // named by its handle. A Java route like logout-others, because only this layer
         // can read the cookie - and clear it when the revoked device was this one.
-        HttpMounts.mount(getContext(), "POST", "/_tesseraql/logout-device",
+        HttpMounts.mount(context, "POST", "/_tesseraql/logout-device",
                 "system.logout.device");
         pipelines.pipeline("system.logout.device")
                 .process(this::logoutDevice);
 
-        HttpMounts.mount(getContext(), "POST", "/_tesseraql/logout-others",
+        HttpMounts.mount(context, "POST", "/_tesseraql/logout-others",
                 "system.logout.others");
         pipelines.pipeline("system.logout.others")
                 .process(this::logoutOthers);
@@ -131,7 +130,7 @@ final class LoginRouteBuilder extends RouteBuilder {
         // cookie, and taking an eligible role has to reach the caller's own session — a
         // principal frozen at sign-in would otherwise hold the new role only after a
         // re-login, which makes the feature useless for its purpose.
-        HttpMounts.mount(getContext(), "POST", "/_tesseraql/account/elevate",
+        HttpMounts.mount(context, "POST", "/_tesseraql/account/elevate",
                 "system.account.elevate");
         pipelines.pipeline("system.account.elevate")
                 .process(this::elevate);

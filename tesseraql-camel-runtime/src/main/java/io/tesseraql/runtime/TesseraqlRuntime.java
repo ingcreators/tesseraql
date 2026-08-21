@@ -1379,8 +1379,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     io.tesseraql.yaml.migration.SchemaHistoryName.of(manifest.config()),
                     appHome, manifest.config(), dataSource, tenantDataSources, dataSources::get);
             context.addService(new TesseraqlHttpServer(context, "0.0.0.0", port));
-            context.addRoutes(new RouteCompiler().appName(appName)
-                    .functions(modules.functions()).compile(manifest));
+            new RouteCompiler().appName(appName)
+                    .functions(modules.functions()).compile(context, manifest);
             // Mounted apps (jar-bundled system apps and config-listed directories, design ch. 32)
             // are plain yaml/sql/template trees compiled exactly like the main app. They load before
             // the MCP endpoint is wired so their MCP surface joins the main app's on one endpoint and
@@ -1395,8 +1395,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 // Mounted apps migrate their own schema (per-app history table) before serving.
                 AppMigrations.migrate(mounted.name(), mounted.manifest().appHome(),
                         manifest.config(), dataSource, tenantDataSources, dataSources::get);
-                context.addRoutes(new RouteCompiler().appName(mounted.name())
-                        .functions(modules.functions()).compile(mounted.manifest()));
+                new RouteCompiler().appName(mounted.name())
+                        .functions(modules.functions()).compile(context, mounted.manifest());
                 // Mounted apps' batch jobs join the same scheduler and manual-run surface,
                 // tagged with the owning app; duplicate ids across apps fail the mount.
                 for (JobFile job : mounted.manifest().jobs()) {
@@ -1509,9 +1509,10 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                     + " per-primitive auth:/policy: continue underneath"
                                     + " either");
                 }
-                context.addRoutes(new McpRouteBuilder(
+                new McpRouteBuilder(
                         new io.tesseraql.mcp.McpHttpHandler(mcpServer, mcpGate,
-                                mcpChallenge)));
+                                mcpChallenge))
+                        .install(context);
                 LOG.info(
                         "Serving {} MCP tool(s), {} resource(s), {} UI resource(s), and {} prompt(s)"
                                 + " at /_tesseraql/mcp",
@@ -1581,9 +1582,9 @@ public final class TesseraqlRuntime implements AutoCloseable {
             // the console's ops.* providers shape the same actions differently.
             OpsActions opsActions = new OpsActions(outboxStore, eventChannelStore,
                     jobRepository, jobRunner, ownedJobs, appName, servedApps);
-            context.addRoutes(new OperationsRouteBuilder(
+            new OperationsRouteBuilder(
                     opsActions, jobRepository, ownedJobs, jobDefinitions, opsDashboard,
-                    metricsSettings, routeAuditStore, fileTransfers));
+                    metricsSettings, routeAuditStore, fileTransfers).install(context);
             // Service providers expose non-SQL runtime state to mounted yaml/template apps
             // (the bundled ops-console and studio apps render these, design ch. 26.11, 16, 47).
             io.tesseraql.opsui.OpsDashboard dashboardRef = opsDashboard;
@@ -2347,7 +2348,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
             }
             if (shellTargets != null) {
                 OpsShellProviders.register(serviceProviders, shellTargets);
-                context.addRoutes(new OpsShellRouteBuilder(shellTargets));
+                new OpsShellRouteBuilder(shellTargets).install(context);
             }
             context.getRegistry().bind(TesseraqlProperties.SERVICE_PROVIDERS_BEAN,
                     serviceProviders);
@@ -2474,9 +2475,9 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     dataSource);
             totpStore.ensureSchema();
             context.getRegistry().bind(TesseraqlProperties.TOTP_STORE_BEAN, totpStore);
-            context.addRoutes(new LoginRouteBuilder(
+            new LoginRouteBuilder(
                     new PasswordAuthenticator(identity), realm, sessionStore, totpStore,
-                    credentialThrottle, identity));
+                    credentialThrottle, identity).install(context);
             // A session buys a short-lived bearer (docs/session-token-exchange.md). Off by
             // default: an endpoint that turns a session into a credential should exist because
             // somebody decided it should, not because they upgraded.
@@ -2522,13 +2523,13 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 if (!stackIssuer && !TokenExchangeRouteBuilder.canIssue(security.jwt())) {
                     throw TokenExchangeRouteBuilder.noSigningKey();
                 }
-                context.addRoutes(new TokenExchangeRouteBuilder(sessionStore, sessionTokens));
+                new TokenExchangeRouteBuilder(sessionStore, sessionTokens).install(context);
             }
             // The stack's authenticated deploy endpoint (docs/stack-shells.md, the deploy
             // surface): mounted only where the host handed a pen — the surface runtime — so a
             // member, an unhosted boot, and every other runtime shape simply have no endpoint.
             if (hostContext != null && hostContext.deployPen() != null) {
-                context.addRoutes(new DeployRouteBuilder(hostContext.deployPen(), sessionStore));
+                new DeployRouteBuilder(hostContext.deployPen(), sessionStore).install(context);
             }
             // The console's issue-token page (docs/stack-architecture.md Decision 20), so
             // acquiring a token stops meaning "read a cookie and a meta tag out of developer
@@ -2566,7 +2567,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
             // itself is — a hosted member serves no /_tesseraql/admin of its own
             // (docs/stack-shells.md structural decision 3).
             if (hostedApps.contains("iam-admin")) {
-                context.addRoutes(new IamAdminRouteBuilder());
+                new IamAdminRouteBuilder().install(context);
             }
             // Password recovery (roadmap Phase 50 slice 1): fail-fast validation - a half
             // configuration must not silently produce a reset page that goes nowhere.
@@ -2594,12 +2595,12 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                 "tesseraql.identity.recovery.enabled needs a url:"));
             }
             if (recoveryEnabled || inviteEnabled) {
-                context.addRoutes(new RecoveryRouteBuilder(credentialTokens, identity, realm,
+                new RecoveryRouteBuilder(credentialTokens, identity, realm,
                         sessionStore, outboxStore, recoveryChannel, recoveryUrl,
                         java.time.Duration.ofMinutes(manifest.config()
                                 .getString("tesseraql.identity.recovery.ttlMinutes")
                                 .map(Long::parseLong).orElse(30L)),
-                        appName, inviteEnabled, credentialThrottle));
+                        appName, inviteEnabled, credentialThrottle).install(context);
             }
             // The serve --watch file watcher and Studio's apply drive one reloader; bound
             // unstarted (independent of any extension) so watchRoutes() can start it on

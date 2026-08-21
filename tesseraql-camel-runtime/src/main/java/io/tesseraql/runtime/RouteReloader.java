@@ -13,7 +13,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.apache.camel.CamelContext;
-import org.apache.camel.builder.RouteBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -209,8 +208,8 @@ public final class RouteReloader {
         for (String id : changes) {
             try {
                 stopAndRemove(id);
-                context.addRoutes(new RouteCompiler().appName(appName).functions(functions)
-                        .compile(reloaded, true, Set.of(id)));
+                new RouteCompiler().appName(appName).functions(functions)
+                        .compile(context, reloaded, true, Set.of(id));
                 (before.containsKey(id) ? reloadedIds : addedIds).add(id);
             } catch (Exception ex) {
                 // Per-route isolation (roadmap Phase 42): the broken definition serves a clear
@@ -247,8 +246,8 @@ public final class RouteReloader {
             for (Map.Entry<String, String> transition : nowWorkflow.entrySet()) {
                 String id = transition.getKey();
                 try {
-                    context.addRoutes(new RouteCompiler().appName(appName).functions(functions)
-                            .compile(reloaded, true, Set.of(id)));
+                    new RouteCompiler().appName(appName).functions(functions)
+                            .compile(context, reloaded, true, Set.of(id));
                     (beforeWorkflow.containsKey(id) ? reloadedIds : addedIds).add(id);
                 } catch (Exception ex) {
                     failed.add(new RouteFailure(id, "POST", transition.getValue(),
@@ -455,32 +454,24 @@ public final class RouteReloader {
         LOG.warn("Route {} failed to compile; serving a {} stub: {}", id, COMPILE_FAILED,
                 cause.getMessage());
         try {
-            context.addRoutes(new RouteBuilder() {
-                @Override
-                public void configure() {
-                    // The stub answers where the route it replaces answered, under the app's
-                    // own prefix: a hot reload must not quietly move a route out from under it
-                    // (docs/base-path.md).
-                    switch (route.httpMethod() == null ? "GET" : route.httpMethod()) {
-                        case "POST", "PUT", "PATCH", "DELETE" -> io.tesseraql.camel.HttpMounts
-                                .mount(getContext(), route.httpMethod(), route.urlPath(), id);
-                        default -> io.tesseraql.camel.HttpMounts.mount(getContext(), "GET",
-                                route.urlPath(), id);
-                    }
-                    // A stub is a one-step pipeline, registered under the id the mount names.
-                    io.tesseraql.compiler.pipeline.Pipelines.of(getContext())
-                            .compiling(java.util.List.of()).pipeline(id).process(exchange -> {
-                                exchange.getMessage().setHeader(
-                                        Headers.HTTP_RESPONSE_CODE, 500);
-                                exchange.getMessage().setHeader(
-                                        Headers.CONTENT_TYPE,
-                                        "application/json; charset=utf-8");
-                                exchange.getMessage().setBody("{\"error\":{\"code\":\""
-                                        + COMPILE_FAILED + "\",\"message\":\"Route failed to"
-                                        + " compile; see the server log for the cause\"}}");
-                            });
-                }
-            });
+            // The stub answers where the route it replaces answered, under the app's own prefix:
+            // a hot reload must not quietly move a route out from under it (docs/base-path.md).
+            switch (route.httpMethod() == null ? "GET" : route.httpMethod()) {
+                case "POST", "PUT", "PATCH", "DELETE" -> io.tesseraql.camel.HttpMounts
+                        .mount(context, route.httpMethod(), route.urlPath(), id);
+                default -> io.tesseraql.camel.HttpMounts.mount(context, "GET",
+                        route.urlPath(), id);
+            }
+            // A stub is a one-step pipeline, registered under the id the mount names.
+            io.tesseraql.compiler.pipeline.Pipelines.of(context)
+                    .compiling(java.util.List.of()).pipeline(id).process(exchange -> {
+                        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 500);
+                        exchange.getMessage().setHeader(Headers.CONTENT_TYPE,
+                                "application/json; charset=utf-8");
+                        exchange.getMessage().setBody("{\"error\":{\"code\":\"" + COMPILE_FAILED
+                                + "\",\"message\":\"Route failed to compile; see the server log"
+                                + " for the cause\"}}");
+                    });
         } catch (Exception stubFailure) {
             LOG.error("Could not install the 500 stub for {}; the endpoint answers 404 until the"
                     + " definition is fixed", id, stubFailure);
