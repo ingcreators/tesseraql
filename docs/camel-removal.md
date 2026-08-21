@@ -444,10 +444,44 @@ and only the insert settles it. `PollLoop` now takes that claim as a one-method 
 rule is asserted with a fake instead of a database, and the property outlived the option that used
 to imply it.
 
-**Camel has no components left.** Fifteen jars remain and every one is engine, model or support:
-`camel-api`, `camel-core-engine`, `camel-support`, and what they drag in. What is still using them
-is `Exchange`, `Processor` and a `CamelContext` that holds a registry and a service lifecycle —
-which is exactly the list slice 3 exists to replace.
+**No Camel-supplied component is left in the build.** Fifteen jars remain and every one is
+engine, model or support: `camel-api`, `camel-core-engine`, `camel-support`, and what they drag in.
+
+**The framework's own four components were still components, though**, and saying "no components
+left" over-claimed it: `tesseraql-sql:`, `tesseraql-auth:`, `tesseraql-iam:` and
+`tesseraql-service:` were `Component`/`Endpoint`/`Producer` implementations of Camel's SPI, living
+in this repository. Slice 3a is where they stop being that.
+
+## What slice 3a found
+
+**A URI built from typed values and parsed back into typed fields is a round trip with a defect
+class in it.** The compiler wrote
+`tesseraql-sql:file:/…/q.sql?datasource=main&mode=query&maxRows=200&dialect=postgres`; the endpoint
+parsed it back into a `String`, a `String`, an `int` and a `String`. The step is constructed with
+those values now, and the `Component`/`Endpoint` layer — 406 lines of URI parsing and parameter
+binding across four components — is gone.
+
+**The security gate was percent-encoding its own atom.** A parameterised policy
+(`tql.iam.write.{path.name}`) and the route's URL template had to be URL-encoded into the query
+string, because braces are not URI characters, and decoded again at the endpoint. Both are
+arguments now. The test that guarded the round trip — *does the decode give the gate back what the
+encode took?* — no longer has a subject: it is rewritten to assert that nothing is encoded on the
+way, with the reason recorded in it, because **a test whose subject was removed should say so
+rather than disappear quietly**.
+
+**One flake, recorded rather than explained away.** `MultiAppReplaceIntegrationTest`'s
+no-request-dropped assertion saw a single 502 during a swap, in one full-suite run, and did not
+reproduce in four runs afterwards (three isolated, one full). Slice 3a does move work from context
+start to first use, so it was not dismissed on sight — but the failure is in the same family as the
+`BindException` this campaign already saw on `main`: a port race that shows up under load. If it
+recurs, the first thing to read is `StackRelay`'s per-port `HttpProxy` cache, which is never
+evicted — a replaced runtime that lands on a port a previous one used would inherit a dead
+connection pool.
+
+**A step has no lifecycle, and one producer was using it.** `TesseraqlSqlProducer` parsed its SQL
+file in `doStart()`, which is what a Camel service gets. `SqlStep` parses on first use instead,
+which keeps the property that mattered — the file is read once, not per request — without inventing
+a lifecycle to hang it on.
 
 ## What this does not buy, said before anyone expects it
 

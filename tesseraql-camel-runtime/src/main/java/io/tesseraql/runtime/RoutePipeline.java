@@ -42,26 +42,15 @@ final class RoutePipeline {
      */
     private final int handoffAt;
     private final String laneExecutor;
-    /**
-     * The producers this pipeline created, and therefore owns.
-     *
-     * <p>Kept apart from {@link #steps} because the two have opposite lifecycles: the processors
-     * belong to the route model and are shared with the Camel route still mounted behind this
-     * one, so stopping them would stop that route too. The producers are this pipeline's own —
-     * {@code createProducer()} makes a new one per call — and a hot reload that replaced a
-     * pipeline without stopping them would leak one per route per reload.
-     */
-    private final List<org.apache.camel.Producer> owned = new ArrayList<>();
 
     /** One {@code onException} clause: what it catches, and what it does about it. */
     private record Handler(List<String> caught, Processor renderer) {
     }
 
-    private RoutePipeline(List<Processor> steps, List<Handler> handlers,
-            List<org.apache.camel.Producer> owned, int handoffAt, String laneExecutor) {
+    private RoutePipeline(List<Processor> steps, List<Handler> handlers, int handoffAt,
+            String laneExecutor) {
         this.steps = steps;
         this.handlers = handlers;
-        this.owned.addAll(owned);
         this.handoffAt = handoffAt;
         this.laneExecutor = laneExecutor;
     }
@@ -75,57 +64,36 @@ final class RoutePipeline {
     /**
      * A compiled pipeline, which needs no reading back (docs/camel-removal.md decision 1).
      *
-     * <p>The chain is the artifact now, so there is no shape to decline: what the compiler emitted
-     * is a list of steps and a list of clauses, and the only work left is resolving the endpoints
-     * it named to producers this pipeline then owns.
+     * <p>The chain is the artifact, so there is nothing to resolve and no shape to decline: what
+     * the compiler emitted is a list of steps and a list of clauses. Resolving used to mean
+     * turning an endpoint URI into a producer, which is what the framework's own components
+     * stopped being (docs/camel-removal.md decision 2).
      */
-    static Optional<RoutePipeline> of(CamelContext camelContext,
-            Pipeline compiled) {
+    static Optional<RoutePipeline> of(CamelContext camelContext, Pipeline compiled) {
         List<Processor> steps = new ArrayList<>();
-        List<org.apache.camel.Producer> owned = new ArrayList<>();
         for (Pipeline.Step step : compiled.steps()) {
-            switch (step) {
-                case Pipeline.Step.Run run ->
-                    steps.add(run.processor());
-                case Pipeline.Step.Send send -> {
-                    try {
-                        org.apache.camel.Producer producer = camelContext
-                                .getEndpoint(send.uri()).createProducer();
-                        owned.add(producer);
-                        steps.add(producer);
-                    } catch (Exception unusable) {
-                        LOG.warn("Pipeline {} names endpoint {}, which cannot be resolved",
-                                compiled.id(), send.uri(), unusable);
-                        return Optional.empty();
-                    }
-                }
-            }
+            steps.add(step.processor());
         }
         List<Handler> handlers = new ArrayList<>();
         for (Pipeline.Handler handler : compiled.handlers()) {
             handlers.add(new Handler(handler.caught(), handler.renderer()));
         }
-        return Optional.of(new RoutePipeline(steps, handlers, owned, compiled.handoffAt(),
+        return Optional.of(new RoutePipeline(steps, handlers, compiled.handoffAt(),
                 compiled.laneExecutor()));
     }
 
-    /** Starts the producers the {@code to} steps resolved to; they are services like any other. */
-    void start() throws Exception {
-        for (org.apache.camel.Producer producer : owned) {
-            producer.start();
-        }
+    /**
+     * Nothing to start.
+     *
+     * <p>A pipeline used to own the producers its {@code to} steps resolved to, which were
+     * services with a lifecycle. Its steps are plain objects the compiler constructed now, so the
+     * method stays only because its callers are about a pipeline becoming live, not about Camel.
+     */
+    void start() {
     }
 
-    /** Stops what this pipeline created, and nothing the route model owns. */
+    /** Nothing to stop, for the same reason nothing has to be started. */
     void stop() {
-        for (org.apache.camel.Producer producer : owned) {
-            try {
-                producer.stop();
-            } catch (Exception ignored) {
-                // Best effort on a replaced pipeline: one producer failing to stop must not
-                // strand the ones after it, and the replacement is already serving.
-            }
-        }
     }
 
     /**

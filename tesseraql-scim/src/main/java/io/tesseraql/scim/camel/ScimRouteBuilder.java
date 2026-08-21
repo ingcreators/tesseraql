@@ -2,6 +2,7 @@ package io.tesseraql.scim.camel;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.camel.HttpMounts;
+import io.tesseraql.camel.auth.AuthStep;
 import io.tesseraql.compiler.pipeline.Pipeline;
 import io.tesseraql.compiler.pipeline.Pipelines;
 import io.tesseraql.scim.ScimError;
@@ -21,8 +22,8 @@ import org.apache.camel.builder.RouteBuilder;
  */
 public final class ScimRouteBuilder extends RouteBuilder {
 
-    private static final String AUTH = "tesseraql-auth:authenticate?auth=bearer";
-    private static final String AUTHORIZE = "tesseraql-auth:authorize?policy=scim.manage";
+    private static final AuthStep AUTH = new AuthStep("authenticate", "bearer", null, null);
+    private static final AuthStep AUTHORIZE = new AuthStep("authorize", null, "scim.manage", null);
     private static final String SCIM_JSON = "application/scim+json; charset=utf-8";
 
     private final ObjectMapper mapper = new ObjectMapper();
@@ -61,17 +62,17 @@ public final class ScimRouteBuilder extends RouteBuilder {
         HttpMounts.mount(getContext(), "DELETE", "/scim/v2/Users/{id}", "scim.deleteUser");
 
         pipelines.pipeline("scim.createUser")
-                .to(AUTH).to(AUTHORIZE).process(this::createUser);
+                .process(AUTH).process(AUTHORIZE).process(this::createUser);
         pipelines.pipeline("scim.getUser")
-                .to(AUTH).to(AUTHORIZE).process(this::getUser);
+                .process(AUTH).process(AUTHORIZE).process(this::getUser);
         pipelines.pipeline("scim.listUsers")
-                .to(AUTH).to(AUTHORIZE).process(this::listUsers);
+                .process(AUTH).process(AUTHORIZE).process(this::listUsers);
         pipelines.pipeline("scim.replaceUser")
-                .to(AUTH).to(AUTHORIZE).process(this::replaceUser);
+                .process(AUTH).process(AUTHORIZE).process(this::replaceUser);
         pipelines.pipeline("scim.patchUser")
-                .to(AUTH).to(AUTHORIZE).process(this::patchUser);
+                .process(AUTH).process(AUTHORIZE).process(this::patchUser);
         pipelines.pipeline("scim.deleteUser")
-                .to(AUTH).to(AUTHORIZE).process(this::deleteUser);
+                .process(AUTH).process(AUTHORIZE).process(this::deleteUser);
 
         if (groups != null) {
             configureGroups(pipelines);
@@ -87,17 +88,17 @@ public final class ScimRouteBuilder extends RouteBuilder {
         HttpMounts.mount(getContext(), "DELETE", "/scim/v2/Groups/{id}", "scim.deleteGroup");
 
         pipelines.pipeline("scim.createGroup")
-                .to(AUTH).to(AUTHORIZE).process(this::createGroup);
+                .process(AUTH).process(AUTHORIZE).process(this::createGroup);
         pipelines.pipeline("scim.getGroup")
-                .to(AUTH).to(AUTHORIZE).process(this::getGroup);
+                .process(AUTH).process(AUTHORIZE).process(this::getGroup);
         pipelines.pipeline("scim.listGroups")
-                .to(AUTH).to(AUTHORIZE).process(this::listGroups);
+                .process(AUTH).process(AUTHORIZE).process(this::listGroups);
         pipelines.pipeline("scim.replaceGroup")
-                .to(AUTH).to(AUTHORIZE).process(this::replaceGroup);
+                .process(AUTH).process(AUTHORIZE).process(this::replaceGroup);
         pipelines.pipeline("scim.patchGroup")
-                .to(AUTH).to(AUTHORIZE).process(this::patchGroup);
+                .process(AUTH).process(AUTHORIZE).process(this::patchGroup);
         pipelines.pipeline("scim.deleteGroup")
-                .to(AUTH).to(AUTHORIZE).process(this::deleteGroup);
+                .process(AUTH).process(AUTHORIZE).process(this::deleteGroup);
     }
 
     private void createUser(Exchange exchange) throws Exception {

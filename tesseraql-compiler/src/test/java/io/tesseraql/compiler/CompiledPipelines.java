@@ -25,30 +25,27 @@ final class CompiledPipelines {
     /** Each pipeline's steps, by id: a processor's simple class name, or an endpoint's URI. */
     static Map<String, List<String>> stepsById(CamelContext context) {
         Map<String, List<String>> byId = new LinkedHashMap<>();
-        Pipelines.of(context).all().forEach((id, pipeline) -> byId.put(id, steps(pipeline)));
+        Pipelines.of(context).all().forEach((id, pipeline) -> byId.put(id, names(pipeline)));
         return byId;
     }
 
-    /** Every endpoint URI any pipeline names, in compilation order, filtered by prefix. */
-    static List<String> endpoints(CamelContext context, String prefix) {
-        List<String> uris = new ArrayList<>();
+    /** Every step of {@code type} any pipeline holds, in compilation order. */
+    static <T> List<T> steps(CamelContext context, Class<T> type) {
+        List<T> found = new ArrayList<>();
         for (Pipeline pipeline : Pipelines.of(context).all().values()) {
             for (Pipeline.Step step : pipeline.steps()) {
-                if (step instanceof Pipeline.Step.Send send && send.uri().startsWith(prefix)) {
-                    uris.add(send.uri());
+                if (type.isInstance(step.processor())) {
+                    found.add(type.cast(step.processor()));
                 }
             }
         }
-        return uris;
+        return found;
     }
 
-    private static List<String> steps(Pipeline pipeline) {
+    private static List<String> names(Pipeline pipeline) {
         List<String> names = new ArrayList<>();
         for (Pipeline.Step step : pipeline.steps()) {
-            names.add(switch (step) {
-                case Pipeline.Step.Run run -> run.processor().getClass().getSimpleName();
-                case Pipeline.Step.Send send -> send.uri();
-            });
+            names.add(step.processor().getClass().getSimpleName());
         }
         return names;
     }

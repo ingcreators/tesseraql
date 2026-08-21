@@ -14,39 +14,69 @@ import io.tesseraql.security.session.BrowserAuthenticator;
 import io.tesseraql.security.session.CsrfValidator;
 import io.tesseraql.security.session.SessionStore;
 import org.apache.camel.Exchange;
-import org.apache.camel.support.DefaultProducer;
+import org.apache.camel.Processor;
 
 /**
  * Performs the {@code authenticate} and {@code authorize} operations for the {@code tesseraql-auth}
  * component (design ch. 9.2, 7.2). The {@link PolicyEngine} and {@link JwtAuthenticator} are looked
  * up from the Camel registry, where the runtime binds them from the security configuration.
  */
-public class TesseraqlAuthProducer extends DefaultProducer {
+public class AuthStep implements Processor {
 
     private static final TqlErrorCode UNSUPPORTED = new TqlErrorCode(TqlDomain.SEC, 4000);
 
     /** TQL-SEC-4001: the authenticator this route needs is not configured, so nothing can pass. */
     private static final TqlErrorCode NOT_CONFIGURED = new TqlErrorCode(TqlDomain.SEC, 4001);
 
-    private final TesseraqlAuthEndpoint endpoint;
+    private final String operation;
+    private final String auth;
+    private final String policy;
+    private final String pathTemplate;
 
-    public TesseraqlAuthProducer(TesseraqlAuthEndpoint endpoint) {
-        super(endpoint);
-        this.endpoint = endpoint;
+    /** The gate a route declares, with the settings its endpoint URI used to carry. */
+    public AuthStep(String operation, String auth, String policy, String pathTemplate) {
+        this.operation = operation;
+        this.auth = auth == null ? "bearer" : auth;
+        this.policy = policy;
+        this.pathTemplate = pathTemplate;
+    }
+
+    /** A gate with no settings beyond its operation: csrf, rotate, fence, conditions, activate. */
+    public AuthStep(String operation) {
+        this(operation, null, null, null);
+    }
+
+    /** Which gate this is. */
+    public String operation() {
+        return operation;
+    }
+
+    /** The authentication kind an {@code authenticate} gate demands. */
+    public String auth() {
+        return auth;
+    }
+
+    /** The permission atom an {@code authorize} gate checks, possibly parameterised. */
+    public String policy() {
+        return policy;
+    }
+
+    /** The route's URL template, which is where a parameterised atom reads its parameter from. */
+    public String pathTemplate() {
+        return pathTemplate;
     }
 
     @Override
     public void process(Exchange exchange) {
-        String operation = endpoint.getOperation();
         io.tesseraql.core.telemetry.Span span = io.tesseraql.camel.TesseraqlTracing.tracer(exchange)
                 .start("tesseraql.security." + operation,
                         io.tesseraql.camel.TesseraqlTracing.parent(exchange))
                 .attribute("operation", operation);
-        if (endpoint.getAuth() != null) {
-            span.attribute("auth", endpoint.getAuth());
+        if (auth != null) {
+            span.attribute("auth", auth);
         }
-        if (endpoint.getPolicy() != null) {
-            span.attribute("policy", endpoint.getPolicy());
+        if (policy != null) {
+            span.attribute("policy", policy);
         }
         try {
             switch (operation) {
@@ -76,7 +106,7 @@ public class TesseraqlAuthProducer extends DefaultProducer {
      * caller without one.
      */
     private void rotate(Exchange exchange) {
-        SessionStore sessions = endpoint.getCamelContext().getRegistry().lookupByNameAndType(
+        SessionStore sessions = exchange.getContext().getRegistry().lookupByNameAndType(
                 TesseraqlProperties.SESSION_STORE_BEAN, SessionStore.class);
         if (sessions == null) {
             return;
@@ -91,16 +121,16 @@ public class TesseraqlAuthProducer extends DefaultProducer {
     }
 
     private void authenticate(Exchange exchange) {
-        Principal principal = switch (endpoint.getAuth()) {
+        Principal principal = switch (auth) {
             case "bearer" ->
-                bean(JwtAuthenticator.class, TesseraqlProperties.JWT_AUTHENTICATOR_BEAN)
+                bean(exchange, JwtAuthenticator.class, TesseraqlProperties.JWT_AUTHENTICATOR_BEAN)
                         .authenticate(
                                 exchange.getMessage().getHeader("Authorization", String.class));
             case "api-key" -> apiKeyAuthenticate(exchange);
             case "mtls" -> mtlsAuthenticate(exchange);
             case "browser" -> browserAuthenticate(exchange);
             default ->
-                throw new TqlException(UNSUPPORTED, "Unsupported auth type: " + endpoint.getAuth());
+                throw new TqlException(UNSUPPORTED, "Unsupported auth type: " + auth);
         };
         exchange.setProperty(TesseraqlProperties.PRINCIPAL, principal);
     }
@@ -111,7 +141,7 @@ public class TesseraqlAuthProducer extends DefaultProducer {
      * the {@code Authorization} header (design ch. 11.1).
      */
     private Principal apiKeyAuthenticate(Exchange exchange) {
-        ApiKeyAuthenticator authenticator = bean(ApiKeyAuthenticator.class,
+        ApiKeyAuthenticator authenticator = bean(exchange, ApiKeyAuthenticator.class,
                 TesseraqlProperties.API_KEY_AUTHENTICATOR_BEAN);
         String key = exchange.getMessage().getHeader(authenticator.header(), String.class);
         if (key == null) {
@@ -131,7 +161,7 @@ public class TesseraqlAuthProducer extends DefaultProducer {
      * (design ch. 11.1).
      */
     private Principal mtlsAuthenticate(Exchange exchange) {
-        MtlsAuthenticator authenticator = bean(MtlsAuthenticator.class,
+        MtlsAuthenticator authenticator = bean(exchange, MtlsAuthenticator.class,
                 TesseraqlProperties.MTLS_AUTHENTICATOR_BEAN);
         String header = authenticator.header();
         String certificate = header == null
@@ -146,7 +176,8 @@ public class TesseraqlAuthProducer extends DefaultProducer {
      * token the {@code csrf} operation later validates.
      */
     private Principal browserAuthenticate(Exchange exchange) {
-        SessionStore sessions = bean(SessionStore.class, TesseraqlProperties.SESSION_STORE_BEAN);
+        SessionStore sessions = bean(exchange, SessionStore.class,
+                TesseraqlProperties.SESSION_STORE_BEAN);
         String cookie = exchange.getMessage().getHeader("Cookie", String.class);
         Principal principal = new BrowserAuthenticator(sessions).authenticate(cookie);
         if (principal != null) {
@@ -172,7 +203,7 @@ public class TesseraqlAuthProducer extends DefaultProducer {
      * do, because a principal is a principal.
      */
     private void fence(Exchange exchange) {
-        String member = endpoint.getCamelContext().getRegistry().lookupByNameAndType(
+        String member = exchange.getContext().getRegistry().lookupByNameAndType(
                 TesseraqlProperties.STACK_MEMBER_BEAN, String.class);
         if (member == null) {
             return;
@@ -187,7 +218,8 @@ public class TesseraqlAuthProducer extends DefaultProducer {
     }
 
     private void authorize(Exchange exchange, io.tesseraql.core.telemetry.Span span) {
-        PolicyEngine engine = bean(PolicyEngine.class, TesseraqlProperties.POLICY_ENGINE_BEAN);
+        PolicyEngine engine = bean(exchange, PolicyEngine.class,
+                TesseraqlProperties.POLICY_ENGINE_BEAN);
         Principal principal = exchange.getProperty(TesseraqlProperties.PRINCIPAL, Principal.class);
         engine.authorize(policyFor(exchange, span), principal);
     }
@@ -207,12 +239,12 @@ public class TesseraqlAuthProducer extends DefaultProducer {
      * one the engine would give anyway — reached here without a policy id to hand it.
      */
     private String policyFor(Exchange exchange, io.tesseraql.core.telemetry.Span span) {
-        String declared = endpoint.getPolicy();
+        String declared = policy;
         if (!io.tesseraql.security.policy.PolicyTemplate.isTemplate(declared)) {
             return declared;
         }
         String resolved = io.tesseraql.security.policy.PolicyTemplate.resolve(declared,
-                endpoint.getPathTemplate(), wirePath(exchange));
+                pathTemplate, wirePath(exchange));
         if (resolved == null) {
             throw new TqlException(PolicyEngine.FORBIDDEN, "Policy '" + declared + "' resolves"
                     + " from this request's path, which names no application it can check");
@@ -242,7 +274,7 @@ public class TesseraqlAuthProducer extends DefaultProducer {
         if (principal == null) {
             return;
         }
-        java.time.ZoneId zone = endpoint.getCamelContext().getRegistry().lookupByNameAndType(
+        java.time.ZoneId zone = exchange.getContext().getRegistry().lookupByNameAndType(
                 TesseraqlProperties.CONDITION_ZONE_BEAN, java.time.ZoneId.class);
         // The presented address, resolved exactly as the session records it: the edge's
         // forwarded value when there is one, else the peer of the connection.
@@ -272,7 +304,7 @@ public class TesseraqlAuthProducer extends DefaultProducer {
      * fence; anywhere but a hosted member the topology bean is absent and this is a no-op.
      */
     private void activate(Exchange exchange) {
-        String member = endpoint.getCamelContext().getRegistry().lookupByNameAndType(
+        String member = exchange.getContext().getRegistry().lookupByNameAndType(
                 TesseraqlProperties.STACK_MEMBER_BEAN, String.class);
         if (member == null) {
             return;
@@ -335,7 +367,7 @@ public class TesseraqlAuthProducer extends DefaultProducer {
 
     /** The same page under the given role's activation segment, query preserved. */
     private String activatedLocation(Exchange exchange, String role) {
-        String base = io.tesseraql.camel.BasePath.of(endpoint.getCamelContext());
+        String base = io.tesseraql.camel.BasePath.of(exchange.getContext());
         String path = wirePath(exchange);
         String within = path.startsWith(base) ? path.substring(base.length()) : path;
         return base + "/_as/" + io.tesseraql.camel.BasePath.encodeSegment(role) + within
@@ -381,7 +413,7 @@ public class TesseraqlAuthProducer extends DefaultProducer {
      */
     private void csrf(Exchange exchange) {
         CsrfValidator validator = new CsrfValidator(
-                bean(SessionStore.class, TesseraqlProperties.SESSION_STORE_BEAN));
+                bean(exchange, SessionStore.class, TesseraqlProperties.SESSION_STORE_BEAN));
         String header = exchange.getMessage().getHeader("X-CSRF-Token", String.class);
         String token = header != null ? header : formField(exchange, "_csrf");
         validator.validate(exchange.getMessage().getHeader("Cookie", String.class), token);
@@ -410,11 +442,11 @@ public class TesseraqlAuthProducer extends DefaultProducer {
      * leaves the code as the operator's only signal, and one code covering three unrelated
      * conditions cannot be acted on. The build-time counterpart is {@code TQL-SEC-4047}.
      */
-    private <T> T bean(Class<T> type, String name) {
-        T bean = endpoint.getCamelContext().getRegistry().lookupByNameAndType(name, type);
+    private <T> T bean(Exchange exchange, Class<T> type, String name) {
+        T bean = exchange.getContext().getRegistry().lookupByNameAndType(name, type);
         if (bean == null) {
             throw new TqlException(NOT_CONFIGURED, "Security bean '" + name + "' is not bound;"
-                    + " security is not configured for auth: " + endpoint.getAuth());
+                    + " security is not configured for auth: " + auth);
         }
         return bean;
     }

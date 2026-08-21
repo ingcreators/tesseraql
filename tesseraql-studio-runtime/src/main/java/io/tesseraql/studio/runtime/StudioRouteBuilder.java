@@ -3,6 +3,7 @@ package io.tesseraql.studio.runtime;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.camel.HttpMounts;
 import io.tesseraql.camel.TesseraqlProperties;
+import io.tesseraql.camel.auth.AuthStep;
 import io.tesseraql.compiler.binding.ErrorResponseRenderer;
 import io.tesseraql.compiler.pipeline.Pipeline;
 import io.tesseraql.compiler.pipeline.Pipelines;
@@ -26,7 +27,7 @@ import org.apache.camel.builder.RouteBuilder;
  */
 final class StudioRouteBuilder extends RouteBuilder {
 
-    private static final String AUTH = "tesseraql-auth:authenticate?auth=bearer";
+    private static final AuthStep AUTH = new AuthStep("authenticate", "bearer", null, null);
 
     private final ObjectMapper mapper = new ObjectMapper();
     private final StudioService studio;
@@ -78,21 +79,21 @@ final class StudioRouteBuilder extends RouteBuilder {
         HttpMounts.mount(getContext(), "POST", "/_tesseraql/studio/reload", "studio.reload");
 
         pipelines.pipeline("studio.explorer")
-                .to(AUTH).process(json(exchange -> studio
+                .process(AUTH).process(json(exchange -> studio
                         .explorer(exchange.getMessage().getHeader("q", String.class))));
 
         pipelines.pipeline("studio.source")
-                .to(AUTH).process(json(exchange -> {
+                .process(AUTH).process(json(exchange -> {
                     String path = requirePath(exchange);
                     return Map.of("path", path, "content", studio.source(path));
                 }));
 
         // Lists every pending draft with its conflict status (backlog D5 draft overview).
         pipelines.pipeline("studio.drafts")
-                .to(AUTH).process(json(exchange -> studio.drafts()));
+                .process(AUTH).process(json(exchange -> studio.drafts()));
 
         pipelines.pipeline("studio.draft")
-                .to(AUTH).process(json(exchange -> {
+                .process(AUTH).process(json(exchange -> {
                     studioEdit.requireEdit(permissions(exchange));
                     String path = requirePath(exchange);
                     String content = exchange.getMessage().getBody(String.class);
@@ -103,7 +104,7 @@ final class StudioRouteBuilder extends RouteBuilder {
                 }));
 
         pipelines.pipeline("studio.preview")
-                .to(AUTH).process(json(exchange -> {
+                .process(AUTH).process(json(exchange -> {
                     String path = requirePath(exchange);
                     return studio.preview(path, exchange.getMessage().getBody(String.class));
                 }));
@@ -112,7 +113,7 @@ final class StudioRouteBuilder extends RouteBuilder {
         // carries a JSON body {content, sampleModel, live} rather than the raw content the others
         // use. live:true runs the route's query through the A2 sandbox for real rows.
         pipelines.pipeline("studio.render")
-                .to(AUTH).process(json(exchange -> {
+                .process(AUTH).process(json(exchange -> {
                     String path = requirePath(exchange);
                     com.fasterxml.jackson.databind.JsonNode body = readBody(exchange);
                     boolean live = "true".equals(text(body, "live")) && studioTests.isEnabled();
@@ -124,22 +125,25 @@ final class StudioRouteBuilder extends RouteBuilder {
         // Runs the route's read-only sql test cases against the dev datasource (backlog A2);
         // returns ran:false with a note when disabled, unknown, or lacking SQL cases.
         pipelines.pipeline("studio.runTests")
-                .to(AUTH).process(json(exchange -> studioTests.runForPath(requirePath(exchange))));
+                .process(AUTH)
+                .process(json(exchange -> studioTests.runForPath(requirePath(exchange))));
 
         // Lists the dev datasource's tables for the scaffold picker, and previews one table's
         // generated CRUD slice (backlog B3); both return ran/enabled:false notes when disabled.
         pipelines.pipeline("studio.scaffold.tables")
-                .to(AUTH).process(json(exchange -> io.tesseraql.studio.StudioViews.scaffoldTables(
+                .process(AUTH)
+                .process(json(exchange -> io.tesseraql.studio.StudioViews.scaffoldTables(
                         studioScaffold.tables(), studioScaffold.isEnabled())));
 
         pipelines.pipeline("studio.scaffold.preview")
-                .to(AUTH).process(json(exchange -> io.tesseraql.studio.StudioViews.scaffoldPreview(
+                .process(AUTH)
+                .process(json(exchange -> io.tesseraql.studio.StudioViews.scaffoldPreview(
                         studioScaffold.preview(requireTable(exchange)))));
 
         // Writes a table's CRUD slice into the app home (backlog B3), honoring edit detection unless
         // force=true; new route files need a restart, surfaced in the result.
         pipelines.pipeline("studio.scaffold.apply")
-                .to(AUTH).process(json(exchange -> {
+                .process(AUTH).process(json(exchange -> {
                     studioEdit.requireEdit(permissions(exchange));
                     Map<String, Object> result = io.tesseraql.studio.StudioViews.scaffoldResult(
                             studioScaffold.apply(requireTable(exchange), flag(exchange, "force"),
@@ -151,10 +155,10 @@ final class StudioRouteBuilder extends RouteBuilder {
 
         // The audit trail (backlog D6): who applied or scaffolded what, when (newest first).
         pipelines.pipeline("studio.audit")
-                .to(AUTH).process(json(exchange -> studio.auditEntries(200)));
+                .process(AUTH).process(json(exchange -> studio.auditEntries(200)));
 
         pipelines.pipeline("studio.apply")
-                .to(AUTH).process(json(exchange -> {
+                .process(AUTH).process(json(exchange -> {
                     studioEdit.requireEdit(permissions(exchange));
                     String path = requirePath(exchange);
                     // The confirm-before-apply gate applies to every apply surface, not only the
@@ -184,7 +188,7 @@ final class StudioRouteBuilder extends RouteBuilder {
         // without it, any authenticated caller without the edit atom could still rebuild
         // every route, repeatedly.
         pipelines.pipeline("studio.reload")
-                .to(AUTH).process(json(exchange -> {
+                .process(AUTH).process(json(exchange -> {
                     studioEdit.requireEdit(permissions(exchange));
                     RouteReloader.Result reload = reloader.reload(true);
                     // The response keeps the pre-extraction shape: the reload delta plus the

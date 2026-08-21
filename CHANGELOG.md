@@ -136,6 +136,16 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **The framework's own four components stop being Camel components** (docs/camel-removal.md
+  structural decision 2, slice 3a). `tesseraql-sql:`, `tesseraql-auth:`, `tesseraql-iam:` and
+  `tesseraql-service:` were `Component`/`Endpoint`/`Producer` implementations, so the compiler
+  wrote a URI out of typed values — `tesseraql-sql:file:/…/q.sql?datasource=main&mode=query&maxRows=200`
+  — and the endpoint parsed it back into typed fields. The compiler constructs the step now, and
+  406 lines of URI parsing and parameter binding go with the round trip. **The security gate stops
+  percent-encoding its own atom**: a parameterised policy and the route's URL template had to be
+  URL-encoded into a query string, because braces are not URI characters, and decoded again at the
+  other end. Both are arguments. Nothing about a route's YAML or its behaviour changes.
+
 - **Every file connector is the runtime's own, in both directions** (docs/camel-removal.md
   structural decision 4). FTPS joins local and SFTP on the runtime's poll cycle, and a `push:`
   step delivers through the same client its poll sibling reads with. That sharing is the point

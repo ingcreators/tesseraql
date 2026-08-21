@@ -1,6 +1,7 @@
 package io.tesseraql.compiler;
 
 import io.tesseraql.camel.TesseraqlProperties;
+import io.tesseraql.camel.auth.AuthStep;
 import io.tesseraql.compiler.binding.ConcurrencyLimiter;
 import io.tesseraql.compiler.binding.ErrorResponseRenderer;
 import io.tesseraql.compiler.binding.HtmlResponseRenderer;
@@ -362,7 +363,7 @@ public final class RouteCompiler {
             RouteDefinition definition) {
         if (definition.response() != null && definition.response().session() != null
                 && definition.response().session().rotates()) {
-            return route.to("tesseraql-auth:rotate");
+            return route.process(new AuthStep("rotate"));
         }
         return route;
     }
@@ -874,10 +875,11 @@ public final class RouteCompiler {
         // export exists to avoid.
         String exportDatasource = bindingDatasource(definition.main(),
                 definition.effectiveDatasource());
-        String sqlUri = "tesseraql-sql:file:" + sqlPath
-                + "?datasource=" + exportDatasource
-                + "&mode=query-export&filename=" + exportFilename(definition, codec)
-                + executionParams(exportDatasource, definition.main());
+        io.tesseraql.camel.sql.SqlStep exportSql = new io.tesseraql.camel.sql.SqlStep(
+                sqlPath.toString(), exportDatasource, "query-export", "main",
+                effectiveMaxRows(definition.main()), effectiveTimeoutSeconds(definition.main()),
+                effectiveOnOverflow(definition.main()), exportFilename(definition, codec),
+                datasourceDialect(exportDatasource));
 
         PipelineBuilder route = pipelines.pipeline(routeId);
         applyCommonGovernance(route, routeFile);
@@ -895,7 +897,7 @@ public final class RouteCompiler {
                         "tesseraql.files.timezone"),
                 declaredExportRowCap(spec, format), exportQueries(definition, routeDir),
                 httpSourceNames(definition), enrichProcessors(routeDir, definition)))
-                .to(sqlUri);
+                .process(exportSql);
     }
 
     /**
@@ -1109,7 +1111,7 @@ public final class RouteCompiler {
         for (var entry : definition.steps().entrySet()) {
             step = step.process(new io.tesseraql.compiler.binding.NamedQueryBinder(
                     entry.getValue()))
-                    .to(executionUri(routeFile, entry.getValue(), "steps." + entry.getKey()));
+                    .process(execution(routeFile, entry.getValue(), "steps." + entry.getKey()));
         }
         // enrich: runs last of the data stage: it reads a result set the earlier steps
         // published and writes it back enriched (docs/lookups.md).
@@ -1145,7 +1147,7 @@ public final class RouteCompiler {
         }
         return step
                 .process(new io.tesseraql.compiler.binding.NamedQueryBinder(binding))
-                .to(executionUri(routeFile, binding, name));
+                .process(execution(routeFile, binding, name));
     }
 
     /** The same, for the {@code direct:} pipelines that carry a directory instead of a route. */
@@ -1157,7 +1159,7 @@ public final class RouteCompiler {
         }
         return step
                 .process(new io.tesseraql.compiler.binding.NamedQueryBinder(binding))
-                .to(executionUri(dir, binding, name, datasource));
+                .process(execution(dir, binding, name, datasource));
     }
 
     /**
@@ -1424,9 +1426,9 @@ public final class RouteCompiler {
     }
 
     /** Builds an execution step URI: a service provider, a tesseraql-iam contract or a SQL file. */
-    private String executionUri(RouteFile routeFile, io.tesseraql.yaml.model.Binding binding,
-            String resultKey) {
-        return executionUri(routeFile.source().getParent(), binding, resultKey,
+    private org.apache.camel.Processor execution(RouteFile routeFile,
+            io.tesseraql.yaml.model.Binding binding, String resultKey) {
+        return execution(routeFile.source().getParent(), binding, resultKey,
                 routeFile.definition().effectiveDatasource());
     }
 
@@ -1434,35 +1436,23 @@ public final class RouteCompiler {
      * SQL files relative to {@code sourceDir} (shared by routes and MCP tools). The binding's own
      * {@code datasource:} wins over {@code routeDatasource}, the route-level connector (roadmap
      * Phase 53); the baked dialect follows the connector the SQL actually runs on. */
-    private String executionUri(Path sourceDir, io.tesseraql.yaml.model.Binding binding,
-            String resultKey, String routeDatasource) {
+    private org.apache.camel.Processor execution(Path sourceDir,
+            io.tesseraql.yaml.model.Binding binding, String resultKey, String routeDatasource) {
         if (binding.isService()) {
-            return "tesseraql-service:call?name=" + binding.service() + "&resultKey=" + resultKey;
+            return new io.tesseraql.camel.service.ServiceStep("call", binding.service(), resultKey);
         }
         if (binding.isContract()) {
-            return "tesseraql-iam:contract?name=" + binding.contract()
-                    + "&mode=" + binding.effectiveMode() + "&resultKey=" + resultKey;
+            return new io.tesseraql.camel.iam.IamStep("contract", binding.contract(),
+                    binding.effectiveMode(), resultKey);
         }
         String datasource = bindingDatasource(binding, routeDatasource);
         Path sqlPath = sourceDir.resolve(binding.file()).normalize();
-        return "tesseraql-sql:file:" + sqlPath
-                + "?datasource=" + datasource
-                + "&mode=" + binding.effectiveMode()
-                + "&resultKey=" + resultKey
-                + executionParams(datasource, binding);
-    }
-
-    /**
-     * The execution parameters every {@code tesseraql-sql:} endpoint carries, whatever its mode.
-     * {@code dialect} is the load-bearing one: the producer resolves {@code foo.<dialect>.sql}
-     * variants from it, picks the dialect's streaming profile, and folds column labels with it —
-     * a hand-built URI that omits it silently runs the base file with default streaming.
-     */
-    private String executionParams(String datasource, io.tesseraql.yaml.model.Binding binding) {
-        return "&dialect=" + datasourceDialect(datasource)
-                + "&maxRows=" + effectiveMaxRows(binding)
-                + "&onOverflow=" + effectiveOnOverflow(binding)
-                + "&queryTimeoutSeconds=" + effectiveTimeoutSeconds(binding);
+        // The dialect is the load-bearing setting: the step resolves foo.<dialect>.sql variants
+        // from it, picks the dialect's streaming profile, and folds column labels with it.
+        return new io.tesseraql.camel.sql.SqlStep(sqlPath.toString(), datasource,
+                binding.effectiveMode(), resultKey, effectiveMaxRows(binding),
+                effectiveTimeoutSeconds(binding), effectiveOnOverflow(binding), null,
+                datasourceDialect(datasource));
     }
 
     /** The connector a binding runs on: its own {@code datasource:} when declared, else the route's. */
@@ -1818,31 +1808,30 @@ public final class RouteCompiler {
             return;
         }
         if (security.auth() != null && !"public".equals(security.auth())) {
-            route.to("tesseraql-auth:authenticate?auth=" + security.auth());
+            route.process(new AuthStep("authenticate", security.auth(), null, null));
             // The member fence (docs/stack-shells.md structural decision 3): on a hosted stack
             // member the runtime binds the topology bean and an authenticated principal without
             // the member's app-use atom is refused before the route runs; everywhere else the
             // bean is absent and this is a no-op. Emitted here rather than decided here because
             // only the runtime knows its own topology, and public routes stay untouched.
-            route.to("tesseraql-auth:fence");
+            route.process(new AuthStep("fence"));
             // Grant context conditions (docs/access-governance.md structural decision 8): a
             // held role whose network or hours conditions this request does not satisfy leaves
             // the principal here, before activation chooses among what is left. Unlike its two
             // neighbours this step has no topology guard — a role's conditions belong to the
             // grant, not to the stack, so the unhosted boot evaluates them too.
-            route.to("tesseraql-auth:conditions");
+            route.process(new AuthStep("conditions"));
             // Role activation (docs/application-roles.md structural decision 4): after the
             // union-scoped fence, the acting-role signal narrows the exchange's principal to
             // the active view everything downstream reads. Same topology guard as the fence —
             // absent bean, no-op — so the unhosted boot serves no activation step.
-            route.to("tesseraql-auth:activate");
+            route.process(new AuthStep("activate"));
         }
         if (security.csrfEnforced(httpMethod)) {
-            route.to("tesseraql-auth:csrf");
+            route.process(new AuthStep("csrf"));
         }
         if (security.policy() != null && !security.policy().isBlank()) {
-            route.to("tesseraql-auth:authorize?policy="
-                    + policyUriValue(security.policy(), urlPath));
+            route.process(authorize(security.policy(), urlPath));
         }
     }
 
@@ -1861,9 +1850,9 @@ public final class RouteCompiler {
      *
      * <p>Both are percent-encoded because braces are not URI characters.
      */
-    private String policyUriValue(String policy, String urlPath) {
+    private AuthStep authorize(String policy, String urlPath) {
         if (!io.tesseraql.security.policy.PolicyTemplate.isTemplate(policy)) {
-            return policy;
+            return new AuthStep("authorize", null, policy, null);
         }
         String violation = io.tesseraql.yaml.app.PolicyCodes.templateViolation(policy,
                 urlPath == null ? java.util.List.of() : pathParams(urlPath));
@@ -1871,11 +1860,9 @@ public final class RouteCompiler {
             throw new TqlException(io.tesseraql.yaml.app.PolicyCodes.TEMPLATE_UNRESOLVABLE,
                     violation);
         }
-        return encode(policy.replace("{path.", "{")) + "&pathTemplate=" + encode(urlPath);
-    }
-
-    private static String encode(String value) {
-        return java.net.URLEncoder.encode(value, java.nio.charset.StandardCharsets.UTF_8);
+        // The atom and the template are arguments now, so nothing is percent-encoded into a
+        // query string and nothing has to be decoded back out (docs/camel-removal.md decision 2).
+        return new AuthStep("authorize", null, policy.replace("{path.", "{"), urlPath);
     }
 
     /**

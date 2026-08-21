@@ -1,6 +1,7 @@
 package io.tesseraql.studio.runtime;
 
 import io.tesseraql.camel.HttpMounts;
+import io.tesseraql.camel.auth.AuthStep;
 import io.tesseraql.compiler.binding.ErrorResponseRenderer;
 import io.tesseraql.compiler.pipeline.Pipeline;
 import io.tesseraql.compiler.pipeline.Pipelines;
@@ -23,8 +24,8 @@ import org.apache.camel.builder.RouteBuilder;
  */
 final class CopilotProxyRouteBuilder extends RouteBuilder {
 
-    private static final String BROWSER = "tesseraql-auth:authenticate?auth=browser";
-    private static final String CSRF = "tesseraql-auth:csrf";
+    private static final AuthStep BROWSER = new AuthStep("authenticate", "browser", null, null);
+    private static final AuthStep CSRF = new AuthStep("csrf");
 
     private final HostContext.MemberOrigins origins;
     private final HttpClient client = HttpClient.newHttpClient();
@@ -44,7 +45,7 @@ final class CopilotProxyRouteBuilder extends RouteBuilder {
                 "studio.shell.copilot.send");
 
         pipelines.pipeline("studio.shell.copilot.send")
-                .to(BROWSER).to(CSRF).process(this::forward);
+                .process(BROWSER).process(CSRF).process(this::forward);
     }
 
     private void forward(Exchange exchange) throws Exception {

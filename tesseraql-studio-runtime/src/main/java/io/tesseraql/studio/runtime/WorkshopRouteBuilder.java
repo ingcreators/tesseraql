@@ -3,6 +3,7 @@ package io.tesseraql.studio.runtime;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.camel.HttpMounts;
 import io.tesseraql.camel.TesseraqlProperties;
+import io.tesseraql.camel.auth.AuthStep;
 import io.tesseraql.compiler.binding.ErrorResponseRenderer;
 import io.tesseraql.compiler.pipeline.Pipeline;
 import io.tesseraql.compiler.pipeline.Pipelines;
@@ -26,8 +27,8 @@ import org.apache.camel.builder.RouteBuilder;
  */
 final class WorkshopRouteBuilder extends RouteBuilder {
 
-    private static final String BROWSER = "tesseraql-auth:authenticate?auth=browser";
-    private static final String CSRF = "tesseraql-auth:csrf";
+    private static final AuthStep BROWSER = new AuthStep("authenticate", "browser", null, null);
+    private static final AuthStep CSRF = new AuthStep("csrf");
 
     private final ObjectMapper mapper = new ObjectMapper();
     private final StudioEdit studioEdit;
@@ -51,9 +52,9 @@ final class WorkshopRouteBuilder extends RouteBuilder {
                 "studio.workshop.public");
 
         pipelines.pipeline("studio.workshop.read")
-                .to(BROWSER).process(exchange -> answer(exchange, "GET"));
+                .process(BROWSER).process(exchange -> answer(exchange, "GET"));
         pipelines.pipeline("studio.workshop.act")
-                .to(BROWSER).to(CSRF).process(exchange -> answer(exchange, "POST"));
+                .process(BROWSER).process(CSRF).process(exchange -> answer(exchange, "POST"));
         // The token-authorized share providers: no session, no atom — the provider verifies
         // the signed link itself, and only the PUBLIC rows answer here.
         pipelines.pipeline("studio.workshop.public")
