@@ -20,7 +20,7 @@ import io.tesseraql.security.session.SessionStore;
 /**
  * Performs the {@code authenticate} and {@code authorize} operations for the {@code tesseraql-auth}
  * component (design ch. 9.2, 7.2). The {@link PolicyEngine} and {@link JwtAuthenticator} are looked
- * up from the Camel registry, where the runtime binds them from the security configuration.
+ * up from the runtime's registry, where it binds them from the security configuration.
  */
 public class AuthStep implements Step {
 

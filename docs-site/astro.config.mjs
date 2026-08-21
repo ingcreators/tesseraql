@@ -22,7 +22,7 @@ export default defineConfig({
       // Self-hosted brand font (SIL OFL): Sora Variable + brand overrides.
       customCss: ['@fontsource-variable/sora', './src/styles/custom.css'],
       description:
-        'A SQL-first framework for hypermedia business applications: YAML routes, 2-way SQL, and server-rendered HTML on Apache Camel.',
+        'A SQL-first framework for hypermedia business applications: YAML routes, 2-way SQL, and server-rendered HTML on the JVM.',
       plugins: [
         // Fail the build on broken internal links or anchors over the rendered
         // route graph - the site-side complement of the sync's completeness guard.
@@ -32,7 +32,7 @@ export default defineConfig({
         starlightLlmsTxt({
           projectName: 'TesseraQL',
           description:
-            'A SQL-first framework for hypermedia business applications: YAML routes, 2-way SQL files, server-rendered Thymeleaf/htmx HTML on Apache Camel.',
+            'A SQL-first framework for hypermedia business applications: YAML routes, 2-way SQL files, server-rendered Thymeleaf/htmx HTML on the JVM.',
           details: [
             'Facts an agent should hold when authoring a TesseraQL application:',
             '',

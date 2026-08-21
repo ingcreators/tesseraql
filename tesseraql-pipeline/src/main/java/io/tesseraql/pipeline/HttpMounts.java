@@ -28,7 +28,7 @@ public final class HttpMounts {
      * One surface.
      *
      * @param method   the HTTP method, upper case
-     * @param path     the URL, base-relative, with Camel's {@code {name}} parameter spelling
+     * @param path     the URL, base-relative, with {@code {name}} parameter spelling
      * @param pipeline the id of the pipeline that answers here
      */
     public record Mount(String method, String path, String pipeline) {

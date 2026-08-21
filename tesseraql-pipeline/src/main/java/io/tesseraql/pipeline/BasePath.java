@@ -7,7 +7,7 @@ import io.tesseraql.core.http.BasePaths;
  * docs/base-path.md), and the one place a framework-built URL acquires it.
  *
  * <p>{@link BasePaths} states the rule; this reads the running application's value. It is bound in
- * the Camel registry rather than threaded through constructors, for the same reason
+ * the runtime's registry rather than threaded through constructors, for the same reason
  * {@link TesseraqlProperties#RESPONSE_HEADERS_BEAN} is: the surfaces that need it are hand-written
  * route builders and processors the compiler never sees.
  *

@@ -14,8 +14,8 @@ import java.util.Map;
 /**
  * Wires the directory-polling consumers for {@code poll:}-triggered file-import jobs (roadmap
  * Phase 26): a local directory, or a remote SFTP/FTPS server, whose files flow into the job's
- * {@code import:} pipeline. The underlying Camel {@code file}/{@code sftp}/{@code ftps} endpoint
- * is an implementation detail — the user declares a poll recipe, not an endpoint URI.
+ * {@code import:} pipeline. The client that reads the directory is an implementation detail —
+ * the user declares a poll recipe, not an endpoint URI.
  *
  * <p>Egress is deny-by-default: a remote source whose host is not in
  * {@code tesseraql.connectors.poll.allowedHosts} is refused (the same rule lint enforces). With

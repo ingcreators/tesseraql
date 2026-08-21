@@ -24,7 +24,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  *
  * <p>Slice 1 measured the happy path, which is the easy half. The design named the hard half in
  * advance and put it outside the list of things to rebuild, because it is not a line item:
- * Camel's unit of work runs {@code addOnCompletion} whether the exchange succeeded or failed, and
+ * the unit of work ran {@code addOnCompletion} whether the exchange succeeded or failed, and
  * five places in this framework depend on that — the audit row, the per-route concurrency permit,
  * the lane permit, the telemetry span, the SQL producer's streamed body. Re-implementing that is
  * easy. Noticing every place that relies on it is not, and the failure mode is silent and only on
@@ -59,20 +59,22 @@ class HttpEdgeFailurePathIntegrationTest {
     }
 
     /**
-     * A refusal produced off a route is the refusal the route produces.
+     * A refusal produced off a route is the refusal the route declares.
      *
      * <p>The {@code onException} clauses are the ones the compiler put in the model, reused rather
-     * than reimplemented, so this is a check that they were reached — not that two renderers
-     * happen to agree.
+     * than reimplemented, so this is a check that they were reached — that the failure arrives as
+     * the framework's error envelope and not as a bare 500 from something above the pipeline.
+     *
+     * <p>It used to compare the edge's answer against the answer of the Camel route mounted behind
+     * it. That route went with docs/camel-removal.md decision 1, and both halves of the comparison
+     * became the same request — so the assertion is on the envelope itself now.
      */
     @Test
     void theErrorEnvelopeIsTheRoutesOwn() {
-        HttpResponse<String> viaCamel = get(PATH);
-        HttpResponse<String> viaEdge = get(PATH);
+        HttpResponse<String> failed = get(PATH);
 
-        assertThat(viaCamel.statusCode()).isNotEqualTo(200);
-        assertThat(viaEdge.statusCode()).isEqualTo(viaCamel.statusCode());
-        assertThat(viaEdge.body()).isEqualTo(viaCamel.body());
+        assertThat(failed.statusCode()).isNotEqualTo(200);
+        assertThat(failed.body()).contains("\"code\":\"TQL-");
     }
 
     /**

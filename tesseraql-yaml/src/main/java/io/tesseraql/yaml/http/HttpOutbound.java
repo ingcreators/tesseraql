@@ -20,7 +20,7 @@ import java.util.Optional;
  *
  * <p>Egress is deny-by-default: a call may only target a host in {@code allowedHosts}, so an
  * {@code http-call} step can never reach an arbitrary URL (the host stays an
- * allow-listed recipe, not an open Camel endpoint). Credential settings resolve their
+ * allow-listed recipe, not an open endpoint URI). Credential settings resolve their
  * {@code ${...}} placeholders lazily, per read, so secrets declared through the SecretResolver
  * SPI ({@code ${secret.<provider>.<name>}}) are fetched at call time, never at startup and never
  * into logs or artifacts — mirroring how {@code tesseraql.notifications.channels} handle them.

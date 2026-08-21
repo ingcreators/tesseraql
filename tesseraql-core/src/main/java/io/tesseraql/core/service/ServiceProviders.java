@@ -8,7 +8,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * The registry of named {@link ServiceProvider}s available to routes (design ch. 47). The runtime
- * and its extensions register providers before the Camel context starts; the
+ * and its extensions register providers before the runtime starts; the
  * {@code tesseraql-service} component resolves them by name at request time.
  */
 public final class ServiceProviders {

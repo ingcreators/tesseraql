@@ -32,7 +32,7 @@ public record ExtensionContext(RuntimeContext runtime, AppManifest manifest, Dat
         return runtime.lookup(name, type);
     }
 
-    /** Binds a bean into the Camel registry under {@code name}. */
+    /** Binds a bean into the runtime's registry under {@code name}. */
     public void bind(String name, Object bean) {
         runtime.bind(name, bean);
     }

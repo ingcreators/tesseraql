@@ -90,7 +90,7 @@ final class CopilotRouteBuilder {
     /**
      * The streaming-response recipe's stream, {@code GET …/copilot/stream?turn=<id>} — an
      * {@link SseRoutes} endpoint (registered after the platform server starts, hence not a
-     * Camel route; see SseRoutes): consume the single-use turn (404 before the stream
+     * compiled pipeline; see SseRoutes): consume the single-use turn (404 before the stream
      * opens), then run the tool loop on the SSE producer — deltas as chunk events, tool
      * markers in between, and done carrying the final transcript markup.
      */

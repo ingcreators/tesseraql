@@ -1,8 +1,8 @@
 # TesseraQL
 
 TesseraQL is a SQL-first hypermedia and integration framework: applications are plain
-directories of 2-way SQL files, declarative YAML routes, and HTML templates, compiled onto an
-Apache Camel runtime. The SQL stays executable in any SQL tool, the YAML stays reviewable, and
+directories of 2-way SQL files, declarative YAML routes, and HTML templates, compiled onto the
+framework's own runtime. The SQL stays executable in any SQL tool, the YAML stays reviewable, and
 the framework supplies the production machinery around them - identity, security, batch,
 file transfers, observability, and supply-chain tooling.
 
@@ -12,8 +12,8 @@ file transfers, observability, and supply-chain tooling.
   whitelists live in SQL comments, so every file runs unchanged in plain SQL tools. Rendering
   produces coverage traces and source maps.
 - **Declarative routes** - `query-json`, `command-json`, `query-html`, `page`, `query-export`,
-  `file-import`, and `file-export` recipes compile YAML route definitions into Camel routes.
-  No Camel DSL in application code.
+  `file-import`, and `file-export` recipes compile YAML route definitions into compiled
+  pipelines. No integration DSL in application code.
 - **Security by default** - deny-by-default policies (role/permission/claim), JWT bearer and
   session auth, CSRF, field-level authorization, data masking, CSP, and per-app operations
   scopes (`tql.ops.view.<name>`).
@@ -145,9 +145,9 @@ browsable here under [docs/](docs/).
 | --- | --- |
 | `tesseraql-core` | 2-way SQL engine, expression evaluator, file codecs, spool/outbox/telemetry/threading primitives (dependency-free) |
 | `tesseraql-yaml` | Route/job model, manifest loader, config, secrets SPI, OpenAPI & htmx contract generators, SBOM / evidence / governance |
-| `tesseraql-compiler` | Compiles route definitions into Camel routes (recipes, security, telemetry, transfers) |
-| `tesseraql-pipeline` | `tesseraql-sql`, `tesseraql-auth`, and related Camel components |
-| `tesseraql-runtime` | Camel Main runtime: app mounting, migrations, scheduling, ops API, Studio, app MCP endpoints |
+| `tesseraql-compiler` | Compiles route definitions into pipelines (recipes, security, telemetry, transfers) |
+| `tesseraql-pipeline` | The pipeline contract and its steps: exchange, message, SQL, auth |
+| `tesseraql-runtime` | The runtime: HTTP edge, app mounting, migrations, scheduling, ops API, Studio, app MCP endpoints |
 | `tesseraql-security` | Policy engine, JWT/session auth, CSRF, principal model |
 | `tesseraql-identity` | Managed identity schema, Identity SQL Contracts, realm resolution |
 | `tesseraql-scim` / `tesseraql-saml` | SCIM provisioning and SAML SP federation |

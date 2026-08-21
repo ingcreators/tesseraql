@@ -10,7 +10,7 @@ import java.util.Locale;
  * policy block: a remote target's host must be allow-listed under
  * {@code tesseraql.connectors.push.allowedHosts} (deny by default) and its {@code credential}
  * names an entry under {@code tesseraql.connectors.push.credentials}, so a job never carries
- * a credential. The underlying Camel producer stays an implementation detail, not user API.
+ * a credential. The client that carries the transfer stays an implementation detail, not user API.
  *
  * @param transport  {@code local}, {@code sftp}, or {@code ftps}
  * @param host       the remote host (sftp/ftps); ignored for a local target

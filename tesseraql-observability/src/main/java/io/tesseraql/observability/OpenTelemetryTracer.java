@@ -13,7 +13,7 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * OpenTelemetry-backed {@link Tracer} (design ch. 25.2, 25.4). Bridges the framework's telemetry
  * abstraction to the OpenTelemetry API so spans are exported via whatever SDK/exporter the host
- * configures (camel-opentelemetry2, OTLP, etc.).
+ * configures (OTLP, etc.).
  *
  * <p>As a {@link KeyedTracer} it can adopt the in-process tracer's span id as its key, recording the
  * OpenTelemetry {@link Context} for each live span so child spans link to their parent natively —

@@ -11,7 +11,7 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Tests the declarative route runner against a lightweight in-JVM HTTP stub, so it needs no
- * database or Camel runtime.
+ * database or runtime.
  */
 class RouteTestRunnerTest {
 

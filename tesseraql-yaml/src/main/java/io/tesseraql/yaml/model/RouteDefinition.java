@@ -7,8 +7,8 @@ import java.util.Map;
 /**
  * A TesseraQL Simple YAML route definition (design ch. 6.1, 6.3).
  *
- * <p>This is the user-authored, source-of-truth model. The compiler transforms it into a Camel
- * route; it is never hand-edited as generated Camel YAML (design ch. 3.1 "source of truth").
+ * <p>This is the user-authored, source-of-truth model. The compiler transforms it into a
+ * pipeline; it is never hand-edited as a generated form (design ch. 3.1 "source of truth").
  *
  * @param version the DSL version, e.g. {@code tesseraql/v1}
  * @param id      unique route id, e.g. {@code users.search}

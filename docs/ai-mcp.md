@@ -160,7 +160,7 @@ model (a name, declared arguments, and a handler rendering messages), and the tr
 (`StdioTransport`, and a server-agnostic `McpHttpHandler` with a JDK-server binding). Each
 surface is advertised in `initialize` only when the server registers some. The dev-tool server
 is one consumer; the [application MCP surface](app-mcp.md) is the second — the runtime drives
-the same `McpHttpHandler` from a Camel route to serve the tools, resources, and prompts an app
+the same `McpHttpHandler` from a mounted route to serve the tools, resources, and prompts an app
 declares.
 
 ## Error codes

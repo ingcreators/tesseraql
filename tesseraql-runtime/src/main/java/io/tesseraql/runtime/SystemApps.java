@@ -126,10 +126,11 @@ final class SystemApps {
      * flat namespace (a tool and a prompt may share a name, matching the within-app lint
      * {@code TQL-MCP-1014}); resources and UI resources share a single uri namespace (the
      * within-app duplicate-uri lint, {@code TQL-MCP-1007}, cannot see across apps). The compiled
-     * camel route ids ({@code mcp.<id>}, {@code mcp.resource.<id>}, {@code mcp.ui.<id>},
+     * pipeline ids ({@code mcp.<id>}, {@code mcp.resource.<id>}, {@code mcp.ui.<id>},
      * {@code mcp.prompt.<id>}) are checked too, so two apps declaring the same id within one kind
-     * fail here with a clear message rather than as a raw duplicate-route-id error when the routes
-     * are added to the context.
+     * fail here with a clear message. There is no longer anything behind this check: compiling a
+     * pipeline replaces whatever stood under its id, so an unguarded collision is a silent
+     * last-one-wins rather than the duplicate-route-id error the context used to raise.
      */
     static void requireNoRouteConflicts(AppManifest main, List<MountedApp> mounted) {
         Map<String, Path> byRouteId = new HashMap<>();

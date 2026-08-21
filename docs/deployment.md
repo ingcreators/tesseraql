@@ -40,7 +40,7 @@ otherwise (status word only). Point container health checks at
 previous image.
 
 **B. Several applications on one host.** `tesseraql host --stack <dir>` starts every application
-the directory holds in its own runtime behind one port — its own Camel context, datasource
+the directory holds in its own runtime behind one port — its own runtime context, datasource
 set, Studio and traces. They are addressed as `/<name>/` on one origin and share a sign-in
 across them. See [hosting.md](hosting.md).
 
@@ -269,9 +269,8 @@ aggregator correlates each line with the request that produced it:
 | Key | What it is |
 | --- | --- |
 | `traceId`, `spanId` | The request's trace ids, set when the route starts. |
-| `camel.routeId` | The route the exchange entered on. |
-| `camel.exchangeId`, `camel.messageId` | The exchange and message being processed. |
-| `camel.contextId`, `camel.threadId` | The runtime and the thread the line was written on. |
+
+Route identity is not on the MDC; it is on the access-log line below as `route=`.
 
 The ids travel on the exchange rather than on the thread, and are copied into the MDC around
 each step, so a step handed to an execution lane still logs under the request that started it.

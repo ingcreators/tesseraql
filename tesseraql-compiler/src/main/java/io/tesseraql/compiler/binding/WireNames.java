@@ -12,7 +12,7 @@ import java.util.regex.Pattern;
  * contract — it is what the route YAML, the SQL binds, and the OpenAPI document say — but
  * the HTTP router (Vert.x, via Java regex named groups) only accepts
  * {@code [A-Za-z][A-Za-z0-9]*} as a parameter name, which excludes {@code {受注番号}} and
- * even {@code {order_id}}. So the Camel endpoint registers a positional stand-in
+ * even {@code {order_id}}. So the mount registers a positional stand-in
  * ({@code {p0}}, {@code {p1}}, …) for any declared name the router cannot carry, and the
  * request binder maps the stand-in back. Wire-safe names pass through untouched, so
  * existing routes see identical headers.

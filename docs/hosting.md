@@ -12,7 +12,7 @@ configuration changes that ([studio-shell.md](studio-shell.md)) — changes reac
 tesseraql host --stack /srv/tesseraql/apps --port 8080
 ```
 
-Every application the directory holds starts in its own runtime: its own Camel context, its own
+Every application the directory holds starts in its own runtime: its own runtime context, its own
 datasource set, its own traces. A gateway on the given port routes each request to the right
 one.
 
@@ -388,7 +388,7 @@ transport depend on.
 
 ## What isolation gives you, and what it does not
 
-Each runtime is separate: a separate Camel context, URL space, trace buffer and
+Each runtime is separate: a separate runtime context, URL space, trace buffer and
 configuration. A route in one application cannot collide with a route in another, and in
 development each application's workshop edits exactly its own runtime's source.
 

@@ -26,8 +26,8 @@ import org.slf4j.LoggerFactory;
  * Serves compiled routes on the platform router, off the worker pool (docs/http-edge.md
  * decision 1).
  *
- * <p>{@code camel-platform-http-vertx} hands every exchange to {@code executeBlocking}, so a
- * request runs on a pool of ten platform threads whether or not it needs anything that pool
+ * <p>{@code camel-platform-http-vertx} handed every exchange to {@code executeBlocking}, so a
+ * request ran on a pool of ten platform threads whether or not it needed anything that pool
  * protects. That single choice is what the [HTTP threading](http-threading.md) campaign spent
  * eight slices working around. Here the route's own processors run on a virtual thread instead,
  * and the only bound left on work that needs a connection is the connection pool — measured at
@@ -47,9 +47,9 @@ final class RouteEdge {
     static final String BEAN = "tesseraqlRouteEdge";
 
     /**
-     * Ahead of the Camel routes, behind the admission gate.
+     * Ahead of the hand-written router surfaces, behind the admission gate.
      *
-     * <p>Deliberately ahead of Camel's body handler as well, which is why a request with a body
+     * <p>Deliberately ahead of the shared body handler as well, which is why a request with a body
      * is handed back rather than read here: reading it would consume the stream the handler
      * behind us needs.
      */
@@ -84,7 +84,7 @@ final class RouteEdge {
     /**
      * Mounts every declared HTTP surface; returns the edge so reloads can refresh it.
      *
-     * <p><strong>A surface this cannot serve fails the boot.</strong> There is no Camel route
+     * <p><strong>A surface this cannot serve fails the boot.</strong> There is no route
      * behind it any longer — the REST DSL that used to put one there is gone — so declining would
      * mean a declared URL answering 404 for the life of the process. A runtime that cannot serve
      * what it was asked to serve should say so while somebody is still watching it start.
@@ -108,7 +108,7 @@ final class RouteEdge {
      * route that changed keeps its mount and swaps its pipeline, one that appeared or moved gets
      * a mount, and one that is gone loses both so the URL answers 404 instead of its last body.
      * The router is edited under live traffic because the file watcher's promise is that a route
-     * directory appearing on disk starts serving — and there is no Camel route behind this one to
+     * directory appearing on disk starts serving — and there is no route behind this one to
      * keep that promise for it any more.
      */
     void refreshAll() {
@@ -141,7 +141,7 @@ final class RouteEdge {
      * Mounts a route that was not there before, or was there at a different URL.
      *
      * <p>A route directory that appears while the runtime is running is a shipped promise of the
-     * file watcher, and there is no Camel route behind this one to catch it — so the router grows
+     * file watcher, and there is no route behind this one to catch it — so the router grows
      * a route rather than waiting for a restart. Tolerant, for the reason above: a reload that
      * cannot mount one route leaves the others serving.
      */
@@ -212,7 +212,7 @@ final class RouteEdge {
         }
         pipelines.put(routeId, pipeline);
         at.put(routeId, mount);
-        // The body handler is the router's own — the instance the Camel consumer would have used,
+        // The body handler is the router's own — the instance the platform consumer would have used,
         // with whatever the server configured on it — so an upload spools where it already
         // spooled and a form parses the way it already parsed.
         mounted.put(routeId, router.route(HttpMethod.valueOf(mount.method()), path(mount.path()))
@@ -223,7 +223,7 @@ final class RouteEdge {
 
     /**
      * The URL the route answers at: the declared path under the application's base path, with
-     * Camel's {@code {name}} parameters spelled the way this router spells them.
+     * Declared {@code {name}} parameters spelled the way this router spells them.
      *
      * <p>The base path used to arrive from the context-wide REST configuration
      * (docs/base-path.md), which is gone, so the mount is where it goes on — the one place that
@@ -288,7 +288,7 @@ final class RouteEdge {
      *
      * <p>The drain contract (docs/runtime-replace.md): replacing a runtime lets what is in flight
      * finish rather than cutting it. The bound is the declared {@code tesseraql.shutdown.timeout},
-     * the same one Camel's strategy uses for everything else, so a stop still has one number.
+     * the same one the shutdown strategy used for everything else, so a stop still has one number.
      *
      * @return whether everything finished inside the bound
      */
@@ -564,7 +564,7 @@ final class RouteEdge {
     }
 
     /**
-     * The response headers, decided by the same filter the Camel edge decides them with.
+     * The response headers, decided by the same filter the platform edge decided them with.
      *
      * <p>Load-bearing rather than tidy. The request's own headers are on this message — they were
      * put there so the route could read {@code Cookie}, {@code Accept} and the rest — and copying
@@ -576,7 +576,7 @@ final class RouteEdge {
     private void headers(HttpServerResponse response, Exchange exchange) {
         Integer code = exchange.getMessage().getHeader(Headers.HTTP_RESPONSE_CODE, Integer.class);
         response.setStatusCode(code == null ? 200 : code);
-        // Camel writes the content type itself rather than through the filter, which strips it
+        // The platform edge wrote the content type itself rather than through the filter, which strips it
         // from the generic copy; doing the same here is why a JSON response says so.
         String contentType = exchange.getMessage().getHeader(Headers.CONTENT_TYPE, String.class);
         if (contentType != null) {

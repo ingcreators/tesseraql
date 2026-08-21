@@ -29,11 +29,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * The Camel Main based TesseraQL runtime (design ch. 19.2).
+ * The TesseraQL runtime (design ch. 19.2).
  *
  * <p>Loads an external app home, wires datasources and the embedded HTTP server, compiles the
- * Simple YAML routes into Camel routes, and starts the context. The {@code tesseraql-sql} component
- * is discovered from the classpath service descriptor.
+ * Simple YAML routes into pipelines, and starts the context. The SQL step is discovered from the
+ * classpath service descriptor.
  */
 public final class TesseraqlRuntime implements AutoCloseable {
 
@@ -71,7 +71,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
     /**
      * The reason recorded on job runs the drain stops cooperatively (docs/runtime-replace.md):
      * {@code close()} asks every run this runtime owns to stop at its next checkpoint before the
-     * Camel drain begins, and this string is what the stopped execution says happened. The host
+     * drain begins, and this string is what the stopped execution says happened. The host
      * names the deploy here before retiring a replaced runtime; anything else drains under the
      * shutdown wording.
      */
@@ -237,12 +237,16 @@ public final class TesseraqlRuntime implements AutoCloseable {
     /**
      * The Vert.x sizing for this runtime's HTTP server (docs/http-threading.md decision 1).
      *
-     * <p>Every request runs on the worker pool: {@code camel-platform-http-vertx} hands each
-     * exchange to {@code executeBlocking}, so the pool size is this runtime's ceiling on
-     * concurrent route execution. Vert.x's own default of 20 was chosen for a framework where
-     * blocking is the exception, and against the connection pool's default of 10 it left half the
-     * workers able to do nothing but wait in {@code getConnection()}. Both now default to 10 and
-     * are raised together.
+     * <p>Route execution no longer sits here (docs/http-edge.md decision 1): the runtime's own
+     * edge runs each request on a virtual thread. What the pool still bounds is the work that
+     * genuinely hands off to it — the stack relay and the multi-app gateway — so it is sized for
+     * those rather than for concurrent route execution.
+     *
+     * <p>It was the ceiling on route execution when every exchange went to
+     * {@code executeBlocking}, and that is why the pairing below exists: Vert.x's own default of
+     * 20 was chosen for a framework where blocking is the exception, and against the connection
+     * pool's default of 10 it left half the workers able to do nothing but wait in
+     * {@code getConnection()}. Both now default to 10 and are raised together.
      *
      * <p>The event loop count keeps Vert.x's default unless asked otherwise: loops are not where
      * blocking work sits, and a host running several runtimes is the case that wants them lowered.
@@ -663,7 +667,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
 
         // The transport this runtime serves on (docs/http-threading.md decisions 1 and 4).
         // Hosted, the host built one instance for every runtime and sized it, so this runtime
-        // rides it and closes nothing: Camel resolves both Vertx and VertxOptions by type from
+        // rides it and closes nothing: the runtime resolves both Vertx and VertxOptions by type from
         // this registry, and it closes only an instance it built itself. Standalone, the options
         // are what stop the server from inheriting a default sized for a framework where blocking
         // is the exception.
@@ -683,7 +687,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
         // (docs/http-edge.md decision 1).
         // SSE endpoints register on the platform's Vert.x router, which exists only once
         // the context (and with it the HTTP server) has started — collected here, run
-        // right after context.start() (see SseRoutes for why they are not Camel routes).
+        // right after context.start() (see SseRoutes for why they are not compiled pipelines).
         java.util.List<Runnable> sseEndpoints = new java.util.ArrayList<>();
 
         // The framework's own migrations run before any store touches the schema (versioned
@@ -1542,7 +1546,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
             io.tesseraql.opsui.OpsDashboard health = opsDashboard;
             sseEndpoints.add(() -> HealthRoutes.install(context, port, health));
             // Compiled routes, served on the router off the worker pool (docs/http-edge.md
-            // decision 1). Mounted ahead of the Camel routes rather than instead of them: a
+            // decision 1). Mounted ahead of the remaining hand-written surfaces rather than
+            // instead of them: a
             // request this adapter does not reproduce faithfully is handed back, and the route
             // model is unchanged either way.
             sseEndpoints.add(() -> context.bind(RouteEdge.BEAN,
@@ -2717,7 +2722,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
             UnicodePaths.install(context, port);
             // The runtime-wide in-flight bound (docs/http-threading.md decision 3). Installed here
             // because the platform router does not exist until the HTTP server service has
-            // started, and ordered ahead of every route Camel registered before it.
+            // started, and ordered ahead of every route registered before it.
             HttpAdmission.install(context, port, maxInFlight(manifest.config()));
             sseEndpoints.forEach(Runnable::run);
         } catch (Exception ex) {
@@ -3087,16 +3092,16 @@ public final class TesseraqlRuntime implements AutoCloseable {
         // Stop the --watch file watcher first so no reload races the context shutdown.
         closeQuietly(runtimeContext.lookup(RouteWatcher.BEAN, RouteWatcher.class));
         // A running job is drained by asking, not only by waiting (docs/runtime-replace.md):
-        // before the Camel drain starts waiting on the exchanges that carry job runs, every run
+        // before the drain starts waiting on the requests that carry job runs, every run
         // this runtime owns is asked to stop at its next step or chunk boundary — a committed
         // checkpoint and an exact resume point, comfortably inside a bound that would otherwise
         // force-cut it. The force timeout stays, unchanged, as the last resort for a run that
         // ignores the flag.
         closeQuietly(() -> jobExecutor.requestDrainStop(drainReason));
         // The requests the edge is serving, drained before the context stops (docs/runtime-replace.md,
-        // docs/camel-removal.md decision 1). Camel's shutdown strategy drains what it can count,
-        // and a compiled route is no longer one of its routes — so the edge counts its own and is
-        // asked here, under the same declared bound the strategy uses.
+        // docs/camel-removal.md decision 1). A shutdown strategy drains what it can count, and
+        // nothing counts a compiled pipeline but the edge — so the edge counts its own and is
+        // asked here, under the same declared bound that strategy used.
         RouteEdge edge = runtimeContext.lookup(RouteEdge.BEAN, RouteEdge.class);
         if (edge != null) {
             Long bound = runtimeContext.lookup(SHUTDOWN_TIMEOUT_BEAN, Long.class);
@@ -3108,7 +3113,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
             // Everything below outlives the drain, because the drain is what it observes and
             // serves (docs/audit-hardening.md Decision 5). The tracer and meter bound into the
             // registry wrap this SDK, so closing it before runtimeContext.stop() dropped every span
-            // and metric produced while Camel finished its in-flight exchanges — the one window
+            // and metric produced while the drain finished its in-flight requests — the one window
             // the drain exists to make visible. The transfer executor is the same shape: shutting
             // it down first rejects a transfer a draining route submits.
             // The heartbeat thread outlives the drain for the same reason the tracer does: a run

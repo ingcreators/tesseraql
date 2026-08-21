@@ -111,7 +111,7 @@
         <artifactId>maven-surefire-plugin</artifactId>
         <configuration>
           <systemPropertyVariables>
-            <!-- Pin a modern docker-java API version for Testcontainers (see camel-runtime pom). -->
+            <!-- Pin a modern docker-java API version for Testcontainers (see the tesseraql-runtime pom). -->
             <api.version>1.43</api.version>
           </systemPropertyVariables>
         </configuration>

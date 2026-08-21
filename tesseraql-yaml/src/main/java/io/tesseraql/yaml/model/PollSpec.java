@@ -7,7 +7,7 @@ import java.util.Locale;
  * A {@code poll:} trigger on a {@code file-import} job (roadmap Phase 26): the runtime watches a
  * source directory and feeds every file it finds into the job's {@code import:} pipeline, instead
  * of waiting for an HTTP upload. The source is a local directory or a remote SFTP/FTPS server;
- * the underlying Camel consumer stays an implementation detail, not user API.
+ * the client that reads the directory stays an implementation detail, not user API.
  *
  * <p>A remote source's host must be allow-listed under
  * {@code tesseraql.connectors.poll.allowedHosts} (deny by default), and its {@code credential}

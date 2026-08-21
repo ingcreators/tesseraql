@@ -13,7 +13,7 @@ import io.tesseraql.pipeline.TesseraqlProperties;
 import java.util.Map;
 
 /**
- * Camel processor that opens a {@code tesseraql.route} span and counts route invocations
+ * Pipeline step that opens a {@code tesseraql.route} span and counts route invocations
  * (design ch. 25.4, 25.6). The span ends and the response status is recorded when the exchange
  * completes; the tracer and meter are resolved from the registry (no-op when absent).
  */

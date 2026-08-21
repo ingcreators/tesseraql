@@ -32,7 +32,7 @@ import io.tesseraql.yaml.model.SecuritySpec;
 import java.nio.file.Path;
 
 /**
- * Compiles a TesseraQL {@link AppManifest} into Camel routes (design ch. 7).
+ * Compiles a TesseraQL {@link AppManifest} into pipelines (design ch. 7).
  *
  * <p>The compiler emits an in-memory {@link RouteBuilder} (design decision: in-memory route model
  * for the first milestone) that configures the REST transport and, for each route file, dispatches
@@ -119,18 +119,6 @@ public final class RouteCompiler {
         this.mountRest = mountRest;
         if (this.appName == null) {
             this.appName = config.getString("tesseraql.app.name").orElse("app");
-        }
-        if (mountRest) {
-            // inlineRoutes is pinned, not inherited (docs/transition-engine.md track E):
-            // it decides whether from(direct:) transition routes keep their own
-            // consumers, and a Camel default flip must not silently rewire the topology
-            // (the dispatch selector's 30s DirectComponent.getConsumer hang).
-            // contextPath carries the app's base path (docs/base-path.md). It is set
-            // once, on the context-wide REST configuration, so every REST route the
-            // runtime mounts inherits it — the application's own, and the framework's
-            // hand-written /_tesseraql/** endpoints in the runtime's route builders
-            // alike. Concatenating the prefix per route would have had to find all of
-            // them; this cannot miss one.
         }
         // Per-route response.onError steering (HX-Retarget/HX-Reswap), resolved at error
         // time from the failing route id; the error renderer is one shared exception handler.

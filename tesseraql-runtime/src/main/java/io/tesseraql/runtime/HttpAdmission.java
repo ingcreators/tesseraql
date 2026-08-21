@@ -10,7 +10,7 @@ import org.slf4j.LoggerFactory;
 
 /**
  * The runtime-wide bound on requests in flight (docs/http-threading.md decision 3): a permit taken
- * on the event loop before the request reaches Camel, released when the response ends.
+ * on the event loop before the request reaches a route, released when the response ends.
  *
  * <p>There was none. Route processing runs on a fixed worker pool, and requests arriving while
  * every worker is blocked in JDBC queued in Vert.x's blocked-task queue, which has no bound.
@@ -29,7 +29,7 @@ final class HttpAdmission {
     private static final TqlErrorCode AT_CAPACITY = new TqlErrorCode(TqlDomain.RATE, 4293);
 
     /**
-     * Ahead of every route Camel registers. Vert.x orders routes by registration index unless told
+     * Ahead of every route the runtime registers. Vert.x orders routes by registration index unless told
      * otherwise, and this handler installs after {@code context.start()} — the router does not
      * exist before it — so without an explicit order it would sit behind the handlers it exists to
      * guard.

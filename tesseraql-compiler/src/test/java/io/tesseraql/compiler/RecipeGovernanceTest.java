@@ -22,7 +22,7 @@ import org.junit.jupiter.api.io.TempDir;
  * review cannot reliably catch a missing line in a list restated six times; compiling each
  * recipe and reading back its processors can.
  *
- * <p>The assertion is on the compiled Camel model rather than on the compiler's source, so a
+ * <p>The assertion is on the compiled pipeline rather than on the compiler's source, so a
  * future recipe that forgets to call the applier fails here even if it looks right.
  */
 class RecipeGovernanceTest {

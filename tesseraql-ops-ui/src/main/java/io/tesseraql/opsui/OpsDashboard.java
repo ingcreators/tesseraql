@@ -151,13 +151,13 @@ public final class OpsDashboard {
     /**
      * Wires the route-status contributor (docs/audit-hardening.md Decision 9).
      *
-     * <p>A supplier rather than a direct reference because this module has no Camel dependency and
-     * a stopped route is Camel's fact about itself, which nothing here can compute.
+     * <p>A supplier rather than a direct reference because this module has no runtime dependency
+     * and a stopped route is the runtime's fact about itself, which nothing here can compute.
      *
-     * <p>It contributes a detail and an alert, never the readiness verdict. Gating on Camel's own
-     * health registry would black out the boot: its {@code initialState} is DOWN, so a healthy
-     * consumer that has not polled yet reports DOWN — on exactly the file and SFTP sources the
-     * signal is for.
+     * <p>It contributes a detail and an alert, never the readiness verdict. Gating the verdict on
+     * a route-health registry would black out the boot, which is what the engine's own did: its
+     * {@code initialState} was DOWN, so a healthy consumer that had not polled yet reported DOWN
+     * — on exactly the file and SFTP sources the signal is for.
      */
     public OpsDashboard routeStatus(java.util.function.Supplier<Map<String, String>> routeStatus) {
         this.routeStatus = routeStatus;

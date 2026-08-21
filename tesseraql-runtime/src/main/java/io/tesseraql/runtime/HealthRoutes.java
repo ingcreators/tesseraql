@@ -14,7 +14,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * front of the worker pool.
  *
  * <p>The gate already let health through, because health is the one surface whose whole purpose is
- * to be answerable when nothing else is. That was half an answer. Health was still a Camel route,
+ * to be answerable when nothing else is. That was half an answer. Health was still a route,
  * so it still needed a worker, and a runtime with every worker inside a slow query still could not
  * say so — it just waited behind a bounded queue instead of an unbounded one. An orchestrator
  * that gets no answer to "are you saturated" concludes the process is dead and restarts it,
@@ -40,7 +40,7 @@ final class HealthRoutes {
      * After the admission gate, like every other surface that does not take a worker.
      *
      * <p>The gate exempts this prefix already — that is decision 3's first half — so this order
-     * only keeps it ahead of the Camel routes.
+     * only keeps it ahead of the compiled routes.
      */
     private static final int AFTER_THE_GATE = Integer.MIN_VALUE + 1;
 
@@ -139,7 +139,7 @@ final class HealthRoutes {
 
     private static void answer(RoutingContext ctx, String status) {
         // Three constants, so the JSON is written rather than serialized; the shape is the one
-        // the Camel route produced, byte for byte.
+        // the route it replaced produced, byte for byte.
         respond(ctx, "DOWN".equals(status) ? 503 : 200, "{\"status\":\"" + status + "\"}");
     }
 

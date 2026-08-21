@@ -9,7 +9,7 @@ different reach and a different cost. Take the lowest one that solves the proble
 | 0 | A declaration | Everything documented | None |
 | 1 | An expression function | One predicate, anywhere expressions run | Not admissible for distribution |
 | 2 | A service provider binding | Runtime state a route can read | Route becomes `extended`; not admissible |
-| 3 | A plugin jar | Camel routes and beans at boot | Signed jar; not admissible |
+| 3 | A plugin jar | Routes and beans at boot | Signed jar; not admissible |
 
 "Not admissible" means `tesseraql admission` fails, so the application cannot be distributed
 for other people to install ([admission.md](admission.md)). It says nothing about running it
@@ -86,7 +86,7 @@ registering — rung 3.
 
 ## Rung 3: a runtime extension
 
-A **runtime extension** installs Camel routes and beans into the runtime as it is assembled.
+A **runtime extension** installs routes and beans into the runtime as it is assembled.
 This is how the optional feature modules work: SAML, SCIM, and OIDC are all runtime
 extensions, so the runtime carries no compile-time dependency on any of them.
 
@@ -99,12 +99,12 @@ public interface RuntimeExtension {
 ```
 
 `install` runs **after** the core beans are bound — datasources, security, session store,
-identity service and realm — and **before** the Camel context starts. `ExtensionContext`
+identity service and realm — and **before** the runtime starts. `ExtensionContext`
 gives you:
 
 | | |
 | --- | --- |
-| `camel()` | the context being assembled: add routes, use the registry |
+| `runtime()` | the runtime context being assembled: mount routes, use the registry |
 | `manifest()` | the app manifest, including its configuration and app home |
 | `dataSource()` | the main datasource — business and identity data |
 | `frameworkDataSource()` | ambient framework state ([framework datasource](deployment.md#framework-datasource)) |

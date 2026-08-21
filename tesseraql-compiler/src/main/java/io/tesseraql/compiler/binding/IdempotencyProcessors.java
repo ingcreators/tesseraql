@@ -13,7 +13,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 
 /**
- * Camel processors implementing request idempotency (design ch. 39.4, 39.5).
+ * Pipeline steps implementing request idempotency (design ch. 39.4, 39.5).
  *
  * <p>{@link Begin} runs before request binding: on a replay it sets the stored response and marks
  * the exchange so the route short-circuits; on a conflict it raises {@code TQL-IDEM-4090} (409).
