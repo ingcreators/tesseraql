@@ -145,6 +145,16 @@ All notable changes to TesseraQL are documented here. The format follows
   because its exemption did not know why it existed. Declare `consumeOnce: true` on any poll
   source that more than one replica can reach.
 
+- **`tesseraql new` no longer writes a component allow-list block into every generated
+  application.** The comment promised that dangerous components "are refused by a built-in
+  baseline whether or not anything is configured" and pointed at the design record for a control
+  retired earlier in this release — a false security promise in the first file an author reads.
+  The scaffold⇄consumer drift guard could not catch it because it parses the templates as YAML,
+  and the block was a comment.
+
+- **`ExtensionContext.camel()` is `ExtensionContext.runtime()`** — a `RuntimeExtension` sees the
+  runtime context, and the accessor now says so.
+
 - **Renamed, with no behaviour attached** (docs/camel-removal.md slice 6c): the error domain
   `TQL-CAMEL-*` is now **`TQL-ROUTE-*`** — the codes are about route compilation and the route
   pipeline, which is what they now say. The modules `tesseraql-camel-runtime` and

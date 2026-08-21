@@ -46,7 +46,7 @@ public final class ScimRuntimeExtension implements RuntimeExtension {
             new ScimRouteBuilder(
                     buildUserService(manifest, context.dataSource()),
                     buildGroupService(manifest, context.dataSource()),
-                    buildAttributeCapture(context)).install(context.camel());
+                    buildAttributeCapture(context)).install(context.runtime());
         }
         if (flag(manifest.config(), "tesseraql.scim.outbound.enabled")) {
             context.bind(TesseraqlProperties.OUTBOX_EVENT_SINK_BEAN,

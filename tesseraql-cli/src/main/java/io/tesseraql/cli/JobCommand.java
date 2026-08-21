@@ -403,7 +403,7 @@ final class JobCommand implements Callable<Integer> {
         transfers.sqlTimeoutSeconds(manifest.config().getString("tesseraql.sql.timeoutSeconds")
                 .map(Integer::parseInt).orElse(30));
         transfers.ensureSchema();
-        // push: steps deliver through an owned, lazily-started Camel context — a run
+        // push: steps deliver through an owned, lazily-started push service — a run
         // without a push step never pays for it, and the JVM exits with the command.
         @SuppressWarnings("resource") // owned for the life of the process, which ends here
         io.tesseraql.runtime.FilePushService filePush = new io.tesseraql.runtime.FilePushService(

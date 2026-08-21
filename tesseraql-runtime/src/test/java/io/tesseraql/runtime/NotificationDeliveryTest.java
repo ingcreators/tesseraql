@@ -44,15 +44,15 @@ class NotificationDeliveryTest {
     @TempDir
     static Path appHome;
 
-    static RuntimeContext camel;
+    static RuntimeContext context;
     static HttpServer receiver;
     static final AtomicReference<Map<String, String>> received = new AtomicReference<>();
     static volatile int receiverStatus = 200;
 
     @BeforeAll
     static void start() throws Exception {
-        camel = new RuntimeContext();
-        camel.start();
+        context = new RuntimeContext();
+        context.start();
         Files.createDirectories(appHome.resolve("templates/mail"));
         Files.writeString(appHome.resolve("templates/mail/welcome.txt"), """
                 Hello [(${payload.userName})],
@@ -78,8 +78,8 @@ class NotificationDeliveryTest {
 
     @AfterAll
     static void stop() throws Exception {
-        if (camel != null) {
-            camel.close();
+        if (context != null) {
+            context.close();
         }
         if (receiver != null) {
             receiver.stop(0);
@@ -95,7 +95,7 @@ class NotificationDeliveryTest {
         AppConfig config = new AppConfig(
                 Map.of("tesseraql", Map.of("notifications", Map.of("channels", channels))),
                 name -> null);
-        return new NotificationSink(NotificationChannels.load(config), appHome, camel, null,
+        return new NotificationSink(NotificationChannels.load(config), appHome, context, null,
                 transfers, gateway());
     }
 

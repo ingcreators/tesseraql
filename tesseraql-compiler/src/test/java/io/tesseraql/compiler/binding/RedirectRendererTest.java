@@ -2,6 +2,7 @@ package io.tesseraql.compiler.binding;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.tesseraql.pipeline.Beans;
 import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.pipeline.Headers;
 import io.tesseraql.pipeline.RuntimeContext;
@@ -92,7 +93,7 @@ class RedirectRendererTest {
 
     private static Exchange exchange(String hxRequest) {
         Exchange exchange = new Exchange(
-                new RuntimeContext().beans());
+                Beans.NONE);
         exchange.setProperty(TesseraqlProperties.CONTEXT, Map.of("params", Map.of("id", 42)));
         if (hxRequest != null) {
             exchange.getMessage().setHeader("HX-Request", hxRequest);

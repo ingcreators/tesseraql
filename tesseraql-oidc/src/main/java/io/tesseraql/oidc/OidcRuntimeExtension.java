@@ -63,7 +63,7 @@ public final class OidcRuntimeExtension implements RuntimeExtension {
         new OidcRouteBuilder(config, discovery, stateStore, http, sessions, linker,
                 context.bean(TesseraqlProperties.CREDENTIAL_THROTTLE_BEAN,
                         io.tesseraql.security.throttle.CredentialThrottle.class))
-                .install(context.camel());
+                .install(context.runtime());
     }
 
     private static void require(String value, String key) {

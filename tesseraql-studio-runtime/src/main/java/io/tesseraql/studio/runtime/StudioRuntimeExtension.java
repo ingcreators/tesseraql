@@ -38,7 +38,7 @@ public final class StudioRuntimeExtension implements RuntimeExtension {
 
     @Override
     public void install(ExtensionContext extension) throws Exception {
-        RuntimeContext context = extension.camel();
+        RuntimeContext context = extension.runtime();
         AppManifest manifest = extension.manifest();
         Path appHome = manifest.appHome();
         RuntimeSeams seams = extension.bean(TesseraqlProperties.RUNTIME_SEAMS_BEAN,
