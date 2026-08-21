@@ -143,7 +143,7 @@ public final class MultiAppGateway implements AutoCloseable {
         // carries rather than queues behind.
         int perMember = maxConcurrentPerMember(stackSettings);
         this.client = vertx.createHttpClient(StackRelay.outboundOptions(settings.http2(),
-                perMember, readIdleSeconds(stackSettings)));
+                perMember, readIdleSeconds(stackSettings)), StackRelay.outboundPool(perMember));
         // Every per-app lookup is the host's live slot state (docs/runtime-replace.md): a
         // replace swaps which runtime, which entry and which strip set answer for a member, and
         // the relay reads all three per request rather than from a start-time copy. Membership

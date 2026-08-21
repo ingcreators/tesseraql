@@ -203,7 +203,7 @@ untouched:
 | | Default in force | Consequence |
 | --- | --- | --- |
 | Connections per member | 5 (`maxPoolSize`) | Fewer than a member's own worker pool, so the front door — not the member — was the ceiling |
-| Wait queue | unbounded (`maxWaitQueueSize` −1) | The queue decision 3 removed inside a runtime, still present in front of it |
+| Wait queue | unbounded (`maxWaitQueueSize` −1) | The queue decision 3 removed inside a runtime, still present in front of it — **bounded to the same number since Vert.x 5 made it a pool setting** (docs/http-edge.md decision 3) |
 | h2c multiplexing | unlimited (`http2MultiplexingLimit` −1) | Turning on a *protocol* flag replaced the limit of five with no limit at all |
 
 So the effective concurrency of the whole stack was a number nobody chose, nobody could see,

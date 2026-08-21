@@ -172,8 +172,10 @@ class StackRelayTest {
      */
     @Test
     void theOutboundClientIsSizedToWhatTheFrontAdmits() {
-        assertThat(StackRelay.outboundOptions(false, 7).getMaxPoolSize()).isEqualTo(7);
-        assertThat(StackRelay.outboundOptions(true, 7).getMaxPoolSize()).isEqualTo(7);
+        assertThat(StackRelay.outboundPool(7).getHttp1MaxSize()).isEqualTo(7);
+        assertThat(StackRelay.outboundPool(7).getHttp2MaxSize()).isEqualTo(7);
+        // The queue in front of the bound is bounded to the same number, not left unbounded.
+        assertThat(StackRelay.outboundPool(7).getMaxWaitQueueSize()).isEqualTo(7);
         assertThat(StackRelay.outboundOptions(true, 7).getHttp2MultiplexingLimit()).isEqualTo(7);
     }
 
