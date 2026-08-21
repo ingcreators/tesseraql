@@ -1583,6 +1583,12 @@ public final class TesseraqlRuntime implements AutoCloseable {
             // nothing else is must not need the resource everything else is waiting for.
             io.tesseraql.opsui.OpsDashboard health = opsDashboard;
             sseEndpoints.add(() -> HealthRoutes.install(context, port, health));
+            // Compiled routes, served on the router off the worker pool (docs/http-edge.md
+            // decision 1). Mounted ahead of the Camel routes rather than instead of them: a
+            // request this adapter does not reproduce faithfully is handed back, and the route
+            // model is unchanged either way.
+            sseEndpoints.add(() -> context.getRegistry().bind(RouteEdge.BEAN,
+                    RouteEdge.install(context, port)));
             // The ops API needs each job's owning app so per-app scope can gate listing and runs.
             Map<String, String> ownedJobs = new LinkedHashMap<>();
             jobs.keySet().forEach(id -> ownedJobs.put(id, jobOwners.getOrDefault(id, appName)));
