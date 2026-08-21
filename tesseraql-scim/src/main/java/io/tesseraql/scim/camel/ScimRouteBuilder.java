@@ -1,6 +1,7 @@
 package io.tesseraql.scim.camel;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.tesseraql.camel.HttpMounts;
 import io.tesseraql.scim.ScimError;
 import io.tesseraql.scim.ScimException;
 import io.tesseraql.scim.ScimGroup;
@@ -48,12 +49,12 @@ public final class ScimRouteBuilder extends RouteBuilder {
         onException(ScimException.class).handled(true).process(this::scimError);
         onException(Exception.class).handled(true).process(this::genericError);
 
-        rest().post("/scim/v2/Users").to("direct:scim.createUser");
-        rest().get("/scim/v2/Users/{id}").to("direct:scim.getUser");
-        rest().get("/scim/v2/Users").to("direct:scim.listUsers");
-        rest().put("/scim/v2/Users/{id}").to("direct:scim.replaceUser");
-        rest().patch("/scim/v2/Users/{id}").to("direct:scim.patchUser");
-        rest().delete("/scim/v2/Users/{id}").to("direct:scim.deleteUser");
+        HttpMounts.mount(getContext(), "POST", "/scim/v2/Users", "direct:scim.createUser");
+        HttpMounts.mount(getContext(), "GET", "/scim/v2/Users/{id}", "direct:scim.getUser");
+        HttpMounts.mount(getContext(), "GET", "/scim/v2/Users", "direct:scim.listUsers");
+        HttpMounts.mount(getContext(), "PUT", "/scim/v2/Users/{id}", "direct:scim.replaceUser");
+        HttpMounts.mount(getContext(), "PATCH", "/scim/v2/Users/{id}", "direct:scim.patchUser");
+        HttpMounts.mount(getContext(), "DELETE", "/scim/v2/Users/{id}", "direct:scim.deleteUser");
 
         from("direct:scim.createUser").routeId("scim.createUser")
                 .to(AUTH).to(AUTHORIZE).process(this::createUser);
@@ -74,12 +75,12 @@ public final class ScimRouteBuilder extends RouteBuilder {
     }
 
     private void configureGroups() {
-        rest().post("/scim/v2/Groups").to("direct:scim.createGroup");
-        rest().get("/scim/v2/Groups/{id}").to("direct:scim.getGroup");
-        rest().get("/scim/v2/Groups").to("direct:scim.listGroups");
-        rest().put("/scim/v2/Groups/{id}").to("direct:scim.replaceGroup");
-        rest().patch("/scim/v2/Groups/{id}").to("direct:scim.patchGroup");
-        rest().delete("/scim/v2/Groups/{id}").to("direct:scim.deleteGroup");
+        HttpMounts.mount(getContext(), "POST", "/scim/v2/Groups", "direct:scim.createGroup");
+        HttpMounts.mount(getContext(), "GET", "/scim/v2/Groups/{id}", "direct:scim.getGroup");
+        HttpMounts.mount(getContext(), "GET", "/scim/v2/Groups", "direct:scim.listGroups");
+        HttpMounts.mount(getContext(), "PUT", "/scim/v2/Groups/{id}", "direct:scim.replaceGroup");
+        HttpMounts.mount(getContext(), "PATCH", "/scim/v2/Groups/{id}", "direct:scim.patchGroup");
+        HttpMounts.mount(getContext(), "DELETE", "/scim/v2/Groups/{id}", "direct:scim.deleteGroup");
 
         from("direct:scim.createGroup").routeId("scim.createGroup")
                 .to(AUTH).to(AUTHORIZE).process(this::createGroup);

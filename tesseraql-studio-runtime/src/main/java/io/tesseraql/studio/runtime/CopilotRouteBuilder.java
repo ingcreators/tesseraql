@@ -1,5 +1,6 @@
 package io.tesseraql.studio.runtime;
 
+import io.tesseraql.camel.HttpMounts;
 import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.compiler.binding.ErrorResponseRenderer;
 import io.tesseraql.core.error.TqlDomain;
@@ -48,7 +49,7 @@ final class CopilotRouteBuilder extends RouteBuilder {
         onException(TqlException.class).handled(true).process(new ErrorResponseRenderer());
         onException(Exception.class).handled(true).process(new ErrorResponseRenderer());
 
-        rest().post(page + "/send").to("direct:tql.copilot.send");
+        HttpMounts.mount(getContext(), "POST", page + "/send", "direct:tql.copilot.send");
 
         // The chat-messages recipe's dual-path send: an htmx caller gets the user item, the
         // streaming placeholder, and an out-of-band composer clear; a no-JS post runs the

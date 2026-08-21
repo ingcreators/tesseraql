@@ -11,6 +11,7 @@ import org.apache.camel.model.OnExceptionDefinition;
 import org.apache.camel.model.ProcessDefinition;
 import org.apache.camel.model.ProcessorDefinition;
 import org.apache.camel.model.RouteDefinition;
+import org.apache.camel.model.ThreadsDefinition;
 import org.apache.camel.model.ToDefinition;
 import org.apache.camel.spi.Synchronization;
 import org.apache.camel.support.UnitOfWorkHelper;
@@ -30,8 +31,22 @@ import org.apache.camel.support.UnitOfWorkHelper;
  */
 final class RoutePipeline {
 
+    private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory
+            .getLogger(RoutePipeline.class);
+
     private final List<Processor> steps;
     private final List<Handler> handlers;
+    /**
+     * Where the declared execution lane takes over, and the executor it takes over on.
+     *
+     * <p>{@code admission.lane} compiles to a {@code threads()} handoff: everything after it runs
+     * on the lane's executor, which is the bound an application asked for by name. The edge runs
+     * a request on a virtual thread of its own, but that is not the same promise — a lane is a
+     * <em>named, sized</em> pool, and honouring the handoff is the difference between running the
+     * declaration and ignoring it.
+     */
+    private final int handoffAt;
+    private final String laneExecutor;
     /**
      * The producers this pipeline created, and therefore owns.
      *
@@ -48,10 +63,12 @@ final class RoutePipeline {
     }
 
     private RoutePipeline(List<Processor> steps, List<Handler> handlers,
-            List<org.apache.camel.Producer> owned) {
+            List<org.apache.camel.Producer> owned, int handoffAt, String laneExecutor) {
         this.steps = steps;
         this.handlers = handlers;
         this.owned.addAll(owned);
+        this.handoffAt = handoffAt;
+        this.laneExecutor = laneExecutor;
     }
 
     /**
@@ -69,6 +86,8 @@ final class RoutePipeline {
         List<Processor> steps = new ArrayList<>();
         List<Handler> handlers = new ArrayList<>();
         List<org.apache.camel.Producer> owned = new ArrayList<>();
+        int handoffAt = -1;
+        String laneExecutor = null;
         for (ProcessorDefinition<?> output : definition.getOutputs()) {
             switch (output) {
                 case OnExceptionDefinition onException -> {
@@ -79,6 +98,13 @@ final class RoutePipeline {
                     handlers.add(new Handler(List.copyOf(onException.getExceptions()), renderer));
                 }
                 case ProcessDefinition process -> steps.add(process.getProcessor());
+                case ThreadsDefinition threads -> {
+                    if (handoffAt >= 0 || threads.getExecutorServiceRef() == null) {
+                        return Optional.empty();
+                    }
+                    handoffAt = steps.size();
+                    laneExecutor = threads.getExecutorServiceRef();
+                }
                 case ToDefinition to -> {
                     try {
                         org.apache.camel.Producer producer = camelContext.getEndpoint(to.getUri())
@@ -90,13 +116,16 @@ final class RoutePipeline {
                     }
                 }
                 default -> {
+                    LOG.debug("Route {} is not a plain chain: {}", routeId,
+                            output.getClass().getSimpleName());
                     return Optional.empty();
                 }
             }
         }
         return steps.stream().anyMatch(java.util.Objects::isNull)
                 ? Optional.empty()
-                : Optional.of(new RoutePipeline(steps, handlers, owned));
+                : Optional.of(new RoutePipeline(steps, handlers, owned, handoffAt,
+                        laneExecutor));
     }
 
     private static Processor single(List<ProcessorDefinition<?>> outputs) {
@@ -133,7 +162,15 @@ final class RoutePipeline {
      */
     void run(Exchange exchange) {
         try {
-            for (Processor step : steps) {
+            for (int at = 0; at < steps.size(); at++) {
+                if (at == handoffAt) {
+                    // The rest of the route belongs to the declared lane. The virtual thread that
+                    // got this far waits for it, which is what a lane is: a bound on how many of
+                    // these run at once, not a way to answer sooner.
+                    onLane(exchange, at);
+                    return;
+                }
+                Processor step = steps.get(at);
                 step.process(exchange);
                 if (exchange.getException() != null) {
                     throw exchange.getException();
@@ -163,6 +200,34 @@ final class RoutePipeline {
             }
         } finally {
             done(exchange);
+        }
+    }
+
+    /** Runs the steps from {@code from} on the lane's executor, and waits for them. */
+    private void onLane(Exchange exchange, int from) throws Exception {
+        java.util.concurrent.ExecutorService lane = exchange.getContext().getRegistry()
+                .lookupByNameAndType(laneExecutor, java.util.concurrent.ExecutorService.class);
+        if (lane == null) {
+            throw new IllegalStateException("Execution lane '" + laneExecutor + "' is not bound");
+        }
+        java.util.concurrent.Future<?> ran = lane.submit(() -> {
+            for (int at = from; at < steps.size(); at++) {
+                steps.get(at).process(exchange);
+                if (exchange.getException() != null) {
+                    throw exchange.getException();
+                }
+                if (exchange.isRouteStop()) {
+                    return null;
+                }
+            }
+            return null;
+        });
+        try {
+            ran.get();
+        } catch (java.util.concurrent.ExecutionException failed) {
+            throw failed.getCause() instanceof Exception cause
+                    ? cause
+                    : new IllegalStateException(failed.getCause());
         }
     }
 

@@ -1,5 +1,6 @@
 package io.tesseraql.runtime;
 
+import io.tesseraql.camel.HttpMounts;
 import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.compiler.binding.ErrorResponseRenderer;
 import io.tesseraql.core.error.TqlException;
@@ -30,8 +31,9 @@ final class OpsShellRouteBuilder extends RouteBuilder {
         onException(TqlException.class).handled(true).process(new ErrorResponseRenderer());
         onException(Exception.class).handled(true).process(new ErrorResponseRenderer());
 
-        rest().get("/_tesseraql/ops/console/{member}/transfers/{id}/file")
-                .to("direct:ops.shell.transferFile");
+        HttpMounts.mount(getContext(), "GET",
+                "/_tesseraql/ops/console/{member}/transfers/{id}/file",
+                "direct:ops.shell.transferFile");
         from("direct:ops.shell.transferFile").routeId("ops.shell.transferFile")
                 .to("tesseraql-auth:authenticate?auth=browser")
                 .process(this::download);

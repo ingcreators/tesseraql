@@ -1,6 +1,7 @@
 package io.tesseraql.saml.camel;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.tesseraql.camel.HttpMounts;
 import io.tesseraql.saml.AuthnRequest;
 import io.tesseraql.saml.LogoutRequest;
 import io.tesseraql.saml.LogoutResponse;
@@ -98,23 +99,25 @@ final class SamlAcsRouteBuilder extends RouteBuilder {
         onException(SamlException.class).handled(true).process(this::unauthorized);
         onException(Exception.class).handled(true).process(this::badRequest);
 
-        rest().post("/_tesseraql/saml/acs").to("direct:tql.saml.acs");
+        HttpMounts.mount(getContext(), "POST", "/_tesseraql/saml/acs", "direct:tql.saml.acs");
         from("direct:tql.saml.acs").routeId("system.saml.acs").process(this::consume);
 
-        rest().get("/_tesseraql/saml/logout").to("direct:tql.saml.logout");
+        HttpMounts.mount(getContext(), "GET", "/_tesseraql/saml/logout", "direct:tql.saml.logout");
         from("direct:tql.saml.logout").routeId("system.saml.logout").process(this::logout);
 
         if (metadata != null) {
-            rest().get("/_tesseraql/saml/metadata").to("direct:tql.saml.metadata");
+            HttpMounts.mount(getContext(), "GET", "/_tesseraql/saml/metadata",
+                    "direct:tql.saml.metadata");
             from("direct:tql.saml.metadata").routeId("system.saml.metadata")
                     .process(this::serveMetadata);
         }
         if (endpoints != null && endpoints.idpSsoUrl() != null && endpoints.acsUrl() != null) {
-            rest().get("/_tesseraql/saml/login").to("direct:tql.saml.login");
+            HttpMounts.mount(getContext(), "GET", "/_tesseraql/saml/login",
+                    "direct:tql.saml.login");
             from("direct:tql.saml.login").routeId("system.saml.login").process(this::login);
         }
         if (endpoints != null && endpoints.idpSloUrl() != null) {
-            rest().get("/_tesseraql/saml/slo").to("direct:tql.saml.slo");
+            HttpMounts.mount(getContext(), "GET", "/_tesseraql/saml/slo", "direct:tql.saml.slo");
             from("direct:tql.saml.slo").routeId("system.saml.slo").process(this::inboundLogout);
         }
     }

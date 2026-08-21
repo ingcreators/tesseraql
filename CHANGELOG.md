@@ -136,6 +136,19 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **A route declares where it answers instead of asking Camel for a consumer**
+  (docs/http-edge.md decision 1). Every framework and application surface said this by calling
+  `rest().get(path).to("direct:id")`, which created an HTTP consumer as a side effect of recording
+  a URL; the runtime serves those routes itself now, so the consumer was the only part still being
+  asked for. Mounts are a table the edge reads and the framework's surface guard reads, so the two
+  cannot disagree about where a surface answers.
+
+  **A surface the runtime cannot serve now fails the boot** rather than answering 404 for the life
+  of the process, and a hot reload reconciles the router: a route directory that appears starts
+  serving, one that moves is remounted, and a deleted one answers 404 instead of its last body.
+  Strict at boot and tolerant at reload — a reload that cannot mount one route leaves the others
+  serving, because a runtime that exits on a bad save takes the good routes with it.
+
 - **A route is served on the HTTP router rather than through Camel's `executeBlocking`**
   (docs/http-edge.md decision 1). `camel-platform-http-vertx` hands every exchange to the Vert.x
   worker pool, so a request ran on ten platform threads whether or not it needed anything those

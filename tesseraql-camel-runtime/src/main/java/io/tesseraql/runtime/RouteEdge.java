@@ -69,43 +69,111 @@ final class RouteEdge {
      */
     private final Map<String, RoutePipeline> pipelines = new ConcurrentHashMap<>();
     private final Map<String, Route> mounted = new ConcurrentHashMap<>();
+    /** What each mounted route was mounted as, so a reload can tell a moved URL from a stable one. */
+    private final Map<String, io.tesseraql.camel.HttpMounts.Mount> at = new ConcurrentHashMap<>();
+    private volatile VertxPlatformHttpRouter router;
 
     private RouteEdge(CamelContext camelContext) {
         this.camelContext = camelContext;
     }
 
-    /** Mounts every compiled HTTP route this can run; returns the edge so reloads can refresh it. */
+    /**
+     * Mounts every declared HTTP surface; returns the edge so reloads can refresh it.
+     *
+     * <p><strong>A surface this cannot serve fails the boot.</strong> There is no Camel route
+     * behind it any longer — the REST DSL that used to put one there is gone — so declining would
+     * mean a declared URL answering 404 for the life of the process. A runtime that cannot serve
+     * what it was asked to serve should say so while somebody is still watching it start.
+     */
     static RouteEdge install(CamelContext camelContext, int port) {
         VertxPlatformHttpRouter router = VertxPlatformHttpRouter.lookup(camelContext,
                 VertxPlatformHttpRouter.getRouterNameFromPort(port));
         RouteEdge edge = new RouteEdge(camelContext);
-        int served = 0;
-        int declined = 0;
-        for (RouteDefinition definition : ((ModelCamelContext) camelContext)
-                .getRouteDefinitions()) {
-            if (edge.mount(router, definition)) {
-                served++;
-            } else {
-                declined++;
-            }
+        edge.router = router;
+        for (io.tesseraql.camel.HttpMounts.Mount mount : io.tesseraql.camel.HttpMounts
+                .all(camelContext)) {
+            edge.mount(router, mount);
         }
-        LOG.debug("HTTP edge serving {} route(s) on the router, {} left to Camel", served,
-                declined);
+        LOG.debug("HTTP edge serving {} route(s) on the router", edge.mounted.size());
         return edge;
     }
 
     /**
      * Re-reads one route's pipeline after a hot reload.
      *
-     * <p>Called with the routes already recompiled: each entry is replaced, or removed when the
-     * new definition is one this cannot run or is gone, in which case the mounted handler hands
-     * that path back — to the Camel route if it still exists, and to a 404 if it does not, which
-     * is what a deleted route should answer. The mount itself is never moved: a route that
-     * appears at a new URL is served by Camel until the next restart, recorded here rather than
-     * hidden, because router surgery under live traffic buys nothing a restart does not.
+     * <p>Called with the routes already recompiled, and it reconciles rather than refreshes: a
+     * route that changed keeps its mount and swaps its pipeline, one that appeared or moved gets
+     * a mount, and one that is gone loses both so the URL answers 404 instead of its last body.
+     * The router is edited under live traffic because the file watcher's promise is that a route
+     * directory appearing on disk starts serving — and there is no Camel route behind this one to
+     * keep that promise for it any more.
      */
     void refreshAll() {
-        mounted.keySet().forEach(this::refresh);
+        java.util.Set<String> declared = new java.util.HashSet<>();
+        for (io.tesseraql.camel.HttpMounts.Mount mount : io.tesseraql.camel.HttpMounts
+                .all(camelContext)) {
+            String routeId = routeIdOf(mount.direct());
+            if (routeId == null) {
+                // Declared but not built: a save that did not compile and left no stub. The
+                // watcher has to survive that, which is why a reload is tolerant where a boot is
+                // strict — nobody is watching a reload, and a runtime that exits on a bad save
+                // takes the good routes with it.
+                continue;
+            }
+            declared.add(routeId);
+            if (mounted.containsKey(routeId) && mount.equals(at.get(routeId))) {
+                refresh(routeId);
+            } else {
+                remount(mount, routeId);
+            }
+        }
+        for (String routeId : java.util.List.copyOf(mounted.keySet())) {
+            if (!declared.contains(routeId)) {
+                unmount(routeId);
+            }
+        }
+    }
+
+    /**
+     * Mounts a route that was not there before, or was there at a different URL.
+     *
+     * <p>A route directory that appears while the runtime is running is a shipped promise of the
+     * file watcher, and there is no Camel route behind this one to catch it — so the router grows
+     * a route rather than waiting for a restart. Tolerant, for the reason above: a reload that
+     * cannot mount one route leaves the others serving.
+     */
+    private void remount(io.tesseraql.camel.HttpMounts.Mount mount, String routeId) {
+        RoutePipeline pipeline = RoutePipeline.of(camelContext, routeId).orElse(null);
+        if (pipeline == null) {
+            LOG.warn("Route {} cannot be served on the router after a reload", routeId);
+            return;
+        }
+        try {
+            pipeline.start();
+        } catch (Exception unusable) {
+            LOG.warn("Route {} could not be started after a reload", routeId, unusable);
+            return;
+        }
+        unmount(routeId);
+        pipelines.put(routeId, pipeline);
+        at.put(routeId, mount);
+        mounted.put(routeId, router.route(HttpMethod.valueOf(mount.method()), path(mount.path()))
+                .order(AFTER_THE_GATE)
+                .handler(router.bodyHandler())
+                .handler(ctx -> serve(ctx, routeId)));
+    }
+
+    /** Takes a route off the router, so a deleted route answers 404 rather than its last body. */
+    private void unmount(String routeId) {
+        Route route = mounted.remove(routeId);
+        if (route != null) {
+            route.remove();
+        }
+        at.remove(routeId);
+        RoutePipeline gone = pipelines.remove(routeId);
+        if (gone != null) {
+            gone.stop();
+        }
     }
 
     private void refresh(String routeId) {
@@ -122,69 +190,65 @@ final class RouteEdge {
         }
     }
 
-    private boolean mount(VertxPlatformHttpRouter router, RouteDefinition definition) {
-        String from = definition.getInput().getEndpointUri();
-        if (from == null || !from.startsWith("rest://")) {
-            return false;
+    private void mount(VertxPlatformHttpRouter router,
+            io.tesseraql.camel.HttpMounts.Mount mount) {
+        String routeId = routeIdOf(mount.direct());
+        if (routeId == null) {
+            throw new IllegalStateException("The HTTP surface " + mount.method() + " "
+                    + mount.path() + " names " + mount.direct() + ", which no route consumes");
         }
-        String routeId = definition.getRouteId();
-        RoutePipeline pipeline = RoutePipeline.of(camelContext, routeId).orElse(null);
-        if (pipeline == null) {
-            return false;
-        }
+        RoutePipeline pipeline = RoutePipeline.of(camelContext, routeId)
+                .orElseThrow(() -> new IllegalStateException("Route " + routeId
+                        + " is not a plain processor chain, so " + mount.method() + " "
+                        + mount.path() + " cannot be served"));
         try {
             pipeline.start();
         } catch (Exception unusable) {
-            return false;
-        }
-        HttpMethod method = method(from);
-        String path = path(from);
-        if (method == null || path == null) {
-            return false;
+            throw new IllegalStateException("Route " + routeId + " could not be started",
+                    unusable);
         }
         pipelines.put(routeId, pipeline);
+        at.put(routeId, mount);
         // The body handler is the router's own — the instance the Camel consumer would have used,
         // with whatever the server configured on it — so an upload spools where it already
         // spooled and a form parses the way it already parsed.
-        mounted.put(routeId, router.route(method, path).order(AFTER_THE_GATE)
+        mounted.put(routeId, router.route(HttpMethod.valueOf(mount.method()), path(mount.path()))
+                .order(AFTER_THE_GATE)
                 .handler(router.bodyHandler())
                 .handler(ctx -> serve(ctx, routeId)));
-        return true;
-    }
-
-    /** {@code rest://get:/api/echo?…} — the method is the segment before the first colon. */
-    private static HttpMethod method(String from) {
-        String rest = from.substring("rest://".length());
-        int colon = rest.indexOf(':');
-        if (colon < 0) {
-            return null;
-        }
-        try {
-            return HttpMethod.valueOf(rest.substring(0, colon).toUpperCase(java.util.Locale.ROOT));
-        } catch (IllegalArgumentException unknown) {
-            return null;
-        }
     }
 
     /**
-     * The URL the route answers at: the REST path under the application's base path, with Camel's
-     * {@code {name}} parameters spelled the way this router spells them.
+     * The route that consumes a mount's {@code direct:} endpoint.
      *
-     * <p>The base path is on the context-wide REST configuration rather than on each route
-     * (docs/base-path.md), so it has to be put back here — the one thing the REST DSL was doing
-     * that a router mount does not do by itself.
+     * <p>A mount names the endpoint rather than the route id because that is what the declaring
+     * line had in its hand; the id is on the {@code from(...)} beside it. Camel normalises
+     * {@code direct:x} to {@code direct://x}, so the comparison is on what follows the scheme.
      */
-    private String path(String from) {
-        String rest = from.substring("rest://".length());
-        int colon = rest.indexOf(':');
-        int query = rest.indexOf('?');
-        String path = query < 0 ? rest.substring(colon + 1) : rest.substring(colon + 1, query);
-        path = java.net.URLDecoder.decode(path, java.nio.charset.StandardCharsets.UTF_8);
-        if (path.isBlank()) {
-            return null;
+    private String routeIdOf(String direct) {
+        String name = direct.substring(direct.indexOf(':') + 1).replaceFirst("^//", "");
+        for (RouteDefinition definition : ((ModelCamelContext) camelContext)
+                .getRouteDefinitions()) {
+            String from = definition.getInput().getEndpointUri();
+            if (from != null && from.startsWith("direct:")
+                    && from.substring(from.indexOf(':') + 1).replaceFirst("^//", "").equals(name)) {
+                return definition.getRouteId();
+            }
         }
+        return null;
+    }
+
+    /**
+     * The URL the route answers at: the declared path under the application's base path, with
+     * Camel's {@code {name}} parameters spelled the way this router spells them.
+     *
+     * <p>The base path used to arrive from the context-wide REST configuration
+     * (docs/base-path.md), which is gone, so the mount is where it goes on — the one place that
+     * knows about URLs at all.
+     */
+    private String path(String declared) {
         StringBuilder mountedPath = new StringBuilder(io.tesseraql.camel.BasePath.of(camelContext));
-        for (String segment : path.split("/", -1)) {
+        for (String segment : declared.split("/", -1)) {
             if (segment.isEmpty()) {
                 continue;
             }

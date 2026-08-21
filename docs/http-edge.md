@@ -266,6 +266,49 @@ any more, so an upload competes with nothing and nothing competes with it. That 
 decision 1 said would happen, and it is the honest version of "the coupling died" — the pool did
 not stop being used, it stopped being shared.
 
+### The REST DSL leaves, and what it was hiding
+
+A route said where it answered by calling `rest().get(path).to("direct:id")`, which asked Camel to
+create a consumer as a side effect of recording a URL. The runtime serves those routes itself now,
+so the consumer was the only part still being asked for — and asking for it kept
+`camel-platform-http-vertx` in the build along with the REST configuration that carried the base
+path. All **108 declarations across 18 files** become `HttpMounts.mount(...)`: a table the edge
+reads, and the same table the framework's surface guard reads, so the guard and the server can no
+longer disagree about where a surface answers.
+
+**A mount names the `direct:` endpoint rather than the route id**, because that is what the
+declaring line already had in its hand; the id is on the `from(...)` beside it. The edge resolves
+one to the other by reading the route model, which is where it reads the pipeline from anyway.
+
+**A surface the edge cannot serve now fails the boot.** There is no Camel route behind it to catch
+a decline, so declining would mean a declared URL answering 404 for the life of the process. And
+the guard earned its keep immediately: it refused to start **68 fixtures**, each naming a route.
+
+Three things came out of that, and none of them would have been found by reading:
+
+- **Two `choice()` calls were not branches.** Both were `choice().when(p).stop().end()` — "if this
+  is a replay, stop" and "if this is a duplicate, stop". The pipeline already honours
+  `setRouteStop(true)`, so the compiler now says what it means: `if (p) setRouteStop(true)`. A
+  one-armed choice was a branch-shaped way of writing an early return, and writing it plainly is
+  what makes the route a chain the edge can run.
+- **`admission.lane` is a promise the edge has to keep.** A lane compiles to a `threads()` handoff,
+  and the edge runs requests on virtual threads already — but that is not the same promise. A lane
+  is a **named, sized** pool an application asked for by name, so the pipeline hands off to it and
+  the virtual thread waits. A lane bounds how many run at once; it was never a way to answer
+  sooner.
+- **A recorded limitation expired without being edited.** The cutover deferred router surgery: a
+  route that appeared, moved or disappeared was "served by Camel until the next restart". That was
+  true when it was written and stopped being true the moment the REST DSL left, because there is
+  no Camel route behind it any more — and the file watcher's shipped promise is that a route
+  directory appearing on disk starts serving. So a reload reconciles the router instead of
+  refreshing pipelines: appeared and moved routes get a mount, deleted ones lose theirs and answer
+  404 rather than their last body. **A deferral records the reason as well as the decision, and
+  the reason is what expires.**
+
+**Strict at boot, tolerant at reload.** A boot that cannot serve a declared surface stops; a reload
+that cannot mount one route logs it and leaves the others serving. Nobody is watching a reload, and
+a runtime that exits on a bad save takes the good routes with it.
+
 ## Structural decisions
 
 ### 1. The request pipeline runs on a virtual thread per request
@@ -369,14 +412,22 @@ Slice 2 counted them — five, all `addOnCompletion` — and proved the drain by
    against two workers.** `direct:` and `ProducerTemplate` turned out not to need replacing at
    all — camel-core stays, and of the external callers exactly one addresses an HTTP route
    pipeline.
-5. **and 5b. Split, because they are different work.** **5 is done**: request bodies move across,
-   the hand-back goes, and every request the runtime serves is served on the router — eight
-   concurrent one-second form posts against two workers in 1040 ms. **5b remains**: the REST DSL
-   and `camel-platform-http-vertx` leave the build, which means TesseraQL owns the HTTP server,
-   the router and the body handler rather than borrowing them, and `HttpMessage` needs a
-   replacement. That is a different kind of change from moving a body, and folding them would
-   have made the reversible half irreversible.
-6. **Sweeps and cron** — the `timer:` and `quartz:` routes.
+5. **Done**: request bodies move across, the hand-back goes, and every request the runtime serves
+   is served on the router — eight concurrent one-second form posts against two workers in
+   1040 ms.
+5b-1. **Done**: the REST DSL leaves; mounts are a table; a surface the edge cannot serve fails the
+   boot; a reload reconciles the router.
+5b-2. **Remains**: `camel-platform-http-vertx` leaves the build, which means TesseraQL owns the
+   HTTP server, the router and the body handler rather than borrowing them. Ordering is forced —
+   the REST consumers had to leave the platform router before anything else could own it — and
+   folding them would have made the reversible half irreversible.
+6. **Sweeps and cron — declined, and here is why.** Written when this document expected Camel to
+   leave, and decision 4 then decided the connectors keep it, so camel-core stays and the
+   `timer:` and `quartz:` routes do not have to go. What replacing them would actually buy is
+   **108 KB** — `camel-quartz` — because `org.quartz.CronExpression` has to stay either way: a
+   cron's scheduled fire time is computed identically on every node, which is what lets
+   `tryClaimFiring` give one firing to exactly one of them. Cheap to keep, and the risk of
+   hand-rolling cron semantics in a batch platform is not.
 
 Slice 5 must not land before the rest: it removes the mechanism they replace, and the hand-back it
 removes is what has been keeping the cutover reversible.

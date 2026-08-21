@@ -1,6 +1,7 @@
 package io.tesseraql.studio.runtime;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.tesseraql.camel.HttpMounts;
 import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.compiler.binding.ErrorResponseRenderer;
 import io.tesseraql.core.error.TqlException;
@@ -38,10 +39,12 @@ final class WorkshopRouteBuilder extends RouteBuilder {
         onException(TqlException.class).handled(true).process(new ErrorResponseRenderer());
         onException(Exception.class).handled(true).process(new ErrorResponseRenderer());
 
-        rest().get("/_tesseraql/studio/data/{op}").to("direct:studio.workshop.read");
-        rest().post("/_tesseraql/studio/data/{op}").to("direct:studio.workshop.act");
-        rest().get("/_tesseraql/studio/data/public/{op}")
-                .to("direct:studio.workshop.public");
+        HttpMounts.mount(getContext(), "GET", "/_tesseraql/studio/data/{op}",
+                "direct:studio.workshop.read");
+        HttpMounts.mount(getContext(), "POST", "/_tesseraql/studio/data/{op}",
+                "direct:studio.workshop.act");
+        HttpMounts.mount(getContext(), "GET", "/_tesseraql/studio/data/public/{op}",
+                "direct:studio.workshop.public");
 
         from("direct:studio.workshop.read").routeId("studio.workshop.read")
                 .to(BROWSER).process(exchange -> answer(exchange, "GET"));

@@ -1,6 +1,7 @@
 package io.tesseraql.oidc;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.tesseraql.camel.HttpMounts;
 import io.tesseraql.compiler.binding.ErrorResponseRenderer;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
@@ -89,13 +90,14 @@ final class OidcRouteBuilder extends RouteBuilder {
         onException(OidcException.class).handled(true).process(this::unauthorized);
         onException(Exception.class).handled(true).process(this::badRequest);
 
-        rest().get("/_tesseraql/oidc/login").to("direct:tql.oidc.login");
+        HttpMounts.mount(getContext(), "GET", "/_tesseraql/oidc/login", "direct:tql.oidc.login");
         from("direct:tql.oidc.login").routeId("system.oidc.login").process(this::login);
 
-        rest().get("/_tesseraql/oidc/callback").to("direct:tql.oidc.callback");
+        HttpMounts.mount(getContext(), "GET", "/_tesseraql/oidc/callback",
+                "direct:tql.oidc.callback");
         from("direct:tql.oidc.callback").routeId("system.oidc.callback").process(this::callback);
 
-        rest().get("/_tesseraql/oidc/logout").to("direct:tql.oidc.logout");
+        HttpMounts.mount(getContext(), "GET", "/_tesseraql/oidc/logout", "direct:tql.oidc.logout");
         from("direct:tql.oidc.logout").routeId("system.oidc.logout").process(this::logout);
     }
 

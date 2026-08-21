@@ -1,6 +1,7 @@
 package io.tesseraql.runtime;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.tesseraql.camel.HttpMounts;
 import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.compiler.binding.ErrorResponseRenderer;
 import io.tesseraql.core.error.TqlException;
@@ -109,29 +110,36 @@ final class OperationsRouteBuilder extends RouteBuilder {
         onException(TqlException.class).handled(true).process(new ErrorResponseRenderer());
         onException(Exception.class).handled(true).process(new ErrorResponseRenderer());
 
-        rest().get("/_tesseraql/ops/batch/jobs").to("direct:ops.batch.jobs");
-        rest().get("/_tesseraql/ops/batch/executions").to("direct:ops.batch.executions");
-        rest().get("/_tesseraql/ops/batch/executions/{id}").to("direct:ops.batch.executionDetail");
-        rest().post("/_tesseraql/ops/batch/jobs/{jobId}/run").to("direct:ops.batch.run");
-        rest().post("/_tesseraql/ops/batch/executions/{id}/cancel")
-                .to("direct:ops.batch.cancel");
-        rest().get("/_tesseraql/ops/batch/transfers/{id}/file")
-                .to("direct:ops.batch.transferFile");
-        rest().get("/_tesseraql/ops/console/transfers/{id}/file")
-                .to("direct:ops.console.transferFile");
-        rest().get("/_tesseraql/ops/overview").to("direct:ops.overview");
-        rest().get("/_tesseraql/ops/lanes").to("direct:ops.lanes");
-        rest().get("/_tesseraql/ops/slow-sql").to("direct:ops.slowSql");
-        rest().get("/_tesseraql/ops/traces").to("direct:ops.traces");
-        rest().get("/_tesseraql/ops/traces/tree").to("direct:ops.traceTree");
-        rest().get("/_tesseraql/ops/traces/summary").to("direct:ops.traceSummary");
-        rest().get("/_tesseraql/ops/traces/metrics").to("direct:ops.traceMetrics");
-        rest().get("/_tesseraql/ops/alerts").to("direct:ops.alerts");
-        rest().get("/_tesseraql/ops/pinning").to("direct:ops.pinning");
+        HttpMounts.mount(getContext(), "GET", "/_tesseraql/ops/batch/jobs",
+                "direct:ops.batch.jobs");
+        HttpMounts.mount(getContext(), "GET", "/_tesseraql/ops/batch/executions",
+                "direct:ops.batch.executions");
+        HttpMounts.mount(getContext(), "GET", "/_tesseraql/ops/batch/executions/{id}",
+                "direct:ops.batch.executionDetail");
+        HttpMounts.mount(getContext(), "POST", "/_tesseraql/ops/batch/jobs/{jobId}/run",
+                "direct:ops.batch.run");
+        HttpMounts.mount(getContext(), "POST", "/_tesseraql/ops/batch/executions/{id}/cancel",
+                "direct:ops.batch.cancel");
+        HttpMounts.mount(getContext(), "GET", "/_tesseraql/ops/batch/transfers/{id}/file",
+                "direct:ops.batch.transferFile");
+        HttpMounts.mount(getContext(), "GET", "/_tesseraql/ops/console/transfers/{id}/file",
+                "direct:ops.console.transferFile");
+        HttpMounts.mount(getContext(), "GET", "/_tesseraql/ops/overview", "direct:ops.overview");
+        HttpMounts.mount(getContext(), "GET", "/_tesseraql/ops/lanes", "direct:ops.lanes");
+        HttpMounts.mount(getContext(), "GET", "/_tesseraql/ops/slow-sql", "direct:ops.slowSql");
+        HttpMounts.mount(getContext(), "GET", "/_tesseraql/ops/traces", "direct:ops.traces");
+        HttpMounts.mount(getContext(), "GET", "/_tesseraql/ops/traces/tree",
+                "direct:ops.traceTree");
+        HttpMounts.mount(getContext(), "GET", "/_tesseraql/ops/traces/summary",
+                "direct:ops.traceSummary");
+        HttpMounts.mount(getContext(), "GET", "/_tesseraql/ops/traces/metrics",
+                "direct:ops.traceMetrics");
+        HttpMounts.mount(getContext(), "GET", "/_tesseraql/ops/alerts", "direct:ops.alerts");
+        HttpMounts.mount(getContext(), "GET", "/_tesseraql/ops/pinning", "direct:ops.pinning");
         // The business-route audit trail read surface (roadmap Phase 45): bearer-gated and
         // narrowed to the caller's tql.ops.view.<name> grants like every ops read.
         if (routeAudit != null) {
-            rest().get("/_tesseraql/ops/audit").to("direct:ops.audit");
+            HttpMounts.mount(getContext(), "GET", "/_tesseraql/ops/audit", "direct:ops.audit");
             from("direct:ops.audit").routeId("ops.audit")
                     .to(VIEW).process(requireAnyOpsView())
                     .process(jsonProcessor(
@@ -141,15 +149,18 @@ final class OperationsRouteBuilder extends RouteBuilder {
         // What each code catalog holds and a manual refresh (docs/lookups.md, decision 14).
         // The store is looked up per request rather than injected: an app with no catalogs/
         // simply answers an empty list, and the endpoints do not depend on start-up order.
-        rest().get("/_tesseraql/ops/catalogs").to("direct:ops.catalogs");
-        rest().post("/_tesseraql/ops/catalogs/{name}/refresh").to("direct:ops.catalogs.refresh");
+        HttpMounts.mount(getContext(), "GET", "/_tesseraql/ops/catalogs", "direct:ops.catalogs");
+        HttpMounts.mount(getContext(), "POST", "/_tesseraql/ops/catalogs/{name}/refresh",
+                "direct:ops.catalogs.refresh");
         // The outbox delivery log and dead-letter redelivery (roadmap Phase 20).
-        rest().get("/_tesseraql/ops/outbox").to("direct:ops.outbox");
-        rest().post("/_tesseraql/ops/outbox/{id}/redeliver").to("direct:ops.outbox.redeliver");
+        HttpMounts.mount(getContext(), "GET", "/_tesseraql/ops/outbox", "direct:ops.outbox");
+        HttpMounts.mount(getContext(), "POST", "/_tesseraql/ops/outbox/{id}/redeliver",
+                "direct:ops.outbox.redeliver");
         // The messaging-channel queue event log and dead-letter redelivery, mirroring the
         // outbox surface (docs/silent-tolerance.md O1).
-        rest().get("/_tesseraql/ops/events").to("direct:ops.events");
-        rest().post("/_tesseraql/ops/events/{id}/redeliver").to("direct:ops.events.redeliver");
+        HttpMounts.mount(getContext(), "GET", "/_tesseraql/ops/events", "direct:ops.events");
+        HttpMounts.mount(getContext(), "POST", "/_tesseraql/ops/events/{id}/redeliver",
+                "direct:ops.events.redeliver");
         // Health for load balancers and deploy tooling (roadmap Phase 45): unauthenticated by
         // design, exposing only the status word - details stay behind the authorized ops API.
         // /health/live is pure liveness (the process answers; never touches a dependency);
@@ -164,7 +175,7 @@ final class OperationsRouteBuilder extends RouteBuilder {
         // the scrape is authorized like the rest of the ops API unless the operator
         // explicitly opts a cluster-internal scraper out of auth.
         if (metrics != null && metrics.enabled()) {
-            rest().get("/_tesseraql/metrics").to("direct:ops.metrics");
+            HttpMounts.mount(getContext(), "GET", "/_tesseraql/metrics", "direct:ops.metrics");
             var metricsRoute = from("direct:ops.metrics").routeId("ops.metrics");
             if (!metrics.unauthenticated()) {
                 metricsRoute = metricsRoute.to(VIEW)
@@ -333,19 +344,27 @@ final class OperationsRouteBuilder extends RouteBuilder {
         // authenticates the same principal and re-runs its own grant checks — the shell adds
         // reach, never authority. A caller without tql.ops.view.<thisApp> is refused with the
         // 404-shaped TQL-BATCH-4040, the same answer an unknown resource gives.
-        rest().get("/_tesseraql/ops/data/overview").to("direct:ops.data.overview");
-        rest().get("/_tesseraql/ops/data/jobs").to("direct:ops.data.jobs");
-        rest().get("/_tesseraql/ops/data/traces").to("direct:ops.data.traces");
-        rest().get("/_tesseraql/ops/data/transfers").to("direct:ops.data.transfers");
-        rest().get("/_tesseraql/ops/data/outbox").to("direct:ops.data.outbox");
-        rest().get("/_tesseraql/ops/data/events").to("direct:ops.data.events");
-        rest().get("/_tesseraql/ops/data/audit").to("direct:ops.data.audit");
-        rest().get("/_tesseraql/ops/data/executions/{id}").to("direct:ops.data.execution");
-        rest().post("/_tesseraql/ops/data/jobs/run").to("direct:ops.data.jobRun");
-        rest().post("/_tesseraql/ops/data/outbox/{id}/redeliver")
-                .to("direct:ops.data.outboxRedeliver");
-        rest().post("/_tesseraql/ops/data/events/{id}/redeliver")
-                .to("direct:ops.data.eventsRedeliver");
+        HttpMounts.mount(getContext(), "GET", "/_tesseraql/ops/data/overview",
+                "direct:ops.data.overview");
+        HttpMounts.mount(getContext(), "GET", "/_tesseraql/ops/data/jobs", "direct:ops.data.jobs");
+        HttpMounts.mount(getContext(), "GET", "/_tesseraql/ops/data/traces",
+                "direct:ops.data.traces");
+        HttpMounts.mount(getContext(), "GET", "/_tesseraql/ops/data/transfers",
+                "direct:ops.data.transfers");
+        HttpMounts.mount(getContext(), "GET", "/_tesseraql/ops/data/outbox",
+                "direct:ops.data.outbox");
+        HttpMounts.mount(getContext(), "GET", "/_tesseraql/ops/data/events",
+                "direct:ops.data.events");
+        HttpMounts.mount(getContext(), "GET", "/_tesseraql/ops/data/audit",
+                "direct:ops.data.audit");
+        HttpMounts.mount(getContext(), "GET", "/_tesseraql/ops/data/executions/{id}",
+                "direct:ops.data.execution");
+        HttpMounts.mount(getContext(), "POST", "/_tesseraql/ops/data/jobs/run",
+                "direct:ops.data.jobRun");
+        HttpMounts.mount(getContext(), "POST", "/_tesseraql/ops/data/outbox/{id}/redeliver",
+                "direct:ops.data.outboxRedeliver");
+        HttpMounts.mount(getContext(), "POST", "/_tesseraql/ops/data/events/{id}/redeliver",
+                "direct:ops.data.eventsRedeliver");
 
         from("direct:ops.data.overview").routeId("ops.data.overview")
                 .to(BROWSER).process(requireMemberView())

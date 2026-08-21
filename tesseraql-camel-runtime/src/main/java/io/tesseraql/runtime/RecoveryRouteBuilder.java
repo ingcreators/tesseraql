@@ -1,5 +1,6 @@
 package io.tesseraql.runtime;
 
+import io.tesseraql.camel.HttpMounts;
 import io.tesseraql.compiler.binding.ErrorResponseRenderer;
 import io.tesseraql.core.credential.CredentialTokenStore;
 import io.tesseraql.core.error.TqlException;
@@ -75,18 +76,20 @@ final class RecoveryRouteBuilder extends RouteBuilder {
         onException(Exception.class).handled(true).process(new ErrorResponseRenderer());
 
         if (channel != null && confirmUrl != null) {
-            rest().post("/_tesseraql/reset").to("direct:tql.reset.request");
+            HttpMounts.mount(getContext(), "POST", "/_tesseraql/reset", "direct:tql.reset.request");
             from("direct:tql.reset.request").routeId("system.reset.request")
                     .process(this::request);
 
-            rest().post("/_tesseraql/reset/confirm").to("direct:tql.reset.confirm");
+            HttpMounts.mount(getContext(), "POST", "/_tesseraql/reset/confirm",
+                    "direct:tql.reset.confirm");
             from("direct:tql.reset.confirm").routeId("system.reset.confirm")
                     .process(this::confirm);
         }
         if (inviteEnabled) {
             // The invite accept leg (roadmap Phase 50 slice 2): same token machinery,
             // purpose invite, plus the enable-user flip to ACTIVE.
-            rest().post("/_tesseraql/invite").to("direct:tql.invite.accept");
+            HttpMounts.mount(getContext(), "POST", "/_tesseraql/invite",
+                    "direct:tql.invite.accept");
             from("direct:tql.invite.accept").routeId("system.invite.accept")
                     .process(this::acceptInvite);
         }
