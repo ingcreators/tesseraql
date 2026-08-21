@@ -16,8 +16,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.camel.CamelContext;
 import org.apache.camel.Exchange;
-import org.apache.camel.component.platform.http.vertx.HttpMessage;
-import org.apache.camel.component.platform.http.vertx.VertxPlatformHttpRouter;
 import org.apache.camel.model.ModelCamelContext;
 import org.apache.camel.model.RouteDefinition;
 import org.apache.camel.support.DefaultExchange;
@@ -71,7 +69,7 @@ final class RouteEdge {
     private final Map<String, Route> mounted = new ConcurrentHashMap<>();
     /** What each mounted route was mounted as, so a reload can tell a moved URL from a stable one. */
     private final Map<String, io.tesseraql.camel.HttpMounts.Mount> at = new ConcurrentHashMap<>();
-    private volatile VertxPlatformHttpRouter router;
+    private volatile io.vertx.ext.web.Router router;
 
     private RouteEdge(CamelContext camelContext) {
         this.camelContext = camelContext;
@@ -86,8 +84,7 @@ final class RouteEdge {
      * what it was asked to serve should say so while somebody is still watching it start.
      */
     static RouteEdge install(CamelContext camelContext, int port) {
-        VertxPlatformHttpRouter router = VertxPlatformHttpRouter.lookup(camelContext,
-                VertxPlatformHttpRouter.getRouterNameFromPort(port));
+        io.vertx.ext.web.Router router = HttpEdgeBeans.router(camelContext);
         RouteEdge edge = new RouteEdge(camelContext);
         edge.router = router;
         for (io.tesseraql.camel.HttpMounts.Mount mount : io.tesseraql.camel.HttpMounts
@@ -159,7 +156,7 @@ final class RouteEdge {
         at.put(routeId, mount);
         mounted.put(routeId, router.route(HttpMethod.valueOf(mount.method()), path(mount.path()))
                 .order(AFTER_THE_GATE)
-                .handler(router.bodyHandler())
+                .handler(HttpEdgeBeans.bodyHandler(camelContext))
                 .handler(ctx -> serve(ctx, routeId)));
     }
 
@@ -190,7 +187,7 @@ final class RouteEdge {
         }
     }
 
-    private void mount(VertxPlatformHttpRouter router,
+    private void mount(io.vertx.ext.web.Router router,
             io.tesseraql.camel.HttpMounts.Mount mount) {
         String routeId = routeIdOf(mount.direct());
         if (routeId == null) {
@@ -214,7 +211,7 @@ final class RouteEdge {
         // spooled and a form parses the way it already parsed.
         mounted.put(routeId, router.route(HttpMethod.valueOf(mount.method()), path(mount.path()))
                 .order(AFTER_THE_GATE)
-                .handler(router.bodyHandler())
+                .handler(HttpEdgeBeans.bodyHandler(camelContext))
                 .handler(ctx -> serve(ctx, routeId)));
     }
 
@@ -308,8 +305,10 @@ final class RouteEdge {
         // that cannot say which route it is drops that segment out of every link a shared
         // template emits, and thirty-one Studio assertions with it.
         exchange.getExchangeExtension().setFromRouteId(routeId);
-        HttpMessage message = new HttpMessage(exchange, request, ctx.response());
-        exchange.setMessage(message);
+        // A plain message: the request and the response are the handler's, not the message's.
+        // The platform-http HttpMessage carried them so a processor could reach the raw Vert.x
+        // objects, and nothing in this framework ever did.
+        org.apache.camel.Message message = exchange.getMessage();
         Map<String, Object> headers = new java.util.LinkedHashMap<>();
         headers.put(Exchange.HTTP_PATH, ctx.normalizedPath());
         org.apache.camel.spi.HeaderFilterStrategy filter = headerFilter();
@@ -369,7 +368,13 @@ final class RouteEdge {
             return;
         }
         if (ctx.body() != null && ctx.body().buffer() != null) {
-            message.setBody(ctx.body().buffer());
+            // Bytes, not a Vert.x Buffer. The consumer set a Buffer because the component it
+            // lived in also registered the converter that turned one into a String — and that
+            // converter left with the component. A webhook verifying a signature over the raw
+            // body, a multipart deploy reading its part, and an export reading its own response
+            // all failed on the same missing conversion, which is a good argument for the
+            // adapter handing over a type the framework already knows.
+            message.setBody(ctx.body().buffer().getBytes());
         }
     }
 
@@ -413,9 +418,7 @@ final class RouteEdge {
     }
 
     private org.apache.camel.spi.HeaderFilterStrategy headerFilter() {
-        return camelContext.getComponent("platform-http",
-                org.apache.camel.component.platform.http.PlatformHttpComponent.class)
-                .getHeaderFilterStrategy();
+        return HttpEdgeBeans.headerFilter(camelContext);
     }
 
     private void respond(RoutingContext ctx, Context connection, Exchange exchange) {

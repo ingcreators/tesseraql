@@ -20,7 +20,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.camel.CamelContext;
-import org.apache.camel.component.platform.http.vertx.VertxPlatformHttpRouter;
 import org.apache.camel.support.service.ServiceSupport;
 
 /**
@@ -156,8 +155,7 @@ final class AssetRoutes extends ServiceSupport {
     /** Mounts the asset tree on the started platform router, under the app's base path. */
     static void install(CamelContext camelContext, int port, Path mainAssets,
             Map<String, Path> appAssets, ClientMessages clientMessages) {
-        VertxPlatformHttpRouter router = VertxPlatformHttpRouter.lookup(camelContext,
-                VertxPlatformHttpRouter.getRouterNameFromPort(port));
+        io.vertx.ext.web.Router router = HttpEdgeBeans.router(camelContext);
         AssetRoutes assets = new AssetRoutes(camelContext, mainAssets, appAssets, clientMessages);
         try {
             camelContext.addService(assets);

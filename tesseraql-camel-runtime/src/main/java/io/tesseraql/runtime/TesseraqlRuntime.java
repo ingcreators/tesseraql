@@ -25,8 +25,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.apache.camel.CamelContext;
-import org.apache.camel.component.platform.http.vertx.VertxPlatformHttpServer;
-import org.apache.camel.component.platform.http.vertx.VertxPlatformHttpServerConfiguration;
 import org.apache.camel.impl.DefaultCamelContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -702,19 +700,16 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     vertxOptions(manifest.config()));
         }
 
-        VertxPlatformHttpServerConfiguration httpConfig = new VertxPlatformHttpServerConfiguration();
-        httpConfig.setBindHost("0.0.0.0");
-        httpConfig.setBindPort(port);
         // The default HTTP header filter drops response caching headers wholesale; declarative
         // route caching (docs/response-shaping.md) needs Cache-Control on the wire, so the
-        // component-level strategy keeps the full default filter minus exactly that header —
-        // request hop-by-hop headers still never echo back.
+        // runtime's strategy keeps the full default filter minus exactly that header — request
+        // hop-by-hop headers still never echo back. Bound by name now that no component holds it
+        // (docs/http-edge.md decision 1).
         org.apache.camel.http.base.HttpHeaderFilterStrategy httpHeaderFilter = new org.apache.camel.http.base.HttpHeaderFilterStrategy();
         httpHeaderFilter.getOutFilter().removeIf("cache-control"::equalsIgnoreCase);
         httpHeaderFilter.getInFilter().removeIf("cache-control"::equalsIgnoreCase);
-        context.getComponent("platform-http",
-                org.apache.camel.component.platform.http.PlatformHttpComponent.class)
-                .setHeaderFilterStrategy(httpHeaderFilter);
+        context.getRegistry().bind(HttpEdgeBeans.HEADER_FILTER,
+                httpHeaderFilter);
         // SSE endpoints register on the platform's Vert.x router, which exists only once
         // the context (and with it the HTTP server) has started — collected here, run
         // right after context.start() (see SseRoutes for why they are not Camel routes).
@@ -1414,7 +1409,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
             AppMigrations.migrate(
                     io.tesseraql.yaml.migration.SchemaHistoryName.of(manifest.config()),
                     appHome, manifest.config(), dataSource, tenantDataSources, dataSources::get);
-            context.addService(new VertxPlatformHttpServer(httpConfig));
+            context.addService(new TesseraqlHttpServer(context, "0.0.0.0", port));
             context.addRoutes(new RouteCompiler().appName(appName)
                     .functions(modules.functions()).compile(manifest));
             // Mounted apps (jar-bundled system apps and config-listed directories, design ch. 32)

@@ -7,7 +7,6 @@ import io.vertx.ext.web.RoutingContext;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.camel.CamelContext;
-import org.apache.camel.component.platform.http.vertx.VertxPlatformHttpRouter;
 
 /**
  * Answers liveness and readiness on the platform router, without a worker
@@ -70,8 +69,7 @@ final class HealthRoutes {
 
     /** Mounts liveness and readiness on the started platform router, under the app's base path. */
     static void install(CamelContext camelContext, int port, OpsDashboard dashboard) {
-        VertxPlatformHttpRouter router = VertxPlatformHttpRouter.lookup(camelContext,
-                VertxPlatformHttpRouter.getRouterNameFromPort(port));
+        io.vertx.ext.web.Router router = HttpEdgeBeans.router(camelContext);
         HealthRoutes health = new HealthRoutes(dashboard);
         String mount = io.tesseraql.camel.BasePath.of(camelContext) + "/_tesseraql/health";
         // Liveness is a constant: it says the process is running, and it must never consult a

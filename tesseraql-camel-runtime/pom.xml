@@ -148,10 +148,6 @@
       <groupId>org.apache.camel</groupId>
       <artifactId>camel-platform-http</artifactId>
     </dependency>
-    <dependency>
-      <groupId>org.apache.camel</groupId>
-      <artifactId>camel-platform-http-vertx</artifactId>
-    </dependency>
     <!--
       Uploaded parts reach a route as attachments (docs/http-edge.md decision 1). The runtime's
       own edge builds them now rather than inheriting them from the platform-http consumer, so
@@ -168,6 +164,14 @@
       relay was measured on 2026-08-16 and lost chunked bodies outright, buffered event streams,
       and copied HTTP/2 pseudo-headers into HTTP/1.1 answers — see MultiAppGateway.
     -->
+    <!--
+      The runtime owns its HTTP server and router (docs/http-edge.md decision 1); they used to
+      arrive through camel-platform-http-vertx, which no longer has anything to route.
+    -->
+    <dependency>
+      <groupId>io.vertx</groupId>
+      <artifactId>vertx-web</artifactId>
+    </dependency>
     <dependency>
       <groupId>io.vertx</groupId>
       <artifactId>vertx-http-proxy</artifactId>

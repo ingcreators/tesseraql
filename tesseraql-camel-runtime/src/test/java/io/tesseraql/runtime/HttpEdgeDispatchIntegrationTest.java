@@ -23,7 +23,6 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Stream;
 import javax.sql.DataSource;
-import org.apache.camel.component.platform.http.vertx.VertxPlatformHttpRouter;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -70,9 +69,9 @@ class HttpEdgeDispatchIntegrationTest {
         runtime = TesseraqlRuntime.start(appHome, freePort());
         DataSource dataSource = runtime.camelContext().getRegistry()
                 .lookupByNameAndType("main", DataSource.class);
-        VertxPlatformHttpRouter router = VertxPlatformHttpRouter.lookup(runtime.camelContext(),
-                VertxPlatformHttpRouter.getRouterNameFromPort(runtime.port()));
-        Vertx vertx = router.vertx();
+        io.vertx.ext.web.Router router = runtime.camelContext().getRegistry()
+                .lookupByNameAndType("tesseraqlHttpRouter", io.vertx.ext.web.Router.class);
+        Vertx vertx = runtime.camelContext().getRegistry().findSingleByType(Vertx.class);
 
         CompletableFuture<Context> deployed = new CompletableFuture<>();
         vertx.deployVerticle(new AbstractVerticle() {
@@ -94,7 +93,7 @@ class HttpEdgeDispatchIntegrationTest {
             virtualPool.add(member.get());
         }
 
-        // A: what camel-platform-http-vertx does today.
+        // A: what the platform-http consumer did, kept as the baseline it measures against.
         router.route(HttpMethod.GET, "/spike/worker")
                 .handler(ctx -> ctx.vertx().executeBlocking(() -> hold(dataSource), false)
                         .onComplete(done -> ctx.response().end("ok")));

@@ -136,6 +136,14 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **The runtime owns its HTTP server and router** (docs/http-edge.md decision 1), and
+  `camel-platform-http-vertx` leaves the build. Nothing routed through that component any more —
+  the REST DSL that created its consumers is gone — so what remained was a place to keep a server,
+  a router, a body handler and a header filter. The body handler's settings become this
+  framework's own rather than another component's defaults: uploads handled and deleted when the
+  exchange ends, form attributes merged, the body buffer preallocated. A shared Vert.x instance is
+  still used and never closed, so replacing one application leaves the others' event loops alone.
+
 - **A route declares where it answers instead of asking Camel for a consumer**
   (docs/http-edge.md decision 1). Every framework and application surface said this by calling
   `rest().get(path).to("direct:id")`, which created an HTTP consumer as a side effect of recording
