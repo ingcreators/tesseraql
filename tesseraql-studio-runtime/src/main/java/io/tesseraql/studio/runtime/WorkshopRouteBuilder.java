@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.camel.HttpMounts;
 import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.compiler.binding.ErrorResponseRenderer;
+import io.tesseraql.compiler.pipeline.Pipeline;
+import io.tesseraql.compiler.pipeline.Pipelines;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.service.ServiceProviders;
 import io.tesseraql.security.Principal;
@@ -36,23 +38,25 @@ final class WorkshopRouteBuilder extends RouteBuilder {
 
     @Override
     public void configure() {
-        onException(TqlException.class).handled(true).process(new ErrorResponseRenderer());
-        onException(Exception.class).handled(true).process(new ErrorResponseRenderer());
+        Pipelines.Compilation pipelines = Pipelines.of(getContext())
+                .compiling(java.util.List.of(
+                        Pipeline.Handler.catching(TqlException.class, new ErrorResponseRenderer()),
+                        Pipeline.Handler.catching(Exception.class, new ErrorResponseRenderer())));
 
         HttpMounts.mount(getContext(), "GET", "/_tesseraql/studio/data/{op}",
-                "direct:studio.workshop.read");
+                "studio.workshop.read");
         HttpMounts.mount(getContext(), "POST", "/_tesseraql/studio/data/{op}",
-                "direct:studio.workshop.act");
+                "studio.workshop.act");
         HttpMounts.mount(getContext(), "GET", "/_tesseraql/studio/data/public/{op}",
-                "direct:studio.workshop.public");
+                "studio.workshop.public");
 
-        from("direct:studio.workshop.read").routeId("studio.workshop.read")
+        pipelines.pipeline("studio.workshop.read")
                 .to(BROWSER).process(exchange -> answer(exchange, "GET"));
-        from("direct:studio.workshop.act").routeId("studio.workshop.act")
+        pipelines.pipeline("studio.workshop.act")
                 .to(BROWSER).to(CSRF).process(exchange -> answer(exchange, "POST"));
         // The token-authorized share providers: no session, no atom — the provider verifies
         // the signed link itself, and only the PUBLIC rows answer here.
-        from("direct:studio.workshop.public").routeId("studio.workshop.public")
+        pipelines.pipeline("studio.workshop.public")
                 .process(this::answerPublic);
     }
 

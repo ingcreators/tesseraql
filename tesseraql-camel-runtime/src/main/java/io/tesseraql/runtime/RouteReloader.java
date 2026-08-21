@@ -457,17 +457,14 @@ public final class RouteReloader {
             context.addRoutes(new RouteBuilder() {
                 @Override
                 public void configure() {
-                    // Pinned for the same reason RouteCompiler pins it
-                    // (docs/transition-engine.md track E): topology is a choice. The base path
-                    // is restated for the same reason: a reloaded route re-enters the same
-                    // REST configuration, and a hot reload must not quietly move a route out
-                    // from under the app's prefix (docs/base-path.md).
-                    String direct = "direct:" + id;
+                    // The stub answers where the route it replaces answered, under the app's
+                    // own prefix: a hot reload must not quietly move a route out from under it
+                    // (docs/base-path.md).
                     switch (route.httpMethod() == null ? "GET" : route.httpMethod()) {
                         case "POST", "PUT", "PATCH", "DELETE" -> io.tesseraql.camel.HttpMounts
-                                .mount(getContext(), route.httpMethod(), route.urlPath(), direct);
+                                .mount(getContext(), route.httpMethod(), route.urlPath(), id);
                         default -> io.tesseraql.camel.HttpMounts.mount(getContext(), "GET",
-                                route.urlPath(), direct);
+                                route.urlPath(), id);
                     }
                     // A stub is a one-step pipeline, registered under the id the mount names.
                     io.tesseraql.compiler.pipeline.Pipelines.of(getContext())

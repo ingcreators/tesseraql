@@ -3,6 +3,8 @@ package io.tesseraql.runtime;
 import io.tesseraql.camel.HttpMounts;
 import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.compiler.binding.ErrorResponseRenderer;
+import io.tesseraql.compiler.pipeline.Pipeline;
+import io.tesseraql.compiler.pipeline.Pipelines;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.security.Principal;
 import java.util.LinkedHashMap;
@@ -28,13 +30,15 @@ final class OpsShellRouteBuilder extends RouteBuilder {
 
     @Override
     public void configure() {
-        onException(TqlException.class).handled(true).process(new ErrorResponseRenderer());
-        onException(Exception.class).handled(true).process(new ErrorResponseRenderer());
+        Pipelines.Compilation pipelines = Pipelines.of(getContext())
+                .compiling(java.util.List.of(
+                        Pipeline.Handler.catching(TqlException.class, new ErrorResponseRenderer()),
+                        Pipeline.Handler.catching(Exception.class, new ErrorResponseRenderer())));
 
         HttpMounts.mount(getContext(), "GET",
                 "/_tesseraql/ops/console/{member}/transfers/{id}/file",
-                "direct:ops.shell.transferFile");
-        from("direct:ops.shell.transferFile").routeId("ops.shell.transferFile")
+                "ops.shell.transferFile");
+        pipelines.pipeline("ops.shell.transferFile")
                 .to("tesseraql-auth:authenticate?auth=browser")
                 .process(this::download);
     }
@@ -50,9 +54,21 @@ final class OpsShellRouteBuilder extends RouteBuilder {
         String id = exchange.getMessage().getHeader("id", String.class);
         String url = targets.downloadUrl(selected.member(), selected.canary(), id);
         if (url == null) {
-            // The unhosted boot: the member is this runtime, so the local handler answers.
-            exchange.getContext().createProducerTemplate()
-                    .send("direct:ops.console.transferFile", exchange);
+            // The unhosted boot: the member is this runtime, so the local handler answers. Run
+            // rather than send: what this ever wanted was the pipeline behind that address
+            // (docs/camel-removal.md decision 1), and a template was the only way to ask for it.
+            RoutePipelines.of(exchange.getContext())
+                    .run("ops.console.transferFile", target -> {
+                        target.getMessage().setHeaders(exchange.getMessage().getHeaders());
+                        target.getMessage().setBody(exchange.getMessage().getBody());
+                    })
+                    .ifPresent(answered -> {
+                        exchange.getMessage().setHeaders(answered.getMessage().getHeaders());
+                        exchange.getMessage().setBody(answered.getMessage().getBody());
+                        if (answered.getException() != null) {
+                            exchange.setException(answered.getException());
+                        }
+                    });
             return;
         }
         java.net.http.HttpRequest.Builder request = java.net.http.HttpRequest

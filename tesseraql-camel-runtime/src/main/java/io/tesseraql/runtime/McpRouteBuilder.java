@@ -1,6 +1,8 @@
 package io.tesseraql.runtime;
 
 import io.tesseraql.camel.HttpMounts;
+import io.tesseraql.compiler.pipeline.Pipeline;
+import io.tesseraql.compiler.pipeline.Pipelines;
 import io.tesseraql.mcp.McpHttpHandler;
 import org.apache.camel.Exchange;
 import org.apache.camel.Processor;
@@ -24,16 +26,25 @@ final class McpRouteBuilder extends RouteBuilder {
 
     @Override
     public void configure() {
-        // Each verb routes to its own direct endpoint (one shared bridge): a single direct target
-        // for all three would collide on the derived route id.
-        HttpMounts.mount(getContext(), "POST", "/_tesseraql/mcp", "direct:mcp.endpoint.post");
-        HttpMounts.mount(getContext(), "GET", "/_tesseraql/mcp", "direct:mcp.endpoint.get");
-        HttpMounts.mount(getContext(), "DELETE", "/_tesseraql/mcp", "direct:mcp.endpoint.delete");
+        // The error envelope every other framework surface carries. These three had none: the
+        // handler catches what it expects, and anything it did not left the caller holding an
+        // open connection (docs/camel-removal.md slice 2b).
+        Pipelines.Compilation pipelines = Pipelines.of(getContext())
+                .compiling(java.util.List.of(
+                        Pipeline.Handler.catching(io.tesseraql.core.error.TqlException.class,
+                                new io.tesseraql.compiler.binding.ErrorResponseRenderer()),
+                        Pipeline.Handler.catching(Exception.class,
+                                new io.tesseraql.compiler.binding.ErrorResponseRenderer())));
+        // Each verb answers on its own pipeline (one shared bridge): a single target for all
+        // three would collide on the id.
+        HttpMounts.mount(getContext(), "POST", "/_tesseraql/mcp", "mcp.endpoint.post");
+        HttpMounts.mount(getContext(), "GET", "/_tesseraql/mcp", "mcp.endpoint.get");
+        HttpMounts.mount(getContext(), "DELETE", "/_tesseraql/mcp", "mcp.endpoint.delete");
 
         Processor bridge = bridge();
-        from("direct:mcp.endpoint.post").routeId("mcp.endpoint.post").process(bridge);
-        from("direct:mcp.endpoint.get").routeId("mcp.endpoint.get").process(bridge);
-        from("direct:mcp.endpoint.delete").routeId("mcp.endpoint.delete").process(bridge);
+        pipelines.pipeline("mcp.endpoint.post").process(bridge);
+        pipelines.pipeline("mcp.endpoint.get").process(bridge);
+        pipelines.pipeline("mcp.endpoint.delete").process(bridge);
     }
 
     private Processor bridge() {

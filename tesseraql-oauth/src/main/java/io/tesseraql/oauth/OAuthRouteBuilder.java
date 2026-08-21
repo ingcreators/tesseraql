@@ -1,6 +1,8 @@
 package io.tesseraql.oauth;
 
 import io.tesseraql.camel.HttpMounts;
+import io.tesseraql.compiler.pipeline.Pipeline;
+import io.tesseraql.compiler.pipeline.Pipelines;
 import io.tesseraql.security.Principal;
 import io.tesseraql.security.session.SessionStore;
 import java.net.URLEncoder;
@@ -52,27 +54,36 @@ final class OAuthRouteBuilder extends RouteBuilder {
 
     @Override
     public void configure() {
-        HttpMounts.mount(getContext(), "GET", "/_tesseraql/oauth/jwks", "direct:tql.oauth.jwks");
-        from("direct:tql.oauth.jwks").routeId("system.oauth.jwks").process(this::jwks);
+        // The error envelope every other framework surface carries, which these seven did not:
+        // an unexpected failure on an OAuth endpoint left the caller holding an open connection
+        // rather than answering (docs/camel-removal.md slice 2b).
+        Pipelines.Compilation pipelines = Pipelines.of(getContext())
+                .compiling(java.util.List.of(
+                        Pipeline.Handler.catching(io.tesseraql.core.error.TqlException.class,
+                                new io.tesseraql.compiler.binding.ErrorResponseRenderer()),
+                        Pipeline.Handler.catching(Exception.class,
+                                new io.tesseraql.compiler.binding.ErrorResponseRenderer())));
+        HttpMounts.mount(getContext(), "GET", "/_tesseraql/oauth/jwks", "system.oauth.jwks");
+        pipelines.pipeline("system.oauth.jwks").process(this::jwks);
         if (flow != null && sessions != null) {
             HttpMounts.mount(getContext(), "GET", "/_tesseraql/oauth/authorize",
-                    "direct:tql.oauth.authorize");
-            from("direct:tql.oauth.authorize").routeId("system.oauth.authorize")
+                    "system.oauth.authorize");
+            pipelines.pipeline("system.oauth.authorize")
                     .process(this::authorize);
             HttpMounts.mount(getContext(), "POST", "/_tesseraql/oauth/decision",
-                    "direct:tql.oauth.consent");
-            from("direct:tql.oauth.consent").routeId("system.oauth.consent")
+                    "system.oauth.consent");
+            pipelines.pipeline("system.oauth.consent")
                     .process(this::consent);
             HttpMounts.mount(getContext(), "POST", "/_tesseraql/oauth/token",
-                    "direct:tql.oauth.token");
-            from("direct:tql.oauth.token").routeId("system.oauth.token").process(this::token);
+                    "system.oauth.token");
+            pipelines.pipeline("system.oauth.token").process(this::token);
             HttpMounts.mount(getContext(), "POST", "/_tesseraql/oauth/register",
-                    "direct:tql.oauth.register");
-            from("direct:tql.oauth.register").routeId("system.oauth.register")
+                    "system.oauth.register");
+            pipelines.pipeline("system.oauth.register")
                     .process(this::register);
             HttpMounts.mount(getContext(), "GET", "/.well-known/oauth-authorization-server",
-                    "direct:tql.oauth.metadata");
-            from("direct:tql.oauth.metadata").routeId("system.oauth.metadata")
+                    "system.oauth.metadata");
+            pipelines.pipeline("system.oauth.metadata")
                     .process(this::metadata);
             // RFC 9728 protected-resource metadata, path-inserted per member — the probe the
             // measured clients try first (docs/audit-hardening.md decision 2). One document
@@ -81,9 +92,9 @@ final class OAuthRouteBuilder extends RouteBuilder {
             for (String basePath : flow.memberAddresses().values()) {
                 HttpMounts.mount(getContext(), "GET",
                         "/.well-known/oauth-protected-resource" + basePath + "/_tesseraql/mcp",
-                        "direct:tql.oauth.resourceMetadata");
+                        "system.oauth.resourceMetadata");
             }
-            from("direct:tql.oauth.resourceMetadata").routeId("system.oauth.resourceMetadata")
+            pipelines.pipeline("system.oauth.resourceMetadata")
                     .process(this::resourceMetadata);
         }
     }

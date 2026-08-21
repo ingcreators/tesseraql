@@ -237,6 +237,17 @@ runtime start time here, before and after, because it is the one number nobody h
 the reloader, the MCP server and the queue consumer address them by id. The framework's own route
 builders still declare consumers and are slice 2b. What it cost and what it caught is below.
 
+**2b done: the framework's own routes, and the last `direct:`.** The 95 routes across 16 builders
+are pipelines; a mount names the pipeline that answers it rather than an endpoint URI; the edge's
+resolver and the route-model reader are deleted. **`from("direct:` appears zero times in main
+sources.**
+
+**And the number decision 2 asked for.** Starting the `CamelContext` now costs **1–10 ms, median
+6**, measured across 332 context starts in one runtime suite run. That bounds what removing Camel
+entirely can still save at boot, and the answer is: not enough to justify anything. Recorded so the
+remaining slices are argued on footprint, attack surface and ownership — which is what they were
+always about — rather than on a number nobody had checked.
+
 **3. `Exchange`, `Processor`, and the conversion table.** Mechanical across 116 files, with the
 five completions and the leak test as the acceptance.
 
@@ -347,6 +358,27 @@ failure mode its own comment describes. It reads both models now.
 An application route has no started state any more: it resolves at boot or the boot fails, which is
 the stricter half of the same guarantee, but the health detail now covers the framework's routes
 only. Recorded because it is a change in what an operator sees, not only in how it works.
+
+## What slice 2b found
+
+**Two framework surfaces had no error envelope at all, and the failure mode was silence.**
+`OAuthRouteBuilder`'s seven routes and `McpRouteBuilder`'s three declared no `onException` clause,
+where every sibling declares two. The edge throws when no clause claims a failure, `serve` did not
+catch it, and the caller was left holding an open connection until it timed out — the one answer an
+HTTP surface must never give. Giving every pipeline its clauses explicitly is what asked the
+question; a route builder could omit them silently before because the DSL let the omission look
+like nothing. Both are fixed, **and the edge now answers a 500 for any failure nothing rendered**,
+because fixing only the two would leave the hole open for the next builder that forgets.
+
+**A mount and a route id were two strings for the same thing.** A mount named `direct:tql.login`
+while the route was `system.login`, and 25 of the 95 framework routes differed that way — which is
+the entire reason the edge carried a resolver that scanned the route model. One string now, and the
+resolver is gone with the reader it used.
+
+**A blind rename would have changed the wrong `direct()`.** `HttpMounts.Mount.direct()` became
+`pipeline()`, and a repository-wide rename also hit `ModelFieldConsumerScan.Consumers.direct()` —
+an unrelated type about which code reads a model field. The compiler caught it; it is recorded
+because the next mechanical rename in this campaign will look just as safe.
 
 ## What this does not buy, said before anyone expects it
 

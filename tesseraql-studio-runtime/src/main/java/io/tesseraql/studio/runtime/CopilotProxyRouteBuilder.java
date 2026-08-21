@@ -2,6 +2,8 @@ package io.tesseraql.studio.runtime;
 
 import io.tesseraql.camel.HttpMounts;
 import io.tesseraql.compiler.binding.ErrorResponseRenderer;
+import io.tesseraql.compiler.pipeline.Pipeline;
+import io.tesseraql.compiler.pipeline.Pipelines;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.runtime.HostContext;
 import java.net.URI;
@@ -33,13 +35,15 @@ final class CopilotProxyRouteBuilder extends RouteBuilder {
 
     @Override
     public void configure() {
-        onException(TqlException.class).handled(true).process(new ErrorResponseRenderer());
-        onException(Exception.class).handled(true).process(new ErrorResponseRenderer());
+        Pipelines.Compilation pipelines = Pipelines.of(getContext())
+                .compiling(java.util.List.of(
+                        Pipeline.Handler.catching(TqlException.class, new ErrorResponseRenderer()),
+                        Pipeline.Handler.catching(Exception.class, new ErrorResponseRenderer())));
 
         HttpMounts.mount(getContext(), "POST", "/_tesseraql/studio/{member}/ui/copilot/send",
-                "direct:studio.shell.copilot.send");
+                "studio.shell.copilot.send");
 
-        from("direct:studio.shell.copilot.send").routeId("studio.shell.copilot.send")
+        pipelines.pipeline("studio.shell.copilot.send")
                 .to(BROWSER).to(CSRF).process(this::forward);
     }
 

@@ -28,11 +28,11 @@ public final class HttpMounts {
     /**
      * One surface.
      *
-     * @param method  the HTTP method, upper case
-     * @param path    the URL, base-relative, with Camel's {@code {name}} parameter spelling
-     * @param direct  the {@code direct:} endpoint the route consumes from
+     * @param method   the HTTP method, upper case
+     * @param path     the URL, base-relative, with Camel's {@code {name}} parameter spelling
+     * @param pipeline the id of the pipeline that answers here
      */
-    public record Mount(String method, String path, String direct) {
+    public record Mount(String method, String path, String pipeline) {
     }
 
     private final List<Mount> mounts = new ArrayList<>();
@@ -45,10 +45,10 @@ public final class HttpMounts {
      * URL twice.
      */
     public static synchronized void mount(CamelContext context, String method, String path,
-            String direct) {
+            String pipeline) {
         HttpMounts held = of(context);
-        held.mounts.removeIf(mount -> mount.direct().equals(direct));
-        held.mounts.add(new Mount(method.toUpperCase(Locale.ROOT), path, direct));
+        held.mounts.removeIf(mount -> mount.pipeline().equals(pipeline));
+        held.mounts.add(new Mount(method.toUpperCase(Locale.ROOT), path, pipeline));
     }
 
     /** Every mount declared so far, in declaration order. */
@@ -57,8 +57,8 @@ public final class HttpMounts {
     }
 
     /** Forgets the mounts of routes being replaced, so a hot reload does not accumulate them. */
-    public static synchronized void forget(CamelContext context, String direct) {
-        of(context).mounts.removeIf(mount -> mount.direct().equals(direct));
+    public static synchronized void forget(CamelContext context, String pipeline) {
+        of(context).mounts.removeIf(mount -> mount.pipeline().equals(pipeline));
     }
 
     private static HttpMounts of(CamelContext context) {

@@ -136,6 +136,20 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **Every framework HTTP surface is a pipeline too, and a mount names it directly**
+  (docs/camel-removal.md structural decision 1, slice 2b). The 95 routes across the framework's 16
+  route builders join the compiler's: `from("direct:` appears nowhere in the framework any more,
+  and the edge's resolver and the route-model reader are deleted with it. A mount used to name the
+  `direct:` endpoint a route consumed while the route carried a different id — they differed for 25
+  of the 95 — which is why resolving one to the other needed a scan of the route model. They are one
+  string now.
+
+- **An OAuth or MCP endpoint answers a failure instead of hanging.** Those two surfaces declared no
+  error clauses, where every sibling declares two, and the edge left a failure nothing claimed
+  unanswered — the caller held an open connection until it timed out. Both now carry the framework
+  envelope, **and the edge answers `TQL-CAMEL-5000` for any failure nothing rendered**, so a future
+  surface that forgets its clauses fails visibly rather than silently.
+
 - **A compiled application route is a pipeline, not a Camel route** (docs/camel-removal.md
   structural decision 1, slice 2a). The compiler emitted a chain of processors, encoded it as a
   route so that the HTTP edge could decode the chain back out of the route model, and carried a

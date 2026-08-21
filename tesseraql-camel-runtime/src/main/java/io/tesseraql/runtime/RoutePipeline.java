@@ -8,13 +8,6 @@ import java.util.Optional;
 import org.apache.camel.CamelContext;
 import org.apache.camel.Exchange;
 import org.apache.camel.Processor;
-import org.apache.camel.model.ModelCamelContext;
-import org.apache.camel.model.OnExceptionDefinition;
-import org.apache.camel.model.ProcessDefinition;
-import org.apache.camel.model.ProcessorDefinition;
-import org.apache.camel.model.RouteDefinition;
-import org.apache.camel.model.ThreadsDefinition;
-import org.apache.camel.model.ToDefinition;
 import org.apache.camel.spi.Synchronization;
 import org.apache.camel.support.UnitOfWorkHelper;
 
@@ -73,65 +66,10 @@ final class RoutePipeline {
         this.laneExecutor = laneExecutor;
     }
 
-    /**
-     * Reads the route's model, or declines.
-     *
-     * <p>Declining is the important half: a route with a {@code choice}, a {@code split} or a
-     * {@code threads} is not something this prototype pretends to run, and slice 1 is not the
-     * place to find out that it half-ran one.
-     */
+    /** The pipeline compiled under {@code routeId}, resolved for running. */
     static Optional<RoutePipeline> of(CamelContext camelContext, String routeId) {
-        Optional<Pipeline> compiled = Pipelines.of(camelContext).find(routeId);
-        if (compiled.isPresent()) {
-            return of(camelContext, compiled.get());
-        }
-        RouteDefinition definition = ((ModelCamelContext) camelContext).getRouteDefinition(routeId);
-        if (definition == null) {
-            return Optional.empty();
-        }
-        List<Processor> steps = new ArrayList<>();
-        List<Handler> handlers = new ArrayList<>();
-        List<org.apache.camel.Producer> owned = new ArrayList<>();
-        int handoffAt = -1;
-        String laneExecutor = null;
-        for (ProcessorDefinition<?> output : definition.getOutputs()) {
-            switch (output) {
-                case OnExceptionDefinition onException -> {
-                    Processor renderer = single(onException.getOutputs());
-                    if (renderer == null) {
-                        return Optional.empty();
-                    }
-                    handlers.add(new Handler(List.copyOf(onException.getExceptions()), renderer));
-                }
-                case ProcessDefinition process -> steps.add(process.getProcessor());
-                case ThreadsDefinition threads -> {
-                    if (handoffAt >= 0 || threads.getExecutorServiceRef() == null) {
-                        return Optional.empty();
-                    }
-                    handoffAt = steps.size();
-                    laneExecutor = threads.getExecutorServiceRef();
-                }
-                case ToDefinition to -> {
-                    try {
-                        org.apache.camel.Producer producer = camelContext.getEndpoint(to.getUri())
-                                .createProducer();
-                        owned.add(producer);
-                        steps.add(producer);
-                    } catch (Exception unusable) {
-                        return Optional.empty();
-                    }
-                }
-                default -> {
-                    LOG.debug("Route {} is not a plain chain: {}", routeId,
-                            output.getClass().getSimpleName());
-                    return Optional.empty();
-                }
-            }
-        }
-        return steps.stream().anyMatch(java.util.Objects::isNull)
-                ? Optional.empty()
-                : Optional.of(new RoutePipeline(steps, handlers, owned, handoffAt,
-                        laneExecutor));
+        return Pipelines.of(camelContext).find(routeId)
+                .flatMap(compiled -> of(camelContext, compiled));
     }
 
     /**
@@ -169,12 +107,6 @@ final class RoutePipeline {
         }
         return Optional.of(new RoutePipeline(steps, handlers, owned, compiled.handoffAt(),
                 compiled.laneExecutor()));
-    }
-
-    private static Processor single(List<ProcessorDefinition<?>> outputs) {
-        return outputs.size() == 1 && outputs.get(0) instanceof ProcessDefinition process
-                ? process.getProcessor()
-                : null;
     }
 
     /** Starts the producers the {@code to} steps resolved to; they are services like any other. */

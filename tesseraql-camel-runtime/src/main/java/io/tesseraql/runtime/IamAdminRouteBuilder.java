@@ -3,6 +3,8 @@ package io.tesseraql.runtime;
 import io.tesseraql.camel.HttpMounts;
 import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.compiler.binding.ErrorResponseRenderer;
+import io.tesseraql.compiler.pipeline.Pipeline;
+import io.tesseraql.compiler.pipeline.Pipelines;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
@@ -37,15 +39,17 @@ final class IamAdminRouteBuilder extends RouteBuilder {
 
     @Override
     public void configure() {
-        onException(TqlException.class).handled(true).process(new ErrorResponseRenderer());
-        onException(Exception.class).handled(true).process(new ErrorResponseRenderer());
+        Pipelines.Compilation pipelines = Pipelines.of(getContext())
+                .compiling(java.util.List.of(
+                        Pipeline.Handler.catching(TqlException.class, new ErrorResponseRenderer()),
+                        Pipeline.Handler.catching(Exception.class, new ErrorResponseRenderer())));
 
-        HttpMounts.mount(getContext(), "POST", USERS + "/bulk", "direct:tql.iamAdmin.users.bulk");
+        HttpMounts.mount(getContext(), "POST", USERS + "/bulk", "tql.iamAdmin.users.bulk");
 
         // Post/redirect/get like the per-user disable: the no-JS-first shape of the
         // recipe (the htmx tbody-swap enhancement needs HX-Request negotiation and can
         // layer on later without changing this contract).
-        from("direct:tql.iamAdmin.users.bulk").routeId("tql.iamAdmin.users.bulk")
+        pipelines.pipeline("tql.iamAdmin.users.bulk")
                 .to("tesseraql-auth:authenticate?auth=browser")
                 .to("tesseraql-auth:csrf")
                 .to("tesseraql-auth:authorize?policy=tql.iam.admin.write")

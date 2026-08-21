@@ -2,6 +2,8 @@ package io.tesseraql.saml.camel;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.camel.HttpMounts;
+import io.tesseraql.compiler.pipeline.Pipeline;
+import io.tesseraql.compiler.pipeline.Pipelines;
 import io.tesseraql.saml.AuthnRequest;
 import io.tesseraql.saml.LogoutRequest;
 import io.tesseraql.saml.LogoutResponse;
@@ -96,29 +98,31 @@ final class SamlAcsRouteBuilder extends RouteBuilder {
 
     @Override
     public void configure() {
-        onException(SamlException.class).handled(true).process(this::unauthorized);
-        onException(Exception.class).handled(true).process(this::badRequest);
+        Pipelines.Compilation pipelines = Pipelines.of(getContext())
+                .compiling(java.util.List.of(
+                        Pipeline.Handler.catching(SamlException.class, this::unauthorized),
+                        Pipeline.Handler.catching(Exception.class, this::badRequest)));
 
-        HttpMounts.mount(getContext(), "POST", "/_tesseraql/saml/acs", "direct:tql.saml.acs");
-        from("direct:tql.saml.acs").routeId("system.saml.acs").process(this::consume);
+        HttpMounts.mount(getContext(), "POST", "/_tesseraql/saml/acs", "system.saml.acs");
+        pipelines.pipeline("system.saml.acs").process(this::consume);
 
-        HttpMounts.mount(getContext(), "GET", "/_tesseraql/saml/logout", "direct:tql.saml.logout");
-        from("direct:tql.saml.logout").routeId("system.saml.logout").process(this::logout);
+        HttpMounts.mount(getContext(), "GET", "/_tesseraql/saml/logout", "system.saml.logout");
+        pipelines.pipeline("system.saml.logout").process(this::logout);
 
         if (metadata != null) {
             HttpMounts.mount(getContext(), "GET", "/_tesseraql/saml/metadata",
-                    "direct:tql.saml.metadata");
-            from("direct:tql.saml.metadata").routeId("system.saml.metadata")
+                    "system.saml.metadata");
+            pipelines.pipeline("system.saml.metadata")
                     .process(this::serveMetadata);
         }
         if (endpoints != null && endpoints.idpSsoUrl() != null && endpoints.acsUrl() != null) {
             HttpMounts.mount(getContext(), "GET", "/_tesseraql/saml/login",
-                    "direct:tql.saml.login");
-            from("direct:tql.saml.login").routeId("system.saml.login").process(this::login);
+                    "system.saml.login");
+            pipelines.pipeline("system.saml.login").process(this::login);
         }
         if (endpoints != null && endpoints.idpSloUrl() != null) {
-            HttpMounts.mount(getContext(), "GET", "/_tesseraql/saml/slo", "direct:tql.saml.slo");
-            from("direct:tql.saml.slo").routeId("system.saml.slo").process(this::inboundLogout);
+            HttpMounts.mount(getContext(), "GET", "/_tesseraql/saml/slo", "system.saml.slo");
+            pipelines.pipeline("system.saml.slo").process(this::inboundLogout);
         }
     }
 

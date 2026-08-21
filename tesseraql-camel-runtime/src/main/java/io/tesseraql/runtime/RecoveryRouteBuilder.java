@@ -2,6 +2,8 @@ package io.tesseraql.runtime;
 
 import io.tesseraql.camel.HttpMounts;
 import io.tesseraql.compiler.binding.ErrorResponseRenderer;
+import io.tesseraql.compiler.pipeline.Pipeline;
+import io.tesseraql.compiler.pipeline.Pipelines;
 import io.tesseraql.core.credential.CredentialTokenStore;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.identity.IdentityContracts;
@@ -72,25 +74,27 @@ final class RecoveryRouteBuilder extends RouteBuilder {
 
     @Override
     public void configure() {
-        onException(TqlException.class).handled(true).process(new ErrorResponseRenderer());
-        onException(Exception.class).handled(true).process(new ErrorResponseRenderer());
+        Pipelines.Compilation pipelines = Pipelines.of(getContext())
+                .compiling(java.util.List.of(
+                        Pipeline.Handler.catching(TqlException.class, new ErrorResponseRenderer()),
+                        Pipeline.Handler.catching(Exception.class, new ErrorResponseRenderer())));
 
         if (channel != null && confirmUrl != null) {
-            HttpMounts.mount(getContext(), "POST", "/_tesseraql/reset", "direct:tql.reset.request");
-            from("direct:tql.reset.request").routeId("system.reset.request")
+            HttpMounts.mount(getContext(), "POST", "/_tesseraql/reset", "system.reset.request");
+            pipelines.pipeline("system.reset.request")
                     .process(this::request);
 
             HttpMounts.mount(getContext(), "POST", "/_tesseraql/reset/confirm",
-                    "direct:tql.reset.confirm");
-            from("direct:tql.reset.confirm").routeId("system.reset.confirm")
+                    "system.reset.confirm");
+            pipelines.pipeline("system.reset.confirm")
                     .process(this::confirm);
         }
         if (inviteEnabled) {
             // The invite accept leg (roadmap Phase 50 slice 2): same token machinery,
             // purpose invite, plus the enable-user flip to ACTIVE.
             HttpMounts.mount(getContext(), "POST", "/_tesseraql/invite",
-                    "direct:tql.invite.accept");
-            from("direct:tql.invite.accept").routeId("system.invite.accept")
+                    "system.invite.accept");
+            pipelines.pipeline("system.invite.accept")
                     .process(this::acceptInvite);
         }
     }
