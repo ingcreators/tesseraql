@@ -5,24 +5,25 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.tesseraql.core.messaging.EventChannelStore;
 import io.tesseraql.core.messaging.EventMessage;
 import java.util.List;
-import org.apache.camel.ProducerTemplate;
 import org.apache.camel.impl.DefaultCamelContext;
 import org.junit.jupiter.api.Test;
 
 /**
- * The queue consumer's send template is stopped with the context.
+ * The pipeline runner is stopped with the context (docs/camel-removal.md decision 1).
  *
- * <p>It was created lazily and never stopped. A {@link ProducerTemplate} holds a producer cache,
- * so an app close or a reload left its endpoints — and whatever connections they hold — behind.
- * Neither owner had a close path to add one to: a {@code PgNotifyListener} and a route builder.
- * Handing the template to the context as a service is what closes the row without inventing one.
+ * <p>This guarded a {@code ProducerTemplate} the queue consumer created lazily and never stopped:
+ * a template holds a producer cache, so an app close or a reload left its endpoints — and whatever
+ * connections they hold — behind, and neither owner had a close path to add one to. The template
+ * is gone and the leak is not, because {@link RoutePipelines} caches resolved pipelines and the
+ * producers inside them for exactly the same reason. So the property is the same one, asserted of
+ * what holds the cache now.
  */
-class QueueConsumerTemplateTest {
+class RoutePipelinesLifecycleTest {
 
     /**
-     * One message, then none: the drain has to reach the send for the template to exist at all.
-     * The send fails (no such route) and the consumer records that, which is fine — the point is
-     * the template, not the delivery.
+     * One message, then none: the drain has to reach the run for the runner to exist at all. The
+     * run finds no compiled pipeline and the consumer records that failure, which is fine — the
+     * point is the runner's lifecycle, not the delivery.
      */
     private static final java.util.concurrent.atomic.AtomicBoolean SERVED = new java.util.concurrent.atomic.AtomicBoolean();
 
@@ -77,7 +78,7 @@ class QueueConsumerTemplateTest {
     };
 
     @Test
-    void stoppingTheContextStopsTheTemplate() throws Exception {
+    void stoppingTheContextStopsTheRunner() throws Exception {
         DefaultCamelContext context = new DefaultCamelContext();
         context.start();
         QueueConsumer consumer = new QueueConsumer(context, EMPTY,
@@ -86,20 +87,19 @@ class QueueConsumerTemplateTest {
 
         consumer.drainAll();
 
-        ProducerTemplate template = context.getCamelContextExtension().getServices().stream()
-                .filter(ProducerTemplate.class::isInstance)
-                .map(ProducerTemplate.class::cast)
+        RoutePipelines runner = context.getCamelContextExtension().getServices().stream()
+                .filter(RoutePipelines.class::isInstance)
+                .map(RoutePipelines.class::cast)
                 .findFirst()
                 .orElseThrow(() -> new AssertionError(
-                        "the consumer's template is not a service of the context, so nothing"
-                                + " will ever stop it"));
-        assertThat(((org.apache.camel.support.service.ServiceSupport) template).isStarted())
-                .isTrue();
+                        "the pipeline runner is not a service of the context, so nothing will"
+                                + " ever stop the producers it resolved"));
+        assertThat(runner.isStarted()).isTrue();
 
         context.stop();
 
-        assertThat(((org.apache.camel.support.service.ServiceSupport) template).isStarted())
-                .as("the template must stop with the context that owns it")
+        assertThat(runner.isStarted())
+                .as("the runner must stop with the context that owns it")
                 .isFalse();
     }
 }

@@ -233,6 +233,10 @@ differs from the component's.
 reading `RouteDefinition`; the four `ProducerTemplate` callers move to the registry. Measure
 runtime start time here, before and after, because it is the one number nobody has.
 
+**2a done: the application routes.** The 138 routes `RouteCompiler` emits are pipelines; the edge,
+the reloader, the MCP server and the queue consumer address them by id. The framework's own route
+builders still declare consumers and are slice 2b. What it cost and what it caught is below.
+
 **3. `Exchange`, `Processor`, and the conversion table.** Mechanical across 116 files, with the
 five completions and the leak test as the acceptance.
 
@@ -299,6 +303,50 @@ Prometheus gauges read, and the FTPS transport, which keeps its consumer until s
 a path that did not change as much as on the paths that did — which is what machine variance looks
 like. Slice 1 was about behaviour, and the number that would matter (time from a file landing to
 its rows being visible) has not been measured on either implementation.
+
+## What slice 2a found
+
+**The DSL and the builder are the same shape, which is what made the change reviewable.** The
+compiler threaded a `ProcessorDefinition<?>` through a few dozen helpers, calling `process` and
+`to` on it; Camel's fluent DSL appends to the current definition and returns the same object, and
+so does `PipelineBuilder`. So the diff is a type and seventeen construction sites, not 1,900 lines
+of rewritten control flow — and a rewrite of the text is precisely where a difference would have
+hidden.
+
+**The tests that read the route model got shorter.** Four compiler tests walked Camel's output
+definitions recursively to find the processors inside them. A pipeline is the list, so the walk is
+a loop, and what they assert — how often a processor is mounted, in what order, with which endpoint
+URI — is now asked of the artifact rather than of an encoding of it.
+
+**A borrowed drain stopped working the moment its premise left, and the suite said so.** The edge
+registered each request in Camel's inflight repository under its route id, so the shutdown strategy
+would wait for it (docs/runtime-replace.md). That works exactly as long as there is a route by that
+id. There is not any more: the strategy had nothing to count, and replacing a runtime went back to
+cutting an in-flight request mid-answer — the defect the edge campaign had already found and fixed
+once, reappearing through a different door. `MultiAppReplaceIntegrationTest` failed on it before
+anybody had to suspect it. The edge counts its own requests now and `close()` drains them under the
+same declared `tesseraql.shutdown.timeout`, which is decision 5's table entry arriving on schedule.
+
+**A leak test survived the thing it was guarding.** `QueueConsumerTemplateTest` pinned a property
+about a `ProducerTemplate` being a context service, because a template caches producers and holds
+their connections. The template is gone; the cache is not — `RoutePipelines` keeps resolved
+pipelines and the producers inside them for the same reason — so the test was rewritten against the
+new holder rather than deleted. **A test that only made sense with its subject was a test about the
+subject, not about the property.**
+
+**A security guard was reading how a surface is served, not which surfaces exist.**
+`FrameworkSurfaceGuardTest` asserts that every framework HTTP route authenticates or is recorded as
+deliberately open. It read the Camel route model — so the bundled Studio app's two share routes,
+which the compiler builds and which are now pipelines, dropped out of the audit. What made that
+visible rather than silent is the guard's own honesty probe: it also asserts that the fixture still
+mounts a whole surface, and that assertion failed beside the first one. Without it the guard would
+have reported a clean surface while having quietly stopped looking at two routes — the exact
+failure mode its own comment describes. It reads both models now.
+
+**One signal genuinely narrows.** `RouteHealthSignals` reports Camel routes that are not started.
+An application route has no started state any more: it resolves at boot or the boot fails, which is
+the stricter half of the same guarantee, but the health detail now covers the framework's routes
+only. Recorded because it is a change in what an operator sees, not only in how it works.
 
 ## What this does not buy, said before anyone expects it
 

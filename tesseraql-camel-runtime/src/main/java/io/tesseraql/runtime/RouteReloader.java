@@ -423,7 +423,18 @@ public final class RouteReloader {
         return routes;
     }
 
+    /**
+     * Takes a route out of service, whichever kind it is.
+     *
+     * <p>An application route is a pipeline now (docs/camel-removal.md decision 1), so removing it
+     * is dropping a map entry — the operation Camel's stop-then-remove was standing in for. The
+     * route lookup stays for the framework's own builders, which still declare consumers.
+     */
     private void stopAndRemove(String id) throws Exception {
+        io.tesseraql.compiler.pipeline.Pipelines.of(context).remove(id);
+        // And the resolved copy: a pipeline that has been run holds started producers, and the
+        // replacement compiled behind it is a different list of processor instances.
+        RoutePipelines.of(context).evict(id);
         if (context.getRoute(id) != null) {
             context.getRouteController().stopRoute(id);
             context.removeRoute(id);
@@ -458,15 +469,18 @@ public final class RouteReloader {
                         default -> io.tesseraql.camel.HttpMounts.mount(getContext(), "GET",
                                 route.urlPath(), direct);
                     }
-                    from(direct).routeId(id).process(exchange -> {
-                        exchange.getMessage().setHeader(
-                                org.apache.camel.Exchange.HTTP_RESPONSE_CODE, 500);
-                        exchange.getMessage().setHeader(org.apache.camel.Exchange.CONTENT_TYPE,
-                                "application/json; charset=utf-8");
-                        exchange.getMessage().setBody("{\"error\":{\"code\":\"" + COMPILE_FAILED
-                                + "\",\"message\":\"Route failed to compile; see the server"
-                                + " log for the cause\"}}");
-                    });
+                    // A stub is a one-step pipeline, registered under the id the mount names.
+                    io.tesseraql.compiler.pipeline.Pipelines.of(getContext())
+                            .compiling(java.util.List.of()).pipeline(id).process(exchange -> {
+                                exchange.getMessage().setHeader(
+                                        org.apache.camel.Exchange.HTTP_RESPONSE_CODE, 500);
+                                exchange.getMessage().setHeader(
+                                        org.apache.camel.Exchange.CONTENT_TYPE,
+                                        "application/json; charset=utf-8");
+                                exchange.getMessage().setBody("{\"error\":{\"code\":\""
+                                        + COMPILE_FAILED + "\",\"message\":\"Route failed to"
+                                        + " compile; see the server log for the cause\"}}");
+                            });
                 }
             });
         } catch (Exception stubFailure) {

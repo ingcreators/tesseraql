@@ -162,12 +162,12 @@ class FrameworkSurfaceGuardTest {
     @Test
     void everyFrameworkHttpRouteAuthenticatesOrSaysWhyNot() {
         List<String> unexplained = new ArrayList<>();
-        for (RouteDefinition route : frameworkRoutes()) {
-            if (authSteps(route).stream().anyMatch(step -> step.startsWith("authenticate"))) {
+        for (String routeId : frameworkRoutes()) {
+            if (authSteps(routeId).stream().anyMatch(step -> step.startsWith("authenticate"))) {
                 continue;
             }
-            if (!FrameworkSurfaces.exempt(route.getRouteId())) {
-                unexplained.add(route.getRouteId());
+            if (!FrameworkSurfaces.exempt(routeId)) {
+                unexplained.add(routeId);
             }
         }
 
@@ -185,8 +185,7 @@ class FrameworkSurfaceGuardTest {
      */
     @Test
     void everyRegisteredExemptionMatchesAMountedRoute() {
-        Set<String> mounted = new LinkedHashSet<>();
-        frameworkRoutes().forEach(route -> mounted.add(route.getRouteId()));
+        Set<String> mounted = new LinkedHashSet<>(frameworkRoutes());
 
         List<String> stale = new ArrayList<>();
         FrameworkSurfaces.PUBLIC_BY_DESIGN.keySet().forEach(id -> {
@@ -223,12 +222,11 @@ class FrameworkSurfaceGuardTest {
     void everyProcessorEnforcedRouteRefusesAnUnauthenticatedCall() throws Exception {
         List<String> probed = new ArrayList<>();
         List<String> answered = new ArrayList<>();
-        for (RouteDefinition route : frameworkRoutes()) {
-            String id = route.getRouteId();
+        for (String id : frameworkRoutes()) {
             if (!FrameworkSurfaces.PROCESSOR_ENFORCED.containsKey(id)) {
                 continue;
             }
-            Mounted mounted = mountedAt(route);
+            Mounted mounted = mountedAt(id);
             HttpResponse<String> response = HttpClient.newHttpClient().send(
                     HttpRequest.newBuilder(URI.create("http://localhost:" + runtime.port()
                             + mounted.path()))
@@ -261,9 +259,8 @@ class FrameworkSurfaceGuardTest {
      */
     @Test
     void theFixtureActuallyMountsTheWholeSurface() {
-        List<RouteDefinition> routes = frameworkRoutes();
-        Set<String> ids = new LinkedHashSet<>();
-        routes.forEach(route -> ids.add(route.getRouteId()));
+        List<String> routes = frameworkRoutes();
+        Set<String> ids = new LinkedHashSet<>(routes);
 
         for (String family : FAMILIES) {
             assertThat(ids).as("family '%s' must be mounted for this guard to mean anything",
@@ -274,8 +271,8 @@ class FrameworkSurfaceGuardTest {
         assertThat(routes.size()).as("framework HTTP routes mounted").isGreaterThan(150);
     }
 
-    /** Framework-mounted HTTP routes: the app's own routes are the compiler's contract, not this. */
-    private static List<RouteDefinition> frameworkRoutes() {
+    /** Framework-mounted HTTP routes, by id: an app's own routes are the compiler's contract. */
+    private static List<String> frameworkRoutes() {
         return new ArrayList<>(frameworkMounts().keySet());
     }
 
@@ -288,33 +285,42 @@ class FrameworkSurfaceGuardTest {
      * than the URI ever was — it is the same table the runtime mounts from, so this guard and the
      * server cannot disagree about where a surface answers.
      */
-    private static Map<RouteDefinition, Mounted> frameworkMounts() {
+    private static Map<String, Mounted> frameworkMounts() {
         ModelCamelContext model = runtime.camelContext().getCamelContextExtension()
                 .getContextPlugin(ModelCamelContext.class);
-        Map<String, RouteDefinition> byDirect = new LinkedHashMap<>();
+        Map<String, String> byDirect = new LinkedHashMap<>();
         for (RouteDefinition route : model.getRouteDefinitions()) {
             if (route.getInput() == null) {
                 continue;
             }
             String uri = route.getInput().getEndpointUri();
             if (uri != null && uri.startsWith("direct:")) {
-                byDirect.put(directName(uri), route);
+                byDirect.put(directName(uri), route.getRouteId());
             }
         }
-        Map<RouteDefinition, Mounted> framework = new LinkedHashMap<>();
+        Map<String, Mounted> framework = new LinkedHashMap<>();
         for (io.tesseraql.camel.HttpMounts.Mount mount : io.tesseraql.camel.HttpMounts
                 .all(runtime.camelContext())) {
-            RouteDefinition route = byDirect.get(directName(mount.direct()));
-            if (route == null) {
+            String name = directName(mount.direct());
+            // Either kind: the framework's own builders still declare a consumer, and a bundled
+            // system app's routes are compiled pipelines addressed by the id the mount names
+            // (docs/camel-removal.md decision 1). Reading only one of the two is how this guard
+            // would quietly stop covering a surface that had merely changed how it is served.
+            String routeId = pipelines().contains(name) ? name : byDirect.get(name);
+            if (routeId == null) {
                 continue;
             }
             String path = java.net.URLDecoder.decode(mount.path(),
                     java.nio.charset.StandardCharsets.UTF_8);
             if (FRAMEWORK_PATHS.stream().anyMatch(path::startsWith)) {
-                framework.put(route, new Mounted(mount.method(), path));
+                framework.put(routeId, new Mounted(mount.method(), path));
             }
         }
         return framework;
+    }
+
+    private static io.tesseraql.compiler.pipeline.Pipelines pipelines() {
+        return io.tesseraql.compiler.pipeline.Pipelines.of(runtime.camelContext());
     }
 
     private static String directName(String uri) {
@@ -326,17 +332,35 @@ class FrameworkSurfaceGuardTest {
     }
 
     /** Where a framework route answers, as its own mount declares it. */
-    private static Mounted mountedAt(RouteDefinition route) {
-        Mounted mounted = frameworkMounts().get(route);
+    private static Mounted mountedAt(String routeId) {
+        Mounted mounted = frameworkMounts().get(routeId);
         if (mounted == null) {
-            throw new IllegalStateException("Route " + route.getRouteId() + " is not mounted");
+            throw new IllegalStateException("Route " + routeId + " is not mounted");
         }
         return mounted;
     }
 
-    private static List<String> authSteps(RouteDefinition route) {
+    /** The authentication steps a route runs, read from whichever model holds its chain. */
+    private static List<String> authSteps(String routeId) {
+        java.util.Optional<io.tesseraql.compiler.pipeline.Pipeline> compiled = pipelines()
+                .find(routeId);
+        if (compiled.isPresent()) {
+            List<String> found = new ArrayList<>();
+            for (io.tesseraql.compiler.pipeline.Pipeline.Step step : compiled.get().steps()) {
+                if (step instanceof io.tesseraql.compiler.pipeline.Pipeline.Step.Send send
+                        && send.uri().startsWith("tesseraql-auth:")) {
+                    found.add(send.uri().substring("tesseraql-auth:".length()));
+                }
+            }
+            return found;
+        }
+        ModelCamelContext model = runtime.camelContext().getCamelContextExtension()
+                .getContextPlugin(ModelCamelContext.class);
+        RouteDefinition route = model.getRouteDefinition(routeId);
         List<String> found = new ArrayList<>();
-        collectAuth(route.getOutputs(), found);
+        if (route != null) {
+            collectAuth(route.getOutputs(), found);
+        }
         return found;
     }
 

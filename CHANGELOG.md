@@ -136,6 +136,20 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **A compiled application route is a pipeline, not a Camel route** (docs/camel-removal.md
+  structural decision 1, slice 2a). The compiler emitted a chain of processors, encoded it as a
+  route so that the HTTP edge could decode the chain back out of the route model, and carried a
+  decline path in the middle for shapes the encoder could express and this framework never emits.
+  The chain is the artifact now: `RouteCompiler` builds a `Pipeline`, and the edge, the reloader,
+  the MCP server and the queue consumer address it by id through a registry. That registry is what
+  `direct:<id>` was standing in for — all four callers wanted a lookup, and three of them held a
+  `ProducerTemplate` in order to make one call. Nothing about a route's YAML, its behaviour or its
+  error envelope changes. Two consequences are worth knowing: the edge now counts and drains its
+  own in-flight requests, because Camel's shutdown strategy can only wait for routes it has and a
+  pipeline is not one (the drain bound is the unchanged `tesseraql.shutdown.timeout`); and the
+  health detail listing routes that are not started now covers the framework's own routes only,
+  since an application route resolves at boot or the boot fails.
+
 - **A local or SFTP `poll:` source is served by the runtime's own poll cycle**
   (docs/camel-removal.md slice 1). What a file consumer does, once the endpoint URI is taken away,
   is four operations per transport — list the directory, re-read a file's fingerprint, put its

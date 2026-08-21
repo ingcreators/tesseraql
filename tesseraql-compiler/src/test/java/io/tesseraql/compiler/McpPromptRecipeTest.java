@@ -8,19 +8,15 @@ import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.ManifestLoader;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.apache.camel.impl.DefaultCamelContext;
-import org.apache.camel.model.ProcessDefinition;
-import org.apache.camel.model.ProcessorDefinition;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 /**
- * The {@code prompt-text} recipe (docs/prompt-as-recipe.md): a prompt compiles to
- * {@code direct:mcp.prompt.<id>} through the same head and the same binders every other read
+ * The {@code prompt-text} recipe (docs/prompt-as-recipe.md): a prompt compiles to the
+ * {@code mcp.prompt.<id>} pipeline through the same head and the same binders every other read
  * recipe runs, and ends in the {@code text:} renderer whose output is the message.
  *
  * <p>It is a read, so the two things a prompt cannot be are refused at compile time rather than
@@ -94,28 +90,11 @@ class McpPromptRecipeTest {
     /** Compiles the fixture app and maps each route id to its processors' simple class names. */
     private static Map<String, List<String>> compile(Path dir) throws Exception {
         AppManifest manifest = new ManifestLoader().load(dir);
-        Map<String, List<String>> byRoute = new LinkedHashMap<>();
         try (DefaultCamelContext context = new DefaultCamelContext()) {
             context.addRoutes(new RouteCompiler().appName("prompt-test")
                     .compile(manifest, false, null));
-            for (org.apache.camel.model.RouteDefinition route : context.getRouteDefinitions()) {
-                byRoute.put(route.getRouteId(), processorNames(route.getOutputs()));
-            }
+            return CompiledPipelines.stepsById(context);
         }
-        return byRoute;
-    }
-
-    private static List<String> processorNames(List<ProcessorDefinition<?>> outputs) {
-        List<String> names = new ArrayList<>();
-        for (ProcessorDefinition<?> output : outputs) {
-            if (output instanceof ProcessDefinition process && process.getProcessor() != null) {
-                names.add(process.getProcessor().getClass().getSimpleName());
-            } else {
-                names.add(output.getClass().getSimpleName());
-            }
-            names.addAll(processorNames(output.getOutputs()));
-        }
-        return names;
     }
 
     /** One prompt document, with the execution and response block under test appended to it. */
