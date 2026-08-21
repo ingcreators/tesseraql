@@ -2,10 +2,10 @@ package io.tesseraql.compiler.binding;
 
 import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.core.expr.EvaluationContext;
+import io.tesseraql.pipeline.Exchange;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import org.apache.camel.Exchange;
 
 /**
  * Resolves a file transfer's locale/timezone declaration (design ch. 28): a plain value

@@ -6,6 +6,8 @@ import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.sql.SqlNode;
+import io.tesseraql.pipeline.Exchange;
+import io.tesseraql.pipeline.Step;
 import io.tesseraql.yaml.enrich.KeyedReference;
 import io.tesseraql.yaml.model.EnrichSpec;
 import java.sql.Connection;
@@ -14,8 +16,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import javax.sql.DataSource;
-import org.apache.camel.Exchange;
-import org.apache.camel.Processor;
 
 /**
  * Folds a keyed reference into a result set's rows (docs/lookups.md, decision 3).
@@ -32,7 +32,7 @@ import org.apache.camel.Processor;
  * enrichment that quietly issues ten thousand round trips looks exactly like one that issues
  * one.
  */
-public final class EnrichProcessor implements Processor {
+public final class EnrichProcessor implements Step {
 
     /** TQL-CAMEL-3115: the target of an enrich: is not a result set with rows. */
     static final TqlErrorCode NO_TARGET = new TqlErrorCode(TqlDomain.CAMEL, 3115);
@@ -103,9 +103,9 @@ public final class EnrichProcessor implements Processor {
 
             @Override
             public io.tesseraql.core.sql.ScopeResolver scopeResolver() {
-                io.tesseraql.core.sql.ScopeResolver resolver = exchange.getContext().getRegistry()
-                        .lookupByNameAndType(TesseraqlProperties.SCOPE_RESOLVER_BEAN,
-                                io.tesseraql.core.sql.ScopeResolver.class);
+                io.tesseraql.core.sql.ScopeResolver resolver = exchange.beans().lookup(
+                        TesseraqlProperties.SCOPE_RESOLVER_BEAN,
+                        io.tesseraql.core.sql.ScopeResolver.class);
                 return resolver != null
                         ? resolver
                         : io.tesseraql.core.sql.ScopeResolver.UNSUPPORTED;
@@ -113,16 +113,16 @@ public final class EnrichProcessor implements Processor {
 
             @Override
             public io.tesseraql.yaml.http.OutboundGateway gateway() {
-                return exchange.getContext().getRegistry().lookupByNameAndType(
+                return exchange.beans().lookup(
                         TesseraqlProperties.OUTBOUND_GATEWAY_BEAN,
                         io.tesseraql.yaml.http.OutboundGateway.class);
             }
 
             @Override
             public void degraded(String enrichment) {
-                io.tesseraql.core.telemetry.Meter meter = exchange.getContext().getRegistry()
-                        .lookupByNameAndType(TesseraqlProperties.METER_BEAN,
-                                io.tesseraql.core.telemetry.Meter.class);
+                io.tesseraql.core.telemetry.Meter meter = exchange.beans().lookup(
+                        TesseraqlProperties.METER_BEAN,
+                        io.tesseraql.core.telemetry.Meter.class);
                 if (meter != null) {
                     meter.counter("tesseraql.enrich.degraded")
                             .increment(Map.of("enrich", enrichment));

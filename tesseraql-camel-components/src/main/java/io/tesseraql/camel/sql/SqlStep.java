@@ -19,6 +19,9 @@ import io.tesseraql.core.sql.ScopeResolver;
 import io.tesseraql.core.sql.Sql2WayParser;
 import io.tesseraql.core.sql.SqlNode;
 import io.tesseraql.core.sql.SqlRenderer;
+import io.tesseraql.pipeline.Exchange;
+import io.tesseraql.pipeline.Headers;
+import io.tesseraql.pipeline.Step;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
@@ -31,15 +34,13 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import javax.sql.DataSource;
-import org.apache.camel.Exchange;
-import org.apache.camel.Processor;
 
 /**
  * Executes a 2-way SQL file against JDBC and publishes the result into the execution context
  * (design ch. 9.1). The SQL is parsed once at startup and rendered per exchange with the resolved
  * bind parameters held in the {@link TesseraqlProperties#SQL_PARAMS} property.
  */
-public class SqlStep implements Processor {
+public class SqlStep implements Step {
 
     /**
      * The document's primary source. Declarative pagination is main-bound
@@ -112,9 +113,9 @@ public class SqlStep implements Processor {
      * without the bean falls back to the process default (docs/module-scope.md).
      */
     private io.tesseraql.core.expr.ExpressionFunctions functions(Exchange exchange) {
-        io.tesseraql.core.expr.ExpressionFunctions bound = exchange.getContext()
-                .getRegistry().lookupByNameAndType(TesseraqlProperties.FUNCTIONS_BEAN,
-                        io.tesseraql.core.expr.ExpressionFunctions.class);
+        io.tesseraql.core.expr.ExpressionFunctions bound = exchange.beans().lookup(
+                TesseraqlProperties.FUNCTIONS_BEAN,
+                io.tesseraql.core.expr.ExpressionFunctions.class);
         return bound != null
                 ? bound
                 : io.tesseraql.core.expr.ExpressionFunctions
@@ -212,9 +213,9 @@ public class SqlStep implements Processor {
     }
 
     private io.tesseraql.core.telemetry.Tracer tracer(Exchange exchange) {
-        io.tesseraql.core.telemetry.Tracer tracer = exchange.getContext().getRegistry()
-                .lookupByNameAndType(TesseraqlProperties.TRACER_BEAN,
-                        io.tesseraql.core.telemetry.Tracer.class);
+        io.tesseraql.core.telemetry.Tracer tracer = exchange.beans().lookup(
+                TesseraqlProperties.TRACER_BEAN,
+                io.tesseraql.core.telemetry.Tracer.class);
         return tracer != null ? tracer : io.tesseraql.core.telemetry.NoopTracer.INSTANCE;
     }
 
@@ -224,8 +225,8 @@ public class SqlStep implements Processor {
      * without scopes fails loudly rather than silently bypassing scoping.
      */
     private ScopeResolver scopeResolver(Exchange exchange) {
-        ScopeResolver resolver = exchange.getContext().getRegistry()
-                .lookupByNameAndType(TesseraqlProperties.SCOPE_RESOLVER_BEAN, ScopeResolver.class);
+        ScopeResolver resolver = exchange.beans().lookup(TesseraqlProperties.SCOPE_RESOLVER_BEAN,
+                ScopeResolver.class);
         return resolver != null ? resolver : ScopeResolver.UNSUPPORTED;
     }
 
@@ -239,9 +240,9 @@ public class SqlStep implements Processor {
         if (!"duckdb".equals(dialect)) {
             return io.tesseraql.core.sql.FilePathResolver.UNSUPPORTED;
         }
-        DatasourceFilePathResolver resolver = exchange.getContext().getRegistry()
-                .lookupByNameAndType(TesseraqlProperties.FILE_PATH_RESOLVER_BEAN,
-                        DatasourceFilePathResolver.class);
+        DatasourceFilePathResolver resolver = exchange.beans().lookup(
+                TesseraqlProperties.FILE_PATH_RESOLVER_BEAN,
+                DatasourceFilePathResolver.class);
         if (resolver == null) {
             return io.tesseraql.core.sql.FilePathResolver.UNSUPPORTED;
         }
@@ -250,9 +251,9 @@ public class SqlStep implements Processor {
     }
 
     private io.tesseraql.core.diag.SqlExecutionLog slowSqlLog(Exchange exchange) {
-        io.tesseraql.core.diag.SqlExecutionLog log = exchange.getContext().getRegistry()
-                .lookupByNameAndType(TesseraqlProperties.SLOW_SQL_LOG_BEAN,
-                        io.tesseraql.core.diag.SqlExecutionLog.class);
+        io.tesseraql.core.diag.SqlExecutionLog log = exchange.beans().lookup(
+                TesseraqlProperties.SLOW_SQL_LOG_BEAN,
+                io.tesseraql.core.diag.SqlExecutionLog.class);
         return log != null ? log : io.tesseraql.core.diag.NoopSqlExecutionLog.INSTANCE;
     }
 
@@ -330,15 +331,15 @@ public class SqlStep implements Processor {
         } catch (java.io.IOException ex) {
             throw executionError(ex);
         }
-        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 200);
+        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 200);
         boolean split = spec.splitBy() != null && !spec.splitBy().isBlank();
-        exchange.getMessage().setHeader(Exchange.CONTENT_TYPE,
+        exchange.getMessage().setHeader(Headers.CONTENT_TYPE,
                 split ? "application/zip" : codec.contentType());
         exchange.getMessage().setHeader("Content-Disposition",
                 "attachment; filename=\"" + (split
                         ? zipName(filename)
                         : filename) + "\"");
-        exchange.getExchangeExtension().addOnCompletion(new org.apache.camel.spi.Synchronization() {
+        exchange.addOnCompletion(new io.tesseraql.pipeline.Completion() {
             @Override
             public void onComplete(Exchange completed) {
                 tempStore.delete(ref);
@@ -419,8 +420,8 @@ public class SqlStep implements Processor {
     }
 
     private TempStore tempStore(Exchange exchange) {
-        TempStore bean = exchange.getContext().getRegistry()
-                .lookupByNameAndType(TesseraqlProperties.TEMP_STORE_BEAN, TempStore.class);
+        TempStore bean = exchange.beans().lookup(TesseraqlProperties.TEMP_STORE_BEAN,
+                TempStore.class);
         return bean != null
                 ? bean
                 : new FileTempStore(

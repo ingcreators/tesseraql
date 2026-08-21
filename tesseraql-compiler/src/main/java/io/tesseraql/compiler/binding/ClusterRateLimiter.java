@@ -5,8 +5,8 @@ import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.rate.RateBudget;
-import org.apache.camel.Exchange;
-import org.apache.camel.Processor;
+import io.tesseraql.pipeline.Exchange;
+import io.tesseraql.pipeline.Step;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -47,12 +47,12 @@ public final class ClusterRateLimiter {
     }
 
     /** Returns a processor that rejects with 429 when the leased budget is exhausted. */
-    public Processor acquire() {
+    public Step acquire() {
         return new Gate();
     }
 
     /** Named so the recipe-governance matrix test can read it back off the compiled route. */
-    final class Gate implements Processor {
+    final class Gate implements Step {
         @Override
         public void process(Exchange exchange) {
             if (!tryAcquire(exchange)) {
@@ -85,8 +85,8 @@ public final class ClusterRateLimiter {
         if (want <= 0) {
             return;
         }
-        RateBudget budget = exchange.getContext().getRegistry()
-                .lookupByNameAndType(TesseraqlProperties.RATE_BUDGET_BEAN, RateBudget.class);
+        RateBudget budget = exchange.beans().lookup(TesseraqlProperties.RATE_BUDGET_BEAN,
+                RateBudget.class);
         if (budget == null) {
             throw new IllegalStateException("rateLimit scope: cluster on '" + scopeKey
                     + "' but no rate-budget ledger is bound");

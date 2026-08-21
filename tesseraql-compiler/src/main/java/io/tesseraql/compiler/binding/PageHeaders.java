@@ -1,9 +1,10 @@
 package io.tesseraql.compiler.binding;
 
 import io.tesseraql.camel.TesseraqlProperties;
+import io.tesseraql.pipeline.Exchange;
+import io.tesseraql.pipeline.Headers;
+import io.tesseraql.pipeline.Step;
 import java.util.Map;
-import org.apache.camel.Exchange;
-import org.apache.camel.Processor;
 
 /**
  * Emits the automatic pagination response headers (roadmap Phase 41) from the {@code page}
@@ -11,7 +12,7 @@ import org.apache.camel.Processor;
  * RFC 8288 {@code Link} {@code rel="next"}/{@code rel="prev"} built from the request URI with
  * the {@code page}/{@code after} parameter rewritten.
  */
-public final class PageHeaders implements Processor {
+public final class PageHeaders implements Step {
 
     @Override
     @SuppressWarnings("unchecked")
@@ -26,12 +27,12 @@ public final class PageHeaders implements Processor {
         if (page.get("totalRows") instanceof Number total) {
             exchange.getMessage().setHeader("X-Total-Count", String.valueOf(total.longValue()));
         }
-        String uri = exchange.getMessage().getHeader(Exchange.HTTP_URI, String.class);
+        String uri = exchange.getMessage().getHeader(Headers.HTTP_URI, String.class);
         if (uri == null) {
             return;
         }
         String path = uri.indexOf('?') < 0 ? uri : uri.substring(0, uri.indexOf('?'));
-        String query = exchange.getMessage().getHeader(Exchange.HTTP_QUERY, String.class);
+        String query = exchange.getMessage().getHeader(Headers.HTTP_QUERY, String.class);
         StringBuilder link = new StringBuilder();
         Object next = page.get("next");
         boolean hasNext = Boolean.TRUE.equals(page.get("hasNext"));

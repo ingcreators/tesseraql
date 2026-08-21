@@ -5,11 +5,12 @@ import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.idempotency.IdempotencyStore;
+import io.tesseraql.pipeline.Exchange;
+import io.tesseraql.pipeline.Headers;
+import io.tesseraql.pipeline.Step;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import org.apache.camel.Exchange;
-import org.apache.camel.Processor;
 
 /**
  * Camel processors implementing request idempotency (design ch. 39.4, 39.5).
@@ -30,7 +31,7 @@ public final class IdempotencyProcessors {
     }
 
     /** Begins idempotent processing before request binding. */
-    public static Processor begin(String scope, long ttlMillis, boolean required) {
+    public static Step begin(String scope, long ttlMillis, boolean required) {
         // Named rather than a lambda: begin and complete have to be paired, and the
         // recipe-governance matrix test can only check that by reading the compiled route back.
         return new IdempotencyBegin(scope, ttlMillis, required);
@@ -39,10 +40,10 @@ public final class IdempotencyProcessors {
     /** @see #begin(String, long, boolean) */
     public record IdempotencyBegin(String scope, long ttlMillis, boolean required)
             implements
-                Processor {
+                Step {
 
         @Override
-        public void process(org.apache.camel.Exchange exchange) {
+        public void process(io.tesseraql.pipeline.Exchange exchange) {
             String key = exchange.getMessage().getHeader(KEY_HEADER, String.class);
             if (key == null || key.isBlank()) {
                 if (required) {
@@ -61,9 +62,9 @@ public final class IdempotencyProcessors {
                 case IdempotencyStore.Replay replay -> {
                     exchange.setProperty(REPLAY_PROPERTY, true);
                     exchange.getMessage().setBody(replay.body());
-                    exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, replay.status());
+                    exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, replay.status());
                     if (replay.contentType() != null) {
-                        exchange.getMessage().setHeader(Exchange.CONTENT_TYPE,
+                        exchange.getMessage().setHeader(Headers.CONTENT_TYPE,
                                 replay.contentType());
                     }
                 }
@@ -74,15 +75,15 @@ public final class IdempotencyProcessors {
     }
 
     /** Persists the rendered response so future requests with the same key replay it. */
-    public static Processor complete(String scope) {
+    public static Step complete(String scope) {
         return new IdempotencyComplete(scope);
     }
 
     /** @see #complete(String) */
-    public record IdempotencyComplete(String scope) implements Processor {
+    public record IdempotencyComplete(String scope) implements Step {
 
         @Override
-        public void process(org.apache.camel.Exchange exchange) {
+        public void process(io.tesseraql.pipeline.Exchange exchange) {
             if (Boolean.TRUE.equals(exchange.getProperty(REPLAY_PROPERTY))) {
                 return;
             }
@@ -90,19 +91,18 @@ public final class IdempotencyProcessors {
             if (key == null || key.isBlank()) {
                 return;
             }
-            int status = exchange.getMessage().getHeader(Exchange.HTTP_RESPONSE_CODE, 200,
+            int status = exchange.getMessage().getHeader(Headers.HTTP_RESPONSE_CODE, 200,
                     Integer.class);
             String body = exchange.getMessage().getBody(String.class);
-            String contentType = exchange.getMessage().getHeader(Exchange.CONTENT_TYPE,
+            String contentType = exchange.getMessage().getHeader(Headers.CONTENT_TYPE,
                     String.class);
             store(exchange).complete(scope, key, status, body, contentType);
         }
     }
 
     private static IdempotencyStore store(Exchange exchange) {
-        IdempotencyStore store = exchange.getContext().getRegistry()
-                .lookupByNameAndType(TesseraqlProperties.IDEMPOTENCY_STORE_BEAN,
-                        IdempotencyStore.class);
+        IdempotencyStore store = exchange.beans().lookup(TesseraqlProperties.IDEMPOTENCY_STORE_BEAN,
+                IdempotencyStore.class);
         if (store == null) {
             throw new TqlException(CONFLICT, "Idempotency store is not configured");
         }
@@ -110,8 +110,8 @@ public final class IdempotencyProcessors {
     }
 
     private static String requestHash(Exchange exchange) {
-        String method = exchange.getMessage().getHeader(Exchange.HTTP_METHOD, "", String.class);
-        String path = exchange.getMessage().getHeader(Exchange.HTTP_PATH, "", String.class);
+        String method = exchange.getMessage().getHeader(Headers.HTTP_METHOD, "", String.class);
+        String path = exchange.getMessage().getHeader(Headers.HTTP_PATH, "", String.class);
         String body = exchange.getMessage().getBody(String.class);
         if (body == null) {
             body = "";

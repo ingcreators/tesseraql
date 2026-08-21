@@ -8,6 +8,8 @@ import io.tesseraql.compiler.pipeline.Pipelines;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.identity.PasswordAuthenticator;
 import io.tesseraql.identity.RealmConfig;
+import io.tesseraql.pipeline.Exchange;
+import io.tesseraql.pipeline.Headers;
 import io.tesseraql.security.Principal;
 import io.tesseraql.security.policy.PolicyEngine;
 import io.tesseraql.security.session.LoginRedirects;
@@ -18,7 +20,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
-import org.apache.camel.Exchange;
 import org.apache.camel.builder.RouteBuilder;
 
 /**
@@ -83,10 +84,10 @@ final class LoginRouteBuilder extends RouteBuilder {
                                     + URLEncoder.encode(next, StandardCharsets.UTF_8)));
             return;
         }
-        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 429);
+        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 429);
         exchange.getMessage().setHeader("Retry-After",
                 String.valueOf(Math.max(1, wait.toSeconds())));
-        exchange.getMessage().setHeader(Exchange.CONTENT_TYPE,
+        exchange.getMessage().setHeader(Headers.CONTENT_TYPE,
                 "application/json; charset=utf-8");
         exchange.getMessage().setBody(mapper.writeValueAsString(Map.of("error", Map.of(
                 "code", "TQL-RATE-4292",
@@ -206,8 +207,8 @@ final class LoginRouteBuilder extends RouteBuilder {
             redirect(exchange, 303, next);
             return;
         }
-        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 200);
-        exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "application/json; charset=utf-8");
+        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 200);
+        exchange.getMessage().setHeader(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
         // The CSRF token rides back with the cookie (docs/stack-architecture.md Decision 20). A
         // non-browser caller that authenticates here could not proceed to any guarded route
         // without it — POST /_tesseraql/token most of all — because the token reached pages only,
@@ -363,7 +364,7 @@ final class LoginRouteBuilder extends RouteBuilder {
     }
 
     private static boolean isFormPost(Exchange exchange) {
-        String contentType = exchange.getMessage().getHeader(Exchange.CONTENT_TYPE, String.class);
+        String contentType = exchange.getMessage().getHeader(Headers.CONTENT_TYPE, String.class);
         return contentType != null && contentType.contains("application/x-www-form-urlencoded");
     }
 

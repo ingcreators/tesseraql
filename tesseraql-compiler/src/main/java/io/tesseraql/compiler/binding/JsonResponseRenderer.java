@@ -6,6 +6,9 @@ import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.expr.EvaluationContext;
+import io.tesseraql.pipeline.Exchange;
+import io.tesseraql.pipeline.Headers;
+import io.tesseraql.pipeline.Step;
 import io.tesseraql.security.Principal;
 import io.tesseraql.security.policy.PolicyEngine;
 import io.tesseraql.yaml.model.ResponseSpec;
@@ -14,8 +17,6 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import org.apache.camel.Exchange;
-import org.apache.camel.Processor;
 
 /**
  * Camel processor that renders the JSON response from the response template (design ch. 7.2, the
@@ -25,7 +26,7 @@ import org.apache.camel.Processor;
  * expressions (for example {@code main.rows}, {@code params.limit}) resolved against the execution
  * context, then the resulting tree is serialized to JSON.
  */
-public final class JsonResponseRenderer implements Processor {
+public final class JsonResponseRenderer implements Step {
 
     private static final TqlErrorCode RENDER_ERROR = new TqlErrorCode(TqlDomain.CAMEL, 3001);
 
@@ -127,9 +128,9 @@ public final class JsonResponseRenderer implements Processor {
 
         Object body = resolve(compiledBody, evaluation);
         if (!response.fields().isEmpty()) {
-            PolicyEngine policyEngine = exchange.getContext().getRegistry()
-                    .lookupByNameAndType(TesseraqlProperties.POLICY_ENGINE_BEAN,
-                            PolicyEngine.class);
+            PolicyEngine policyEngine = exchange.beans().lookup(
+                    TesseraqlProperties.POLICY_ENGINE_BEAN,
+                    PolicyEngine.class);
             Principal principal = exchange.getProperty(TesseraqlProperties.PRINCIPAL,
                     Principal.class);
             body = new FieldPolicyApplier(response.fields(), policyEngine, principal).apply(body);
@@ -146,8 +147,8 @@ public final class JsonResponseRenderer implements Processor {
         // Declared headers before the framework's own: Content-Type is this renderer's to set, and
         // a route naming it would be describing a body it is not producing.
         headers.apply(exchange, evaluation);
-        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, status);
-        exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "application/json; charset=utf-8");
+        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, status);
+        exchange.getMessage().setHeader(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
         exchange.getMessage().setBody(json);
     }
 

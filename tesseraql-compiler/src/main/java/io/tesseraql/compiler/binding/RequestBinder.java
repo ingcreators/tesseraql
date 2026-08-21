@@ -6,6 +6,9 @@ import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.expr.EvaluationContext;
+import io.tesseraql.pipeline.Exchange;
+import io.tesseraql.pipeline.Headers;
+import io.tesseraql.pipeline.Step;
 import io.tesseraql.yaml.model.Binding;
 import io.tesseraql.yaml.model.InputField;
 import io.tesseraql.yaml.model.InputPolicy;
@@ -14,8 +17,6 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import org.apache.camel.Exchange;
-import org.apache.camel.Processor;
 
 /**
  * Camel processor that binds an HTTP request into the TesseraQL execution context (design ch. 7.2,
@@ -26,7 +27,7 @@ import org.apache.camel.Processor;
  * {@code query}/{@code body}/{@code params} context, publishes the authenticated principal, and
  * resolves the route's {@code sql.params} source expressions into bind values.
  */
-public final class RequestBinder implements Processor {
+public final class RequestBinder implements Step {
 
     private static final TqlErrorCode FIELD_REJECTED = new TqlErrorCode(TqlDomain.FIELD, 2002);
     private static final System.Logger LOG = System.getLogger(RequestBinder.class.getName());
@@ -109,7 +110,7 @@ public final class RequestBinder implements Processor {
                 name -> rawValue(name, body, exchange, fromPath),
                 name -> body.get(name),
                 java.util.Locale.forLanguageTag(localeTag),
-                exchange.getContext().getRegistry().lookupByNameAndType(
+                exchange.beans().lookup(
                         TesseraqlProperties.CATALOG_STORE_BEAN,
                         io.tesseraql.core.catalog.CatalogStore.class));
 
@@ -149,10 +150,9 @@ public final class RequestBinder implements Processor {
                     .live(appHome);
             if (!declared.isEmpty()) {
                 Map<String, String> stored = Map.of();
-                io.tesseraql.core.account.PreferenceStore preferences = exchange.getContext()
-                        .getRegistry().lookupByNameAndType(
-                                TesseraqlProperties.PREFERENCE_STORE_BEAN,
-                                io.tesseraql.core.account.PreferenceStore.class);
+                io.tesseraql.core.account.PreferenceStore preferences = exchange.beans().lookup(
+                        TesseraqlProperties.PREFERENCE_STORE_BEAN,
+                        io.tesseraql.core.account.PreferenceStore.class);
                 if (preferences != null && exchange.getProperty(
                         TesseraqlProperties.PRINCIPAL) instanceof io.tesseraql.security.Principal principal) {
                     stored = preferences.preferences(principal.tenantId(),
@@ -206,7 +206,7 @@ public final class RequestBinder implements Processor {
         if (raw == null || raw.isBlank()) {
             return Map.of();
         }
-        String contentType = exchange.getMessage().getHeader(Exchange.CONTENT_TYPE, String.class);
+        String contentType = exchange.getMessage().getHeader(Headers.CONTENT_TYPE, String.class);
         if (contentType != null && contentType.contains("application/x-www-form-urlencoded")) {
             return parseForm(raw);
         }
@@ -278,9 +278,9 @@ public final class RequestBinder implements Processor {
 
     /** Whether the principal satisfies a field's write {@code policy:}. Fails safe. */
     private boolean permitsWrite(Exchange exchange, String policyId) {
-        io.tesseraql.security.policy.PolicyEngine engine = exchange.getContext().getRegistry()
-                .lookupByNameAndType(TesseraqlProperties.POLICY_ENGINE_BEAN,
-                        io.tesseraql.security.policy.PolicyEngine.class);
+        io.tesseraql.security.policy.PolicyEngine engine = exchange.beans().lookup(
+                TesseraqlProperties.POLICY_ENGINE_BEAN,
+                io.tesseraql.security.policy.PolicyEngine.class);
         io.tesseraql.security.Principal principal = exchange.getProperty(
                 TesseraqlProperties.PRINCIPAL, io.tesseraql.security.Principal.class);
         return engine != null && engine.permits(policyId, principal);
@@ -317,7 +317,7 @@ public final class RequestBinder implements Processor {
             return Map.of();
         }
         String requestPath = exchange.getMessage()
-                .getHeader(Exchange.HTTP_URI, String.class);
+                .getHeader(Headers.HTTP_URI, String.class);
         Map<String, String> values = io.tesseraql.core.http.PathTemplate.values(urlPath,
                 requestPath);
         if (!values.isEmpty()) {

@@ -74,7 +74,8 @@ public final class SseRoutes {
      */
     public static void register(CamelContext camelContext, int port, String path, Handler handler) {
         io.vertx.ext.web.Router router = HttpEdgeBeans.router(camelContext);
-        String mounted = io.tesseraql.camel.BasePath.of(camelContext) + path;
+        String mounted = io.tesseraql.camel.BasePath
+                .of(io.tesseraql.camel.CamelBeans.of(camelContext)) + path;
         router.route(HttpMethod.GET, mounted)
                 .handler(ctx -> serve(camelContext, router, ctx, mounted, handler));
     }

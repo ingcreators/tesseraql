@@ -2,9 +2,9 @@ package io.tesseraql.compiler.binding;
 
 import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.core.catalog.CatalogStore;
+import io.tesseraql.pipeline.Exchange;
+import io.tesseraql.pipeline.Step;
 import java.util.List;
-import org.apache.camel.Exchange;
-import org.apache.camel.Processor;
 
 /**
  * Drops the code catalogs a command's write made stale (docs/lookups.md, decision 13).
@@ -18,7 +18,7 @@ import org.apache.camel.Processor;
  * written; the table is known from the route. Over-invalidating costs a handful of small
  * queries, which is precisely the trade a catalog is chosen for.
  */
-public final class CatalogInvalidateProcessor implements Processor {
+public final class CatalogInvalidateProcessor implements Step {
 
     private final List<String> tables;
 
@@ -28,8 +28,8 @@ public final class CatalogInvalidateProcessor implements Processor {
 
     @Override
     public void process(Exchange exchange) {
-        CatalogStore store = exchange.getContext().getRegistry()
-                .lookupByNameAndType(TesseraqlProperties.CATALOG_STORE_BEAN, CatalogStore.class);
+        CatalogStore store = exchange.beans().lookup(TesseraqlProperties.CATALOG_STORE_BEAN,
+                CatalogStore.class);
         if (store != null) {
             store.invalidate(tables);
         }

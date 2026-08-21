@@ -1,9 +1,9 @@
 package io.tesseraql.camel.auth;
 
 import io.tesseraql.camel.TesseraqlProperties;
+import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.security.net.SignInAllowList;
 import io.tesseraql.security.session.SessionStore;
-import org.apache.camel.Exchange;
 
 /**
  * Where a session may be established from (docs/access-governance.md structural decision 8,
@@ -41,7 +41,7 @@ public final class SignInAdmission {
 
     /** The configured list, or the unrestricted one when the deployment named no network. */
     private static SignInAllowList allowList(Exchange exchange) {
-        SignInAllowList configured = exchange.getContext().getRegistry().lookupByNameAndType(
+        SignInAllowList configured = exchange.beans().lookup(
                 TesseraqlProperties.SIGN_IN_ALLOW_LIST_BEAN, SignInAllowList.class);
         return configured == null ? SignInAllowList.EVERYWHERE : configured;
     }

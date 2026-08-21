@@ -11,14 +11,15 @@ import io.tesseraql.core.error.TqlException;
 import io.tesseraql.operations.batch.JobExecution;
 import io.tesseraql.operations.batch.JobRepository;
 import io.tesseraql.operations.batch.StepExecution;
+import io.tesseraql.pipeline.Exchange;
+import io.tesseraql.pipeline.Headers;
+import io.tesseraql.pipeline.Step;
 import io.tesseraql.security.Principal;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Predicate;
-import org.apache.camel.Exchange;
-import org.apache.camel.Processor;
 import org.apache.camel.builder.RouteBuilder;
 
 /**
@@ -42,8 +43,8 @@ final class OperationsRouteBuilder extends RouteBuilder {
 
     /** The app's code catalogs, or null when it declares none (docs/lookups.md, decision 14). */
     private static io.tesseraql.core.catalog.CatalogStore catalogStore(
-            org.apache.camel.Exchange exchange) {
-        return exchange.getContext().getRegistry().lookupByNameAndType(
+            io.tesseraql.pipeline.Exchange exchange) {
+        return exchange.beans().lookup(
                 io.tesseraql.camel.TesseraqlProperties.CATALOG_STORE_BEAN,
                 io.tesseraql.core.catalog.CatalogStore.class);
     }
@@ -187,8 +188,8 @@ final class OperationsRouteBuilder extends RouteBuilder {
                         .process(new AuthStep("authorize", null, "ops.metrics.view", null));
             }
             metricsRoute.process(exchange -> {
-                exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 200);
-                exchange.getMessage().setHeader(Exchange.CONTENT_TYPE,
+                exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 200);
+                exchange.getMessage().setHeader(Headers.CONTENT_TYPE,
                         io.tesseraql.core.telemetry.PrometheusTextFormat.CONTENT_TYPE);
                 exchange.getMessage().setBody(io.tesseraql.core.telemetry.PrometheusTextFormat
                         .render(metrics.meter())
@@ -436,7 +437,7 @@ final class OperationsRouteBuilder extends RouteBuilder {
      * refused with the 404-shaped TQL-BATCH-4040 so an out-of-scope member reads exactly like
      * an unknown one, whichever side of the shell the probe comes from.
      */
-    private Processor requireMemberView() {
+    private Step requireMemberView() {
         return exchange -> {
             if (!viewScope(exchange).test(actions.mainApp())) {
                 throw OpsActions.notFound("Application '" + actions.mainApp() + "'");
@@ -446,9 +447,9 @@ final class OperationsRouteBuilder extends RouteBuilder {
 
     /** The console's view-model provider, invoked with the session principal's own facts. */
     private Object invokeProvider(Exchange exchange, String name, Map<String, Object> extra) {
-        io.tesseraql.core.service.ServiceProviders providers = exchange.getContext().getRegistry()
-                .lookupByNameAndType(TesseraqlProperties.SERVICE_PROVIDERS_BEAN,
-                        io.tesseraql.core.service.ServiceProviders.class);
+        io.tesseraql.core.service.ServiceProviders providers = exchange.beans().lookup(
+                TesseraqlProperties.SERVICE_PROVIDERS_BEAN,
+                io.tesseraql.core.service.ServiceProviders.class);
         Map<String, Object> params = new LinkedHashMap<>(extra);
         params.put("permissions", permissions(exchange));
         return providers.require(name).invoke(params);
@@ -533,7 +534,7 @@ final class OperationsRouteBuilder extends RouteBuilder {
      * with none is refused rather than shown an empty page, exactly as the retired entry
      * permission refused (TQL-SEC-4031).
      */
-    private Processor requireAnyOpsView() {
+    private Step requireAnyOpsView() {
         return exchange -> {
             if (!io.tesseraql.opsui.OpsScope.holdsAnyView(permissions(exchange))) {
                 throw new TqlException(io.tesseraql.security.policy.PolicyEngine.FORBIDDEN,
@@ -571,7 +572,7 @@ final class OperationsRouteBuilder extends RouteBuilder {
                 principal == null ? null : principal.loginId(), runScope(exchange));
         // Work accepted, poll the execution: the same 202 + Location contract the
         // file-transfer start answers (docs/vocabulary-cleanup.md slice 3).
-        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 202);
+        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 202);
         exchange.getMessage().setHeader("Location", io.tesseraql.camel.BasePath.url(exchange,
                 "/_tesseraql/ops/batch/executions/" + execution.id()));
         Map<String, Object> result = new LinkedHashMap<>();
@@ -679,14 +680,14 @@ final class OperationsRouteBuilder extends RouteBuilder {
         }
     }
 
-    private Processor jsonProcessor(java.util.function.Function<Exchange, Object> handler) {
+    private Step jsonProcessor(java.util.function.Function<Exchange, Object> handler) {
         return exchange -> {
             Object body = handler.apply(exchange);
             // A handler that set its own status (the 202 accepted-run) keeps it.
-            if (exchange.getMessage().getHeader(Exchange.HTTP_RESPONSE_CODE) == null) {
-                exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 200);
+            if (exchange.getMessage().getHeader(Headers.HTTP_RESPONSE_CODE) == null) {
+                exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 200);
             }
-            exchange.getMessage().setHeader(Exchange.CONTENT_TYPE,
+            exchange.getMessage().setHeader(Headers.CONTENT_TYPE,
                     "application/json; charset=utf-8");
             exchange.getMessage().setBody(mapper.writeValueAsString(body));
         };
@@ -716,8 +717,8 @@ final class OperationsRouteBuilder extends RouteBuilder {
                     .build();
         }
         exchange.getMessage().removeHeaders("*");
-        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 200);
-        exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, download.contentType());
+        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 200);
+        exchange.getMessage().setHeader(Headers.CONTENT_TYPE, download.contentType());
         exchange.getMessage().setHeader("Content-Disposition", "attachment; filename=\""
                 + download.filename().replaceAll("[\\r\\n\"]", "_") + "\"");
         exchange.getMessage().setBody(download.content());

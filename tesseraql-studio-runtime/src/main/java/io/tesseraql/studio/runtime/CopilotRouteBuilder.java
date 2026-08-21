@@ -9,6 +9,8 @@ import io.tesseraql.compiler.pipeline.Pipelines;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
+import io.tesseraql.pipeline.Exchange;
+import io.tesseraql.pipeline.Headers;
 import io.tesseraql.runtime.SseRoutes;
 import io.tesseraql.security.Principal;
 import io.tesseraql.studio.CopilotFragments;
@@ -17,7 +19,6 @@ import java.io.IOException;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
-import org.apache.camel.Exchange;
 import org.apache.camel.builder.RouteBuilder;
 
 /**
@@ -69,8 +70,8 @@ final class CopilotRouteBuilder extends RouteBuilder {
                     if ("true".equals(exchange.getMessage().getHeader("HX-Request",
                             String.class))) {
                         String turn = copilot.begin(actor, message, canEdit);
-                        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 200);
-                        exchange.getMessage().setHeader(Exchange.CONTENT_TYPE,
+                        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 200);
+                        exchange.getMessage().setHeader(Headers.CONTENT_TYPE,
                                 "text/html; charset=utf-8");
                         // The placeholder's hx-get is markup, not a template — it carries the
                         // app's prefix from here (docs/base-path.md).

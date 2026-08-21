@@ -1,6 +1,9 @@
 package io.tesseraql.runtime;
 
 import io.tesseraql.opsui.PollSourceStatus;
+import io.tesseraql.pipeline.Exchange;
+import io.tesseraql.pipeline.Headers;
+import io.tesseraql.pipeline.Step;
 import java.io.InputStream;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
@@ -10,9 +13,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import org.apache.camel.CamelContext;
-import org.apache.camel.Exchange;
-import org.apache.camel.Processor;
-import org.apache.camel.support.DefaultExchange;
 import org.apache.camel.support.service.ServiceSupport;
 
 /**
@@ -60,7 +60,7 @@ final class PollLoop extends ServiceSupport {
 
     private final String jobId;
     private final PollSource source;
-    private final Processor importer;
+    private final Step importer;
     private final CamelContext context;
     private final PathMatcher include;
     private final String move;
@@ -72,7 +72,7 @@ final class PollLoop extends ServiceSupport {
 
     private volatile Thread worker;
 
-    PollLoop(String jobId, String transport, PollSource source, Processor importer,
+    PollLoop(String jobId, String transport, PollSource source, Step importer,
             CamelContext context, String include, String move, String moveFailed,
             long delayMillis, Claim consumed, PollSourceStatus status) {
         this.jobId = jobId;
@@ -172,8 +172,8 @@ final class PollLoop extends ServiceSupport {
         PollSource.Fetched fetched = null;
         try {
             fetched = source.fetch(file);
-            Exchange exchange = new DefaultExchange(context);
-            exchange.getMessage().setHeader(Exchange.FILE_NAME, file.name());
+            Exchange exchange = new Exchange(io.tesseraql.camel.CamelBeans.of(context));
+            exchange.getMessage().setHeader(Headers.FILE_NAME, file.name());
             try (InputStream content = Files.newInputStream(fetched.path())) {
                 exchange.getMessage().setBody(content);
                 importer.process(exchange);

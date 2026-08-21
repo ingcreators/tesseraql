@@ -8,10 +8,10 @@ import io.tesseraql.core.expr.EvaluationContext;
 import io.tesseraql.core.expr.Expr;
 import io.tesseraql.core.expr.ExpressionFunctions;
 import io.tesseraql.core.expr.ExpressionParser;
+import io.tesseraql.pipeline.Exchange;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import org.apache.camel.Exchange;
 
 /**
  * A response's declared {@code headers:} block, compiled once and applied per request.

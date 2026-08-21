@@ -6,18 +6,19 @@ import io.tesseraql.core.attachment.AttachmentStore;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
+import io.tesseraql.pipeline.Exchange;
+import io.tesseraql.pipeline.Headers;
+import io.tesseraql.pipeline.Step;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import org.apache.camel.Exchange;
-import org.apache.camel.Processor;
 
 /**
  * Lists the attachments of one owning record as JSON (roadmap Phase 30 slice 1). Scoped to the record
  * in the path; the blob bytes are never read, only the metadata rows.
  */
-public final class AttachmentListProcessor implements Processor {
+public final class AttachmentListProcessor implements Step {
 
     private static final TqlErrorCode NO_SERVICE = new TqlErrorCode(TqlDomain.LD, 2840);
 
@@ -31,9 +32,9 @@ public final class AttachmentListProcessor implements Processor {
 
     @Override
     public void process(Exchange exchange) throws Exception {
-        AttachmentService service = exchange.getContext().getRegistry()
-                .lookupByNameAndType(TesseraqlProperties.ATTACHMENT_SERVICE_BEAN,
-                        AttachmentService.class);
+        AttachmentService service = exchange.beans().lookup(
+                TesseraqlProperties.ATTACHMENT_SERVICE_BEAN,
+                AttachmentService.class);
         if (service == null) {
             throw new TqlException(NO_SERVICE, "Attachment service is not configured");
         }
@@ -51,9 +52,9 @@ public final class AttachmentListProcessor implements Processor {
             item.put("createdAt", a.createdAt() == null ? null : a.createdAt().toString());
             items.add(item);
         }
-        exchange.getMessage().removeHeaders("*", Exchange.CONTENT_TYPE);
-        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 200);
-        exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "application/json; charset=utf-8");
+        exchange.getMessage().removeHeaders("*", Headers.CONTENT_TYPE);
+        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 200);
+        exchange.getMessage().setHeader(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
         exchange.getMessage().setBody(FileImportProcessor.MAPPER.writeValueAsString(items));
     }
 }

@@ -6,10 +6,11 @@ import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.files.FileReadSpec;
 import io.tesseraql.core.files.FileTransferService;
+import io.tesseraql.pipeline.Exchange;
+import io.tesseraql.pipeline.Headers;
+import io.tesseraql.pipeline.Step;
 import java.io.InputStream;
 import java.nio.file.Path;
-import org.apache.camel.Exchange;
-import org.apache.camel.Processor;
 
 /**
  * Feeds one polled file into the file-import pipeline (roadmap Phase 26): the consumer's body is
@@ -18,7 +19,7 @@ import org.apache.camel.Processor;
  * console. The spool completes before this returns, so the polling consumer can then move the
  * file to its done/failed sub-directory.
  */
-final class PollImportProcessor implements Processor {
+final class PollImportProcessor implements Step {
 
     private static final TqlErrorCode EMPTY_FILE = new TqlErrorCode(TqlDomain.LD, 2824);
     private static final TqlErrorCode NO_SERVICE = new TqlErrorCode(TqlDomain.LD, 2825);
@@ -52,13 +53,13 @@ final class PollImportProcessor implements Processor {
 
     @Override
     public void process(Exchange exchange) throws Exception {
-        FileTransferService transfers = exchange.getContext().getRegistry()
-                .lookupByNameAndType(TesseraqlProperties.FILE_TRANSFER_BEAN,
-                        FileTransferService.class);
+        FileTransferService transfers = exchange.beans().lookup(
+                TesseraqlProperties.FILE_TRANSFER_BEAN,
+                FileTransferService.class);
         if (transfers == null) {
             throw new TqlException(NO_SERVICE, "File transfer service is not configured");
         }
-        String fileName = exchange.getMessage().getHeader(Exchange.FILE_NAME, String.class);
+        String fileName = exchange.getMessage().getHeader(Headers.FILE_NAME, String.class);
         try (InputStream content = exchange.getMessage().getBody(InputStream.class)) {
             if (content == null) {
                 throw new TqlException(EMPTY_FILE,

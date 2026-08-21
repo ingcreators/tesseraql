@@ -3,9 +3,9 @@ package io.tesseraql.runtime;
 import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.core.messaging.EventChannelStore;
 import io.tesseraql.core.messaging.EventMessage;
+import io.tesseraql.pipeline.Exchange;
 import java.util.List;
 import org.apache.camel.CamelContext;
-import org.apache.camel.Exchange;
 
 /**
  * Drains a messaging channel's durable log into the {@code queue-consume} routes that subscribe to

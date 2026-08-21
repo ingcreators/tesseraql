@@ -5,8 +5,8 @@ import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.tenant.TenantContext;
+import io.tesseraql.pipeline.Exchange;
 import javax.sql.DataSource;
-import org.apache.camel.Exchange;
 
 /**
  * Resolves the {@link DataSource} an exchange executes against (design ch. 30.2), shared by every
@@ -36,9 +36,9 @@ public final class TenantRouting {
                 ? exchange.getProperty(TesseraqlProperties.TENANT)
                 : null;
         if (tenant instanceof TenantContext tenantContext) {
-            TenantDataSourceResolver resolver = exchange.getContext().getRegistry()
-                    .lookupByNameAndType(TesseraqlProperties.TENANT_DATASOURCE_RESOLVER_BEAN,
-                            TenantDataSourceResolver.class);
+            TenantDataSourceResolver resolver = exchange.beans().lookup(
+                    TesseraqlProperties.TENANT_DATASOURCE_RESOLVER_BEAN,
+                    TenantDataSourceResolver.class);
             if (resolver != null) {
                 DataSource resolved = resolver.resolve(tenantContext.id());
                 if (resolved != null) {
@@ -46,8 +46,7 @@ public final class TenantRouting {
                 }
             }
         }
-        DataSource dataSource = exchange.getContext().getRegistry()
-                .lookupByNameAndType(datasourceName, DataSource.class);
+        DataSource dataSource = exchange.beans().lookup(datasourceName, DataSource.class);
         if (dataSource == null) {
             throw new TqlException(NO_DATASOURCE,
                     "No DataSource named '" + datasourceName + "' in the registry");

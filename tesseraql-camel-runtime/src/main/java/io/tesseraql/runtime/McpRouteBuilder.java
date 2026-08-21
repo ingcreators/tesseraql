@@ -4,8 +4,8 @@ import io.tesseraql.camel.HttpMounts;
 import io.tesseraql.compiler.pipeline.Pipeline;
 import io.tesseraql.compiler.pipeline.Pipelines;
 import io.tesseraql.mcp.McpHttpHandler;
-import org.apache.camel.Exchange;
-import org.apache.camel.Processor;
+import io.tesseraql.pipeline.Headers;
+import io.tesseraql.pipeline.Step;
 import org.apache.camel.builder.RouteBuilder;
 
 /**
@@ -41,22 +41,22 @@ final class McpRouteBuilder extends RouteBuilder {
         HttpMounts.mount(getContext(), "GET", "/_tesseraql/mcp", "mcp.endpoint.get");
         HttpMounts.mount(getContext(), "DELETE", "/_tesseraql/mcp", "mcp.endpoint.delete");
 
-        Processor bridge = bridge();
+        Step bridge = bridge();
         pipelines.pipeline("mcp.endpoint.post").process(bridge);
         pipelines.pipeline("mcp.endpoint.get").process(bridge);
         pipelines.pipeline("mcp.endpoint.delete").process(bridge);
     }
 
-    private Processor bridge() {
+    private Step bridge() {
         return exchange -> {
             McpHttpHandler.Request request = new McpHttpHandler.Request(
-                    exchange.getMessage().getHeader(Exchange.HTTP_METHOD, "POST", String.class),
+                    exchange.getMessage().getHeader(Headers.HTTP_METHOD, "POST", String.class),
                     exchange.getMessage().getHeader("Authorization", String.class),
                     exchange.getMessage().getHeader(McpHttpHandler.SESSION_HEADER, String.class),
                     exchange.getMessage().getHeader("MCP-Protocol-Version", String.class),
                     exchange.getMessage().getBody(String.class));
             McpHttpHandler.Response response = handler.handle(request);
-            exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, response.status());
+            exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, response.status());
             response.headers()
                     .forEach((name, value) -> exchange.getMessage().setHeader(name, value));
             exchange.getMessage().setBody(response.body());

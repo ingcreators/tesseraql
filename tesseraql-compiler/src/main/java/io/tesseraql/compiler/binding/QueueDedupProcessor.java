@@ -6,10 +6,10 @@ import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.expr.EvaluationContext;
 import io.tesseraql.core.messaging.EventChannelStore;
+import io.tesseraql.pipeline.Exchange;
+import io.tesseraql.pipeline.Step;
 import java.util.Arrays;
 import java.util.Map;
-import org.apache.camel.Exchange;
-import org.apache.camel.Processor;
 
 /**
  * Resolves a {@code queue-consume} delivery's idempotency key and recognises a redelivery before
@@ -26,7 +26,7 @@ import org.apache.camel.Processor;
  * at-least-once channel becomes effectively exactly-once per business key. A duplicate is not an
  * error — the consumer still acknowledges the message.
  */
-public final class QueueDedupProcessor implements Processor {
+public final class QueueDedupProcessor implements Step {
 
     /** TQL-CAMEL-3111: the event channel store backing a queue-consume route is not configured. */
     private static final TqlErrorCode NO_STORE = new TqlErrorCode(TqlDomain.CAMEL, 3111);
@@ -50,7 +50,7 @@ public final class QueueDedupProcessor implements Processor {
         if (key == null) {
             return;
         }
-        EventChannelStore store = exchange.getContext().getRegistry().lookupByNameAndType(
+        EventChannelStore store = exchange.beans().lookup(
                 TesseraqlProperties.EVENT_CHANNEL_STORE_BEAN, EventChannelStore.class);
         if (store == null) {
             throw new TqlException(NO_STORE, "Event channel store is not configured");

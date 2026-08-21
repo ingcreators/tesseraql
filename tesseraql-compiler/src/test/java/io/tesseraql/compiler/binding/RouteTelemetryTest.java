@@ -3,12 +3,11 @@ package io.tesseraql.compiler.binding;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.tesseraql.camel.TesseraqlProperties;
+import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.security.Principal;
 import java.util.List;
 import java.util.Map;
-import org.apache.camel.Exchange;
 import org.apache.camel.impl.DefaultCamelContext;
-import org.apache.camel.support.DefaultExchange;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -21,7 +20,7 @@ class RouteTelemetryTest {
     @Test
     void theAccessLineCarriesRequestIdentityAndPrincipal() throws Exception {
         try (DefaultCamelContext context = new DefaultCamelContext()) {
-            Exchange exchange = new DefaultExchange(context);
+            Exchange exchange = new Exchange(io.tesseraql.camel.CamelBeans.of(context));
             RouteTelemetry telemetry = new RouteTelemetry("users.search", "GET", "/api/users",
                     "app", true);
 

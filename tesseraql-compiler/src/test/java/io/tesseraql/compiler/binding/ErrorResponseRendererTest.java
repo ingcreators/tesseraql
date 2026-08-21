@@ -2,16 +2,17 @@ package io.tesseraql.compiler.binding;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
+import io.tesseraql.pipeline.Exchange;
+import io.tesseraql.pipeline.Headers;
 import io.tesseraql.yaml.i18n.I18nSettings;
 import io.tesseraql.yaml.model.ResponseSpec.OnError;
 import java.util.List;
 import java.util.Map;
-import org.apache.camel.Exchange;
 import org.apache.camel.impl.DefaultCamelContext;
-import org.apache.camel.support.DefaultExchange;
 import org.junit.jupiter.api.Test;
 
 class ErrorResponseRendererTest {
@@ -35,7 +36,7 @@ class ErrorResponseRendererTest {
         new ErrorResponseRenderer().process(exchange);
 
         String body = exchange.getMessage().getBody(String.class);
-        assertThat(exchange.getMessage().getHeader(Exchange.HTTP_RESPONSE_CODE)).isEqualTo(409);
+        assertThat(exchange.getMessage().getHeader(Headers.HTTP_RESPONSE_CODE)).isEqualTo(409);
         assertThat(body).contains("\"code\":\"TQL-SQL-4090\"")
                 .contains("\"message\":\"Conflict\"")
                 // Details render as the error.details namespace (transition-engine track F).
@@ -59,7 +60,7 @@ class ErrorResponseRendererTest {
         new ErrorResponseRenderer().process(exchange);
 
         String body = exchange.getMessage().getBody(String.class);
-        assertThat(exchange.getMessage().getHeader(Exchange.HTTP_RESPONSE_CODE)).isEqualTo(422);
+        assertThat(exchange.getMessage().getHeader(Headers.HTTP_RESPONSE_CODE)).isEqualTo(422);
         assertThat(body).contains("\"code\":\"TQL-WORKFLOW-3202\"")
                 .contains("\"message\":\"Unprocessable Entity\"")
                 .contains("\"code\":\"not-funded\"")
@@ -75,7 +76,7 @@ class ErrorResponseRendererTest {
         Exchange federation = exchangeWith(new TqlException(
                 new TqlErrorCode(TqlDomain.SEC, 4140), "idp unreachable"));
         new ErrorResponseRenderer().process(federation);
-        assertThat(federation.getMessage().getHeader(Exchange.HTTP_RESPONSE_CODE))
+        assertThat(federation.getMessage().getHeader(Headers.HTTP_RESPONSE_CODE))
                 .isEqualTo(500);
 
         // The genuine credential failures keep their statuses.
@@ -127,7 +128,7 @@ class ErrorResponseRendererTest {
         new ErrorResponseRenderer().process(exchange);
 
         String body = exchange.getMessage().getBody(String.class);
-        assertThat(exchange.getMessage().getHeader(Exchange.CONTENT_TYPE, String.class))
+        assertThat(exchange.getMessage().getHeader(Headers.CONTENT_TYPE, String.class))
                 .startsWith("text/html");
         assertThat(body).contains("class=\"hc-alert\" data-variant=\"error\"")
                 .contains("data-error-code=\"TQL-SQL-4092\"")
@@ -144,7 +145,7 @@ class ErrorResponseRendererTest {
         Exchange steered = exchangeWith(
                 TqlException.builder(new TqlErrorCode(TqlDomain.FIELD, 4220)).build());
         steered.getMessage().setHeader("HX-Request", "true");
-        steered.setProperty(Exchange.FAILURE_ROUTE_ID, "members.create");
+        steered.setProperty(TesseraqlProperties.FAILURE_ROUTE_ID, "members.create");
         renderer.process(steered);
         assertThat(steered.getMessage().getHeader("HX-Retarget")).isEqualTo("#flash");
         assertThat(steered.getMessage().getHeader("HX-Reswap")).isEqualTo("outerHTML");
@@ -153,7 +154,7 @@ class ErrorResponseRendererTest {
         Exchange plain = exchangeWith(
                 TqlException.builder(new TqlErrorCode(TqlDomain.FIELD, 4220)).build());
         plain.getMessage().setHeader("HX-Request", "true");
-        plain.setProperty(Exchange.FAILURE_ROUTE_ID, "other.route");
+        plain.setProperty(TesseraqlProperties.FAILURE_ROUTE_ID, "other.route");
         renderer.process(plain);
         assertThat(plain.getMessage().getHeader("HX-Retarget")).isNull();
         assertThat(plain.getMessage().getHeader("HX-Reswap")).isNull();
@@ -182,7 +183,7 @@ class ErrorResponseRendererTest {
         new ErrorResponseRenderer().process(exchange);
 
         String body = exchange.getMessage().getBody(String.class);
-        assertThat(exchange.getMessage().getHeader(Exchange.HTTP_RESPONSE_CODE)).isEqualTo(422);
+        assertThat(exchange.getMessage().getHeader(Headers.HTTP_RESPONSE_CODE)).isEqualTo(422);
         assertThat(body).contains("\"code\":\"TQL-FIELD-4220\"")
                 .contains("\"message\":\"Unprocessable Entity\"")
                 .contains("\"details\":{\"fields\":[")
@@ -290,7 +291,7 @@ class ErrorResponseRendererTest {
         new ErrorResponseRenderer().process(exchange);
 
         String body = exchange.getMessage().getBody(String.class);
-        assertThat(exchange.getMessage().getHeader(Exchange.HTTP_RESPONSE_CODE)).isEqualTo(422);
+        assertThat(exchange.getMessage().getHeader(Headers.HTTP_RESPONSE_CODE)).isEqualTo(422);
         assertThat(body).contains("hc-alert__error")
                 .contains("data-field=\"email\"")
                 .contains("data-code=\"duplicate\"")
@@ -298,8 +299,9 @@ class ErrorResponseRendererTest {
     }
 
     private static Exchange exchangeWith(Throwable cause) {
-        Exchange exchange = new DefaultExchange(new DefaultCamelContext());
-        exchange.setProperty(Exchange.EXCEPTION_CAUGHT, cause);
+        Exchange exchange = new Exchange(
+                io.tesseraql.camel.CamelBeans.of(new DefaultCamelContext()));
+        exchange.setProperty(TesseraqlProperties.EXCEPTION_CAUGHT, cause);
         return exchange;
     }
 

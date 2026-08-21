@@ -1,8 +1,8 @@
 package io.tesseraql.camel;
 
 import io.tesseraql.core.http.BasePaths;
+import io.tesseraql.pipeline.Exchange;
 import org.apache.camel.CamelContext;
-import org.apache.camel.Exchange;
 
 /**
  * The prefix this runtime's application is served under ({@code tesseraql.http.basePath},
@@ -31,12 +31,11 @@ public final class BasePath {
     }
 
     /** The application's prefix, {@code ""} when it is served at the root of its origin. */
-    public static String of(CamelContext context) {
-        if (context == null) {
+    public static String of(io.tesseraql.pipeline.Beans beans) {
+        if (beans == null) {
             return "";
         }
-        String bound = context.getRegistry().lookupByNameAndType(
-                TesseraqlProperties.BASE_PATH_BEAN, String.class);
+        String bound = beans.lookup(TesseraqlProperties.BASE_PATH_BEAN, String.class);
         return bound == null ? "" : bound;
     }
 
@@ -45,13 +44,13 @@ public final class BasePath {
         if (exchange == null) {
             return "";
         }
-        return of(exchange.getContext()) + activationSegment(exchange);
+        return of(exchange.beans()) + activationSegment(exchange);
     }
 
     /** A base-relative path as the wire URL this application serves it at. */
     public static String url(Exchange exchange, String path) {
         if (isAsset(path)) {
-            return BasePaths.join(of(exchange == null ? null : exchange.getContext()), path);
+            return BasePaths.join(of(exchange == null ? null : exchange.beans()), path);
         }
         return BasePaths.join(of(exchange), path);
     }

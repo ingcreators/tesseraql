@@ -9,10 +9,11 @@ import io.tesseraql.compiler.pipeline.Pipeline;
 import io.tesseraql.compiler.pipeline.Pipelines;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.service.ServiceProviders;
+import io.tesseraql.pipeline.Exchange;
+import io.tesseraql.pipeline.Headers;
 import io.tesseraql.security.Principal;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import org.apache.camel.Exchange;
 import org.apache.camel.builder.RouteBuilder;
 
 /**
@@ -67,7 +68,7 @@ final class WorkshopRouteBuilder extends RouteBuilder {
             throw WorkshopTargets.notFound(op);
         }
         Map<String, Object> params = new LinkedHashMap<>(StudioSupport.parseQueryString(
-                exchange.getMessage().getHeader(Exchange.HTTP_QUERY, String.class)));
+                exchange.getMessage().getHeader(Headers.HTTP_QUERY, String.class)));
         respond(exchange, op, params);
     }
 
@@ -88,7 +89,7 @@ final class WorkshopRouteBuilder extends RouteBuilder {
         }
         Map<String, Object> params = "GET".equals(verb)
                 ? new LinkedHashMap<>(StudioSupport.parseQueryString(
-                        exchange.getMessage().getHeader(Exchange.HTTP_QUERY, String.class)))
+                        exchange.getMessage().getHeader(Headers.HTTP_QUERY, String.class)))
                 : formParams(exchange);
         // Identity is the member's own verdict, never the wire's.
         params.put("permissions", permissions);
@@ -100,7 +101,7 @@ final class WorkshopRouteBuilder extends RouteBuilder {
 
     private void respond(Exchange exchange, String op, Map<String, Object> params)
             throws Exception {
-        ServiceProviders providers = exchange.getContext().getRegistry().lookupByNameAndType(
+        ServiceProviders providers = exchange.beans().lookup(
                 TesseraqlProperties.SERVICE_PROVIDERS_BEAN, ServiceProviders.class);
         Object result = providers.require(op).invoke(params);
         // A scalar result (a CSV string, a generated file's bytes) rides the hop in a value
@@ -111,8 +112,8 @@ final class WorkshopRouteBuilder extends RouteBuilder {
         // platform-http mirrors request headers — including parsed form fields — onto the
         // response, and a multi-line field (a route document being saved) is a header value
         // Vert.x rightly refuses. The answer is the JSON body and nothing else.
-        exchange.getMessage().removeHeaders("*", Exchange.HTTP_RESPONSE_CODE);
-        exchange.getMessage().setHeader(Exchange.CONTENT_TYPE,
+        exchange.getMessage().removeHeaders("*", Headers.HTTP_RESPONSE_CODE);
+        exchange.getMessage().setHeader(Headers.CONTENT_TYPE,
                 "application/json; charset=utf-8");
         exchange.getMessage().setBody(mapper.writeValueAsString(body));
     }

@@ -3,12 +3,12 @@ package io.tesseraql.compiler.binding;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.tesseraql.camel.TesseraqlProperties;
+import io.tesseraql.pipeline.Exchange;
+import io.tesseraql.pipeline.Headers;
 import io.tesseraql.yaml.model.ResponseSpec;
 import java.util.List;
 import java.util.Map;
-import org.apache.camel.Exchange;
 import org.apache.camel.impl.DefaultCamelContext;
-import org.apache.camel.support.DefaultExchange;
 import org.junit.jupiter.api.Test;
 
 /** Response shaping (roadmap Phase 41): computed leaves, nest:, and statusWhen:. */
@@ -16,7 +16,8 @@ class JsonResponseShapingTest {
 
     private static Exchange render(ResponseSpec.JsonResponse response,
             Map<String, Object> context) throws Exception {
-        Exchange exchange = new DefaultExchange(new DefaultCamelContext());
+        Exchange exchange = new Exchange(
+                io.tesseraql.camel.CamelBeans.of(new DefaultCamelContext()));
         exchange.setProperty(TesseraqlProperties.CONTEXT, context);
         new JsonResponseRenderer(response).process(exchange);
         return exchange;
@@ -53,9 +54,9 @@ class JsonResponseShapingTest {
                 List.of(new ResponseSpec.StatusWhen("main.rowCount == 0", 404)));
         Exchange missing = render(response, Map.of("main", Map.of("rows", List.of(),
                 "rowCount", 0)));
-        assertThat(missing.getMessage().getHeader(Exchange.HTTP_RESPONSE_CODE)).isEqualTo(404);
+        assertThat(missing.getMessage().getHeader(Headers.HTTP_RESPONSE_CODE)).isEqualTo(404);
         Exchange found = render(response, Map.of("main", Map.of("rows",
                 List.of(Map.of("id", 1)), "rowCount", 1)));
-        assertThat(found.getMessage().getHeader(Exchange.HTTP_RESPONSE_CODE)).isEqualTo(200);
+        assertThat(found.getMessage().getHeader(Headers.HTTP_RESPONSE_CODE)).isEqualTo(200);
     }
 }

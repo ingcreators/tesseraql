@@ -2,14 +2,15 @@ package io.tesseraql.compiler.binding;
 
 import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.core.expr.EvaluationContext;
+import io.tesseraql.pipeline.Exchange;
+import io.tesseraql.pipeline.Headers;
+import io.tesseraql.pipeline.Step;
 import io.tesseraql.yaml.model.ResponseSpec.TextResponse;
 import io.tesseraql.yaml.template.Templates;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import org.apache.camel.Exchange;
-import org.apache.camel.Processor;
 
 /**
  * Renders a template-generated text response (docs/prompt-as-recipe.md decision 3): the template
@@ -22,7 +23,7 @@ import org.apache.camel.Processor;
  * The status is still set, because the MCP endpoint reads it to tell a rendered message from a
  * failure the error renderer handled.
  */
-public final class TextResponseRenderer implements Processor {
+public final class TextResponseRenderer implements Step {
 
     private final TextResponse response;
     private final Path appHome;
@@ -46,7 +47,7 @@ public final class TextResponseRenderer implements Processor {
         response.model().forEach((key, expr) -> model.put(key,
                 evaluation.resolve(Arrays.asList(String.valueOf(expr).split("\\.")))));
 
-        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, response.effectiveStatus());
+        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, response.effectiveStatus());
         exchange.getMessage().setBody(Templates.render(appHome, templateName, model));
     }
 }

@@ -9,6 +9,17 @@ package io.tesseraql.camel;
  */
 public final class TesseraqlProperties {
 
+    /**
+     * The failure a pipeline's clause answered for (docs/camel-removal.md decision 2).
+     *
+     * <p>The value is Camel's, unchanged: renderers read it, and moving a name is a different
+     * change from moving what it names.
+     */
+    public static final String EXCEPTION_CAUGHT = "CamelExceptionCaught";
+
+    /** The pipeline a failure came from. */
+    public static final String FAILURE_ROUTE_ID = "CamelFailureRouteId";
+
     public static final String CONTEXT = "TesseraqlContext";
     /** The computed page request a paginated query executes under (roadmap Phase 41). */
     public static final String PAGE = "TesseraqlPage";

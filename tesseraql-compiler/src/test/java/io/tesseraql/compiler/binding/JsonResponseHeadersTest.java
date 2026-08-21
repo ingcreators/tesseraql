@@ -3,13 +3,13 @@ package io.tesseraql.compiler.binding;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.tesseraql.camel.TesseraqlProperties;
+import io.tesseraql.pipeline.Exchange;
+import io.tesseraql.pipeline.Headers;
 import io.tesseraql.yaml.model.ResponseSpec;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import org.apache.camel.Exchange;
 import org.apache.camel.impl.DefaultCamelContext;
-import org.apache.camel.support.DefaultExchange;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -29,7 +29,8 @@ class JsonResponseHeadersTest {
 
     private static Exchange render(ResponseSpec.JsonResponse response,
             Map<String, Object> context) throws Exception {
-        Exchange exchange = new DefaultExchange(new DefaultCamelContext());
+        Exchange exchange = new Exchange(
+                io.tesseraql.camel.CamelBeans.of(new DefaultCamelContext()));
         exchange.setProperty(TesseraqlProperties.CONTEXT, context);
         new JsonResponseRenderer(response).process(exchange);
         return exchange;
@@ -73,13 +74,13 @@ class JsonResponseHeadersTest {
         Exchange created = render(response(headers, guards, statusWhen),
                 Map.of("steps", Map.of("record",
                         Map.of("created", true, "keys", Map.of("id", 42)))));
-        assertThat(created.getMessage().getHeader(Exchange.HTTP_RESPONSE_CODE)).isEqualTo(201);
+        assertThat(created.getMessage().getHeader(Headers.HTTP_RESPONSE_CODE)).isEqualTo(201);
         assertThat(created.getMessage().getHeader("Location")).isEqualTo("/api/items/42");
 
         Exchange unchanged = render(response(headers, guards, statusWhen),
                 Map.of("steps", Map.of("record",
                         Map.of("created", false, "keys", Map.of("id", 42)))));
-        assertThat(unchanged.getMessage().getHeader(Exchange.HTTP_RESPONSE_CODE)).isEqualTo(200);
+        assertThat(unchanged.getMessage().getHeader(Headers.HTTP_RESPONSE_CODE)).isEqualTo(200);
         assertThat(unchanged.getMessage().getHeader("Location"))
                 .as("a 200 that created nothing has nowhere to point")
                 .isNull();
@@ -91,7 +92,7 @@ class JsonResponseHeadersTest {
         Exchange exchange = render(
                 response(Map.of("Content-Type", "text/csv"), null, null), Map.of());
 
-        assertThat(exchange.getMessage().getHeader(Exchange.CONTENT_TYPE))
+        assertThat(exchange.getMessage().getHeader(Headers.CONTENT_TYPE))
                 .isEqualTo("application/json; charset=utf-8");
     }
 }

@@ -5,9 +5,10 @@ import io.tesseraql.core.attachment.AttachmentService;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
+import io.tesseraql.pipeline.Exchange;
+import io.tesseraql.pipeline.Headers;
+import io.tesseraql.pipeline.Step;
 import java.util.Optional;
-import org.apache.camel.Exchange;
-import org.apache.camel.Processor;
 
 /**
  * Streams an attachment download (roadmap Phase 30 slice 1): loads the metadata owner-scoped to the
@@ -15,7 +16,7 @@ import org.apache.camel.Processor;
  * streams the blob with a sanitized {@code Content-Disposition}. Authorization rides the route's
  * {@code security:}; the owner scope is enforced here.
  */
-public final class AttachmentDownloadProcessor implements Processor {
+public final class AttachmentDownloadProcessor implements Step {
 
     private static final TqlErrorCode NO_SERVICE = new TqlErrorCode(TqlDomain.LD, 2840);
     private static final TqlErrorCode UNKNOWN = new TqlErrorCode(TqlDomain.LD, 2844);
@@ -32,9 +33,9 @@ public final class AttachmentDownloadProcessor implements Processor {
 
     @Override
     public void process(Exchange exchange) {
-        AttachmentService service = exchange.getContext().getRegistry()
-                .lookupByNameAndType(TesseraqlProperties.ATTACHMENT_SERVICE_BEAN,
-                        AttachmentService.class);
+        AttachmentService service = exchange.beans().lookup(
+                TesseraqlProperties.ATTACHMENT_SERVICE_BEAN,
+                AttachmentService.class);
         if (service == null) {
             throw new TqlException(NO_SERVICE, "Attachment service is not configured");
         }
@@ -52,8 +53,8 @@ public final class AttachmentDownloadProcessor implements Processor {
                 ? f.metadata().filename()
                 : f.metadata().id();
         exchange.getMessage().removeHeaders("*");
-        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 200);
-        exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, contentType);
+        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 200);
+        exchange.getMessage().setHeader(Headers.CONTENT_TYPE, contentType);
         exchange.getMessage().setHeader("Content-Disposition",
                 "attachment; filename=\"" + filename.replaceAll("[\\r\\n\"]", "_") + "\"");
         exchange.getMessage().setBody(f.content());

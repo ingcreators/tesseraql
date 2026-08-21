@@ -3,8 +3,8 @@ package io.tesseraql.compiler.binding;
 import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.core.files.FileCodec;
 import io.tesseraql.core.files.FileWriteSpec;
-import org.apache.camel.Exchange;
-import org.apache.camel.Processor;
+import io.tesseraql.pipeline.Exchange;
+import io.tesseraql.pipeline.Step;
 
 /**
  * Binds the synchronous {@code query-export} route to the file-transfer encoding machinery
@@ -12,7 +12,7 @@ import org.apache.camel.Processor;
  * zone resolved like {@code file-export} does - travel to the SQL component as exchange
  * properties, so both recipes share column mapping, formats, and codecs.
  */
-public final class QueryExportBinder implements Processor {
+public final class QueryExportBinder implements Step {
 
     private final FileCodec codec;
     private final FileWriteSpec writeSpec;

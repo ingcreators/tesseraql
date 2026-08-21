@@ -2,14 +2,15 @@ package io.tesseraql.compiler.binding;
 
 import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.core.expr.EvaluationContext;
+import io.tesseraql.pipeline.Exchange;
+import io.tesseraql.pipeline.Headers;
+import io.tesseraql.pipeline.Step;
 import io.tesseraql.yaml.model.ResponseSpec.FileResponse;
 import io.tesseraql.yaml.template.Templates;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import org.apache.camel.Exchange;
-import org.apache.camel.Processor;
 
 /**
  * Renders a template-generated file response (design ch. 6.4): non-HTML templates render in
@@ -18,7 +19,7 @@ import org.apache.camel.Processor;
  * is the general text-generation primitive for business apps (config files, fixed-format exports,
  * receipts) alongside the SQL-driven CSV export.
  */
-public final class FileResponseRenderer implements Processor {
+public final class FileResponseRenderer implements Step {
 
     private final FileResponse response;
     private final Path appHome;
@@ -42,8 +43,8 @@ public final class FileResponseRenderer implements Processor {
         response.model().forEach((key, expr) -> model.put(key,
                 evaluation.resolve(Arrays.asList(String.valueOf(expr).split("\\.")))));
 
-        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, response.effectiveStatus());
-        exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, response.effectiveContentType());
+        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, response.effectiveStatus());
+        exchange.getMessage().setHeader(Headers.CONTENT_TYPE, response.effectiveContentType());
         if (response.filename() != null && !response.filename().isBlank()) {
             exchange.getMessage().setHeader("Content-Disposition",
                     "attachment; filename=\"" + sanitizeFilename(response.filename()) + "\"");

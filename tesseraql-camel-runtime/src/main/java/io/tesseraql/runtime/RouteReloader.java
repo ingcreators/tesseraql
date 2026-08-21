@@ -1,6 +1,7 @@
 package io.tesseraql.runtime;
 
 import io.tesseraql.compiler.RouteCompiler;
+import io.tesseraql.pipeline.Headers;
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.ManifestLoader;
 import io.tesseraql.yaml.manifest.RouteFile;
@@ -470,9 +471,9 @@ public final class RouteReloader {
                     io.tesseraql.compiler.pipeline.Pipelines.of(getContext())
                             .compiling(java.util.List.of()).pipeline(id).process(exchange -> {
                                 exchange.getMessage().setHeader(
-                                        org.apache.camel.Exchange.HTTP_RESPONSE_CODE, 500);
+                                        Headers.HTTP_RESPONSE_CODE, 500);
                                 exchange.getMessage().setHeader(
-                                        org.apache.camel.Exchange.CONTENT_TYPE,
+                                        Headers.CONTENT_TYPE,
                                         "application/json; charset=utf-8");
                                 exchange.getMessage().setBody("{\"error\":{\"code\":\""
                                         + COMPILE_FAILED + "\",\"message\":\"Route failed to"

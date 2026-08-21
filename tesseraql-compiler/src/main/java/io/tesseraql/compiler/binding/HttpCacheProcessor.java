@@ -1,12 +1,13 @@
 package io.tesseraql.compiler.binding;
 
 import io.tesseraql.core.util.Durations;
+import io.tesseraql.pipeline.Exchange;
+import io.tesseraql.pipeline.Headers;
+import io.tesseraql.pipeline.Step;
 import io.tesseraql.yaml.model.CacheSpec;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import org.apache.camel.Exchange;
-import org.apache.camel.Processor;
 
 /**
  * Declarative HTTP caching for a query route's rendered response (docs/response-shaping.md,
@@ -16,7 +17,7 @@ import org.apache.camel.Processor;
  * so a 304 saves transfer, not compute; it is deliberately stateless (no server-side cache to
  * invalidate, nothing to coordinate across nodes). Only 200 responses are stamped.
  */
-public final class HttpCacheProcessor implements Processor {
+public final class HttpCacheProcessor implements Step {
 
     private final String cacheControl;
     private final boolean etag;
@@ -36,7 +37,7 @@ public final class HttpCacheProcessor implements Processor {
 
     @Override
     public void process(Exchange exchange) {
-        Integer status = exchange.getMessage().getHeader(Exchange.HTTP_RESPONSE_CODE,
+        Integer status = exchange.getMessage().getHeader(Headers.HTTP_RESPONSE_CODE,
                 Integer.class);
         if (status != null && status != 200) {
             return;
@@ -56,7 +57,7 @@ public final class HttpCacheProcessor implements Processor {
         exchange.getMessage().setHeader("ETag", tag);
         String ifNoneMatch = exchange.getMessage().getHeader("If-None-Match", String.class);
         if (tag.equals(ifNoneMatch)) {
-            exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 304);
+            exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 304);
             exchange.getMessage().setBody("");
         }
     }

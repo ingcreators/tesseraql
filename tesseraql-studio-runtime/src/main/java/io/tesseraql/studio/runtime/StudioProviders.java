@@ -1905,7 +1905,8 @@ final class StudioProviders {
                             content == null ? null : String.valueOf(content),
                             sample == null ? null : String.valueOf(sample), rows,
                             studioMask, studioPdf),
-                            io.tesseraql.camel.BasePath.of(context));
+                            io.tesseraql.camel.BasePath
+                                    .of(io.tesseraql.camel.CamelBeans.of(context)));
                 })
                 .register("studio.runTests",
                         params -> studioTests

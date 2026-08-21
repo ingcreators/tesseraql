@@ -1,6 +1,8 @@
 package io.tesseraql.runtime;
 
 import io.tesseraql.compiler.pipeline.Pipelines;
+import io.tesseraql.pipeline.Exchange;
+import io.tesseraql.pipeline.Headers;
 import io.vertx.core.Context;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.http.HttpMethod;
@@ -17,8 +19,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.camel.CamelContext;
-import org.apache.camel.Exchange;
-import org.apache.camel.support.DefaultExchange;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -230,7 +230,8 @@ final class RouteEdge {
      * knows about URLs at all.
      */
     private String path(String declared) {
-        StringBuilder mountedPath = new StringBuilder(io.tesseraql.camel.BasePath.of(camelContext));
+        StringBuilder mountedPath = new StringBuilder(
+                io.tesseraql.camel.BasePath.of(io.tesseraql.camel.CamelBeans.of(camelContext)));
         for (String segment : declared.split("/", -1)) {
             if (segment.isEmpty()) {
                 continue;
@@ -328,19 +329,19 @@ final class RouteEdge {
      */
     private Exchange request(RoutingContext ctx, String routeId) {
         HttpServerRequest request = ctx.request();
-        Exchange exchange = new DefaultExchange(camelContext);
+        Exchange exchange = new Exchange(io.tesseraql.camel.CamelBeans.of(camelContext));
         // Which route this is, which a route running on a route never has to be told. Two
         // renderers ask: the redirect renderer, and the HTML renderer, which publishes the
         // Studio shell's member segment only for a route under `tql.studio.` — so an exchange
         // that cannot say which route it is drops that segment out of every link a shared
         // template emits, and thirty-one Studio assertions with it.
-        exchange.getExchangeExtension().setFromRouteId(routeId);
+        exchange.setFromRouteId(routeId);
         // A plain message: the request and the response are the handler's, not the message's.
         // The platform-http HttpMessage carried them so a processor could reach the raw Vert.x
         // objects, and nothing in this framework ever did.
-        org.apache.camel.Message message = exchange.getMessage();
+        io.tesseraql.pipeline.Message message = exchange.getMessage();
         Map<String, Object> headers = new java.util.LinkedHashMap<>();
-        headers.put(Exchange.HTTP_PATH, ctx.normalizedPath());
+        headers.put(Headers.HTTP_PATH, ctx.normalizedPath());
         org.apache.camel.spi.HeaderFilterStrategy filter = headerFilter();
         applyInbound(headers, exchange, filter, request.headers());
         if (!ctx.queryParams().isEmpty()) {
@@ -356,11 +357,11 @@ final class RouteEdge {
             headers.put(io.tesseraql.camel.PlatformHttpHeaders.REMOTE_ADDRESS,
                     request.remoteAddress());
         }
-        headers.put(Exchange.HTTP_METHOD, request.method().toString());
-        headers.put(Exchange.HTTP_URL, request.absoluteURI());
-        headers.put(Exchange.HTTP_URI, request.uri());
-        headers.put(Exchange.HTTP_QUERY, request.query());
-        headers.put(Exchange.HTTP_RAW_QUERY, request.query());
+        headers.put(Headers.HTTP_METHOD, request.method().toString());
+        headers.put(Headers.HTTP_URL, request.absoluteURI());
+        headers.put(Headers.HTTP_URI, request.uri());
+        headers.put(Headers.HTTP_QUERY, request.query());
+        headers.put(Headers.HTTP_RAW_QUERY, request.query());
         body(ctx, exchange, message, headers, filter);
         message.setHeaders(headers);
         attachments(ctx, message);
@@ -377,7 +378,7 @@ final class RouteEdge {
      * body has always been.
      */
     private static void body(RoutingContext ctx, Exchange exchange,
-            org.apache.camel.Message message, Map<String, Object> headers,
+            io.tesseraql.pipeline.Message message, Map<String, Object> headers,
             org.apache.camel.spi.HeaderFilterStrategy filter) {
         if (isForm(ctx)) {
             Map<String, Object> form = new java.util.LinkedHashMap<>();
@@ -385,11 +386,11 @@ final class RouteEdge {
             for (String name : attributes.names()) {
                 for (String value : attributes.getAll(name)) {
                     if (filter != null
-                            && filter.applyFilterToExternalHeaders(name, value, exchange)) {
+                            && filter.applyFilterToExternalHeaders(name, value, null)) {
                         continue;
                     }
-                    org.apache.camel.util.CollectionHelper.appendEntry(headers, name, value);
-                    org.apache.camel.util.CollectionHelper.appendEntry(form, name, value);
+                    appendEntry(headers, name, value);
+                    appendEntry(form, name, value);
                 }
             }
             if (!form.isEmpty()) {
@@ -409,18 +410,18 @@ final class RouteEdge {
     }
 
     /** Uploaded parts, as the attachments three processors already read them off the message. */
-    private static void attachments(RoutingContext ctx, org.apache.camel.Message message) {
+    private static void attachments(RoutingContext ctx, io.tesseraql.pipeline.Message message) {
         java.util.List<io.vertx.ext.web.FileUpload> uploads = ctx.fileUploads();
         if (uploads.isEmpty()) {
             return;
         }
         message.setHeader("CamelAttachmentsSize", uploads.size());
-        org.apache.camel.attachment.AttachmentMessage attachments = message.getExchange()
-                .getMessage(org.apache.camel.attachment.AttachmentMessage.class);
         for (io.vertx.ext.web.FileUpload upload : uploads) {
-            attachments.addAttachment(upload.name(), new jakarta.activation.DataHandler(
-                    new org.apache.camel.attachment.CamelFileDataSource(
-                            new java.io.File(upload.uploadedFileName()), upload.fileName())));
+            // The spooled file, named as the client named it: a part is a name, a content type
+            // and a stream, which is all three readers ever asked of it.
+            message.attachments().put(upload.name(), io.tesseraql.pipeline.Message.part(
+                    java.nio.file.Path.of(upload.uploadedFileName()), upload.contentType(),
+                    upload.fileName()));
         }
     }
 
@@ -441,14 +442,36 @@ final class RouteEdge {
         source.forEach(entry -> {
             String name = entry.getKey();
             String value = entry.getValue();
-            if (filter == null || !filter.applyFilterToExternalHeaders(name, value, exchange)) {
-                org.apache.camel.util.CollectionHelper.appendEntry(headers, name, value);
+            if (filter == null || !filter.applyFilterToExternalHeaders(name, value, null)) {
+                appendEntry(headers, name, value);
             }
         });
     }
 
     private org.apache.camel.spi.HeaderFilterStrategy headerFilter() {
         return HttpEdgeBeans.headerFilter(camelContext);
+    }
+
+    /**
+     * Appends a value under {@code name}, so a repeated header or field becomes a list.
+     *
+     * <p>This was {@code CollectionHelper.appendEntry}, and the behaviour is load-bearing: one
+     * binder reads a repeated form field as a list and another reads the single value, so a
+     * second value must not silently replace the first.
+     */
+    private static void appendEntry(Map<String, Object> into, String name, Object value) {
+        Object existing = into.get(name);
+        if (existing == null) {
+            into.put(name, value);
+            return;
+        }
+        if (existing instanceof java.util.List<?> list) {
+            java.util.List<Object> appended = new java.util.ArrayList<>(list);
+            appended.add(value);
+            into.put(name, appended);
+            return;
+        }
+        into.put(name, new java.util.ArrayList<>(java.util.List.of(existing, value)));
     }
 
     /**
@@ -482,8 +505,7 @@ final class RouteEdge {
                 ? null
                 : body instanceof byte[] bytes
                         ? Buffer.buffer(bytes)
-                        : Buffer.buffer(exchange.getContext().getTypeConverter()
-                                .convertTo(String.class, exchange, body));
+                        : Buffer.buffer(exchange.getMessage().getBody(String.class));
         connection.runOnContext(reply -> {
             if (ctx.response().ended()) {
                 return;
@@ -561,18 +583,18 @@ final class RouteEdge {
      * declarative route caching needs on the wire), so it is asked rather than reimplemented.
      */
     private void headers(HttpServerResponse response, Exchange exchange) {
-        Integer code = exchange.getMessage().getHeader(Exchange.HTTP_RESPONSE_CODE, Integer.class);
+        Integer code = exchange.getMessage().getHeader(Headers.HTTP_RESPONSE_CODE, Integer.class);
         response.setStatusCode(code == null ? 200 : code);
         org.apache.camel.spi.HeaderFilterStrategy filter = headerFilter();
         // Camel writes the content type itself rather than through the filter, which strips it
         // from the generic copy; doing the same here is why a JSON response says so.
-        String contentType = exchange.getMessage().getHeader(Exchange.CONTENT_TYPE, String.class);
+        String contentType = exchange.getMessage().getHeader(Headers.CONTENT_TYPE, String.class);
         if (contentType != null) {
             response.putHeader("Content-Type", contentType);
         }
         exchange.getMessage().getHeaders().forEach((name, value) -> {
             if (value == null || (filter != null
-                    && filter.applyFilterToCamelHeaders(name, value, exchange))) {
+                    && filter.applyFilterToCamelHeaders(name, value, null))) {
                 return;
             }
             response.putHeader(name, String.valueOf(value));

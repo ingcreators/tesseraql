@@ -318,8 +318,8 @@ class FrameworkSurfaceGuardTest {
         if (compiled == null) {
             return found;
         }
-        for (io.tesseraql.compiler.pipeline.Pipeline.Step step : compiled.steps()) {
-            if (step.processor() instanceof io.tesseraql.camel.auth.AuthStep gate) {
+        for (io.tesseraql.pipeline.Step step : compiled.steps()) {
+            if (step instanceof io.tesseraql.camel.auth.AuthStep gate) {
                 found.add(gate.operation());
             }
         }

@@ -1,7 +1,7 @@
 package io.tesseraql.camel;
 
+import io.tesseraql.pipeline.Exchange;
 import org.apache.camel.CamelContext;
-import org.apache.camel.Exchange;
 
 /**
  * The {@code Path} this runtime's session cookie is issued with, as the host that started it
@@ -27,17 +27,16 @@ public final class CookiePath {
     }
 
     /** This runtime's cookie path; {@code /} unless a host said otherwise. */
-    public static String of(CamelContext context) {
-        if (context == null) {
+    public static String of(io.tesseraql.pipeline.Beans beans) {
+        if (beans == null) {
             return "/";
         }
-        String bound = context.getRegistry().lookupByNameAndType(
-                TesseraqlProperties.COOKIE_PATH_BEAN, String.class);
+        String bound = beans.lookup(TesseraqlProperties.COOKIE_PATH_BEAN, String.class);
         return bound == null ? "/" : bound;
     }
 
     /** The cookie path of the application serving this exchange. */
     public static String of(Exchange exchange) {
-        return exchange == null ? "/" : of(exchange.getContext());
+        return exchange == null ? "/" : of(exchange.beans());
     }
 }

@@ -469,19 +469,59 @@ encode took?* — no longer has a subject: it is rewritten to assert that nothin
 way, with the reason recorded in it, because **a test whose subject was removed should say so
 rather than disappear quietly**.
 
-**One flake, recorded rather than explained away.** `MultiAppReplaceIntegrationTest`'s
-no-request-dropped assertion saw a single 502 during a swap, in one full-suite run, and did not
-reproduce in four runs afterwards (three isolated, one full). Slice 3a does move work from context
-start to first use, so it was not dismissed on sight — but the failure is in the same family as the
-`BindException` this campaign already saw on `main`: a port race that shows up under load. If it
-recurs, the first thing to read is `StackRelay`'s per-port `HttpProxy` cache, which is never
-evicted — a replaced runtime that lands on a port a previous one used would inherit a dead
-connection pool.
+**One flake, recorded rather than explained away** — and the first guess about it was wrong, which
+is recorded too. `MultiAppReplaceIntegrationTest`'s no-request-dropped assertion saw a single 502
+during a swap in one full-suite run, and a slice later `StackDeployIntegrationTest` saw one in the
+same family. Neither reproduces in isolation.
+
+The first hypothesis — a stale per-port proxy cache in `StackRelay` — **is refuted by the code**:
+the relay caches proxies by *member*, never by port, and re-resolves the origin per request
+precisely so a retired port is never cached. That is written in its class javadoc, and the guess was
+made without reading it.
+
+What the code does say is narrower and more interesting. `RetryOnceAcrossTheSwap` retries a request
+whose connection was never established, and a 503 from a runtime whose slot has moved — but a
+request whose connection **dies mid-flight** is deliberately not retried, because "replaying a
+request the origin may have acted on is a worse defect than the 502 it would save". A pooled
+keep-alive connection to the retiring runtime, picked up at the moment that runtime closes it, is
+exactly that case. So the 502 is the documented decision working, not a fault.
+
+**There is a narrow improvement available, and it is not this campaign's to make**: the same
+replayable predicate the 503 leg already computes (`GET` or `HEAD`) would justify retrying a
+died-mid-flight request too, since an idempotent request the origin may have acted on can be
+re-sent. That changes a deliberate decision in [runtime-replace.md](runtime-replace.md), so it is
+recorded here for its owner rather than folded into a type rename.
 
 **A step has no lifecycle, and one producer was using it.** `TesseraqlSqlProducer` parsed its SQL
 file in `doStart()`, which is what a Camel service gets. `SqlStep` parses on first use instead,
 which keeps the property that mattered — the file is read once, not per request — without inventing
 a lifecycle to hang it on.
+
+## What slice 3b found
+
+**The type converter was counted; the map semantics were not.** Decision 3 measured the typed
+accessors — 25 real conversions against 165 casts — and got that part right. What nobody counted is
+that Camel's message holds its headers in a **case-insensitive** map, and says so nowhere a reader
+would look. A plain `LinkedHashMap` made **59 test classes answer 401 at once**: HTTP/2 lower-cases
+every header name on the wire, a client may send `authorization` or `Authorization`, and this
+framework's steps read `"Cookie"` and `"Authorization"` as written.
+
+That is the fourth borrowed property this campaign has found, and the first that failed loudly. The
+other three — the type converter that left with a component, the drain that needed a route, the MDC
+service that needed a reifier — were all silent. **A property that fails loudly is the cheap kind**;
+the reason to keep counting is the other three.
+
+**Two utilities had to be rebuilt because their behaviour was load-bearing, not incidental.**
+`CollectionHelper.appendEntry` is why a repeated form field becomes a list rather than the last
+value winning — one binder reads the map, another reads the header, and both had to keep working.
+`UnitOfWorkHelper.doneSynchronizations` runs every completion even when one throws: an audit row
+that cannot be written is not a reason to leak a permit.
+
+**One question was answered by reading bytecode rather than assuming.** The header filter's
+`applyFilterToExternalHeaders(name, value, exchange)` takes a Camel exchange, which a pipeline no
+longer has. `DefaultHeaderFilterStrategy#doFiltering` never loads its third argument — `aload 3`
+appears zero times — so passing null is not a guess. The catalogue is the advertisement; the
+bytecode is the contract.
 
 ## What this does not buy, said before anyone expects it
 

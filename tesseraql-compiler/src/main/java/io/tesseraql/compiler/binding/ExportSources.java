@@ -1,10 +1,10 @@
 package io.tesseraql.compiler.binding;
 
 import io.tesseraql.camel.TesseraqlProperties;
+import io.tesseraql.pipeline.Exchange;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
-import org.apache.camel.Exchange;
 
 /**
  * Harvests an export's {@code http:} source results out of the execution context

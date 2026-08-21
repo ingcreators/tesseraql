@@ -3,11 +3,11 @@ package io.tesseraql.compiler.binding;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.tesseraql.camel.TesseraqlProperties;
+import io.tesseraql.pipeline.Exchange;
+import io.tesseraql.pipeline.Headers;
 import io.tesseraql.yaml.model.ResponseSpec.RedirectResponse;
 import java.util.Map;
-import org.apache.camel.Exchange;
 import org.apache.camel.impl.DefaultCamelContext;
-import org.apache.camel.support.DefaultExchange;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -25,7 +25,7 @@ class RedirectRendererTest {
 
         renderer.process(exchange);
 
-        assertThat(exchange.getMessage().getHeader(Exchange.HTTP_RESPONSE_CODE)).isEqualTo(303);
+        assertThat(exchange.getMessage().getHeader(Headers.HTTP_RESPONSE_CODE)).isEqualTo(303);
         assertThat(exchange.getMessage().getHeader("Location")).isEqualTo("/items/42");
         assertThat(exchange.getMessage().getHeader("HX-Redirect")).isNull();
     }
@@ -36,7 +36,7 @@ class RedirectRendererTest {
 
         renderer.process(exchange);
 
-        assertThat(exchange.getMessage().getHeader(Exchange.HTTP_RESPONSE_CODE)).isEqualTo(204);
+        assertThat(exchange.getMessage().getHeader(Headers.HTTP_RESPONSE_CODE)).isEqualTo(204);
         assertThat(exchange.getMessage().getHeader("HX-Redirect")).isEqualTo("/items/42");
         // No Location header — htmx navigates via HX-Redirect, not a transparent 3xx follow.
         assertThat(exchange.getMessage().getHeader("Location")).isNull();
@@ -49,7 +49,7 @@ class RedirectRendererTest {
 
         seeOther.process(exchange);
 
-        assertThat(exchange.getMessage().getHeader(Exchange.HTTP_RESPONSE_CODE)).isEqualTo(302);
+        assertThat(exchange.getMessage().getHeader(Headers.HTTP_RESPONSE_CODE)).isEqualTo(302);
         assertThat(exchange.getMessage().getHeader("Location")).isEqualTo("/items");
     }
 
@@ -63,12 +63,12 @@ class RedirectRendererTest {
         DefaultCamelContext context = new DefaultCamelContext();
         io.tesseraql.camel.BasePath.bind(context, "/apps/shop-a");
 
-        Exchange plain = new DefaultExchange(context);
+        Exchange plain = new Exchange(io.tesseraql.camel.CamelBeans.of(context));
         plain.setProperty(TesseraqlProperties.CONTEXT, Map.of("params", Map.of("id", 42)));
         renderer.process(plain);
         assertThat(plain.getMessage().getHeader("Location")).isEqualTo("/apps/shop-a/items/42");
 
-        Exchange htmx = new DefaultExchange(context);
+        Exchange htmx = new Exchange(io.tesseraql.camel.CamelBeans.of(context));
         htmx.setProperty(TesseraqlProperties.CONTEXT, Map.of("params", Map.of("id", 42)));
         htmx.getMessage().setHeader("HX-Request", "true");
         renderer.process(htmx);
@@ -80,7 +80,7 @@ class RedirectRendererTest {
     void anAbsoluteRedirectIsLeftAlone() {
         DefaultCamelContext context = new DefaultCamelContext();
         io.tesseraql.camel.BasePath.bind(context, "/apps/shop-a");
-        Exchange exchange = new DefaultExchange(context);
+        Exchange exchange = new Exchange(io.tesseraql.camel.CamelBeans.of(context));
         exchange.setProperty(TesseraqlProperties.CONTEXT, Map.of());
 
         new RedirectRenderer(new RedirectResponse(303, "https://example.test/pay"))
@@ -91,7 +91,8 @@ class RedirectRendererTest {
     }
 
     private static Exchange exchange(String hxRequest) {
-        Exchange exchange = new DefaultExchange(new DefaultCamelContext());
+        Exchange exchange = new Exchange(
+                io.tesseraql.camel.CamelBeans.of(new DefaultCamelContext()));
         exchange.setProperty(TesseraqlProperties.CONTEXT, Map.of("params", Map.of("id", 42)));
         if (hxRequest != null) {
             exchange.getMessage().setHeader("HX-Request", hxRequest);

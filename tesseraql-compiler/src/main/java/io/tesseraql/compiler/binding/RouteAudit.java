@@ -3,6 +3,10 @@ package io.tesseraql.compiler.binding;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.core.audit.RouteAuditSink;
+import io.tesseraql.pipeline.Completion;
+import io.tesseraql.pipeline.Exchange;
+import io.tesseraql.pipeline.Headers;
+import io.tesseraql.pipeline.Step;
 import io.tesseraql.security.Principal;
 import io.tesseraql.yaml.model.InputField;
 import java.time.Instant;
@@ -10,9 +14,6 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
-import org.apache.camel.Exchange;
-import org.apache.camel.Processor;
-import org.apache.camel.spi.Synchronization;
 
 /**
  * The opt-in business-route audit log (roadmap Phase 45): one durable row per invocation —
@@ -21,7 +22,7 @@ import org.apache.camel.spi.Synchronization;
  * excluded wholesale, so a sensitive value can never leak into the trail. Rides the same
  * on-completion seam as {@link RouteTelemetry} and the per-app ops scoping via the app name.
  */
-public final class RouteAudit implements Processor {
+public final class RouteAudit implements Step {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
@@ -51,7 +52,7 @@ public final class RouteAudit implements Processor {
     @Override
     public void process(Exchange exchange) {
         long startedNanos = System.nanoTime();
-        exchange.getExchangeExtension().addOnCompletion(new Synchronization() {
+        exchange.addOnCompletion(new Completion() {
             @Override
             public void onComplete(Exchange completed) {
                 record(completed, startedNanos);
@@ -65,7 +66,7 @@ public final class RouteAudit implements Processor {
     }
 
     private void record(Exchange exchange, long startedNanos) {
-        RouteAuditSink sink = exchange.getContext().getRegistry().lookupByNameAndType(
+        RouteAuditSink sink = exchange.beans().lookup(
                 TesseraqlProperties.ROUTE_AUDIT_SINK_BEAN, RouteAuditSink.class);
         if (sink == null) {
             return;
@@ -75,7 +76,7 @@ public final class RouteAudit implements Processor {
         String actor = principal == null
                 ? null
                 : principal.loginId() != null ? principal.loginId() : principal.subject();
-        Object status = exchange.getMessage().getHeader(Exchange.HTTP_RESPONSE_CODE);
+        Object status = exchange.getMessage().getHeader(Headers.HTTP_RESPONSE_CODE);
         Object traceContext = exchange.getProperty(TesseraqlProperties.TRACE_CONTEXT);
         String traceId = traceContext instanceof io.tesseraql.core.telemetry.SpanContext ids
                 ? ids.traceId()

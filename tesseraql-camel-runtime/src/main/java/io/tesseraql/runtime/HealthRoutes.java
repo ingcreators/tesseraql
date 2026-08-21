@@ -71,7 +71,8 @@ final class HealthRoutes {
     static void install(CamelContext camelContext, int port, OpsDashboard dashboard) {
         io.vertx.ext.web.Router router = HttpEdgeBeans.router(camelContext);
         HealthRoutes health = new HealthRoutes(dashboard);
-        String mount = io.tesseraql.camel.BasePath.of(camelContext) + "/_tesseraql/health";
+        String mount = io.tesseraql.camel.BasePath
+                .of(io.tesseraql.camel.CamelBeans.of(camelContext)) + "/_tesseraql/health";
         // Liveness is a constant: it says the process is running, and it must never consult a
         // dependency, which is the whole distinction between it and readiness.
         router.route(HttpMethod.GET, mount + "/live").order(AFTER_THE_GATE)

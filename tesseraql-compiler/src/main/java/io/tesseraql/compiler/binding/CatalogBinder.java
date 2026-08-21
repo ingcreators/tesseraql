@@ -2,9 +2,9 @@ package io.tesseraql.compiler.binding;
 
 import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.core.catalog.CatalogStore;
+import io.tesseraql.pipeline.Exchange;
+import io.tesseraql.pipeline.Step;
 import java.util.Map;
-import org.apache.camel.Exchange;
-import org.apache.camel.Processor;
 
 /**
  * Publishes the app's code catalogs into the execution context under {@code codes}
@@ -18,7 +18,7 @@ import org.apache.camel.Processor;
  * <p>Resolution costs no query — the store serves a held load — so a page showing twenty coded
  * columns costs nothing beyond the map lookups it makes.
  */
-public final class CatalogBinder implements Processor {
+public final class CatalogBinder implements Step {
 
     private final String fixedLocale;
 
@@ -42,8 +42,8 @@ public final class CatalogBinder implements Processor {
     @Override
     @SuppressWarnings("unchecked")
     public void process(Exchange exchange) {
-        CatalogStore store = exchange.getContext().getRegistry()
-                .lookupByNameAndType(TesseraqlProperties.CATALOG_STORE_BEAN, CatalogStore.class);
+        CatalogStore store = exchange.beans().lookup(TesseraqlProperties.CATALOG_STORE_BEAN,
+                CatalogStore.class);
         if (store == null) {
             return;
         }

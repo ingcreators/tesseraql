@@ -2,16 +2,18 @@ package io.tesseraql.scim.camel;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.camel.HttpMounts;
+import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.camel.auth.AuthStep;
 import io.tesseraql.compiler.pipeline.Pipeline;
 import io.tesseraql.compiler.pipeline.Pipelines;
+import io.tesseraql.pipeline.Exchange;
+import io.tesseraql.pipeline.Headers;
 import io.tesseraql.scim.ScimError;
 import io.tesseraql.scim.ScimException;
 import io.tesseraql.scim.ScimGroup;
 import io.tesseraql.scim.ScimGroupService;
 import io.tesseraql.scim.ScimUser;
 import io.tesseraql.scim.ScimUserService;
-import org.apache.camel.Exchange;
 import org.apache.camel.builder.RouteBuilder;
 
 /**
@@ -111,7 +113,7 @@ public final class ScimRouteBuilder extends RouteBuilder {
         }
         // RFC 7644 §3.3: a SCIM 201 carries the created resource's Location.
         exchange.getMessage().setHeader("Location",
-                exchange.getMessage().getHeader(Exchange.HTTP_URI, String.class)
+                exchange.getMessage().getHeader(Headers.HTTP_URI, String.class)
                         + "/" + created.id());
         respond(exchange, 201, created);
     }
@@ -156,7 +158,7 @@ public final class ScimRouteBuilder extends RouteBuilder {
 
     private void deleteUser(Exchange exchange) {
         users.delete(exchange.getMessage().getHeader("id", String.class));
-        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 204);
+        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 204);
         exchange.getMessage().setBody(null);
     }
 
@@ -165,7 +167,7 @@ public final class ScimRouteBuilder extends RouteBuilder {
                 ScimGroup.class);
         ScimGroup created = groups.create(request);
         exchange.getMessage().setHeader("Location",
-                exchange.getMessage().getHeader(Exchange.HTTP_URI, String.class)
+                exchange.getMessage().getHeader(Headers.HTTP_URI, String.class)
                         + "/" + created.id());
         respond(exchange, 201, created);
     }
@@ -208,23 +210,25 @@ public final class ScimRouteBuilder extends RouteBuilder {
 
     private void deleteGroup(Exchange exchange) {
         groups.delete(exchange.getMessage().getHeader("id", String.class));
-        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 204);
+        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 204);
         exchange.getMessage().setBody(null);
     }
 
     private void respond(Exchange exchange, int status, Object body) throws Exception {
-        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, status);
-        exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, SCIM_JSON);
+        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, status);
+        exchange.getMessage().setHeader(Headers.CONTENT_TYPE, SCIM_JSON);
         exchange.getMessage().setBody(mapper.writeValueAsString(body));
     }
 
     private void scimError(Exchange exchange) throws Exception {
-        ScimException ex = exchange.getProperty(Exchange.EXCEPTION_CAUGHT, ScimException.class);
+        ScimException ex = exchange.getProperty(TesseraqlProperties.EXCEPTION_CAUGHT,
+                ScimException.class);
         respond(exchange, ex.status(), ex.toError());
     }
 
     private void genericError(Exchange exchange) throws Exception {
-        Throwable cause = exchange.getProperty(Exchange.EXCEPTION_CAUGHT, Throwable.class);
+        Throwable cause = exchange.getProperty(TesseraqlProperties.EXCEPTION_CAUGHT,
+                Throwable.class);
         int status = cause instanceof io.tesseraql.core.error.TqlException tql
                 ? io.tesseraql.compiler.binding.ErrorResponseRenderer.httpStatus(tql.code())
                 : 500;

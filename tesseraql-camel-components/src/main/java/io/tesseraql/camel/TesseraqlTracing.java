@@ -3,7 +3,7 @@ package io.tesseraql.camel;
 import io.tesseraql.core.telemetry.NoopTracer;
 import io.tesseraql.core.telemetry.SpanContext;
 import io.tesseraql.core.telemetry.Tracer;
-import org.apache.camel.Exchange;
+import io.tesseraql.pipeline.Exchange;
 
 /**
  * Tracing helpers shared by route processors and components (design ch. 25.4). Resolves the tracer
@@ -17,8 +17,7 @@ public final class TesseraqlTracing {
 
     /** The registry-bound tracer, or a no-op when none is configured. */
     public static Tracer tracer(Exchange exchange) {
-        Tracer tracer = exchange.getContext().getRegistry()
-                .lookupByNameAndType(TesseraqlProperties.TRACER_BEAN, Tracer.class);
+        Tracer tracer = exchange.beans().lookup(TesseraqlProperties.TRACER_BEAN, Tracer.class);
         return tracer != null ? tracer : NoopTracer.INSTANCE;
     }
 

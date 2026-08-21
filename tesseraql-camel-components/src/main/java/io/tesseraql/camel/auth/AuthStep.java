@@ -4,6 +4,9 @@ import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
+import io.tesseraql.pipeline.Exchange;
+import io.tesseraql.pipeline.Headers;
+import io.tesseraql.pipeline.Step;
 import io.tesseraql.security.Activation;
 import io.tesseraql.security.Principal;
 import io.tesseraql.security.apikey.ApiKeyAuthenticator;
@@ -13,15 +16,13 @@ import io.tesseraql.security.policy.PolicyEngine;
 import io.tesseraql.security.session.BrowserAuthenticator;
 import io.tesseraql.security.session.CsrfValidator;
 import io.tesseraql.security.session.SessionStore;
-import org.apache.camel.Exchange;
-import org.apache.camel.Processor;
 
 /**
  * Performs the {@code authenticate} and {@code authorize} operations for the {@code tesseraql-auth}
  * component (design ch. 9.2, 7.2). The {@link PolicyEngine} and {@link JwtAuthenticator} are looked
  * up from the Camel registry, where the runtime binds them from the security configuration.
  */
-public class AuthStep implements Processor {
+public class AuthStep implements Step {
 
     private static final TqlErrorCode UNSUPPORTED = new TqlErrorCode(TqlDomain.SEC, 4000);
 
@@ -106,7 +107,7 @@ public class AuthStep implements Processor {
      * caller without one.
      */
     private void rotate(Exchange exchange) {
-        SessionStore sessions = exchange.getContext().getRegistry().lookupByNameAndType(
+        SessionStore sessions = exchange.beans().lookup(
                 TesseraqlProperties.SESSION_STORE_BEAN, SessionStore.class);
         if (sessions == null) {
             return;
@@ -203,7 +204,7 @@ public class AuthStep implements Processor {
      * do, because a principal is a principal.
      */
     private void fence(Exchange exchange) {
-        String member = exchange.getContext().getRegistry().lookupByNameAndType(
+        String member = exchange.beans().lookup(
                 TesseraqlProperties.STACK_MEMBER_BEAN, String.class);
         if (member == null) {
             return;
@@ -274,7 +275,7 @@ public class AuthStep implements Processor {
         if (principal == null) {
             return;
         }
-        java.time.ZoneId zone = exchange.getContext().getRegistry().lookupByNameAndType(
+        java.time.ZoneId zone = exchange.beans().lookup(
                 TesseraqlProperties.CONDITION_ZONE_BEAN, java.time.ZoneId.class);
         // The presented address, resolved exactly as the session records it: the edge's
         // forwarded value when there is one, else the peer of the connection.
@@ -304,7 +305,7 @@ public class AuthStep implements Processor {
      * fence; anywhere but a hosted member the topology bean is absent and this is a no-op.
      */
     private void activate(Exchange exchange) {
-        String member = exchange.getContext().getRegistry().lookupByNameAndType(
+        String member = exchange.beans().lookup(
                 TesseraqlProperties.STACK_MEMBER_BEAN, String.class);
         if (member == null) {
             return;
@@ -357,7 +358,7 @@ public class AuthStep implements Processor {
         if ("true".equals(exchange.getMessage().getHeader("HX-Request", String.class))) {
             return false;
         }
-        Object method = exchange.getMessage().getHeader(Exchange.HTTP_METHOD);
+        Object method = exchange.getMessage().getHeader(Headers.HTTP_METHOD);
         if (method != null && !"GET".equalsIgnoreCase(String.valueOf(method))) {
             return false;
         }
@@ -367,7 +368,7 @@ public class AuthStep implements Processor {
 
     /** The same page under the given role's activation segment, query preserved. */
     private String activatedLocation(Exchange exchange, String role) {
-        String base = io.tesseraql.camel.BasePath.of(exchange.getContext());
+        String base = io.tesseraql.camel.BasePath.of(exchange.beans());
         String path = wirePath(exchange);
         String within = path.startsWith(base) ? path.substring(base.length()) : path;
         return base + "/_as/" + io.tesseraql.camel.BasePath.encodeSegment(role) + within
@@ -387,20 +388,20 @@ public class AuthStep implements Processor {
 
     /** The request's wire path (the member never sees the {@code _as} segment — relay-stripped). */
     private static String wirePath(Exchange exchange) {
-        String path = exchange.getMessage().getHeader(Exchange.HTTP_URI, String.class);
+        String path = exchange.getMessage().getHeader(Headers.HTTP_URI, String.class);
         return path == null || !path.startsWith("/") || path.startsWith("//") ? "/" : path;
     }
 
     private static String querySuffix(Exchange exchange) {
-        String query = exchange.getMessage().getHeader(Exchange.HTTP_QUERY, String.class);
+        String query = exchange.getMessage().getHeader(Headers.HTTP_QUERY, String.class);
         return query == null || query.isBlank() ? "" : "?" + query;
     }
 
     /** A 302 that ends the route here — the activation redirects, never a rendered page. */
     private static void redirect(Exchange exchange, String location) {
-        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 302);
+        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 302);
         exchange.getMessage().setHeader("Location", location);
-        exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "text/plain; charset=utf-8");
+        exchange.getMessage().setHeader(Headers.CONTENT_TYPE, "text/plain; charset=utf-8");
         exchange.getMessage().setBody("");
         exchange.setRouteStop(true);
     }
@@ -443,7 +444,7 @@ public class AuthStep implements Processor {
      * conditions cannot be acted on. The build-time counterpart is {@code TQL-SEC-4047}.
      */
     private <T> T bean(Exchange exchange, Class<T> type, String name) {
-        T bean = exchange.getContext().getRegistry().lookupByNameAndType(name, type);
+        T bean = exchange.beans().lookup(name, type);
         if (bean == null) {
             throw new TqlException(NOT_CONFIGURED, "Security bean '" + name + "' is not bound;"
                     + " security is not configured for auth: " + auth);

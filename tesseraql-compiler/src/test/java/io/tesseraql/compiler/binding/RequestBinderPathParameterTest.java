@@ -2,12 +2,12 @@ package io.tesseraql.compiler.binding;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.tesseraql.pipeline.Exchange;
+import io.tesseraql.pipeline.Headers;
 import io.tesseraql.yaml.SimpleYamlParser;
 import io.tesseraql.yaml.model.RouteDefinition;
 import java.util.Map;
-import org.apache.camel.Exchange;
 import org.apache.camel.impl.DefaultCamelContext;
-import org.apache.camel.support.DefaultExchange;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -70,9 +70,9 @@ class RequestBinderPathParameterTest {
     }
 
     private static Exchange request(String uri, String body, Map<String, Object> headers) {
-        Exchange exchange = new DefaultExchange(camel);
+        Exchange exchange = new Exchange(io.tesseraql.camel.CamelBeans.of(camel));
         if (uri != null) {
-            exchange.getMessage().setHeader(Exchange.HTTP_URI, uri);
+            exchange.getMessage().setHeader(Headers.HTTP_URI, uri);
         }
         headers.forEach((name, value) -> exchange.getMessage().setHeader(name, value));
         exchange.getMessage().setBody(body);

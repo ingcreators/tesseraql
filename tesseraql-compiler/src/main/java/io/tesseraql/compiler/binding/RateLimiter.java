@@ -3,8 +3,8 @@ package io.tesseraql.compiler.binding;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
-import org.apache.camel.Exchange;
-import org.apache.camel.Processor;
+import io.tesseraql.pipeline.Exchange;
+import io.tesseraql.pipeline.Step;
 
 /**
  * Token-bucket rate limiter for a route (design ch. 36.1). Requests beyond the sustained
@@ -28,7 +28,7 @@ public final class RateLimiter {
     }
 
     /** Returns a processor that rejects when no token is available. */
-    public Processor acquire() {
+    public Step acquire() {
         return new Gate();
     }
 
@@ -37,7 +37,7 @@ public final class RateLimiter {
      * matrix test asserts admission guards by processor name, and an anonymous one is invisible
      * to it.
      */
-    final class Gate implements Processor {
+    final class Gate implements Step {
         @Override
         public void process(Exchange exchange) {
             if (!tryAcquire()) {

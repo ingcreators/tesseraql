@@ -4,8 +4,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
-import org.apache.camel.Exchange;
-import org.apache.camel.Processor;
+import io.tesseraql.pipeline.Exchange;
+import io.tesseraql.pipeline.Headers;
+import io.tesseraql.pipeline.Step;
 
 /**
  * The default result renderer for an application-declared MCP tool (roadmap Phase 24 follow-on):
@@ -13,7 +14,7 @@ import org.apache.camel.Processor;
  * as the tool result. A tool that wants a custom shape declares a {@code response: { json: ... }}
  * block and uses {@link JsonResponseRenderer} instead.
  */
-public final class McpToolResultRenderer implements Processor {
+public final class McpToolResultRenderer implements Step {
 
     private static final TqlErrorCode RENDER_ERROR = new TqlErrorCode(TqlDomain.MCP, 3001);
 
@@ -29,7 +30,7 @@ public final class McpToolResultRenderer implements Processor {
             throw new TqlException(RENDER_ERROR, "Failed to serialize MCP tool result: "
                     + ex.getMessage());
         }
-        exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "application/json; charset=utf-8");
+        exchange.getMessage().setHeader(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
         exchange.getMessage().setBody(json);
     }
 }
