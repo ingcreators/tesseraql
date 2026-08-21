@@ -38,7 +38,7 @@ jobs:
           ./mvnw -B -ntp -pl tesseraql-coverage-core test -Dtesseraql.dialect.its=true
           -Dtest='OraclePlanGuardIntegrationTest,SqlServerPlanGuardIntegrationTest'
 
-      - name: Runtime portability (camel-runtime)
+      - name: Runtime portability (tesseraql-runtime)
         run: >
           ./mvnw -B -ntp -pl tesseraql-runtime test -Dtesseraql.dialect.its=true
           -Dtest='OraclePortabilityIntegrationTest,SqlServerPortabilityIntegrationTest'

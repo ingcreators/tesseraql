@@ -12,7 +12,7 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * The MCP Streamable HTTP transport, free of any specific HTTP server: it maps a request
  * ({@link Request}) to a {@link Response} over an {@link McpServer}. A JDK-server binding
- * ({@link HttpTransport}) drives it for the dev tool; a Camel route can drive the same handler to
+ * ({@link HttpTransport}) drives it for the dev tool; a mounted route can drive the same handler to
  * serve app-declared MCP endpoints later (roadmap Phase 24).
  *
  * <p>{@code POST} carries one JSON-RPC message and gets the JSON-RPC response (or {@code 202} for a

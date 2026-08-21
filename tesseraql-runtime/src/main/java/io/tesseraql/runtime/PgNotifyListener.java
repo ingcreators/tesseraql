@@ -19,7 +19,7 @@ import org.slf4j.LoggerFactory;
  * so a missed notification never strands a message. Durability lives in the {@code tql_event} table;
  * this thread only decides <em>when</em> to drain, never <em>whether</em> a message survives.
  *
- * <p>Run as a Camel service, so it starts with the context and stops cleanly on shutdown. On a
+ * <p>Run as a runtime service, so it starts with the context and stops cleanly on shutdown. On a
  * connection loss (a database restart) it reconnects, re-listens, and drains to catch up — the same
  * recovery the backstop would eventually provide, only sooner.
  */

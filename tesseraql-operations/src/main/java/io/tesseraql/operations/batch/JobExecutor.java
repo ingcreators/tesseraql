@@ -111,8 +111,8 @@ public final class JobExecutor {
 
     /**
      * Delivers a produced file to a {@code push:} step's target
-     * (docs/analytics-experience.md); the runtime wires the Camel-backed push service, this
-     * module stays Camel-free.
+     * (docs/analytics-experience.md); the runtime wires the push service, this module stays
+     * free of it.
      */
     @FunctionalInterface
     public interface FilePusher {

@@ -1,13 +1,13 @@
 package io.tesseraql.pipeline;
 
 /**
- * The exchange headers {@code camel-platform-http-vertx} puts a request's peer addresses on
- * (docs/http-edge.md decision 1).
+ * The exchange headers a request's peer addresses ride on (docs/http-edge.md decision 1).
  *
- * <p>Restated here rather than imported because the runtime now builds the same exchange without
- * that consumer, and a surface two producers must agree on is worth naming once. The names are
- * the component's own: changing them would change what a request looks like to a route, which is
- * why they are constants and not literals at the two call sites.
+ * <p>These began as {@code camel-platform-http-vertx}'s, which is what this class is named after.
+ * The runtime builds the same exchange without that consumer now, and the names became the
+ * framework's own with the rest of the header vocabulary — so a surface two producers must agree
+ * on is named once, here. Changing them would change what a request looks like to a route, which
+ * is why they are constants and not literals at the two call sites.
  */
 public final class PlatformHttpHeaders {
 

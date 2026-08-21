@@ -19,7 +19,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Camel processor that binds an HTTP request into the TesseraQL execution context (design ch. 7.2,
+ * Pipeline step that binds an HTTP request into the TesseraQL execution context (design ch. 7.2,
  * the {@code tesseraqlHttpRequestBinder}).
  *
  * <p>It parses the JSON body, enforces the mass-assignment guard (unknown and non-writable fields,

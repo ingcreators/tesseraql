@@ -64,7 +64,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 final class AssetRoutes implements RuntimeContext.Service {
 
     /**
-     * After the admission gate, before every route Camel registered.
+     * After the admission gate, before every compiled route.
      *
      * <p>The gate skips this prefix: it bounds work that occupies a worker, and an asset no longer
      * does. Refusing a stylesheet because the database is slow would put back the coupling this

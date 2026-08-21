@@ -15,7 +15,7 @@ import org.slf4j.LoggerFactory;
  * connection that {@code LISTEN}s on {@link CrossNodeTopicBus#CHANNEL} and forwards each
  * notification's {@code tenant|topic} payload to this node's local {@link LiveStreams} — never
  * back onto the bus, so a signal crosses the database exactly once. Mirrors the pg-notify
- * messaging consumer's lifecycle ({@link PgNotifyListener}): a Camel service that starts with
+ * messaging consumer's lifecycle ({@link PgNotifyListener}): a runtime service that starts with
  * the context, reconnects with backoff on a connection loss, and stops cleanly. Signals are a
  * freshness hint with no durability to recover, so unlike the messaging listener there is
  * nothing to drain after a reconnect — subscribers simply refresh on their next signal.

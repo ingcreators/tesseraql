@@ -19,7 +19,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Camel processor that renders the JSON response from the response template (design ch. 7.2, the
+ * Pipeline step that renders the JSON response from the response template (design ch. 7.2, the
  * {@code tesseraqlJsonResponseRenderer}).
  *
  * <p>The response body template is walked recursively; leaf strings are treated as context

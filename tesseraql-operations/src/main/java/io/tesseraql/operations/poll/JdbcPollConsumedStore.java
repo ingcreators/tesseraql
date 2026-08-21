@@ -103,7 +103,7 @@ public final class JdbcPollConsumedStore {
     /**
      * Drops a claim, so the file can be consumed again.
      *
-     * <p>Camel calls this when the exchange that took the claim failed, which is the behaviour
+     * <p>The poll loop calls this when the import that took the claim failed, which is the behaviour
      * wanted: a file that failed to import is not silently swallowed by a claim nobody will
      * complete.
      */

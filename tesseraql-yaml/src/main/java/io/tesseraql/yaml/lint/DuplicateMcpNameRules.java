@@ -52,8 +52,9 @@ final class DuplicateMcpNameRules implements LintRule {
     /**
      * Tools and prompts are named by their {@code id}, each in its own namespace — a tool and a
      * prompt may share a name, two tools may not. A duplicate tool id also compiles to two
-     * routes with one route id, so the first failure an author sees today is a Camel startup
-     * error rather than either file's name.
+     * pipelines under one id, and compiling one replaces whatever stood there — so without this
+     * lint the second silently wins and neither file is named. There is no startup error behind
+     * it any more; this is the whole of the check.
      */
     void lintDuplicateToolAndPromptIds(Path appHome, AppManifest manifest,
             List<LintFinding> findings) {

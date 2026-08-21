@@ -20,10 +20,10 @@ import org.slf4j.LoggerFactory;
 
 /**
  * Server-Sent Events endpoints on the platform's Vert.x router (docs/copilot.md "The SSE
- * transport", docs/inbox.md "Live badge"). These are raw router routes, not Camel routes,
- * for one load-bearing reason: a Camel exchange answers with a complete body, and the
- * platform-http InputStream pump only flushes full buffers — an SSE frame must reach the
- * wire the moment it is written. Registration happens after the context (and with it the
+ * transport", docs/inbox.md "Live badge"). These are raw router routes, not compiled
+ * pipelines, for one load-bearing reason: a pipeline answers with a complete body, and the
+ * InputStream pump behind it only flushes full buffers — an SSE frame must reach the wire the
+ * moment it is written. Registration happens after the context (and with it the
  * platform HTTP server) has started.
  *
  * <p>Per connection: the browser session authenticates exactly like {@code auth: browser}
@@ -69,8 +69,8 @@ public final class SseRoutes {
     /**
      * Registers {@code GET path} as an SSE endpoint on the started platform router. The path is
      * base-relative and mounted under the application's prefix (docs/base-path.md): these are
-     * router routes, so Camel's REST configuration — where the prefix reaches every other
-     * framework endpoint at once — does not apply to them.
+     * router routes, so the mount table — where the prefix reaches every other framework
+     * endpoint at once — does not carry them.
      */
     public static void register(RuntimeContext runtimeContext, int port, String path,
             Handler handler) {

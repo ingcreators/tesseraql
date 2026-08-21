@@ -11,7 +11,7 @@ package io.tesseraql.core.http;
  * request is already a wire URL and must not acquire it twice.
  *
  * <p>Living in core keeps the rule available to the OpenAPI generator, which runs at build time
- * with no Camel context; {@code io.tesseraql.pipeline.BasePath} adds the runtime's own prefix on top.
+ * with no runtime context; {@code io.tesseraql.pipeline.BasePath} adds the runtime's own prefix on top.
  */
 public final class BasePaths {
 

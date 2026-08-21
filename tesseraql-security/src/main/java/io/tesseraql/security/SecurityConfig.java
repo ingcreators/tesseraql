@@ -8,7 +8,7 @@ import java.util.Optional;
 
 /**
  * Resolved security configuration: named policies and authentication settings (design ch. 10.9,
- * 11). Built by the runtime from {@code tesseraql.security.*} and bound into the Camel registry.
+ * 11). Built by the runtime from {@code tesseraql.security.*} and bound into its registry.
  *
  * @param policies authorization policies keyed by id
  * @param jwt      bearer JWT verification settings, or null when no bearer auth is configured

@@ -17,7 +17,7 @@ import java.util.Map;
  * instead. A pipeline step runs sequentially and is the right home for request/response REST.
  *
  * <p>The target host must be allow-listed under {@code tesseraql.http.outbound.allowedHosts}
- * (deny by default — Camel's component catalog stays an implementation detail, not user API);
+ * (deny by default — how the call is carried out stays an implementation detail, not user API);
  * credentials, timeouts, and the circuit breaker come from the same configuration so secrets
  * never appear in the step. The {@link #query} values and {@link #body} are source expressions
  * bound from the step context exactly like a SQL step's params; static {@link #headers} values

@@ -558,7 +558,7 @@ second org model:
 (Flowable, Camunda, jBPM) was weighed and rejected. Three reasons. An external engine would keep
 process state in the engine's own schema, mutated by the engine's runtime rather than by
 plain-SQL-tool-runnable 2-way SQL. It is a heavy runtime dependency, with its own
-persistence, threading, and transaction model to reconcile with Camel and the TesseraQL
+persistence, threading, and transaction model to reconcile with the pipeline runtime and the
 outbox. And it would duplicate machinery the framework already owns: a transaction-scoped
 write engine, row scoping, an expression language, and a cluster-safe scheduler. The native
 state machine reuses all of that and adds no runtime dependency. The seam

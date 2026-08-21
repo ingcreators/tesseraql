@@ -1,7 +1,7 @@
 # Managed connectors
 
 TesseraQL apps integrate with neighbouring systems through **managed connectors**: governed
-recipes for files and HTTP. Camel's component catalog stays an
+recipes for files and HTTP. How a transfer is actually carried out stays an
 implementation detail — an app never writes a raw endpoint URI; it declares a connector that
 runs under the framework's allow-lists, secrets, lint, and coverage.
 

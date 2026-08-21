@@ -94,7 +94,7 @@ class MultiAppHostIntegrationTest {
      * Every runtime in the host serves on one Vert.x instance (docs/http-threading.md decision 4).
      *
      * <p>Each built its own. {@code VertxPlatformHttpServer} looks a Vert.x up in the runtime's own
-     * Camel registry and builds one when it finds none, so a host's worker and event-loop threads
+     * registry and builds one when it finds none, so a host's worker and event-loop threads
      * were a function of how many applications were installed — five applications on a twenty-core
      * machine meant a hundred worker threads and two hundred event loops, and no configuration
      * reduced it.

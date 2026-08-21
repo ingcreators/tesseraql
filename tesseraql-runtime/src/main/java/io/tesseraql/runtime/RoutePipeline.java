@@ -17,7 +17,7 @@ import java.util.Optional;
  * <p>What a compiled route contains is two {@code onException} handlers, a run of {@code process}
  * steps and a {@code to} — the {@code tesseraql-sql:} producer. Every one of those is a
  * {@link Step} or resolves to one, so running them in order is a loop, and the thread that
- * runs the loop is a choice rather than something {@code camel-platform-http-vertx} makes for the
+ * runs the loop is a choice rather than something {@code camel-platform-http-vertx} made for the
  * framework. Measured on a real runtime: <strong>138 HTTP routes, none declined</strong>.
  *
  * <p>The route model stays the source of truth. This reads it rather than replacing it, so the
@@ -187,9 +187,9 @@ final class RoutePipeline {
      * registrations is the whole of what has to be reproduced rather than a first approximation
      * of it.
      *
-     * <p>Drained with Camel's own helper, so a completion runs here exactly as it runs on a
-     * route: {@code onFailure} when the exchange is still failed, {@code onComplete} when the
-     * envelope above has already answered for it.
+     * <p>Drained the way the unit of work drained them, so a completion runs here exactly as it
+     * did on a route: {@code onFailure} when the exchange is still failed, {@code onComplete}
+     * when the envelope above has already answered for it.
      */
     private static void done(Exchange exchange) {
         boolean failed = exchange.getException() != null;

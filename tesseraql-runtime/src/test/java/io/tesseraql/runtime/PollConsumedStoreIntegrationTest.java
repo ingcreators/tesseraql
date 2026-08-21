@@ -71,7 +71,7 @@ class PollConsumedStoreIntegrationTest {
     /**
      * A failed import releases its claim, so the file is not silently swallowed.
      *
-     * <p>Camel calls {@code remove} when the exchange that took the claim failed.
+     * <p>The poll loop calls {@code remove} when the import that took the claim failed.
      */
     @Test
     void releasingAClaimMakesTheFileConsumableAgain() {

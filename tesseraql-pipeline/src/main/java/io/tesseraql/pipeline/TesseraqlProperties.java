@@ -233,14 +233,14 @@ public final class TesseraqlProperties {
     public static final String LANES_BEAN = "tesseraqlExecutionLanes";
     /**
      * Registry bean name for the {@code VertxOptions} the platform HTTP server builds its Vert.x
-     * instance from (docs/http-threading.md decision 1). Camel looks the options up by type, so
+     * instance from (docs/http-threading.md decision 1). The runtime looks the options up by type, so
      * the name only has to be unique; binding one at all is what stops the request path from
      * inheriting a default sized for a framework where blocking is the exception.
      */
     public static final String VERTX_OPTIONS_BEAN = "tesseraqlVertxOptions";
     /**
      * Registry bean name for the host's shared {@code Vertx} (docs/http-threading.md decision 4).
-     * Present only when a host built one; Camel looks it up by type and, finding it, does not
+     * Present only when a host built one; the runtime looks it up by type and, finding it, does not
      * build — or close — an instance of its own.
      */
     public static final String VERTX_BEAN = "tesseraqlVertx";
