@@ -370,28 +370,6 @@ public final class TesseraqlRuntime implements AutoCloseable {
     }
 
     /**
-     * Carries the trace-correlation MDC keys across Camel's async boundaries, so a step handed
-     * to an execution lane keeps logging with the ids of the request that started it.
-     *
-     * <p>The propagation unit is the exchange, not the thread: {@code RouteTelemetry} writes
-     * {@code traceId} and {@code spanId} as exchange properties, and this service copies them
-     * into the MDC around every processor call and takes them out again afterwards. That is why
-     * a lane hop keeps them — the thread changed, the exchange did not.
-     *
-     * <p>It also contributes Camel's own identifiers ({@code camel.exchangeId},
-     * {@code camel.routeId}, {@code camel.contextId}, {@code camel.messageId},
-     * {@code camel.threadId}), so a structured log line carries the route and exchange it came
-     * from without the framework threading them through by hand.
-     */
-    @SuppressWarnings("resource") // the Camel context adopts the service and closes it
-    private static void bridgeMdcAcrossAsyncBoundaries(DefaultCamelContext context) {
-        org.apache.camel.mdc.MDCService mdc = new org.apache.camel.mdc.MDCService();
-        mdc.setCustomProperties(TesseraqlProperties.TRACE_ID + ","
-                + TesseraqlProperties.SPAN_ID);
-        mdc.init(context);
-    }
-
-    /**
      * @param cookiePath the {@code Path} session cookies are issued with, supplied by whatever
      *                   starts the runtime (docs/base-path.md decision 4). Null means the
      *                   standalone answer: the application's own base path, so its cookie is not
@@ -525,14 +503,11 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     : new io.tesseraql.core.telemetry.CompositeMeter(aggregatingMeter, meter,
                             new io.tesseraql.observability.OpenTelemetryMeter(sdk));
         }
-        // MDC bridging (roadmap Phase 45): Camel copies the trace-correlation keys across
-        // its async boundaries so lane-dispatched steps keep logging with the request's ids.
         String activeProfile = io.tesseraql.yaml.manifest.ManifestLoader.activeProfile();
         if (activeProfile != null) {
             LOG.info("Environment profile active: {} (config/env/{}.yml)", activeProfile,
                     activeProfile);
         }
-        bridgeMdcAcrossAsyncBoundaries(context);
         context.getRegistry().bind(TesseraqlProperties.TRACER_BEAN, effectiveTracer);
         context.getRegistry().bind(TesseraqlProperties.METER_BEAN, effectiveMeter);
         // This runtime's function set, bound where the tracer and lanes bind so the SQL
@@ -963,11 +938,12 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 .map(Integer::parseInt).orElse(0);
         if (transferRetentionDays > 0) {
             try {
-                context.addRoutes(new TransferRetentionRoutes(fileTransfers,
+                new TransferRetentionSweep(fileTransfers,
                         transferRetentionDays,
                         io.tesseraql.core.util.Durations.toMillis(manifest.config()
                                 .getString("tesseraql.transfers.sweepInterval").orElse("1h")),
-                        java.time.Clock.systemDefaultZone()));
+                        java.time.Clock.systemDefaultZone())
+                        .schedule(Schedules.of(context));
             } catch (Exception ex) {
                 throw new IllegalStateException(
                         "Failed to wire transfer retention: " + ex.getMessage(), ex);
@@ -1017,16 +993,9 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 long scanPeriod = io.tesseraql.core.util.Durations.toMillis(manifest.config()
                         .getString("tesseraql.attachments.scan.interval").orElse("10s"));
                 try {
-                    context.addRoutes(new org.apache.camel.builder.RouteBuilder() {
-                        @Override
-                        public void configure() {
-                            from("timer:tql-attachment-scan?period=" + scanPeriod + "&delay="
-                                    + scanPeriod)
-                                    .routeId("system.attachments.scan")
-                                    .process(exchange -> scanSweeper.sweep());
-                        }
-                    });
-                } catch (Exception ex) {
+                    Schedules.of(context).every("system.attachments.scan", scanPeriod,
+                            scanSweeper::sweep);
+                } catch (RuntimeException ex) {
                     // Without the sweep, async uploads would stay pending forever - fail the
                     // boot loudly rather than hold every attachment back silently.
                     throw new IllegalStateException(
@@ -2387,15 +2356,14 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     id -> claimKeys.put(id, jobOwners.getOrDefault(id, appName) + ":" + id));
             // The daily-consider gate (docs/batch-platform.md track B), evaluated after the
             // cluster claim; the decision arithmetic is shared with the console preview.
-            SchedulingRouteBuilder.CalendarGate calendarGate = (jobId, fireDate) -> {
+            JobSchedules.CalendarGate calendarGate = (jobId, fireDate) -> {
                 JobFile jobFile = jobs.get(jobId);
                 return jobFile == null
-                        ? SchedulingRouteBuilder.CalendarGate.Decision.RUNS
+                        ? JobSchedules.CalendarGate.Decision.RUNS
                         : calendarDecisions.decide(jobFile, fireDate);
             };
-            context.addRoutes(new SchedulingRouteBuilder(
-                    jobRunner, jobRepository, List.copyOf(jobs.values()), claimKeys,
-                    calendarGate));
+            new JobSchedules(jobRunner, jobRepository, List.copyOf(jobs.values()), claimKeys,
+                    calendarGate).schedule(Schedules.of(context));
             // Batch SLA alerts (docs/batch-platform.md track E): jobs declaring sla: get a
             // periodic check that pages through the configured alerts channel — alert-only,
             // deduplicated per execution / per business date via the claim table.
@@ -2408,27 +2376,28 @@ public final class TesseraqlRuntime implements AutoCloseable {
                         java.time.Clock.systemDefaultZone());
                 long slaPeriod = io.tesseraql.core.util.Durations.toMillis(manifest.config()
                         .getString("tesseraql.batch.slaSweepInterval").orElse("60s"));
-                context.addRoutes(new JobSlaRoutes(slaSweeper, slaPeriod));
+                new JobSlaSweep(slaSweeper, slaPeriod).schedule(Schedules.of(context));
             }
             // The reaper (docs/audit-hardening.md Decision 6, slice 9): a RUNNING row whose owner
             // stopped reporting is finished with a reason of its own, so the console stops showing
             // a run that ended when its node did.
             if (!jobs.isEmpty()) {
-                context.addRoutes(new JobReaperRoutes(jobRepository,
+                new JobReaperSweep(jobRepository,
                         List.copyOf(jobs.keySet()),
                         io.tesseraql.core.util.Durations.parse(manifest.config()
                                 .getString("tesseraql.batch.heartbeat.livenessWindow")
                                 .orElse("5m")),
                         io.tesseraql.core.util.Durations.toMillis(manifest.config()
-                                .getString("tesseraql.batch.reaperInterval").orElse("60s"))));
+                                .getString("tesseraql.batch.reaperInterval").orElse("60s")))
+                        .schedule(Schedules.of(context));
             }
             // Approval-workflow deadline sweeper (roadmap Phase 28 slice 3): a cluster-safe timer
             // escalates overdue tasks, so exactly one node sweeps per interval.
             if (workflowSweeper != null) {
-                context.addRoutes(new WorkflowSweepRoutes(workflowSweeper, jobRepository,
+                new WorkflowSweep(workflowSweeper, jobRepository,
                         io.tesseraql.yaml.workflow.WorkflowSettings
                                 .sweepIntervalMillis(manifest.config()),
-                        appName));
+                        appName).schedule(Schedules.of(context));
             }
             // Directory-polling consumers for poll-triggered file-import jobs (roadmap Phase 26):
             // local/SFTP/FTPS sources feed the file-import pipeline, under a deny-by-default host
@@ -2480,9 +2449,9 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 }
             }
             if (!dbPollSubs.isEmpty()) {
-                context.addRoutes(new QueuePollRouteBuilder(new QueueConsumer(context,
+                new QueuePollSweep(new QueueConsumer(context,
                         eventChannelStore, dbPollSubs, messagingMaxAttempts)
-                        .meter(effectiveMeter), backstop));
+                        .meter(effectiveMeter), backstop).schedule(Schedules.of(context));
             }
 
             IdentityService identity = new IdentityService(
@@ -2708,7 +2677,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 java.time.Duration attachmentRetention = manifest.config()
                         .getString("tesseraql.retention.attachments")
                         .map(io.tesseraql.core.util.Durations::parse).orElse(null);
-                context.addRoutes(new RetentionRouteBuilder(
+                new RetentionSweep(
                         new io.tesseraql.operations.retention.RetentionSweeper(dataSource,
                                 attachmentStore, blobStore),
                         io.tesseraql.core.util.Durations.toMillis(retentionSweep.get()),
@@ -2718,21 +2687,22 @@ public final class TesseraqlRuntime implements AutoCloseable {
                         io.tesseraql.core.util.Durations.parse(
                                 manifest.config().getString("tesseraql.retention.jobs")
                                         .orElse("90d")),
-                        attachmentRetention));
+                        attachmentRetention).schedule(Schedules.of(context));
             }
             var outboxDelay = manifest.config().getString("tesseraql.outbox.dispatch.fixedDelay");
             if (outboxDelay.isPresent()) {
-                context.addRoutes(new OutboxDispatchRouteBuilder(outboxStore, outboxSink,
+                new OutboxDispatchSweep(outboxStore, outboxSink,
                         io.tesseraql.core.util.Durations.toMillis(outboxDelay.get()), hostedApps,
-                        outboxMaxAttempts(manifest.config())));
+                        outboxMaxAttempts(manifest.config()))
+                        .schedule(Schedules.of(context));
             }
             if (alertChannel != null) {
                 // Threshold-breach alerts from the dashboard notify through the same channel
                 // (roadmap Phase 20).
                 long alertPeriod = io.tesseraql.core.util.Durations.toMillis(manifest.config()
                         .getString("tesseraql.notifications.alerts.checkInterval").orElse("60s"));
-                context.addRoutes(new AlertNotifyRouteBuilder(opsDashboard, outboxStore,
-                        alertChannel, alertPeriod, appName));
+                new AlertNotifySweep(opsDashboard, outboxStore,
+                        alertChannel, alertPeriod, appName).schedule(Schedules.of(context));
             }
             // The drain is configured rather than inherited (docs/audit-hardening.md Decision 6).
             // Nothing referenced ShutdownStrategy anywhere, so Camel's 45-second default with

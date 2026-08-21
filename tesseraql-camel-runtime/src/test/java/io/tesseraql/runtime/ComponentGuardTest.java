@@ -54,8 +54,13 @@ class ComponentGuardTest {
             assertThatThrownBy(() -> context.addComponent("kafka", new Stub()))
                     .hasMessageContaining("allowed");
             context.addComponent("smtp", new Stub());
-            context.addComponent("direct", new Stub());
+            // A framework component is admitted whatever the allowed: list says. The floor shrank
+            // to what the framework registers unconditionally as the campaign proceeded — direct
+            // stood here until the pipelines stopped needing it (docs/camel-removal.md decisions 1
+            // and 5) — so this names what is left on it.
+            context.addComponent("properties", new Stub());
             assertThat(context.hasComponent("smtp")).isNotNull();
+            assertThat(context.hasComponent("properties")).isNotNull();
         }
     }
 }

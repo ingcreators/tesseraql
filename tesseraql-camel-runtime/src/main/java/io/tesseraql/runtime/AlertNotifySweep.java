@@ -6,7 +6,6 @@ import io.tesseraql.yaml.notify.NotifyEvents;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
-import org.apache.camel.builder.RouteBuilder;
 
 /**
  * Periodically forwards newly raised operational alerts — threshold breaches from the dashboard
@@ -17,10 +16,10 @@ import org.apache.camel.builder.RouteBuilder;
  * notifies again. The dedup window is per node and in memory: after a restart a still-raised
  * alert notifies once more, which errs on the side of not losing an alert.
  */
-final class AlertNotifyRouteBuilder extends RouteBuilder {
+final class AlertNotifySweep {
 
     private static final System.Logger LOG = System
-            .getLogger(AlertNotifyRouteBuilder.class.getName());
+            .getLogger(AlertNotifySweep.class.getName());
 
     private final OpsDashboard dashboard;
     private final JdbcOutboxStore store;
@@ -29,7 +28,7 @@ final class AlertNotifyRouteBuilder extends RouteBuilder {
     private final String appName;
     private final Set<String> notified = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
-    AlertNotifyRouteBuilder(OpsDashboard dashboard, JdbcOutboxStore store, String channel,
+    AlertNotifySweep(OpsDashboard dashboard, JdbcOutboxStore store, String channel,
             long periodMs, String appName) {
         this.dashboard = dashboard;
         this.store = store;
@@ -38,11 +37,8 @@ final class AlertNotifyRouteBuilder extends RouteBuilder {
         this.appName = appName;
     }
 
-    @Override
-    public void configure() {
-        from("timer:tql-alert-notify?period=" + periodMs + "&delay=" + periodMs)
-                .routeId("system.alerts.notifier")
-                .process(exchange -> check());
+    void schedule(Schedules schedules) {
+        schedules.every("system.alerts.notifier", periodMs, () -> check());
     }
 
     private void check() {

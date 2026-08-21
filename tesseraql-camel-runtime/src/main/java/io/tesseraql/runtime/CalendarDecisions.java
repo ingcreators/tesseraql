@@ -57,23 +57,23 @@ public final class CalendarDecisions {
     }
 
     /** Whether a firing on {@code fireDate} counts, and the nominal date it is for. */
-    SchedulingRouteBuilder.CalendarGate.Decision decide(JobFile job, LocalDate fireDate) {
+    JobSchedules.CalendarGate.Decision decide(JobFile job, LocalDate fireDate) {
         Resolved resolved = resolve(job);
         if (resolved == null) {
-            return SchedulingRouteBuilder.CalendarGate.Decision.RUNS;
+            return JobSchedules.CalendarGate.Decision.RUNS;
         }
         TriggerSpec.Schedule schedule = resolved.schedule();
         if (schedule.dayOfMonth() != null) {
             LocalDate nominal = Calendars.shiftedNominal(resolved.calendar(),
                     schedule.dayOfMonth(), schedule.shift(), fireDate, resolved.holidays());
             return nominal == null
-                    ? SchedulingRouteBuilder.CalendarGate.Decision.FILTERED
-                    : new SchedulingRouteBuilder.CalendarGate.Decision(true, nominal);
+                    ? JobSchedules.CalendarGate.Decision.FILTERED
+                    : new JobSchedules.CalendarGate.Decision(true, nominal);
         }
         return Calendars.counts(resolved.calendar(), schedule.runOn(), fireDate,
                 resolved.holidays())
-                        ? SchedulingRouteBuilder.CalendarGate.Decision.RUNS
-                        : SchedulingRouteBuilder.CalendarGate.Decision.FILTERED;
+                        ? JobSchedules.CalendarGate.Decision.RUNS
+                        : JobSchedules.CalendarGate.Decision.FILTERED;
     }
 
     /**

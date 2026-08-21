@@ -182,32 +182,29 @@
       <artifactId>vertx-http-proxy</artifactId>
     </dependency>
     <!--
-      The components this runtime actually resolves, declared one by one rather than taken from
-      the camel-core aggregate. camel-core is a convenience bundle of 27 jars, of which this
-      framework uses six; the rest is an expression-language stack, an XML processing stack and a
-      set of test components that no source here imports. Declaring what is used keeps the guard
-      in docs/component-guard.md honest as well: a component that is not on the classpath cannot
-      be auto-discovered, refused, or exploited.
+      The components this runtime resolves, declared one by one rather than taken from the
+      camel-core aggregate (slice 0). The list keeps shrinking as the campaign proceeds: direct
+      and timer left with the pipelines and the schedules that used to need them
+      (docs/camel-removal.md decisions 1 and 5), leaving the FTPS consumer's own. A component that
+      is not on the classpath cannot be auto-discovered, refused, or exploited.
+    -->
+    <!--
+      Quartz's cron expression, without Quartz's scheduler (docs/camel-removal.md decision 5).
+      What makes a cron firing safe across replicas is that every node computes the same fire time
+      and one of them wins the claim — CronExpression is that computation. The scheduler, its
+      thread pool and its JDBC job store are not used, so c3p0 (which the job store brings, and
+      which is a second connection pool in a runtime that declares its own) is excluded rather
+      than shipped unused.
     -->
     <dependency>
-      <groupId>org.apache.camel</groupId>
-      <artifactId>camel-direct</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.camel</groupId>
-      <artifactId>camel-timer</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.camel</groupId>
-      <artifactId>camel-quartz</artifactId>
-    </dependency>
-    <!-- Mapped Diagnostic Context (docs/jvm-baseline.md decision 2, slice 5): the replacement
-         for the MDC logic Camel 4.19 deprecated. It wraps every processor, setting the MDC from
-         the exchange before the call and restoring it after, so a step handed to an execution
-         lane logs with the ids of the request that started it. -->
-    <dependency>
-      <groupId>org.apache.camel</groupId>
-      <artifactId>camel-mdc</artifactId>
+      <groupId>org.quartz-scheduler</groupId>
+      <artifactId>quartz</artifactId>
+      <exclusions>
+        <exclusion>
+          <groupId>com.mchange</groupId>
+          <artifactId>c3p0</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
     <!-- SMTP notification channels (roadmap Phase 20). -->
     <!-- Managed connectors: directory polling for file-import (roadmap Phase 26). Only the FTPS

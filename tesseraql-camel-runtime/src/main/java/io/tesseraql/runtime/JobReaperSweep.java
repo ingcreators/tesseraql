@@ -3,7 +3,6 @@ package io.tesseraql.runtime;
 import io.tesseraql.operations.batch.JobRepository;
 import java.time.Duration;
 import java.util.List;
-import org.apache.camel.builder.RouteBuilder;
 
 /**
  * Finishes runs whose owner stopped reporting (docs/audit-hardening.md Decision 6, slice 9).
@@ -21,16 +20,16 @@ import org.apache.camel.builder.RouteBuilder;
  * outcome; what strands a row is SIGKILL, OOM or node loss, and those strand it at any timeout.
  * This notices afterwards, and says so in a reason distinct from a failure the job itself produced.
  */
-final class JobReaperRoutes extends RouteBuilder {
+final class JobReaperSweep {
 
-    private static final System.Logger LOG = System.getLogger(JobReaperRoutes.class.getName());
+    private static final System.Logger LOG = System.getLogger(JobReaperSweep.class.getName());
 
     private final JobRepository repository;
     private final List<String> jobIds;
     private final Duration livenessWindow;
     private final long periodMillis;
 
-    JobReaperRoutes(JobRepository repository, List<String> jobIds, Duration livenessWindow,
+    JobReaperSweep(JobRepository repository, List<String> jobIds, Duration livenessWindow,
             long periodMillis) {
         this.repository = repository;
         this.jobIds = List.copyOf(jobIds);
@@ -38,23 +37,20 @@ final class JobReaperRoutes extends RouteBuilder {
         this.periodMillis = periodMillis;
     }
 
-    @Override
-    public void configure() {
-        from("timer:tql-job-reaper?period=" + periodMillis + "&delay=" + periodMillis)
-                .routeId("tql.job.reaper")
-                .process(exchange -> {
-                    for (String jobId : jobIds) {
-                        // Per job rather than one sweep over the table: the repository's reads are
-                        // job-scoped, and a job list is what this runtime knows about. A row for a
-                        // job this app no longer declares is left alone rather than reaped by a
-                        // process that knows nothing about it.
-                        List<String> reaped = repository.reapAbandoned(jobId, livenessWindow);
-                        if (!reaped.isEmpty()) {
-                            LOG.log(System.Logger.Level.WARNING,
-                                    "Reaped {0} abandoned execution(s) of job {1}: {2}",
-                                    reaped.size(), jobId, reaped);
-                        }
-                    }
-                });
+    void schedule(Schedules schedules) {
+        schedules.every("tql.job.reaper", periodMillis, () -> {
+            for (String jobId : jobIds) {
+                // Per job rather than one sweep over the table: the repository's reads are
+                // job-scoped, and a job list is what this runtime knows about. A row for a
+                // job this app no longer declares is left alone rather than reaped by a
+                // process that knows nothing about it.
+                List<String> reaped = repository.reapAbandoned(jobId, livenessWindow);
+                if (!reaped.isEmpty()) {
+                    LOG.log(System.Logger.Level.WARNING,
+                            "Reaped {0} abandoned execution(s) of job {1}: {2}",
+                            reaped.size(), jobId, reaped);
+                }
+            }
+        });
     }
 }

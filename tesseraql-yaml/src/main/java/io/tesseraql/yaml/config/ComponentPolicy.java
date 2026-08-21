@@ -45,14 +45,17 @@ public final class ComponentPolicy {
             "exec", "script", "groovy", "class", "language", "bean");
 
     /**
-     * The components the framework itself registers — the recipes' endpoints, Camel's own
-     * infrastructure components, and the runtime's transports. Kept honest by the runtime
-     * integration suites, which boot the gallery and bundled apps under the guard, plus the
-     * explicit registered-components assertion in {@code StudioIntegrationTest}.
+     * The components the framework itself registers unconditionally.
+     *
+     * <p>It used to hold the recipes' endpoints and the runtime's transports; the recipes stopped
+     * having endpoints (docs/camel-removal.md decisions 1 and 5), and a remote file transport is
+     * admitted by the job that declares it rather than by standing here — which is the narrower
+     * answer, because an app that declares no SFTP source should not have SFTP resolvable.
+     * Kept honest by the runtime integration suites, which boot the gallery and bundled apps under
+     * the guard, plus the explicit registered-components assertion in
+     * {@code StudioIntegrationTest}.
      */
-    public static final Set<String> FRAMEWORK_FLOOR = Set.of(
-            "direct", "platform-http", "rest", "rest-api", "properties",
-            "timer", "quartz", "file", "log", "seda");
+    public static final Set<String> FRAMEWORK_FLOOR = Set.of("properties");
 
     /** Whether the name is framework-registered: the floor set, or any {@code tesseraql-*}
      * component — the framework's own component namespace, present and future. */

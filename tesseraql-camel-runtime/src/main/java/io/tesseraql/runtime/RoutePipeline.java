@@ -185,18 +185,22 @@ final class RoutePipeline {
         if (lane == null) {
             throw new IllegalStateException("Execution lane '" + laneExecutor + "' is not bound");
         }
-        java.util.concurrent.Future<?> ran = lane.submit(() -> {
-            for (int at = from; at < steps.size(); at++) {
-                steps.get(at).process(exchange);
-                if (exchange.getException() != null) {
-                    throw exchange.getException();
-                }
-                if (exchange.isRouteStop()) {
+        // The request's correlation ids follow the step onto the lane's thread
+        // (docs/camel-removal.md decision 5): Camel's MDC service used to carry them by wrapping
+        // every processor a route reified, and a pipeline reifies nothing.
+        java.util.concurrent.Future<?> ran = lane.submit(
+                io.tesseraql.camel.Correlation.carry(() -> {
+                    for (int at = from; at < steps.size(); at++) {
+                        steps.get(at).process(exchange);
+                        if (exchange.getException() != null) {
+                            throw exchange.getException();
+                        }
+                        if (exchange.isRouteStop()) {
+                            return null;
+                        }
+                    }
                     return null;
-                }
-            }
-            return null;
-        });
+                }));
         try {
             ran.get();
         } catch (java.util.concurrent.ExecutionException failed) {
