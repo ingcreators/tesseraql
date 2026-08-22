@@ -429,6 +429,12 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **Malformed Basic credentials at the token endpoint answer `invalid_client`, not a 500.**
+  Invalid base64 in the `Authorization: Basic` header threw out of the decode into the generic
+  error envelope — a server-error claim for what RFC 6749 §5.2 defines as a client that failed
+  to authenticate. Every other client-authentication failure already spoke the OAuth wire
+  vocabulary; the unreadable header now does too.
+
 - **A request racing a hot reload no longer answers 404, and never crashes on a torn chain.**
   The reloader removed a changed route's pipeline before recompiling it, so every save under
   live traffic opened a window in which the mounted URL answered 404; the compiler's
