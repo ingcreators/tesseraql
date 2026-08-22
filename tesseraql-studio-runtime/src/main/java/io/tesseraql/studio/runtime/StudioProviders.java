@@ -62,7 +62,8 @@ final class StudioProviders {
             io.tesseraql.studio.StudioService.FieldMask studioMask,
             io.tesseraql.studio.StudioService.PdfRender studioPdf, boolean scaffoldEnabled,
             boolean testRunnerEnabled, RouteReloader reloader, AppManifest manifest,
-            Path appHome, String appName, int port, RuntimeContext context,
+            Path appHome, String appName, java.util.function.IntSupplier port,
+            RuntimeContext context,
             HikariDataSource dataSource, Map<String, HikariDataSource> dataSources,
             TenantDataSources tenantDataSources, CalendarDecisions calendarDecisions,
             io.tesseraql.yaml.notify.NotificationChannels notificationChannels,
@@ -85,7 +86,9 @@ final class StudioProviders {
         AppManifest manifest = deps.manifest();
         Path appHome = deps.appHome();
         String appName = deps.appName();
-        int port = deps.port();
+        // Read at call time, not here: the seams bind before the server listens, so an
+        // ephemeral boot's port resolves only after start.
+        java.util.function.IntSupplier port = deps.port();
         RuntimeContext context = deps.context();
         HikariDataSource dataSource = deps.dataSource();
         Map<String, HikariDataSource> dataSources = deps.dataSources();
@@ -857,7 +860,7 @@ final class StudioProviders {
                     return model;
                 })
                 .register("studio.tryRun", params -> {
-                    Map<String, Object> result = tryInvoke(port, params);
+                    Map<String, Object> result = tryInvoke(port.getAsInt(), params);
                     // The test recorder (Track J3): a recordable invocation offers "Save
                     // as test case" on the result fragment, echoing what was sent.
                     result.putAll(studio.recordability(

@@ -2613,7 +2613,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
             // Studio wiring used to reach as locals. Runtime types only — no Studio type is
             // named here.
             context.bind(TesseraqlProperties.RUNTIME_SEAMS_BEAN, new RuntimeSeams(
-                    port, appName, java.util.Map.copyOf(dataSources), tenantDataSources,
+                    httpServer::actualPort, appName,
+                    java.util.Map.copyOf(dataSources), tenantDataSources,
                     calendarDecisions, notificationChannels, reloader, sseEndpoints::add,
                     httpOutbound, modules.loader(), datasourceDialect(manifest.config()),
                     hostContext != null,

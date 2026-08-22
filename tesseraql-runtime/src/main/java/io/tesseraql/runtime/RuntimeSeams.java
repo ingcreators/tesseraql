@@ -12,7 +12,10 @@ import java.util.function.Consumer;
  * install. The runtime publishes seams here, never a Studio type: every component is a
  * runtime-owned object or a plain value.
  *
- * @param port                  the app's own HTTP port (the try-it console's loopback target)
+ * @param port                  the app's own HTTP port (the try-it console's loopback target),
+ *                              as a supplier because the seams bind before the server listens —
+ *                              an ephemeral request (port 0) resolves to the bound port only
+ *                              after start, and the consumers all run later than that
  * @param appName               the declared {@code tesseraql.app.name}
  * @param dataSources           every configured pool by datasource name ({@code main} included)
  * @param tenantDataSources     the per-tenant pool resolver (empty when untenanted)
@@ -37,7 +40,8 @@ import java.util.function.Consumer;
  *                              runtime's seams — how a shell reaches a member's internal port
  *                              across replaces; {@code null} everywhere else
  */
-public record RuntimeSeams(int port, String appName, Map<String, HikariDataSource> dataSources,
+public record RuntimeSeams(java.util.function.IntSupplier port, String appName,
+        Map<String, HikariDataSource> dataSources,
         TenantDataSources tenantDataSources, CalendarDecisions calendarDecisions,
         io.tesseraql.yaml.notify.NotificationChannels notificationChannels,
         RouteReloader reloader, Consumer<Runnable> postStart,
