@@ -429,6 +429,18 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **The completion drain runs after the wire write, not before it.** The pipeline runner drained
+  completions in its own `finally`, and the HTTP edge streamed the response body after the runner
+  returned — so the completions that delete a streamed export's spool file, release the route's
+  concurrency and lane permits, and end its telemetry span all fired before a byte reached the
+  wire. Downloads streamed at all only by unlink-while-open filesystem semantics: on Windows
+  every query-export download leaked its spool file permanently (the delete throws on an open
+  file and the drain logs and moves on), and on a blob-backed temp store the object was deleted
+  mid-download, so a client retry read `NoSuchKey` and truncated. A declared concurrency bound
+  also stopped counting the streaming phase, and audited durations excluded it. The edge now owns
+  its drain, after the response is written; every other caller — the queue consumer, MCP, the
+  poll loop — consumes the exchange synchronously and drains as before.
+
 - **A queue delivery whose pipeline failed is no longer marked consumed.** The consumer checked
   only the exchange's exception, but a `queue.<id>` pipeline inherits the route error clauses,
   and the runner clears the exception (moving it to `EXCEPTION_CAUGHT`) before rendering the
