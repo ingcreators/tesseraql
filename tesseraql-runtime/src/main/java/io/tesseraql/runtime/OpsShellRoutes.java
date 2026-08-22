@@ -24,6 +24,14 @@ import java.util.Map;
  */
 final class OpsShellRoutes {
 
+    /**
+     * One client for every proxied download: each {@code newHttpClient()} owns a selector
+     * thread and a connection pool released only at GC, and this surface built one per
+     * request. Thread-safe by contract, shared for the life of the runtime.
+     */
+    private static final java.net.http.HttpClient CLIENT = java.net.http.HttpClient
+            .newHttpClient();
+
     private final OpsShellProviders.Targets targets;
 
     OpsShellRoutes(OpsShellProviders.Targets targets) {
@@ -79,10 +87,15 @@ final class OpsShellRoutes {
         if (cookie != null) {
             request.header("Cookie", cookie);
         }
-        java.net.http.HttpResponse<byte[]> response;
+        java.net.http.HttpResponse<java.io.InputStream> response;
         try {
-            response = java.net.http.HttpClient.newHttpClient().send(request.build(),
-                    java.net.http.HttpResponse.BodyHandlers.ofByteArray());
+            // Streamed, not buffered: this surface exists because it streams bytes
+            // (docs/stack-shells.md structural decision 2), and the proxied branch was the one
+            // place that materialized the whole transfer file on the heap. The edge reads the
+            // stream to the wire and closes it; the member's Content-Length is recomputed by
+            // the transport like every response header the edge frames itself.
+            response = CLIENT.send(request.build(),
+                    java.net.http.HttpResponse.BodyHandlers.ofInputStream());
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
             throw new java.io.IOException("interrupted", ex);
@@ -92,6 +105,17 @@ final class OpsShellRoutes {
                 .ifPresent(value -> exchange.response().header(Headers.CONTENT_TYPE, value));
         response.headers().firstValue("Content-Disposition").ifPresent(
                 value -> exchange.response().header("Content-Disposition", value));
-        exchange.setBody(response.body());
+        java.io.InputStream body = response.body();
+        // The edge closes the stream after writing it; the completion is the net for the
+        // path that never streams — a failure between here and the wire would otherwise
+        // hold the pooled connection until GC. Closing twice is harmless.
+        exchange.addOnCompletion(done -> {
+            try {
+                body.close();
+            } catch (java.io.IOException ignored) {
+                // the edge already closed it
+            }
+        });
+        exchange.setBody(body);
     }
 }
