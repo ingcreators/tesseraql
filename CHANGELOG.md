@@ -429,6 +429,17 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A deleted broken route stops serving its stub, and the dead surface the review found is
+  gone.** A parse-broken route drops out of the manifest, so a later reload matched it to
+  neither the old routes nor the new — deleting the broken file left its TQL-ROUTE-3103 stub
+  serving on the deleted URL until restart. The reloader keeps a ledger of stubbed routes and
+  removes a stub whose route is gone (the honest 404), and removing a pipeline now removes its
+  mount row too, so the table stops accumulating debris. Swept with it: `Response.removeHeader`
+  and `hasHeader` (no callers, no story), `Headers.FILE_NAME` (its javadoc described a hand-off
+  that actually rides the `POLLED_FILE_NAME` exchange property — a documented header that was
+  silently ignored if written), and three comments describing mechanisms deleted with the
+  one-bag message.
+
 - **Set-Cookie appends everywhere a cookie is written.** The response's header map was built
   multi-valued because Set-Cookie repeats (RFC 6265), and then every writer — session issue and
   expiry across login, OIDC and SAML, session rotation, the shell's theme re-sync, and a
