@@ -8,6 +8,16 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **The pipeline module's contracts are pinned where they live, and coverage is measurable.**
+  `tesseraql-pipeline` carried 25 main sources and no direct tests — `param()`'s path→query→form
+  order, the response's replace-vs-append header semantics, the completion drain's
+  once-and-never-strand guarantee and the declared body conversions were pinned only from
+  neighbouring modules' integration suites. They have their own unit tests now (`RequestTest`,
+  `ResponseTest`, `ExchangeTest`). And `mvn verify -Pcoverage` writes each module's JaCoCo
+  report to `target/site/jacoco` — opt-in and report-only by design: no threshold, no gate,
+  the default build stays agent-free; the number it exists to surface is placement, not a
+  percentage to chase.
+
 - **Context conditions, in two layers** (docs/access-governance.md structural decision 8,
   slice 8). `tesseraql.security.network.allow` is a CIDR list naming the networks a session may
   be established from; a sign-in from anywhere else is refused with `TQL-SEC-4149` before a
