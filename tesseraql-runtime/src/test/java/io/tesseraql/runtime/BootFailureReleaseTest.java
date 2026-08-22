@@ -50,8 +50,36 @@ class BootFailureReleaseTest {
                     workerThreads: not-a-number
                 """);
 
+        // A refusal propagates raw on this side of the phase too: same code, and the message
+        // still names the key that caused it - the contract the threading suite pins.
         assertThatThrownBy(() -> TesseraqlRuntime.start(appHome, 0))
-                .hasMessageContaining("Failed to start");
+                .isInstanceOf(io.tesseraql.core.error.TqlException.class)
+                .hasMessageContaining("tesseraql.http.workerThreads");
+
+        assertThat(poolThreadsGone("tesseraql-main")).isTrue();
+    }
+
+    /**
+     * An {@link Error} inside the boot releases the record the same way: ServiceLoader over an
+     * application's module jars throws {@link java.util.ServiceConfigurationError} for a broken
+     * descriptor, and a catch clause that let it through stranded every pool for the rest of
+     * the process.
+     */
+    @Test
+    void anErrorInsideTheBootReleasesTheRecord(@TempDir Path dir) throws Exception {
+        Path appHome = appHome(dir, "boot-leak-c", "");
+        Path modules = appHome.resolve("work/modules");
+        Files.createDirectories(modules);
+        try (java.util.jar.JarOutputStream jar = new java.util.jar.JarOutputStream(
+                Files.newOutputStream(modules.resolve("broken-codec.jar")))) {
+            jar.putNextEntry(new java.util.zip.ZipEntry(
+                    "META-INF/services/io.tesseraql.core.files.FileCodec"));
+            jar.write("does.not.Exist\n".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            jar.closeEntry();
+        }
+
+        assertThatThrownBy(() -> TesseraqlRuntime.start(appHome, 0))
+                .isInstanceOf(java.util.ServiceConfigurationError.class);
 
         assertThat(poolThreadsGone("tesseraql-main")).isTrue();
     }

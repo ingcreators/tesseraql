@@ -33,9 +33,9 @@ class CopilotEgressGateIntegrationTest {
     void aCopilotWithoutAnyAllowListFailsTheBootWithTheYamlToAdd() throws Exception {
         Path appHome = prepareAppHome("");
         try {
+            // The refusal arrives raw, code and all - the boot's catch releases and rethrows a
+            // TqlException rather than relabeling it (docs/boot-phases.md).
             assertThatThrownBy(() -> TesseraqlRuntime.start(appHome, 0))
-                    .isInstanceOf(IllegalStateException.class)
-                    .cause()
                     .isInstanceOf(TqlException.class)
                     .hasMessageContaining("TQL-SEC-4085")
                     .hasMessageContaining("Copilot endpoint host 'api.example.com'")
@@ -57,8 +57,6 @@ class CopilotEgressGateIntegrationTest {
                 """);
         try {
             assertThatThrownBy(() -> TesseraqlRuntime.start(appHome, 0))
-                    .isInstanceOf(IllegalStateException.class)
-                    .cause()
                     .isInstanceOf(TqlException.class)
                     .hasMessageContaining("TQL-SEC-4085")
                     .hasMessageContaining("api.example.com");

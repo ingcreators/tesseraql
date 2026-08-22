@@ -49,10 +49,12 @@ class BootFailureTeardownIntegrationTest {
         Path appHome = prepareAppHome();
         int port = freePort();
         try {
+            // The unparseable delay is the proof the boot failed late - and the refusal
+            // arrives raw, with its code, not relabeled by the boot's catch.
             assertThatThrownBy(() -> TesseraqlRuntime.start(appHome, port))
                     .as("the fixture must fail the boot late, or this proves nothing")
-                    .isInstanceOf(IllegalStateException.class)
-                    .hasMessageContaining("Failed to start TesseraQL runtime");
+                    .isInstanceOf(io.tesseraql.core.error.TqlException.class)
+                    .hasMessageContaining("every-so-often");
 
             // Binding is the assertion: it is what the next start attempt does, and it is what
             // used to fail.

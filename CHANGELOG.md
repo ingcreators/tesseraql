@@ -146,6 +146,24 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **A boot refusal keeps its error code on every path, and the failure paths release what the
+  slice-4 observable could not see** (docs/boot-phases.md, revised by the post-campaign
+  review). The hoisted `try` had split refusals into two exception types: a pools-phase
+  `TqlException` escaped raw with its `TQL-*` code while the same class of config refusal
+  after the phase surfaced as `IllegalStateException`, the code invisible unless a caller
+  unwrapped the cause. The boot's catch now releases and rethrows `TqlException` raw
+  everywhere; the `Failed to start TesseraQL runtime` wrapper marks only a failure the boot
+  did not anticipate (and no longer prints `: null` for a cause without a message). Three leak
+  paths close with it: the catch takes `Error` too — ServiceLoader over an application's
+  module jars throws `ServiceConfigurationError` for a broken descriptor, and the old clause
+  let it strand every pool, which `BootFailureReleaseTest` now pins with a broken-descriptor
+  jar; each start overload owns the module classloader until the boot's own handling takes
+  over, so a malformed `server.port` or a pools-phase refusal no longer strands the loader and
+  its open jar handles (function discovery inside `AppModules.load` closes a loader it just
+  opened, and the stack host's aggregate release catches `Error` for the same reason); and
+  every failure path releases executors before the pools their work borrows connections from —
+  `close()`'s order, which the catch had inverted.
+
 - **The boot's releasable substrate builds as one named phase, and a failed boot releases what
   it took on every path** (docs/boot-phases.md slice 4, closing the campaign). `RuntimePools`
   builds the datasource pools, the framework pool, telemetry, lanes, the diagnostics rings and
