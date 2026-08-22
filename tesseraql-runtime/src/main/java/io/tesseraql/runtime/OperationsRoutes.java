@@ -715,8 +715,8 @@ final class OperationsRoutes {
         }
         exchange.response().status(200);
         exchange.response().header(Headers.CONTENT_TYPE, download.contentType());
-        exchange.response().header("Content-Disposition", "attachment; filename=\""
-                + download.filename().replaceAll("[\\r\\n\"]", "_") + "\"");
+        exchange.response().header("Content-Disposition",
+                io.tesseraql.core.http.ContentDisposition.attachment(download.filename()));
         exchange.setBody(download.content());
     }
 

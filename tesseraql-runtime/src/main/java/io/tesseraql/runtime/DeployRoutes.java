@@ -201,9 +201,12 @@ final class DeployRoutes {
 
     /** The uploaded package, spooled off-heap; the caller deletes it when done. */
     private static Path spool(Exchange exchange) throws Exception {
-        InputStream body = packageStream(exchange);
         Path spooled = Files.createTempFile("tesseraql-deploy", ".tqlapp");
-        try {
+        // The part's stream closes here on every path — Files.copy does not close its source,
+        // and an open handle per deploy leaked a descriptor until GC (and on Windows raced the
+        // body handler's end-of-response upload deletion). The sibling readers
+        // (FileImportProcessor, AttachmentUploadProcessor) already close theirs.
+        try (InputStream body = packageStream(exchange)) {
             long bytes = body == null
                     ? 0
                     : Files.copy(body,
