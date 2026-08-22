@@ -99,13 +99,13 @@ Keys are declared in `config/application.yml` and `config/tesseraql.yml`, overri
 | --- | --- | --- |
 | `tesseraql.diagnostics.batchFailureWarnPercent` | [OpsDashboards.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/OpsDashboards.java) | — |
 | `tesseraql.diagnostics.errorRateWarnPercent` | [OpsDashboards.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/OpsDashboards.java) | — |
-| `tesseraql.diagnostics.pinning.enabled` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
-| `tesseraql.diagnostics.pinning.thresholdMillis` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
+| `tesseraql.diagnostics.pinning.enabled` | [RuntimePools.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/RuntimePools.java) | — |
+| `tesseraql.diagnostics.pinning.thresholdMillis` | [RuntimePools.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/RuntimePools.java) | — |
 | `tesseraql.diagnostics.readinessTtl` | [OpsDashboards.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/OpsDashboards.java) | — |
 | `tesseraql.diagnostics.slowRateWarnPercent` | [OpsDashboards.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/OpsDashboards.java) | — |
 | `tesseraql.diagnostics.slowSpanMillis` | [OpsDashboards.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/OpsDashboards.java) | — |
-| `tesseraql.diagnostics.slowSqlCapacity` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
-| `tesseraql.diagnostics.slowSqlMillis` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
+| `tesseraql.diagnostics.slowSqlCapacity` | [RuntimePools.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/RuntimePools.java) | — |
+| `tesseraql.diagnostics.slowSqlMillis` | [RuntimePools.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/RuntimePools.java) | — |
 | `tesseraql.diagnostics.traceRingCapacity` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
 
 ## tesseraql.docs
@@ -132,7 +132,7 @@ Keys are declared in `config/application.yml` and `config/tesseraql.yml`, overri
 
 | Key | Read by | Documented in |
 | --- | --- | --- |
-| `tesseraql.framework.datasource` | [MultiAppHost.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/MultiAppHost.java), [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [deployment](deployment.md), [hosting](hosting.md) |
+| `tesseraql.framework.datasource` | [MultiAppHost.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/MultiAppHost.java), [RuntimePools.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/RuntimePools.java) | [deployment](deployment.md), [hosting](hosting.md) |
 
 ## tesseraql.gateway
 
@@ -285,8 +285,8 @@ Keys are declared in `config/application.yml` and `config/tesseraql.yml`, overri
 
 | Key | Read by | Documented in |
 | --- | --- | --- |
-| `tesseraql.otel.otlp.endpoint` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [deployment](deployment.md) |
-| `tesseraql.otel.serviceName` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
+| `tesseraql.otel.otlp.endpoint` | [RuntimePools.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/RuntimePools.java) | [deployment](deployment.md) |
+| `tesseraql.otel.serviceName` | [RuntimePools.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/RuntimePools.java) | — |
 
 ## tesseraql.outbox
 

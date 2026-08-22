@@ -421,811 +421,708 @@ public final class TesseraqlRuntime implements AutoCloseable {
         io.tesseraql.pipeline.BasePath.bind(context, basePath);
         io.tesseraql.pipeline.CookiePath.bind(context,
                 cookiePath != null ? cookiePath : basePath);
-        // Every datasource declared under tesseraql.datasources gets a pool, registered by name
-        // so routes, contracts and per-datasource migrations can address it (design ch. 5.2).
-        Map<String, HikariDataSource> dataSources = DataSources.createAll(manifest.config(),
-                override, appHome, modules.present() ? modules.loader() : null);
-        HikariDataSource dataSource = dataSources.get("main");
-        dataSources.forEach((name, pool) -> context.bind(name, pool));
-        // Ambient framework state - sessions, tokens, replay guards, rate leases, audit,
-        // preferences - may ride its own pool or database (docs/framework-datasource.md).
-        // Transactionally- and integrity-coupled stores (outbox, workflow, idempotency,
-        // webhook replay) deliberately ignore this key: a config line must not be able
-        // to break outbox atomicity. An unknown name refuses the boot - a typo that
-        // silently fell back to main would defeat the isolation someone configured.
-        javax.sql.DataSource frameworkDataSource;
-        if (stackFrameworkDataSource != null) {
-            // The stack supplies the connection (docs/stack-architecture.md decision 22): one
-            // pool for every runtime, so signing in carries by construction. The name
-            // indirection is not consulted — the host refused any explicit declaration before
-            // this runtime started (TQL-APP-4212).
-            frameworkDataSource = stackFrameworkDataSource;
-        } else {
-            String frameworkDataSourceName = manifest.config()
-                    .getString("tesseraql.framework.datasource").orElse("main");
-            frameworkDataSource = dataSources.get(frameworkDataSourceName);
-            if (frameworkDataSource == null) {
-                throw new io.tesseraql.core.error.TqlException(
-                        new io.tesseraql.core.error.TqlErrorCode(
-                                io.tesseraql.core.error.TqlDomain.APP, 5205),
-                        "tesseraql.framework.datasource names '" + frameworkDataSourceName
-                                + "' but no such datasource is declared under"
-                                + " tesseraql.datasources");
+        // Pools, telemetry, lanes, diagnostics, tenant pools and catalogs build as one
+        // named phase that releases its own partial work on failure
+        // (docs/boot-phases.md slice 4) - the pre-try boot leak retired by ownership.
+        RuntimePools pools = RuntimePools.build(context, manifest, appHome, override,
+                stackFrameworkDataSource, modules, tracer, meter);
+        Map<String, HikariDataSource> dataSources = pools.dataSources();
+        HikariDataSource dataSource = pools.dataSource();
+        javax.sql.DataSource frameworkDataSource = pools.frameworkDataSource();
+        io.tesseraql.core.telemetry.AggregatingMeter aggregatingMeter = pools.aggregatingMeter();
+        io.tesseraql.core.telemetry.Tracer effectiveTracer = pools.effectiveTracer();
+        io.tesseraql.core.telemetry.Meter effectiveMeter = pools.effectiveMeter();
+        AutoCloseable otelSdk = pools.otelSdk();
+        io.tesseraql.core.threading.ExecutionLanes lanes = pools.lanes();
+        io.tesseraql.core.diag.RingSqlExecutionLog slowSqlLog = pools.slowSqlLog();
+        io.tesseraql.core.diag.PinningMonitor pinningMonitor = pools.pinningMonitor();
+        io.tesseraql.core.diag.JfrPinningSource pinningSource = pools.pinningSource();
+        TenantDataSources tenantDataSources = pools.tenantDataSources();
+        // From here every failure releases the record above through the catch at the end -
+        // the half of the boot leak that ownership inside RuntimePools does not cover
+        // (docs/boot-phases.md slice 4): the boot has exactly two failure behaviours, the
+        // phase's own and this one.
+        try {
+
+            SecurityConfig security = SecurityConfigFactory.build(manifest.config());
+            context.bind(TesseraqlProperties.POLICY_ENGINE_BEAN,
+                    new PolicyEngine(security));
+            // Context conditions, both layers (docs/access-governance.md structural decision 8).
+            // Layer A is bound only when the deployment names its networks, so an unconfigured
+            // one looks up nothing and admits everybody. The zone is bound only when it differs
+            // from the JVM's, which is the same "absent means the default" reading.
+            io.tesseraql.security.net.SignInAllowList signInNetworks = io.tesseraql.security.net.SignInAllowList
+                    .parse(manifest.config().getString("tesseraql.security.network.allow")
+                            .orElse(null));
+            if (signInNetworks.restricts()) {
+                context.bind(TesseraqlProperties.SIGN_IN_ALLOW_LIST_BEAN,
+                        signInNetworks);
             }
-        }
-
-        // OTLP export (design ch. 25.7): when an endpoint is configured, fan spans out to OTLP
-        // alongside the in-process ring and export metrics via OpenTelemetry. Independent of
-        // the push path, a JDK-only aggregating meter always collects per-route counters and
-        // latency histograms for the pull-based /_tesseraql/metrics exposition (roadmap
-        // Phase 45, decision point 9 resolved: no new dependency for the scrape path).
-        io.tesseraql.core.telemetry.AggregatingMeter aggregatingMeter = new io.tesseraql.core.telemetry.AggregatingMeter();
-        io.tesseraql.core.telemetry.Tracer effectiveTracer = tracer;
-        // The provided meter (tests inject a recording one) keeps receiving everything the
-        // aggregator sees; a no-op provided meter needs no fan-out.
-        io.tesseraql.core.telemetry.Meter effectiveMeter = meter == io.tesseraql.core.telemetry.NoopMeter.INSTANCE
-                ? aggregatingMeter
-                : new io.tesseraql.core.telemetry.CompositeMeter(aggregatingMeter,
-                        meter);
-        AutoCloseable otelSdk = null;
-        String otlpEndpoint = manifest.config().getString("tesseraql.otel.otlp.endpoint")
-                .orElse(null);
-        if (otlpEndpoint != null && !otlpEndpoint.isBlank()) {
-            String serviceName = manifest.config().getString("tesseraql.otel.serviceName")
-                    .or(() -> manifest.config().getString("tesseraql.app.name"))
-                    .orElse("tesseraql");
-            io.opentelemetry.sdk.OpenTelemetrySdk sdk = io.tesseraql.observability.OpenTelemetrySupport
-                    .otlp(otlpEndpoint, serviceName);
-            otelSdk = sdk;
-            effectiveTracer = new io.tesseraql.core.telemetry.CompositeTracer(
-                    tracer, new io.tesseraql.observability.OpenTelemetryTracer(sdk));
-            effectiveMeter = meter == io.tesseraql.core.telemetry.NoopMeter.INSTANCE
-                    ? new io.tesseraql.core.telemetry.CompositeMeter(aggregatingMeter,
-                            new io.tesseraql.observability.OpenTelemetryMeter(sdk))
-                    : new io.tesseraql.core.telemetry.CompositeMeter(aggregatingMeter, meter,
-                            new io.tesseraql.observability.OpenTelemetryMeter(sdk));
-        }
-        String activeProfile = io.tesseraql.yaml.manifest.ManifestLoader.activeProfile();
-        if (activeProfile != null) {
-            LOG.info("Environment profile active: {} (config/env/{}.yml)", activeProfile,
-                    activeProfile);
-        }
-        context.bind(TesseraqlProperties.TRACER_BEAN, effectiveTracer);
-        context.bind(TesseraqlProperties.METER_BEAN, effectiveMeter);
-        // This runtime's function set, bound where the tracer and lanes bind so the SQL
-        // producers parse against it (docs/module-scope.md).
-        context.bind(TesseraqlProperties.FUNCTIONS_BEAN, modules.functions());
-
-        io.tesseraql.core.threading.ExecutionLanes lanes = LaneConfigs.load(manifest.config());
-        context.bind(TesseraqlProperties.LANES_BEAN, lanes);
-        for (io.tesseraql.core.threading.Lane lane : lanes.all()) {
-            context.bind(
-                    TesseraqlProperties.laneExecutorRef(lane.name()), lane.executor());
-        }
-
-        int slowSqlCapacity = manifest.config().getString("tesseraql.diagnostics.slowSqlCapacity")
-                .map(Integer::parseInt).orElse(100);
-        long slowSqlMillis = manifest.config().getString("tesseraql.diagnostics.slowSqlMillis")
-                .map(Long::parseLong).orElse(200L);
-        io.tesseraql.core.diag.RingSqlExecutionLog slowSqlLog = new io.tesseraql.core.diag.RingSqlExecutionLog(
-                slowSqlCapacity, slowSqlMillis);
-        context.bind(TesseraqlProperties.SLOW_SQL_LOG_BEAN, slowSqlLog);
-
-        io.tesseraql.core.diag.PinningMonitor pinningMonitor = new io.tesseraql.core.diag.PinningMonitor(
-                100);
-        io.tesseraql.core.diag.JfrPinningSource pinningSource = null;
-        if (manifest.config().getString("tesseraql.diagnostics.pinning.enabled")
-                .map(Boolean::parseBoolean).orElse(false)) {
-            long pinMs = manifest.config()
-                    .getString("tesseraql.diagnostics.pinning.thresholdMillis")
-                    .map(Long::parseLong).orElse(20L);
-            pinningSource = new io.tesseraql.core.diag.JfrPinningSource(
-                    pinningMonitor, java.time.Duration.ofMillis(pinMs));
-        }
-
-        TenantDataSources tenantDataSources = TenantDataSources.load(manifest.config(),
-                modules.present() ? modules.loader() : null);
-        if (!tenantDataSources.isEmpty()) {
-            context.bind(
-                    TesseraqlProperties.TENANT_DATASOURCE_RESOLVER_BEAN, tenantDataSources);
-        }
-
-        // Code catalogs (docs/lookups.md, decision 8): small, nearly static tables of codes and
-        // names, loaded whole and resolved from memory wherever a code is rendered.
-        io.tesseraql.yaml.catalog.Catalogs codeCatalogs = io.tesseraql.yaml.catalog.Catalogs
-                .load(appHome);
-        if (!codeCatalogs.isEmpty()) {
-            if (!tenantDataSources.isEmpty()) {
-                // A held catalog is app-wide; serving one tenant's codes to another is a data
-                // leak, so the combination is refused until catalogs key by tenant rather than
-                // being discovered in production (docs/lookups.md, decision 14).
-                throw new io.tesseraql.core.error.TqlException(
-                        new io.tesseraql.core.error.TqlErrorCode(
-                                io.tesseraql.core.error.TqlDomain.APP, 4207),
-                        "catalogs/ and per-tenant datasources are declared together; a catalog is"
-                                + " held app-wide and is not yet keyed by tenant");
+            manifest.config().getString("tesseraql.security.conditions.zone")
+                    .map(String::trim).filter(zone -> !zone.isEmpty())
+                    .ifPresent(zone -> context.bind(
+                            TesseraqlProperties.CONDITION_ZONE_BEAN, java.time.ZoneId.of(zone)));
+            // Organizational data scoping (roadmap Phase 29): the resolver expands /*%scope ... */
+            // into principal-derived predicates. Bound only when the app declares scopes, so the SQL
+            // producer falls back to its reject-any-scope default everywhere else.
+            if (!manifest.scopes().isEmpty()) {
+                context.bind(TesseraqlProperties.SCOPE_RESOLVER_BEAN,
+                        new io.tesseraql.identity.scope.CompiledScopeResolver(
+                                manifest.scopes(), datasourceDialect(manifest.config()),
+                                modules.functions()));
             }
-            io.tesseraql.operations.catalog.JdbcCatalogStore catalogStore = new io.tesseraql.operations.catalog.JdbcCatalogStore(
-                    codeCatalogs.all(),
-                    dataSources::get, datasourceDialect(manifest.config()),
-                    manifest.appHome(), io.tesseraql.yaml.i18n.I18nSettings
-                            .from(manifest.config(), manifest.appHome()));
-            // The version table carries an invalidation to the runtimes that did not serve the
-            // command; failing to create it disables the stamp, never the catalogs.
-            catalogStore.ensureSchema();
-            context.bind(TesseraqlProperties.CATALOG_STORE_BEAN, catalogStore);
-        }
-
-        SecurityConfig security = SecurityConfigFactory.build(manifest.config());
-        context.bind(TesseraqlProperties.POLICY_ENGINE_BEAN,
-                new PolicyEngine(security));
-        // Context conditions, both layers (docs/access-governance.md structural decision 8).
-        // Layer A is bound only when the deployment names its networks, so an unconfigured
-        // one looks up nothing and admits everybody. The zone is bound only when it differs
-        // from the JVM's, which is the same "absent means the default" reading.
-        io.tesseraql.security.net.SignInAllowList signInNetworks = io.tesseraql.security.net.SignInAllowList
-                .parse(manifest.config().getString("tesseraql.security.network.allow")
-                        .orElse(null));
-        if (signInNetworks.restricts()) {
-            context.bind(TesseraqlProperties.SIGN_IN_ALLOW_LIST_BEAN,
-                    signInNetworks);
-        }
-        manifest.config().getString("tesseraql.security.conditions.zone")
-                .map(String::trim).filter(zone -> !zone.isEmpty())
-                .ifPresent(zone -> context.bind(
-                        TesseraqlProperties.CONDITION_ZONE_BEAN, java.time.ZoneId.of(zone)));
-        // Organizational data scoping (roadmap Phase 29): the resolver expands /*%scope ... */
-        // into principal-derived predicates. Bound only when the app declares scopes, so the SQL
-        // producer falls back to its reject-any-scope default everywhere else.
-        if (!manifest.scopes().isEmpty()) {
-            context.bind(TesseraqlProperties.SCOPE_RESOLVER_BEAN,
-                    new io.tesseraql.identity.scope.CompiledScopeResolver(
-                            manifest.scopes(), datasourceDialect(manifest.config()),
-                            modules.functions()));
-        }
-        // Analytics file scopes (docs/duckdb.md): ${scope.*} placeholders resolve only when a
-        // duckdb datasource is declared; everywhere else the SQL producer's reject-any-placeholder
-        // default applies.
-        FileScopes fileScopes = FileScopes.fromConfig(appHome, manifest.config());
-        if (fileScopes.anyDuckDbDatasource()) {
-            context.bind(TesseraqlProperties.FILE_PATH_RESOLVER_BEAN, fileScopes);
-        }
-        if (security.jwt() != null) {
-            context.bind(
-                    TesseraqlProperties.JWT_AUTHENTICATOR_BEAN,
-                    new JwtAuthenticator(security.jwt()));
-        }
-        if (security.apiKeys() != null) {
-            context.bind(
-                    TesseraqlProperties.API_KEY_AUTHENTICATOR_BEAN,
-                    new io.tesseraql.security.apikey.ApiKeyAuthenticator(security.apiKeys()));
-        }
-        if (security.mtls() != null) {
-            context.bind(
-                    TesseraqlProperties.MTLS_AUTHENTICATOR_BEAN,
-                    new io.tesseraql.security.mtls.MtlsAuthenticator(security.mtls()));
-        }
-        // Spooled exports and large rowsets (design ch. 28.4; docs/deployment.md "Shared
-        // export files"): file (node-local default), db (the main database — any node serves
-        // the download), or blob (the configured object store, for heavy volumes).
-        String tempStoreKind = manifest.config().getString("tesseraql.temp.store")
-                .orElse("file");
-        java.nio.file.Path tempScratch = appHome.resolve("work/tmp/tesseraql");
-        io.tesseraql.core.spool.TempStore tempStore = switch (tempStoreKind) {
-            case "file" -> new io.tesseraql.core.spool.FileTempStore(tempScratch);
-            case "db" -> {
-                io.tesseraql.operations.spool.JdbcTempStore jdbcTemp = new io.tesseraql.operations.spool.JdbcTempStore(
-                        dataSource, tempScratch,
-                        manifest.config().getString("tesseraql.temp.maxBytes")
-                                .map(Long::parseLong)
-                                .orElse(io.tesseraql.operations.spool.JdbcTempStore.DEFAULT_MAX_BYTES));
-                jdbcTemp.ensureSchema();
-                yield jdbcTemp;
+            // Analytics file scopes (docs/duckdb.md): ${scope.*} placeholders resolve only when a
+            // duckdb datasource is declared; everywhere else the SQL producer's reject-any-placeholder
+            // default applies.
+            FileScopes fileScopes = FileScopes.fromConfig(appHome, manifest.config());
+            if (fileScopes.anyDuckDbDatasource()) {
+                context.bind(TesseraqlProperties.FILE_PATH_RESOLVER_BEAN, fileScopes);
             }
-            case "blob" -> {
-                io.tesseraql.core.blob.BlobStore blobStore = io.tesseraql.yaml.blob.BlobStores
-                        .create(manifest.config(), appHome, modules.loader());
-                if (blobStore instanceof io.tesseraql.core.blob.FileBlobStore) {
-                    LOG.warn("tesseraql.temp.store: blob with the local file provider is still"
-                            + " node-local; configure tesseraql.object-storage.provider (or use"
-                            + " store: db) for multi-node downloads");
+            if (security.jwt() != null) {
+                context.bind(
+                        TesseraqlProperties.JWT_AUTHENTICATOR_BEAN,
+                        new JwtAuthenticator(security.jwt()));
+            }
+            if (security.apiKeys() != null) {
+                context.bind(
+                        TesseraqlProperties.API_KEY_AUTHENTICATOR_BEAN,
+                        new io.tesseraql.security.apikey.ApiKeyAuthenticator(security.apiKeys()));
+            }
+            if (security.mtls() != null) {
+                context.bind(
+                        TesseraqlProperties.MTLS_AUTHENTICATOR_BEAN,
+                        new io.tesseraql.security.mtls.MtlsAuthenticator(security.mtls()));
+            }
+            // Spooled exports and large rowsets (design ch. 28.4; docs/deployment.md "Shared
+            // export files"): file (node-local default), db (the main database — any node serves
+            // the download), or blob (the configured object store, for heavy volumes).
+            String tempStoreKind = manifest.config().getString("tesseraql.temp.store")
+                    .orElse("file");
+            java.nio.file.Path tempScratch = appHome.resolve("work/tmp/tesseraql");
+            io.tesseraql.core.spool.TempStore tempStore = switch (tempStoreKind) {
+                case "file" -> new io.tesseraql.core.spool.FileTempStore(tempScratch);
+                case "db" -> {
+                    io.tesseraql.operations.spool.JdbcTempStore jdbcTemp = new io.tesseraql.operations.spool.JdbcTempStore(
+                            dataSource, tempScratch,
+                            manifest.config().getString("tesseraql.temp.maxBytes")
+                                    .map(Long::parseLong)
+                                    .orElse(io.tesseraql.operations.spool.JdbcTempStore.DEFAULT_MAX_BYTES));
+                    jdbcTemp.ensureSchema();
+                    yield jdbcTemp;
                 }
-                yield new io.tesseraql.core.spool.BlobTempStore(blobStore,
-                        manifest.config().getString("tesseraql.temp.bucket")
-                                .orElse("tesseraql-temp"));
-            }
-            default -> throw new io.tesseraql.core.error.TqlException(
-                    new io.tesseraql.core.error.TqlErrorCode(
-                            io.tesseraql.core.error.TqlDomain.YAML, 1024),
-                    "tesseraql.temp.store must be 'file', 'db', or 'blob', got '"
-                            + tempStoreKind + "'");
-        };
-        context.bind(TesseraqlProperties.TEMP_STORE_BEAN, tempStore);
+                case "blob" -> {
+                    io.tesseraql.core.blob.BlobStore blobStore = io.tesseraql.yaml.blob.BlobStores
+                            .create(manifest.config(), appHome, modules.loader());
+                    if (blobStore instanceof io.tesseraql.core.blob.FileBlobStore) {
+                        LOG.warn("tesseraql.temp.store: blob with the local file provider is still"
+                                + " node-local; configure tesseraql.object-storage.provider (or use"
+                                + " store: db) for multi-node downloads");
+                    }
+                    yield new io.tesseraql.core.spool.BlobTempStore(blobStore,
+                            manifest.config().getString("tesseraql.temp.bucket")
+                                    .orElse("tesseraql-temp"));
+                }
+                default -> throw new io.tesseraql.core.error.TqlException(
+                        new io.tesseraql.core.error.TqlErrorCode(
+                                io.tesseraql.core.error.TqlDomain.YAML, 1024),
+                        "tesseraql.temp.store must be 'file', 'db', or 'blob', got '"
+                                + tempStoreKind + "'");
+            };
+            context.bind(TesseraqlProperties.TEMP_STORE_BEAN, tempStore);
 
-        // The transport this runtime serves on (docs/http-threading.md decisions 1 and 4) is
-        // handed to the server at construction below (docs/vertx-native.md decision 6): hosted,
-        // the host's instance, ridden and never closed; standalone, the declared options, which
-        // are what stop the server from inheriting a default sized for a framework where
-        // blocking is the exception.
-        final io.vertx.core.Vertx sharedTransport = hostContext == null
-                ? null
-                : hostContext.vertx();
-        if (sharedTransport != null) {
-            warnOnMemberThreadSizing(manifest.config(),
-                    io.tesseraql.yaml.app.ApplicationName.of(manifest.config()));
-        }
-        // Resolved here, not at server construction: a declared thread count that cannot be a
-        // pool refuses the boot while the failure still names the key that caused it.
-        final io.vertx.core.VertxOptions standaloneTransportOptions = sharedTransport != null
-                ? null
-                : vertxOptions(manifest.config());
-
-        // SSE endpoints register on the platform's Vert.x router, which exists only once
-        // the context (and with it the HTTP server) has started — collected here, run
-        // right after context.start() (see SseRoutes for why they are not compiled pipelines).
-        java.util.List<Runnable> sseEndpoints = new java.util.ArrayList<>();
-
-        // The framework's own migrations run before any store touches the schema (versioned
-        // history per component, Flyway's lock serializing concurrent node startups); the
-        // stores' direct bootstrap below stays as the idempotent fallback for embedders.
-        // Hosted, the stack-wide security component was migrated once by the host before this
-        // runtime started, so it is VALIDATED here instead — failing to start on a mismatch is
-        // the wrong-framework-datasource guard, and what refuses a canary expecting a newer
-        // schema than the host migrated (docs/stack-architecture.md decision 16).
-        if (hostedValidatesFramework) {
-            FrameworkMigrations.migrateOperations(dataSource);
-            FrameworkMigrations.validateSecurity(frameworkDataSource);
-        } else {
-            FrameworkMigrations.migrate(dataSource, frameworkDataSource);
-        }
-        // Browser sessions: "jdbc" by default (docs/contract-bugfixes.md track G) — tql_session
-        // shared across all runtime nodes, so a login made on one node resolves on every other
-        // (design ch. 11.2) and survives a restart. "memory" is the explicit per-node opt-in
-        // for embedders and tests.
-        // Constructed after Flyway on purpose: the versioned history owns evolutions like the
-        // V2 subject column, and the store's direct ensureSchema stays the tolerated,
-        // idempotent fallback for embedders without it.
-        SessionStore sessionStore;
-        // One reading of the TTL for both stores. It used to be read inside the jdbc branch
-        // only, so on the default (memory) store the key was silently inert and sessions never
-        // expired at all.
-        java.time.Duration sessionTtl = java.time.Duration.ofMillis(
-                io.tesseraql.core.util.Durations.toMillis(
-                        manifest.config().getString("tesseraql.sessions.ttl").orElse("12h")));
-        // Optional sliding idle window inside the absolute TTL (docs/session-visibility.md);
-        // unset keeps the pre-existing absolute-only behavior.
-        java.time.Duration sessionIdle = manifest.config()
-                .getString("tesseraql.sessions.idleTimeout")
-                .map(value -> java.time.Duration.ofMillis(
-                        io.tesseraql.core.util.Durations.toMillis(value)))
-                .orElse(null);
-        // Declared per-subject session cap, evict-oldest (docs/session-visibility.md
-        // addendum); single-session policy is maxPerSubject: 1. Unset = unlimited.
-        Integer sessionCap = manifest.config().getString("tesseraql.sessions.maxPerSubject")
-                .map(Integer::parseInt).orElse(null);
-        if ("jdbc".equalsIgnoreCase(
-                manifest.config().getString("tesseraql.sessions.store").orElse("jdbc"))) {
-            io.tesseraql.security.session.JdbcSessionStore jdbcSessions = new io.tesseraql.security.session.JdbcSessionStore(
-                    frameworkDataSource, sessionTtl, sessionIdle, sessionCap,
-                    io.tesseraql.security.session.SessionStore.DEFAULT_COOKIE_NAME);
-            jdbcSessions.ensureSchema();
-            sessionStore = jdbcSessions;
-        } else {
-            sessionStore = new io.tesseraql.security.session.InMemorySessionStore(
-                    io.tesseraql.security.session.SessionStore.DEFAULT_COOKIE_NAME, sessionTtl,
-                    sessionIdle, sessionCap);
-        }
-        context.bind(TesseraqlProperties.SESSION_STORE_BEAN, sessionStore);
-        // Keyed credential throttle (docs/credential-throttle.md): on by default with
-        // generous failures-only budgets; enabled: false is the visible test/dev escape.
-        io.tesseraql.security.throttle.CredentialThrottle credentialThrottle = new io.tesseraql.security.throttle.CredentialThrottle(
-                new io.tesseraql.security.throttle.CredentialThrottle.Config(
-                        manifest.config()
-                                .getBoolean("tesseraql.security.credentialThrottle.enabled", true),
-                        manifest.config()
-                                .getString("tesseraql.security.credentialThrottle.loginAttempts")
-                                .map(Integer::parseInt).orElse(10),
-                        java.time.Duration.ofMillis(io.tesseraql.core.util.Durations.toMillis(
-                                manifest.config()
-                                        .getString(
-                                                "tesseraql.security.credentialThrottle.loginWindow")
-                                        .orElse("15m"))),
-                        manifest.config()
-                                .getString("tesseraql.security.credentialThrottle.addressAttempts")
-                                .map(Integer::parseInt).orElse(100),
-                        java.time.Duration.ofMillis(io.tesseraql.core.util.Durations.toMillis(
-                                manifest.config()
-                                        .getString(
-                                                "tesseraql.security.credentialThrottle.addressWindow")
-                                        .orElse("15m")))),
-                effectiveMeter);
-        context.bind(TesseraqlProperties.CREDENTIAL_THROTTLE_BEAN,
-                credentialThrottle);
-        // A run is stamped with the node that owns it (docs/audit-hardening.md Decision 6). The
-        // default is derived from host and pid so two replicas of one image are distinguishable
-        // without anybody configuring anything.
-        JobRepository jobRepository = new JobRepository(dataSource,
-                io.tesseraql.operations.batch.NodeIdentity.resolve(manifest.config()
-                        .getString("tesseraql.batch.nodeId").orElse(null)));
-        jobRepository.ensureSchema();
-        JdbcIdempotencyStore idempotencyStore = new JdbcIdempotencyStore(dataSource);
-        idempotencyStore.ensureSchema();
-        context.bind(TesseraqlProperties.IDEMPOTENCY_STORE_BEAN, idempotencyStore);
-        JdbcOutboxStore outboxStore = new JdbcOutboxStore(dataSource);
-        outboxStore.ensureSchema();
-        context.bind(TesseraqlProperties.OUTBOX_STORE_BEAN, outboxStore);
-        // The opt-in business-route audit log (roadmap Phase 45): who called what, with the
-        // declared decision-relevant params, per-app scoped like every other ops table.
-        //
-        // On the BUSINESS datasource, not tesseraql.framework.datasource
-        // (docs/app-isolation-model.md): this store writes once per audited request — business
-        // request rate — and that key exists to keep a long-running business query from
-        // starving login of a connection. Business-rate writes on the login pool defeat it.
-        // It also keeps the ops console reading one database: every other page it serves
-        // (jobs, executions, outbox, events) is bucket-1 and pinned here.
-        io.tesseraql.operations.audit.JdbcRouteAuditStore routeAuditStore = null;
-        if (manifest.config().getString("tesseraql.audit.routes.enabled")
-                .map(Boolean::parseBoolean).orElse(false)) {
-            routeAuditStore = new io.tesseraql.operations.audit.JdbcRouteAuditStore(
-                    dataSource);
-            routeAuditStore.ensureSchema();
-            context.bind(TesseraqlProperties.ROUTE_AUDIT_SINK_BEAN,
-                    routeAuditStore);
-        }
-        // The account surface (roadmap Phase 48): the managed per-user preference store, plus
-        // the marker bean the shared shell keys the settings link off. Mounted with the bundled
-        // account app (the auth-ui precedent) — AccountAppProvider.enabled is the one source of
-        // truth for both the app mount and this wiring. One final reference, so the account
-        // service providers registered below can capture it.
-        final io.tesseraql.core.account.PreferenceStore preferences = AccountAppProvider
-                .enabled(manifest.config()) ? accountPreferenceStore(frameworkDataSource) : null;
-        final io.tesseraql.core.account.ShortcutStore shortcuts;
-        if (preferences != null) {
-            context.bind(TesseraqlProperties.PREFERENCE_STORE_BEAN, preferences);
-            context.bind(TesseraqlProperties.ACCOUNT_SURFACE_BEAN, Boolean.TRUE);
-            // Pins and recents (roadmap Phase 51) ride the account surface: the sidebar's
-            // Pinned group reads through the same wrapper the mutations refresh.
-            io.tesseraql.operations.account.JdbcShortcutStore jdbcShortcuts = new io.tesseraql.operations.account.JdbcShortcutStore(
-                    frameworkDataSource);
-            jdbcShortcuts.ensureSchema();
-            shortcuts = new io.tesseraql.core.account.CachingShortcutStore(jdbcShortcuts);
-            context.bind(TesseraqlProperties.SHORTCUT_STORE_BEAN, shortcuts);
-        } else {
-            shortcuts = null;
-        }
-        // The operator's default page theme (roadmap Phase 48): the shell's fallback when the
-        // user has no stored or cookie choice. Values outside the enum are ignored.
-        String uiTheme = manifest.config().getString("tesseraql.ui.theme").orElse(null);
-        if ("light".equals(uiTheme) || "dark".equals(uiTheme)) {
-            context.bind(TesseraqlProperties.UI_THEME_BEAN, uiTheme);
-        }
-        // The app's UI defaults (docs/hypermedia-ui.md "UI defaults"): the neutral ramp and
-        // control density every shell renders. The renderer defaults to slate + compact; only
-        // a validated operator override is bound here (values outside the kit's enums are
-        // ignored, like the theme).
-        String uiNeutral = manifest.config().getString("tesseraql.ui.neutral").orElse(null);
-        if (uiNeutral != null
-                && java.util.Set.of("neutral", "slate", "zinc", "stone").contains(uiNeutral)) {
-            context.bind(TesseraqlProperties.UI_NEUTRAL_BEAN, uiNeutral);
-        }
-        String uiDensity = manifest.config().getString("tesseraql.ui.density").orElse(null);
-        if (uiDensity != null
-                && java.util.Set.of("comfortable", "compact", "dense").contains(uiDensity)) {
-            context.bind(TesseraqlProperties.UI_DENSITY_BEAN, uiDensity);
-        }
-        // Whether the password form (and so self-service password change) is on: the same
-        // flag the bundled login page reads (roadmap Phase 48 slice 4).
-        final boolean passwordLoginEnabled = manifest.config()
-                .getString("tesseraql.console.login.password.enabled")
-                .map(Boolean::parseBoolean).orElse(true);
-        // The locales the account surface's language picker offers — the same negotiated set
-        // every route resolves against (Phase 22 semantics, one source of truth).
-        final List<String> accountLocales = io.tesseraql.yaml.i18n.I18nSettings
-                .from(manifest.config(), appHome).supportedTags();
-        // Inbound-webhook replay protection (roadmap Phase 26): a delivery is processed at most
-        // once on any node sharing this database.
-        io.tesseraql.operations.webhook.JdbcWebhookReplayStore webhookReplayStore = new io.tesseraql.operations.webhook.JdbcWebhookReplayStore(
-                dataSource);
-        webhookReplayStore.ensureSchema();
-        context.bind(TesseraqlProperties.WEBHOOK_REPLAY_STORE_BEAN,
-                webhookReplayStore);
-        // Messaging channel event log backing the built-in pg-notify transport (roadmap Phase 27):
-        // the durable bus a publish: relay writes to and a queue-consume route claims from.
-        io.tesseraql.operations.messaging.JdbcEventChannelStore eventChannelStore = new io.tesseraql.operations.messaging.JdbcEventChannelStore(
-                dataSource);
-        eventChannelStore.ensureSchema();
-        context.bind(TesseraqlProperties.EVENT_CHANNEL_STORE_BEAN, eventChannelStore);
-        // Managed org-unit hierarchy for data scoping (roadmap Phase 29 slice 2): provisioned and
-        // bound only in `managed` mode, so an app that owns its own org tables (the `app` default)
-        // gets no managed schema. A subtree scope joins tql_org_closure; this store maintains it.
-        if (io.tesseraql.yaml.org.OrgUnitSettings.from(manifest.config()).managed()) {
-            io.tesseraql.operations.org.JdbcOrgUnitStore orgUnitStore = new io.tesseraql.operations.org.JdbcOrgUnitStore(
-                    dataSource);
-            orgUnitStore.ensureSchema();
-            context.bind(TesseraqlProperties.ORG_UNIT_STORE_BEAN, orgUnitStore);
-        }
-        // Managed approval-workflow state (roadmap Phase 28 slice 1): provisioned and bound when any
-        // declared workflow runs in `managed` mode (the app-wide default or a per-workflow
-        // override); `app` mode keeps state in the business table's column and binds no store (the
-        // transition route carries its own).
-        if (workflowsNeedManagedStore(manifest)) {
-            io.tesseraql.operations.workflow.JdbcWorkflowStore workflowStore = new io.tesseraql.operations.workflow.JdbcWorkflowStore(
-                    dataSource);
-            workflowStore.ensureSchema();
-            context.bind(TesseraqlProperties.WORKFLOW_STORE_BEAN, workflowStore);
-        }
-        // Managed approval-workflow task inbox (roadmap Phase 28 slice 2): provisioned and bound when
-        // any transition assigns a task, independent of where the workflow keeps its state, so one
-        // inbox spans managed-state and app-state workflows alike.
-        WorkflowSweeper workflowSweeper = null;
-        if (workflowsAssignTasks(manifest)) {
-            io.tesseraql.operations.workflow.JdbcWorkflowTaskStore taskStore = new io.tesseraql.operations.workflow.JdbcWorkflowTaskStore(
-                    dataSource);
-            taskStore.ensureSchema();
-            context.bind(TesseraqlProperties.WORKFLOW_TASK_STORE_BEAN, taskStore);
-            // Standing absence rules (roadmap Phase 52): built wherever the task inbox is -
-            // every assignee funnel resolves through this one store, one hop, never a chain.
-            io.tesseraql.operations.workflow.JdbcDelegationStore delegationStore = new io.tesseraql.operations.workflow.JdbcDelegationStore(
-                    dataSource);
-            delegationStore.ensureSchema();
-            context.bind(TesseraqlProperties.DELEGATION_STORE_BEAN,
-                    delegationStore);
-            // Deadline escalation (roadmap Phase 28 slice 3): a sweeper reassigns overdue tasks per
-            // each state's onBreach.reassign resolver, recording history through the managed store.
-            List<WorkflowSweeper.Rule> rules = buildSweeperRules(manifest,
-                    datasourceDialect(manifest.config()), modules.functions());
-            if (!rules.isEmpty()) {
-                io.tesseraql.core.workflow.WorkflowStore historyStore = context.lookup(
-                        TesseraqlProperties.WORKFLOW_STORE_BEAN,
-                        io.tesseraql.core.workflow.WorkflowStore.class);
-                workflowSweeper = new WorkflowSweeper(rules, taskStore, historyStore, outboxStore,
-                        io.tesseraql.yaml.app.ApplicationName.of(manifest.config()),
-                        dataSource, delegationStore);
-                context.bind(TesseraqlProperties.WORKFLOW_SWEEPER_BEAN,
-                        workflowSweeper);
+            // The transport this runtime serves on (docs/http-threading.md decisions 1 and 4) is
+            // handed to the server at construction below (docs/vertx-native.md decision 6): hosted,
+            // the host's instance, ridden and never closed; standalone, the declared options, which
+            // are what stop the server from inheriting a default sized for a framework where
+            // blocking is the exception.
+            final io.vertx.core.Vertx sharedTransport = hostContext == null
+                    ? null
+                    : hostContext.vertx();
+            if (sharedTransport != null) {
+                warnOnMemberThreadSizing(manifest.config(),
+                        io.tesseraql.yaml.app.ApplicationName.of(manifest.config()));
             }
-        }
-        io.tesseraql.yaml.messaging.MessagingChannels messagingChannels = io.tesseraql.yaml.messaging.MessagingChannels
-                .load(manifest.config());
-        // Managed document-number sequences for command steps (roadmap Phase 18).
-        io.tesseraql.operations.sequence.JdbcDocumentSequences documentSequences = new io.tesseraql.operations.sequence.JdbcDocumentSequences(
-                dataSource);
-        documentSequences.ensureSchema();
-        context.bind(TesseraqlProperties.DOCUMENT_SEQUENCES_BEAN, documentSequences);
-        // Asynchronous file imports/exports (design ch. 28); codecs arrive via ServiceLoader, so
-        // adding the optional tesseraql-excel module to the classpath is the whole install.
-        io.tesseraql.operations.files.JdbcFileTransferService fileTransfers = new io.tesseraql.operations.files.JdbcFileTransferService(
-                jobRepository,
-                tempStore, dataSource,
-                io.tesseraql.core.files.FileCodecs.discover(modules.loader()),
-                modules.functions());
-        // The same bound routes and commands run under: an export query or an after-SQL
-        // statement held a pooled connection for as long as the driver allowed.
-        fileTransfers.sqlTimeoutSeconds(manifest.config().getString("tesseraql.sql.timeoutSeconds")
-                .map(Integer::parseInt).orElse(30));
-        fileTransfers.ensureSchema();
-        context.bind(TesseraqlProperties.FILE_TRANSFER_BEAN, fileTransfers);
-        // Transfer retention (docs/file-transfers.md): opt-in, because nothing expires by
-        // default — the DuckLake stance, retention policy belongs to the app. When set,
-        // produced files older than retentionDays are reclaimed on a periodic sweep.
-        int transferRetentionDays = manifest.config()
-                .getString("tesseraql.transfers.retentionDays")
-                .map(Integer::parseInt).orElse(0);
-        if (transferRetentionDays > 0) {
-            try {
-                new TransferRetentionSweep(fileTransfers,
-                        transferRetentionDays,
-                        io.tesseraql.core.util.Durations.toMillis(manifest.config()
-                                .getString("tesseraql.transfers.sweepInterval").orElse("1h")),
-                        java.time.Clock.systemDefaultZone())
-                        .schedule(Schedules.of(context));
-            } catch (Exception ex) {
-                throw new IllegalStateException(
-                        "Failed to wire transfer retention: " + ex.getMessage(), ex);
+            // Resolved here, not at server construction: a declared thread count that cannot be a
+            // pool refuses the boot while the failure still names the key that caused it.
+            final io.vertx.core.VertxOptions standaloneTransportOptions = sharedTransport != null
+                    ? null
+                    : vertxOptions(manifest.config());
+
+            // SSE endpoints register on the platform's Vert.x router, which exists only once
+            // the context (and with it the HTTP server) has started — collected here, run
+            // right after context.start() (see SseRoutes for why they are not compiled pipelines).
+            java.util.List<Runnable> sseEndpoints = new java.util.ArrayList<>();
+
+            // The framework's own migrations run before any store touches the schema (versioned
+            // history per component, Flyway's lock serializing concurrent node startups); the
+            // stores' direct bootstrap below stays as the idempotent fallback for embedders.
+            // Hosted, the stack-wide security component was migrated once by the host before this
+            // runtime started, so it is VALIDATED here instead — failing to start on a mismatch is
+            // the wrong-framework-datasource guard, and what refuses a canary expecting a newer
+            // schema than the host migrated (docs/stack-architecture.md decision 16).
+            if (hostedValidatesFramework) {
+                FrameworkMigrations.migrateOperations(dataSource);
+                FrameworkMigrations.validateSecurity(frameworkDataSource);
+            } else {
+                FrameworkMigrations.migrate(dataSource, frameworkDataSource);
             }
-        }
-        // Managed attachments (roadmap Phase 30): provisioned and bound when the app declares
-        // attachment documents in `managed` mode (the default). The blob store is selected by
-        // tesseraql.object-storage.provider — the local file store by default, or S3 from the opt-in
-        // tesseraql-s3 module (slice 2) — and the metadata table backs the synthesized
-        // upload/list/download routes; an app with no attachments gets neither.
-        if (attachmentsNeedManagedStore(manifest)) {
-            io.tesseraql.core.blob.BlobStore blobStore = io.tesseraql.yaml.blob.BlobStores.create(
-                    manifest.config(), appHome, modules.loader());
-            context.bind(TesseraqlProperties.BLOB_STORE_BEAN, blobStore);
-            io.tesseraql.operations.attachment.JdbcAttachmentStore attachmentStore = new io.tesseraql.operations.attachment.JdbcAttachmentStore(
+            // Browser sessions: "jdbc" by default (docs/contract-bugfixes.md track G) — tql_session
+            // shared across all runtime nodes, so a login made on one node resolves on every other
+            // (design ch. 11.2) and survives a restart. "memory" is the explicit per-node opt-in
+            // for embedders and tests.
+            // Constructed after Flyway on purpose: the versioned history owns evolutions like the
+            // V2 subject column, and the store's direct ensureSchema stays the tolerated,
+            // idempotent fallback for embedders without it.
+            SessionStore sessionStore;
+            // One reading of the TTL for both stores. It used to be read inside the jdbc branch
+            // only, so on the default (memory) store the key was silently inert and sessions never
+            // expired at all.
+            java.time.Duration sessionTtl = java.time.Duration.ofMillis(
+                    io.tesseraql.core.util.Durations.toMillis(
+                            manifest.config().getString("tesseraql.sessions.ttl").orElse("12h")));
+            // Optional sliding idle window inside the absolute TTL (docs/session-visibility.md);
+            // unset keeps the pre-existing absolute-only behavior.
+            java.time.Duration sessionIdle = manifest.config()
+                    .getString("tesseraql.sessions.idleTimeout")
+                    .map(value -> java.time.Duration.ofMillis(
+                            io.tesseraql.core.util.Durations.toMillis(value)))
+                    .orElse(null);
+            // Declared per-subject session cap, evict-oldest (docs/session-visibility.md
+            // addendum); single-session policy is maxPerSubject: 1. Unset = unlimited.
+            Integer sessionCap = manifest.config().getString("tesseraql.sessions.maxPerSubject")
+                    .map(Integer::parseInt).orElse(null);
+            if ("jdbc".equalsIgnoreCase(
+                    manifest.config().getString("tesseraql.sessions.store").orElse("jdbc"))) {
+                io.tesseraql.security.session.JdbcSessionStore jdbcSessions = new io.tesseraql.security.session.JdbcSessionStore(
+                        frameworkDataSource, sessionTtl, sessionIdle, sessionCap,
+                        io.tesseraql.security.session.SessionStore.DEFAULT_COOKIE_NAME);
+                jdbcSessions.ensureSchema();
+                sessionStore = jdbcSessions;
+            } else {
+                sessionStore = new io.tesseraql.security.session.InMemorySessionStore(
+                        io.tesseraql.security.session.SessionStore.DEFAULT_COOKIE_NAME, sessionTtl,
+                        sessionIdle, sessionCap);
+            }
+            context.bind(TesseraqlProperties.SESSION_STORE_BEAN, sessionStore);
+            // Keyed credential throttle (docs/credential-throttle.md): on by default with
+            // generous failures-only budgets; enabled: false is the visible test/dev escape.
+            io.tesseraql.security.throttle.CredentialThrottle credentialThrottle = new io.tesseraql.security.throttle.CredentialThrottle(
+                    new io.tesseraql.security.throttle.CredentialThrottle.Config(
+                            manifest.config()
+                                    .getBoolean("tesseraql.security.credentialThrottle.enabled",
+                                            true),
+                            manifest.config()
+                                    .getString(
+                                            "tesseraql.security.credentialThrottle.loginAttempts")
+                                    .map(Integer::parseInt).orElse(10),
+                            java.time.Duration.ofMillis(io.tesseraql.core.util.Durations.toMillis(
+                                    manifest.config()
+                                            .getString(
+                                                    "tesseraql.security.credentialThrottle.loginWindow")
+                                            .orElse("15m"))),
+                            manifest.config()
+                                    .getString(
+                                            "tesseraql.security.credentialThrottle.addressAttempts")
+                                    .map(Integer::parseInt).orElse(100),
+                            java.time.Duration.ofMillis(io.tesseraql.core.util.Durations.toMillis(
+                                    manifest.config()
+                                            .getString(
+                                                    "tesseraql.security.credentialThrottle.addressWindow")
+                                            .orElse("15m")))),
+                    effectiveMeter);
+            context.bind(TesseraqlProperties.CREDENTIAL_THROTTLE_BEAN,
+                    credentialThrottle);
+            // A run is stamped with the node that owns it (docs/audit-hardening.md Decision 6). The
+            // default is derived from host and pid so two replicas of one image are distinguishable
+            // without anybody configuring anything.
+            JobRepository jobRepository = new JobRepository(dataSource,
+                    io.tesseraql.operations.batch.NodeIdentity.resolve(manifest.config()
+                            .getString("tesseraql.batch.nodeId").orElse(null)));
+            jobRepository.ensureSchema();
+            JdbcIdempotencyStore idempotencyStore = new JdbcIdempotencyStore(dataSource);
+            idempotencyStore.ensureSchema();
+            context.bind(TesseraqlProperties.IDEMPOTENCY_STORE_BEAN, idempotencyStore);
+            JdbcOutboxStore outboxStore = new JdbcOutboxStore(dataSource);
+            outboxStore.ensureSchema();
+            context.bind(TesseraqlProperties.OUTBOX_STORE_BEAN, outboxStore);
+            // The opt-in business-route audit log (roadmap Phase 45): who called what, with the
+            // declared decision-relevant params, per-app scoped like every other ops table.
+            //
+            // On the BUSINESS datasource, not tesseraql.framework.datasource
+            // (docs/app-isolation-model.md): this store writes once per audited request — business
+            // request rate — and that key exists to keep a long-running business query from
+            // starving login of a connection. Business-rate writes on the login pool defeat it.
+            // It also keeps the ops console reading one database: every other page it serves
+            // (jobs, executions, outbox, events) is bucket-1 and pinned here.
+            io.tesseraql.operations.audit.JdbcRouteAuditStore routeAuditStore = null;
+            if (manifest.config().getString("tesseraql.audit.routes.enabled")
+                    .map(Boolean::parseBoolean).orElse(false)) {
+                routeAuditStore = new io.tesseraql.operations.audit.JdbcRouteAuditStore(
+                        dataSource);
+                routeAuditStore.ensureSchema();
+                context.bind(TesseraqlProperties.ROUTE_AUDIT_SINK_BEAN,
+                        routeAuditStore);
+            }
+            // The account surface (roadmap Phase 48): the managed per-user preference store, plus
+            // the marker bean the shared shell keys the settings link off. Mounted with the bundled
+            // account app (the auth-ui precedent) — AccountAppProvider.enabled is the one source of
+            // truth for both the app mount and this wiring. One final reference, so the account
+            // service providers registered below can capture it.
+            final io.tesseraql.core.account.PreferenceStore preferences = AccountAppProvider
+                    .enabled(manifest.config())
+                            ? accountPreferenceStore(frameworkDataSource)
+                            : null;
+            final io.tesseraql.core.account.ShortcutStore shortcuts;
+            if (preferences != null) {
+                context.bind(TesseraqlProperties.PREFERENCE_STORE_BEAN, preferences);
+                context.bind(TesseraqlProperties.ACCOUNT_SURFACE_BEAN, Boolean.TRUE);
+                // Pins and recents (roadmap Phase 51) ride the account surface: the sidebar's
+                // Pinned group reads through the same wrapper the mutations refresh.
+                io.tesseraql.operations.account.JdbcShortcutStore jdbcShortcuts = new io.tesseraql.operations.account.JdbcShortcutStore(
+                        frameworkDataSource);
+                jdbcShortcuts.ensureSchema();
+                shortcuts = new io.tesseraql.core.account.CachingShortcutStore(jdbcShortcuts);
+                context.bind(TesseraqlProperties.SHORTCUT_STORE_BEAN, shortcuts);
+            } else {
+                shortcuts = null;
+            }
+            // The operator's default page theme (roadmap Phase 48): the shell's fallback when the
+            // user has no stored or cookie choice. Values outside the enum are ignored.
+            String uiTheme = manifest.config().getString("tesseraql.ui.theme").orElse(null);
+            if ("light".equals(uiTheme) || "dark".equals(uiTheme)) {
+                context.bind(TesseraqlProperties.UI_THEME_BEAN, uiTheme);
+            }
+            // The app's UI defaults (docs/hypermedia-ui.md "UI defaults"): the neutral ramp and
+            // control density every shell renders. The renderer defaults to slate + compact; only
+            // a validated operator override is bound here (values outside the kit's enums are
+            // ignored, like the theme).
+            String uiNeutral = manifest.config().getString("tesseraql.ui.neutral").orElse(null);
+            if (uiNeutral != null
+                    && java.util.Set.of("neutral", "slate", "zinc", "stone").contains(uiNeutral)) {
+                context.bind(TesseraqlProperties.UI_NEUTRAL_BEAN, uiNeutral);
+            }
+            String uiDensity = manifest.config().getString("tesseraql.ui.density").orElse(null);
+            if (uiDensity != null
+                    && java.util.Set.of("comfortable", "compact", "dense").contains(uiDensity)) {
+                context.bind(TesseraqlProperties.UI_DENSITY_BEAN, uiDensity);
+            }
+            // Whether the password form (and so self-service password change) is on: the same
+            // flag the bundled login page reads (roadmap Phase 48 slice 4).
+            final boolean passwordLoginEnabled = manifest.config()
+                    .getString("tesseraql.console.login.password.enabled")
+                    .map(Boolean::parseBoolean).orElse(true);
+            // The locales the account surface's language picker offers — the same negotiated set
+            // every route resolves against (Phase 22 semantics, one source of truth).
+            final List<String> accountLocales = io.tesseraql.yaml.i18n.I18nSettings
+                    .from(manifest.config(), appHome).supportedTags();
+            // Inbound-webhook replay protection (roadmap Phase 26): a delivery is processed at most
+            // once on any node sharing this database.
+            io.tesseraql.operations.webhook.JdbcWebhookReplayStore webhookReplayStore = new io.tesseraql.operations.webhook.JdbcWebhookReplayStore(
                     dataSource);
-            attachmentStore.ensureSchema();
-            context.bind(TesseraqlProperties.ATTACHMENT_STORE_BEAN, attachmentStore);
-            // Scan-passed attachments become owner-gated ${dataset.*} references on duckdb
-            // datasources, bridged into the fence's one spool directory (docs/duckdb.md).
-            fileScopes.wireDatasets(attachmentStore, new DatasetSpool(blobStore,
-                    DuckDbDatasources.spoolDirectory(manifest.config(), appHome)));
-            // Malware scanning (roadmap Phase 30 slice 3): the installed AttachmentScanner (the
-            // no-op default unless a scanner module is on the classpath) runs on upload; an infected
-            // object is quarantined or deleted per tesseraql.attachments.scan.onInfected and is never
-            // served (the download gate refuses a non-clean object).
-            String onInfected = io.tesseraql.yaml.attachment.AttachmentSettings
-                    .from(manifest.config()).onInfected();
-            io.tesseraql.core.scan.AttachmentScanner scanner = io.tesseraql.core.scan.AttachmentScanners
-                    .discover();
-            // Asynchronous scanning (docs/attachments.md): uploads record pending and return
-            // immediately; the sweep claims, scans, and records the verdict — the existing
-            // non-clean download gate holds pending objects back, so fail-closed is intact.
-            boolean asyncScan = "async".equalsIgnoreCase(manifest.config()
-                    .getString("tesseraql.attachments.scan.mode").orElse("sync"));
-            context.bind(TesseraqlProperties.ATTACHMENT_SERVICE_BEAN,
-                    new io.tesseraql.operations.attachment.DefaultAttachmentService(blobStore,
-                            attachmentStore, scanner, onInfected, asyncScan));
-            if (asyncScan) {
-                io.tesseraql.operations.attachment.AttachmentScanSweeper scanSweeper = new io.tesseraql.operations.attachment.AttachmentScanSweeper(
-                        blobStore, attachmentStore, scanner, onInfected,
-                        manifest.config().getString("tesseraql.attachments.scan.maxAttempts")
-                                .map(Integer::parseInt).orElse(5),
-                        io.tesseraql.core.util.Durations.parse(manifest.config()
-                                .getString("tesseraql.attachments.scan.lease").orElse("5m")),
-                        100);
-                long scanPeriod = io.tesseraql.core.util.Durations.toMillis(manifest.config()
-                        .getString("tesseraql.attachments.scan.interval").orElse("10s"));
+            webhookReplayStore.ensureSchema();
+            context.bind(TesseraqlProperties.WEBHOOK_REPLAY_STORE_BEAN,
+                    webhookReplayStore);
+            // Messaging channel event log backing the built-in pg-notify transport (roadmap Phase 27):
+            // the durable bus a publish: relay writes to and a queue-consume route claims from.
+            io.tesseraql.operations.messaging.JdbcEventChannelStore eventChannelStore = new io.tesseraql.operations.messaging.JdbcEventChannelStore(
+                    dataSource);
+            eventChannelStore.ensureSchema();
+            context.bind(TesseraqlProperties.EVENT_CHANNEL_STORE_BEAN, eventChannelStore);
+            // Managed org-unit hierarchy for data scoping (roadmap Phase 29 slice 2): provisioned and
+            // bound only in `managed` mode, so an app that owns its own org tables (the `app` default)
+            // gets no managed schema. A subtree scope joins tql_org_closure; this store maintains it.
+            if (io.tesseraql.yaml.org.OrgUnitSettings.from(manifest.config()).managed()) {
+                io.tesseraql.operations.org.JdbcOrgUnitStore orgUnitStore = new io.tesseraql.operations.org.JdbcOrgUnitStore(
+                        dataSource);
+                orgUnitStore.ensureSchema();
+                context.bind(TesseraqlProperties.ORG_UNIT_STORE_BEAN, orgUnitStore);
+            }
+            // Managed approval-workflow state (roadmap Phase 28 slice 1): provisioned and bound when any
+            // declared workflow runs in `managed` mode (the app-wide default or a per-workflow
+            // override); `app` mode keeps state in the business table's column and binds no store (the
+            // transition route carries its own).
+            if (workflowsNeedManagedStore(manifest)) {
+                io.tesseraql.operations.workflow.JdbcWorkflowStore workflowStore = new io.tesseraql.operations.workflow.JdbcWorkflowStore(
+                        dataSource);
+                workflowStore.ensureSchema();
+                context.bind(TesseraqlProperties.WORKFLOW_STORE_BEAN, workflowStore);
+            }
+            // Managed approval-workflow task inbox (roadmap Phase 28 slice 2): provisioned and bound when
+            // any transition assigns a task, independent of where the workflow keeps its state, so one
+            // inbox spans managed-state and app-state workflows alike.
+            WorkflowSweeper workflowSweeper = null;
+            if (workflowsAssignTasks(manifest)) {
+                io.tesseraql.operations.workflow.JdbcWorkflowTaskStore taskStore = new io.tesseraql.operations.workflow.JdbcWorkflowTaskStore(
+                        dataSource);
+                taskStore.ensureSchema();
+                context.bind(TesseraqlProperties.WORKFLOW_TASK_STORE_BEAN, taskStore);
+                // Standing absence rules (roadmap Phase 52): built wherever the task inbox is -
+                // every assignee funnel resolves through this one store, one hop, never a chain.
+                io.tesseraql.operations.workflow.JdbcDelegationStore delegationStore = new io.tesseraql.operations.workflow.JdbcDelegationStore(
+                        dataSource);
+                delegationStore.ensureSchema();
+                context.bind(TesseraqlProperties.DELEGATION_STORE_BEAN,
+                        delegationStore);
+                // Deadline escalation (roadmap Phase 28 slice 3): a sweeper reassigns overdue tasks per
+                // each state's onBreach.reassign resolver, recording history through the managed store.
+                List<WorkflowSweeper.Rule> rules = buildSweeperRules(manifest,
+                        datasourceDialect(manifest.config()), modules.functions());
+                if (!rules.isEmpty()) {
+                    io.tesseraql.core.workflow.WorkflowStore historyStore = context.lookup(
+                            TesseraqlProperties.WORKFLOW_STORE_BEAN,
+                            io.tesseraql.core.workflow.WorkflowStore.class);
+                    workflowSweeper = new WorkflowSweeper(rules, taskStore, historyStore,
+                            outboxStore,
+                            io.tesseraql.yaml.app.ApplicationName.of(manifest.config()),
+                            dataSource, delegationStore);
+                    context.bind(TesseraqlProperties.WORKFLOW_SWEEPER_BEAN,
+                            workflowSweeper);
+                }
+            }
+            io.tesseraql.yaml.messaging.MessagingChannels messagingChannels = io.tesseraql.yaml.messaging.MessagingChannels
+                    .load(manifest.config());
+            // Managed document-number sequences for command steps (roadmap Phase 18).
+            io.tesseraql.operations.sequence.JdbcDocumentSequences documentSequences = new io.tesseraql.operations.sequence.JdbcDocumentSequences(
+                    dataSource);
+            documentSequences.ensureSchema();
+            context.bind(TesseraqlProperties.DOCUMENT_SEQUENCES_BEAN, documentSequences);
+            // Asynchronous file imports/exports (design ch. 28); codecs arrive via ServiceLoader, so
+            // adding the optional tesseraql-excel module to the classpath is the whole install.
+            io.tesseraql.operations.files.JdbcFileTransferService fileTransfers = new io.tesseraql.operations.files.JdbcFileTransferService(
+                    jobRepository,
+                    tempStore, dataSource,
+                    io.tesseraql.core.files.FileCodecs.discover(modules.loader()),
+                    modules.functions());
+            // The same bound routes and commands run under: an export query or an after-SQL
+            // statement held a pooled connection for as long as the driver allowed.
+            fileTransfers
+                    .sqlTimeoutSeconds(manifest.config().getString("tesseraql.sql.timeoutSeconds")
+                            .map(Integer::parseInt).orElse(30));
+            fileTransfers.ensureSchema();
+            context.bind(TesseraqlProperties.FILE_TRANSFER_BEAN, fileTransfers);
+            // Transfer retention (docs/file-transfers.md): opt-in, because nothing expires by
+            // default — the DuckLake stance, retention policy belongs to the app. When set,
+            // produced files older than retentionDays are reclaimed on a periodic sweep.
+            int transferRetentionDays = manifest.config()
+                    .getString("tesseraql.transfers.retentionDays")
+                    .map(Integer::parseInt).orElse(0);
+            if (transferRetentionDays > 0) {
                 try {
-                    Schedules.of(context).every("system.attachments.scan", scanPeriod,
-                            scanSweeper::sweep);
-                } catch (RuntimeException ex) {
-                    // Without the sweep, async uploads would stay pending forever - fail the
-                    // boot loudly rather than hold every attachment back silently.
+                    new TransferRetentionSweep(fileTransfers,
+                            transferRetentionDays,
+                            io.tesseraql.core.util.Durations.toMillis(manifest.config()
+                                    .getString("tesseraql.transfers.sweepInterval").orElse("1h")),
+                            java.time.Clock.systemDefaultZone())
+                            .schedule(Schedules.of(context));
+                } catch (Exception ex) {
                     throw new IllegalStateException(
-                            "Failed to start the attachment scan sweep", ex);
+                            "Failed to wire transfer retention: " + ex.getMessage(), ex);
                 }
             }
-        }
-        // The outbound egress policy (roadmap Phase 26): deny-by-default allow-list, named
-        // credentials, timeouts. One instance gates every framework-issued outbound call —
-        // httpCall steps here and the Studio copilot endpoint below.
-        final io.tesseraql.yaml.http.HttpOutbound httpOutbound = io.tesseraql.yaml.http.HttpOutbound
-                .load(manifest.config());
-        // One outbound HTTP client gates every framework-issued call: httpCall job steps
-        // and query routes' http: sources (docs/connectors.md) share the allow-list, the
-        // named credentials, the timeouts, and the per-host circuit breaker.
-        io.tesseraql.operations.http.HttpCallClient httpCallClient = new io.tesseraql.operations.http.HttpCallClient(
-                httpOutbound, manifest.config(), tracer, effectiveMeter);
-        // push: pipeline steps deliver a produced transfer to a partner drop — local, or
-        // SFTP/FTPS under the push policy block's deny-by-default allow-list
-        // (docs/analytics-experience.md).
-        @SuppressWarnings("resource") // holds nothing between deliveries; closed with the runtime
-        FilePushService filePush = new FilePushService(
-                io.tesseraql.yaml.connectors.FileConnectors.push(manifest.config()), appHome);
-        JobExecutor jobExecutor = new JobExecutor(jobRepository, tempStore, slowSqlLog, tracer,
-                modules.functions())
-                // A running job says so on a clock, and overlap: skip believes a previous run
-                // only while its owner keeps saying it (docs/audit-hardening.md Decision 6).
-                .heartbeatInterval(io.tesseraql.core.util.Durations.parse(manifest.config()
-                        .getString("tesseraql.batch.heartbeat.interval").orElse("30s")))
-                .livenessWindow(io.tesseraql.core.util.Durations.parse(manifest.config()
-                        .getString("tesseraql.batch.heartbeat.livenessWindow").orElse("5m")))
-                // Every finished run counts on the exposition (docs/jobs.md "Observing
-                // runs"): tesseraql.job.runs by job/app/status + a duration histogram.
-                .meter(effectiveMeter)
-                // The same bound routes and commands run under: a batch statement held a pooled
-                // connection for as long as the driver would let it, which on a job is the
-                // longest anything goes unnoticed — nobody is waiting for the response.
-                .sqlTimeoutSeconds(manifest.config().getString("tesseraql.sql.timeoutSeconds")
-                        .map(Integer::parseInt).orElse(30))
-                // A job has no request to read configuration from, so a step's default row
-                // ceiling arrives the same way its timeout does (docs/export-pipeline.md, dec. 7).
-                .resultBounds(
-                        manifest.config().getString("tesseraql.resultMaterialization.maxRows")
-                                .map(Integer::parseInt).orElse(10_000),
-                        manifest.config().getString("tesseraql.resultMaterialization.onOverflow")
-                                .orElse("fail"))
-                // A batch read step may extract from another declared connector and load into
-                // the job's (docs/unified-sources.md decision 19).
-                .connectors(dataSources::get)
-                .notificationOutbox(outboxStore)
-                // Recipient-aware notify steps honor per-user opt-outs (roadmap Phase 48).
-                .preferenceStore(preferences)
-                // Outbound REST for httpCall pipeline steps (roadmap Phase 26): deny-by-default
-                // egress, secret-managed credentials, timeouts, and circuit breaking from config.
-                .httpCall(httpCallClient)
-                // export: pipeline steps write through the same transfer machinery HTTP
-                // file-export routes use (docs/analytics-experience.md track 3).
-                .fileTransfers(fileTransfers, appHome)
-                .filePush(filePush::push)
-                // ETL job SQL on a duckdb datasource resolves ${scope.*} placeholders through the
-                // same declared file scopes as routes (docs/duckdb.md).
-                .filePathResolvers(datasourceName -> datasourceName != null
-                        && DuckDbDatasources.isDuckDb(manifest.config(), datasourceName)
-                                ? (channel, scopeName, suffix, ctx) -> fileScopes.resolve(
-                                        datasourceName, channel, scopeName, suffix, ctx)
-                                : io.tesseraql.core.sql.FilePathResolver.UNSUPPORTED);
-        // Cluster-scoped rate limits (docs/deployment.md): the lease ledger exists exactly
-        // when a route declares rateLimit.scope: cluster; limiters reach it via the registry.
-        if (routeShaped(manifest).anyMatch(definition -> definition.admission() != null
-                && definition.admission().rateLimit() != null
-                && definition.admission().rateLimit().isCluster())) {
-            io.tesseraql.operations.rate.JdbcRateLeaseStore rateLeases = new io.tesseraql.operations.rate.JdbcRateLeaseStore(
-                    frameworkDataSource);
-            rateLeases.ensureSchema();
-            context.bind(TesseraqlProperties.RATE_BUDGET_BEAN, rateLeases);
-        }
-        // An enrichment's http: reference calls through the same gateway, so it counts toward
-        // binding it — otherwise the reference fails at request time with no route-level http:
-        // anywhere in the app (docs/lookups.md).
-        if (routeShaped(manifest).anyMatch(definition -> definition.sources().values().stream()
-                .anyMatch(binding -> binding.isHttp()
-                        || binding.enrich().values().stream()
-                                .anyMatch(enrich -> enrich.http() != null)))) {
-            context.bind(TesseraqlProperties.OUTBOUND_GATEWAY_BEAN,
-                    outboundGateway(httpCallClient));
-        }
-        // Notification channels and operations alerts (roadmap Phase 20).
-        io.tesseraql.yaml.notify.NotificationChannels notificationChannels = io.tesseraql.yaml.notify.NotificationChannels
-                .load(manifest.config());
-        // Channels the operator marked user-facing (roadmap Phase 48): only these appear on
-        // the account page's notification section - system/ops channels never do.
-        final List<String> optOutChannels = notificationChannels.names().stream()
-                .filter(name -> notificationChannels.require(name).setting("userOptOut")
-                        .map(Boolean::parseBoolean).orElse(false))
-                .sorted().toList();
-        // The in-app inbox (roadmap Phase 49): the store exists exactly when a channel of
-        // type inbox is declared - no channel, no table, no bell. ensureSchema is the only
-        // owner of tql_user_notification (deliberately outside the Flyway component set).
-        // The one live-event hub (docs/inbox.md "Live badge", docs/realtime.md): the inbox
-        // badge and the live-view topics share it, and /_tesseraql/events serves both.
-        java.util.Set<String> declaredTopics = new java.util.TreeSet<>();
-        manifest.routes().forEach(route -> declaredTopics.addAll(route.definition().emit()));
-        boolean inboxConfigured = notificationChannels.names().stream()
-                .anyMatch(name -> io.tesseraql.yaml.notify.NotificationChannels.INBOX
-                        .equals(notificationChannels.require(name).type()));
-        final LiveStreams liveStreams = inboxConfigured || !declaredTopics.isEmpty()
-                ? new LiveStreams(
-                        manifest.config().getString("tesseraql.live.maxPerSubject")
-                                .map(Integer::parseInt)
-                                .orElse(LiveStreams.DEFAULT_MAX_PER_SUBJECT),
-                        manifest.config().getString("tesseraql.live.maxTotal")
-                                .map(Integer::parseInt).orElse(LiveStreams.DEFAULT_MAX_TOTAL))
-                : null;
-        final io.tesseraql.core.inbox.InboxStore inboxStore;
-        if (inboxConfigured) {
-            io.tesseraql.operations.inbox.JdbcInboxStore jdbcInbox = new io.tesseraql.operations.inbox.JdbcInboxStore(
-                    dataSource,
-                    java.time.Duration.ofDays(manifest.config()
-                            .getString("tesseraql.inbox.retentionDays")
-                            .map(Long::parseLong).orElse(90L)));
-            jdbcInbox.ensureSchema();
-            // Wrapped twice: the caching layer keeps the bell's per-page unread count a map
-            // lookup (a local mutation invalidates it first), and the notifying layer
-            // signals the subject's open /_tesseraql/events streams (docs/inbox.md, "Live
-            // badge") — the sink, the pages, and the mark-read routes all share the same
-            // wrapper, so every mutation pushes a fresh badge with no per-caller wiring.
-            inboxStore = new NotifyingInboxStore(
-                    new io.tesseraql.core.inbox.CachingInboxStore(jdbcInbox), liveStreams);
-            context.bind(TesseraqlProperties.INBOX_STORE_BEAN, inboxStore);
-        } else {
-            inboxStore = null;
-        }
-        if (liveStreams != null) {
-            // Live views (docs/realtime.md): commands reach the bus through the registry
-            // (TopicEmitProcessor), so hot-reloaded routes keep working. On PostgreSQL the
-            // bus rides pg_notify across nodes and the bridge forwards peers' signals into
-            // this node's hub; on other databases signals stay per-node (documented).
-            if (!declaredTopics.isEmpty()) {
-                boolean postgres = "postgresql".equals(
-                        io.tesseraql.core.util.DatabaseVendors.vendor(dataSource).orElse(null));
-                context.bind(TesseraqlProperties.TOPIC_BUS_BEAN, postgres
-                        ? new CrossNodeTopicBus(liveStreams, dataSource)
-                        : liveStreams);
-                if (postgres) {
+            // Managed attachments (roadmap Phase 30): provisioned and bound when the app declares
+            // attachment documents in `managed` mode (the default). The blob store is selected by
+            // tesseraql.object-storage.provider — the local file store by default, or S3 from the opt-in
+            // tesseraql-s3 module (slice 2) — and the metadata table backs the synthesized
+            // upload/list/download routes; an app with no attachments gets neither.
+            if (attachmentsNeedManagedStore(manifest)) {
+                io.tesseraql.core.blob.BlobStore blobStore = io.tesseraql.yaml.blob.BlobStores
+                        .create(
+                                manifest.config(), appHome, modules.loader());
+                context.bind(TesseraqlProperties.BLOB_STORE_BEAN, blobStore);
+                io.tesseraql.operations.attachment.JdbcAttachmentStore attachmentStore = new io.tesseraql.operations.attachment.JdbcAttachmentStore(
+                        dataSource);
+                attachmentStore.ensureSchema();
+                context.bind(TesseraqlProperties.ATTACHMENT_STORE_BEAN, attachmentStore);
+                // Scan-passed attachments become owner-gated ${dataset.*} references on duckdb
+                // datasources, bridged into the fence's one spool directory (docs/duckdb.md).
+                fileScopes.wireDatasets(attachmentStore, new DatasetSpool(blobStore,
+                        DuckDbDatasources.spoolDirectory(manifest.config(), appHome)));
+                // Malware scanning (roadmap Phase 30 slice 3): the installed AttachmentScanner (the
+                // no-op default unless a scanner module is on the classpath) runs on upload; an infected
+                // object is quarantined or deleted per tesseraql.attachments.scan.onInfected and is never
+                // served (the download gate refuses a non-clean object).
+                String onInfected = io.tesseraql.yaml.attachment.AttachmentSettings
+                        .from(manifest.config()).onInfected();
+                io.tesseraql.core.scan.AttachmentScanner scanner = io.tesseraql.core.scan.AttachmentScanners
+                        .discover();
+                // Asynchronous scanning (docs/attachments.md): uploads record pending and return
+                // immediately; the sweep claims, scans, and records the verdict — the existing
+                // non-clean download gate holds pending objects back, so fail-closed is intact.
+                boolean asyncScan = "async".equalsIgnoreCase(manifest.config()
+                        .getString("tesseraql.attachments.scan.mode").orElse("sync"));
+                context.bind(TesseraqlProperties.ATTACHMENT_SERVICE_BEAN,
+                        new io.tesseraql.operations.attachment.DefaultAttachmentService(blobStore,
+                                attachmentStore, scanner, onInfected, asyncScan));
+                if (asyncScan) {
+                    io.tesseraql.operations.attachment.AttachmentScanSweeper scanSweeper = new io.tesseraql.operations.attachment.AttachmentScanSweeper(
+                            blobStore, attachmentStore, scanner, onInfected,
+                            manifest.config().getString("tesseraql.attachments.scan.maxAttempts")
+                                    .map(Integer::parseInt).orElse(5),
+                            io.tesseraql.core.util.Durations.parse(manifest.config()
+                                    .getString("tesseraql.attachments.scan.lease").orElse("5m")),
+                            100);
+                    long scanPeriod = io.tesseraql.core.util.Durations.toMillis(manifest.config()
+                            .getString("tesseraql.attachments.scan.interval").orElse("10s"));
                     try {
-                        context.addService(new TopicNotifyBridge(dataSource, liveStreams));
-                    } catch (Exception ex) {
-                        // The bridge is a freshness hint: without it this node still signals
-                        // locally, so a wiring failure must not stop the boot.
-                        LOG.warn("Cross-node topic bridge not started: {}", ex.getMessage());
+                        Schedules.of(context).every("system.attachments.scan", scanPeriod,
+                                scanSweeper::sweep);
+                    } catch (RuntimeException ex) {
+                        // Without the sweep, async uploads would stay pending forever - fail the
+                        // boot loudly rather than hold every attachment back silently.
+                        throw new IllegalStateException(
+                                "Failed to start the attachment scan sweep", ex);
                     }
                 }
             }
-            final io.tesseraql.core.inbox.InboxStore inboxForEvents = inboxStore;
-            java.util.Set<String> topics = java.util.Set.copyOf(declaredTopics);
-            sseEndpoints.add(() -> LiveEvents.register(context, port, liveStreams,
-                    inboxForEvents, topics));
-        }
-        // Invitations (roadmap Phase 50 slice 2): configured when both the accept-link base
-        // and a mail channel are named; anything half-set fails the boot (SEC 4120). The
-        // one-time token store is shared with password recovery and built when either flow
-        // is on - the iam-admin invite provider below and the identity block both use it.
-        final String inviteUrl = manifest.config()
-                .getString("tesseraql.identity.invite.url").orElse(null);
-        final String inviteChannel = manifest.config()
-                .getString("tesseraql.identity.invite.channel").orElse(null);
-        final boolean inviteEnabled;
-        if (inviteUrl != null || inviteChannel != null) {
-            if (inviteUrl == null || inviteChannel == null) {
-                throw new io.tesseraql.core.error.TqlException(
-                        new io.tesseraql.core.error.TqlErrorCode(
-                                io.tesseraql.core.error.TqlDomain.SEC, 4120),
-                        "tesseraql.identity.invite needs BOTH channel: and url:");
+            // The outbound egress policy (roadmap Phase 26): deny-by-default allow-list, named
+            // credentials, timeouts. One instance gates every framework-issued outbound call —
+            // httpCall steps here and the Studio copilot endpoint below.
+            final io.tesseraql.yaml.http.HttpOutbound httpOutbound = io.tesseraql.yaml.http.HttpOutbound
+                    .load(manifest.config());
+            // One outbound HTTP client gates every framework-issued call: httpCall job steps
+            // and query routes' http: sources (docs/connectors.md) share the allow-list, the
+            // named credentials, the timeouts, and the per-host circuit breaker.
+            io.tesseraql.operations.http.HttpCallClient httpCallClient = new io.tesseraql.operations.http.HttpCallClient(
+                    httpOutbound, manifest.config(), tracer, effectiveMeter);
+            // push: pipeline steps deliver a produced transfer to a partner drop — local, or
+            // SFTP/FTPS under the push policy block's deny-by-default allow-list
+            // (docs/analytics-experience.md).
+            @SuppressWarnings("resource") // holds nothing between deliveries; closed with the runtime
+            FilePushService filePush = new FilePushService(
+                    io.tesseraql.yaml.connectors.FileConnectors.push(manifest.config()), appHome);
+            JobExecutor jobExecutor = new JobExecutor(jobRepository, tempStore, slowSqlLog, tracer,
+                    modules.functions())
+                    // A running job says so on a clock, and overlap: skip believes a previous run
+                    // only while its owner keeps saying it (docs/audit-hardening.md Decision 6).
+                    .heartbeatInterval(io.tesseraql.core.util.Durations.parse(manifest.config()
+                            .getString("tesseraql.batch.heartbeat.interval").orElse("30s")))
+                    .livenessWindow(io.tesseraql.core.util.Durations.parse(manifest.config()
+                            .getString("tesseraql.batch.heartbeat.livenessWindow").orElse("5m")))
+                    // Every finished run counts on the exposition (docs/jobs.md "Observing
+                    // runs"): tesseraql.job.runs by job/app/status + a duration histogram.
+                    .meter(effectiveMeter)
+                    // The same bound routes and commands run under: a batch statement held a pooled
+                    // connection for as long as the driver would let it, which on a job is the
+                    // longest anything goes unnoticed — nobody is waiting for the response.
+                    .sqlTimeoutSeconds(manifest.config().getString("tesseraql.sql.timeoutSeconds")
+                            .map(Integer::parseInt).orElse(30))
+                    // A job has no request to read configuration from, so a step's default row
+                    // ceiling arrives the same way its timeout does (docs/export-pipeline.md, dec. 7).
+                    .resultBounds(
+                            manifest.config().getString("tesseraql.resultMaterialization.maxRows")
+                                    .map(Integer::parseInt).orElse(10_000),
+                            manifest.config()
+                                    .getString("tesseraql.resultMaterialization.onOverflow")
+                                    .orElse("fail"))
+                    // A batch read step may extract from another declared connector and load into
+                    // the job's (docs/unified-sources.md decision 19).
+                    .connectors(dataSources::get)
+                    .notificationOutbox(outboxStore)
+                    // Recipient-aware notify steps honor per-user opt-outs (roadmap Phase 48).
+                    .preferenceStore(preferences)
+                    // Outbound REST for httpCall pipeline steps (roadmap Phase 26): deny-by-default
+                    // egress, secret-managed credentials, timeouts, and circuit breaking from config.
+                    .httpCall(httpCallClient)
+                    // export: pipeline steps write through the same transfer machinery HTTP
+                    // file-export routes use (docs/analytics-experience.md track 3).
+                    .fileTransfers(fileTransfers, appHome)
+                    .filePush(filePush::push)
+                    // ETL job SQL on a duckdb datasource resolves ${scope.*} placeholders through the
+                    // same declared file scopes as routes (docs/duckdb.md).
+                    .filePathResolvers(datasourceName -> datasourceName != null
+                            && DuckDbDatasources.isDuckDb(manifest.config(), datasourceName)
+                                    ? (channel, scopeName, suffix, ctx) -> fileScopes.resolve(
+                                            datasourceName, channel, scopeName, suffix, ctx)
+                                    : io.tesseraql.core.sql.FilePathResolver.UNSUPPORTED);
+            // Cluster-scoped rate limits (docs/deployment.md): the lease ledger exists exactly
+            // when a route declares rateLimit.scope: cluster; limiters reach it via the registry.
+            if (routeShaped(manifest).anyMatch(definition -> definition.admission() != null
+                    && definition.admission().rateLimit() != null
+                    && definition.admission().rateLimit().isCluster())) {
+                io.tesseraql.operations.rate.JdbcRateLeaseStore rateLeases = new io.tesseraql.operations.rate.JdbcRateLeaseStore(
+                        frameworkDataSource);
+                rateLeases.ensureSchema();
+                context.bind(TesseraqlProperties.RATE_BUDGET_BEAN, rateLeases);
             }
-            if (!io.tesseraql.yaml.notify.NotificationChannels.MAIL.equals(
-                    notificationChannels.require(inviteChannel).type())) {
-                throw new io.tesseraql.core.error.TqlException(
-                        new io.tesseraql.core.error.TqlErrorCode(
-                                io.tesseraql.core.error.TqlDomain.SEC, 4120),
-                        "Invite channel '" + inviteChannel + "' must be type mail");
+            // An enrichment's http: reference calls through the same gateway, so it counts toward
+            // binding it — otherwise the reference fails at request time with no route-level http:
+            // anywhere in the app (docs/lookups.md).
+            if (routeShaped(manifest).anyMatch(definition -> definition.sources().values().stream()
+                    .anyMatch(binding -> binding.isHttp()
+                            || binding.enrich().values().stream()
+                                    .anyMatch(enrich -> enrich.http() != null)))) {
+                context.bind(TesseraqlProperties.OUTBOUND_GATEWAY_BEAN,
+                        outboundGateway(httpCallClient));
             }
-            inviteEnabled = true;
-        } else {
-            inviteEnabled = false;
-        }
-        final java.time.Duration inviteTtl = java.time.Duration.ofDays(manifest.config()
-                .getString("tesseraql.identity.invite.ttlDays")
-                .map(Long::parseLong).orElse(7L));
-        final boolean recoveryEnabled = manifest.config()
-                .getString("tesseraql.identity.recovery.enabled")
-                .map(Boolean::parseBoolean).orElse(false);
-        final io.tesseraql.core.credential.CredentialTokenStore credentialTokens;
-        if (recoveryEnabled || inviteEnabled) {
-            io.tesseraql.operations.credential.JdbcCredentialTokenStore jdbcTokens = new io.tesseraql.operations.credential.JdbcCredentialTokenStore(
-                    frameworkDataSource);
-            jdbcTokens.ensureSchema();
-            credentialTokens = jdbcTokens;
-        } else {
-            credentialTokens = null;
-        }
-        String alertChannel = manifest.config()
-                .getString("tesseraql.notifications.alerts.channel").orElse(null);
-        if (alertChannel != null) {
-            // Job failures alert through the same notification channels (roadmap Phase 20),
-            // enqueued on the outbox so the alert inherits at-least-once delivery.
-            jobExecutor.onFailure((jobId, executionId, jobApp, message) -> {
-                Map<String, Object> payload = new LinkedHashMap<>();
-                payload.put("jobId", jobId);
-                payload.put("executionId", executionId);
-                payload.put("app", jobApp);
-                payload.put("error", message == null ? "" : message);
-                outboxStore.insert(io.tesseraql.yaml.notify.NotifyEvents.event(
-                        alertChannel, "ops.jobFailure", payload, jobApp == null ? "app" : jobApp));
-            });
-        }
-        Map<String, JobFile> jobs = new LinkedHashMap<>();
-        manifest.jobs().forEach(job -> jobs.put(job.definition().id(), job));
-        // Required, not defaulted: the name scopes outbox claims, job ownership and
-        // tql.ops.view.<name>, so a shared fallback is a shared identity (io.tesseraql.yaml.app
-        // .ApplicationName).
-        String appName = io.tesseraql.yaml.app.ApplicationName.of(manifest.config());
-        // The owning app per job id (main app jobs default), so execution records are tagged with
-        // the app that declared the job, not just the hosting runtime (design ch. 26, 32).
-        Map<String, String> jobOwners = new LinkedHashMap<>();
-        // Every app this runtime hosts (main + mounted), scoping outbox claims (design ch. 39).
-        java.util.Set<String> hostedApps = new java.util.LinkedHashSet<>();
-        hostedApps.add(appName);
+            // Notification channels and operations alerts (roadmap Phase 20).
+            io.tesseraql.yaml.notify.NotificationChannels notificationChannels = io.tesseraql.yaml.notify.NotificationChannels
+                    .load(manifest.config());
+            // Channels the operator marked user-facing (roadmap Phase 48): only these appear on
+            // the account page's notification section - system/ops channels never do.
+            final List<String> optOutChannels = notificationChannels.names().stream()
+                    .filter(name -> notificationChannels.require(name).setting("userOptOut")
+                            .map(Boolean::parseBoolean).orElse(false))
+                    .sorted().toList();
+            // The in-app inbox (roadmap Phase 49): the store exists exactly when a channel of
+            // type inbox is declared - no channel, no table, no bell. ensureSchema is the only
+            // owner of tql_user_notification (deliberately outside the Flyway component set).
+            // The one live-event hub (docs/inbox.md "Live badge", docs/realtime.md): the inbox
+            // badge and the live-view topics share it, and /_tesseraql/events serves both.
+            java.util.Set<String> declaredTopics = new java.util.TreeSet<>();
+            manifest.routes().forEach(route -> declaredTopics.addAll(route.definition().emit()));
+            boolean inboxConfigured = notificationChannels.names().stream()
+                    .anyMatch(name -> io.tesseraql.yaml.notify.NotificationChannels.INBOX
+                            .equals(notificationChannels.require(name).type()));
+            final LiveStreams liveStreams = inboxConfigured || !declaredTopics.isEmpty()
+                    ? new LiveStreams(
+                            manifest.config().getString("tesseraql.live.maxPerSubject")
+                                    .map(Integer::parseInt)
+                                    .orElse(LiveStreams.DEFAULT_MAX_PER_SUBJECT),
+                            manifest.config().getString("tesseraql.live.maxTotal")
+                                    .map(Integer::parseInt).orElse(LiveStreams.DEFAULT_MAX_TOTAL))
+                    : null;
+            final io.tesseraql.core.inbox.InboxStore inboxStore;
+            if (inboxConfigured) {
+                io.tesseraql.operations.inbox.JdbcInboxStore jdbcInbox = new io.tesseraql.operations.inbox.JdbcInboxStore(
+                        dataSource,
+                        java.time.Duration.ofDays(manifest.config()
+                                .getString("tesseraql.inbox.retentionDays")
+                                .map(Long::parseLong).orElse(90L)));
+                jdbcInbox.ensureSchema();
+                // Wrapped twice: the caching layer keeps the bell's per-page unread count a map
+                // lookup (a local mutation invalidates it first), and the notifying layer
+                // signals the subject's open /_tesseraql/events streams (docs/inbox.md, "Live
+                // badge") — the sink, the pages, and the mark-read routes all share the same
+                // wrapper, so every mutation pushes a fresh badge with no per-caller wiring.
+                inboxStore = new NotifyingInboxStore(
+                        new io.tesseraql.core.inbox.CachingInboxStore(jdbcInbox), liveStreams);
+                context.bind(TesseraqlProperties.INBOX_STORE_BEAN, inboxStore);
+            } else {
+                inboxStore = null;
+            }
+            if (liveStreams != null) {
+                // Live views (docs/realtime.md): commands reach the bus through the registry
+                // (TopicEmitProcessor), so hot-reloaded routes keep working. On PostgreSQL the
+                // bus rides pg_notify across nodes and the bridge forwards peers' signals into
+                // this node's hub; on other databases signals stay per-node (documented).
+                if (!declaredTopics.isEmpty()) {
+                    boolean postgres = "postgresql".equals(
+                            io.tesseraql.core.util.DatabaseVendors.vendor(dataSource).orElse(null));
+                    context.bind(TesseraqlProperties.TOPIC_BUS_BEAN, postgres
+                            ? new CrossNodeTopicBus(liveStreams, dataSource)
+                            : liveStreams);
+                    if (postgres) {
+                        try {
+                            context.addService(new TopicNotifyBridge(dataSource, liveStreams));
+                        } catch (Exception ex) {
+                            // The bridge is a freshness hint: without it this node still signals
+                            // locally, so a wiring failure must not stop the boot.
+                            LOG.warn("Cross-node topic bridge not started: {}", ex.getMessage());
+                        }
+                    }
+                }
+                final io.tesseraql.core.inbox.InboxStore inboxForEvents = inboxStore;
+                java.util.Set<String> topics = java.util.Set.copyOf(declaredTopics);
+                sseEndpoints.add(() -> LiveEvents.register(context, port, liveStreams,
+                        inboxForEvents, topics));
+            }
+            // Invitations (roadmap Phase 50 slice 2): configured when both the accept-link base
+            // and a mail channel are named; anything half-set fails the boot (SEC 4120). The
+            // one-time token store is shared with password recovery and built when either flow
+            // is on - the iam-admin invite provider below and the identity block both use it.
+            final String inviteUrl = manifest.config()
+                    .getString("tesseraql.identity.invite.url").orElse(null);
+            final String inviteChannel = manifest.config()
+                    .getString("tesseraql.identity.invite.channel").orElse(null);
+            final boolean inviteEnabled;
+            if (inviteUrl != null || inviteChannel != null) {
+                if (inviteUrl == null || inviteChannel == null) {
+                    throw new io.tesseraql.core.error.TqlException(
+                            new io.tesseraql.core.error.TqlErrorCode(
+                                    io.tesseraql.core.error.TqlDomain.SEC, 4120),
+                            "tesseraql.identity.invite needs BOTH channel: and url:");
+                }
+                if (!io.tesseraql.yaml.notify.NotificationChannels.MAIL.equals(
+                        notificationChannels.require(inviteChannel).type())) {
+                    throw new io.tesseraql.core.error.TqlException(
+                            new io.tesseraql.core.error.TqlErrorCode(
+                                    io.tesseraql.core.error.TqlDomain.SEC, 4120),
+                            "Invite channel '" + inviteChannel + "' must be type mail");
+                }
+                inviteEnabled = true;
+            } else {
+                inviteEnabled = false;
+            }
+            final java.time.Duration inviteTtl = java.time.Duration.ofDays(manifest.config()
+                    .getString("tesseraql.identity.invite.ttlDays")
+                    .map(Long::parseLong).orElse(7L));
+            final boolean recoveryEnabled = manifest.config()
+                    .getString("tesseraql.identity.recovery.enabled")
+                    .map(Boolean::parseBoolean).orElse(false);
+            final io.tesseraql.core.credential.CredentialTokenStore credentialTokens;
+            if (recoveryEnabled || inviteEnabled) {
+                io.tesseraql.operations.credential.JdbcCredentialTokenStore jdbcTokens = new io.tesseraql.operations.credential.JdbcCredentialTokenStore(
+                        frameworkDataSource);
+                jdbcTokens.ensureSchema();
+                credentialTokens = jdbcTokens;
+            } else {
+                credentialTokens = null;
+            }
+            String alertChannel = manifest.config()
+                    .getString("tesseraql.notifications.alerts.channel").orElse(null);
+            if (alertChannel != null) {
+                // Job failures alert through the same notification channels (roadmap Phase 20),
+                // enqueued on the outbox so the alert inherits at-least-once delivery.
+                jobExecutor.onFailure((jobId, executionId, jobApp, message) -> {
+                    Map<String, Object> payload = new LinkedHashMap<>();
+                    payload.put("jobId", jobId);
+                    payload.put("executionId", executionId);
+                    payload.put("app", jobApp);
+                    payload.put("error", message == null ? "" : message);
+                    outboxStore.insert(io.tesseraql.yaml.notify.NotifyEvents.event(
+                            alertChannel, "ops.jobFailure", payload,
+                            jobApp == null ? "app" : jobApp));
+                });
+            }
+            Map<String, JobFile> jobs = new LinkedHashMap<>();
+            manifest.jobs().forEach(job -> jobs.put(job.definition().id(), job));
+            // Required, not defaulted: the name scopes outbox claims, job ownership and
+            // tql.ops.view.<name>, so a shared fallback is a shared identity (io.tesseraql.yaml.app
+            // .ApplicationName).
+            String appName = io.tesseraql.yaml.app.ApplicationName.of(manifest.config());
+            // The owning app per job id (main app jobs default), so execution records are tagged with
+            // the app that declared the job, not just the hosting runtime (design ch. 26, 32).
+            Map<String, String> jobOwners = new LinkedHashMap<>();
+            // Every app this runtime hosts (main + mounted), scoping outbox claims (design ch. 39).
+            java.util.Set<String> hostedApps = new java.util.LinkedHashSet<>();
+            hostedApps.add(appName);
 
-        TenantDataSources tenantPools = tenantDataSources;
-        // The manual/scheduled runner, with light after-chaining
-        // (docs/batch-platform.md track D; docs/boot-phases.md slice 3).
-        OpsActions.JobRunner jobRunner = JobRunners.chained(jobs, jobOwners, appName,
-                dataSource, dataSources, manifest.config(), tenantPools, jobExecutor);
+            TenantDataSources tenantPools = tenantDataSources;
+            // The manual/scheduled runner, with light after-chaining
+            // (docs/batch-platform.md track D; docs/boot-phases.md slice 3).
+            OpsActions.JobRunner jobRunner = JobRunners.chained(jobs, jobOwners, appName,
+                    dataSource, dataSources, manifest.config(), tenantPools, jobExecutor);
 
-        // Business-day calendars (docs/batch-platform.md track B): loaded at startup so a
-        // broken calendars/ dir fails fast. One decision helper answers both the scheduling
-        // gate and the console's next-counting preview, so the two can never drift.
-        io.tesseraql.yaml.calendar.Calendars calendars = io.tesseraql.yaml.calendar.Calendars
-                .load(appHome, new io.tesseraql.yaml.SimpleYamlParser());
-        // A calendar that cannot be resolved fails open at fire time, so the skip is recorded
-        // here and alerted by the dashboard (docs/silent-tolerance.md O5).
-        io.tesseraql.opsui.CalendarStatus calendarStatus = new io.tesseraql.opsui.CalendarStatus();
-        CalendarDecisions calendarDecisions = new CalendarDecisions(calendars, dataSource,
-                dataSources).status(calendarStatus);
+            // Business-day calendars (docs/batch-platform.md track B): loaded at startup so a
+            // broken calendars/ dir fails fast. One decision helper answers both the scheduling
+            // gate and the console's next-counting preview, so the two can never drift.
+            io.tesseraql.yaml.calendar.Calendars calendars = io.tesseraql.yaml.calendar.Calendars
+                    .load(appHome, new io.tesseraql.yaml.SimpleYamlParser());
+            // A calendar that cannot be resolved fails open at fire time, so the skip is recorded
+            // here and alerted by the dashboard (docs/silent-tolerance.md O5).
+            io.tesseraql.opsui.CalendarStatus calendarStatus = new io.tesseraql.opsui.CalendarStatus();
+            CalendarDecisions calendarDecisions = new CalendarDecisions(calendars, dataSource,
+                    dataSources).status(calendarStatus);
 
-        io.tesseraql.core.outbox.OutboxEventSink outboxSink;
-        // Per-node poll-source health (docs/poll-source-status.md): fed by the polling
-        // wiring below, read by the dashboard's alerts and the console's jobs page.
-        io.tesseraql.opsui.PollSourceStatus pollSourceStatus = new io.tesseraql.opsui.PollSourceStatus();
-        context.bind("tesseraqlPollSourceStatus", pollSourceStatus);
-        io.tesseraql.opsui.OpsDashboard opsDashboard;
-        // The port actually bound, learned after the server starts: the requested one, or the
-        // kernel's pick when 0 was asked for.
-        int boundPort = port;
-        try {
+            io.tesseraql.core.outbox.OutboxEventSink outboxSink;
+            // Per-node poll-source health (docs/poll-source-status.md): fed by the polling
+            // wiring below, read by the dashboard's alerts and the console's jobs page.
+            io.tesseraql.opsui.PollSourceStatus pollSourceStatus = new io.tesseraql.opsui.PollSourceStatus();
+            context.bind("tesseraqlPollSourceStatus", pollSourceStatus);
+            io.tesseraql.opsui.OpsDashboard opsDashboard;
+            // The port actually bound, learned after the server starts: the requested one, or the
+            // kernel's pick when 0 was asked for.
+            int boundPort = port;
             // The effective tracer, not the supplied one: with OTLP configured the supplied tracer
             // is wrapped in a composite, and reading past it left the console's trace pages empty
             // in exactly the deployments that had the most telemetry (docs/audit-hardening.md
@@ -1876,6 +1773,10 @@ public final class TesseraqlRuntime implements AutoCloseable {
             // started, and ordered ahead of every route registered before it.
             HttpAdmission.install(context, port, maxInFlight(manifest.config()));
             sseEndpoints.forEach(Runnable::run);
+            LOG.info("TesseraQL runtime started on port {} for app {}", boundPort, appHome);
+            return new TesseraqlRuntime(context, dataSources, boundPort, jobRepository, jobExecutor,
+                    outboxStore, jobs, jobOwners, appName, hostedApps, lanes, tenantDataSources,
+                    manifest.config(), pinningSource, otelSdk, opsDashboard, outboxSink, modules);
         } catch (Exception ex) {
             // A failed boot releases what it took (docs/audit-hardening.md Decision 5). Closing
             // the TesseraQL objects is not enough: everything registered through addService above
@@ -1893,12 +1794,12 @@ public final class TesseraqlRuntime implements AutoCloseable {
             closeQuietly(lanes);
             dataSources.values().forEach(TesseraqlRuntime::closeQuietly);
             closeQuietly(modules);
-            throw new IllegalStateException("Failed to start TesseraQL runtime", ex);
+            // The cause's message rides the wrapper: a boot refusal must keep naming the key
+            // that caused it (the workerThreads contract HttpThreadingIntegrationTest pins),
+            // and the hoisted try now wraps refusals that used to propagate raw.
+            throw new IllegalStateException(
+                    "Failed to start TesseraQL runtime: " + ex.getMessage(), ex);
         }
-        LOG.info("TesseraQL runtime started on port {} for app {}", boundPort, appHome);
-        return new TesseraqlRuntime(context, dataSources, boundPort, jobRepository, jobExecutor,
-                outboxStore, jobs, jobOwners, appName, hostedApps, lanes, tenantDataSources,
-                manifest.config(), pinningSource, otelSdk, opsDashboard, outboxSink, modules);
     }
 
     /** Whether any declared workflow runs in managed mode (the default or a per-workflow override). */
@@ -2072,7 +1973,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
     }
 
     /** The configured dialect for the main datasource, or inferred from its JDBC URL (design ch. 42). */
-    private static String datasourceDialect(AppConfig config) {
+    static String datasourceDialect(AppConfig config) {
         String prefix = "tesseraql.datasources.main.";
         return config.getString(prefix + "dialect")
                 .orElseGet(() -> io.tesseraql.core.dialect.Dialect
@@ -2269,7 +2170,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
         }
     }
 
-    private static void closeQuietly(AutoCloseable closeable) {
+    static void closeQuietly(AutoCloseable closeable) {
         if (closeable == null) {
             return;
         }
