@@ -7,6 +7,12 @@ still Camel's rather than this framework's.
 Written 2026-08-21, before implementation, measured against main at #958 and re-measured at #960
 after that PR shipped the prose half of what became decision 7.
 
+> **Shipped 2026-08-22 as #962–#968.** Everything between here and the Slices section describes
+> main *before* the campaign — the diagnosis, quoted from code that the slices then deleted
+> (`Message`, `HeaderFilter`, `PathTemplate`, `RoutePipeline` are gone from the tree, which is
+> why they carry no source links). The Slices section records what shipping found, including
+> where it departed from the decisions below.
+
 [camel-removal.md](camel-removal.md) replaced `Exchange`, `Processor` and `Synchronization` with
 types of this framework's own, and it was explicit about the method: what the replacement carries
 was **counted rather than copied**. That was the right method for the change it was making — 116
@@ -139,7 +145,7 @@ does not ask a conversion table what a `String` is.
 ### The runner reconstructs an artifact that needs no reconstruction
 
 [`Pipeline`](../tesseraql-compiler/src/main/java/io/tesseraql/compiler/pipeline/Pipeline.java) is a
-49-line record: steps, handlers, handoff index, lane name.
+51-line record: steps, handlers, handoff index, lane name.
 `RoutePipeline` is
 229 lines that copy all four into fields of its own and redeclare `Handler` as a structurally
 identical private record. Three consequences, all of them leftovers from when resolving a pipeline
@@ -186,7 +192,9 @@ sites besides the setter:
 | `RoutePipelines:82` | after `run()` has already returned — the completions have run |
 | `OpsShellRouteBuilder:70` | inside a step, and the run loop rethrows it on the next check |
 
-So `exchange.getException() != null` is false at every `done()`, and **`onFailure` is unreachable**.
+So `exchange.getException() != null` is false at every `done()`, and **`onFailure` is
+unreachable** (fixed in #963, slice 1 — quoted here as the pre-campaign diagnosis, and
+`OpsShellRouteBuilder` was renamed `OpsShellRoutes` by slice 0).
 Four of the five implementations have byte-identical bodies, so this costs nothing. The fifth is
 `RouteTelemetry`:
 
@@ -197,7 +205,8 @@ public void onFailure(Exchange failed) {
     }
 ```
 
-**No span this framework emits has ever carried its exception.** The failure is available — the run
+**No span this framework emitted had ever carried its exception** (fixed in #963;
+`RouteFailureSpanTest` pins it). The failure is available — the run
 loop puts it on `TesseraqlProperties.EXCEPTION_CAUGHT` one line after clearing it, and the error
 renderers read it from there — but the completion asks the wrong question.
 
@@ -296,7 +305,9 @@ form** — declared once, in one place, instead of decided by insertion order in
 `PathTemplate` stops being a workaround. It stays as the *linter and OpenAPI* template reader it
 also is, but nothing at runtime re-parses a URL to find out what the router already matched, and
 the binder's header fallback goes with it. `WireNames` maps the stand-in back to the declared name
-at the edge, so no later step sees a `p0`.
+at the edge, so no later step sees a `p0`. *(Superseded in shipping — see slice 4: the class left
+entirely, because the linter/OpenAPI reader role this decision believed it kept had no caller;
+the belief was wrong when written, not invalidated later.)*
 
 A form has one representation: `formFields()`. The edge stops writing fields into the header map
 and a `Map` body both, and the binder's own `parseForm` goes — an exchange built without the edge
@@ -365,8 +376,8 @@ thing in this repository to rediscover.
 **0. The names, alone.** Decision 7 — the class renames and the two missed sentences; the prose
 already landed as #960. No behaviour, no test changes, lands by itself so that every diff after it
 is attributable to a structural change. **Done, #962.** The rename pass caught a third missed
-sentence: `RouteCompiler`'s own class Javadoc still emitted "an in-memory {@code @link
-RouteBuilder}" that "configures the REST transport" — a broken link to a deleted type, describing
+sentence: `RouteCompiler`'s own class Javadoc still emitted "an in-memory `{@link RouteBuilder}`"
+that "configures the REST transport" — a broken link to a deleted type, describing
 a transport that left with it, on the first file a compiler reader opens.
 
 **1. The completion, and the span that never carried its error.** Decision 5. Small, self-contained,
@@ -384,8 +395,12 @@ lose a route — which makes "registered" and "finished" different moments. The 
 cache is therefore version-checked against the builder's mutation count; a cache keyed on
 registration alone would have frozen the half-built chain a racing lookup saw, where the old
 build-per-call shape self-healed. `PipelinesCacheTest` pins all three faces of that. One shape
-note: `List.of(TqlException.class)` is not a `List<Class<? extends Throwable>>`, so the clause
-API stayed single-class (`catching`, `onException(Class, Step)`) rather than list-typed.
+note: the clause *record* is list-typed (`Pipeline.Handler` carries
+`List<Class<? extends Throwable>>`), and only the conveniences (`catching`,
+`onException(Class, Step)`) stayed single-class, because no call site wanted more. (An earlier
+version of this note claimed `List.of(TqlException.class)` cannot satisfy the list type — false:
+`List.of` is target-typed and infers `Class<? extends Throwable>` cleanly. The signatures are a
+choice, not a language constraint.)
 
 **3. The response side.** Decision 1, outbound half. ~140 `setHeader` sites and the 10
 `removeHeaders("*")` sites move to a response object; `HeaderFilter.leaves` and `NEVER_LEAVES` are
@@ -411,8 +426,9 @@ parameters instead of re-deriving them. The form's three representations become 
 constants become one accessor, and the attachments become the framework's own `Part` — taking the
 `jakarta.activation` import out of the pipeline module.
 
-**Done, #966, and `PathTemplate` left entirely** rather than staying as a template reader — its
-last runtime caller went with the binder's fallback, and rule 10 does the rest. The mount carries
+**Done, #966, and `PathTemplate` left entirely** rather than staying as a template reader — the
+linter/OpenAPI reader role decision 2 kept it for turned out to have no caller, its last runtime
+caller went with the binder's fallback, and AGENTS.md rule 10 does the rest. The mount carries
 the *declared* template now; the edge applies `WireNames` on the way onto the router and maps the
 match back, so the stand-ins are invisible outside one file. Both regressions the suite caught
 were the same shape — a wire header swept into a parameter read (the OIDC callback's `Cookie`)
@@ -451,5 +467,9 @@ saw a single 502 on one main run (green on the same commit re-run, and on every 
 That 502 is [the relay's documented residual](../tesseraql-runtime/src/main/java/io/tesseraql/runtime/StackRelay.java)
 — a request whose connection died mid-flight is deliberately not replayed, because replaying a
 request the origin may have acted on is a worse defect than the 502 it saves — so the test's
-"every response a 200" holds only outside that window. Narrowing the window (or teaching the test
-about it) is a runtime-replace follow-up, not a pipeline one.
+"every response a 200" holds only outside that window. [camel-removal.md](camel-removal.md)
+recorded the same observation first — with the refuted first hypothesis and the concrete
+narrowing proposal (reuse the relay's `replayable` predicate for the died-mid-flight leg) — and
+the follow-up now lives where its owner looks: [runtime-replace.md](runtime-replace.md) open
+question 6. The test tolerates the one documented transient the way its sibling
+`StackDeployIntegrationTest` already did, and stays strict beyond it.

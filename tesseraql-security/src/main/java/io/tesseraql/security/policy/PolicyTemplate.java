@@ -14,11 +14,14 @@ import java.util.regex.Pattern;
  * policy is one fixed atom, so a per-application grant can never be the thing a route checks —
  * the delegated administrator is refused at the route before any containment runs.
  *
- * <p><b>The value comes off the URL, not off a header</b> ({@code PathTemplate}): the transport
- * publishes path parameters, query parameters and form-body fields all as message headers and
- * all under their own names, so a gate reading one would resolve its atom from input the caller
- * steers. What this class adds on top is the check that the resolved value is one atom segment
- * and nothing else.
+ * <p><b>The value comes off the URL, not off caller-steerable input</b>: {@code resolve} takes
+ * the router-matched path parameters — {@code request().pathParams()}, filled by the edge from
+ * the route it matched — never {@code param()}, whose query and form sources a caller writes.
+ * (The one-bag era published path, query and form values all as message headers under one
+ * namespace, and a since-deleted {@code PathTemplate} re-derived the path's own values from the
+ * URL to escape that; the router match made the re-parse unnecessary — docs/vertx-native.md
+ * decision 2.) What this class adds on top is the check that the resolved value is one atom
+ * segment and nothing else.
  */
 public final class PolicyTemplate {
 

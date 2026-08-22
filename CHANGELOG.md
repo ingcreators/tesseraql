@@ -429,6 +429,19 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **The replace suite tolerates the swap's one documented transient, and the records around it
+  agree.** `MultiAppReplaceIntegrationTest` asserted 200 on every sample fired through a
+  replace — asserting the absence of exactly the 502 the swap is documented to produce (a
+  request whose connection dies mid-flight is deliberately not replayed), the same shape its
+  sibling `StackDeployIntegrationTest` already tolerates; it now allows that one transient and
+  stays strict beyond it. The follow-up that would narrow the window lives where its owner
+  looks (docs/runtime-replace.md open question 6, with the concrete proposal both campaign
+  docs half-carried), the vertx-native design doc carries a shipped banner and corrections for
+  what reading it against the tree found (the `PathTemplate` decision superseded in shipping,
+  a `List.of` "constraint" that is not real Java, two bold pre-fix claims now marked fixed),
+  `PolicyTemplate`'s contract paragraph describes the mechanism that exists rather than the
+  one that was deleted, and the one dead source link in `docs/` points at the renamed class.
+
 - **`response.session.rotate` either rotates or refuses — never a silent no-op.** Only the JSON
   and command builders applied the declaration; on a page recipe it compiled, booted, and
   served while rotating nothing — a session-fixation control that silently does not exist, on
@@ -773,12 +786,13 @@ All notable changes to TesseraQL are documented here. The format follows
   outright. `path.id` could be an id the caller chose, and so could `params.id` and every
   `sql.params` expression reading either — a route addressed to one row operating on another.
 
-  Path parameters are now read off the request's URL, matched against the route's own template
-  (`PathTemplate`, aligned from the end so a base path is ignored); the message header remains
-  the answer only where there is no URL to read, such as a `direct:` invocation. A declared
-  input sharing a path parameter's name still **types and validates** that path parameter
-  (typed path parameters) — it no longer *sources* it, so such a name can no longer double as a
-  body field.
+  Path parameters are now read off the request's URL. (This first shipped as a `PathTemplate`
+  re-parse aligned from the end so a base path is ignored; within this same release the
+  vertx-native campaign replaced the re-parse with the router's own match —
+  `request().pathParams()` — and `PathTemplate` left the tree. The guarantee is unchanged: the
+  URL, never a steerable field.) A declared input sharing a path parameter's name still
+  **types and validates** that path parameter (typed path parameters) — it no longer *sources*
+  it, so such a name can no longer double as a body field.
 
 ### Added
 
