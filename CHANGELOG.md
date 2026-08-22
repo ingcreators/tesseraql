@@ -429,6 +429,15 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **The OIDC callback no longer decodes the caller's cookie after issuing the session.** The
+  post-login target rode the `tql_oidc_next` cookie — a value any client can present — and was
+  URL-decoded after the session's `Set-Cookie` was written; a malformed percent-escape threw
+  there, and the 500 the error clause rendered went out on the same response, still carrying the
+  freshly issued session cookie. Planting that cookie in a victim's browser failed every login
+  they attempted until it was cleared, each attempt minting a live session delivered on an error
+  page. The target now resolves before the session exists, and a value the decoder refuses falls
+  back to the configured default like any other value the sanitizer rejects.
+
 - **The completion drain runs after the wire write, not before it.** The pipeline runner drained
   completions in its own `finally`, and the HTTP edge streamed the response body after the runner
   returned — so the completions that delete a streamed export's spool file, release the route's

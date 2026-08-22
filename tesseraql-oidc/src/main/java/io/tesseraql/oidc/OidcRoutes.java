@@ -166,6 +166,11 @@ final class OidcRoutes {
         Principal validated = validator(metadata).validate(idToken, pending.nonce());
         Principal principal = link(validated, metadata.issuer());
 
+        // The target is resolved before the session exists: it is read off a cookie any client
+        // can present, and nothing that can fail on caller-controlled input may run between
+        // writing the session's Set-Cookie and the redirect — an error rendered onto this
+        // response would ship the freshly issued cookie on a 500.
+        String target = postLoginTarget(exchange);
         // The deployment's sign-in allow-list applies however the session was established
         // (docs/access-governance.md structural decision 8, layer A).
         String sessionId = sessions.create(principal,
@@ -173,13 +178,26 @@ final class OidcRoutes {
         exchange.response().header("Set-Cookie",
                 io.tesseraql.security.session.SessionCookie.issue(sessions.cookieName(),
                         sessionId, io.tesseraql.pipeline.CookiePath.of(exchange)));
-        redirect(exchange, postLoginTarget(exchange));
+        redirect(exchange, target);
     }
 
-    /** The post-login target: the sanitized {@code next} carried since /login, else the default. */
-    private String postLoginTarget(Exchange exchange) {
+    /**
+     * The post-login target: the sanitized {@code next} carried since /login, else the default.
+     *
+     * <p>Total on any cookie value: the cookie is the caller's to set, and a malformed
+     * percent-escape planted in a victim's browser must not fail every login they attempt —
+     * it falls back to the default target like any other value the sanitizer refuses.
+     */
+    String postLoginTarget(Exchange exchange) {
         String cookie = cookieValue(exchange.request().header("Cookie"), NEXT_COOKIE);
-        String next = cookie == null ? null : URLDecoder.decode(cookie, StandardCharsets.UTF_8);
+        String next = null;
+        if (cookie != null) {
+            try {
+                next = URLDecoder.decode(cookie, StandardCharsets.UTF_8);
+            } catch (IllegalArgumentException malformed) {
+                // fall through to the default target
+            }
+        }
         return LoginRedirects.sanitize(next, config.postLoginUrl());
     }
 
