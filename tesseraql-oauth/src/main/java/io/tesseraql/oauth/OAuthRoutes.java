@@ -63,25 +63,25 @@ final class OAuthRoutes {
                                 new io.tesseraql.compiler.binding.ErrorResponseRenderer()),
                         Pipeline.Handler.catching(Exception.class,
                                 new io.tesseraql.compiler.binding.ErrorResponseRenderer())));
-        HttpMounts.mount(context, "GET", "/_tesseraql/oauth/jwks", "system.oauth.jwks");
+        HttpMounts.of(context).mount("GET", "/_tesseraql/oauth/jwks", "system.oauth.jwks");
         pipelines.pipeline("system.oauth.jwks").process(this::jwks);
         if (flow != null && sessions != null) {
-            HttpMounts.mount(context, "GET", "/_tesseraql/oauth/authorize",
+            HttpMounts.of(context).mount("GET", "/_tesseraql/oauth/authorize",
                     "system.oauth.authorize");
             pipelines.pipeline("system.oauth.authorize")
                     .process(this::authorize);
-            HttpMounts.mount(context, "POST", "/_tesseraql/oauth/decision",
+            HttpMounts.of(context).mount("POST", "/_tesseraql/oauth/decision",
                     "system.oauth.consent");
             pipelines.pipeline("system.oauth.consent")
                     .process(this::consent);
-            HttpMounts.mount(context, "POST", "/_tesseraql/oauth/token",
+            HttpMounts.of(context).mount("POST", "/_tesseraql/oauth/token",
                     "system.oauth.token");
             pipelines.pipeline("system.oauth.token").process(this::token);
-            HttpMounts.mount(context, "POST", "/_tesseraql/oauth/register",
+            HttpMounts.of(context).mount("POST", "/_tesseraql/oauth/register",
                     "system.oauth.register");
             pipelines.pipeline("system.oauth.register")
                     .process(this::register);
-            HttpMounts.mount(context, "GET", "/.well-known/oauth-authorization-server",
+            HttpMounts.of(context).mount("GET", "/.well-known/oauth-authorization-server",
                     "system.oauth.metadata");
             pipelines.pipeline("system.oauth.metadata")
                     .process(this::metadata);
@@ -90,7 +90,7 @@ final class OAuthRoutes {
             // per member's MCP surface; the surface serves them because it is what holds the
             // member list and the origin, and the fence already owns /.well-known/*.
             for (String basePath : flow.memberAddresses().values()) {
-                HttpMounts.mount(context, "GET",
+                HttpMounts.of(context).mount("GET",
                         "/.well-known/oauth-protected-resource" + basePath + "/_tesseraql/mcp",
                         "system.oauth.resourceMetadata");
             }

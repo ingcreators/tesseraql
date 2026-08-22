@@ -44,7 +44,7 @@ final class IamAdminRoutes {
                         Pipeline.Handler.catching(TqlException.class, new ErrorResponseRenderer()),
                         Pipeline.Handler.catching(Exception.class, new ErrorResponseRenderer())));
 
-        HttpMounts.mount(context, "POST", USERS + "/bulk", "tql.iamAdmin.users.bulk");
+        HttpMounts.of(context).mount("POST", USERS + "/bulk", "tql.iamAdmin.users.bulk");
 
         // Post/redirect/get like the per-user disable: the no-JS-first shape of the
         // recipe (the htmx tbody-swap enhancement needs HX-Request negotiation and can

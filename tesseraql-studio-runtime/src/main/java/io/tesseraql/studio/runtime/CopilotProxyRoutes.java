@@ -41,7 +41,7 @@ final class CopilotProxyRoutes {
                         Pipeline.Handler.catching(TqlException.class, new ErrorResponseRenderer()),
                         Pipeline.Handler.catching(Exception.class, new ErrorResponseRenderer())));
 
-        HttpMounts.mount(context, "POST", "/_tesseraql/studio/{member}/ui/copilot/send",
+        HttpMounts.of(context).mount("POST", "/_tesseraql/studio/{member}/ui/copilot/send",
                 "studio.shell.copilot.send");
 
         pipelines.pipeline("studio.shell.copilot.send")

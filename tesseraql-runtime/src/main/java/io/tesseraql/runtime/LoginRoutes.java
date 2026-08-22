@@ -101,13 +101,13 @@ final class LoginRoutes {
                         Pipeline.Handler.catching(TqlException.class, new ErrorResponseRenderer()),
                         Pipeline.Handler.catching(Exception.class, new ErrorResponseRenderer())));
 
-        HttpMounts.mount(context, "POST", LOGIN_PATH, "system.login");
+        HttpMounts.of(context).mount("POST", LOGIN_PATH, "system.login");
         pipelines.pipeline("system.login").process(this::login);
 
         // Sign-out is a state change: a POST with the CSRF token, like its logout-device
         // and logout-others siblings — the CSRF-exempt GET is gone
         // (docs/vocabulary-cleanup.md slice 3).
-        HttpMounts.mount(context, "POST", "/_tesseraql/logout", "system.logout");
+        HttpMounts.of(context).mount("POST", "/_tesseraql/logout", "system.logout");
         pipelines.pipeline("system.logout").process(this::logout);
 
         // Sign out every session but this one (roadmap Phase 48, the account surface). A
@@ -116,12 +116,12 @@ final class LoginRoutes {
         // Per-device sign-out (docs/session-visibility.md): ends the caller's session
         // named by its handle. A Java route like logout-others, because only this layer
         // can read the cookie - and clear it when the revoked device was this one.
-        HttpMounts.mount(context, "POST", "/_tesseraql/logout-device",
+        HttpMounts.of(context).mount("POST", "/_tesseraql/logout-device",
                 "system.logout.device");
         pipelines.pipeline("system.logout.device")
                 .process(this::logoutDevice);
 
-        HttpMounts.mount(context, "POST", "/_tesseraql/logout-others",
+        HttpMounts.of(context).mount("POST", "/_tesseraql/logout-others",
                 "system.logout.others");
         pipelines.pipeline("system.logout.others")
                 .process(this::logoutOthers);
@@ -131,7 +131,7 @@ final class LoginRoutes {
         // cookie, and taking an eligible role has to reach the caller's own session — a
         // principal frozen at sign-in would otherwise hold the new role only after a
         // re-login, which makes the feature useless for its purpose.
-        HttpMounts.mount(context, "POST", "/_tesseraql/account/elevate",
+        HttpMounts.of(context).mount("POST", "/_tesseraql/account/elevate",
                 "system.account.elevate");
         pipelines.pipeline("system.account.elevate")
                 .process(this::elevate);

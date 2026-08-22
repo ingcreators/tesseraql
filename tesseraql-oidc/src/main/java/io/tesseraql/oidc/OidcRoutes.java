@@ -96,14 +96,14 @@ final class OidcRoutes {
                         Pipeline.Handler.catching(OidcException.class, this::unauthorized),
                         Pipeline.Handler.catching(Exception.class, this::badRequest)));
 
-        HttpMounts.mount(context, "GET", "/_tesseraql/oidc/login", "system.oidc.login");
+        HttpMounts.of(context).mount("GET", "/_tesseraql/oidc/login", "system.oidc.login");
         pipelines.pipeline("system.oidc.login").process(this::login);
 
-        HttpMounts.mount(context, "GET", "/_tesseraql/oidc/callback",
+        HttpMounts.of(context).mount("GET", "/_tesseraql/oidc/callback",
                 "system.oidc.callback");
         pipelines.pipeline("system.oidc.callback").process(this::callback);
 
-        HttpMounts.mount(context, "GET", "/_tesseraql/oidc/logout", "system.oidc.logout");
+        HttpMounts.of(context).mount("GET", "/_tesseraql/oidc/logout", "system.oidc.logout");
         pipelines.pipeline("system.oidc.logout").process(this::logout);
     }
 

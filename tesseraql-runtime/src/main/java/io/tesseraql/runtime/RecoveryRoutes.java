@@ -79,11 +79,11 @@ final class RecoveryRoutes {
                         Pipeline.Handler.catching(Exception.class, new ErrorResponseRenderer())));
 
         if (channel != null && confirmUrl != null) {
-            HttpMounts.mount(context, "POST", "/_tesseraql/reset", "system.reset.request");
+            HttpMounts.of(context).mount("POST", "/_tesseraql/reset", "system.reset.request");
             pipelines.pipeline("system.reset.request")
                     .process(this::request);
 
-            HttpMounts.mount(context, "POST", "/_tesseraql/reset/confirm",
+            HttpMounts.of(context).mount("POST", "/_tesseraql/reset/confirm",
                     "system.reset.confirm");
             pipelines.pipeline("system.reset.confirm")
                     .process(this::confirm);
@@ -91,7 +91,7 @@ final class RecoveryRoutes {
         if (inviteEnabled) {
             // The invite accept leg (roadmap Phase 50 slice 2): same token machinery,
             // purpose invite, plus the enable-user flip to ACTIVE.
-            HttpMounts.mount(context, "POST", "/_tesseraql/invite",
+            HttpMounts.of(context).mount("POST", "/_tesseraql/invite",
                     "system.invite.accept");
             pipelines.pipeline("system.invite.accept")
                     .process(this::acceptInvite);

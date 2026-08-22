@@ -62,13 +62,6 @@ final class RouteEdge {
     private static final String UNRENDERED_FAILURE = "{\"error\":{\"code\":\"TQL-ROUTE-5000\",\"message\":\"Internal error\"}}";
 
     private final RuntimeContext runtimeContext;
-    /**
-     * Pipelines by route id, looked up per request rather than captured by the handler.
-     *
-     * <p>That indirection is what makes hot reload a swap: a recompiled route replaces its entry
-     * and the mounted handler picks the new one up on the next request, with no router surgery.
-     */
-    private final Map<String, RoutePipeline> pipelines = new ConcurrentHashMap<>();
     private final Map<String, Route> mounted = new ConcurrentHashMap<>();
     /** What each mounted route was mounted as, so a reload can tell a moved URL from a stable one. */
     private final Map<String, io.tesseraql.pipeline.HttpMounts.Mount> at = new ConcurrentHashMap<>();
@@ -94,7 +87,7 @@ final class RouteEdge {
         RouteEdge edge = new RouteEdge(runtimeContext);
         edge.router = router;
         for (io.tesseraql.pipeline.HttpMounts.Mount mount : io.tesseraql.pipeline.HttpMounts
-                .all(runtimeContext)) {
+                .of(runtimeContext).all()) {
             edge.mount(router, mount);
         }
         LOG.debug("HTTP edge serving {} route(s) on the router", edge.mounted.size());
@@ -114,7 +107,7 @@ final class RouteEdge {
     void refreshAll() {
         java.util.Set<String> declared = new java.util.HashSet<>();
         for (io.tesseraql.pipeline.HttpMounts.Mount mount : io.tesseraql.pipeline.HttpMounts
-                .all(runtimeContext)) {
+                .of(runtimeContext).all()) {
             String routeId = mount.pipeline();
             if (!Pipelines.of(runtimeContext).contains(routeId)) {
                 // Declared but not built: a save that did not compile and left no stub. The
@@ -124,9 +117,9 @@ final class RouteEdge {
                 continue;
             }
             declared.add(routeId);
-            if (mounted.containsKey(routeId) && mount.equals(at.get(routeId))) {
-                refresh(routeId);
-            } else {
+            if (!(mounted.containsKey(routeId) && mount.equals(at.get(routeId)))) {
+                // A recompiled route that kept its URL needs nothing from the edge: the serve
+                // handler asks the registry per request, so the swap already happened there.
                 remount(mount, routeId);
             }
         }
@@ -146,19 +139,7 @@ final class RouteEdge {
      * cannot mount one route leaves the others serving.
      */
     private void remount(io.tesseraql.pipeline.HttpMounts.Mount mount, String routeId) {
-        RoutePipeline pipeline = RoutePipeline.of(runtimeContext, routeId).orElse(null);
-        if (pipeline == null) {
-            LOG.warn("Route {} cannot be served on the router after a reload", routeId);
-            return;
-        }
-        try {
-            pipeline.start();
-        } catch (Exception unusable) {
-            LOG.warn("Route {} could not be started after a reload", routeId, unusable);
-            return;
-        }
         unmount(routeId);
-        pipelines.put(routeId, pipeline);
         at.put(routeId, mount);
         mounted.put(routeId, router.route(HttpMethod.valueOf(mount.method()), path(mount.path()))
                 .order(AFTER_THE_GATE)
@@ -173,24 +154,6 @@ final class RouteEdge {
             route.remove();
         }
         at.remove(routeId);
-        RoutePipeline gone = pipelines.remove(routeId);
-        if (gone != null) {
-            gone.stop();
-        }
-    }
-
-    private void refresh(String routeId) {
-        RoutePipeline replaced = RoutePipeline.of(runtimeContext, routeId).map(pipeline -> {
-            try {
-                pipeline.start();
-                return pipelines.put(routeId, pipeline);
-            } catch (Exception unusable) {
-                return pipelines.remove(routeId);
-            }
-        }).orElseGet(() -> pipelines.remove(routeId));
-        if (replaced != null) {
-            replaced.stop();
-        }
     }
 
     private void mount(io.vertx.ext.web.Router router,
@@ -200,17 +163,6 @@ final class RouteEdge {
             throw new IllegalStateException("The HTTP surface " + mount.method() + " "
                     + mount.path() + " names pipeline " + routeId + ", which was not compiled");
         }
-        RoutePipeline pipeline = RoutePipeline.of(runtimeContext, routeId)
-                .orElseThrow(() -> new IllegalStateException("Route " + routeId
-                        + " is not a plain processor chain, so " + mount.method() + " "
-                        + mount.path() + " cannot be served"));
-        try {
-            pipeline.start();
-        } catch (Exception unusable) {
-            throw new IllegalStateException("Route " + routeId + " could not be started",
-                    unusable);
-        }
-        pipelines.put(routeId, pipeline);
         at.put(routeId, mount);
         // The body handler is the router's own — the instance the platform consumer would have used,
         // with whatever the server configured on it — so an upload spools where it already
@@ -247,7 +199,11 @@ final class RouteEdge {
     }
 
     private void serve(RoutingContext ctx, String routeId) {
-        RoutePipeline pipeline = pipelines.get(routeId);
+        // Asked of the registry per request, which is what makes hot reload a swap: a recompiled
+        // route replaces its entry there and this handler picks the new chain up on the next
+        // request, with no router surgery (docs/vertx-native.md decision 4).
+        io.tesseraql.compiler.pipeline.Pipeline pipeline = Pipelines.of(runtimeContext)
+                .find(routeId).orElse(null);
         if (pipeline == null) {
             ctx.next();
             return;
@@ -263,7 +219,7 @@ final class RouteEdge {
         inFlight.incrementAndGet();
         Thread.ofVirtual().name("tql-route-" + routeId).start(() -> {
             try {
-                pipeline.run(exchange);
+                PipelineRunner.run(pipeline, exchange);
                 respond(ctx, connection, exchange);
             } catch (Throwable unrendered) {
                 // A failure no clause claimed. The pipeline's envelope answers everything a route

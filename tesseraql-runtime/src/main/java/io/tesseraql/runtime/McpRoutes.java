@@ -36,9 +36,9 @@ final class McpRoutes {
                                 new io.tesseraql.compiler.binding.ErrorResponseRenderer())));
         // Each verb answers on its own pipeline (one shared bridge): a single target for all
         // three would collide on the id.
-        HttpMounts.mount(context, "POST", "/_tesseraql/mcp", "mcp.endpoint.post");
-        HttpMounts.mount(context, "GET", "/_tesseraql/mcp", "mcp.endpoint.get");
-        HttpMounts.mount(context, "DELETE", "/_tesseraql/mcp", "mcp.endpoint.delete");
+        HttpMounts.of(context).mount("POST", "/_tesseraql/mcp", "mcp.endpoint.post");
+        HttpMounts.of(context).mount("GET", "/_tesseraql/mcp", "mcp.endpoint.get");
+        HttpMounts.of(context).mount("DELETE", "/_tesseraql/mcp", "mcp.endpoint.delete");
 
         Step bridge = bridge();
         pipelines.pipeline("mcp.endpoint.post").process(bridge);

@@ -284,7 +284,7 @@ class FrameworkSurfaceGuardTest {
     private static Map<String, Mounted> frameworkMounts() {
         Map<String, Mounted> framework = new LinkedHashMap<>();
         for (io.tesseraql.pipeline.HttpMounts.Mount mount : io.tesseraql.pipeline.HttpMounts
-                .all(runtime.context())) {
+                .of(runtime.context()).all()) {
             String path = java.net.URLDecoder.decode(mount.path(),
                     java.nio.charset.StandardCharsets.UTF_8);
             if (FRAMEWORK_PATHS.stream().anyMatch(path::startsWith)) {

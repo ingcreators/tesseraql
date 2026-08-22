@@ -44,11 +44,11 @@ final class WorkshopRoutes {
                         Pipeline.Handler.catching(TqlException.class, new ErrorResponseRenderer()),
                         Pipeline.Handler.catching(Exception.class, new ErrorResponseRenderer())));
 
-        HttpMounts.mount(context, "GET", "/_tesseraql/studio/data/{op}",
+        HttpMounts.of(context).mount("GET", "/_tesseraql/studio/data/{op}",
                 "studio.workshop.read");
-        HttpMounts.mount(context, "POST", "/_tesseraql/studio/data/{op}",
+        HttpMounts.of(context).mount("POST", "/_tesseraql/studio/data/{op}",
                 "studio.workshop.act");
-        HttpMounts.mount(context, "GET", "/_tesseraql/studio/data/public/{op}",
+        HttpMounts.of(context).mount("GET", "/_tesseraql/studio/data/public/{op}",
                 "studio.workshop.public");
 
         pipelines.pipeline("studio.workshop.read")

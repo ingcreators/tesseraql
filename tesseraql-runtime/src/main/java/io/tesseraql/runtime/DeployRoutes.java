@@ -67,7 +67,7 @@ final class DeployRoutes {
                         Pipeline.Handler.catching(TqlException.class, new ErrorResponseRenderer()),
                         Pipeline.Handler.catching(Exception.class, new ErrorResponseRenderer())));
 
-        HttpMounts.mount(context, "POST", "/_tesseraql/deploy", "system.deploy");
+        HttpMounts.of(context).mount("POST", "/_tesseraql/deploy", "system.deploy");
         pipelines.pipeline("system.deploy").process(this::deploy);
     }
 

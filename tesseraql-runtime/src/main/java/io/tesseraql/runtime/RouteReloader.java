@@ -417,15 +417,13 @@ public final class RouteReloader {
     /**
      * Takes a route out of service, whichever kind it is.
      *
-     * <p>Every route is a pipeline now (docs/camel-removal.md decision 1), so removing one is
-     * dropping two map entries — the compiled pipeline, and the resolved copy that a run may have
-     * left behind. Camel's stop-then-remove was standing in for exactly this.
+     * <p>Every route is a pipeline now (docs/camel-removal.md decision 1), and the registry is
+     * its one holder (docs/vertx-native.md decision 4) — the resolved copy this also used to
+     * evict guarded producers a resolve no longer creates, so removing a route is removing it
+     * from the one place everything serves it from.
      */
     private void stopAndRemove(String id) {
         io.tesseraql.compiler.pipeline.Pipelines.of(context).remove(id);
-        // And the resolved copy: a pipeline that has been run holds started producers, and the
-        // replacement compiled behind it is a different list of processor instances.
-        RoutePipelines.of(context).evict(id);
     }
 
     /**
@@ -445,8 +443,8 @@ public final class RouteReloader {
             // a hot reload must not quietly move a route out from under it (docs/base-path.md).
             switch (route.httpMethod() == null ? "GET" : route.httpMethod()) {
                 case "POST", "PUT", "PATCH", "DELETE" -> io.tesseraql.pipeline.HttpMounts
-                        .mount(context, route.httpMethod(), route.urlPath(), id);
-                default -> io.tesseraql.pipeline.HttpMounts.mount(context, "GET",
+                        .of(context).mount(route.httpMethod(), route.urlPath(), id);
+                default -> io.tesseraql.pipeline.HttpMounts.of(context).mount("GET",
                         route.urlPath(), id);
             }
             // A stub is a one-step pipeline, registered under the id the mount names.

@@ -88,7 +88,7 @@ final class TokenExchangeRoutes {
                         Pipeline.Handler.catching(Exception.class,
                                 new io.tesseraql.compiler.binding.ErrorResponseRenderer())));
 
-        HttpMounts.mount(context, "POST", "/_tesseraql/token", "system.token");
+        HttpMounts.of(context).mount("POST", "/_tesseraql/token", "system.token");
         pipelines.pipeline("system.token").process(this::exchange);
     }
 
