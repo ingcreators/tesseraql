@@ -335,29 +335,6 @@ public final class TesseraqlRuntime implements AutoCloseable {
     }
 
     /**
-     * The in-process span ring behind a tracer, wherever it sits.
-     *
-     * <p>An {@code instanceof} against the supplied tracer found nothing once OTLP wrapped it in a
-     * composite, so the console's trace pages went empty in exactly the deployments carrying the
-     * most telemetry. Asking the composite is the fix rather than reaching past it.
-     */
-    private static io.tesseraql.core.telemetry.TraceLog traceLogOf(
-            io.tesseraql.core.telemetry.Tracer tracer) {
-        if (tracer instanceof io.tesseraql.core.telemetry.TraceLog traceLog) {
-            return traceLog;
-        }
-        if (tracer instanceof io.tesseraql.core.telemetry.CompositeTracer composite) {
-            for (io.tesseraql.core.telemetry.Tracer delegate : composite.delegates()) {
-                io.tesseraql.core.telemetry.TraceLog found = traceLogOf(delegate);
-                if (found != null) {
-                    return found;
-                }
-            }
-        }
-        return io.tesseraql.core.telemetry.TraceLog.empty();
-    }
-
-    /**
      * The manifest with {@code tesseraql.http.basePath} replaced by the host's value.
      *
      * <p>Only {@code null} means "no host is speaking". The empty string is the origin root, which
@@ -1223,92 +1200,10 @@ public final class TesseraqlRuntime implements AutoCloseable {
         hostedApps.add(appName);
 
         TenantDataSources tenantPools = tenantDataSources;
-        AppConfig runtimeConfig = manifest.config();
-        OpsActions.JobRunner runOne = (jobId, params, triggerType, triggeredBy) -> {
-            JobFile jobFile = jobs.get(jobId);
-            if (jobFile == null) {
-                throw new IllegalArgumentException("Unknown job: " + jobId);
-            }
-            Map<String, Object> boundParams = bindJobParams(jobFile, params);
-            String owner = jobOwners.getOrDefault(jobId, appName);
-            // A job's declared datasource: (docs/duckdb.md ETL) wins over main; per-tenant pool
-            // routing applies only to main-datasource jobs (a duckdb engine is one per node,
-            // tenant isolation there comes from tenant-partitioned file scopes).
-            String declared = jobFile.definition().datasource();
-            javax.sql.DataSource jobPool;
-            if (declared == null || declared.isBlank() || "main".equals(declared)) {
-                jobPool = dataSource;
-            } else {
-                jobPool = dataSources.get(declared);
-                if (jobPool == null) {
-                    throw new IllegalArgumentException(
-                            "Job datasource '" + declared + "' is not declared");
-                }
-            }
-            if (jobFile.definition().perTenant()) {
-                List<String> tenants = TenantRegistry.tenantIds(runtimeConfig, dataSource,
-                        tenantPools);
-                if (!tenants.isEmpty()) {
-                    JobExecution last = null;
-                    for (String tenantId : tenants) {
-                        last = jobExecutor.run(jobFile,
-                                jobPool == dataSource
-                                        ? tenantPools.dataSourceFor(tenantId, dataSource)
-                                        : jobPool,
-                                io.tesseraql.core.tenant.TenantContext.of(tenantId),
-                                owner, boundParams, triggerType, triggeredBy);
-                    }
-                    return last;
-                }
-            }
-            return jobExecutor.run(jobFile, jobPool, owner, boundParams, triggerType, triggeredBy);
-        };
-        // Light chaining (docs/batch-platform.md track D): trigger: { after: <jobId> } fires a
-        // job when the named job's execution completes successfully in the same app, carrying
-        // the business date so "extract, then send" runs the same fact. Breadth-first with a
-        // fired-set, so a declared cycle (a lint error) cannot loop at runtime; anything wider
-        // than a chain belongs to the external scheduler by design.
-        OpsActions.JobRunner jobRunner = (jobId, params, triggerType, triggeredBy) -> {
-            JobExecution execution = runOne.run(jobId, params, triggerType, triggeredBy);
-            if (execution == null
-                    || execution.status() != io.tesseraql.operations.batch.JobStatus.COMPLETED) {
-                return execution;
-            }
-            java.util.Set<String> fired = new java.util.LinkedHashSet<>();
-            fired.add(jobId);
-            java.util.ArrayDeque<String> completed = new java.util.ArrayDeque<>();
-            completed.add(jobId);
-            while (!completed.isEmpty()) {
-                String parent = completed.poll();
-                String parentOwner = jobOwners.getOrDefault(parent, appName);
-                for (JobFile candidate : jobs.values()) {
-                    String candidateId = candidate.definition().id();
-                    io.tesseraql.yaml.model.TriggerSpec trigger = candidate.definition()
-                            .trigger();
-                    if (trigger == null || !parent.equals(trigger.after())
-                            || !parentOwner.equals(jobOwners.getOrDefault(candidateId, appName))
-                            || !fired.add(candidateId)) {
-                        continue;
-                    }
-                    Map<String, Object> chainedParams = execution.businessDate() == null
-                            ? Map.of()
-                            : Map.of("businessDate", execution.businessDate().toString());
-                    try {
-                        JobExecution chained = runOne.run(candidateId, chainedParams, "after",
-                                null);
-                        if (chained != null && chained
-                                .status() == io.tesseraql.operations.batch.JobStatus.COMPLETED) {
-                            completed.add(candidateId);
-                        }
-                    } catch (RuntimeException chainFailure) {
-                        // A broken link stops its own chain; the parent's success stands.
-                        LOG.warn("Chained job {} (after {}) failed: {}", candidateId, parent,
-                                chainFailure.getMessage());
-                    }
-                }
-            }
-            return execution;
-        };
+        // The manual/scheduled runner, with light after-chaining
+        // (docs/batch-platform.md track D; docs/boot-phases.md slice 3).
+        OpsActions.JobRunner jobRunner = JobRunners.chained(jobs, jobOwners, appName,
+                dataSource, dataSources, manifest.config(), tenantPools, jobExecutor);
 
         // Business-day calendars (docs/batch-platform.md track B): loaded at startup so a
         // broken calendars/ dir fails fast. One decision helper answers both the scheduling
@@ -1335,38 +1230,10 @@ public final class TesseraqlRuntime implements AutoCloseable {
             // is wrapped in a composite, and reading past it left the console's trace pages empty
             // in exactly the deployments that had the most telemetry (docs/audit-hardening.md
             // Decision 7).
-            opsDashboard = new io.tesseraql.opsui.OpsDashboard(jobRepository, lanes, slowSqlLog,
-                    traceLogOf(effectiveTracer),
-                    manifest.config().getString("tesseraql.diagnostics.slowSpanMillis")
-                            .map(Long::parseLong).orElse(200L),
-                    new io.tesseraql.opsui.OpsDashboard.AlertThresholds(
-                            manifest.config()
-                                    .getString("tesseraql.diagnostics.errorRateWarnPercent")
-                                    .map(Double::parseDouble).orElse(5.0),
-                            manifest.config().getString("tesseraql.diagnostics.slowRateWarnPercent")
-                                    .map(Double::parseDouble).orElse(20.0),
-                            manifest.config()
-                                    .getString("tesseraql.diagnostics.batchFailureWarnPercent")
-                                    .map(Double::parseDouble).orElse(10.0)),
-                    pinningMonitor)
-                    // Dead-lettered deliveries surface as an operational alert (Phase 20).
-                    .outboxCounts(outboxStore::countByStatus)
-                    // Dead-lettered queue messages alert the same way (silent-tolerance O1).
-                    .eventCounts(eventChannelStore::countByStatus)
-                    // A skipped or repeatedly failing poll source surfaces as an alert
-                    // instead of only a startup log line (docs/poll-source-status.md).
-                    .pollSources(pollSourceStatus)
-                    // A job firing unfiltered because its calendar would not resolve.
-                    .calendars(calendarStatus)
-                    // Truthful readiness (roadmap Phase 45): every configured datasource is
-                    // probed live; any failure rolls health up to DOWN so a load balancer
-                    // actually sheds traffic.
-                    .datasourceProbe(() -> probeDatasources(dataSource, dataSources))
-                    // An unauthenticated endpoint doing real work per poll is a lever; a memo
-                    // bounds it to one probe per TTL however fast the polls arrive
-                    // (docs/audit-hardening.md Decision 9).
-                    .healthTtl(io.tesseraql.core.util.Durations.parse(manifest.config()
-                            .getString("tesseraql.diagnostics.readinessTtl").orElse("1s")));
+            opsDashboard = OpsDashboards.assemble(manifest.config(),
+                    jobRepository, lanes, slowSqlLog, effectiveTracer,
+                    pinningMonitor, outboxStore, eventChannelStore,
+                    pollSourceStatus, calendarStatus, dataSource, dataSources);
             // The app's db/migration runs before anything queries its schema: fresh installs,
             // upgrades and canary activations all converge here (design ch. 31, 32).
             // The history key is the application's own declaration, not this runtime's idea of its
@@ -2202,33 +2069,6 @@ public final class TesseraqlRuntime implements AutoCloseable {
         }
         return io.tesseraql.yaml.notify.NotifyEvents.compile(def.id(), "escalated",
                 def.reminders().escalated(), functions);
-    }
-
-    /**
-     * Live validity of every configured datasource (roadmap Phase 45): a short
-     * {@link java.sql.Connection#isValid} round-trip per pool, by datasource name.
-     */
-    private static Map<String, Boolean> probeDatasources(javax.sql.DataSource main,
-            Map<String, ? extends javax.sql.DataSource> named) {
-        Map<String, Boolean> out = new java.util.LinkedHashMap<>();
-        out.put("main", datasourceValid(main));
-        named.forEach((name, ds) -> {
-            if (!"main".equals(name)) {
-                out.put(name, datasourceValid(ds));
-            }
-        });
-        return out;
-    }
-
-    private static boolean datasourceValid(javax.sql.DataSource dataSource) {
-        try (java.sql.Connection connection = dataSource.getConnection()) {
-            return connection.isValid(2);
-        } catch (Exception ex) {
-            // The health roll-up only sees false; without this the operator gets a DOWN with no
-            // diagnosable cause (bad credentials, network, missing driver all look identical).
-            LOG.warn("Datasource health probe failed", ex);
-            return false;
-        }
     }
 
     /** The configured dialect for the main datasource, or inferred from its JDBC URL (design ch. 42). */
