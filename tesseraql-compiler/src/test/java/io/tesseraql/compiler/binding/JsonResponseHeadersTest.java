@@ -42,6 +42,25 @@ class JsonResponseHeadersTest {
                 headers, headersWhen);
     }
 
+    /**
+     * Set-Cookie appends rather than replaces (RFC 6265): the session cookie a step wrote
+     * earlier in the pipeline — rotation — survives a declared cookie, and both reach the
+     * wire. Replace-semantics here silently logged the user out: the store had already
+     * invalidated the old session id, and the fresh one never reached the browser.
+     */
+    @Test
+    void aDeclaredSetCookieJoinsTheOneAStepAlreadyWrote() throws Exception {
+        Exchange exchange = new Exchange(Beans.NONE);
+        exchange.setProperty(TesseraqlProperties.CONTEXT, Map.of());
+        exchange.response().addHeader("Set-Cookie", "tql_session=rotated; Path=/; HttpOnly");
+        new JsonResponseRenderer(
+                response(Map.of("Set-Cookie", "prefs=dark; Path=/"), null, null))
+                .process(exchange);
+
+        assertThat(exchange.response().headers().get("Set-Cookie"))
+                .containsExactly("tql_session=rotated; Path=/; HttpOnly", "prefs=dark; Path=/");
+    }
+
     @Test
     void aDeclaredHeaderIsEmitted() throws Exception {
         Exchange exchange = render(

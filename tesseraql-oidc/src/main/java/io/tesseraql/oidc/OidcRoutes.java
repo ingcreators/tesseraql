@@ -119,7 +119,7 @@ final class OidcRoutes {
         if (next != null) {
             // Scoped to the OIDC endpoints, so this one follows the base path they are
             // mounted under rather than the session cookie's (docs/base-path.md).
-            exchange.response().header("Set-Cookie", NEXT_COOKIE + "=" + encode(next)
+            exchange.response().addHeader("Set-Cookie", NEXT_COOKIE + "=" + encode(next)
                     + "; Path=" + io.tesseraql.pipeline.BasePath.url(exchange, "/_tesseraql/oidc")
                     + "; HttpOnly; SameSite=Lax; Max-Age=600");
         }
@@ -175,7 +175,7 @@ final class OidcRoutes {
         // (docs/access-governance.md structural decision 8, layer A).
         String sessionId = sessions.create(principal,
                 io.tesseraql.pipeline.auth.SignInAdmission.admitted(exchange));
-        exchange.response().header("Set-Cookie",
+        exchange.response().addHeader("Set-Cookie",
                 io.tesseraql.security.session.SessionCookie.issue(sessions.cookieName(),
                         sessionId, io.tesseraql.pipeline.CookiePath.of(exchange)));
         redirect(exchange, target);
@@ -205,7 +205,7 @@ final class OidcRoutes {
     private void logout(Exchange exchange) {
         String sessionId = cookieValue(exchange.request().header("Cookie"), sessions.cookieName());
         sessions.invalidate(sessionId);
-        exchange.response().header("Set-Cookie",
+        exchange.response().addHeader("Set-Cookie",
                 io.tesseraql.security.session.SessionCookie.expire(sessions.cookieName(),
                         io.tesseraql.pipeline.CookiePath.of(exchange)));
         try {
