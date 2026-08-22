@@ -437,6 +437,27 @@ All notable changes to TesseraQL are documented here. The format follows
   (`/scim/v2/Users?x=1/<id>`) whenever the caller appended one. All three now build from the
   path and append what they mean to append.
 
+- **The OIDC callback no longer decodes the caller's cookie after issuing the session.** The
+  post-login target rode the `tql_oidc_next` cookie — a value any client can present — and was
+  URL-decoded after the session's `Set-Cookie` was written; a malformed percent-escape threw
+  there, and the 500 the error clause rendered went out on the same response, still carrying the
+  freshly issued session cookie. Planting that cookie in a victim's browser failed every login
+  they attempted until it was cleared, each attempt minting a live session delivered on an error
+  page. The target now resolves before the session exists, and a value the decoder refuses falls
+  back to the configured default like any other value the sanitizer rejects.
+
+- **The completion drain runs after the wire write, not before it.** The pipeline runner drained
+  completions in its own `finally`, and the HTTP edge streamed the response body after the runner
+  returned — so the completions that delete a streamed export's spool file, release the route's
+  concurrency and lane permits, and end its telemetry span all fired before a byte reached the
+  wire. Downloads streamed at all only by unlink-while-open filesystem semantics: on Windows
+  every query-export download leaked its spool file permanently (the delete throws on an open
+  file and the drain logs and moves on), and on a blob-backed temp store the object was deleted
+  mid-download, so a client retry read `NoSuchKey` and truncated. A declared concurrency bound
+  also stopped counting the streaming phase, and audited durations excluded it. The edge now owns
+  its drain, after the response is written; every other caller — the queue consumer, MCP, the
+  poll loop — consumes the exchange synchronously and drains as before.
+
 - **A queue delivery whose pipeline failed is no longer marked consumed.** The consumer checked
   only the exchange's exception, but a `queue.<id>` pipeline inherits the route error clauses,
   and the runner clears the exception (moving it to `EXCEPTION_CAUGHT`) before rendering the
