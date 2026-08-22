@@ -429,6 +429,16 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A response body that fails mid-stream closes the connection instead of hanging it.** Once
+  the head and the first chunks are on the wire no error body can follow, and the edge's error
+  paths left the third and worst outcome: an `IOException` from the body skipped the terminal
+  chunk and left the connection open until the caller's own timeout, and an unchecked failure
+  (an `UncheckedIOException` from a wrapped reader) escaped to the last-resort net, which tried
+  to write a 500 onto the committed response and threw on the event loop — connection still
+  open. The edge now closes the connection on a mid-body failure — a truncated response, now,
+  instead of silence — and the last-resort net closes rather than writes when the head is
+  already out.
+
 - **Redirects and Location headers built from the request no longer double the query string.**
   `request().uri()` is the path *plus* the query, and three builders treated it as the path:
   the role-activation redirect appended the query again (`…/admin/users?tab=audit?tab=audit`,

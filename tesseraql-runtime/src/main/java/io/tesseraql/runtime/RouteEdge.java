@@ -424,6 +424,14 @@ final class RouteEdge {
             if (ctx.response().ended()) {
                 return;
             }
+            if (ctx.response().headWritten()) {
+                // The head is already on the wire, so a 500 cannot be written any more —
+                // setStatusCode here would throw on the event loop and leave the caller
+                // holding the connection until their own timeout. Closing it is the one
+                // honest signal left: a truncated response, now, instead of silence.
+                ctx.request().connection().close();
+                return;
+            }
             ctx.response().setStatusCode(500)
                     .putHeader("Content-Type", "application/json; charset=utf-8")
                     .end(UNRENDERED_FAILURE);
@@ -474,8 +482,17 @@ final class RouteEdge {
                 write(connection, gone, response, Buffer.buffer(java.util.Arrays.copyOf(chunk,
                         read)));
             }
-        } catch (IOException unreadable) {
-            gone.set(true);
+        } catch (IOException | RuntimeException unreadable) {
+            // The head and some chunks are already on the wire, so no error body can follow.
+            // Ending would fake a complete response; leaving the connection open hung the
+            // caller until their own timeout — closing it mid-chunk is the one honest signal
+            // left. RuntimeException is caught here because body readers wrap their I/O
+            // (UncheckedIOException and kin), and escaping to the serve() net would try to
+            // write a 500 onto a committed response.
+            LOG.warn("Streaming the response of route {} failed mid-body; closing the connection",
+                    exchange.getFromRouteId(), unreadable);
+            connection.runOnContext(abort -> ctx.request().connection().close());
+            return;
         }
         connection.runOnContext(end -> {
             if (!gone.get() && !response.ended()) {
