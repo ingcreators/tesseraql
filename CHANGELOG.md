@@ -429,6 +429,17 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A deleted broken route stops serving its stub, and the dead surface the review found is
+  gone.** A parse-broken route drops out of the manifest, so a later reload matched it to
+  neither the old routes nor the new — deleting the broken file left its TQL-ROUTE-3103 stub
+  serving on the deleted URL until restart. The reloader keeps a ledger of stubbed routes and
+  removes a stub whose route is gone (the honest 404), and removing a pipeline now removes its
+  mount row too, so the table stops accumulating debris. Swept with it: `Response.removeHeader`
+  and `hasHeader` (no callers, no story), `Headers.FILE_NAME` (its javadoc described a hand-off
+  that actually rides the `POLLED_FILE_NAME` exchange property — a documented header that was
+  silently ignored if written), and three comments describing mechanisms deleted with the
+  one-bag message.
+
 - **Malformed Basic credentials at the token endpoint answer `invalid_client`, not a 500.**
   Invalid base64 in the `Authorization: Basic` header threw out of the decode into the generic
   error envelope — a server-error claim for what RFC 6749 §5.2 defines as a client that failed

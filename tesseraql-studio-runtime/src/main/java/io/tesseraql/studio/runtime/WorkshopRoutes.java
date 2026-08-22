@@ -108,9 +108,6 @@ final class WorkshopRoutes {
         Object body = result instanceof Map<?, ?> map
                 ? WorkshopTargets.encodeBytes(map)
                 : Map.of("__value__", WorkshopTargets.encodeBytes(result));
-        // platform-http mirrors request headers — including parsed form fields — onto the
-        // response, and a multi-line field (a route document being saved) is a header value
-        // Vert.x rightly refuses. The answer is the JSON body and nothing else.
         exchange.response().header(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
         exchange.setBody(mapper.writeValueAsString(body));
     }

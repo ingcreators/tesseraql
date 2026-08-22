@@ -57,6 +57,13 @@ public final class RouteReloader {
     private final List<Runnable> reloadListeners = new java.util.concurrent.CopyOnWriteArrayList<>();
     private final io.tesseraql.core.expr.ExpressionFunctions functions;
     private AppManifest current;
+    /**
+     * The routes currently serving a compile-failure stub. A stubbed route left the manifest on
+     * the reload that broke it, so a later reload matches it to neither the old routes nor the
+     * new — this ledger is what remembers it existed, so deleting the broken file un-mounts the
+     * stub instead of serving TQL-ROUTE-3103 until restart.
+     */
+    private final java.util.Set<String> stubbed = new LinkedHashSet<>();
     /** Per-route content fingerprints (source-directory digests) from the last good reload. */
     private Map<String, String> fingerprints;
     /** The app-wide inputs every compiled route bakes in (config/ + shared definitions). */
@@ -172,6 +179,19 @@ public final class RouteReloader {
             }
         }
 
+        // A stub whose route is gone entirely — the broken file deleted, so the id is in
+        // neither manifest — leaves with its route: without this sweep the stub kept serving
+        // its 500 on the deleted URL until restart, because nothing could match it any more.
+        for (String id : java.util.List.copyOf(stubbed)) {
+            if (!now.containsKey(id) && !brokenIds.contains(id)) {
+                stubbed.remove(id);
+                if (!removed.contains(id)) {
+                    stopAndRemove(id);
+                    removed.add(id);
+                }
+            }
+        }
+
         for (String id : brokenIds) {
             RouteFile old = before.get(id);
             try {
@@ -205,6 +225,7 @@ public final class RouteReloader {
                 new RouteCompiler().appName(appName).functions(functions)
                         .compile(context, reloaded, true, Set.of(id));
                 (before.containsKey(id) ? reloadedIds : addedIds).add(id);
+                stubbed.remove(id);
             } catch (Exception ex) {
                 // Per-route isolation (roadmap Phase 42): the broken definition serves a clear
                 // 500 carrying its compile error; every other route keeps serving. The failed
@@ -434,6 +455,10 @@ public final class RouteReloader {
      */
     private void stopAndRemove(String id) {
         io.tesseraql.compiler.pipeline.Pipelines.of(context).remove(id);
+        // The mount row goes with the pipeline: leaving it made a removed route's row
+        // permanent debris in the table, and left a stub's mount serving after its route was
+        // deleted. A replacement re-mounts under the same id either way.
+        io.tesseraql.pipeline.HttpMounts.of(context).forget(id);
     }
 
     /**
@@ -442,6 +467,7 @@ public final class RouteReloader {
      */
     private void installStub(RouteFile route, Exception cause) {
         String id = route.definition().id();
+        stubbed.add(id);
         // The compile message names absolute paths, SQL text, and table and column names. The
         // stub is mounted in place of the route's own security chain, so it can be reached
         // without credentials - the diagnostics belong in the log, not in the response, the same
