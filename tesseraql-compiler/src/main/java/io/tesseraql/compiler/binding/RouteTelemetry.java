@@ -5,7 +5,6 @@ import io.tesseraql.core.telemetry.NoopMeter;
 import io.tesseraql.core.telemetry.NoopTracer;
 import io.tesseraql.core.telemetry.Span;
 import io.tesseraql.core.telemetry.Tracer;
-import io.tesseraql.pipeline.Completion;
 import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.pipeline.Headers;
 import io.tesseraql.pipeline.Step;
@@ -70,23 +69,18 @@ public final class RouteTelemetry implements Step {
             org.slf4j.MDC.put(TesseraqlProperties.TRACE_ID, spanContext.traceId());
             org.slf4j.MDC.put(TesseraqlProperties.SPAN_ID, spanContext.spanId());
         }
-        exchange.addOnCompletion(new Completion() {
-            @Override
-            public void onComplete(Exchange completed) {
-                finish(completed, span, startedNanos);
-            }
-
-            @Override
-            public void onFailure(Exchange failed) {
-                if (failed.getException() != null) {
-                    span.recordError(failed.getException());
-                }
-                finish(failed, span, startedNanos);
-            }
-        });
+        exchange.addOnCompletion(done -> finish(done, span, startedNanos));
     }
 
     private void finish(Exchange exchange, Span span, long startedNanos) {
+        // The route's failure, read where the envelope put it. It used to be read off
+        // getException() in a failure-only branch of the completion — which never ran, because
+        // the pipeline moves the exception to this property before draining, so no span this
+        // framework emitted ever carried its error (docs/vertx-native.md decision 5).
+        Throwable failure = failure(exchange);
+        if (failure != null) {
+            span.recordError(failure);
+        }
         Object status = exchange.getMessage().getHeader(Headers.HTTP_RESPONSE_CODE);
         if (status != null) {
             span.attribute("status", status);
@@ -97,7 +91,7 @@ public final class RouteTelemetry implements Step {
         // (2xx..5xx) keeps label cardinality bounded; an unset status after a failure
         // counts as 5xx, matching what the error renderer will have sent.
         long durationMillis = (System.nanoTime() - startedNanos) / 1_000_000;
-        String outcome = outcomeClass(status, exchange.getException() != null);
+        String outcome = outcomeClass(status, failure != null);
         Map<String, String> labels = Map.of("routeId", routeId, "method", method,
                 "outcome", outcome);
         meter(exchange).histogram("tesseraql.route.duration").record(durationMillis, labels);
@@ -134,6 +128,13 @@ public final class RouteTelemetry implements Step {
             }
         }
         return line.toString();
+    }
+
+    /** The failure the envelope answered for, or one nothing answered for, or null. */
+    static Throwable failure(Exchange exchange) {
+        Throwable caught = exchange.getProperty(TesseraqlProperties.EXCEPTION_CAUGHT,
+                Throwable.class);
+        return caught != null ? caught : exchange.getException();
     }
 
     private static String outcomeClass(Object status, boolean failed) {

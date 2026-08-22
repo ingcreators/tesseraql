@@ -174,9 +174,9 @@ final class PollLoop implements RuntimeContext.Service {
 
     private void consume(PollSource.PolledFile file) {
         PollSource.Fetched fetched = null;
+        Exchange exchange = new Exchange(context.beans());
         try {
             fetched = source.fetch(file);
-            Exchange exchange = new Exchange(context.beans());
             exchange.getMessage().setHeader(Headers.FILE_NAME, file.name());
             try (InputStream content = Files.newInputStream(fetched.path())) {
                 exchange.getMessage().setBody(content);
@@ -188,6 +188,11 @@ final class PollLoop implements RuntimeContext.Service {
                     + jobId + " did not import: " + ex.getMessage(), ex);
             archiveFailure(file);
         } finally {
+            // This exchange runs its step without a pipeline runner, so nothing else keeps the
+            // completion guarantee for it (docs/vertx-native.md decision 5). Nothing registers a
+            // completion on the import path today; this is what makes that a fact rather than
+            // a requirement the import step has to know about.
+            exchange.drain();
             if (fetched != null) {
                 fetched.release();
             }

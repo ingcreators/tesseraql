@@ -3,7 +3,6 @@ package io.tesseraql.compiler.binding;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
-import io.tesseraql.pipeline.Completion;
 import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.pipeline.Step;
 import java.util.concurrent.Semaphore;
@@ -35,17 +34,7 @@ public final class ConcurrencyLimiter {
             if (!semaphore.tryAcquire()) {
                 throw new TqlException(RATE_LIMIT, "Too many concurrent requests");
             }
-            exchange.addOnCompletion(new Completion() {
-                @Override
-                public void onComplete(Exchange completed) {
-                    semaphore.release();
-                }
-
-                @Override
-                public void onFailure(Exchange failed) {
-                    semaphore.release();
-                }
-            });
+            exchange.addOnCompletion(done -> semaphore.release());
         }
     }
 }

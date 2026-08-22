@@ -103,14 +103,26 @@ public final class Exchange {
     }
 
     /**
-     * Takes the completions, so the caller owns running them.
+     * Runs everything registered on this exchange, once (docs/vertx-native.md decision 5).
      *
-     * <p>Handing them over rather than running them here is deliberate: the pipeline runs them once
-     * at the end, and an exchange that has given them up cannot have them run twice.
+     * <p>The list is emptied before anything runs, so an exchange that has drained cannot drain
+     * twice — and the drain lives here rather than on the runner so that an exchange built and
+     * run <em>without</em> a runner (the poll loop hands one straight to the import step) still
+     * has one call that keeps the completion guarantee.
+     *
+     * <p>One completion failing must not strand the ones after it: an audit row that cannot be
+     * written is not a reason to leak a permit.
      */
-    public List<Completion> handoverCompletions() {
+    public void drain() {
         List<Completion> taken = List.copyOf(completions);
         completions.clear();
-        return taken;
+        for (Completion completion : taken) {
+            try {
+                completion.onDone(this);
+            } catch (RuntimeException failed) {
+                org.slf4j.LoggerFactory.getLogger(Exchange.class)
+                        .warn("A completion of route {} failed", fromRouteId, failed);
+            }
+        }
     }
 }

@@ -371,7 +371,16 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
-- **A saturated runtime could not say that it was saturated** (docs/http-threading.md decision 3).
+- **A failing route's span now carries its exception** (docs/vertx-native.md decision 5,
+  slice 1). The telemetry completion recorded the error in its failure branch, and that branch
+  was unreachable: the pipeline answers every failure it has a clause for *before* draining, so
+  the exception has always moved off the exchange and onto the `EXCEPTION_CAUGHT` property by the
+  time a completion runs. No span this framework ever emitted recorded its error, and the
+  outcome-classed error counter had the same blind spot when a failure left no status. The
+  completion interface is one method now (`Completion.onDone`) — the branch that could be
+  registered against the wrong condition no longer exists — the telemetry reads the failure where
+  the envelope puts it, and the drain lives on the exchange itself, so an exchange run without a
+  pipeline runner (the poll loop's import) keeps the completion guarantee too.
   The admission gate let health past without taking a permit, which was half the answer: health
   was still a Camel route, so it still queued for one of the workers the slow query was holding.
   An orchestrator that gets no answer to "are you busy" concludes the process is dead and restarts

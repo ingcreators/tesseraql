@@ -5,7 +5,6 @@ import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.threading.ExecutionLanes;
 import io.tesseraql.core.threading.Lane;
-import io.tesseraql.pipeline.Completion;
 import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.pipeline.Step;
 import io.tesseraql.pipeline.TesseraqlProperties;
@@ -39,16 +38,6 @@ public final class LaneGate implements Step {
         if (!lane.tryAdmit()) {
             throw new TqlException(CAPACITY, "Execution lane '" + laneName + "' is at capacity");
         }
-        exchange.addOnCompletion(new Completion() {
-            @Override
-            public void onComplete(Exchange completed) {
-                lane.release();
-            }
-
-            @Override
-            public void onFailure(Exchange failed) {
-                lane.release();
-            }
-        });
+        exchange.addOnCompletion(done -> lane.release());
     }
 }
