@@ -429,6 +429,16 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **Set-Cookie appends everywhere a cookie is written.** The response's header map was built
+  multi-valued because Set-Cookie repeats (RFC 6265), and then every writer — session issue and
+  expiry across login, OIDC and SAML, session rotation, the shell's theme re-sync, and a
+  declared `Set-Cookie` in a route's `headers:` block — used the replacing `header()`. No
+  current pipeline puts two cookies on one exchange, so nothing broke yet; the day one does
+  (rotation on an HTML page, a declared cookie beside a rotated session), the second write
+  silently discards the first — for the rotation pair, a browser keeping an already-invalidated
+  session id and a signed-out user. All cookie writers now use `addHeader`, which is what the
+  method was built for.
+
 - **A response body that fails mid-stream closes the connection instead of hanging it.** Once
   the head and the first chunks are on the wire no error body can follow, and the edge's error
   paths left the third and worst outcome: an `IOException` from the body skipped the terminal

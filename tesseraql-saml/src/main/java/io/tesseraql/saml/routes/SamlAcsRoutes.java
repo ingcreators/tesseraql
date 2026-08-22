@@ -165,7 +165,7 @@ final class SamlAcsRoutes {
         String sessionId = cookieValue(exchange.request().header("Cookie"),
                 sessions.cookieName());
         sessions.invalidate(sessionId);
-        exchange.response().header("Set-Cookie",
+        exchange.response().addHeader("Set-Cookie",
                 io.tesseraql.security.session.SessionCookie.expire(sessions.cookieName(),
                         io.tesseraql.pipeline.CookiePath.of(exchange)));
 
@@ -181,7 +181,7 @@ final class SamlAcsRoutes {
                 sessions.cookieName());
         SessionStore.Session session = sessions.session(sessionId);
         sessions.invalidate(sessionId);
-        exchange.response().header("Set-Cookie",
+        exchange.response().addHeader("Set-Cookie",
                 io.tesseraql.security.session.SessionCookie.expire(sessions.cookieName(),
                         io.tesseraql.pipeline.CookiePath.of(exchange)));
 
@@ -283,7 +283,7 @@ final class SamlAcsRoutes {
         // (docs/access-governance.md structural decision 8, layer A).
         String sessionId = sessions.create(principal,
                 io.tesseraql.pipeline.auth.SignInAdmission.admitted(exchange));
-        exchange.response().header("Set-Cookie",
+        exchange.response().addHeader("Set-Cookie",
                 io.tesseraql.security.session.SessionCookie.issue(sessions.cookieName(),
                         sessionId, io.tesseraql.pipeline.CookiePath.of(exchange)));
 

@@ -116,7 +116,7 @@ public class AuthStep implements Step {
         String cookieHeader = exchange.request().header("Cookie");
         String fresh = sessions.rotate(sessions.sessionIdFromCookie(cookieHeader));
         if (fresh != null) {
-            exchange.response().header("Set-Cookie",
+            exchange.response().addHeader("Set-Cookie",
                     io.tesseraql.security.session.SessionCookie.issue(sessions.cookieName(),
                             fresh, io.tesseraql.pipeline.CookiePath.of(exchange)));
         }
