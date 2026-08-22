@@ -24,10 +24,10 @@ class SecurityDefaultsTest {
     void firstMatchingRuleWinsInDeclarationOrder() {
         SecurityDefaults defaults = SecurityDefaults.from(SCAFFOLD_SHAPE);
 
-        assertThat(defaults.resolve("GET", "/api/users", null).auth()).isEqualTo("bearer");
-        assertThat(defaults.resolve("GET", "/users", null).auth()).isEqualTo("browser");
+        assertThat(defaults.resolve("/api/users", null).auth()).isEqualTo("bearer");
+        assertThat(defaults.resolve("/users", null).auth()).isEqualTo("browser");
         // The trailing /** also matches the bare prefix, the ant-path convention.
-        assertThat(defaults.resolve("GET", "/api", null).auth()).isEqualTo("bearer");
+        assertThat(defaults.resolve("/api", null).auth()).isEqualTo("bearer");
     }
 
     @Test
@@ -36,11 +36,11 @@ class SecurityDefaultsTest {
 
         // The rule's `auto` merges verbatim; enforcement resolves per method at wiring
         // (SecuritySpec.csrfEnforced, the one resolution point).
-        assertThat(defaults.resolve("POST", "/items/create", null).csrfEnforced("POST"))
+        assertThat(defaults.resolve("/items/create", null).csrfEnforced("POST"))
                 .isTrue();
-        assertThat(defaults.resolve("GET", "/items", null).csrfEnforced("GET")).isFalse();
+        assertThat(defaults.resolve("/items", null).csrfEnforced("GET")).isFalse();
         // Bearer routes never inherit CSRF from auto, whatever the method.
-        assertThat(defaults.resolve("POST", "/api/items", null).csrfEnforced("POST"))
+        assertThat(defaults.resolve("/api/items", null).csrfEnforced("POST"))
                 .isFalse();
     }
 
@@ -50,7 +50,7 @@ class SecurityDefaultsTest {
                 Map.of("match", "/**", "auth", "browser", "csrf", "auto", "policy", "app.read"))));
 
         SecuritySpec declared = new SecuritySpec("bearer", "items.write", "off");
-        SecuritySpec effective = defaults.resolve("POST", "/items", declared);
+        SecuritySpec effective = defaults.resolve("/items", declared);
 
         assertThat(effective.auth()).isEqualTo("bearer");
         assertThat(effective.policy()).isEqualTo("items.write");
@@ -64,7 +64,7 @@ class SecurityDefaultsTest {
                 Map.of("match", "/admin/**", "auth", "browser", "policy", "admin.view"))));
 
         // The route declares only a policy; auth comes from the rule.
-        SecuritySpec effective = defaults.resolve("GET", "/admin/audit",
+        SecuritySpec effective = defaults.resolve("/admin/audit",
                 new SecuritySpec(null, "admin.audit", null));
 
         assertThat(effective.auth()).isEqualTo("browser");
@@ -76,7 +76,7 @@ class SecurityDefaultsTest {
         SecurityDefaults defaults = SecurityDefaults.from(config(List.of(
                 Map.of("match", "/**", "auth", "browser", "csrf", "auto", "policy", "app.read"))));
 
-        SecuritySpec effective = defaults.resolve("POST", "/health",
+        SecuritySpec effective = defaults.resolve("/health",
                 new SecuritySpec("public", null, null));
 
         assertThat(effective.auth()).isEqualTo("public");
@@ -93,8 +93,8 @@ class SecurityDefaultsTest {
                 Map.of("match", "/api/**", "auth", "bearer"))));
 
         SecuritySpec declared = new SecuritySpec("browser", null, null);
-        assertThat(defaults.resolve("GET", "/users", declared)).isSameAs(declared);
-        assertThat(defaults.resolve("GET", "/users", null)).isNull();
+        assertThat(defaults.resolve("/users", declared)).isSameAs(declared);
+        assertThat(defaults.resolve("/users", null)).isNull();
     }
 
     @Test
@@ -113,7 +113,7 @@ class SecurityDefaultsTest {
 
         assertThat(defaults.isEmpty()).isTrue();
         SecuritySpec declared = new SecuritySpec("bearer", null, null);
-        assertThat(defaults.resolve("GET", "/api/users", declared)).isSameAs(declared);
+        assertThat(defaults.resolve("/api/users", declared)).isSameAs(declared);
     }
 
     @Test

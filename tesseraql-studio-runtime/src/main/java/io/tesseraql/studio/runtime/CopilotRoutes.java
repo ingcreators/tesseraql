@@ -93,9 +93,9 @@ final class CopilotRoutes {
      * opens), then run the tool loop on the SSE producer — deltas as chunk events, tool
      * markers in between, and done carrying the final transcript markup.
      */
-    static void registerStream(io.tesseraql.pipeline.RuntimeContext context, int port,
-            CopilotService copilot, StudioEdit studioEdit, String member) {
-        SseRoutes.register(context, port, pageOf(member) + "/stream", (principal, query) -> {
+    static void registerStream(io.tesseraql.pipeline.RuntimeContext context,
+            CopilotService copilot, String member) {
+        SseRoutes.register(context, pageOf(member) + "/stream", (principal, query) -> {
             if (copilot == null) {
                 throw new TqlException(new TqlErrorCode(TqlDomain.STUDIO, 4235),
                         "The copilot is not configured"

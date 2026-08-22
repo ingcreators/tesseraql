@@ -119,11 +119,11 @@ public final class CrudScaffolder {
             table.uniqueIndexes().forEach((index, column) -> files.add(new ScaffoldedFile(
                     "rules/" + names.table() + "-" + column.toLowerCase(Locale.ROOT)
                             .replace('_', '-') + "-free.sql",
-                    uniqueRuleSql(table, names, column))));
+                    uniqueRuleSql(names, column))));
             table.foreignKeys().forEach(fk -> files.add(new ScaffoldedFile(
                     "rules/" + names.table() + "-" + fk.column().toLowerCase(Locale.ROOT)
                             .replace('_', '-') + "-exists.sql",
-                    fkRuleSql(names, fk))));
+                    fkRuleSql(fk))));
         }
         files.add(new ScaffoldedFile(names.dir() + "/get.yml", listRoute(table, names)));
         files.add(new ScaffoldedFile(names.dir() + "/list.view.yml", listView(table, names)));
@@ -135,7 +135,7 @@ public final class CrudScaffolder {
                 createRoute(table, names)));
         files.add(new ScaffoldedFile(names.dir() + "/create/insert.sql",
                 insertSql(table, names)));
-        files.add(new ScaffoldedFile(names.detailDir() + "/get.yml", detailRoute(table, names)));
+        files.add(new ScaffoldedFile(names.detailDir() + "/get.yml", detailRoute(names)));
         files.add(new ScaffoldedFile(names.detailDir() + "/select.sql", selectSql(table, names)));
         files.add(new ScaffoldedFile(names.detailDir() + "/edit.view.yml",
                 editView(table, names)));
@@ -165,8 +165,8 @@ public final class CrudScaffolder {
             return false;
         }
         String base = "/" + names.table();
-        SecuritySpec read = securityDefaults.resolve("GET", base, null);
-        SecuritySpec write = securityDefaults.resolve("POST", base + "/create", null);
+        SecuritySpec read = securityDefaults.resolve(base, null);
+        SecuritySpec write = securityDefaults.resolve(base + "/create", null);
         return read != null && "browser".equals(read.auth())
                 && write != null && "browser".equals(write.auth())
                 && write.csrfEnforced("POST");
@@ -546,7 +546,7 @@ public final class CrudScaffolder {
 
     // ---------------------------------------------------------------- detail / edit
 
-    private String detailRoute(TableSchema table, Names names) {
+    private String detailRoute(Names names) {
         // The path parameter is declared as a typed input: raw path values are strings, and the
         // coerced params.* view is what binds cleanly against a typed key column.
         return """
@@ -912,7 +912,7 @@ public final class CrudScaffolder {
      * optional value never reaches this query. This is the hook where "exists" grows into
      * "exists and is active": one edit here instead of one per route.
      */
-    private static String fkRuleSql(Names names, TableSchema.ForeignKey fk) {
+    private static String fkRuleSql(TableSchema.ForeignKey fk) {
         String field = fk.column().toLowerCase(Locale.ROOT);
         return """
                 -- A returned row is a violation (docs/validation-rule-sets.md): the referenced
@@ -930,7 +930,7 @@ public final class CrudScaffolder {
      * generated key is absent and the bind is null — checks against every row, portably across
      * dialects (no null-typed bind ever reaches the database).
      */
-    private static String uniqueRuleSql(TableSchema table, Names names, String column) {
+    private static String uniqueRuleSql(Names names, String column) {
         return """
                 -- A returned row is a violation (docs/validation-rule-sets.md): the value is
                 -- already taken by another row. Shared by create (excludeId null) and update.

@@ -146,6 +146,25 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **The build gates on unused declarations, and the dead code it found is gone**
+  (docs/build.md). `javac` has no lint for an unread private field, an uncalled private
+  method, an unread local or a parameter nothing reads — `-Xlint:all` with `failOnWarning`
+  passes them all, so that class of dead code surfaced only in the IDE's JDT panel, and
+  recurred with every extraction (three times since the Camel removal). PMD now runs at
+  `verify` with exactly those four rules (`config/pmd-unused.xml`, parameter rule covering
+  non-private methods too); the gate was landed failing against the tree's 26 findings and
+  the findings then removed: the `urlPath` field `RequestBinder` stopped reading when path
+  values moved to the URL, `LoginRoutes.parseForm` left behind when the edge took over form
+  parsing, the `int port` parameter six router installers kept from the port-keyed-router era
+  (with it, `SseRoutes.register`'s cascade through `LiveEvents` and the copilot stream), an
+  unused constructor parameter on `NotificationSink`, an unused `context` on five
+  `RouteCompiler` builders, `SecurityDefaults.resolve`'s never-read `httpMethod`, and eight
+  more parameters across the scaffolder, the lints and the DuckDB init. One deliberate keep
+  is suppressed at the line with the reason: an MCP handler whose signature a method
+  reference fixes. Also swept while in the boot path: a dead local alias and two stranded
+  comments (the retired component policy, the removed `camel-main`) in
+  `TesseraqlRuntime.start`.
+
 - **A boot refusal keeps its error code on every path, and the failure paths release what the
   slice-4 observable could not see** (docs/boot-phases.md, revised by the post-campaign
   review). The hoisted `try` had split refusals into two exception types: a pools-phase

@@ -86,7 +86,7 @@ final class RouteEdge {
      * mean a declared URL answering 404 for the life of the process. A runtime that cannot serve
      * what it was asked to serve should say so while somebody is still watching it start.
      */
-    static RouteEdge install(RuntimeContext runtimeContext, int port) {
+    static RouteEdge install(RuntimeContext runtimeContext) {
         io.vertx.ext.web.Router router = HttpEdgeBeans.router(runtimeContext);
         RouteEdge edge = new RouteEdge(runtimeContext);
         edge.router = router;

@@ -170,7 +170,7 @@ final class RouteRules implements LintRule {
                             + " supported on a queue-consume route under consume/, not the '"
                             + definition.recipe() + "' recipe"));
         }
-        ExportRules.lintRouteExport(context, route, definition, source, findings);
+        ExportRules.lintRouteExport(route, definition, source, findings);
         ExportRules.lintExportRowCap(definition.fileExport(), "", source, findings);
         ExportRules.lintExportSources(context, definition.fileExport(), definition.sources(),
                 ExportRules.extractionSqlFile(route, definition), "", source, findings);

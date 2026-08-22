@@ -151,7 +151,7 @@ public final class RouteCompiler {
         for (ToolFile toolFile : manifest.tools()) {
             if (onlyRouteIds == null
                     || onlyRouteIds.contains(toolFile.definition().id())) {
-                buildMcpTool(context, toolFile);
+                buildMcpTool(toolFile);
             }
         }
         // Application-declared MCP resources (roadmap Phase 24): read-only context, served
@@ -159,7 +159,7 @@ public final class RouteCompiler {
         for (ResourceFile resourceFile : manifest.resources()) {
             if (onlyRouteIds == null
                     || onlyRouteIds.contains(resourceFile.definition().id())) {
-                buildMcpResource(context, resourceFile);
+                buildMcpResource(resourceFile);
             }
         }
         // Application-declared MCP Apps UI resources (roadmap Phase 24): each renders an
@@ -167,7 +167,7 @@ public final class RouteCompiler {
         for (UiResourceFile uiFile : manifest.uiResources()) {
             if (onlyRouteIds == null
                     || onlyRouteIds.contains(uiFile.definition().id())) {
-                buildMcpUi(context, manifest.appHome(), uiFile);
+                buildMcpUi(manifest.appHome(), uiFile);
             }
         }
         // Application-declared MCP prompts (docs/prompt-as-recipe.md): each compiles to a
@@ -175,7 +175,7 @@ public final class RouteCompiler {
         for (io.tesseraql.yaml.manifest.PromptFile promptFile : manifest.prompts()) {
             if (onlyRouteIds == null
                     || onlyRouteIds.contains(promptFile.definition().id())) {
-                buildMcpPrompt(context, promptFile);
+                buildMcpPrompt(promptFile);
             }
         }
         // Messaging consumers (roadmap Phase 27): each queue-consume route compiles to a
@@ -184,7 +184,7 @@ public final class RouteCompiler {
         for (RouteFile consumerFile : manifest.consumers()) {
             if (onlyRouteIds == null
                     || onlyRouteIds.contains(consumerFile.definition().id())) {
-                buildQueueConsume(context, consumerFile);
+                buildQueueConsume(consumerFile);
             }
         }
         // Approval workflows (roadmap Phase 28): each workflow synthesizes one
@@ -799,7 +799,7 @@ public final class RouteCompiler {
      * At-least-once delivery comes from the durable channel and the consumer's claim/ack, not this
      * route.
      */
-    private void buildQueueConsume(RuntimeContext context, RouteFile routeFile) {
+    private void buildQueueConsume(RouteFile routeFile) {
         RouteDefinition definition = routeFile.definition();
         io.tesseraql.yaml.model.ConsumeSpec consume = definition.consume();
         if (consume == null || consume.channel() == null || consume.channel().isBlank()
@@ -1239,7 +1239,7 @@ public final class RouteCompiler {
      * binding and validation, SQL or the transactional command - so a tool is governed exactly like
      * a route. The runtime's MCP endpoint sends to {@code direct:mcp.<id>} and reads the JSON result.
      */
-    private void buildMcpTool(RuntimeContext context, ToolFile toolFile) {
+    private void buildMcpTool(ToolFile toolFile) {
         RouteDefinition definition = toolFile.definition();
         Path toolDir = toolFile.source().getParent();
         String routeId = "mcp." + definition.id();
@@ -1301,7 +1301,7 @@ public final class RouteCompiler {
      * uri), so the binder runs with no path or request parameters; idempotency does not apply to a
      * read.
      */
-    private void buildMcpResource(RuntimeContext context, ResourceFile resourceFile) {
+    private void buildMcpResource(ResourceFile resourceFile) {
         RouteDefinition definition = resourceFile.definition();
         Path resourceDir = resourceFile.source().getParent();
         String routeId = "mcp.resource." + definition.id();
@@ -1336,7 +1336,7 @@ public final class RouteCompiler {
      * resource contents. A UI resource declares no {@code input:} (it is addressed only by its
      * {@code ui://} uri), so the binder runs with no parameters.
      */
-    private void buildMcpUi(RuntimeContext context, Path appHome, UiResourceFile uiFile) {
+    private void buildMcpUi(Path appHome, UiResourceFile uiFile) {
         RouteDefinition definition = uiFile.definition();
         Path uiDir = uiFile.source().getParent();
         String routeId = "mcp.ui." + definition.id();
@@ -1375,8 +1375,7 @@ public final class RouteCompiler {
      * <p>The recipe is a read: {@code prompts/get} is a read in the protocol's own vocabulary, so
      * a command step is refused rather than compiled into a prompt that writes.
      */
-    private void buildMcpPrompt(RuntimeContext context,
-            io.tesseraql.yaml.manifest.PromptFile promptFile) {
+    private void buildMcpPrompt(io.tesseraql.yaml.manifest.PromptFile promptFile) {
         RouteDefinition definition = promptFile.definition();
         Path promptDir = promptFile.source().getParent();
         if (!"prompt-text".equals(definition.recipe())) {

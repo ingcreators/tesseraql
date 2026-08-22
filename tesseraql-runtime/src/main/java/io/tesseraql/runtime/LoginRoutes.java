@@ -15,7 +15,6 @@ import io.tesseraql.security.Principal;
 import io.tesseraql.security.policy.PolicyEngine;
 import io.tesseraql.security.session.LoginRedirects;
 import io.tesseraql.security.session.SessionStore;
-import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
@@ -379,19 +378,5 @@ final class LoginRoutes {
             return Map.of();
         }
         return mapper.readValue(raw, Map.class);
-    }
-
-    /** Parses a {@code application/x-www-form-urlencoded} body (the bundled login form). */
-    private static Map<String, Object> parseForm(String raw) {
-        Map<String, Object> form = new LinkedHashMap<>();
-        for (String pair : raw.split("&")) {
-            int eq = pair.indexOf('=');
-            if (eq < 0) {
-                continue;
-            }
-            form.put(URLDecoder.decode(pair.substring(0, eq), StandardCharsets.UTF_8),
-                    URLDecoder.decode(pair.substring(eq + 1), StandardCharsets.UTF_8));
-        }
-        return form;
     }
 }

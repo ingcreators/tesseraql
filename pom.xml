@@ -185,6 +185,10 @@
     <zonky.embedded.postgres.version>2.2.2</zonky.embedded.postgres.version>
     <zonky.postgres.binaries.version>17.10.0</zonky.postgres.binaries.version>
     <spotless.version>3.9.0</spotless.version>
+    <maven.pmd.plugin.version>3.28.0</maven.pmd.plugin.version>
+    <!-- The plugin's bundled PMD lags; the analyzer version is pinned here so Java language
+         support is chosen deliberately (7.16 is where Java 25 landed). -->
+    <pmd.version>7.26.0</pmd.version>
 
     <!-- Build plugin versions -->
     <maven.compiler.plugin.version>3.15.0</maven.compiler.plugin.version>
@@ -631,6 +635,47 @@
             <!-- m2e must not run this in IDE builds: Spotless' embedded Eclipse formatter
                  clashes with the IDE's own JDT classes. VS Code formats via the same
                  profile through java.format.settings.url; the CLI/CI gate is unaffected. -->
+            <?m2e ignore?>
+            <goals>
+              <goal>check</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!--
+        Unused-declaration gate (config/pmd-unused.xml): the dead code javac has no lint for.
+        The javac -Xlint gate keeps the IDE problems panel empty for every category javac
+        knows; unread private fields, uncalled private methods and unread parameters it does
+        not, and each has recurred as an extraction leftover only JDT could see. Main sources
+        only, failing the build at verify.
+      -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-pmd-plugin</artifactId>
+        <version>${maven.pmd.plugin.version}</version>
+        <configuration>
+          <rulesets>
+            <ruleset>${maven.multiModuleProjectDirectory}/config/pmd-unused.xml</ruleset>
+          </rulesets>
+          <linkXRef>false</linkXRef>
+          <printFailingErrors>true</printFailingErrors>
+          <analysisCache>true</analysisCache>
+        </configuration>
+        <dependencies>
+          <dependency>
+            <groupId>net.sourceforge.pmd</groupId>
+            <artifactId>pmd-core</artifactId>
+            <version>${pmd.version}</version>
+          </dependency>
+          <dependency>
+            <groupId>net.sourceforge.pmd</groupId>
+            <artifactId>pmd-java</artifactId>
+            <version>${pmd.version}</version>
+          </dependency>
+        </dependencies>
+        <executions>
+          <execution>
             <?m2e ignore?>
             <goals>
               <goal>check</goal>

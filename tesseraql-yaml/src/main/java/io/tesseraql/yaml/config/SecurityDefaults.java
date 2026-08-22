@@ -106,7 +106,7 @@ public final class SecurityDefaults {
      * Resolves the effective security of one route: route-local keys win, the first matching
      * rule fills the rest. Returns the declared spec unchanged when no rule matches.
      */
-    public SecuritySpec resolve(String httpMethod, String urlPath, SecuritySpec declared) {
+    public SecuritySpec resolve(String urlPath, SecuritySpec declared) {
         Optional<Rule> matched = matchedRule(urlPath);
         if (matched.isEmpty()) {
             return declared;

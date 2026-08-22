@@ -377,7 +377,7 @@ final class DuckDbDatasources {
         if (config.getString(prefix + "maximumPoolSize").isEmpty()) {
             hikari.setMaximumPoolSize(4);
         }
-        hikari.setConnectionInitSql(initSql(config, name, extensions, attaches, lake,
+        hikari.setConnectionInitSql(initSql(config, extensions, attaches, lake,
                 remoteReads, loadsAtInit, override, appHome));
     }
 
@@ -387,7 +387,7 @@ final class DuckDbDatasources {
      * drop external access (when it was needed for the loads) and lock the configuration — the
      * last statements every pooled connection runs before any app SQL.
      */
-    private static String initSql(AppConfig config, String name, List<String> extensions,
+    private static String initSql(AppConfig config, List<String> extensions,
             List<Attach> attaches, Lake lake, List<RemoteRead> remoteReads, boolean loadsAtInit,
             DataSources.MainDatasourceOverride override, Path appHome) {
         List<String> statements = new ArrayList<>();

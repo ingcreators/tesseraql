@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ruleset name="tesseraql-unused"
+    xmlns="http://pmd.sourceforge.net/ruleset/2.0.0"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://pmd.sourceforge.net/ruleset/2.0.0 https://pmd.sourceforge.io/ruleset_2_0_0.xsd">
+  <description>
+    Dead code javac cannot see: -Xlint:all has no unused-declaration lints, so an unread
+    private field, an uncalled private method or a parameter nothing reads sails through the
+    failOnWarning gate and surfaces only in the IDE's JDT panel. These four rules close that
+    gap; checkAll extends the parameter rule to non-private methods, where extraction
+    leftovers accumulate (a router-installer signature kept a port nothing read six times
+    over). A parameter kept deliberately - a uniform dispatch signature, an SPI shape - says
+    so with @SuppressWarnings("PMD.UnusedFormalParameter") at the declaration.
+  </description>
+  <rule ref="category/java/bestpractices.xml/UnusedPrivateField"/>
+  <rule ref="category/java/bestpractices.xml/UnusedPrivateMethod"/>
+  <rule ref="category/java/bestpractices.xml/UnusedLocalVariable"/>
+  <rule ref="category/java/bestpractices.xml/UnusedFormalParameter">
+    <properties>
+      <property name="checkAll" value="true"/>
+    </properties>
+  </rule>
+</ruleset>

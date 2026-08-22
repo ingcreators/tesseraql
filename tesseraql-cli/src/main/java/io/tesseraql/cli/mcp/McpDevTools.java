@@ -313,7 +313,9 @@ public final class McpDevTools {
                 .build();
     }
 
-    private McpToolResult runTests(JsonNode args, McpCallContext context) throws Exception {
+    // The handler SAM fixes this signature (`.handler(this::runTests)`); this one handler has
+    // no per-call state to read from the context.
+    private McpToolResult runTests(JsonNode args, McpCallContext context) throws Exception { // NOPMD UnusedFormalParameter
         Path app = appHome(args);
         AppConfig config = config(app);
         Datasource ds = resolve(args, app, config);

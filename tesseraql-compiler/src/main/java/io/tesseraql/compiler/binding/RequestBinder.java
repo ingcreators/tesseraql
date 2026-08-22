@@ -38,12 +38,6 @@ public final class RequestBinder implements Step {
     private static final java.util.Set<String> RESERVED_FIELDS = java.util.Set.of("_csrf");
 
     private final RouteDefinition route;
-    /**
-     * The route's own URL template, or null for a document reached without one (an MCP
-     * primitive, a delegated workflow step). It is what the {@code path.*} namespace is read
-     * against — see {@link #pathValues}.
-     */
-    private final String urlPath;
     private final java.util.List<String> pathParams;
     private final java.nio.file.Path appHome;
     private final ObjectMapper mapper = new ObjectMapper();
@@ -67,7 +61,6 @@ public final class RequestBinder implements Step {
     public RequestBinder(RouteDefinition route, String urlPath,
             java.nio.file.Path appHome, io.tesseraql.core.expr.ExpressionFunctions functions) {
         this.route = route;
-        this.urlPath = urlPath;
         this.pathParams = declaredPathParams(urlPath);
 
         this.appHome = appHome;

@@ -95,7 +95,7 @@ class NotificationDeliveryTest {
         AppConfig config = new AppConfig(
                 Map.of("tesseraql", Map.of("notifications", Map.of("channels", channels))),
                 name -> null);
-        return new NotificationSink(NotificationChannels.load(config), appHome, context, null,
+        return new NotificationSink(NotificationChannels.load(config), appHome, null,
                 transfers, gateway());
     }
 

@@ -33,9 +33,9 @@ final class LiveEvents {
     }
 
     /** {@code inbox} is null when no inbox channel is configured (topics-only apps). */
-    static void register(RuntimeContext context, int port, LiveStreams streams, InboxStore inbox,
+    static void register(RuntimeContext context, LiveStreams streams, InboxStore inbox,
             Set<String> declaredTopics) {
-        SseRoutes.register(context, port, "/_tesseraql/events", (principal, query) -> {
+        SseRoutes.register(context, "/_tesseraql/events", (principal, query) -> {
             String tenant = principal.tenantId();
             String subject = principal.subject();
             // Fired signal key → the named event it becomes on the wire.
