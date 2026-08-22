@@ -21,11 +21,12 @@ import org.junit.jupiter.api.Test;
  */
 class QueueConsumerDeadLetterTest {
 
-    /** A one-message store recording what the consumer marked failed. */
+    /** A one-message store recording what the consumer marked failed or consumed. */
     private static final class OneMessageStore implements EventChannelStore {
         private final EventMessage message;
         String failedId;
         String failedError;
+        String consumedId;
         private boolean served;
 
         private OneMessageStore(int attempts) {
@@ -55,6 +56,7 @@ class QueueConsumerDeadLetterTest {
         @Override
         public void markConsumed(String messageId, String channel, String topic,
                 String idempotencyKey) {
+            consumedId = messageId;
         }
 
         @Override
@@ -128,5 +130,63 @@ class QueueConsumerDeadLetterTest {
         // The store still records the failure (the retry path), but nothing dead-lettered.
         assertThat(store.failedId).isEqualTo("m-1");
         assertThat(deadLetters(meter)).isZero();
+    }
+
+    /**
+     * A failure the route's own error clauses answered is still a failed delivery. The runner
+     * clears the exchange's exception before running the envelope (the exception moves to
+     * {@code EXCEPTION_CAUGHT}), so a consumer reading only {@code getException()} would mark a
+     * rolled-back transaction consumed — silent message loss behind a rendered 500 nobody reads.
+     */
+    @Test
+    void aRenderedFailureIsRecordedAsFailedNotConsumed() throws Exception {
+        OneMessageStore store = new OneMessageStore(0);
+        RuntimeContext context = new RuntimeContext();
+        context.start();
+        try {
+            // The real consumer pipeline's shape: a step that throws, behind the inherited
+            // error clause that renders the failure as a status.
+            io.tesseraql.compiler.pipeline.Pipelines.of(context)
+                    .compiling(List.of())
+                    .pipeline("queue.items.route")
+                    .process(exchange -> {
+                        throw new IllegalStateException("constraint violation");
+                    })
+                    .onException(Exception.class, exchange -> exchange.response().status(500));
+            new QueueConsumer(context, store,
+                    List.of(new QueueConsumer.Subscription("events", "items.changed",
+                            "items.route")),
+                    3)
+                    .drainAll();
+        } finally {
+            context.close();
+        }
+
+        assertThat(store.consumedId).isNull();
+        assertThat(store.failedId).isEqualTo("m-1");
+        assertThat(store.failedError).contains("constraint violation");
+    }
+
+    @Test
+    void aSuccessfulDeliveryIsConsumed() throws Exception {
+        OneMessageStore store = new OneMessageStore(0);
+        RuntimeContext context = new RuntimeContext();
+        context.start();
+        try {
+            io.tesseraql.compiler.pipeline.Pipelines.of(context)
+                    .compiling(List.of())
+                    .pipeline("queue.items.route")
+                    .process(exchange -> exchange.setBody("done"));
+            new QueueConsumer(context, store,
+                    List.of(new QueueConsumer.Subscription("events", "items.changed",
+                            "items.route")),
+                    3)
+                    .drainAll();
+        } finally {
+            context.close();
+        }
+
+        assertThat(store.consumedId).isEqualTo("m-1");
+        assertThat(store.failedId).isNull();
     }
 }
