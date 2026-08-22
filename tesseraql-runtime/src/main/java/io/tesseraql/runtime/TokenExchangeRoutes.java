@@ -127,7 +127,7 @@ final class TokenExchangeRoutes {
 
         exchange.response().status(200);
         exchange.response().header(Headers.CONTENT_TYPE, "application/json");
-        exchange.getMessage().setBody(
+        exchange.setBody(
                 MAPPER.writeValueAsString(tokens.mint(principal, appName)));
     }
 }

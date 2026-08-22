@@ -31,7 +31,7 @@ class JsonResponseShapingTest {
         Exchange exchange = render(response, Map.of(
                 "params", Map.of("qty", 3, "price", 4, "name", "sato"),
                 "main", Map.of("rows", List.of(Map.of("id", 1)))));
-        String json = exchange.getMessage().getBody(String.class);
+        String json = exchange.getBody(String.class);
         assertThat(json).contains("\"total\":12").contains("\"label\":\"SATO\"")
                 .contains("\"rows\":[{\"id\":1}]");
     }
@@ -43,7 +43,7 @@ class JsonResponseShapingTest {
         ResponseSpec.JsonResponse response = new ResponseSpec.JsonResponse(200, Map.of(
                 "odd", "not an # expression"), null, null);
         Exchange exchange = render(response, Map.of());
-        assertThat(exchange.getMessage().getBody(String.class)).contains("\"odd\":null");
+        assertThat(exchange.getBody(String.class)).contains("\"odd\":null");
     }
 
     @Test

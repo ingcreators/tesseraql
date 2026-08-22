@@ -203,7 +203,7 @@ public class SqlStep implements Step {
             if (context != null) {
                 io.tesseraql.pipeline.ContextResults.put(context, resultKey, result);
             }
-            exchange.getMessage().setBody(result);
+            exchange.setBody(result);
         } catch (RuntimeException ex) {
             span.recordError(ex);
             throw ex;
@@ -327,7 +327,7 @@ public class SqlStep implements Step {
         }
 
         try {
-            exchange.getMessage().setBody(tempStore.openInput(ref));
+            exchange.setBody(tempStore.openInput(ref));
         } catch (java.io.IOException ex) {
             throw executionError(ex);
         }

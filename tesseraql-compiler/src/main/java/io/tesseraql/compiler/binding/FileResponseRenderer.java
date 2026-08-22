@@ -49,7 +49,7 @@ public final class FileResponseRenderer implements Step {
             exchange.response().header("Content-Disposition",
                     "attachment; filename=\"" + sanitizeFilename(response.filename()) + "\"");
         }
-        exchange.getMessage().setBody(Templates.render(appHome, templateName, model));
+        exchange.setBody(Templates.render(appHome, templateName, model));
     }
 
     /** Keeps the download filename header-safe (no quotes or control characters). */

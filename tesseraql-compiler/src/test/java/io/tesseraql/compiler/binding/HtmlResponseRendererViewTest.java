@@ -57,7 +57,7 @@ class HtmlResponseRendererViewTest {
 
     private static String render(HtmlResponseRenderer renderer, Map<String, Object> context)
             throws Exception {
-        return exchangeFor(renderer, context, Map.of()).getMessage().getBody(String.class);
+        return exchangeFor(renderer, context, Map.of()).getBody(String.class);
     }
 
     private static Exchange exchangeFor(HtmlResponseRenderer renderer,
@@ -85,14 +85,14 @@ class HtmlResponseRendererViewTest {
     void anHxRequestGetsTheBareRegionWithVaryOnBoth(@TempDir Path dir) throws Exception {
         HtmlResponseRenderer renderer = shellRenderer(dir, null);
         Exchange partial = exchangeFor(renderer, Map.of(), Map.of("HX-Request", "true"));
-        String region = partial.getMessage().getBody(String.class);
+        String region = partial.getBody(String.class);
         assertThat(region).doesNotContain("<html").contains("hc-datagrid")
                 .startsWith("<div id=\"page-content\"");
         assertThat(partial.response().header("Vary"))
                 .contains("HX-Request");
 
         Exchange direct = exchangeFor(renderer, Map.of(), Map.of());
-        assertThat(direct.getMessage().getBody(String.class)).contains("<html");
+        assertThat(direct.getBody(String.class)).contains("<html");
         assertThat(direct.response().header("Vary"))
                 .contains("HX-Request");
     }
@@ -102,21 +102,21 @@ class HtmlResponseRendererViewTest {
         HtmlResponseRenderer renderer = shellRenderer(dir, null);
         assertThat(exchangeFor(renderer, Map.of(),
                 Map.of("HX-Request", "true", "HX-Boosted", "true"))
-                .getMessage().getBody(String.class)).contains("<html");
+                .getBody(String.class)).contains("<html");
         assertThat(exchangeFor(renderer, Map.of(),
                 Map.of("HX-Request", "true", "HX-History-Restore-Request", "true"))
-                .getMessage().getBody(String.class)).contains("<html");
+                .getBody(String.class)).contains("<html");
     }
 
     @Test
     void shellAlwaysAndNeverOverrideTheNegotiation(@TempDir Path dir) throws Exception {
         Exchange always = exchangeFor(shellRenderer(dir, "always"), Map.of(),
                 Map.of("HX-Request", "true"));
-        assertThat(always.getMessage().getBody(String.class)).contains("<html");
+        assertThat(always.getBody(String.class)).contains("<html");
         assertThat(always.response().header("Vary")).isNull();
 
         Exchange never = exchangeFor(shellRenderer(dir, "never"), Map.of(), Map.of());
-        assertThat(never.getMessage().getBody(String.class))
+        assertThat(never.getBody(String.class))
                 .doesNotContain("<html").startsWith("<div id=\"page-content\"");
     }
 

@@ -74,7 +74,7 @@ class RequestBinderPathParameterTest {
             exchange.request().uri(uri);
         }
         exchange.request().pathParams().putAll(pathParams);
-        exchange.getMessage().setBody(body);
+        exchange.setBody(body);
         return exchange;
     }
 

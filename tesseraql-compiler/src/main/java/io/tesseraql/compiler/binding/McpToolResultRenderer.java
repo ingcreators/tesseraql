@@ -22,7 +22,7 @@ public final class McpToolResultRenderer implements Step {
 
     @Override
     public void process(Exchange exchange) throws Exception {
-        Object body = exchange.getMessage().getBody();
+        Object body = exchange.getBody();
         String json;
         try {
             json = mapper.writeValueAsString(body);
@@ -31,6 +31,6 @@ public final class McpToolResultRenderer implements Step {
                     + ex.getMessage());
         }
         exchange.response().header(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
-        exchange.getMessage().setBody(json);
+        exchange.setBody(json);
     }
 }

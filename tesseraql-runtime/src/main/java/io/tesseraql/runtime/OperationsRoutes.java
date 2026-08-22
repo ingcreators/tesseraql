@@ -190,7 +190,7 @@ final class OperationsRoutes {
                 exchange.response().status(200);
                 exchange.response().header(Headers.CONTENT_TYPE,
                         io.tesseraql.core.telemetry.PrometheusTextFormat.CONTENT_TYPE);
-                exchange.getMessage().setBody(io.tesseraql.core.telemetry.PrometheusTextFormat
+                exchange.setBody(io.tesseraql.core.telemetry.PrometheusTextFormat
                         .render(metrics.meter())
                         + io.tesseraql.opsui.PollSourceMetrics.render(metrics.pollSources(),
                                 java.time.Instant.now())
@@ -662,7 +662,7 @@ final class OperationsRoutes {
     }
 
     private Map<String, Object> parseBody(Exchange exchange) {
-        String raw = exchange.getMessage().getBody(String.class);
+        String raw = exchange.getBody(String.class);
         if (raw == null || raw.isBlank()) {
             return Map.of();
         }
@@ -686,7 +686,7 @@ final class OperationsRoutes {
                 exchange.response().status(200);
             }
             exchange.response().header(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
-            exchange.getMessage().setBody(mapper.writeValueAsString(body));
+            exchange.setBody(mapper.writeValueAsString(body));
         };
     }
 
@@ -717,7 +717,7 @@ final class OperationsRoutes {
         exchange.response().header(Headers.CONTENT_TYPE, download.contentType());
         exchange.response().header("Content-Disposition", "attachment; filename=\""
                 + download.filename().replaceAll("[\\r\\n\"]", "_") + "\"");
-        exchange.getMessage().setBody(download.content());
+        exchange.setBody(download.content());
     }
 
     // ---- wire shapes: ISO-8601 timestamps only (docs/vocabulary-cleanup.md slice 3) ----

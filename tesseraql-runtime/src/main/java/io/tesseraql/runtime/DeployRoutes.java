@@ -150,7 +150,7 @@ final class DeployRoutes {
                             + "&toVersion=" + encode(result.toVersion())
                             + (canary ? "&canary=true" : ""));
             exchange.response().header(Headers.CONTENT_TYPE, "text/plain; charset=utf-8");
-            exchange.getMessage().setBody("");
+            exchange.setBody("");
             if (htmx) {
                 // htmx surfaces a redirect status to the XHR, not the tab; HX-Redirect on a 200
                 // is its full-navigation signal.
@@ -169,7 +169,7 @@ final class DeployRoutes {
         body.put("canary", canary);
         exchange.response().status(200);
         exchange.response().header(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
-        exchange.getMessage().setBody(MAPPER.writeValueAsString(body));
+        exchange.setBody(MAPPER.writeValueAsString(body));
     }
 
     /**
@@ -197,7 +197,7 @@ final class DeployRoutes {
             }
             return part.open();
         }
-        return exchange.getMessage().getBody(InputStream.class);
+        return exchange.getBody(InputStream.class);
     }
 
     /** The uploaded package, spooled off-heap; the caller deletes it when done. */

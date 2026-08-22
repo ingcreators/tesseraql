@@ -506,7 +506,7 @@ public final class TransactionalCommandProcessor implements Step {
                 connection.setAutoCommit(previousAutoCommit);
             }
         }
-        exchange.getMessage().setBody(Map.copyOf(stepResults));
+        exchange.setBody(Map.copyOf(stepResults));
     }
 
     /** The canonical audit binds: the caller's identity and one clock reading (roadmap Phase 18). */

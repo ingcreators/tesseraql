@@ -136,6 +136,15 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **The exchange is one object** (docs/vertx-native.md decision 3, slice 5). `Message` existed
+  because Camel's exchange had an in/out pair and could copy a message between exchanges; this
+  one held exactly one, created eagerly and never replaced, so every
+  `exchange.getMessage().getBody()` was a hop with no decision in it. The body lives on the
+  exchange now, the two internal step-to-step signals (the polled file's name, the queue
+  message key) are exchange properties — which is what properties are for — and `Message` is
+  deleted. The conversion table stays declared, on the exchange: bytes or a stream to text, the
+  scalar coercions the property reads use, and a null rather than a guess for anything else.
+
 - **A parameter has a source, and the source is declared** (docs/vertx-native.md structural
   decisions 1 and 2, slice 4). The request is its own object now: wire headers, metadata
   (method, path, URI, query, peer addresses) and parameters each in their own place, with one

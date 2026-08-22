@@ -149,7 +149,7 @@ public final class JsonResponseRenderer implements Step {
         headers.apply(exchange, evaluation);
         exchange.response().status(status);
         exchange.response().header(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
-        exchange.getMessage().setBody(json);
+        exchange.setBody(json);
     }
 
     private Object resolve(Object template, EvaluationContext evaluation) {

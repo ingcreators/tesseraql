@@ -87,7 +87,7 @@ public final class WorkflowDelegateProcessor implements Step {
                 connection.setAutoCommit(previousAutoCommit);
             }
         }
-        exchange.getMessage().setBody(Map.of("ok", true));
+        exchange.setBody(Map.of("ok", true));
     }
 
     private static String tenantOf(io.tesseraql.pipeline.Exchange exchange) {

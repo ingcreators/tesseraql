@@ -44,7 +44,7 @@ public final class HttpCacheProcessor implements Step {
         if (!etag) {
             return;
         }
-        Object body = exchange.getMessage().getBody();
+        Object body = exchange.getBody();
         byte[] bytes = body instanceof byte[] raw
                 ? raw
                 : body instanceof String text ? text.getBytes(StandardCharsets.UTF_8) : null;
@@ -56,7 +56,7 @@ public final class HttpCacheProcessor implements Step {
         String ifNoneMatch = exchange.request().header("If-None-Match");
         if (tag.equals(ifNoneMatch)) {
             exchange.response().status(304);
-            exchange.getMessage().setBody("");
+            exchange.setBody("");
         }
     }
 

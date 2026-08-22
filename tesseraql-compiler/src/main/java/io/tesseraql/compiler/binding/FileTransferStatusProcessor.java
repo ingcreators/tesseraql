@@ -55,7 +55,7 @@ public final class FileTransferStatusProcessor implements Step {
         }
         exchange.response().status(200);
         exchange.response().header(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
-        exchange.getMessage().setBody(
+        exchange.setBody(
                 FileImportProcessor.MAPPER.writeValueAsString(body));
     }
 

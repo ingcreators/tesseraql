@@ -6,7 +6,6 @@ import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.files.FileReadSpec;
 import io.tesseraql.core.files.FileTransferService;
 import io.tesseraql.pipeline.Exchange;
-import io.tesseraql.pipeline.Headers;
 import io.tesseraql.pipeline.Step;
 import io.tesseraql.pipeline.TesseraqlProperties;
 import java.io.InputStream;
@@ -59,8 +58,9 @@ final class PollImportProcessor implements Step {
         if (transfers == null) {
             throw new TqlException(NO_SERVICE, "File transfer service is not configured");
         }
-        String fileName = exchange.getMessage().getHeader(Headers.FILE_NAME, String.class);
-        try (InputStream content = exchange.getMessage().getBody(InputStream.class)) {
+        String fileName = exchange.getProperty(
+                io.tesseraql.pipeline.TesseraqlProperties.POLLED_FILE_NAME, String.class);
+        try (InputStream content = exchange.getBody(InputStream.class)) {
             if (content == null) {
                 throw new TqlException(EMPTY_FILE,
                         "Polled file '" + fileName + "' had no readable content");

@@ -56,7 +56,7 @@ final class CopilotProxyRoutes {
         } catch (TqlException ex) {
             throw WorkshopTargets.notFound(member);
         }
-        String body = exchange.getMessage().getBody(String.class);
+        String body = exchange.getBody(String.class);
         HttpRequest.Builder request = HttpRequest.newBuilder(URI.create(
                 "http://localhost:" + port + "/" + member + "/_tesseraql/studio/" + member
                         + "/ui/copilot/send"))
@@ -73,7 +73,7 @@ final class CopilotProxyRoutes {
                 .ifPresent(value -> exchange.response().header(Headers.CONTENT_TYPE, value));
         response.headers().firstValue("Location")
                 .ifPresent(value -> exchange.response().header("Location", value));
-        exchange.getMessage().setBody(response.body());
+        exchange.setBody(response.body());
     }
 
     private static void copyHeader(Exchange exchange, HttpRequest.Builder request, String name) {

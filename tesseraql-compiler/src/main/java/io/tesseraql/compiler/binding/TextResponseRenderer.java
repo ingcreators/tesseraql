@@ -47,6 +47,6 @@ public final class TextResponseRenderer implements Step {
                 evaluation.resolve(Arrays.asList(String.valueOf(expr).split("\\.")))));
 
         exchange.response().status(response.effectiveStatus());
-        exchange.getMessage().setBody(Templates.render(appHome, templateName, model));
+        exchange.setBody(Templates.render(appHome, templateName, model));
     }
 }

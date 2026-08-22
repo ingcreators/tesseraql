@@ -61,7 +61,7 @@ public final class IdempotencyProcessors {
                 }
                 case IdempotencyStore.Replay replay -> {
                     exchange.setProperty(REPLAY_PROPERTY, true);
-                    exchange.getMessage().setBody(replay.body());
+                    exchange.setBody(replay.body());
                     exchange.response().status(replay.status());
                     if (replay.contentType() != null) {
                         exchange.response().header(Headers.CONTENT_TYPE, replay.contentType());
@@ -91,7 +91,7 @@ public final class IdempotencyProcessors {
                 return;
             }
             int status = exchange.response().statusOr200();
-            String body = exchange.getMessage().getBody(String.class);
+            String body = exchange.getBody(String.class);
             String contentType = exchange.response().header(Headers.CONTENT_TYPE);
             store(exchange).complete(scope, key, status, body, contentType);
         }
@@ -109,12 +109,12 @@ public final class IdempotencyProcessors {
     private static String requestHash(Exchange exchange) {
         String method = exchange.request().method() == null ? "" : exchange.request().method();
         String path = exchange.request().path() == null ? "" : exchange.request().path();
-        String body = exchange.getMessage().getBody(String.class);
+        String body = exchange.getBody(String.class);
         if (body == null) {
             body = "";
         }
         // Re-set the body so the request binder can read it again after we consumed it.
-        exchange.getMessage().setBody(body);
+        exchange.setBody(body);
         return sha256(method + "\n" + path + "\n" + body);
     }
 

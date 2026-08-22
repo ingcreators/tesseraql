@@ -26,6 +26,9 @@ public final class TesseraqlProperties {
     /** The pipeline a failure came from. */
     public static final String FAILURE_ROUTE_ID = "TesseraqlFailureRouteId";
 
+    /** A polled file's name, set by the poll loop for the import step (was a message header). */
+    public static final String POLLED_FILE_NAME = "TesseraqlPolledFileName";
+
     public static final String CONTEXT = "TesseraqlContext";
     /** The computed page request a paginated query executes under (roadmap Phase 41). */
     public static final String PAGE = "TesseraqlPage";

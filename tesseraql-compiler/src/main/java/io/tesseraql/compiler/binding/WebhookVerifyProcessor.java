@@ -45,11 +45,11 @@ public final class WebhookVerifyProcessor implements Step {
     public void process(Exchange exchange) {
         // The raw request bytes are what the sender signed; read them before any binder parses the
         // body, and set them back so the downstream JSON parse sees the same bytes.
-        byte[] body = exchange.getMessage().getBody(byte[].class);
+        byte[] body = exchange.getBody(byte[].class);
         if (body == null) {
             body = new byte[0];
         }
-        exchange.getMessage().setBody(body);
+        exchange.setBody(body);
 
         String signature = exchange.request().header(verifier.signatureHeader());
         String timestamp = exchange.request().header(verifier.timestampHeader());

@@ -62,7 +62,7 @@ public class IamStep implements Step {
         if (context != null) {
             io.tesseraql.pipeline.ContextResults.put(context, resultKey, result);
         }
-        exchange.getMessage().setBody(result);
+        exchange.setBody(result);
     }
 
     /** Strips a leading {@code identity.} qualifier to get the contract file name. */

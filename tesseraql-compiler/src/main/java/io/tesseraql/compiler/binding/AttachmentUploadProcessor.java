@@ -107,7 +107,7 @@ public final class AttachmentUploadProcessor implements Step {
             exchange.response().header("Location", uri + "/" + a.id());
         }
         exchange.response().header(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
-        exchange.getMessage().setBody(FileImportProcessor.MAPPER.writeValueAsString(body));
+        exchange.setBody(FileImportProcessor.MAPPER.writeValueAsString(body));
     }
 
     /** The uploaded part: the first multipart file part (preferring {@code file}), or the raw body. */
@@ -126,14 +126,14 @@ public final class AttachmentUploadProcessor implements Step {
                         handler.open());
             }
         }
-        Object raw = exchange.getMessage().getBody();
+        Object raw = exchange.getBody();
         InputStream in;
         if (raw instanceof InputStream stream) {
             in = stream;
         } else if (raw instanceof byte[] bytes) {
             in = new ByteArrayInputStream(bytes);
         } else {
-            byte[] converted = exchange.getMessage().getBody(byte[].class);
+            byte[] converted = exchange.getBody(byte[].class);
             in = converted == null ? null : new ByteArrayInputStream(converted);
         }
         return new UploadPart(null, contentType, in);

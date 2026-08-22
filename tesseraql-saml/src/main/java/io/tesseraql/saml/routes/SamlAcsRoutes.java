@@ -199,9 +199,9 @@ final class SamlAcsRoutes {
         exchange.response().status(200);
         exchange.response().header(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
         try {
-            exchange.getMessage().setBody(mapper.writeValueAsString(Map.of("ok", true)));
+            exchange.setBody(mapper.writeValueAsString(Map.of("ok", true)));
         } catch (Exception ex) {
-            exchange.getMessage().setBody("{\"ok\":true}");
+            exchange.setBody("{\"ok\":true}");
         }
     }
 
@@ -214,7 +214,7 @@ final class SamlAcsRoutes {
                 : SamlRedirect.query(paramName, encodedMessage, relayState);
         exchange.response().status(302);
         exchange.response().header("Location", idpUrl + separator + query);
-        exchange.getMessage().setBody(null);
+        exchange.setBody(null);
     }
 
     private static String cookieValue(String cookieHeader, String name) {
@@ -234,7 +234,7 @@ final class SamlAcsRoutes {
         exchange.response().status(200);
         exchange.response().header(Headers.CONTENT_TYPE,
                 "application/samlmetadata+xml; charset=utf-8");
-        exchange.getMessage().setBody(metadata.toXml());
+        exchange.setBody(metadata.toXml());
     }
 
     private void consume(Exchange exchange) throws Exception {
@@ -298,12 +298,12 @@ final class SamlAcsRoutes {
             // decision 7): the prefix goes on here, where it becomes a wire URL.
             exchange.response().header("Location",
                     io.tesseraql.pipeline.BasePath.url(exchange, target));
-            exchange.getMessage().setBody(null);
+            exchange.setBody(null);
             return;
         }
         exchange.response().status(200);
         exchange.response().header(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
-        exchange.getMessage().setBody(mapper.writeValueAsString(
+        exchange.setBody(mapper.writeValueAsString(
                 Map.of("ok", true, "loginId", principal.loginId(), "subject",
                         principal.subject())));
     }
@@ -437,6 +437,6 @@ final class SamlAcsRoutes {
         exchange.response()
                 .status(io.tesseraql.compiler.binding.ErrorResponseRenderer.httpStatus(code));
         exchange.response().header(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
-        exchange.getMessage().setBody(FederationErrors.body(code, message));
+        exchange.setBody(FederationErrors.body(code, message));
     }
 }

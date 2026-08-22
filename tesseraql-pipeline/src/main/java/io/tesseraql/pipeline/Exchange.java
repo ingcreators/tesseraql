@@ -22,9 +22,9 @@ import java.util.Map;
 public final class Exchange {
 
     private final Beans beans;
-    private final Message message = new Message();
     private final Request request = new Request();
     private final Response response = new Response();
+    private Object body;
     private final Map<String, Object> properties = new LinkedHashMap<>();
     private final List<Completion> completions = new ArrayList<>();
     private Exception exception;
@@ -35,8 +35,23 @@ public final class Exchange {
         this.beans = beans;
     }
 
-    public Message getMessage() {
-        return message;
+    /** The body: the request's on the way in, the response's once a renderer wrote one. */
+    public Object getBody() {
+        return body;
+    }
+
+    /**
+     * The body as {@code type}.
+     *
+     * <p>The one real conversion this framework asks for is bytes or a stream to text
+     * (docs/vertx-native.md decision 3); everything else is a cast of a value a step stored.
+     */
+    public <T> T getBody(Class<T> type) {
+        return Conversions.convert(body, type);
+    }
+
+    public void setBody(Object body) {
+        this.body = body;
     }
 
     /**
@@ -68,13 +83,13 @@ public final class Exchange {
     }
 
     public <T> T getProperty(String name, Class<T> type) {
-        return Message.Conversions.convert(properties.get(name), type);
+        return Conversions.convert(properties.get(name), type);
     }
 
     /** The property as {@code type}, or {@code fallback} when unset. */
     public <T> T getProperty(String name, Object fallback, Class<T> type) {
         Object value = properties.get(name);
-        return Message.Conversions.convert(value == null ? fallback : value, type);
+        return Conversions.convert(value == null ? fallback : value, type);
     }
 
     public void setProperty(String name, Object value) {
@@ -144,6 +159,76 @@ public final class Exchange {
                 org.slf4j.LoggerFactory.getLogger(Exchange.class)
                         .warn("A completion of route {} failed", fromRouteId, failed);
             }
+        }
+    }
+
+    /** The framework's own conversions, declared rather than discovered. */
+    static final class Conversions {
+
+        private Conversions() {
+        }
+
+        @SuppressWarnings("unchecked")
+        static <T> T convert(Object value, Class<T> type) {
+            if (value == null) {
+                return null;
+            }
+            if (type.isInstance(value)) {
+                return (T) value;
+            }
+            if (type == String.class) {
+                return (T) text(value);
+            }
+            if (type == Integer.class && value instanceof Number number) {
+                return (T) Integer.valueOf(number.intValue());
+            }
+            if (type == Long.class && value instanceof Number number) {
+                return (T) Long.valueOf(number.longValue());
+            }
+            if (type == Boolean.class && value instanceof String string) {
+                return (T) Boolean.valueOf(string);
+            }
+            if (type == Integer.class && value instanceof String string) {
+                return (T) Integer.valueOf(string.trim());
+            }
+            if (type == java.io.InputStream.class) {
+                return (T) new java.io.ByteArrayInputStream(bytes(value));
+            }
+            if (type == byte[].class) {
+                return (T) bytes(value);
+            }
+            // A conversion this framework does not perform is a null rather than a guess: the
+            // registry that used to answer here could find a path nobody had written down.
+            return null;
+        }
+
+        private static String text(Object value) {
+            if (value instanceof byte[] bytes) {
+                return new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
+            }
+            if (value instanceof java.io.InputStream stream) {
+                try (stream) {
+                    return new String(stream.readAllBytes(),
+                            java.nio.charset.StandardCharsets.UTF_8);
+                } catch (java.io.IOException unreadable) {
+                    throw new IllegalStateException("Could not read the body as text", unreadable);
+                }
+            }
+            return String.valueOf(value);
+        }
+
+        private static byte[] bytes(Object value) {
+            if (value instanceof byte[] bytes) {
+                return bytes;
+            }
+            if (value instanceof java.io.InputStream stream) {
+                try (stream) {
+                    return stream.readAllBytes();
+                } catch (java.io.IOException unreadable) {
+                    throw new IllegalStateException("Could not read the body", unreadable);
+                }
+            }
+            return String.valueOf(value).getBytes(java.nio.charset.StandardCharsets.UTF_8);
         }
     }
 }

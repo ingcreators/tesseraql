@@ -87,7 +87,7 @@ public final class FileImportProcessor implements Step {
                 return part.open();
             }
         }
-        Object body = exchange.getMessage().getBody();
+        Object body = exchange.getBody();
         if (body instanceof InputStream in) {
             return in;
         }
@@ -97,7 +97,7 @@ public final class FileImportProcessor implements Step {
         if (body instanceof String text) {
             return new java.io.ByteArrayInputStream(text.getBytes(StandardCharsets.UTF_8));
         }
-        byte[] converted = exchange.getMessage().getBody(byte[].class);
+        byte[] converted = exchange.getBody(byte[].class);
         return converted == null ? null : new java.io.ByteArrayInputStream(converted);
     }
 
@@ -119,7 +119,7 @@ public final class FileImportProcessor implements Step {
         exchange.response().header("Location", statusUrl);
         exchange.response().header(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
         try {
-            exchange.getMessage().setBody(MAPPER.writeValueAsString(body));
+            exchange.setBody(MAPPER.writeValueAsString(body));
         } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
             throw new IllegalStateException(ex);
         }

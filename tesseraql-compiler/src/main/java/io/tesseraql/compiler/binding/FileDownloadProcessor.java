@@ -37,6 +37,6 @@ public final class FileDownloadProcessor implements Step {
         exchange.response().header("Content-Disposition",
                 "attachment; filename=\"" + download.filename().replaceAll("[\\r\\n\"]", "_")
                         + "\"");
-        exchange.getMessage().setBody(download.content());
+        exchange.setBody(download.content());
     }
 }

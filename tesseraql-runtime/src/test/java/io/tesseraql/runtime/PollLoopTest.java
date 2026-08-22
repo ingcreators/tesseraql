@@ -3,7 +3,6 @@ package io.tesseraql.runtime;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.tesseraql.opsui.PollSourceStatus;
-import io.tesseraql.pipeline.Headers;
 import io.tesseraql.pipeline.RuntimeContext;
 import io.tesseraql.pipeline.Step;
 import java.io.IOException;
@@ -171,8 +170,9 @@ class PollLoopTest {
     /** An importer that records what it was handed, name and content. */
     private static Step record(List<String> imported) {
         return exchange -> {
-            String name = (String) exchange.getMessage().getHeader(Headers.FILE_NAME);
-            try (InputStream body = (InputStream) exchange.getMessage().getBody()) {
+            String name = exchange.getProperty(
+                    io.tesseraql.pipeline.TesseraqlProperties.POLLED_FILE_NAME, String.class);
+            try (InputStream body = (InputStream) exchange.getBody()) {
                 imported.add(name + ":" + new String(body.readAllBytes()));
             }
         };

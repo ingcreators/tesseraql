@@ -112,7 +112,7 @@ final class WorkshopRoutes {
         // response, and a multi-line field (a route document being saved) is a header value
         // Vert.x rightly refuses. The answer is the JSON body and nothing else.
         exchange.response().header(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
-        exchange.getMessage().setBody(mapper.writeValueAsString(body));
+        exchange.setBody(mapper.writeValueAsString(body));
     }
 
     /** The urlencoded form: platform-http pre-parses it to a map body; a raw string is parsed. */
