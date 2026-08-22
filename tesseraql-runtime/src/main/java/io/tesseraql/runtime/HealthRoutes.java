@@ -68,7 +68,7 @@ final class HealthRoutes {
     }
 
     /** Mounts liveness and readiness on the started platform router, under the app's base path. */
-    static void install(RuntimeContext runtimeContext, int port, OpsDashboard dashboard) {
+    static void install(RuntimeContext runtimeContext, OpsDashboard dashboard) {
         io.vertx.ext.web.Router router = HttpEdgeBeans.router(runtimeContext);
         HealthRoutes health = new HealthRoutes(dashboard);
         String mount = io.tesseraql.pipeline.BasePath

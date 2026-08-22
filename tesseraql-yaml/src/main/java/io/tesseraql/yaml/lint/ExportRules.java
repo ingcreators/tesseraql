@@ -117,8 +117,7 @@ final class ExportRules {
      * apply, and its template renders through the standard template engine, so it must be
      * {@code .html}.
      */
-    static void lintRouteExport(LintContext context, RouteFile route, RouteDefinition definition,
-            String source,
+    static void lintRouteExport(RouteFile route, RouteDefinition definition, String source,
             List<LintFinding> findings) {
         io.tesseraql.yaml.model.ExportSpec spec = definition.fileExport();
         if (spec == null) {
@@ -195,7 +194,7 @@ final class ExportRules {
                                 + " - otherwise every group would be written to the same name and only"
                                 + " the last would survive"));
             }
-            lintGroupOrdering(context, spec, extractionSql, spec.splitBy(), label, source,
+            lintGroupOrdering(context, extractionSql, spec.splitBy(), label, source,
                     findings);
         }
         if (spec.groupBy() != null && !spec.groupBy().isBlank()) {
@@ -204,7 +203,7 @@ final class ExportRules {
                         + "export declares groupBy: but no template: - a " + spec.format()
                         + " export writes rows and nothing else, so the groups have no reader"));
             }
-            lintGroupOrdering(context, spec, extractionSql, spec.groupBy(), label, source,
+            lintGroupOrdering(context, extractionSql, spec.groupBy(), label, source,
                     findings);
         }
         boolean templated = spec.template() != null;
@@ -234,7 +233,7 @@ final class ExportRules {
      * with {@code TQL-LD-2851}; this says so at build time, from the text of the 2-way SQL, in the
      * shape the mail lints already use — a heuristic, hence a warning.
      */
-    static void lintGroupOrdering(LintContext context, io.tesseraql.yaml.model.ExportSpec spec,
+    static void lintGroupOrdering(LintContext context,
             java.nio.file.Path sql, String column, String label, String source,
             List<LintFinding> findings) {
         if (sql == null || !Files.isRegularFile(sql)) {

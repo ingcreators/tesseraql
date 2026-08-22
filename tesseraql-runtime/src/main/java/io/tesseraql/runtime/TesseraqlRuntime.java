@@ -437,7 +437,6 @@ public final class TesseraqlRuntime implements AutoCloseable {
         // (docs/stack-shells.md structural decision 2).
         boolean hostedMember = hostContext != null && stackMembers == null;
         RuntimeContext context = new RuntimeContext();
-        // The component policy guards every registration from here on
         // The prefix this application is served under, published before anything mounts a route
         // or emits a URL (docs/base-path.md). The compiler sets it on the REST configuration;
         // the surfaces outside the REST DSL — static assets, the SSE streams — and the response
@@ -1049,7 +1048,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 }
                 final io.tesseraql.core.inbox.InboxStore inboxForEvents = inboxStore;
                 java.util.Set<String> topics = java.util.Set.copyOf(declaredTopics);
-                sseEndpoints.add(() -> LiveEvents.register(context, port, liveStreams,
+                sseEndpoints.add(() -> LiveEvents.register(context, liveStreams,
                         inboxForEvents, topics));
             }
             // Invitations (roadmap Phase 50 slice 2): configured when both the accept-link base
@@ -1123,11 +1122,10 @@ public final class TesseraqlRuntime implements AutoCloseable {
             java.util.Set<String> hostedApps = new java.util.LinkedHashSet<>();
             hostedApps.add(appName);
 
-            TenantDataSources tenantPools = tenantDataSources;
             // The manual/scheduled runner, with light after-chaining
             // (docs/batch-platform.md track D; docs/boot-phases.md slice 3).
             OpsActions.JobRunner jobRunner = JobRunners.chained(jobs, jobOwners, appName,
-                    dataSource, dataSources, manifest.config(), tenantPools, jobExecutor);
+                    dataSource, dataSources, manifest.config(), tenantDataSources, jobExecutor);
 
             // Business-day calendars (docs/batch-platform.md track B): loaded at startup so a
             // broken calendars/ dir fails fast. One decision helper answers both the scheduling
@@ -1140,12 +1138,10 @@ public final class TesseraqlRuntime implements AutoCloseable {
             CalendarDecisions calendarDecisions = new CalendarDecisions(calendars, dataSource,
                     dataSources).status(calendarStatus);
 
-            io.tesseraql.core.outbox.OutboxEventSink outboxSink;
             // Per-node poll-source health (docs/poll-source-status.md): fed by the polling
             // wiring below, read by the dashboard's alerts and the console's jobs page.
             io.tesseraql.opsui.PollSourceStatus pollSourceStatus = new io.tesseraql.opsui.PollSourceStatus();
             context.bind("tesseraqlPollSourceStatus", pollSourceStatus);
-            io.tesseraql.opsui.OpsDashboard opsDashboard;
             // The port actually bound, learned after the server starts: the requested one, or the
             // kernel's pick when 0 was asked for.
             int boundPort = port;
@@ -1153,7 +1149,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
             // is wrapped in a composite, and reading past it left the console's trace pages empty
             // in exactly the deployments that had the most telemetry (docs/audit-hardening.md
             // Decision 7).
-            opsDashboard = OpsDashboards.assemble(manifest.config(),
+            io.tesseraql.opsui.OpsDashboard opsDashboard = OpsDashboards.assemble(manifest.config(),
                     jobRepository, lanes, slowSqlLog, effectiveTracer,
                     pinningMonitor, outboxStore, eventChannelStore,
                     pollSourceStatus, calendarStatus, dataSource, dataSources);
@@ -1331,20 +1327,20 @@ public final class TesseraqlRuntime implements AutoCloseable {
             java.util.Map<String, java.nio.file.Path> assetTrees = Map.copyOf(appAssets);
             ClientMessages clientMessages = new ClientMessages(appHome,
                     manifest.config().getString("tesseraql.i18n.defaultLocale").orElse("en"));
-            sseEndpoints.add(() -> AssetRoutes.install(context, port, assetRoot, assetTrees,
+            sseEndpoints.add(() -> AssetRoutes.install(context, assetRoot, assetTrees,
                     clientMessages));
             // Liveness and readiness, answered on the router off the roll-up the dashboard holds
             // (docs/http-threading.md decision 3): the surface that has to be answerable when
             // nothing else is must not need the resource everything else is waiting for.
             io.tesseraql.opsui.OpsDashboard health = opsDashboard;
-            sseEndpoints.add(() -> HealthRoutes.install(context, port, health));
+            sseEndpoints.add(() -> HealthRoutes.install(context, health));
             // Compiled routes, served on the router off the worker pool (docs/http-edge.md
             // decision 1). Mounted ahead of the remaining hand-written surfaces rather than
             // instead of them: a
             // request this adapter does not reproduce faithfully is handed back, and the route
             // model is unchanged either way.
             sseEndpoints.add(() -> context.bind(RouteEdge.BEAN,
-                    RouteEdge.install(context, port)));
+                    RouteEdge.install(context)));
             // The ops API needs each job's owning app so per-app scope can gate listing and runs.
             Map<String, String> ownedJobs = new LinkedHashMap<>();
             jobs.keySet().forEach(id -> ownedJobs.put(id, jobOwners.getOrDefault(id, appName)));
@@ -1357,10 +1353,6 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             .map(Boolean::parseBoolean).orElse(false),
                     aggregatingMeter, pollSourceStatus,
                     new io.tesseraql.opsui.RuntimeMetrics(() -> poolStats(dataSources)));
-            // camel-main was declared with zero references anywhere. Removing it is a clean
-            // subtraction that also closes the camel.server.mcp* door structurally: the only thing
-            // keeping those properties inert was that camel-main's bootstrap never ran
-            // (docs/audit-hardening.md Decision 9).
             Map<String, io.tesseraql.yaml.model.JobDefinition> jobDefinitions = new LinkedHashMap<>();
             jobs.forEach((id, jobFile) -> jobDefinitions.put(id, jobFile.definition()));
             // What this runtime serves: the host app plus anything mounted into it. The ops
@@ -1709,7 +1701,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
             io.tesseraql.core.outbox.OutboxEventSink notificationSink = notificationChannels
                     .isEmpty()
                             ? null
-                            : new NotificationSink(notificationChannels, appHome, context,
+                            : new NotificationSink(notificationChannels, appHome,
                                     inboxStore, fileTransfers,
                                     outboundGateway(httpCallClient));
             // The channel-publish sink relays publish: EVENT events onto messaging channels
@@ -1717,7 +1709,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
             io.tesseraql.core.outbox.OutboxEventSink channelSink = messagingChannels.isEmpty()
                     ? null
                     : new ChannelPublishSink(messagingChannels, eventChannelStore);
-            outboxSink = event -> {
+            io.tesseraql.core.outbox.OutboxEventSink outboxSink = event -> {
                 LOGGING_SINK.send(event);
                 if (notificationSink != null) {
                     notificationSink.send(event);
@@ -1793,11 +1785,11 @@ public final class TesseraqlRuntime implements AutoCloseable {
             // pick-a-free-port-then-bind across suite forks.
             boundPort = httpServer.actualPort();
             // Unicode route paths match their percent-encoded requests (UnicodePaths).
-            UnicodePaths.install(context, port);
+            UnicodePaths.install(context);
             // The runtime-wide in-flight bound (docs/http-threading.md decision 3). Installed here
             // because the platform router does not exist until the HTTP server service has
             // started, and ordered ahead of every route registered before it.
-            HttpAdmission.install(context, port, maxInFlight(manifest.config()));
+            HttpAdmission.install(context, maxInFlight(manifest.config()));
             sseEndpoints.forEach(Runnable::run);
             LOG.info("TesseraQL runtime started on port {} for app {}", boundPort, appHome);
             return new TesseraqlRuntime(context, dataSources, boundPort, jobRepository, jobExecutor,

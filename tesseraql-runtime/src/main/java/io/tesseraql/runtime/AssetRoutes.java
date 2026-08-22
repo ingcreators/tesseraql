@@ -154,7 +154,7 @@ final class AssetRoutes implements RuntimeContext.Service {
     }
 
     /** Mounts the asset tree on the started platform router, under the app's base path. */
-    static void install(RuntimeContext runtimeContext, int port, Path mainAssets,
+    static void install(RuntimeContext runtimeContext, Path mainAssets,
             Map<String, Path> appAssets, ClientMessages clientMessages) {
         io.vertx.ext.web.Router router = HttpEdgeBeans.router(runtimeContext);
         AssetRoutes assets = new AssetRoutes(runtimeContext, mainAssets, appAssets, clientMessages);

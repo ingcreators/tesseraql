@@ -22,7 +22,7 @@ final class UnicodePaths {
     }
 
     /** Installs the decoder as the first route on the started platform router. */
-    static void install(RuntimeContext runtimeContext, int port) {
+    static void install(RuntimeContext runtimeContext) {
         io.vertx.ext.web.Router router = HttpEdgeBeans.router(runtimeContext);
         router.route().order(Integer.MIN_VALUE).handler(ctx -> {
             String path = ctx.request().path();

@@ -60,7 +60,7 @@ final class HttpAdmission {
      * <p>Called from the same post-start hook the SSE endpoints use: the router is created when
      * the HTTP server service starts, so there is nothing to register on before that.
      */
-    static void install(RuntimeContext runtimeContext, int port, int maxInFlight) {
+    static void install(RuntimeContext runtimeContext, int maxInFlight) {
         io.vertx.ext.web.Router router = HttpEdgeBeans.router(runtimeContext);
         HttpAdmission gate = new HttpAdmission(maxInFlight,
                 io.tesseraql.pipeline.BasePath.of(runtimeContext.beans())

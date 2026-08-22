@@ -72,16 +72,16 @@ public final class SseRoutes {
      * router routes, so the mount table — where the prefix reaches every other framework
      * endpoint at once — does not carry them.
      */
-    public static void register(RuntimeContext runtimeContext, int port, String path,
+    public static void register(RuntimeContext runtimeContext, String path,
             Handler handler) {
         io.vertx.ext.web.Router router = HttpEdgeBeans.router(runtimeContext);
         String mounted = io.tesseraql.pipeline.BasePath
                 .of(runtimeContext.beans()) + path;
         router.route(HttpMethod.GET, mounted)
-                .handler(ctx -> serve(runtimeContext, router, ctx, mounted, handler));
+                .handler(ctx -> serve(runtimeContext, ctx, mounted, handler));
     }
 
-    private static void serve(RuntimeContext runtimeContext, io.vertx.ext.web.Router router,
+    private static void serve(RuntimeContext runtimeContext,
             RoutingContext ctx, String path, Handler handler) {
         HttpServerResponse response = ctx.response();
         // The connection's event-loop context — captured here, on it — is where every

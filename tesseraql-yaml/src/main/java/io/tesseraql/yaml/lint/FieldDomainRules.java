@@ -54,7 +54,7 @@ final class FieldDomainRules implements LintRule {
                 if (domain == null) {
                     return;
                 }
-                loosened(name, field, domain).forEach(what -> findings.add(new LintFinding(
+                loosened(field, domain).forEach(what -> findings.add(new LintFinding(
                         DOMAIN_LOOSENED, WARNING, source,
                         "Field '" + name + "' loosens domain '" + field.domain() + "': " + what
                                 + " — a loosened copy is the drift domains exist to prevent")));
@@ -68,7 +68,7 @@ final class FieldDomainRules implements LintRule {
     }
 
     /** The ways the merged field is looser than its domain, as human-readable clauses. */
-    private static List<String> loosened(String name, InputField merged, InputField domain) {
+    private static List<String> loosened(InputField merged, InputField domain) {
         List<String> ways = new ArrayList<>();
         if (domain.maxLength() != null && merged.maxLength() != null
                 && merged.maxLength() > domain.maxLength()) {

@@ -41,6 +41,17 @@ Camel context that adopts a service, a `@Container` field, a `stop()` or an `end
 releases what no `close()` ever will. The problems panel is expected to stay empty, which is
 what makes a finding in it worth acting on.
 
+## Unused-declaration gate
+
+`javac` has no lint for an unread private field, an uncalled private method, an unread local
+or a parameter nothing reads, so that class of dead code used to surface only in the IDE's
+JDT panel — and recurred with every extraction. PMD closes the gap: `pmd:check` runs during
+`verify` with the four rules in `config/pmd-unused.xml` (main sources only), and a violation
+fails the build. The parameter rule checks non-private methods too. A parameter kept
+deliberately — a signature fixed by a functional interface the method is a reference to, an
+SPI shape — carries `// NOPMD UnusedFormalParameter` on its declaration line with a comment
+saying why.
+
 ## Test reports and coverage
 
 The `tesseraql:test` and `tesseraql:coverage` goals run the app's declarative suites and write

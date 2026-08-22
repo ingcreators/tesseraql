@@ -225,7 +225,7 @@ public final class RouteGovernance {
         String mode = write && !authenticated ? "advanced" : usesService ? "extended" : "managed";
         String source = manifest.appHome().relativize(route.source()).toString().replace('\\', '/');
         return new Assessment(definition.id(), source, mode, score, List.copyOf(factors),
-                sha256(route));
+                sha256(route.source()));
     }
 
     private static boolean isWrite(RouteFile route) {
@@ -279,10 +279,6 @@ public final class RouteGovernance {
                 }
             }
         }
-    }
-
-    private static String sha256(RouteFile route) {
-        return sha256(route.source());
     }
 
     private static String sha256(Path source) {

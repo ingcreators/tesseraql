@@ -459,7 +459,7 @@ public final class ManifestLoader {
                 resolved.add(route);
                 continue;
             }
-            SecuritySpec effective = defaults.resolve(route.httpMethod(), route.urlPath(),
+            SecuritySpec effective = defaults.resolve(route.urlPath(),
                     route.definition().security());
             resolved.add(new RouteFile(route.httpMethod(), route.urlPath(), route.source(),
                     route.definition().withSecurity(effective)));
