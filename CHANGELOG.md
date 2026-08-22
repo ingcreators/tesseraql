@@ -136,6 +136,14 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **The Studio providers register in feature groups.** `StudioProviders.register` was one
+  1,909-line fluent statement — 85 registrations in a single expression, the second-largest
+  method in the tree. It is eleven feature-group methods now (explorer, composers, routes and
+  menu, the data browser, the builders, apply-and-test, …), order preserved exactly: the
+  captured boot state moved from method locals to fields so every provider lambda's body
+  stayed verbatim, and the groups share no other state — which the one statement made
+  impossible to see.
+
 - **The transport is passed, not looked up** (docs/vertx-native.md decision 6, slice 6). The
   HTTP server takes its Vert.x — the host's shared instance, or the options to build one — as
   constructor arguments from the code that already decided which it is. The by-type registry
