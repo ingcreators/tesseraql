@@ -14,41 +14,17 @@ import java.util.Map;
 /**
  * The {@code ops.*} and {@code account.*} service providers behind the bundled ops-console and
  * account surfaces, with the session, TOTP, delegation and password providers beside them
- * (design ch. 26.11; docs/session-visibility.md; docs/access-governance.md). Extracted verbatim
- * from the runtime boot (docs/boot-phases.md slice 2) - registration order and lambda bodies
- * are exactly what {@code TesseraqlRuntime.start(...)} inlined; the captured boot state moved
- * from method locals to the fields below so every lambda body stayed as written.
+ * (design ch. 26.11; docs/session-visibility.md; docs/access-governance.md). Extracted from
+ * the runtime boot (docs/boot-phases.md slice 2); the captured boot state rides the
+ * {@link Deps} record as the boot handed it over, and the beans that bind after this chain
+ * builds - identity, realm, TOTP, delegation - resolve at call time through the accessors
+ * below.
  */
 final class OpsAccountProviders {
 
-    private final OpsActions opsActions;
-    private final io.tesseraql.opsui.OpsDashboard dashboardRef;
-    private final io.tesseraql.operations.audit.JdbcRouteAuditStore auditStoreRef;
-    private final io.tesseraql.yaml.manifest.AppManifest manifest;
-    private final io.tesseraql.core.account.PreferenceStore preferences;
-    private final io.tesseraql.core.account.ShortcutStore shortcuts;
-    private final List<String> optOutChannels;
-    private final List<String> accountLocales;
-    private final io.tesseraql.core.inbox.InboxStore inboxStore;
-    private final io.tesseraql.security.session.SessionStore sessionStore;
-    private final io.tesseraql.core.credential.CredentialTokenStore credentialTokens;
-    private final java.time.Duration inviteTtl;
-    private final boolean inviteEnabled;
-    private final boolean passwordLoginEnabled;
-    private final RuntimeContext context;
-    private final Path appHome;
-    private final String appName;
-    private final String inviteUrl;
-    private final String inviteChannel;
-    private final Map<String, JobFile> jobs;
-    private final Map<String, String> jobOwners;
-    private final JobRepository jobRepository;
-    private final JdbcOutboxStore outboxStore;
-    private final io.tesseraql.operations.files.JdbcFileTransferService fileTransfers;
-    private final CalendarDecisions calendarDecisions;
-    private final io.tesseraql.opsui.PollSourceStatus pollSourceStatus;
+    private final Deps deps;
 
-    /** The boot-time state the provider lambdas capture, by the names the lambdas use. */
+    /** The boot-time state the provider lambdas capture, held as handed over. */
     record Deps(OpsActions opsActions, io.tesseraql.opsui.OpsDashboard opsDashboard,
             io.tesseraql.operations.audit.JdbcRouteAuditStore routeAuditStore,
             io.tesseraql.yaml.manifest.AppManifest manifest,
@@ -68,32 +44,7 @@ final class OpsAccountProviders {
     }
 
     private OpsAccountProviders(Deps deps) {
-        this.opsActions = deps.opsActions();
-        this.dashboardRef = deps.opsDashboard();
-        this.auditStoreRef = deps.routeAuditStore();
-        this.manifest = deps.manifest();
-        this.preferences = deps.preferences();
-        this.shortcuts = deps.shortcuts();
-        this.optOutChannels = deps.optOutChannels();
-        this.accountLocales = deps.accountLocales();
-        this.inboxStore = deps.inboxStore();
-        this.sessionStore = deps.sessionStore();
-        this.credentialTokens = deps.credentialTokens();
-        this.inviteTtl = deps.inviteTtl();
-        this.inviteEnabled = deps.inviteEnabled();
-        this.passwordLoginEnabled = deps.passwordLoginEnabled();
-        this.context = deps.context();
-        this.appHome = deps.appHome();
-        this.appName = deps.appName();
-        this.inviteUrl = deps.inviteUrl();
-        this.inviteChannel = deps.inviteChannel();
-        this.jobs = deps.jobs();
-        this.jobOwners = deps.jobOwners();
-        this.jobRepository = deps.jobRepository();
-        this.outboxStore = deps.outboxStore();
-        this.fileTransfers = deps.fileTransfers();
-        this.calendarDecisions = deps.calendarDecisions();
-        this.pollSourceStatus = deps.pollSourceStatus();
+        this.deps = deps;
     }
 
     /** Builds the runtime's provider registry with every ops/account provider registered. */
@@ -106,15 +57,46 @@ final class OpsAccountProviders {
         return serviceProviders;
     }
 
+    /**
+     * Identity, realm, TOTP and delegation resolve from the registry at call time: they bind
+     * after the boot's provider chain builds, and an SSO-only deployment answers its honest
+     * degraded model instead of failing to register - the idiom IamAdminProviders uses.
+     */
+    private io.tesseraql.identity.IdentityService identity() {
+        return deps.context().lookup(TesseraqlProperties.IDENTITY_SERVICE_BEAN,
+                io.tesseraql.identity.IdentityService.class);
+    }
+
+    private io.tesseraql.identity.RealmConfig realm() {
+        return deps.context().lookup(TesseraqlProperties.IDENTITY_REALM_BEAN,
+                io.tesseraql.identity.RealmConfig.class);
+    }
+
+    private io.tesseraql.core.credential.TotpStore totpStore() {
+        return deps.context().lookup(TesseraqlProperties.TOTP_STORE_BEAN,
+                io.tesseraql.core.credential.TotpStore.class);
+    }
+
+    private io.tesseraql.core.workflow.DelegationStore delegationStore() {
+        return deps.context().lookup(TesseraqlProperties.DELEGATION_STORE_BEAN,
+                io.tesseraql.core.workflow.DelegationStore.class);
+    }
+
+    /** A session-row cell renders "" for an absent fact - never the string "null". */
+    private static String orEmpty(Object value) {
+        return value == null ? "" : String.valueOf(value);
+    }
+
     /** Batch visibility, traces, transfers, outbox and events for the ops console. */
     private void ops(io.tesseraql.core.service.ServiceProviders serviceProviders) {
         serviceProviders
                 // Batch visibility narrows to the caller's tql.ops.view.<name> grants,
                 // bound by the console routes as principal.permissions (ch. 26.11).
                 .register("ops.overview",
-                        params -> io.tesseraql.opsui.OpsViews.overview(dashboardRef.overview(20,
-                                opsActions.viewScope(params.get("permissions"))),
-                                dashboardRef.health(),
+                        params -> io.tesseraql.opsui.OpsViews.overview(
+                                deps.opsDashboard().overview(20,
+                                        deps.opsActions().viewScope(params.get("permissions"))),
+                                deps.opsDashboard().health(),
                                 io.tesseraql.core.TesseraqlVersion.current()))
                 // The audit page is always mounted; the provider owns the honest
                 // empty state when the flag-gated store is off
@@ -122,54 +104,56 @@ final class OpsAccountProviders {
                 .register("ops.audit",
                         params -> io.tesseraql.opsui.OpsViews.audit(
                                 io.tesseraql.opsui.OpsViews.filterAudit(
-                                        auditStoreRef == null
+                                        deps.routeAuditStore() == null
                                                 ? null
-                                                : auditStoreRef.recent(200, opsActions
-                                                        .viewScope(params.get("permissions"))),
+                                                : deps.routeAuditStore().recent(200,
+                                                        deps.opsActions()
+                                                                .viewScope(
+                                                                        params.get("permissions"))),
                                         params.get("route"), params.get("actor"),
                                         params.get("status")),
-                                auditStoreRef != null))
+                                deps.routeAuditStore() != null))
                 .register("ops.traces",
-                        params -> io.tesseraql.opsui.OpsViews.traces(dashboardRef.traceTree(
-                                opsActions.viewScope(params.get("permissions")))))
+                        params -> io.tesseraql.opsui.OpsViews.traces(deps.opsDashboard().traceTree(
+                                deps.opsActions().viewScope(params.get("permissions")))))
                 .register("ops.transfers", params -> {
-                    java.util.function.Predicate<String> scope = opsActions
+                    java.util.function.Predicate<String> scope = deps.opsActions()
                             .viewScope(params.get("permissions"));
                     return io.tesseraql.opsui.OpsViews.transfers(
-                            fileTransfers.recent(50).stream()
+                            deps.fileTransfers().recent(50).stream()
                                     .filter(transfer -> scope.test(transfer.appName()))
                                     .toList());
                 })
                 .register("ops.outbox",
-                        params -> io.tesseraql.opsui.OpsViews.outbox(opsActions.recentOutbox(
-                                opsActions.viewScope(params.get("permissions")))))
+                        params -> io.tesseraql.opsui.OpsViews.outbox(deps.opsActions().recentOutbox(
+                                deps.opsActions().viewScope(params.get("permissions")))))
                 // Out of scope reads exactly like unknown - the shared core's stance
                 // (docs/ops-console-actions.md); 4040 renders as a plain 404.
                 .register("ops.outboxRedeliver",
-                        params -> opsActions.redeliverOutbox(
+                        params -> deps.opsActions().redeliverOutbox(
                                 String.valueOf(params.get("id")),
-                                opsActions.runScope(params.get("permissions"))))
+                                deps.opsActions().runScope(params.get("permissions"))))
                 // The queue events log and its redelivery: the messaging mirror of the
                 // ops.outbox pair (docs/silent-tolerance.md O1).
                 .register("ops.events",
-                        params -> io.tesseraql.opsui.OpsViews.events(opsActions.recentEvents(
-                                opsActions.viewScope(params.get("permissions")))))
+                        params -> io.tesseraql.opsui.OpsViews.events(deps.opsActions().recentEvents(
+                                deps.opsActions().viewScope(params.get("permissions")))))
                 .register("ops.eventsRedeliver",
-                        params -> opsActions.redeliverEvent(
+                        params -> deps.opsActions().redeliverEvent(
                                 String.valueOf(params.get("id")),
-                                opsActions.runScope(params.get("permissions"))))
+                                deps.opsActions().runScope(params.get("permissions"))))
                 .register("ops.jobs", params -> {
-                    java.util.function.Predicate<String> scope = opsActions
+                    java.util.function.Predicate<String> scope = deps.opsActions()
                             .viewScope(params.get("permissions"));
                     List<io.tesseraql.opsui.OpsViews.JobCatalogEntry> entries = new java.util.ArrayList<>();
-                    jobs.forEach((id, jobFile) -> {
-                        String owner = jobOwners.getOrDefault(id, appName);
+                    deps.jobs().forEach((id, jobFile) -> {
+                        String owner = deps.jobOwners().getOrDefault(id, deps.appName());
                         if (scope.test(owner)) {
                             entries.add(new io.tesseraql.opsui.OpsViews.JobCatalogEntry(
                                     id, owner, jobFile.definition(),
-                                    jobRepository.latestExecution(id).orElse(null),
-                                    pollSourceStatus.forJob(id).orElse(null),
-                                    calendarDecisions.nextCounting(jobFile,
+                                    deps.jobRepository().latestExecution(id).orElse(null),
+                                    deps.pollSourceStatus().forJob(id).orElse(null),
+                                    deps.calendarDecisions().nextCounting(jobFile,
                                             java.time.LocalDate.now())));
                         }
                     });
@@ -181,7 +165,7 @@ final class OpsAccountProviders {
                     // is a declared job parameter, and bindJobParams inside the runner
                     // stays the single validation point (docs/ops-console-coverage.md).
                     // Out of scope reads exactly like unknown - the shared core's stance.
-                    JobExecution execution = opsActions.runJob(id, () -> {
+                    JobExecution execution = deps.opsActions().runJob(id, () -> {
                         java.util.Map<String, Object> jobParams = new java.util.LinkedHashMap<>();
                         if (params.get("values") instanceof java.util.Map<?, ?> posted) {
                             posted.forEach((key, value) -> {
@@ -196,7 +180,7 @@ final class OpsAccountProviders {
                     }, params.get("actor") == null
                             ? null
                             : String.valueOf(params.get("actor")),
-                            opsActions.runScope(params.get("permissions")));
+                            deps.opsActions().runScope(params.get("permissions")));
                     return java.util.Map.of("executionId", execution.id(),
                             "status", execution.status().name());
                 })
@@ -205,111 +189,98 @@ final class OpsAccountProviders {
                             ? ""
                             : String.valueOf(params.get("id"));
                     // An execution outside the caller's scope renders as not found.
-                    JobExecution execution = opsActions.findExecution(id,
-                            opsActions.viewScope(params.get("permissions")));
+                    JobExecution execution = deps.opsActions().findExecution(id,
+                            deps.opsActions().viewScope(params.get("permissions")));
                     return io.tesseraql.opsui.OpsViews.execution(id, execution,
-                            execution == null ? List.of() : jobRepository.findSteps(id));
-                })
-                // The bundled login page reads which sign-in methods are available (password
-                // always; OIDC/SAML when their extension is enabled) plus the first-login hint.
-                .register("auth.loginMethods", params -> LoginMethods.of(manifest.config()))
-        // The bundled account surface (roadmap Phase 48): the routes map the
-        // session principal's facts into the params, so the providers can only
-        // ever describe — or write for — the caller. Settings write through the
-        // cached preference store bound above; it is null only when the surface
-        // is off, in which case the account routes are not mounted either.
-        ;
+                            execution == null ? List.of() : deps.jobRepository().findSteps(id));
+                });
     }
 
-    /** The account surface: profile, settings, inbox, invites. */
+    /**
+     * The bundled account surface (roadmap Phase 48), plus the login page's own read: profile,
+     * settings, inbox, invites. The routes map the session principal's facts into the params,
+     * so the providers can only ever describe — or write for — the caller. Settings write
+     * through the cached preference store; it is null only when the surface is off, in which
+     * case the account routes are not mounted either.
+     */
     private void account(io.tesseraql.core.service.ServiceProviders serviceProviders) {
         serviceProviders
+                // The bundled login page reads which sign-in methods are available (password
+                // always; OIDC/SAML when their extension is enabled) plus the first-login hint.
+                .register("auth.loginMethods", params -> LoginMethods.of(deps.manifest().config()))
                 .register("account.profile.view", AccountViews::profile)
                 .register("account.settings.view",
-                        params -> AccountViews.settings(params, preferences,
-                                accountLocales, optOutChannels, sessionStore,
-                                passwordLoginEnabled,
-                                io.tesseraql.yaml.account.PreferencesSpec.live(appHome),
-                                context.lookup(
-                                        TesseraqlProperties.TOTP_STORE_BEAN,
-                                        io.tesseraql.core.credential.TotpStore.class),
-                                appName,
-                                context.lookup(
-                                        TesseraqlProperties.DELEGATION_STORE_BEAN,
-                                        io.tesseraql.core.workflow.DelegationStore.class),
-                                shortcuts))
+                        params -> AccountViews.settings(params, deps.preferences(),
+                                deps.accountLocales(), deps.optOutChannels(), deps.sessionStore(),
+                                deps.passwordLoginEnabled(),
+                                io.tesseraql.yaml.account.PreferencesSpec.live(deps.appHome()),
+                                totpStore(),
+                                deps.appName(),
+                                delegationStore(),
+                                deps.shortcuts()))
                 // What the caller may elevate into (docs/access-governance.md
                 // structural decision 3). Identity and realm resolve at call time,
                 // like account.invite below: they bind after this chain builds.
                 .register("account.eligibility",
                         params -> io.tesseraql.identity.Elevation.eligibilityModel(
-                                context.lookup(
-                                        TesseraqlProperties.IDENTITY_SERVICE_BEAN,
-                                        io.tesseraql.identity.IdentityService.class),
-                                context.lookup(
-                                        TesseraqlProperties.IDENTITY_REALM_BEAN,
-                                        io.tesseraql.identity.RealmConfig.class),
+                                identity(),
+                                realm(),
                                 String.valueOf(params.get("subject"))))
                 // The requester's own side of access requests
                 // (docs/access-governance.md structural decision 6): what they may ask
                 // for, and what they have asked for. Never anybody else's.
                 .register("account.requests",
                         params -> io.tesseraql.identity.AccessRequests.myRequestsModel(
-                                context.lookup(
-                                        TesseraqlProperties.IDENTITY_SERVICE_BEAN,
-                                        io.tesseraql.identity.IdentityService.class),
-                                context.lookup(
-                                        TesseraqlProperties.IDENTITY_REALM_BEAN,
-                                        io.tesseraql.identity.RealmConfig.class),
+                                identity(),
+                                realm(),
                                 String.valueOf(params.get("subject"))))
                 .register("account.requestRole",
                         params -> io.tesseraql.identity.AccessRequests.request(
-                                context.lookup(
-                                        TesseraqlProperties.IDENTITY_SERVICE_BEAN,
-                                        io.tesseraql.identity.IdentityService.class),
-                                context.lookup(
-                                        TesseraqlProperties.IDENTITY_REALM_BEAN,
-                                        io.tesseraql.identity.RealmConfig.class),
+                                identity(),
+                                realm(),
                                 String.valueOf(params.get("subject")),
                                 String.valueOf(params.get("roleCode")),
                                 String.valueOf(params.get("reason")),
                                 String.valueOf(params.get("minutes"))))
                 .register("account.language.save",
-                        params -> AccountViews.saveLanguage(params, preferences,
-                                accountLocales))
+                        params -> AccountViews.saveLanguage(params, deps.preferences(),
+                                deps.accountLocales()))
                 .register("account.theme.save",
-                        params -> AccountViews.saveTheme(params, preferences))
+                        params -> AccountViews.saveTheme(params, deps.preferences()))
                 .register("account.notify.save",
-                        params -> AccountViews.saveNotifyOptOut(params, preferences,
-                                optOutChannels))
+                        params -> AccountViews.saveNotifyOptOut(params, deps.preferences(),
+                                deps.optOutChannels()))
                 .register("account.app.save",
-                        params -> AccountViews.saveAppPreference(params, preferences,
-                                io.tesseraql.yaml.account.PreferencesSpec.live(appHome)))
+                        params -> AccountViews.saveAppPreference(params, deps.preferences(),
+                                io.tesseraql.yaml.account.PreferencesSpec.live(deps.appHome())))
                 // Identity and realm resolve from the registry at call time: they are
                 // bound after this chain builds, and an SSO-only deployment answers with
                 // the honest 4803 instead of failing to register.
                 // The in-app inbox surface (roadmap Phase 49 slice 2): list, mark one
                 // read, mark all read - the subject always the session principal's.
                 .register("account.inbox.view",
-                        params -> AccountViews.inbox(params, inboxStore))
+                        params -> AccountViews.inbox(params, deps.inboxStore()))
                 .register("account.inbox.read",
-                        params -> AccountViews.markInboxRead(params, inboxStore))
+                        params -> AccountViews.markInboxRead(params, deps.inboxStore()))
                 .register("account.inbox.readAll",
-                        params -> AccountViews.markAllInboxRead(params, inboxStore))
+                        params -> AccountViews.markAllInboxRead(params, deps.inboxStore()))
                 // The iam-admin invite (roadmap Phase 50 slice 2): identity and realm
                 // resolve from the registry at call time (they bind later); the token
                 // store and channel settings are the hoisted finals above.
                 .register("identity.invite",
-                        params -> IdentityInvites.invite(params, credentialTokens,
-                                outboxStore,
-                                context.lookup(
-                                        TesseraqlProperties.IDENTITY_SERVICE_BEAN,
-                                        io.tesseraql.identity.IdentityService.class),
-                                context.lookup(
-                                        TesseraqlProperties.IDENTITY_REALM_BEAN,
-                                        io.tesseraql.identity.RealmConfig.class),
-                                inviteChannel, inviteUrl, inviteTtl, appName,
-                                inviteEnabled))
+                        params -> IdentityInvites.invite(params, deps.credentialTokens(),
+                                deps.outboxStore(),
+                                identity(),
+                                realm(),
+                                deps.inviteChannel(), deps.inviteUrl(), deps.inviteTtl(),
+                                deps.appName(),
+                                deps.inviteEnabled()));
+    }
+
+    /** Session visibility and administration, TOTP, delegation and the password change. */
+    private void sessionsCredentialsDelegation(
+            io.tesseraql.core.service.ServiceProviders serviceProviders) {
+        serviceProviders
                 // Session administration (docs/session-administration.md): the admin's
                 // view of a subject's sessions renders only timestamps - session ids
                 // never reach a template - and revocation ends every session of the
@@ -317,57 +288,43 @@ final class OpsAccountProviders {
                 .register("iam.userSessions", params -> {
                     String userId = String.valueOf(params.get("userId"));
                     java.util.List<Map<String, Object>> rows = new java.util.ArrayList<>();
-                    for (io.tesseraql.security.session.SessionStore.ActiveSession session : sessionStore
+                    for (io.tesseraql.security.session.SessionStore.ActiveSession session : deps
+                            .sessionStore()
                             .sessionsFor(userId)) {
-                        rows.add(Map.of(
-                                "createdAt", session.createdAt() == null
-                                        ? ""
-                                        : session.createdAt().toString(),
-                                "expiresAt", session.expiresAt() == null
-                                        ? ""
-                                        : session.expiresAt().toString(),
-                                "lastSeenAt", session.lastSeenAt() == null
-                                        ? ""
-                                        : session.lastSeenAt().toString(),
-                                "userAgent", session.userAgent() == null
-                                        ? ""
-                                        : session.userAgent(),
-                                "remoteAddr", session.remoteAddr() == null
-                                        ? ""
-                                        : session.remoteAddr(),
-                                "handle", session.handle() == null
-                                        ? ""
-                                        : session.handle()));
+                        // Ordered like the page's columns; Map.of here left the column
+                        // order to the JVM's hashing.
+                        Map<String, Object> row = new LinkedHashMap<>();
+                        row.put("createdAt", orEmpty(session.createdAt()));
+                        row.put("expiresAt", orEmpty(session.expiresAt()));
+                        row.put("lastSeenAt", orEmpty(session.lastSeenAt()));
+                        row.put("userAgent", orEmpty(session.userAgent()));
+                        row.put("remoteAddr", orEmpty(session.remoteAddr()));
+                        row.put("handle", orEmpty(session.handle()));
+                        rows.add(row);
                     }
                     return Map.of("rows", rows, "count", rows.size());
                 })
                 .register("iam.revokeSessions", params -> {
-                    sessionStore.invalidateOthersFor(
+                    deps.sessionStore().invalidateOthersFor(
                             String.valueOf(params.get("userId")), "");
                     return Map.of("revoked", true);
                 })
                 // One device, by its subject-scoped handle (docs/session-visibility.md).
                 .register("iam.revokeSession", params -> {
-                    sessionStore.invalidateByHandle(
+                    deps.sessionStore().invalidateByHandle(
                             String.valueOf(params.get("userId")),
                             String.valueOf(params.get("handle")));
                     return Map.of("revoked", true);
                 })
-        // The cross-subject sessions page (docs/session-visibility.md): live
-        // store state, newest first, optionally narrowed by subject prefix.
-        ;
-    }
-
-    /** Sessions, TOTP, delegation and the password change. */
-    private void sessionsCredentialsDelegation(
-            io.tesseraql.core.service.ServiceProviders serviceProviders) {
-        serviceProviders
+                // The cross-subject sessions page (docs/session-visibility.md): live
+                // store state, newest first, optionally narrowed by subject prefix.
                 .register("iam.sessions", params -> {
                     String q = params.get("q") == null
                             ? ""
                             : String.valueOf(params.get("q")).trim();
                     java.util.List<Map<String, Object>> rows = new java.util.ArrayList<>();
-                    for (io.tesseraql.security.session.SessionStore.ActiveSession s : sessionStore
+                    for (io.tesseraql.security.session.SessionStore.ActiveSession s : deps
+                            .sessionStore()
                             .activeSessions(200)) {
                         if (!q.isEmpty()
                                 && (s.subject() == null || !s.subject().startsWith(q))) {
@@ -375,14 +332,11 @@ final class OpsAccountProviders {
                         }
                         Map<String, Object> row = new LinkedHashMap<>();
                         row.put("subject", s.subject() == null ? "-" : s.subject());
-                        row.put("createdAt",
-                                s.createdAt() == null ? "" : s.createdAt().toString());
-                        row.put("lastSeenAt",
-                                s.lastSeenAt() == null ? "" : s.lastSeenAt().toString());
-                        row.put("userAgent", s.userAgent() == null ? "" : s.userAgent());
-                        row.put("remoteAddr",
-                                s.remoteAddr() == null ? "" : s.remoteAddr());
-                        row.put("handle", s.handle() == null ? "" : s.handle());
+                        row.put("createdAt", orEmpty(s.createdAt()));
+                        row.put("lastSeenAt", orEmpty(s.lastSeenAt()));
+                        row.put("userAgent", orEmpty(s.userAgent()));
+                        row.put("remoteAddr", orEmpty(s.remoteAddr()));
+                        row.put("handle", orEmpty(s.handle()));
                         rows.add(row);
                     }
                     Map<String, Object> model = new LinkedHashMap<>();
@@ -396,15 +350,11 @@ final class OpsAccountProviders {
                 // lazily like identity.invite (they bind later).
                 .register("iam.disableUser", params -> {
                     String userId = String.valueOf(params.get("userId"));
-                    context.lookup(
-                            TesseraqlProperties.IDENTITY_SERVICE_BEAN,
-                            io.tesseraql.identity.IdentityService.class)
-                            .executeUpdate(context.lookup(
-                                    TesseraqlProperties.IDENTITY_REALM_BEAN,
-                                    io.tesseraql.identity.RealmConfig.class),
+                    identity()
+                            .executeUpdate(realm(),
                                     io.tesseraql.identity.IdentityContracts.DISABLE_USER,
                                     Map.of("userId", userId));
-                    sessionStore.invalidateOthersFor(userId, "");
+                    deps.sessionStore().invalidateOthersFor(userId, "");
                     return Map.of("disabled", true);
                 })
                 // TOTP self-service (roadmap Phase 50 slice 3): begin/confirm/disable.
@@ -412,31 +362,19 @@ final class OpsAccountProviders {
                 // identity/realm; disable re-verifies the password.
                 .register("account.totp.begin",
                         params -> AccountViews.totpBegin(params,
-                                context.lookup(
-                                        TesseraqlProperties.TOTP_STORE_BEAN,
-                                        io.tesseraql.core.credential.TotpStore.class)))
+                                totpStore()))
                 .register("account.totp.confirm",
                         params -> AccountViews.totpConfirm(params,
-                                context.lookup(
-                                        TesseraqlProperties.TOTP_STORE_BEAN,
-                                        io.tesseraql.core.credential.TotpStore.class)))
+                                totpStore()))
                 .register("account.totp.disable",
                         params -> AccountViews.totpDisable(params,
-                                context.lookup(
-                                        TesseraqlProperties.TOTP_STORE_BEAN,
-                                        io.tesseraql.core.credential.TotpStore.class),
-                                context.lookup(
-                                        TesseraqlProperties.IDENTITY_SERVICE_BEAN,
-                                        io.tesseraql.identity.IdentityService.class),
-                                context.lookup(
-                                        TesseraqlProperties.IDENTITY_REALM_BEAN,
-                                        io.tesseraql.identity.RealmConfig.class)))
+                                totpStore(),
+                                identity(),
+                                realm()))
                 // The operator's delegation visibility (roadmap Phase 52 slice 2):
                 // read-only rows for the IAM admin panel, tenant-scoped to the caller.
                 .register("identity.delegations", params -> {
-                    io.tesseraql.core.workflow.DelegationStore store = context.lookup(
-                            TesseraqlProperties.DELEGATION_STORE_BEAN,
-                            io.tesseraql.core.workflow.DelegationStore.class);
+                    io.tesseraql.core.workflow.DelegationStore store = delegationStore();
                     java.util.List<Map<String, Object>> rows = new java.util.ArrayList<>();
                     if (store != null) {
                         java.time.Instant now = java.time.Instant.now();
@@ -457,40 +395,26 @@ final class OpsAccountProviders {
                     return rows;
                 })
                 // Pins and recents (roadmap Phase 51): toggle the current page, remove
-                // from the account card - the caller's own shortcuts only.
+                // from the account card - the caller's own deps.shortcuts() only.
                 .register("account.pins.toggle",
-                        params -> AccountViews.togglePin(params, shortcuts))
+                        params -> AccountViews.togglePin(params, deps.shortcuts()))
                 .register("account.shortcuts.remove",
-                        params -> AccountViews.removeShortcut(params, shortcuts))
+                        params -> AccountViews.removeShortcut(params, deps.shortcuts()))
                 // Out-of-office self-service (roadmap Phase 52); store binds with the
                 // task inbox, identity/realm resolve lazily like the neighbours.
                 .register("account.delegation.save",
                         params -> AccountViews.saveDelegation(params,
-                                context.lookup(
-                                        TesseraqlProperties.DELEGATION_STORE_BEAN,
-                                        io.tesseraql.core.workflow.DelegationStore.class),
-                                context.lookup(
-                                        TesseraqlProperties.IDENTITY_SERVICE_BEAN,
-                                        io.tesseraql.identity.IdentityService.class),
-                                context.lookup(
-                                        TesseraqlProperties.IDENTITY_REALM_BEAN,
-                                        io.tesseraql.identity.RealmConfig.class)))
+                                delegationStore(),
+                                identity(),
+                                realm()))
                 .register("account.delegation.clear",
                         params -> AccountViews.clearDelegation(params,
-                                context.lookup(
-                                        TesseraqlProperties.DELEGATION_STORE_BEAN,
-                                        io.tesseraql.core.workflow.DelegationStore.class)))
+                                delegationStore()))
                 .register("account.password.change",
                         params -> AccountViews.changePassword(params,
-                                context.lookup(
-                                        TesseraqlProperties.IDENTITY_SERVICE_BEAN,
-                                        io.tesseraql.identity.IdentityService.class),
-                                context.lookup(
-                                        TesseraqlProperties.IDENTITY_REALM_BEAN,
-                                        io.tesseraql.identity.RealmConfig.class),
-                                passwordLoginEnabled,
-                                context.lookup(
-                                        TesseraqlProperties.SESSION_STORE_BEAN,
-                                        io.tesseraql.security.session.SessionStore.class)));
+                                identity(),
+                                realm(),
+                                deps.passwordLoginEnabled(),
+                                deps.sessionStore()));
     }
 }

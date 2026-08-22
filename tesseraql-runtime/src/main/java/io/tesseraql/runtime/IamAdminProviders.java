@@ -38,13 +38,17 @@ final class IamAdminProviders {
                 ? stackMembers.stream()
                         .map(io.tesseraql.operations.app.InstalledApp::name).toList()
                 : java.util.List.of(appName);
+        java.util.function.Supplier<io.tesseraql.identity.IdentityService> iamIdentity = () -> context
+                .lookup(
+                        TesseraqlProperties.IDENTITY_SERVICE_BEAN,
+                        io.tesseraql.identity.IdentityService.class);
+        java.util.function.Supplier<io.tesseraql.identity.RealmConfig> iamRealm = () -> context
+                .lookup(
+                        TesseraqlProperties.IDENTITY_REALM_BEAN,
+                        io.tesseraql.identity.RealmConfig.class);
         java.util.function.Supplier<io.tesseraql.identity.GrantViews.ContractRunner> grantContracts = () -> {
-            io.tesseraql.identity.IdentityService identity = context.lookup(
-                    TesseraqlProperties.IDENTITY_SERVICE_BEAN,
-                    io.tesseraql.identity.IdentityService.class);
-            io.tesseraql.identity.RealmConfig realm = context.lookup(
-                    TesseraqlProperties.IDENTITY_REALM_BEAN,
-                    io.tesseraql.identity.RealmConfig.class);
+            io.tesseraql.identity.IdentityService identity = iamIdentity.get();
+            io.tesseraql.identity.RealmConfig realm = iamRealm.get();
             if (identity == null || realm == null) {
                 return null;
             }
@@ -73,14 +77,6 @@ final class IamAdminProviders {
         // The role and grant editors (docs/application-roles.md slice 2): reads
         // degrade like the views; writes are gated by the realm's role capability
         // inside IdentityService.executeUpdate.
-        java.util.function.Supplier<io.tesseraql.identity.IdentityService> iamIdentity = () -> context
-                .lookup(
-                        TesseraqlProperties.IDENTITY_SERVICE_BEAN,
-                        io.tesseraql.identity.IdentityService.class);
-        java.util.function.Supplier<io.tesseraql.identity.RealmConfig> iamRealm = () -> context
-                .lookup(
-                        TesseraqlProperties.IDENTITY_REALM_BEAN,
-                        io.tesseraql.identity.RealmConfig.class);
         // What this caller may administer (docs/access-governance.md structural
         // decision 7): store-wide, or confined to the applications whose delegated
         // atom they hold. Derived from the route-declared principal permissions, so

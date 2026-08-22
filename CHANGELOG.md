@@ -146,6 +146,25 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **The ops/account providers carry their boot state as it was handed over.**
+  `OpsAccountProviders` mirrored its 26-component `Deps` record into 26 fields through a
+  copying constructor — ~70 lines of transcription in which two components were silently
+  renamed in transit, one more place for a pairing to be miswired whenever a dependency is
+  added. The class now holds the record itself. The beans that bind after the provider chain
+  builds — identity, realm, TOTP, delegation — resolve through four call-time accessors
+  instead of ~25 inline registry-lookup blocks (the idiom `IamAdminProviders` already used;
+  its own `grantContracts` now composes the suppliers instead of re-spelling their lookups),
+  and the session store, bound once before registration from the same handed-over instance,
+  is read from that state everywhere — `account.password.change` was the one caller
+  re-looking it up through the registry. Session rows render through one `orEmpty` helper,
+  and the admin's per-subject session view builds ordered rows — `Map.of` had left its
+  column order to the JVM's hashing while the cross-subject page ordered deliberately.
+  Providers now register in the group their section describes: `auth.loginMethods` moved
+  from the ops group to the account surface, the per-subject session-administration trio
+  moved beside the cross-subject sessions page, and the two comment blocks stranded above
+  bare statement terminators by the extraction's method split describe their own
+  neighbours again.
+
 - **One execution path for batch jobs, however a job is started** (BREAKING for embedders).
   `JobRunners` re-implemented the runtime's datasource selection and per-tenant loop line for
   line — down to the error strings — so a fix to either copy would have silently applied to
