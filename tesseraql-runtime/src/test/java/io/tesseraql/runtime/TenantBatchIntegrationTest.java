@@ -57,12 +57,33 @@ class TenantBatchIntegrationTest {
 
     @Test
     void perTenantJobRunsOncePerTenant() throws Exception {
+        int acmeBefore = rowCount("acme");
+        int globexBefore = rowCount("globex");
+
         List<JobExecution> executions = runtime.runJobForAllTenants("items.seed", Map.of());
 
         assertThat(executions).hasSize(2);
         assertThat(executions).allMatch(e -> e.status() == JobStatus.COMPLETED);
-        assertThat(rowCount("acme")).isEqualTo(1);
-        assertThat(rowCount("globex")).isEqualTo(1);
+        assertThat(rowCount("acme")).isEqualTo(acmeBefore + 1);
+        assertThat(rowCount("globex")).isEqualTo(globexBefore + 1);
+    }
+
+    /**
+     * {@code runJob} runs the same execution the ops console and the scheduler run, so a
+     * {@code perTenant} declaration is honoured on the embedder API too - it used to run once
+     * with no tenant context on this path only, and the same job behaved differently depending
+     * on who started it.
+     */
+    @Test
+    void runJobHonoursThePerTenantDeclaration() throws Exception {
+        int acmeBefore = rowCount("acme");
+        int globexBefore = rowCount("globex");
+
+        JobExecution last = runtime.runJob("items.seed", Map.of());
+
+        assertThat(last.status()).isEqualTo(JobStatus.COMPLETED);
+        assertThat(rowCount("acme")).isEqualTo(acmeBefore + 1);
+        assertThat(rowCount("globex")).isEqualTo(globexBefore + 1);
     }
 
     private static int rowCount(String schema) throws Exception {

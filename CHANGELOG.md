@@ -146,6 +146,20 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **One execution path for batch jobs, however a job is started** (BREAKING for embedders).
+  `JobRunners` re-implemented the runtime's datasource selection and per-tenant loop line for
+  line — down to the error strings — so a fix to either copy would have silently applied to
+  the ops-console/scheduler path or to the public API, not both. Both now run one shared
+  execution (`JobRunners.runOne`), and the real divergence the duplication had already
+  produced is resolved in the declaration's favour: `TesseraqlRuntime.runJob` honours a
+  `perTenant` declaration — once per configured tenant, each on its tenant pool and
+  tenant context, returning the last execution — where it used to run the job once with no
+  tenant context on this path only. `runJobForAllTenants` keeps its explicit
+  fan-out-regardless semantics. The runner's live-map contract is now written down: the boot
+  hands `chained` its job maps before the mounted-apps loop finishes filling them, so a
+  defensive copy there would make every mounted app's jobs unknown to the scheduler — the
+  javadoc says so.
+
 - **The build gates on unused declarations, and the dead code it found is gone**
   (docs/build.md). `javac` has no lint for an unread private field, an uncalled private
   method, an unread local or a parameter nothing reads — `-Xlint:all` with `failOnWarning`
