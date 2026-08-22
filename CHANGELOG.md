@@ -136,6 +136,16 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **The transport is passed, not looked up** (docs/vertx-native.md decision 6, slice 6). The
+  HTTP server takes its Vert.x — the host's shared instance, or the options to build one — as
+  constructor arguments from the code that already decided which it is. The by-type registry
+  resolution goes with the reason it existed (Camel resolved both by type), and with it a
+  silent failure mode: `findSingleByType` answered null when more than one instance matched, so
+  a second bound `Vertx` made the server quietly build a third with default pools — the exact
+  default the http-threading campaign exists to prevent. `tesseraqlVertx` stays in the registry
+  as the published record of which transport a runtime serves on; `tesseraqlVertxOptions` and
+  `findSingleByType` are deleted.
+
 - **The exchange is one object** (docs/vertx-native.md decision 3, slice 5). `Message` existed
   because Camel's exchange had an in/out pair and could copy a message between exchanges; this
   one held exactly one, created eagerly and never replaced, so every

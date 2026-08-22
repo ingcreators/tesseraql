@@ -235,16 +235,10 @@ public final class TesseraqlProperties {
     public static final String SHORTCUT_STORE_BEAN = "tesseraqlShortcutStore";
     public static final String LANES_BEAN = "tesseraqlExecutionLanes";
     /**
-     * Registry bean name for the {@code VertxOptions} the platform HTTP server builds its Vert.x
-     * instance from (docs/http-threading.md decision 1). The runtime looks the options up by type, so
-     * the name only has to be unique; binding one at all is what stops the request path from
-     * inheriting a default sized for a framework where blocking is the exception.
-     */
-    public static final String VERTX_OPTIONS_BEAN = "tesseraqlVertxOptions";
-    /**
-     * Registry bean name for the host's shared {@code Vertx} (docs/http-threading.md decision 4).
-     * Present only when a host built one; the runtime looks it up by type and, finding it, does not
-     * build — or close — an instance of its own.
+     * The transport this runtime serves on, published by the HTTP server once it knows
+     * (docs/vertx-native.md decision 6): the host's shared instance or the one it built. A
+     * record to read, not a channel to configure through — the server takes its transport as a
+     * constructor argument.
      */
     public static final String VERTX_BEAN = "tesseraqlVertx";
     public static final String SLOW_SQL_LOG_BEAN = "tesseraqlSlowSqlLog";

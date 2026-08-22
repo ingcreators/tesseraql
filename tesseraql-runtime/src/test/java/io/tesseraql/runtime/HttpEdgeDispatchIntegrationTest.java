@@ -70,7 +70,8 @@ class HttpEdgeDispatchIntegrationTest {
         DataSource dataSource = runtime.context().lookup("main", DataSource.class);
         io.vertx.ext.web.Router router = runtime.context().lookup("tesseraqlHttpRouter",
                 io.vertx.ext.web.Router.class);
-        Vertx vertx = runtime.context().findSingleByType(Vertx.class);
+        Vertx vertx = runtime.context().lookup(
+                io.tesseraql.pipeline.TesseraqlProperties.VERTX_BEAN, Vertx.class);
 
         CompletableFuture<Context> deployed = new CompletableFuture<>();
         vertx.deployVerticle(new AbstractVerticle() {

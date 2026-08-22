@@ -67,20 +67,6 @@ public final class RuntimeContext implements AutoCloseable {
         return type.isInstance(bean) ? type.cast(bean) : null;
     }
 
-    /** The single bean of {@code type}, or null when there is not exactly one. */
-    public <T> T findSingleByType(Class<T> type) {
-        T found = null;
-        for (Object bean : beans.values()) {
-            if (type.isInstance(bean)) {
-                if (found != null) {
-                    return null;
-                }
-                found = type.cast(bean);
-            }
-        }
-        return found;
-    }
-
     /**
      * Adds a service, starting it immediately when this context is already running.
      *
