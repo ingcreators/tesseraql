@@ -34,9 +34,9 @@ import java.nio.file.Path;
 /**
  * Compiles a TesseraQL {@link AppManifest} into pipelines (design ch. 7).
  *
- * <p>The compiler emits an in-memory {@link RouteBuilder} (design decision: in-memory route model
- * for the first milestone) that configures the REST transport and, for each route file, dispatches
- * on the recipe to build the route graph: request binder, {@code tesseraql-sql}, response renderer.
+ * <p>For each route file the compiler dispatches on the recipe and writes a pipeline into the
+ * context's registry — request binder, SQL step, response renderer — and declares the mount the
+ * HTTP edge serves it at (docs/camel-removal.md structural decision 1).
  */
 public final class RouteCompiler {
 

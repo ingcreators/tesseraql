@@ -36,9 +36,9 @@ import java.util.Map;
  * The pages themselves are the bundled auth-ui app's; only the state changes live here,
  * beside login/logout.
  */
-final class RecoveryRouteBuilder {
+final class RecoveryRoutes {
 
-    private static final System.Logger LOG = System.getLogger(RecoveryRouteBuilder.class.getName());
+    private static final System.Logger LOG = System.getLogger(RecoveryRoutes.class.getName());
 
     private final CredentialTokenStore tokens;
     private final IdentityService identity;
@@ -52,7 +52,7 @@ final class RecoveryRouteBuilder {
 
     private final boolean inviteEnabled;
 
-    RecoveryRouteBuilder(CredentialTokenStore tokens, IdentityService identity,
+    RecoveryRoutes(CredentialTokenStore tokens, IdentityService identity,
             RealmConfig realm, SessionStore sessions,
             io.tesseraql.operations.outbox.JdbcOutboxStore outbox, String channel,
             String confirmUrl, Duration timeToLive, String appName, boolean inviteEnabled,
@@ -100,23 +100,23 @@ final class RecoveryRouteBuilder {
 
     /** Consume the invite token, set the first password, flip the account ACTIVE. */
     private void acceptInvite(Exchange exchange) throws Exception {
-        Map<String, Object> body = LoginRouteBuilder.parseBody(exchange);
+        Map<String, Object> body = LoginRoutes.parseBody(exchange);
         String token = str(body.get("token"));
         String next = str(body.get("next"));
         if (next.length() < 8 || next.length() > 256) {
-            LoginRouteBuilder.redirect(exchange, 303, "/_tesseraql/invite?error=short&token="
+            LoginRoutes.redirect(exchange, 303, "/_tesseraql/invite?error=short&token="
                     + URLEncoder.encode(token, StandardCharsets.UTF_8));
             return;
         }
-        String address = LoginRouteBuilder.presentedAddress(exchange);
+        String address = LoginRoutes.presentedAddress(exchange);
         if (throttle.retryAfter("invite", null, address).isPresent()) {
-            LoginRouteBuilder.redirect(exchange, 303, "/_tesseraql/invite?invalid=1");
+            LoginRoutes.redirect(exchange, 303, "/_tesseraql/invite?invalid=1");
             return;
         }
         var consumed = tokens.consume(token, CredentialTokenStore.INVITE);
         if (consumed.isEmpty()) {
             throttle.recordFailure(null, address);
-            LoginRouteBuilder.redirect(exchange, 303, "/_tesseraql/invite?invalid=1");
+            LoginRoutes.redirect(exchange, 303, "/_tesseraql/invite?invalid=1");
             return;
         }
         String loginId = consumed.get();
@@ -131,17 +131,17 @@ final class RecoveryRouteBuilder {
             identity.executeUpdate(realm, IdentityContracts.ENABLE_USER,
                     Map.of("userId", str(users.get(0).get("user_id"))));
         }
-        LoginRouteBuilder.redirect(exchange, 303, "/_tesseraql/login?invited=1");
+        LoginRoutes.redirect(exchange, 303, "/_tesseraql/login?invited=1");
     }
 
     /** The neutral request leg: every outcome answers "sent". */
     private void request(Exchange exchange) throws Exception {
-        Map<String, Object> body = LoginRouteBuilder.parseBody(exchange);
+        Map<String, Object> body = LoginRoutes.parseBody(exchange);
         String loginId = str(body.get("loginId"));
         // Every request counts here - issuing mail IS the cost - and a throttled request
         // keeps the neutral answer: a 429 would itself be an oracle
         // (docs/credential-throttle.md). Only the issuing stops.
-        String address = LoginRouteBuilder.presentedAddress(exchange);
+        String address = LoginRoutes.presentedAddress(exchange);
         boolean throttled = throttle.retryAfter("reset", loginId, address).isPresent();
         throttle.recordFailure(loginId, address);
         try {
@@ -153,7 +153,7 @@ final class RecoveryRouteBuilder {
             // become a different response for this login than for the next.
             LOG.log(System.Logger.Level.WARNING, "Reset issue failed: {0}", ex.toString());
         }
-        LoginRouteBuilder.redirect(exchange, 303, "/_tesseraql/reset?sent=1");
+        LoginRoutes.redirect(exchange, 303, "/_tesseraql/reset?sent=1");
     }
 
     private void issueAndMail(String loginId) {
@@ -180,24 +180,24 @@ final class RecoveryRouteBuilder {
 
     /** The confirm leg: consume, rotate, kill every session of the subject. */
     private void confirm(Exchange exchange) throws Exception {
-        Map<String, Object> body = LoginRouteBuilder.parseBody(exchange);
+        Map<String, Object> body = LoginRoutes.parseBody(exchange);
         String token = str(body.get("token"));
         String next = str(body.get("next"));
         if (next.length() < 8 || next.length() > 256) {
-            LoginRouteBuilder.redirect(exchange, 303, "/_tesseraql/reset/confirm?error=short&token="
+            LoginRoutes.redirect(exchange, 303, "/_tesseraql/reset/confirm?error=short&token="
                     + URLEncoder.encode(token, StandardCharsets.UTF_8));
             return;
         }
-        String address = LoginRouteBuilder.presentedAddress(exchange);
+        String address = LoginRoutes.presentedAddress(exchange);
         if (throttle.retryAfter("confirm", null, address).isPresent()) {
-            LoginRouteBuilder.redirect(exchange, 303, "/_tesseraql/reset/confirm?invalid=1");
+            LoginRoutes.redirect(exchange, 303, "/_tesseraql/reset/confirm?invalid=1");
             return;
         }
         var consumed = tokens.consume(token, CredentialTokenStore.RESET);
         if (consumed.isEmpty()) {
             throttle.recordFailure(null, address);
             // Unknown, used, and expired all land here - one honest dead-link answer.
-            LoginRouteBuilder.redirect(exchange, 303, "/_tesseraql/reset/confirm?invalid=1");
+            LoginRoutes.redirect(exchange, 303, "/_tesseraql/reset/confirm?invalid=1");
             return;
         }
         String loginId = consumed.get();
@@ -213,7 +213,7 @@ final class RecoveryRouteBuilder {
         if (!users.isEmpty()) {
             sessions.invalidateOthersFor(str(users.get(0).get("user_id")), "");
         }
-        LoginRouteBuilder.redirect(exchange, 303, "/_tesseraql/login?reset=1");
+        LoginRoutes.redirect(exchange, 303, "/_tesseraql/login?reset=1");
     }
 
     private static String str(Object value) {

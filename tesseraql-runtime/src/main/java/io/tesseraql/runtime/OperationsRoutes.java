@@ -35,7 +35,7 @@ import java.util.function.Predicate;
  * diagnostics (lanes, slow SQL, pinning, aggregate metrics, alerts) describe the shared substrate
  * and open to any holder of any {@code tql.ops.view} grant.
  */
-final class OperationsRouteBuilder {
+final class OperationsRoutes {
 
     private static final AuthStep VIEW = new AuthStep("authenticate", "bearer", null, null);
     private static final AuthStep BROWSER = new AuthStep("authenticate", "browser", null, null);
@@ -91,7 +91,7 @@ final class OperationsRouteBuilder {
             io.tesseraql.opsui.RuntimeMetrics runtime) {
     }
 
-    OperationsRouteBuilder(OpsActions actions, JobRepository repository,
+    OperationsRoutes(OpsActions actions, JobRepository repository,
             Map<String, String> jobOwners,
             Map<String, io.tesseraql.yaml.model.JobDefinition> definitions,
             io.tesseraql.opsui.OpsDashboard dashboard, MetricsSettings metrics,
@@ -260,17 +260,17 @@ final class OperationsRouteBuilder {
         pipelines.pipeline("ops.slowSql")
                 .process(VIEW).process(requireAnyOpsView())
                 .process(jsonProcessor(exchange -> mapList(dashboard.slowSql(),
-                        OperationsRouteBuilder::sqlExecutionWire)));
+                        OperationsRoutes::sqlExecutionWire)));
 
         pipelines.pipeline("ops.traces")
                 .process(VIEW).process(requireAnyOpsView())
                 .process(jsonProcessor(exchange -> mapList(dashboard.traces(viewScope(exchange)),
-                        OperationsRouteBuilder::spanWire)));
+                        OperationsRoutes::spanWire)));
 
         pipelines.pipeline("ops.traceTree")
                 .process(VIEW).process(requireAnyOpsView())
                 .process(jsonProcessor(exchange -> mapList(dashboard.traceTree(viewScope(exchange)),
-                        OperationsRouteBuilder::traceNodeWire)));
+                        OperationsRoutes::traceNodeWire)));
 
         pipelines.pipeline("ops.traceSummary")
                 .process(VIEW).process(requireAnyOpsView())
@@ -297,7 +297,7 @@ final class OperationsRouteBuilder {
                     return store == null
                             ? List.of()
                             : store.status().stream()
-                                    .map(OperationsRouteBuilder::catalogStatusMap).toList();
+                                    .map(OperationsRoutes::catalogStatusMap).toList();
                 }));
 
         pipelines.pipeline("ops.catalogs.refresh")
@@ -319,7 +319,7 @@ final class OperationsRouteBuilder {
                     store.reload(name);
                     return store.status().stream()
                             .filter(status -> status.name().equals(name))
-                            .map(OperationsRouteBuilder::catalogStatusMap).findFirst()
+                            .map(OperationsRoutes::catalogStatusMap).findFirst()
                             .orElseThrow();
                 }));
 
@@ -769,7 +769,7 @@ final class OperationsRouteBuilder {
         map.put("selfMs", node.selfMs());
         map.put("startedAt", node.startedAt());
         map.put("slow", node.slow());
-        map.put("children", mapList(node.children(), OperationsRouteBuilder::traceNodeWire));
+        map.put("children", mapList(node.children(), OperationsRoutes::traceNodeWire));
         return map;
     }
 

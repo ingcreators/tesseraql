@@ -18,7 +18,7 @@ import javax.crypto.spec.SecretKeySpec;
  * (docs/session-token-exchange.md), and the two service providers the console page renders
  * (docs/stack-architecture.md Decision 20).
  *
- * <p>One signer for both faces. {@link TokenExchangeRouteBuilder} is the JSON endpoint a script
+ * <p>One signer for both faces. {@link TokenExchangeRoutes} is the JSON endpoint a script
  * calls; {@code ops.token.issue} is the same mint behind a page, so a token copied out of the
  * console and a token fetched by {@code tesseraql token --url} carry identical claims. Two
  * signers would have drifted the first time a claim was added to one of them.

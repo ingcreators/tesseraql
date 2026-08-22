@@ -12,7 +12,7 @@ import java.util.List;
  * {@code tesseraql.console.login.enabled: false} (or {@code tesseraql.apps.auth-ui.enabled: false}).
  *
  * <p>The credential endpoints — {@code POST /_tesseraql/login} and {@code GET /_tesseraql/logout} —
- * are wired by the runtime ({@code LoginRouteBuilder}); this app only serves the page, reading which
+ * are wired by the runtime ({@code LoginRoutes}); this app only serves the page, reading which
  * sign-in methods are available from the {@code auth.loginMethods} service.
  */
 public final class AuthUiAppProvider implements AppSourceProvider {

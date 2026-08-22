@@ -63,7 +63,7 @@ public final class FrameworkSurfaces {
                             + " enumerated PUBLIC rows, and the provider verifies the signed,"
                             + " expiring link itself"),
             // Moved from PROCESSOR_ENFORCED, where they attested a gate that does not run
-            // (docs/audit-hardening.md Decision 8). The wording is McpRouteBuilder's own, which
+            // (docs/audit-hardening.md Decision 8). The wording is McpRoutes's own, which
             // has always described the surface accurately; only this registry disagreed.
             Map.entry("mcp.endpoint.post",
                     "each MCP primitive runs its own route security, so there is no transport-level"
@@ -88,16 +88,16 @@ public final class FrameworkSurfaces {
      */
     public static final Map<String, String> PROCESSOR_ENFORCED = Map.ofEntries(
             Map.entry("system.logout",
-                    "LoginRouteBuilder#logout validates the CSRF token against the session"
+                    "LoginRoutes#logout validates the CSRF token against the session"
                             + " resolved from the cookie, which refuses when there is none"),
             Map.entry("system.logout.others",
-                    "LoginRouteBuilder#logoutOthers requires a session and validates the CSRF"
+                    "LoginRoutes#logoutOthers requires a session and validates the CSRF"
                             + " token before invalidating anything"),
             Map.entry("system.logout.device",
-                    "LoginRouteBuilder#logoutDevice requires a session and validates the CSRF"
+                    "LoginRoutes#logoutDevice requires a session and validates the CSRF"
                             + " token; the handle is scoped to the caller's own subject"),
             Map.entry("system.account.elevate",
-                    "LoginRouteBuilder#elevate requires a session and validates the CSRF"
+                    "LoginRoutes#elevate requires a session and validates the CSRF"
                             + " token; the subject elevated is the session's own, so the"
                             + " request names no target to validate"));
 

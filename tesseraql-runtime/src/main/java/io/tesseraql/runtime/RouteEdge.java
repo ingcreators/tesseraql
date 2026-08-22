@@ -348,11 +348,11 @@ final class RouteEdge {
         }
         ctx.pathParams().forEach((name, value) -> appendEntry(headers, name, value));
         if (request.localAddress() != null) {
-            headers.put(io.tesseraql.pipeline.PlatformHttpHeaders.LOCAL_ADDRESS,
+            headers.put(io.tesseraql.pipeline.Headers.LOCAL_ADDRESS,
                     request.localAddress());
         }
         if (request.remoteAddress() != null) {
-            headers.put(io.tesseraql.pipeline.PlatformHttpHeaders.REMOTE_ADDRESS,
+            headers.put(io.tesseraql.pipeline.Headers.REMOTE_ADDRESS,
                     request.remoteAddress());
         }
         headers.put(Headers.HTTP_METHOD, request.method().toString());

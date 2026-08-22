@@ -29,7 +29,7 @@ import java.util.List;
  * app routes. Mounted whenever Studio is; an unconfigured copilot refuses with
  * TQL-STUDIO-4235 exactly like the YAML send route did.
  */
-final class CopilotRouteBuilder {
+final class CopilotRoutes {
 
     private static final AuthStep AUTH = new AuthStep("authenticate", "browser", null, null);
 
@@ -38,7 +38,7 @@ final class CopilotRouteBuilder {
     /** The member-shaped page address: {@code /_tesseraql/studio/<member>/ui/copilot}. */
     private final String page;
 
-    CopilotRouteBuilder(CopilotService copilot, StudioEdit studioEdit, String member) {
+    CopilotRoutes(CopilotService copilot, StudioEdit studioEdit, String member) {
         this.copilot = copilot;
         this.studioEdit = studioEdit;
         this.page = pageOf(member);

@@ -11,7 +11,7 @@ import java.util.function.Supplier;
 
 /**
  * The find&rarr;scope&rarr;act cores the operations surface serves from two faces: the JSON
- * API ({@link OperationsRouteBuilder}) and the bundled console's {@code ops.*} service
+ * API ({@link OperationsRoutes}) and the bundled console's {@code ops.*} service
  * providers (registered in {@code TesseraqlRuntime.start}). Each pair used to duplicate the
  * lookup, the per-application scope gate, and the action; the {@code transferFile}
  * handler was already explicitly shared ("two faces, one handler"), and this class applies

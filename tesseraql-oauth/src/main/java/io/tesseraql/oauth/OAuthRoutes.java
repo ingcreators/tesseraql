@@ -20,7 +20,7 @@ import java.time.Duration;
  * is the auth-ui page between them, and every answer that carries a code or an error to a
  * client rides a redirect this class builds — never a page.
  */
-final class OAuthRouteBuilder {
+final class OAuthRoutes {
 
     private static final com.fasterxml.jackson.databind.ObjectMapper MAPPER = new com.fasterxml.jackson.databind.ObjectMapper();
 
@@ -33,7 +33,7 @@ final class OAuthRouteBuilder {
     private final org.apache.cxf.rs.security.oauth2.grants.code.AuthorizationCodeGrantHandler codeGrant;
     private final org.apache.cxf.rs.security.oauth2.grants.refresh.RefreshTokenGrantHandler refreshGrant;
 
-    OAuthRouteBuilder(SigningKeys keys, Duration accessTokenLifetime, AuthorizeFlow flow,
+    OAuthRoutes(SigningKeys keys, Duration accessTokenLifetime, AuthorizeFlow flow,
             SessionStore sessions, TesseraqlOAuthDataProvider provider, OAuthStore store) {
         this.keys = keys;
         this.accessTokenLifetime = accessTokenLifetime;

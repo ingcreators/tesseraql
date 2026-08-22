@@ -23,7 +23,7 @@ import java.time.Duration;
  * names the member's prefixed stream address, which the browser reaches through the gateway
  * directly, so the SSE stream needs no second hop.
  */
-final class CopilotProxyRouteBuilder {
+final class CopilotProxyRoutes {
 
     private static final AuthStep BROWSER = new AuthStep("authenticate", "browser", null, null);
     private static final AuthStep CSRF = new AuthStep("csrf");
@@ -31,7 +31,7 @@ final class CopilotProxyRouteBuilder {
     private final HostContext.MemberOrigins origins;
     private final HttpClient client = HttpClient.newHttpClient();
 
-    CopilotProxyRouteBuilder(HostContext.MemberOrigins origins) {
+    CopilotProxyRoutes(HostContext.MemberOrigins origins) {
         this.origins = origins;
     }
 

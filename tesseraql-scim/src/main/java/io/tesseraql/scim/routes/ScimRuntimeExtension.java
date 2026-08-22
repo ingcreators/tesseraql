@@ -43,7 +43,7 @@ public final class ScimRuntimeExtension implements RuntimeExtension {
     public void install(ExtensionContext context) throws Exception {
         AppManifest manifest = context.manifest();
         if (flag(manifest.config(), "tesseraql.scim.enabled")) {
-            new ScimRouteBuilder(
+            new ScimRoutes(
                     buildUserService(manifest, context.dataSource()),
                     buildGroupService(manifest, context.dataSource()),
                     buildAttributeCapture(context)).install(context.runtime());

@@ -100,9 +100,9 @@ public final class SamlRuntimeExtension implements RuntimeExtension {
         boolean allowIdpInitiated = config.getString("tesseraql.saml.allowIdpInitiated")
                 .map(Boolean::parseBoolean).orElse(false);
         boolean requireSignedLogout = config.getBoolean("tesseraql.saml.requireSignedLogout", true);
-        SamlAcsRouteBuilder.SamlSecurity security = new SamlAcsRouteBuilder.SamlSecurity(
+        SamlAcsRoutes.SamlSecurity security = new SamlAcsRoutes.SamlSecurity(
                 replayGuard, spKey, idpKey, allowIdpInitiated, requireSignedLogout);
-        new SamlAcsRouteBuilder(
+        new SamlAcsRoutes(
                 validator, mapping, sessions, linker, metadata, endpoints, security,
                 context.bean(TesseraqlProperties.CREDENTIAL_THROTTLE_BEAN,
                         io.tesseraql.security.throttle.CredentialThrottle.class))

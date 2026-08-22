@@ -1506,7 +1506,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                     + " per-primitive auth:/policy: continue underneath"
                                     + " either");
                 }
-                new McpRouteBuilder(
+                new McpRoutes(
                         new io.tesseraql.mcp.McpHttpHandler(mcpServer, mcpGate,
                                 mcpChallenge))
                         .install(context);
@@ -1557,7 +1557,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
             jobs.keySet().forEach(id -> ownedJobs.put(id, jobOwners.getOrDefault(id, appName)));
             // The Prometheus scrape endpoint is opt-in and bearer-gated by default; a
             // cluster-internal scraper may opt out of auth explicitly (roadmap Phase 45).
-            OperationsRouteBuilder.MetricsSettings metricsSettings = new OperationsRouteBuilder.MetricsSettings(
+            OperationsRoutes.MetricsSettings metricsSettings = new OperationsRoutes.MetricsSettings(
                     manifest.config().getString("tesseraql.metrics.enabled")
                             .map(Boolean::parseBoolean).orElse(false),
                     manifest.config().getString("tesseraql.metrics.unauthenticated")
@@ -1580,7 +1580,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
             // the console's ops.* providers shape the same actions differently.
             OpsActions opsActions = new OpsActions(outboxStore, eventChannelStore,
                     jobRepository, jobRunner, ownedJobs, appName, servedApps);
-            new OperationsRouteBuilder(
+            new OperationsRoutes(
                     opsActions, jobRepository, ownedJobs, jobDefinitions, opsDashboard,
                     metricsSettings, routeAuditStore, fileTransfers).install(context);
             // Service providers expose non-SQL runtime state to mounted yaml/template apps
@@ -2344,7 +2344,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
             }
             if (shellTargets != null) {
                 OpsShellProviders.register(serviceProviders, shellTargets);
-                new OpsShellRouteBuilder(shellTargets).install(context);
+                new OpsShellRoutes(shellTargets).install(context);
             }
             context.bind(TesseraqlProperties.SERVICE_PROVIDERS_BEAN,
                     serviceProviders);
@@ -2471,7 +2471,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     dataSource);
             totpStore.ensureSchema();
             context.bind(TesseraqlProperties.TOTP_STORE_BEAN, totpStore);
-            new LoginRouteBuilder(
+            new LoginRoutes(
                     new PasswordAuthenticator(identity), realm, sessionStore, totpStore,
                     credentialThrottle, identity).install(context);
             // A session buys a short-lived bearer (docs/session-token-exchange.md). Off by
@@ -2516,16 +2516,16 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     memberAddresses,
                     hostContext == null ? null : hostContext.externalOrigin());
             if (tokenIssuing) {
-                if (!stackIssuer && !TokenExchangeRouteBuilder.canIssue(security.jwt())) {
-                    throw TokenExchangeRouteBuilder.noSigningKey();
+                if (!stackIssuer && !TokenExchangeRoutes.canIssue(security.jwt())) {
+                    throw TokenExchangeRoutes.noSigningKey();
                 }
-                new TokenExchangeRouteBuilder(sessionStore, sessionTokens).install(context);
+                new TokenExchangeRoutes(sessionStore, sessionTokens).install(context);
             }
             // The stack's authenticated deploy endpoint (docs/stack-shells.md, the deploy
             // surface): mounted only where the host handed a pen — the surface runtime — so a
             // member, an unhosted boot, and every other runtime shape simply have no endpoint.
             if (hostContext != null && hostContext.deployPen() != null) {
-                new DeployRouteBuilder(hostContext.deployPen(), sessionStore).install(context);
+                new DeployRoutes(hostContext.deployPen(), sessionStore).install(context);
             }
             // The console's issue-token page (docs/stack-architecture.md Decision 20), so
             // acquiring a token stops meaning "read a cookie and a meta tag out of developer
@@ -2563,7 +2563,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
             // itself is — a hosted member serves no /_tesseraql/admin of its own
             // (docs/stack-shells.md structural decision 3).
             if (hostedApps.contains("iam-admin")) {
-                new IamAdminRouteBuilder().install(context);
+                new IamAdminRoutes().install(context);
             }
             // Password recovery (roadmap Phase 50 slice 1): fail-fast validation - a half
             // configuration must not silently produce a reset page that goes nowhere.
@@ -2591,7 +2591,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                 "tesseraql.identity.recovery.enabled needs a url:"));
             }
             if (recoveryEnabled || inviteEnabled) {
-                new RecoveryRouteBuilder(credentialTokens, identity, realm,
+                new RecoveryRoutes(credentialTokens, identity, realm,
                         sessionStore, outboxStore, recoveryChannel, recoveryUrl,
                         java.time.Duration.ofMinutes(manifest.config()
                                 .getString("tesseraql.identity.recovery.ttlMinutes")

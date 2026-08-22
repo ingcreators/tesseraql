@@ -31,7 +31,7 @@ import io.tesseraql.security.session.SessionStore;
  * <p>This is the JSON face. The console's issue-token page is the other one, and both mint through
  * {@link SessionTokens} so the two cannot drift.
  */
-final class TokenExchangeRouteBuilder {
+final class TokenExchangeRoutes {
 
     /**
      * TQL-SEC-4146: issuing was enabled and there is nothing to sign with — neither an HS256
@@ -53,7 +53,7 @@ final class TokenExchangeRouteBuilder {
     private final SessionStore sessions;
     private final SessionTokens tokens;
 
-    TokenExchangeRouteBuilder(SessionStore sessions, SessionTokens tokens) {
+    TokenExchangeRoutes(SessionStore sessions, SessionTokens tokens) {
         this.sessions = sessions;
         this.tokens = tokens;
     }
@@ -103,7 +103,7 @@ final class TokenExchangeRouteBuilder {
      */
     private void exchange(Exchange exchange) throws Exception {
         String cookie = exchange.getMessage().getHeader("Cookie", String.class);
-        java.util.Map<String, Object> body = LoginRouteBuilder.parseBody(exchange);
+        java.util.Map<String, Object> body = LoginRoutes.parseBody(exchange);
         String token = exchange.getMessage().getHeader("X-CSRF-Token", String.class);
         if (token == null) {
             Object field = body.get("_csrf");

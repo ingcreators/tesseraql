@@ -283,7 +283,7 @@ public class AuthStep implements Step {
         String address = SessionStore.ClientInfo.of(null,
                 exchange.getMessage().getHeader("X-Forwarded-For", String.class),
                 exchange.getMessage().getHeader(
-                        io.tesseraql.pipeline.PlatformHttpHeaders.REMOTE_ADDRESS,
+                        io.tesseraql.pipeline.Headers.REMOTE_ADDRESS,
                         String.class))
                 .remoteAddr();
         exchange.setProperty(TesseraqlProperties.PRINCIPAL,

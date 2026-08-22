@@ -28,12 +28,12 @@ import java.util.concurrent.atomic.AtomicReference;
  * The OIDC relying-party web endpoints under {@code /_tesseraql/oidc} (design ch. 10.14, roadmap
  * Phase 25): {@code GET /login} starts the authorization-code + PKCE flow, {@code GET /callback}
  * exchanges the code and issues a session, and {@code GET /logout} ends it. A failure returns 401
- * without leaking the code, token, or secret. Mirrors the SAML SP route builder.
+ * without leaking the code, token, or secret. Mirrors the SAML SP routes.
  */
-final class OidcRouteBuilder {
+final class OidcRoutes {
 
     private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory
-            .getLogger(OidcRouteBuilder.class);
+            .getLogger(OidcRoutes.class);
 
     private final ObjectMapper mapper = new ObjectMapper();
     private final OidcConfig config;
@@ -47,7 +47,7 @@ final class OidcRouteBuilder {
     /** Short-lived cookie carrying the sanitized post-login {@code next} from /login to /callback. */
     private static final String NEXT_COOKIE = "tql_oidc_next";
 
-    OidcRouteBuilder(OidcConfig config, OidcDiscovery discovery, OidcStateStore stateStore,
+    OidcRoutes(OidcConfig config, OidcDiscovery discovery, OidcStateStore stateStore,
             OidcHttp http, SessionStore sessions, OidcUserLinker linker,
             io.tesseraql.security.throttle.CredentialThrottle throttle) {
         this.config = config;
@@ -73,7 +73,7 @@ final class OidcRouteBuilder {
         String address = io.tesseraql.security.session.SessionStore.ClientInfo.of(null,
                 exchange.getMessage().getHeader("X-Forwarded-For", String.class),
                 exchange.getMessage().getHeader(
-                        io.tesseraql.pipeline.PlatformHttpHeaders.REMOTE_ADDRESS,
+                        io.tesseraql.pipeline.Headers.REMOTE_ADDRESS,
                         String.class))
                 .remoteAddr();
         if (throttle.retryAfter("oidc", null, address).isPresent()) {

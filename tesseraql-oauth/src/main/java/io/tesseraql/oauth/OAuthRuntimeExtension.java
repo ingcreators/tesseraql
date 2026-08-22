@@ -113,7 +113,7 @@ public final class OAuthRuntimeExtension implements RuntimeExtension {
             sessions = context.bean(TesseraqlProperties.SESSION_STORE_BEAN, SessionStore.class);
             registerConsentReview(context, flow);
         }
-        new OAuthRouteBuilder(keys, accessTokenLifetime, flow,
+        new OAuthRoutes(keys, accessTokenLifetime, flow,
                 sessions, provider, store).install(context.runtime());
     }
 

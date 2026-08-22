@@ -26,7 +26,7 @@ import java.util.function.Function;
  * {@code tql.studio.edit.<name>} atom (docs/studio-shell.md structural decision 4).
  * The browser UI (explorer, editor, setup wizards) is served by the bundled studio app (ch. 32).
  */
-final class StudioRouteBuilder {
+final class StudioRoutes {
 
     private static final AuthStep AUTH = new AuthStep("authenticate", "bearer", null, null);
 
@@ -39,7 +39,7 @@ final class StudioRouteBuilder {
     private final StudioService.FieldMask studioMask;
     private final StudioService.PdfRender studioPdf;
 
-    StudioRouteBuilder(StudioService studio, RouteReloader reloader,
+    StudioRoutes(StudioService studio, RouteReloader reloader,
             StudioTestService studioTests, StudioScaffoldService studioScaffold,
             StudioEdit studioEdit, StudioService.FieldMask studioMask,
             StudioService.PdfRender studioPdf) {

@@ -22,7 +22,7 @@ import io.tesseraql.scim.ScimUserService;
  * require a bearer principal with the {@code scim.manage} policy; responses use the SCIM media type
  * and SCIM error envelope.
  */
-public final class ScimRouteBuilder {
+public final class ScimRoutes {
 
     private static final AuthStep AUTH = new AuthStep("authenticate", "bearer", null, null);
     private static final AuthStep AUTHORIZE = new AuthStep("authorize", null, "scim.manage", null);
@@ -33,16 +33,16 @@ public final class ScimRouteBuilder {
     private final ScimGroupService groups;
     private final io.tesseraql.scim.ScimAttributeCapture capture;
 
-    public ScimRouteBuilder(ScimUserService users) {
+    public ScimRoutes(ScimUserService users) {
         this(users, null, null);
     }
 
-    public ScimRouteBuilder(ScimUserService users, ScimGroupService groups) {
+    public ScimRoutes(ScimUserService users, ScimGroupService groups) {
         this(users, groups, null);
     }
 
     /** With the identity-store attribute capture (docs/application-roles.md), or null without. */
-    public ScimRouteBuilder(ScimUserService users, ScimGroupService groups,
+    public ScimRoutes(ScimUserService users, ScimGroupService groups,
             io.tesseraql.scim.ScimAttributeCapture capture) {
         this.users = users;
         this.groups = groups;

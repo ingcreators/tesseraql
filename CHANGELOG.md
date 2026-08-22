@@ -136,6 +136,14 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **The framework's own route classes stop being called builders** (docs/vertx-native.md
+  slice 0). Sixteen `*RouteBuilder` classes are `*Routes` — a builder was the thing
+  `configure()` handed to `addRoutes`, and both left the build with the dependency that defined
+  them. `PlatformHttpHeaders` merged into `Headers` for the same reason: the component the name
+  pointed at left in the edge campaign, and the two peer-address constants it held belong with
+  the other internal header names. Internal renames only; no wire name, header value, or YAML
+  surface moves.
+
 - **A `local` poll source without `consumeOnce: true` is now warned about** (`TQL-YAML-1310`,
   docs/camel-removal.md slice 6c). **This is a defect fix, not a lint tightening.** The warning
   used to skip local sources because the file library's local read-lock strategy wrote an atomic
