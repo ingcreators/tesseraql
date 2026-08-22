@@ -429,6 +429,14 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **Redirects and Location headers built from the request no longer double the query string.**
+  `request().uri()` is the path *plus* the query, and three builders treated it as the path:
+  the role-activation redirect appended the query again (`…/admin/users?tab=audit?tab=audit`,
+  and the same corrupted target inside the role picker's `redirect` parameter), and the SCIM
+  and attachment-upload 201 `Location` headers glued the created id onto the query
+  (`/scim/v2/Users?x=1/<id>`) whenever the caller appended one. All three now build from the
+  path and append what they mean to append.
+
 - **A queue delivery whose pipeline failed is no longer marked consumed.** The consumer checked
   only the exchange's exception, but a `queue.<id>` pipeline inherits the route error clauses,
   and the runner clears the exception (moving it to `EXCEPTION_CAUGHT`) before rendering the

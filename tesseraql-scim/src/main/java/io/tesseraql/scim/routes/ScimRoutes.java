@@ -110,9 +110,11 @@ public final class ScimRoutes {
         if (capture != null) {
             capture.syncResource(created.id(), request, payload);
         }
-        // RFC 7644 §3.3: a SCIM 201 carries the created resource's Location.
+        // RFC 7644 §3.3: a SCIM 201 carries the created resource's Location — built from the
+        // path, because uri() carries the query string too and an IdP that appends one would
+        // get a Location with the id glued onto the query.
         exchange.response().header("Location",
-                exchange.request().uri()
+                exchange.request().path()
                         + "/" + created.id());
         respond(exchange, 201, created);
     }
@@ -166,7 +168,7 @@ public final class ScimRoutes {
                 ScimGroup.class);
         ScimGroup created = groups.create(request);
         exchange.response().header("Location",
-                exchange.request().uri()
+                exchange.request().path()
                         + "/" + created.id());
         respond(exchange, 201, created);
     }

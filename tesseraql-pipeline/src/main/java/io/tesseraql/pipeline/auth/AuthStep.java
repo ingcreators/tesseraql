@@ -385,10 +385,22 @@ public class AuthStep implements Step {
                 + java.net.URLEncoder.encode(wire, java.nio.charset.StandardCharsets.UTF_8);
     }
 
-    /** The request's wire path (the member never sees the {@code _as} segment — relay-stripped). */
+    /**
+     * The request's wire path (the member never sees the {@code _as} segment — relay-stripped).
+     *
+     * <p>The path alone: {@code uri()} carries the query string too, and both locations built
+     * from this append {@link #querySuffix} themselves — reading the full URI here doubled the
+     * query on every activation redirect ({@code ?tab=a?tab=a}) and inside the picker's
+     * {@code redirect} parameter.
+     */
     private static String wirePath(Exchange exchange) {
-        String path = exchange.request().uri();
-        return path == null || !path.startsWith("/") || path.startsWith("//") ? "/" : path;
+        String uri = exchange.request().uri();
+        if (uri == null) {
+            return "/";
+        }
+        int query = uri.indexOf('?');
+        String path = query < 0 ? uri : uri.substring(0, query);
+        return !path.startsWith("/") || path.startsWith("//") ? "/" : path;
     }
 
     private static String querySuffix(Exchange exchange) {
