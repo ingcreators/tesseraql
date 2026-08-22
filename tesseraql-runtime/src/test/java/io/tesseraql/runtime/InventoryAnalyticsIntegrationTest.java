@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
-import java.net.ServerSocket;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -66,7 +65,7 @@ class InventoryAnalyticsIntegrationTest {
     void meetsMilestoneM23OnTheInventoryApp() throws Exception {
         appHome = prepareApp();
 
-        runtime = TesseraqlRuntime.start(appHome, freePort());
+        runtime = TesseraqlRuntime.start(appHome, 0);
 
         // The tenant-scoped dashboard: a main widget beside the tenant's own Parquet drop.
         String alphaBoard = get("/tenantboard", Map.of("X-Tenant-Id", "alpha")).body();
@@ -338,9 +337,4 @@ class InventoryAnalyticsIntegrationTest {
         }
     }
 
-    private static int freePort() throws IOException {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            return socket.getLocalPort();
-        }
-    }
 }

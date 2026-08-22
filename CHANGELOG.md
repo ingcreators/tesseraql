@@ -429,6 +429,17 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **`server.port: 0` binds an ephemeral port and reports the one it got — and the
+  pick-a-free-port-then-bind race is gone.** The runtime stored the *requested* port, so asking
+  for 0 published 0; the host and the whole integration suite therefore pre-picked a free port
+  by binding and closing a probe socket — a race another process (or another suite fork) could
+  win in the window between the probe and the real bind, which is exactly how three unrelated
+  CI runs failed with `Address already in use` in one day. `TesseraqlHttpServer` now reports
+  `actualPort()` after listening, `runtime.port()` carries it, `MultiAppHost` starts members,
+  canaries and the surface on port 0 (a declared `server.port` still binds exactly that, and
+  "undeclared stays ephemeral" is now literally true), and every integration test boots on
+  port 0 instead of racing — the `freePort()` helpers left with their callers.
+
 - **Three resource leaks on the runtime's own surfaces.** A server whose close timed out
   leaked its created Vert.x permanently — event loops and acceptor threads alive for the rest
   of the process, because the stop had no `finally` and the context logs a failed stop and

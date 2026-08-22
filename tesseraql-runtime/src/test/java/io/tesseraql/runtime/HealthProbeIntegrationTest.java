@@ -43,7 +43,7 @@ class HealthProbeIntegrationTest {
     static void start() throws Exception {
         POSTGRES.start();
         appHome = prepareAppHome();
-        runtime = TesseraqlRuntime.start(appHome, freePort());
+        runtime = TesseraqlRuntime.start(appHome, 0);
     }
 
     @AfterAll
@@ -102,12 +102,6 @@ class HealthProbeIntegrationTest {
             Thread.sleep(250);
         }
         return response;
-    }
-
-    private static int freePort() throws IOException {
-        try (java.net.ServerSocket socket = new java.net.ServerSocket(0)) {
-            return socket.getLocalPort();
-        }
     }
 
     private static HttpResponse<String> get(String path) throws Exception {

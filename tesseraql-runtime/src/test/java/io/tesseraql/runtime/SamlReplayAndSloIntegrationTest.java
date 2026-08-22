@@ -6,7 +6,6 @@ import io.tesseraql.saml.LogoutRequest;
 import io.tesseraql.saml.SamlRedirect;
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.net.ServerSocket;
 import java.net.URI;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
@@ -60,7 +59,7 @@ class SamlReplayAndSloIntegrationTest {
     static void start() throws Exception {
         idpKeys = SamlTestSupport.generateKeyPair();
         appHome = prepareAppHome();
-        runtime = TesseraqlRuntime.start(appHome, freePort());
+        runtime = TesseraqlRuntime.start(appHome, 0);
     }
 
     @AfterAll
@@ -294,9 +293,4 @@ class SamlReplayAndSloIntegrationTest {
         }
     }
 
-    private static int freePort() throws IOException {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            return socket.getLocalPort();
-        }
-    }
 }

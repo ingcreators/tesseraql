@@ -140,7 +140,7 @@ class FrameworkSurfaceGuardTest {
                           - role: SCIM
                 """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
                 POSTGRES.getPassword()));
-        runtime = TesseraqlRuntime.start(appHome, freePort());
+        runtime = TesseraqlRuntime.start(appHome, 0);
     }
 
     @AfterAll
@@ -340,9 +340,4 @@ class FrameworkSurfaceGuardTest {
         }
     }
 
-    private static int freePort() throws Exception {
-        try (java.net.ServerSocket socket = new java.net.ServerSocket(0)) {
-            return socket.getLocalPort();
-        }
-    }
 }

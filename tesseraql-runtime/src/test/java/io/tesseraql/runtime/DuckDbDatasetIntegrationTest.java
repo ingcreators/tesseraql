@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.tesseraql.core.attachment.AttachmentStore;
 import io.tesseraql.operations.attachment.JdbcAttachmentStore;
 import java.io.IOException;
-import java.net.ServerSocket;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -60,7 +59,7 @@ class DuckDbDatasetIntegrationTest {
     void resolvesAnOwnedCleanDatasetAndNeutrallyRefusesTheRest() throws Exception {
         appHome = prepareApp();
 
-        runtime = TesseraqlRuntime.start(appHome, freePort());
+        runtime = TesseraqlRuntime.start(appHome, 0);
 
         // The owner reads their scan-passed upload through the dataset placeholder.
         HttpResponse<String> owned = get("/api/report?id=" + cleanId, KEY_A);
@@ -221,9 +220,4 @@ class DuckDbDatasetIntegrationTest {
         }
     }
 
-    private static int freePort() throws IOException {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            return socket.getLocalPort();
-        }
-    }
 }

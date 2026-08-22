@@ -78,7 +78,7 @@ class RsaJwksIntegrationTest {
         jwksServer.start();
 
         appHome = prepareAppHome(jwksServer.getAddress().getPort());
-        runtime = TesseraqlRuntime.start(appHome, freePort());
+        runtime = TesseraqlRuntime.start(appHome, 0);
         seedDatabase();
     }
 

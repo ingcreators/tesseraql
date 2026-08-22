@@ -7,7 +7,6 @@ import io.tesseraql.runtime.TesseraqlRuntime;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
-import java.net.ServerSocket;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
@@ -85,7 +84,7 @@ class CopilotIntegrationTest {
         appHome = prepareAppHome(
                 "http://127.0.0.1:" + modelServer.getAddress().getPort()
                         + "/v1/chat/completions");
-        runtime = TesseraqlRuntime.start(appHome, freePort());
+        runtime = TesseraqlRuntime.start(appHome, 0);
         establishSession();
     }
 
@@ -311,12 +310,6 @@ class CopilotIntegrationTest {
                 .POST(HttpRequest.BodyPublishers.ofString(form))
                 .build();
         return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
-    }
-
-    private static int freePort() throws IOException {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            return socket.getLocalPort();
-        }
     }
 
     private static Path prepareAppHome(String modelEndpoint) throws IOException {

@@ -7,7 +7,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.identity.DefaultIdentityPack;
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.net.ServerSocket;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
@@ -60,7 +59,7 @@ class SamlUserLinkIntegrationTest {
         keyPair = SamlTestSupport.generateKeyPair();
         seedIdentitySchema();
         appHome = prepareAppHome();
-        runtime = TesseraqlRuntime.start(appHome, freePort());
+        runtime = TesseraqlRuntime.start(appHome, 0);
     }
 
     @AfterAll
@@ -261,9 +260,4 @@ class SamlUserLinkIntegrationTest {
         }
     }
 
-    private static int freePort() throws IOException {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            return socket.getLocalPort();
-        }
-    }
 }

@@ -96,7 +96,7 @@ class PollImportFtpsIntegrationTest {
         untrusted = generateKeystore();
         startFtpsServer();
         appHome = prepareAppHome();
-        runtime = TesseraqlRuntime.start(appHome, freePort());
+        runtime = TesseraqlRuntime.start(appHome, 0);
     }
 
     @AfterAll
@@ -166,7 +166,7 @@ class PollImportFtpsIntegrationTest {
         // which is what makes it the honest test of the control: a positive-only test passes
         // whether or not verification happens.
         Path home = prepareAppHome("inbound-untrusted", untrusted);
-        TesseraqlRuntime rogue = TesseraqlRuntime.start(home, freePort());
+        TesseraqlRuntime rogue = TesseraqlRuntime.start(home, 0);
         try {
             // Long enough for several poll cycles at the job's 500ms delay.
             Thread.sleep(java.time.Duration.ofSeconds(6).toMillis());

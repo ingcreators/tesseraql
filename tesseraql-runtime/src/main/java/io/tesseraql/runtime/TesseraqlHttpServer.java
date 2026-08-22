@@ -39,6 +39,8 @@ final class TesseraqlHttpServer implements RuntimeContext.Service {
     private Vertx vertx;
     private Vertx created;
     private HttpServer server;
+    /** The port actually bound — the requested one, or the kernel's pick when 0 was asked. */
+    private volatile int boundPort;
 
     /**
      * The transport is passed, not looked up (docs/vertx-native.md decision 6). The code that
@@ -80,7 +82,17 @@ final class TesseraqlHttpServer implements RuntimeContext.Service {
                 .requestHandler(router);
         server.listen(port, host).toCompletionStage().toCompletableFuture()
                 .get(BIND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-        LOG.info("HTTP server listening on {}:{}", host, port);
+        boundPort = server.actualPort();
+        LOG.info("HTTP server listening on {}:{}", host, boundPort);
+    }
+
+    /**
+     * The port actually bound. Asking for port 0 binds an ephemeral one — the answer to the
+     * pick-a-free-port-then-bind race the integration suite used to run per boot, where another
+     * fork could take the picked port in the window between the probe and the bind.
+     */
+    int actualPort() {
+        return boundPort;
     }
 
     @Override

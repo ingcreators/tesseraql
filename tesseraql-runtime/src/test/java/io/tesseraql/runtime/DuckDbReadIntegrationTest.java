@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
-import java.net.ServerSocket;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -52,7 +51,7 @@ class DuckDbReadIntegrationTest {
     void readsFilesThroughScopesBesideMainAndFencesTheRest() throws Exception {
         appHome = prepareApp();
 
-        runtime = TesseraqlRuntime.start(appHome, freePort());
+        runtime = TesseraqlRuntime.start(appHome, 0);
 
         // A Parquet aggregation through the ${scope.sales} placeholder.
         HttpResponse<String> parquet = get("/api/sales/summary");
@@ -253,9 +252,4 @@ class DuckDbReadIntegrationTest {
         }
     }
 
-    private static int freePort() throws IOException {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            return socket.getLocalPort();
-        }
-    }
 }

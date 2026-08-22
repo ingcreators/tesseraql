@@ -9,7 +9,6 @@ import io.vertx.core.ThreadingModel;
 import io.vertx.core.Vertx;
 import io.vertx.core.http.HttpMethod;
 import java.io.IOException;
-import java.net.ServerSocket;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -66,7 +65,7 @@ class HttpEdgeDispatchIntegrationTest {
     @BeforeAll
     static void start() throws Exception {
         appHome = prepareAppHome();
-        runtime = TesseraqlRuntime.start(appHome, freePort());
+        runtime = TesseraqlRuntime.start(appHome, 0);
         DataSource dataSource = runtime.context().lookup("main", DataSource.class);
         io.vertx.ext.web.Router router = runtime.context().lookup("tesseraqlHttpRouter",
                 io.vertx.ext.web.Router.class);
@@ -221,12 +220,6 @@ class HttpEdgeDispatchIntegrationTest {
                 """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
                 POSTGRES.getPassword()));
         return target;
-    }
-
-    private static int freePort() throws IOException {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            return socket.getLocalPort();
-        }
     }
 
     private static void delete(Path target) throws IOException {

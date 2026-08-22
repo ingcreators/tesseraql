@@ -9,7 +9,6 @@ import io.tesseraql.core.spool.SpoolWriter;
 import io.tesseraql.operations.spool.JdbcTempStore;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.ServerSocket;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -52,7 +51,7 @@ class SharedTempStoreIntegrationTest {
             statement.execute("insert into orders (status) values ('APPROVED')");
         }
         appHome = prepareAppHome();
-        runtime = TesseraqlRuntime.start(appHome, freePort());
+        runtime = TesseraqlRuntime.start(appHome, 0);
     }
 
     @AfterAll
@@ -132,12 +131,6 @@ class SharedTempStoreIntegrationTest {
         assertThat(response.headers().firstValue("Content-Disposition").orElse(""))
                 .contains("orders.csv");
         assertThat(response.body()).contains("PENDING").contains("APPROVED");
-    }
-
-    private static int freePort() throws IOException {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            return socket.getLocalPort();
-        }
     }
 
     private static Path prepareAppHome() throws IOException {

@@ -7,7 +7,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zaxxer.hikari.HikariDataSource;
 import io.tesseraql.yaml.manifest.ManifestLoader;
 import java.io.IOException;
-import java.net.ServerSocket;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -69,7 +68,7 @@ class RemoteLakeIntegrationTest {
     void writesTheLakeOnObjectStorageAndScopesTheCredentials() throws Exception {
         appHome = prepareApp();
 
-        runtime = TesseraqlRuntime.start(appHome, freePort());
+        runtime = TesseraqlRuntime.start(appHome, 0);
 
         // Two job runs land history snapshots as objects under the declared prefix.
         for (int run = 0; run < 2; run++) {
@@ -381,9 +380,4 @@ class RemoteLakeIntegrationTest {
         }
     }
 
-    private static int freePort() throws IOException {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            return socket.getLocalPort();
-        }
-    }
 }

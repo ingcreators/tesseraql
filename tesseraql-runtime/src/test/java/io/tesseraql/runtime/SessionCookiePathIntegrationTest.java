@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.tesseraql.security.password.Pbkdf2PasswordEncoder;
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.net.ServerSocket;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -68,7 +67,7 @@ class SessionCookiePathIntegrationTest {
     /** No host says otherwise, so the standalone answer applies: the application's own prefix. */
     @Test
     void aStandaloneApplicationScopesItsCookieToItsOwnPrefix() throws Exception {
-        try (TesseraqlRuntime runtime = TesseraqlRuntime.start(appHome, freePort(),
+        try (TesseraqlRuntime runtime = TesseraqlRuntime.start(appHome, 0,
                 new HostContext("/myapp", null, null, null, null, null, null, null, null, null,
                         null, false, null))) {
             assertThat(setCookieOnLogin(runtime)).contains("Path=/myapp");
@@ -78,7 +77,7 @@ class SessionCookiePathIntegrationTest {
     /** The stack host says otherwise, because only it knows these applications share a sign-in. */
     @Test
     void aStackHostIssuesTheCookieAtTheOriginRoot() throws Exception {
-        try (TesseraqlRuntime runtime = TesseraqlRuntime.start(appHome, freePort(),
+        try (TesseraqlRuntime runtime = TesseraqlRuntime.start(appHome, 0,
                 HostContext.stack().forApplication("/shop-a"))) {
             assertThat(setCookieOnLogin(runtime))
                     .contains("Path=/;")
@@ -178,9 +177,4 @@ class SessionCookiePathIntegrationTest {
         }
     }
 
-    private static int freePort() throws IOException {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            return socket.getLocalPort();
-        }
-    }
 }

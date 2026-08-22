@@ -5,8 +5,6 @@ import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.operations.app.InstalledApp;
 import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.net.ServerSocket;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -278,7 +276,7 @@ public final class MultiAppHost implements AutoCloseable, StackReconciler.HostOp
                 // bind, which is a flag-grade failure rather than a silent one.
                 host.slots.put(app.name(), new Slot(app,
                         host.startRuntime(app, config,
-                                declaredPort(config).orElseGet(MultiAppHost::freePort)),
+                                declaredPort(config).orElse(0)),
                         ingressStrip(config)));
                 LOG.info("Hosting app {} v{} from {}", app.name(), app.version(), appHome);
 
@@ -289,7 +287,7 @@ public final class MultiAppHost implements AutoCloseable, StackReconciler.HostOp
                     // The candidate answers the same address as the app it may replace, so it
                     // serves the same base path.
                     host.slots.put(app.name() + CANARY_SLOT, new Slot(canary.candidate(),
-                            host.startRuntime(canary.candidate(), candidateConfig, freePort()),
+                            host.startRuntime(canary.candidate(), candidateConfig, 0),
                             ingressStrip(candidateConfig)));
                     host.canaryWeights.put(app.name(), canary.weightPercent());
                     LOG.info("Hosting canary {} v{} at {}% traffic",
@@ -306,7 +304,7 @@ public final class MultiAppHost implements AutoCloseable, StackReconciler.HostOp
                         "tesseraql/apps/portal", MultiAppHost.class.getClassLoader())
                         .materialize(installRoot.resolve("work"));
                 host.slots.put(SURFACE_SLOT, new Slot(null,
-                        TesseraqlRuntime.start(surfaceHome, freePort(),
+                        TesseraqlRuntime.start(surfaceHome, 0,
                                 context.forSurface(
                                         surfaceMainOverride(settings, configs, dev, embedded),
                                         applications, host.memberOrigins(),
@@ -447,7 +445,7 @@ public final class MultiAppHost implements AutoCloseable, StackReconciler.HostOp
                         + io.tesseraql.operations.app.StackSettings.FILE_NAME + ".");
             }
         }
-        TesseraqlRuntime runtime = startRuntime(entry, config, freePort());
+        TesseraqlRuntime runtime = startRuntime(entry, config, 0);
         try {
             awaitReady(entry, runtime);
         } catch (RuntimeException notReady) {
@@ -950,11 +948,4 @@ public final class MultiAppHost implements AutoCloseable, StackReconciler.HostOp
         }
     }
 
-    private static int freePort() {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            return socket.getLocalPort();
-        } catch (IOException ex) {
-            throw new UncheckedIOException(ex);
-        }
-    }
 }

@@ -6,7 +6,6 @@ import io.tesseraql.compiler.pipeline.Pipelines;
 import io.tesseraql.pipeline.HttpMounts;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.ServerSocket;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -52,7 +51,7 @@ class StreamedResponseDrainIntegrationTest {
     @BeforeAll
     static void start() throws Exception {
         appHome = prepareAppHome();
-        runtime = TesseraqlRuntime.start(appHome, freePort());
+        runtime = TesseraqlRuntime.start(appHome, 0);
 
         byte[] content = new byte[BODY_BYTES];
         for (int at = 0; at < content.length; at++) {
@@ -150,12 +149,6 @@ class StreamedResponseDrainIntegrationTest {
                 """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
                 POSTGRES.getPassword()));
         return target;
-    }
-
-    private static int freePort() throws IOException {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            return socket.getLocalPort();
-        }
     }
 
     private static void delete(Path target) throws IOException {

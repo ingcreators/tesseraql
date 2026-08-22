@@ -1332,6 +1332,9 @@ public final class TesseraqlRuntime implements AutoCloseable {
         io.tesseraql.opsui.PollSourceStatus pollSourceStatus = new io.tesseraql.opsui.PollSourceStatus();
         context.bind("tesseraqlPollSourceStatus", pollSourceStatus);
         io.tesseraql.opsui.OpsDashboard opsDashboard;
+        // The port actually bound, learned after the server starts: the requested one, or the
+        // kernel's pick when 0 was asked for.
+        int boundPort = port;
         try {
             // The effective tracer, not the supplied one: with OTLP configured the supplied tracer
             // is wrapped in a composite, and reading past it left the console's trace pages empty
@@ -1378,8 +1381,9 @@ public final class TesseraqlRuntime implements AutoCloseable {
             AppMigrations.migrate(
                     io.tesseraql.yaml.migration.SchemaHistoryName.of(manifest.config()),
                     appHome, manifest.config(), dataSource, tenantDataSources, dataSources::get);
-            context.addService(new TesseraqlHttpServer(context, "0.0.0.0", port,
-                    sharedTransport, standaloneTransportOptions));
+            TesseraqlHttpServer httpServer = new TesseraqlHttpServer(context, "0.0.0.0", port,
+                    sharedTransport, standaloneTransportOptions);
+            context.addService(httpServer);
             new RouteCompiler().appName(appName)
                     .functions(modules.functions()).compile(context, manifest);
             // Mounted apps (jar-bundled system apps and config-listed directories, design ch. 32)
@@ -2722,6 +2726,11 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                     .toMillis()
                             : Long.MAX_VALUE);
             context.start();
+            // The port the server actually bound: asking for 0 binds an ephemeral one, and
+            // the published number — runtime.port(), the boot log — must carry the real port,
+            // not the request. This is what lets a test boot on "any port" instead of racing
+            // pick-a-free-port-then-bind across suite forks.
+            boundPort = httpServer.actualPort();
             // Unicode route paths match their percent-encoded requests (UnicodePaths).
             UnicodePaths.install(context, port);
             // The runtime-wide in-flight bound (docs/http-threading.md decision 3). Installed here
@@ -2748,8 +2757,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
             closeQuietly(modules);
             throw new IllegalStateException("Failed to start TesseraQL runtime", ex);
         }
-        LOG.info("TesseraQL runtime started on port {} for app {}", port, appHome);
-        return new TesseraqlRuntime(context, dataSources, port, jobRepository, jobExecutor,
+        LOG.info("TesseraQL runtime started on port {} for app {}", boundPort, appHome);
+        return new TesseraqlRuntime(context, dataSources, boundPort, jobRepository, jobExecutor,
                 outboxStore, jobs, jobOwners, appName, hostedApps, lanes, tenantDataSources,
                 manifest.config(), pinningSource, otelSdk, opsDashboard, outboxSink, modules);
     }

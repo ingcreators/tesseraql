@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
-import java.net.ServerSocket;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -63,7 +62,7 @@ class MultiDatasourceReadIntegrationTest {
     void readsRunOnTheRouteAndQueryLevelConnector() throws Exception {
         appHome = prepareApp();
 
-        runtime = TesseraqlRuntime.start(appHome, freePort());
+        runtime = TesseraqlRuntime.start(appHome, 0);
 
         // The route-level connector: the whole read runs on the reporting database, whose table
         // exists only there (db/reporting/migration created and seeded it).
@@ -202,9 +201,4 @@ class MultiDatasourceReadIntegrationTest {
         }
     }
 
-    private static int freePort() throws IOException {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            return socket.getLocalPort();
-        }
-    }
 }

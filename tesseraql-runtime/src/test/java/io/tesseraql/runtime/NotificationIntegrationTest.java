@@ -99,7 +99,7 @@ class NotificationIntegrationTest {
         });
         receiver.start();
         appHome = prepareAppHome();
-        runtime = TesseraqlRuntime.start(appHome, freePort());
+        runtime = TesseraqlRuntime.start(appHome, 0);
         seedDatabase();
     }
 

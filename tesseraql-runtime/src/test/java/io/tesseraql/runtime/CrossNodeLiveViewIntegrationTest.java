@@ -6,7 +6,6 @@ import io.tesseraql.pipeline.TesseraqlProperties;
 import io.tesseraql.security.Principal;
 import io.tesseraql.security.session.SessionStore;
 import java.io.IOException;
-import java.net.ServerSocket;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -52,8 +51,8 @@ class CrossNodeLiveViewIntegrationTest {
         }
         homeA = prepareAppHome();
         homeB = prepareAppHome();
-        nodeA = TesseraqlRuntime.start(homeA, freePort());
-        nodeB = TesseraqlRuntime.start(homeB, freePort());
+        nodeA = TesseraqlRuntime.start(homeA, 0);
+        nodeB = TesseraqlRuntime.start(homeB, 0);
         SessionStore sessions = nodeA.context().lookup(
                 TesseraqlProperties.SESSION_STORE_BEAN, SessionStore.class);
         String sid = sessions.create(new Principal("cross-user", "cross-user", "Cross User",
@@ -110,12 +109,6 @@ class CrossNodeLiveViewIntegrationTest {
             // pg_notify crossed the database: B's bridge forwarded into its local hub.
             assertThat(frames.readLine()).isEqualTo("event: orders.changed");
             assertThat(frames.readLine()).isEqualTo("data: ");
-        }
-    }
-
-    private static int freePort() throws IOException {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            return socket.getLocalPort();
         }
     }
 

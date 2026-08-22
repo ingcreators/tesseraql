@@ -6,7 +6,6 @@ import io.tesseraql.pipeline.TesseraqlProperties;
 import io.tesseraql.security.Principal;
 import io.tesseraql.security.session.SessionStore;
 import java.io.IOException;
-import java.net.ServerSocket;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -48,7 +47,7 @@ class LiveViewIntegrationTest {
                     + "status varchar(32) not null)");
             statement.execute("insert into orders (status) values ('PENDING')");
         }
-        runtime = TesseraqlRuntime.start(appHome, freePort());
+        runtime = TesseraqlRuntime.start(appHome, 0);
         SessionStore sessions = runtime.context().lookup(
                 TesseraqlProperties.SESSION_STORE_BEAN, SessionStore.class);
         String sid = sessions.create(new Principal("live-user", "live-user", "Live User", null,
@@ -238,12 +237,6 @@ class LiveViewIntegrationTest {
                 .header("Content-Type", "application/x-www-form-urlencoded")
                 .POST(HttpRequest.BodyPublishers.ofString(form)).build(),
                 HttpResponse.BodyHandlers.ofString());
-    }
-
-    private static int freePort() throws IOException {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            return socket.getLocalPort();
-        }
     }
 
     private static Path prepareAppHome() throws IOException {

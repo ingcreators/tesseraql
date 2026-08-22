@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.tesseraql.security.password.Pbkdf2PasswordEncoder;
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.net.ServerSocket;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -45,8 +44,8 @@ class SharedSessionIntegrationTest {
     static void start() throws Exception {
         homeA = prepareAppHome("node-a");
         homeB = prepareAppHome("node-b");
-        nodeA = TesseraqlRuntime.start(homeA, freePort());
-        nodeB = TesseraqlRuntime.start(homeB, freePort());
+        nodeA = TesseraqlRuntime.start(homeA, 0);
+        nodeB = TesseraqlRuntime.start(homeB, 0);
         seedDatabase();
     }
 
@@ -189,9 +188,4 @@ class SharedSessionIntegrationTest {
         }
     }
 
-    private static int freePort() throws IOException {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            return socket.getLocalPort();
-        }
-    }
 }

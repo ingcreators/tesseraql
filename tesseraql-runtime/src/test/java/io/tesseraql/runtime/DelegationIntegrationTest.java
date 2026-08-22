@@ -6,7 +6,6 @@ import io.tesseraql.pipeline.TesseraqlProperties;
 import io.tesseraql.security.Principal;
 import io.tesseraql.security.session.SessionStore;
 import java.io.IOException;
-import java.net.ServerSocket;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -57,7 +56,7 @@ class DelegationIntegrationTest {
     static void start() throws Exception {
         seedDatabase();
         appHome = prepareAppHome();
-        runtime = TesseraqlRuntime.start(appHome, freePort());
+        runtime = TesseraqlRuntime.start(appHome, 0);
         SessionStore sessions = runtime.context().lookup(
                 TesseraqlProperties.SESSION_STORE_BEAN, SessionStore.class);
         String sid = sessions.create(new Principal("approver-1", "approver-1", "Approver",
@@ -257,12 +256,6 @@ class DelegationIntegrationTest {
                     + "acted_by varchar(64))");
             statement.execute("insert into purchase_requests (id, amount) values "
                     + "('PR-1', 100), ('PR-2', 100), ('PR-3', 100)");
-        }
-    }
-
-    private static int freePort() throws IOException {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            return socket.getLocalPort();
         }
     }
 

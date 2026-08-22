@@ -3,7 +3,6 @@ package io.tesseraql.runtime;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.IOException;
-import java.net.ServerSocket;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -47,7 +46,7 @@ class HttpEdgeFailurePathIntegrationTest {
     @BeforeAll
     static void start() throws Exception {
         appHome = prepareAppHome();
-        runtime = TesseraqlRuntime.start(appHome, freePort());
+        runtime = TesseraqlRuntime.start(appHome, 0);
     }
 
     @AfterAll
@@ -149,12 +148,6 @@ class HttpEdgeFailurePathIntegrationTest {
         Files.writeString(broken.resolve("broken.sql"),
                 "select * from a_table_that_is_not_there\n");
         return target;
-    }
-
-    private static int freePort() throws IOException {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            return socket.getLocalPort();
-        }
     }
 
     private static void delete(Path target) throws IOException {

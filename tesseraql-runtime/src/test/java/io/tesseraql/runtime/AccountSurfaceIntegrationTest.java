@@ -7,7 +7,6 @@ import io.tesseraql.pipeline.TesseraqlProperties;
 import io.tesseraql.security.Principal;
 import io.tesseraql.security.session.SessionStore;
 import java.io.IOException;
-import java.net.ServerSocket;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -44,7 +43,7 @@ class AccountSurfaceIntegrationTest {
     @BeforeAll
     static void start() throws Exception {
         appHome = prepareAppHome(true);
-        runtime = TesseraqlRuntime.start(appHome, freePort());
+        runtime = TesseraqlRuntime.start(appHome, 0);
         sessionCookie = establishSession(runtime);
         // A local-realm user for the password-change loop (slice 4): the standard identity
         // schema plus one seeded account, through the same pack contracts the CLI's
@@ -430,7 +429,7 @@ class AccountSurfaceIntegrationTest {
     @Test
     void disablingTheSurfaceRemovesTheRouteAndTheSettingsLink() throws Exception {
         Path disabledHome = prepareAppHome(false);
-        TesseraqlRuntime disabled = TesseraqlRuntime.start(disabledHome, freePort());
+        TesseraqlRuntime disabled = TesseraqlRuntime.start(disabledHome, 0);
         try {
             String cookie = establishSession(disabled);
             // The bundled app is not mounted...
@@ -580,12 +579,6 @@ class AccountSurfaceIntegrationTest {
                 .header("Cookie", cookie)
                 .build();
         return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
-    }
-
-    private static int freePort() throws IOException {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            return socket.getLocalPort();
-        }
     }
 
     private static void deleteRecursively(Path root) throws IOException {

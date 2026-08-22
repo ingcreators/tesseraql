@@ -8,7 +8,6 @@ import io.tesseraql.core.org.OrgUnitStore;
 import io.tesseraql.core.org.OrgUnitStore.OrgUnit;
 import io.tesseraql.pipeline.TesseraqlProperties;
 import java.io.IOException;
-import java.net.ServerSocket;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -58,7 +57,7 @@ class OrgUnitScopingIntegrationTest {
     static void start() throws Exception {
         seedDatabase();
         appHome = prepareAppHome();
-        runtime = TesseraqlRuntime.start(appHome, freePort());
+        runtime = TesseraqlRuntime.start(appHome, 0);
         // The managed schema is provisioned at startup; seed the hierarchy and build the closure.
         OrgUnitStore store = orgUnitStore();
         store.upsert(new OrgUnit("U1", null, "Root", null));
@@ -241,9 +240,4 @@ class OrgUnitScopingIntegrationTest {
         }
     }
 
-    private static int freePort() throws IOException {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            return socket.getLocalPort();
-        }
-    }
 }

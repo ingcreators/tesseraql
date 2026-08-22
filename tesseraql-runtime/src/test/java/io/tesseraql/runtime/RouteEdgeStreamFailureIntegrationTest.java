@@ -8,7 +8,6 @@ import io.tesseraql.pipeline.HttpMounts;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
-import java.net.ServerSocket;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -53,7 +52,7 @@ class RouteEdgeStreamFailureIntegrationTest {
     @BeforeAll
     static void start() throws Exception {
         appHome = prepareAppHome();
-        runtime = TesseraqlRuntime.start(appHome, freePort());
+        runtime = TesseraqlRuntime.start(appHome, 0);
 
         Pipelines.of(runtime.context()).compiling(List.of())
                 .pipeline("stream.fail.io")
@@ -153,12 +152,6 @@ class RouteEdgeStreamFailureIntegrationTest {
                 """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
                 POSTGRES.getPassword()));
         return target;
-    }
-
-    private static int freePort() throws IOException {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            return socket.getLocalPort();
-        }
     }
 
     private static void delete(Path target) throws IOException {
