@@ -94,7 +94,7 @@ public final class ErrorResponseRenderer implements Step {
 
     /** Applies the app's default security headers to an HTML error response. */
     private void applySecurityHeaders(Exchange exchange) {
-        securityHeaders.forEach((name, value) -> exchange.getMessage().setHeader(name, value));
+        securityHeaders.forEach((name, value) -> exchange.response().header(name, value));
     }
 
     @Override
@@ -119,18 +119,12 @@ public final class ErrorResponseRenderer implements Step {
         }
         Map<String, Object> body = Map.of("error", error);
 
-        // Inbound form fields can surface as multi-line message headers (platform-http); drop them
-        // so the error response is writable as HTTP (header values must not contain newlines).
-        exchange.getMessage().getHeaders().entrySet()
-                .removeIf(entry -> entry.getValue() instanceof String value
-                        && (value.indexOf('\n') >= 0 || value.indexOf('\r') >= 0));
-
-        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, status);
+        exchange.response().status(status);
         // Capacity refusals are retryable; every 429/503 the envelope renders says so
         // (docs/vocabulary-cleanup.md slice 3) — the login throttle was the only surface
         // that did.
         if (status == 429 || status == 503) {
-            exchange.getMessage().setHeader("Retry-After", "5");
+            exchange.response().header("Retry-After", "5");
         }
         // A browser opening an auth: browser admin page with no session gets bounced to the login
         // page (post/redirect/get) instead of a raw JSON 401 — only for a top-level HTML GET, never
@@ -145,21 +139,20 @@ public final class ErrorResponseRenderer implements Step {
         if (appHome != null && status != 401 && wantsHtmlLoginRedirect(exchange)) {
             String page = errorPage(status, error, tag);
             if (page != null) {
-                exchange.getMessage().setHeader(Headers.CONTENT_TYPE,
-                        "text/html; charset=utf-8");
+                exchange.response().header(Headers.CONTENT_TYPE, "text/html; charset=utf-8");
                 applySecurityHeaders(exchange);
                 exchange.getMessage().setBody(page);
                 return;
             }
         }
         if ("true".equals(exchange.getMessage().getHeader("HX-Request", String.class))) {
-            exchange.getMessage().setHeader(Headers.CONTENT_TYPE, "text/html; charset=utf-8");
+            exchange.response().header(Headers.CONTENT_TYPE, "text/html; charset=utf-8");
             applySecurityHeaders(exchange);
             applyOnError(exchange);
             exchange.getMessage().setBody(htmxFragment(error));
             return;
         }
-        exchange.getMessage().setHeader(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
+        exchange.response().header(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
         exchange.getMessage().setBody(mapper.writeValueAsString(body));
     }
 
@@ -212,10 +205,10 @@ public final class ErrorResponseRenderer implements Step {
             target = io.tesseraql.pipeline.BasePath.relative(exchange, wirePath) + suffix;
             location = io.tesseraql.pipeline.BasePath.url(exchange, LOGIN_PATH);
         }
-        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 302);
-        exchange.getMessage().setHeader("Location", location + "?redirect="
+        exchange.response().status(302);
+        exchange.response().header("Location", location + "?redirect="
                 + java.net.URLEncoder.encode(target, java.nio.charset.StandardCharsets.UTF_8));
-        exchange.getMessage().setHeader(Headers.CONTENT_TYPE, "text/plain; charset=utf-8");
+        exchange.response().header(Headers.CONTENT_TYPE, "text/plain; charset=utf-8");
         exchange.getMessage().setBody("");
     }
 
@@ -231,10 +224,10 @@ public final class ErrorResponseRenderer implements Step {
             return;
         }
         if (onError.retarget() != null && !onError.retarget().isBlank()) {
-            exchange.getMessage().setHeader("HX-Retarget", onError.retarget());
+            exchange.response().header("HX-Retarget", onError.retarget());
         }
         if (onError.reswap() != null && !onError.reswap().isBlank()) {
-            exchange.getMessage().setHeader("HX-Reswap", onError.reswap());
+            exchange.response().header("HX-Reswap", onError.reswap());
         }
     }
 

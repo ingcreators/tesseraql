@@ -2,7 +2,6 @@ package io.tesseraql.compiler.binding;
 
 import io.tesseraql.core.expr.EvaluationContext;
 import io.tesseraql.pipeline.Exchange;
-import io.tesseraql.pipeline.Headers;
 import io.tesseraql.pipeline.Step;
 import io.tesseraql.pipeline.TesseraqlProperties;
 import io.tesseraql.yaml.model.ResponseSpec.RedirectResponse;
@@ -94,11 +93,11 @@ public final class RedirectRenderer implements Step {
         String target = io.tesseraql.pipeline.BasePath.url(exchange,
                 withStudioMember(exchange, location));
         if (isHtmxRequest(exchange)) {
-            exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 204);
-            exchange.getMessage().setHeader("HX-Redirect", target);
+            exchange.response().status(204);
+            exchange.response().header("HX-Redirect", target);
         } else {
-            exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, status);
-            exchange.getMessage().setHeader("Location", target);
+            exchange.response().status(status);
+            exchange.response().header("Location", target);
         }
         exchange.getMessage().setBody("");
     }

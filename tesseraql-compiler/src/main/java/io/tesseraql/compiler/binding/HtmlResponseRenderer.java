@@ -282,13 +282,13 @@ public final class HtmlResponseRenderer implements Step {
 
         int status = JsonResponseRenderer.CompiledStatus.resolve(statusWhen,
                 response.effectiveStatus(), evaluation);
-        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, status);
-        exchange.getMessage().setHeader(Headers.CONTENT_TYPE, "text/html; charset=utf-8");
+        exchange.response().status(status);
+        exchange.response().header(Headers.CONTENT_TYPE, "text/html; charset=utf-8");
         headers.apply(exchange, evaluation);
         if ("auto".equals(shellMode)) {
             // The negotiated response differs by HX-Request, so caches must key on it.
             String vary = exchange.getMessage().getHeader("Vary", String.class);
-            exchange.getMessage().setHeader("Vary", vary == null || vary.isBlank()
+            exchange.response().header("Vary", vary == null || vary.isBlank()
                     ? "HX-Request"
                     : vary.contains("HX-Request") ? vary : vary + ", HX-Request");
         }

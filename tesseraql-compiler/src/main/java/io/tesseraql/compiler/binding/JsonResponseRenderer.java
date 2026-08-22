@@ -147,8 +147,8 @@ public final class JsonResponseRenderer implements Step {
         // Declared headers before the framework's own: Content-Type is this renderer's to set, and
         // a route naming it would be describing a body it is not producing.
         headers.apply(exchange, evaluation);
-        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, status);
-        exchange.getMessage().setHeader(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
+        exchange.response().status(status);
+        exchange.response().header(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
         exchange.getMessage().setBody(json);
     }
 

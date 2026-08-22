@@ -136,6 +136,18 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **A response is its own object, and the wire is that object and nothing else**
+  (docs/vertx-native.md structural decision 1, slice 3). The message used to be one bag holding
+  the request, its parameters, and the response being written — and three mechanisms existed only
+  to survive the sharing. All three are gone: the outbound header filter (a response that never
+  contained the request has no caller's cookie to be kept from echoing, and no internal name to
+  be kept off the wire — the mistake the filter guarded against is unrepresentable now), the ten
+  `removeHeaders("*")` calls that meant "forget the request, I am writing the response", and the
+  error renderer's newline-scrub of inbound form fields that could otherwise corrupt the wire.
+  Steps write `exchange.response()` — a status and an ordered, case-insensitive header map that
+  starts empty and may repeat a name, which is what `Set-Cookie` needs. Behaviour on the wire is
+  unchanged; the request side of the message moves in a later slice.
+
 - **The pipeline registry is the one holder of compiled pipelines** (docs/vertx-native.md
   decision 4, slice 2). Two caches used to sit in front of it — the HTTP edge's and the
   template-shaped runner's — each guarding started producers that a resolve stopped creating when

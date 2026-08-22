@@ -111,7 +111,7 @@ public final class ScimRoutes {
             capture.syncResource(created.id(), request, payload);
         }
         // RFC 7644 §3.3: a SCIM 201 carries the created resource's Location.
-        exchange.getMessage().setHeader("Location",
+        exchange.response().header("Location",
                 exchange.getMessage().getHeader(Headers.HTTP_URI, String.class)
                         + "/" + created.id());
         respond(exchange, 201, created);
@@ -157,7 +157,7 @@ public final class ScimRoutes {
 
     private void deleteUser(Exchange exchange) {
         users.delete(exchange.getMessage().getHeader("id", String.class));
-        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 204);
+        exchange.response().status(204);
         exchange.getMessage().setBody(null);
     }
 
@@ -165,7 +165,7 @@ public final class ScimRoutes {
         ScimGroup request = mapper.readValue(exchange.getMessage().getBody(String.class),
                 ScimGroup.class);
         ScimGroup created = groups.create(request);
-        exchange.getMessage().setHeader("Location",
+        exchange.response().header("Location",
                 exchange.getMessage().getHeader(Headers.HTTP_URI, String.class)
                         + "/" + created.id());
         respond(exchange, 201, created);
@@ -209,13 +209,13 @@ public final class ScimRoutes {
 
     private void deleteGroup(Exchange exchange) {
         groups.delete(exchange.getMessage().getHeader("id", String.class));
-        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 204);
+        exchange.response().status(204);
         exchange.getMessage().setBody(null);
     }
 
     private void respond(Exchange exchange, int status, Object body) throws Exception {
-        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, status);
-        exchange.getMessage().setHeader(Headers.CONTENT_TYPE, SCIM_JSON);
+        exchange.response().status(status);
+        exchange.response().header(Headers.CONTENT_TYPE, SCIM_JSON);
         exchange.getMessage().setBody(mapper.writeValueAsString(body));
     }
 

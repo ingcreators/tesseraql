@@ -112,8 +112,8 @@ final class OAuthRoutes {
         document.put("resource", resource);
         document.put("authorization_servers", java.util.List.of(flow.issuer()));
         document.put("bearer_methods_supported", java.util.List.of("header"));
-        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 200);
-        exchange.getMessage().setHeader(Headers.CONTENT_TYPE, "application/json");
+        exchange.response().status(200);
+        exchange.response().header(Headers.CONTENT_TYPE, "application/json");
         exchange.getMessage().setBody(MAPPER.writeValueAsString(document));
     }
 
@@ -138,8 +138,8 @@ final class OAuthRoutes {
         document.put("code_challenge_methods_supported", java.util.List.of("S256"));
         document.put("token_endpoint_auth_methods_supported",
                 java.util.List.of("none", "client_secret_basic"));
-        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 200);
-        exchange.getMessage().setHeader(Headers.CONTENT_TYPE, "application/json");
+        exchange.response().status(200);
+        exchange.response().header(Headers.CONTENT_TYPE, "application/json");
         exchange.getMessage().setBody(MAPPER.writeValueAsString(document));
     }
 
@@ -209,9 +209,9 @@ final class OAuthRoutes {
         if (metadata.hasNonNull("client_name")) {
             answer.put("client_name", metadata.get("client_name").asText());
         }
-        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 201);
-        exchange.getMessage().setHeader(Headers.CONTENT_TYPE, "application/json");
-        exchange.getMessage().setHeader("Cache-Control", "no-store");
+        exchange.response().status(201);
+        exchange.response().header(Headers.CONTENT_TYPE, "application/json");
+        exchange.response().header("Cache-Control", "no-store");
         exchange.getMessage().setBody(MAPPER.writeValueAsString(answer));
     }
 
@@ -262,9 +262,9 @@ final class OAuthRoutes {
             body.put("token_type", "Bearer");
             body.put("expires_in", token.getExpiresIn());
             body.put("refresh_token", token.getRefreshToken());
-            exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 200);
-            exchange.getMessage().setHeader(Headers.CONTENT_TYPE, "application/json");
-            exchange.getMessage().setHeader("Cache-Control", "no-store");
+            exchange.response().status(200);
+            exchange.response().header(Headers.CONTENT_TYPE, "application/json");
+            exchange.response().header("Cache-Control", "no-store");
             exchange.getMessage().setBody(MAPPER.writeValueAsString(body));
         } catch (org.apache.cxf.rs.security.oauth2.provider.OAuthServiceException refused) {
             error(exchange, 400, refused.getMessage() == null
@@ -287,9 +287,9 @@ final class OAuthRoutes {
     }
 
     private static void error(Exchange exchange, int status, String code) throws Exception {
-        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, status);
-        exchange.getMessage().setHeader(Headers.CONTENT_TYPE, "application/json");
-        exchange.getMessage().setHeader("Cache-Control", "no-store");
+        exchange.response().status(status);
+        exchange.response().header(Headers.CONTENT_TYPE, "application/json");
+        exchange.response().header("Cache-Control", "no-store");
         exchange.getMessage().setBody(MAPPER.writeValueAsString(
                 java.util.Map.of("error", code)));
     }
@@ -306,7 +306,7 @@ final class OAuthRoutes {
     }
 
     private void jwks(Exchange exchange) {
-        exchange.getMessage().setHeader(Headers.CONTENT_TYPE, "application/json");
+        exchange.response().header(Headers.CONTENT_TYPE, "application/json");
         exchange.getMessage().setBody(JwksDocuments.render(keys.published(accessTokenLifetime)));
     }
 
@@ -353,7 +353,7 @@ final class OAuthRoutes {
         }
         String expected = session.csrfToken();
         if (expected == null || !expected.equals(form.get("_csrf"))) {
-            exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 403);
+            exchange.response().status(403);
             exchange.getMessage().setBody("");
             return;
         }
@@ -384,8 +384,8 @@ final class OAuthRoutes {
     }
 
     private static void redirect(Exchange exchange, int status, String location) {
-        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, status);
-        exchange.getMessage().setHeader("Location", location);
+        exchange.response().status(status);
+        exchange.response().header("Location", location);
         exchange.getMessage().setBody("");
     }
 }

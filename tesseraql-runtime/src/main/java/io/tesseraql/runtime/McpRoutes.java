@@ -55,9 +55,9 @@ final class McpRoutes {
                     exchange.getMessage().getHeader("MCP-Protocol-Version", String.class),
                     exchange.getMessage().getBody(String.class));
             McpHttpHandler.Response response = handler.handle(request);
-            exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, response.status());
+            exchange.response().status(response.status());
             response.headers()
-                    .forEach((name, value) -> exchange.getMessage().setHeader(name, value));
+                    .forEach((name, value) -> exchange.response().header(name, value));
             exchange.getMessage().setBody(response.body());
         };
     }

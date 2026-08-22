@@ -187,8 +187,8 @@ final class OperationsRoutes {
                         .process(new AuthStep("authorize", null, "ops.metrics.view", null));
             }
             metricsRoute.process(exchange -> {
-                exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 200);
-                exchange.getMessage().setHeader(Headers.CONTENT_TYPE,
+                exchange.response().status(200);
+                exchange.response().header(Headers.CONTENT_TYPE,
                         io.tesseraql.core.telemetry.PrometheusTextFormat.CONTENT_TYPE);
                 exchange.getMessage().setBody(io.tesseraql.core.telemetry.PrometheusTextFormat
                         .render(metrics.meter())
@@ -571,8 +571,8 @@ final class OperationsRoutes {
                 principal == null ? null : principal.loginId(), runScope(exchange));
         // Work accepted, poll the execution: the same 202 + Location contract the
         // file-transfer start answers (docs/vocabulary-cleanup.md slice 3).
-        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 202);
-        exchange.getMessage().setHeader("Location", io.tesseraql.pipeline.BasePath.url(exchange,
+        exchange.response().status(202);
+        exchange.response().header("Location", io.tesseraql.pipeline.BasePath.url(exchange,
                 "/_tesseraql/ops/batch/executions/" + execution.id()));
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("executionId", execution.id());
@@ -683,11 +683,10 @@ final class OperationsRoutes {
         return exchange -> {
             Object body = handler.apply(exchange);
             // A handler that set its own status (the 202 accepted-run) keeps it.
-            if (exchange.getMessage().getHeader(Headers.HTTP_RESPONSE_CODE) == null) {
-                exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 200);
+            if (exchange.response().status() == null) {
+                exchange.response().status(200);
             }
-            exchange.getMessage().setHeader(Headers.CONTENT_TYPE,
-                    "application/json; charset=utf-8");
+            exchange.response().header(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
             exchange.getMessage().setBody(mapper.writeValueAsString(body));
         };
     }
@@ -715,10 +714,9 @@ final class OperationsRoutes {
                     .message("Transfer '" + id + "' has no downloadable file")
                     .build();
         }
-        exchange.getMessage().removeHeaders("*");
-        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 200);
-        exchange.getMessage().setHeader(Headers.CONTENT_TYPE, download.contentType());
-        exchange.getMessage().setHeader("Content-Disposition", "attachment; filename=\""
+        exchange.response().status(200);
+        exchange.response().header(Headers.CONTENT_TYPE, download.contentType());
+        exchange.response().header("Content-Disposition", "attachment; filename=\""
                 + download.filename().replaceAll("[\\r\\n\"]", "_") + "\"");
         exchange.getMessage().setBody(download.content());
     }

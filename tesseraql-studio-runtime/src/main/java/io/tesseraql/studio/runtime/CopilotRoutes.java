@@ -69,8 +69,8 @@ final class CopilotRoutes {
                     if ("true".equals(exchange.getMessage().getHeader("HX-Request",
                             String.class))) {
                         String turn = copilot.begin(actor, message, canEdit);
-                        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 200);
-                        exchange.getMessage().setHeader(Headers.CONTENT_TYPE,
+                        exchange.response().status(200);
+                        exchange.response().header(Headers.CONTENT_TYPE,
                                 "text/html; charset=utf-8");
                         // The placeholder's hx-get is markup, not a template — it carries the
                         // app's prefix from here (docs/base-path.md).

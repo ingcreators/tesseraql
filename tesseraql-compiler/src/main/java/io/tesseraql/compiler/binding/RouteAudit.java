@@ -3,7 +3,6 @@ package io.tesseraql.compiler.binding;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.audit.RouteAuditSink;
 import io.tesseraql.pipeline.Exchange;
-import io.tesseraql.pipeline.Headers;
 import io.tesseraql.pipeline.Step;
 import io.tesseraql.pipeline.TesseraqlProperties;
 import io.tesseraql.security.Principal;
@@ -65,7 +64,7 @@ public final class RouteAudit implements Step {
         String actor = principal == null
                 ? null
                 : principal.loginId() != null ? principal.loginId() : principal.subject();
-        Object status = exchange.getMessage().getHeader(Headers.HTTP_RESPONSE_CODE);
+        Object status = exchange.response().status();
         Object traceContext = exchange.getProperty(TesseraqlProperties.TRACE_CONTEXT);
         String traceId = traceContext instanceof io.tesseraql.core.telemetry.SpanContext ids
                 ? ids.traceId()

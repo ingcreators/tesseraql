@@ -47,7 +47,7 @@ class JsonResponseHeadersTest {
         Exchange exchange = render(
                 response(Map.of("Cache-Control", "no-store"), null, null), Map.of());
 
-        assertThat(exchange.getMessage().getHeader("Cache-Control")).isEqualTo("no-store");
+        assertThat(exchange.response().header("Cache-Control")).isEqualTo("no-store");
     }
 
     @Test
@@ -56,7 +56,7 @@ class JsonResponseHeadersTest {
                 response(Map.of("Location", "/api/items/{steps.record.keys.id}"), null, null),
                 Map.of("steps", Map.of("record", Map.of("keys", Map.of("id", 42)))));
 
-        assertThat(exchange.getMessage().getHeader("Location")).isEqualTo("/api/items/42");
+        assertThat(exchange.response().header("Location")).isEqualTo("/api/items/42");
     }
 
     /**
@@ -74,14 +74,14 @@ class JsonResponseHeadersTest {
         Exchange created = render(response(headers, guards, statusWhen),
                 Map.of("steps", Map.of("record",
                         Map.of("created", true, "keys", Map.of("id", 42)))));
-        assertThat(created.getMessage().getHeader(Headers.HTTP_RESPONSE_CODE)).isEqualTo(201);
-        assertThat(created.getMessage().getHeader("Location")).isEqualTo("/api/items/42");
+        assertThat(created.response().status()).isEqualTo(201);
+        assertThat(created.response().header("Location")).isEqualTo("/api/items/42");
 
         Exchange unchanged = render(response(headers, guards, statusWhen),
                 Map.of("steps", Map.of("record",
                         Map.of("created", false, "keys", Map.of("id", 42)))));
-        assertThat(unchanged.getMessage().getHeader(Headers.HTTP_RESPONSE_CODE)).isEqualTo(200);
-        assertThat(unchanged.getMessage().getHeader("Location"))
+        assertThat(unchanged.response().status()).isEqualTo(200);
+        assertThat(unchanged.response().header("Location"))
                 .as("a 200 that created nothing has nowhere to point")
                 .isNull();
     }
@@ -92,7 +92,7 @@ class JsonResponseHeadersTest {
         Exchange exchange = render(
                 response(Map.of("Content-Type", "text/csv"), null, null), Map.of());
 
-        assertThat(exchange.getMessage().getHeader(Headers.CONTENT_TYPE))
+        assertThat(exchange.response().header(Headers.CONTENT_TYPE))
                 .isEqualTo("application/json; charset=utf-8");
     }
 }

@@ -99,15 +99,14 @@ public final class AttachmentUploadProcessor implements Step {
         body.put("contentType", a.contentType());
         body.put("byteSize", a.byteSize());
         body.put("checksum", a.checksum());
-        exchange.getMessage().removeHeaders("*", Headers.CONTENT_TYPE);
-        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 201);
+        exchange.response().status(201);
         // 201 identifies what it created (docs/vocabulary-cleanup.md slice 3): the
         // attachment's own subtree URL under the upload path.
         String uri = exchange.getMessage().getHeader(Headers.HTTP_URI, String.class);
         if (uri != null && !uri.isBlank()) {
-            exchange.getMessage().setHeader("Location", uri + "/" + a.id());
+            exchange.response().header("Location", uri + "/" + a.id());
         }
-        exchange.getMessage().setHeader(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
+        exchange.response().header(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
         exchange.getMessage().setBody(FileImportProcessor.MAPPER.writeValueAsString(body));
     }
 

@@ -520,29 +520,19 @@ final class RouteEdge {
     }
 
     /**
-     * The response headers, decided by the same filter the platform edge decided them with.
-     *
-     * <p>Load-bearing rather than tidy. The request's own headers are on this message — they were
-     * put there so the route could read {@code Cookie}, {@code Accept} and the rest — and copying
-     * the message's headers out untouched would echo a caller's cookie back as a response header.
-     * The component's {@code HeaderFilterStrategy} is the thing that already knows which headers
-     * leave a runtime, including this framework's one amendment to it (the cache-control entry
-     * declarative route caching needs on the wire), so it is asked rather than reimplemented.
+     * The wire is the response object, whole and nothing else (docs/vertx-native.md
+     * decision 1). The outbound filter that used to decide this is gone with its reason: a
+     * response that never contained the request has no caller's cookie to be kept from echoing,
+     * and no internal name to be kept off the wire.
      */
     private void headers(HttpServerResponse response, Exchange exchange) {
-        Integer code = exchange.getMessage().getHeader(Headers.HTTP_RESPONSE_CODE, Integer.class);
-        response.setStatusCode(code == null ? 200 : code);
-        // The platform edge wrote the content type itself rather than through the filter, which strips it
-        // from the generic copy; doing the same here is why a JSON response says so.
-        String contentType = exchange.getMessage().getHeader(Headers.CONTENT_TYPE, String.class);
-        if (contentType != null) {
-            response.putHeader("Content-Type", contentType);
-        }
-        exchange.getMessage().getHeaders().forEach((name, value) -> {
-            if (value == null || !io.tesseraql.pipeline.HeaderFilter.leaves(name)) {
-                return;
+        response.setStatusCode(exchange.response().statusOr200());
+        exchange.response().headers().forEach((name, values) -> {
+            for (String value : values) {
+                if (value != null) {
+                    response.headers().add(name, value);
+                }
             }
-            response.putHeader(name, String.valueOf(value));
         });
     }
 }

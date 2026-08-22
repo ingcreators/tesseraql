@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.tesseraql.pipeline.Beans;
 import io.tesseraql.pipeline.Exchange;
-import io.tesseraql.pipeline.Headers;
 import io.tesseraql.pipeline.RuntimeContext;
 import io.tesseraql.pipeline.TesseraqlProperties;
 import io.tesseraql.yaml.model.ResponseSpec.RedirectResponse;
@@ -26,9 +25,9 @@ class RedirectRendererTest {
 
         renderer.process(exchange);
 
-        assertThat(exchange.getMessage().getHeader(Headers.HTTP_RESPONSE_CODE)).isEqualTo(303);
-        assertThat(exchange.getMessage().getHeader("Location")).isEqualTo("/items/42");
-        assertThat(exchange.getMessage().getHeader("HX-Redirect")).isNull();
+        assertThat(exchange.response().status()).isEqualTo(303);
+        assertThat(exchange.response().header("Location")).isEqualTo("/items/42");
+        assertThat(exchange.response().header("HX-Redirect")).isNull();
     }
 
     @Test
@@ -37,10 +36,10 @@ class RedirectRendererTest {
 
         renderer.process(exchange);
 
-        assertThat(exchange.getMessage().getHeader(Headers.HTTP_RESPONSE_CODE)).isEqualTo(204);
-        assertThat(exchange.getMessage().getHeader("HX-Redirect")).isEqualTo("/items/42");
+        assertThat(exchange.response().status()).isEqualTo(204);
+        assertThat(exchange.response().header("HX-Redirect")).isEqualTo("/items/42");
         // No Location header — htmx navigates via HX-Redirect, not a transparent 3xx follow.
-        assertThat(exchange.getMessage().getHeader("Location")).isNull();
+        assertThat(exchange.response().header("Location")).isNull();
     }
 
     @Test
@@ -50,8 +49,8 @@ class RedirectRendererTest {
 
         seeOther.process(exchange);
 
-        assertThat(exchange.getMessage().getHeader(Headers.HTTP_RESPONSE_CODE)).isEqualTo(302);
-        assertThat(exchange.getMessage().getHeader("Location")).isEqualTo("/items");
+        assertThat(exchange.response().status()).isEqualTo(302);
+        assertThat(exchange.response().header("Location")).isEqualTo("/items");
     }
 
     /**
@@ -67,13 +66,13 @@ class RedirectRendererTest {
         Exchange plain = new Exchange(context.beans());
         plain.setProperty(TesseraqlProperties.CONTEXT, Map.of("params", Map.of("id", 42)));
         renderer.process(plain);
-        assertThat(plain.getMessage().getHeader("Location")).isEqualTo("/apps/shop-a/items/42");
+        assertThat(plain.response().header("Location")).isEqualTo("/apps/shop-a/items/42");
 
         Exchange htmx = new Exchange(context.beans());
         htmx.setProperty(TesseraqlProperties.CONTEXT, Map.of("params", Map.of("id", 42)));
         htmx.getMessage().setHeader("HX-Request", "true");
         renderer.process(htmx);
-        assertThat(htmx.getMessage().getHeader("HX-Redirect")).isEqualTo("/apps/shop-a/items/42");
+        assertThat(htmx.response().header("HX-Redirect")).isEqualTo("/apps/shop-a/items/42");
     }
 
     /** An off-site redirect is not this application's to prefix. */
@@ -87,7 +86,7 @@ class RedirectRendererTest {
         new RedirectRenderer(new RedirectResponse(303, "https://example.test/pay"))
                 .process(exchange);
 
-        assertThat(exchange.getMessage().getHeader("Location"))
+        assertThat(exchange.response().header("Location"))
                 .isEqualTo("https://example.test/pay");
     }
 

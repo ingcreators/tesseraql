@@ -1,19 +1,18 @@
 package io.tesseraql.pipeline;
 
-import java.util.Locale;
-import java.util.Set;
-
 /**
  * Which headers cross the boundary between a request and a message
  * (docs/camel-removal.md structural decision 2).
  *
  * <p>The rule was read out of {@code DefaultHeaderFilterStrategy} and
  * {@code HttpHeaderFilterStrategy} rather than out of their documentation, because the part that
- * mattered was mentioned at no call site: <strong>both directions drop every header whose name
+ * mattered was mentioned at no call site: <strong>both directions dropped every header whose name
  * carries the framework's prefix</strong> ({@code inFilterStartsWith} and
  * {@code outFilterStartsWith} were both initialised to {@code {"Camel", "camel"}}, with
  * {@code caseInsensitive} on). A replacement written from the call sites alone would have answered
- * every request with an internal status header.
+ * every request with an internal status header. The outbound half is gone
+ * (docs/vertx-native.md decision 1): a response is its own object that never contained the
+ * request, so nothing has to be filtered out of it on the way to the wire.
  *
  * <p>The prefix is now the framework's own — {@code tql.} — and it is a dot rather than a hyphen
  * for a reason this rule has to state, because it is the rule that depends on it: the framework
@@ -27,23 +26,7 @@ public final class HeaderFilter {
     /** The namespace every internal header name carries; see this class's note on the dot. */
     private static final String PREFIX = "tql.";
 
-    /**
-     * Headers a response must not carry over from the request.
-     *
-     * <p>The common set, minus {@code cache-control}: this framework sets that deliberately on
-     * responses, and the runtime removed it from both filters for exactly that reason.
-     * {@code content-type} is here because the edge writes it explicitly — which is the reason a
-     * generic copy that stops here leaves a response with no content type at all.
-     */
-    private static final Set<String> NEVER_LEAVES = Set.of("content-length", "content-type",
-            "host", "connection", "date", "pragma");
-
     private HeaderFilter() {
-    }
-
-    /** Whether a message header may be written onto the response. */
-    public static boolean leaves(String name) {
-        return !internal(name) && !NEVER_LEAVES.contains(name.toLowerCase(Locale.ROOT));
     }
 
     /** Whether a request header may be put onto the message. */

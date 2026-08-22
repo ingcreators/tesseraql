@@ -36,7 +36,7 @@ class ErrorResponseRendererTest {
         new ErrorResponseRenderer().process(exchange);
 
         String body = exchange.getMessage().getBody(String.class);
-        assertThat(exchange.getMessage().getHeader(Headers.HTTP_RESPONSE_CODE)).isEqualTo(409);
+        assertThat(exchange.response().status()).isEqualTo(409);
         assertThat(body).contains("\"code\":\"TQL-SQL-4090\"")
                 .contains("\"message\":\"Conflict\"")
                 // Details render as the error.details namespace (transition-engine track F).
@@ -60,7 +60,7 @@ class ErrorResponseRendererTest {
         new ErrorResponseRenderer().process(exchange);
 
         String body = exchange.getMessage().getBody(String.class);
-        assertThat(exchange.getMessage().getHeader(Headers.HTTP_RESPONSE_CODE)).isEqualTo(422);
+        assertThat(exchange.response().status()).isEqualTo(422);
         assertThat(body).contains("\"code\":\"TQL-WORKFLOW-3202\"")
                 .contains("\"message\":\"Unprocessable Entity\"")
                 .contains("\"code\":\"not-funded\"")
@@ -76,7 +76,7 @@ class ErrorResponseRendererTest {
         Exchange federation = exchangeWith(new TqlException(
                 new TqlErrorCode(TqlDomain.SEC, 4140), "idp unreachable"));
         new ErrorResponseRenderer().process(federation);
-        assertThat(federation.getMessage().getHeader(Headers.HTTP_RESPONSE_CODE))
+        assertThat(federation.response().status())
                 .isEqualTo(500);
 
         // The genuine credential failures keep their statuses.
@@ -128,7 +128,7 @@ class ErrorResponseRendererTest {
         new ErrorResponseRenderer().process(exchange);
 
         String body = exchange.getMessage().getBody(String.class);
-        assertThat(exchange.getMessage().getHeader(Headers.CONTENT_TYPE, String.class))
+        assertThat(exchange.response().header(Headers.CONTENT_TYPE))
                 .startsWith("text/html");
         assertThat(body).contains("class=\"hc-alert\" data-variant=\"error\"")
                 .contains("data-error-code=\"TQL-SQL-4092\"")
@@ -147,8 +147,8 @@ class ErrorResponseRendererTest {
         steered.getMessage().setHeader("HX-Request", "true");
         steered.setProperty(TesseraqlProperties.FAILURE_ROUTE_ID, "members.create");
         renderer.process(steered);
-        assertThat(steered.getMessage().getHeader("HX-Retarget")).isEqualTo("#flash");
-        assertThat(steered.getMessage().getHeader("HX-Reswap")).isEqualTo("outerHTML");
+        assertThat(steered.response().header("HX-Retarget")).isEqualTo("#flash");
+        assertThat(steered.response().header("HX-Reswap")).isEqualTo("outerHTML");
 
         // A route without onError keeps htmx's defaults (no steering headers).
         Exchange plain = exchangeWith(
@@ -156,8 +156,8 @@ class ErrorResponseRendererTest {
         plain.getMessage().setHeader("HX-Request", "true");
         plain.setProperty(TesseraqlProperties.FAILURE_ROUTE_ID, "other.route");
         renderer.process(plain);
-        assertThat(plain.getMessage().getHeader("HX-Retarget")).isNull();
-        assertThat(plain.getMessage().getHeader("HX-Reswap")).isNull();
+        assertThat(plain.response().header("HX-Retarget")).isNull();
+        assertThat(plain.response().header("HX-Reswap")).isNull();
     }
 
     @Test
@@ -183,7 +183,7 @@ class ErrorResponseRendererTest {
         new ErrorResponseRenderer().process(exchange);
 
         String body = exchange.getMessage().getBody(String.class);
-        assertThat(exchange.getMessage().getHeader(Headers.HTTP_RESPONSE_CODE)).isEqualTo(422);
+        assertThat(exchange.response().status()).isEqualTo(422);
         assertThat(body).contains("\"code\":\"TQL-FIELD-4220\"")
                 .contains("\"message\":\"Unprocessable Entity\"")
                 .contains("\"details\":{\"fields\":[")
@@ -291,7 +291,7 @@ class ErrorResponseRendererTest {
         new ErrorResponseRenderer().process(exchange);
 
         String body = exchange.getMessage().getBody(String.class);
-        assertThat(exchange.getMessage().getHeader(Headers.HTTP_RESPONSE_CODE)).isEqualTo(422);
+        assertThat(exchange.response().status()).isEqualTo(422);
         assertThat(body).contains("hc-alert__error")
                 .contains("data-field=\"email\"")
                 .contains("data-code=\"duplicate\"")

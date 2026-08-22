@@ -52,10 +52,9 @@ public final class AttachmentDownloadProcessor implements Step {
         String filename = f.metadata().filename() != null
                 ? f.metadata().filename()
                 : f.metadata().id();
-        exchange.getMessage().removeHeaders("*");
-        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 200);
-        exchange.getMessage().setHeader(Headers.CONTENT_TYPE, contentType);
-        exchange.getMessage().setHeader("Content-Disposition",
+        exchange.response().status(200);
+        exchange.response().header(Headers.CONTENT_TYPE, contentType);
+        exchange.response().header("Content-Disposition",
                 "attachment; filename=\"" + filename.replaceAll("[\\r\\n\"]", "_") + "\"");
         exchange.getMessage().setBody(f.content());
     }

@@ -143,23 +143,22 @@ final class DeployRoutes {
         boolean htmx = "true".equals(exchange.getMessage().getHeader("HX-Request", String.class));
         String accept = exchange.getMessage().getHeader("Accept", String.class);
         // Inbound form fields surfaced as headers must not echo back onto the response.
-        exchange.getMessage().removeHeaders("*");
         if (htmx || (accept != null && accept.contains("text/html"))) {
             String target = io.tesseraql.pipeline.BasePath.url(exchange,
                     "/_tesseraql/ops/console/deploy?deployed=" + encode(result.appName())
                             + "&fromVersion=" + encode(result.fromVersion())
                             + "&toVersion=" + encode(result.toVersion())
                             + (canary ? "&canary=true" : ""));
-            exchange.getMessage().setHeader(Headers.CONTENT_TYPE, "text/plain; charset=utf-8");
+            exchange.response().header(Headers.CONTENT_TYPE, "text/plain; charset=utf-8");
             exchange.getMessage().setBody("");
             if (htmx) {
                 // htmx surfaces a redirect status to the XHR, not the tab; HX-Redirect on a 200
                 // is its full-navigation signal.
-                exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 200);
-                exchange.getMessage().setHeader("HX-Redirect", target);
+                exchange.response().status(200);
+                exchange.response().header("HX-Redirect", target);
             } else {
-                exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 303);
-                exchange.getMessage().setHeader("Location", target);
+                exchange.response().status(303);
+                exchange.response().header("Location", target);
             }
             return;
         }
@@ -168,9 +167,8 @@ final class DeployRoutes {
         body.put("fromVersion", result.fromVersion());
         body.put("toVersion", result.toVersion());
         body.put("canary", canary);
-        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 200);
-        exchange.getMessage().setHeader(Headers.CONTENT_TYPE,
-                "application/json; charset=utf-8");
+        exchange.response().status(200);
+        exchange.response().header(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
         exchange.getMessage().setBody(MAPPER.writeValueAsString(body));
     }
 

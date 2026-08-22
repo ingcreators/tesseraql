@@ -85,11 +85,9 @@ final class LoginRoutes {
                                     + URLEncoder.encode(next, StandardCharsets.UTF_8)));
             return;
         }
-        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 429);
-        exchange.getMessage().setHeader("Retry-After",
-                String.valueOf(Math.max(1, wait.toSeconds())));
-        exchange.getMessage().setHeader(Headers.CONTENT_TYPE,
-                "application/json; charset=utf-8");
+        exchange.response().status(429);
+        exchange.response().header("Retry-After", String.valueOf(Math.max(1, wait.toSeconds())));
+        exchange.response().header(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
         exchange.getMessage().setBody(mapper.writeValueAsString(Map.of("error", Map.of(
                 "code", "TQL-RATE-4292",
                 "message", "Too many attempts; retry later"))));
@@ -207,8 +205,8 @@ final class LoginRoutes {
             redirect(exchange, 303, next);
             return;
         }
-        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 200);
-        exchange.getMessage().setHeader(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
+        exchange.response().status(200);
+        exchange.response().header(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
         // The CSRF token rides back with the cookie (docs/stack-architecture.md Decision 20). A
         // non-browser caller that authenticates here could not proceed to any guarded route
         // without it — POST /_tesseraql/token most of all — because the token reached pages only,
@@ -347,7 +345,7 @@ final class LoginRoutes {
     }
 
     private static void setSessionCookie(Exchange exchange, String cookie) {
-        exchange.getMessage().setHeader("Set-Cookie", cookie);
+        exchange.response().header("Set-Cookie", cookie);
     }
 
     private static String str(Object value) {

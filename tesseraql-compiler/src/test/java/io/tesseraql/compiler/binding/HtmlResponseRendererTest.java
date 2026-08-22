@@ -93,9 +93,9 @@ class HtmlResponseRendererTest {
         renderer.process(exchange);
 
         // The placeholder resolves and the nested map serializes to JSON; the CSP is untouched.
-        assertThat(exchange.getMessage().getHeader("HX-Trigger"))
+        assertThat(exchange.response().header("HX-Trigger"))
                 .isEqualTo("{\"hc:toast\":{\"message\":\"Saved\"}}");
-        assertThat(exchange.getMessage().getHeader("Content-Security-Policy"))
+        assertThat(exchange.response().header("Content-Security-Policy"))
                 .isEqualTo("default-src 'self'");
     }
 
@@ -112,11 +112,11 @@ class HtmlResponseRendererTest {
 
         // Condition true: the header is emitted.
         Exchange ok = exchange(dir, Map.of("result", Map.of("ok", true)), renderer);
-        assertThat(ok.getMessage().getHeader("HX-Trigger")).isNotNull();
+        assertThat(ok.response().header("HX-Trigger")).isNotNull();
 
         // Condition false: the guarded header is skipped (e.g. a handled-error fragment).
         Exchange notOk = exchange(dir, Map.of("result", Map.of("ok", false)), renderer);
-        assertThat(notOk.getMessage().getHeader("HX-Trigger")).isNull();
+        assertThat(notOk.response().header("HX-Trigger")).isNull();
     }
 
     private static Exchange exchange(Path dir, Map<String, Object> context,

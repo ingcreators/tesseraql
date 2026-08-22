@@ -2,7 +2,6 @@ package io.tesseraql.compiler.binding;
 
 import io.tesseraql.core.util.Durations;
 import io.tesseraql.pipeline.Exchange;
-import io.tesseraql.pipeline.Headers;
 import io.tesseraql.pipeline.Step;
 import io.tesseraql.yaml.model.CacheSpec;
 import java.nio.charset.StandardCharsets;
@@ -37,12 +36,11 @@ public final class HttpCacheProcessor implements Step {
 
     @Override
     public void process(Exchange exchange) {
-        Integer status = exchange.getMessage().getHeader(Headers.HTTP_RESPONSE_CODE,
-                Integer.class);
+        Integer status = exchange.response().status();
         if (status != null && status != 200) {
             return;
         }
-        exchange.getMessage().setHeader("Cache-Control", cacheControl);
+        exchange.response().header("Cache-Control", cacheControl);
         if (!etag) {
             return;
         }
@@ -54,10 +52,10 @@ public final class HttpCacheProcessor implements Step {
             return; // streaming bodies (exports) are not hashed
         }
         String tag = "\"" + hex(bytes) + "\"";
-        exchange.getMessage().setHeader("ETag", tag);
+        exchange.response().header("ETag", tag);
         String ifNoneMatch = exchange.getMessage().getHeader("If-None-Match", String.class);
         if (tag.equals(ifNoneMatch)) {
-            exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 304);
+            exchange.response().status(304);
             exchange.getMessage().setBody("");
         }
     }

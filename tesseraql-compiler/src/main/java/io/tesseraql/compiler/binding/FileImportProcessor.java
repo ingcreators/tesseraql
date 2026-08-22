@@ -113,12 +113,11 @@ public final class FileImportProcessor implements Step {
         if (withFileUrl) {
             body.put("fileUrl", statusUrl + "/file");
         }
-        exchange.getMessage().removeHeaders("*", Headers.CONTENT_TYPE);
-        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 202);
+        exchange.response().status(202);
         // 202 points at the status resource (docs/vocabulary-cleanup.md slice 3); the body
         // keeps statusUrl/fileUrl for existing consumers.
-        exchange.getMessage().setHeader("Location", statusUrl);
-        exchange.getMessage().setHeader(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
+        exchange.response().header("Location", statusUrl);
+        exchange.response().header(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
         try {
             exchange.getMessage().setBody(MAPPER.writeValueAsString(body));
         } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {

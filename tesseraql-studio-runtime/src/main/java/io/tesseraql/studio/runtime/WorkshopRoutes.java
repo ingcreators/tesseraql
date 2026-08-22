@@ -111,9 +111,7 @@ final class WorkshopRoutes {
         // platform-http mirrors request headers — including parsed form fields — onto the
         // response, and a multi-line field (a route document being saved) is a header value
         // Vert.x rightly refuses. The answer is the JSON body and nothing else.
-        exchange.getMessage().removeHeaders("*", Headers.HTTP_RESPONSE_CODE);
-        exchange.getMessage().setHeader(Headers.CONTENT_TYPE,
-                "application/json; charset=utf-8");
+        exchange.response().header(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
         exchange.getMessage().setBody(mapper.writeValueAsString(body));
     }
 

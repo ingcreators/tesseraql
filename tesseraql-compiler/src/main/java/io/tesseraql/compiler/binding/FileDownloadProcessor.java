@@ -32,10 +32,9 @@ public final class FileDownloadProcessor implements Step {
                 .orElseThrow(() -> new TqlException(NOT_READY,
                         "Transfer " + transferId + " has no downloadable file (not an export,"
                                 + " still running, or failed)"));
-        exchange.getMessage().removeHeaders("*");
-        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 200);
-        exchange.getMessage().setHeader(Headers.CONTENT_TYPE, download.contentType());
-        exchange.getMessage().setHeader("Content-Disposition",
+        exchange.response().status(200);
+        exchange.response().header(Headers.CONTENT_TYPE, download.contentType());
+        exchange.response().header("Content-Disposition",
                 "attachment; filename=\"" + download.filename().replaceAll("[\\r\\n\"]", "_")
                         + "\"");
         exchange.getMessage().setBody(download.content());

@@ -450,8 +450,8 @@ public final class RouteReloader {
             // A stub is a one-step pipeline, registered under the id the mount names.
             io.tesseraql.compiler.pipeline.Pipelines.of(context)
                     .compiling(java.util.List.of()).pipeline(id).process(exchange -> {
-                        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 500);
-                        exchange.getMessage().setHeader(Headers.CONTENT_TYPE,
+                        exchange.response().status(500);
+                        exchange.response().header(Headers.CONTENT_TYPE,
                                 "application/json; charset=utf-8");
                         exchange.getMessage().setBody("{\"error\":{\"code\":\"" + COMPILE_FAILED
                                 + "\",\"message\":\"Route failed to compile; see the server log"

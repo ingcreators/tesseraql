@@ -11,7 +11,6 @@ import io.tesseraql.mcp.McpServer;
 import io.tesseraql.mcp.McpTool;
 import io.tesseraql.mcp.McpToolResult;
 import io.tesseraql.pipeline.Exchange;
-import io.tesseraql.pipeline.Headers;
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.PromptFile;
 import io.tesseraql.yaml.manifest.ResourceFile;
@@ -232,7 +231,7 @@ final class AppMcpServer {
             return new Outcome(null, null, out.getException());
         }
         return new Outcome(out.getMessage().getBody(String.class),
-                out.getMessage().getHeader(Headers.HTTP_RESPONSE_CODE, Integer.class), null);
+                out.response().status(), null);
     }
 
     /**

@@ -2,7 +2,6 @@ package io.tesseraql.compiler.binding;
 
 import io.tesseraql.core.expr.EvaluationContext;
 import io.tesseraql.pipeline.Exchange;
-import io.tesseraql.pipeline.Headers;
 import io.tesseraql.pipeline.Step;
 import io.tesseraql.pipeline.TesseraqlProperties;
 import io.tesseraql.yaml.model.ResponseSpec.TextResponse;
@@ -47,7 +46,7 @@ public final class TextResponseRenderer implements Step {
         response.model().forEach((key, expr) -> model.put(key,
                 evaluation.resolve(Arrays.asList(String.valueOf(expr).split("\\.")))));
 
-        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, response.effectiveStatus());
+        exchange.response().status(response.effectiveStatus());
         exchange.getMessage().setBody(Templates.render(appHome, templateName, model));
     }
 }
