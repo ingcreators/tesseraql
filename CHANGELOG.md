@@ -429,6 +429,17 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **Three resource leaks on the runtime's own surfaces.** A server whose close timed out
+  leaked its created Vert.x permanently — event loops and acceptor threads alive for the rest
+  of the process, because the stop had no `finally` and the context logs a failed stop and
+  moves on. The ops-shell's proxied transfer-file download built a new `HttpClient` per request
+  (a selector thread and connection pool each, released only at GC) and materialized the whole
+  file on the heap — on the one surface that exists because it streams; it now shares one
+  client and streams the body to the wire, with a completion closing the stream on the path
+  that never gets there. And a deploy upload never closed the part's stream (`Files.copy` does
+  not close its source) — a descriptor per deploy until GC, and on Windows a race against the
+  body handler's end-of-response upload deletion.
+
 - **`response.session.rotate` either rotates or refuses — never a silent no-op.** Only the JSON
   and command builders applied the declaration; on a page recipe it compiled, booted, and
   served while rotating nothing — a session-fixation control that silently does not exist, on
