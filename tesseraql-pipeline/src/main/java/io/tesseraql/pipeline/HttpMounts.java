@@ -36,35 +36,41 @@ public final class HttpMounts {
     private final List<Mount> mounts = new ArrayList<>();
 
     /**
-     * Declares where a route answers, replacing any earlier declaration for the same endpoint.
+     * The context's mount table, created on first use.
      *
-     * <p>Replacing rather than appending is what makes a hot reload idempotent: a recompiled
-     * route re-declares its mount, and a table that grew an entry per reload would mount the same
-     * URL twice.
+     * <p>Synchronized because two installers can declare their first mount at once, and a
+     * check-then-bind that raced would strand one of their tables. This is the only class-wide
+     * lock left: the table's own methods lock the table (docs/vertx-native.md decision 4), so
+     * one application's reload no longer serializes against another's.
      */
-    public static synchronized void mount(RuntimeContext context, String method, String path,
-            String pipeline) {
-        HttpMounts held = of(context);
-        held.mounts.removeIf(mount -> mount.pipeline().equals(pipeline));
-        held.mounts.add(new Mount(method.toUpperCase(Locale.ROOT), path, pipeline));
-    }
-
-    /** Every mount declared so far, in declaration order. */
-    public static synchronized List<Mount> all(RuntimeContext context) {
-        return List.copyOf(of(context).mounts);
-    }
-
-    /** Forgets the mounts of routes being replaced, so a hot reload does not accumulate them. */
-    public static synchronized void forget(RuntimeContext context, String pipeline) {
-        of(context).mounts.removeIf(mount -> mount.pipeline().equals(pipeline));
-    }
-
-    private static HttpMounts of(RuntimeContext context) {
+    public static synchronized HttpMounts of(RuntimeContext context) {
         HttpMounts mounts = context.lookup(BEAN, HttpMounts.class);
         if (mounts == null) {
             mounts = new HttpMounts();
             context.bind(BEAN, mounts);
         }
         return mounts;
+    }
+
+    /**
+     * Declares where a route answers, replacing any earlier declaration for the same endpoint.
+     *
+     * <p>Replacing rather than appending is what makes a hot reload idempotent: a recompiled
+     * route re-declares its mount, and a table that grew an entry per reload would mount the same
+     * URL twice.
+     */
+    public synchronized void mount(String method, String path, String pipeline) {
+        mounts.removeIf(mount -> mount.pipeline().equals(pipeline));
+        mounts.add(new Mount(method.toUpperCase(Locale.ROOT), path, pipeline));
+    }
+
+    /** Every mount declared so far, in declaration order. */
+    public synchronized List<Mount> all() {
+        return List.copyOf(mounts);
+    }
+
+    /** Forgets the mounts of routes being replaced, so a hot reload does not accumulate them. */
+    public synchronized void forget(String pipeline) {
+        mounts.removeIf(mount -> mount.pipeline().equals(pipeline));
     }
 }

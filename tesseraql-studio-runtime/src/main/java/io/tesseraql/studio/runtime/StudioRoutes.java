@@ -58,25 +58,25 @@ final class StudioRoutes {
                         Pipeline.Handler.catching(TqlException.class, new ErrorResponseRenderer()),
                         Pipeline.Handler.catching(Exception.class, new ErrorResponseRenderer())));
 
-        HttpMounts.mount(context, "GET", "/_tesseraql/studio/explorer",
+        HttpMounts.of(context).mount("GET", "/_tesseraql/studio/explorer",
                 "studio.explorer");
-        HttpMounts.mount(context, "GET", "/_tesseraql/studio/source", "studio.source");
-        HttpMounts.mount(context, "GET", "/_tesseraql/studio/drafts", "studio.drafts");
-        HttpMounts.mount(context, "POST", "/_tesseraql/studio/drafts", "studio.draft");
-        HttpMounts.mount(context, "POST", "/_tesseraql/studio/preview",
+        HttpMounts.of(context).mount("GET", "/_tesseraql/studio/source", "studio.source");
+        HttpMounts.of(context).mount("GET", "/_tesseraql/studio/drafts", "studio.drafts");
+        HttpMounts.of(context).mount("POST", "/_tesseraql/studio/drafts", "studio.draft");
+        HttpMounts.of(context).mount("POST", "/_tesseraql/studio/preview",
                 "studio.preview");
-        HttpMounts.mount(context, "POST", "/_tesseraql/studio/render", "studio.render");
-        HttpMounts.mount(context, "POST", "/_tesseraql/studio/runTests",
+        HttpMounts.of(context).mount("POST", "/_tesseraql/studio/render", "studio.render");
+        HttpMounts.of(context).mount("POST", "/_tesseraql/studio/runTests",
                 "studio.runTests");
-        HttpMounts.mount(context, "GET", "/_tesseraql/studio/scaffold/tables",
+        HttpMounts.of(context).mount("GET", "/_tesseraql/studio/scaffold/tables",
                 "studio.scaffold.tables");
-        HttpMounts.mount(context, "POST", "/_tesseraql/studio/scaffold/preview",
+        HttpMounts.of(context).mount("POST", "/_tesseraql/studio/scaffold/preview",
                 "studio.scaffold.preview");
-        HttpMounts.mount(context, "POST", "/_tesseraql/studio/scaffold/apply",
+        HttpMounts.of(context).mount("POST", "/_tesseraql/studio/scaffold/apply",
                 "studio.scaffold.apply");
-        HttpMounts.mount(context, "GET", "/_tesseraql/studio/audit", "studio.audit");
-        HttpMounts.mount(context, "POST", "/_tesseraql/studio/apply", "studio.apply");
-        HttpMounts.mount(context, "POST", "/_tesseraql/studio/reload", "studio.reload");
+        HttpMounts.of(context).mount("GET", "/_tesseraql/studio/audit", "studio.audit");
+        HttpMounts.of(context).mount("POST", "/_tesseraql/studio/apply", "studio.apply");
+        HttpMounts.of(context).mount("POST", "/_tesseraql/studio/reload", "studio.reload");
 
         pipelines.pipeline("studio.explorer")
                 .process(AUTH).process(json(exchange -> studio

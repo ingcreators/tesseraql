@@ -54,7 +54,7 @@ final class CopilotRoutes {
                         Pipeline.Handler.catching(TqlException.class, new ErrorResponseRenderer()),
                         Pipeline.Handler.catching(Exception.class, new ErrorResponseRenderer())));
 
-        HttpMounts.mount(context, "POST", page + "/send", "tql.copilot.send");
+        HttpMounts.of(context).mount("POST", page + "/send", "tql.copilot.send");
 
         // The chat-messages recipe's dual-path send: an htmx caller gets the user item, the
         // streaming placeholder, and an out-of-band composer clear; a no-JS post runs the

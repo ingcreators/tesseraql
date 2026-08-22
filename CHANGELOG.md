@@ -136,6 +136,16 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **The pipeline registry is the one holder of compiled pipelines** (docs/vertx-native.md
+  decision 4, slice 2). Two caches used to sit in front of it — the HTTP edge's and the
+  template-shaped runner's — each guarding started producers that a resolve stopped creating when
+  the framework's own steps stopped being components. Two caches meant two invalidation points a
+  hot reload had to hit; the edge and the MCP/queue runner now ask the registry per request, the
+  runner is a stateless loop over the record, and a reload invalidates the registry it always had
+  to invalidate. Error clauses carry exception classes rather than class names — every
+  declaration site had the class in its hand — and the mount table's lock is the table's own
+  instead of JVM-wide, so one application's reload no longer serializes against another's.
+
 - **The framework's own route classes stop being called builders** (docs/vertx-native.md
   slice 0). Sixteen `*RouteBuilder` classes are `*Routes` — a builder was the thing
   `configure()` handed to `addRoutes`, and both left the build with the dependency that defined

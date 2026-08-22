@@ -61,7 +61,7 @@ class RouteFailureSpanTest {
             TqlException failure = new TqlException(BOOM, "the step refused");
             Pipelines.of(context).compiling(List.of()).pipeline("t.fails")
                     .process(new RouteTelemetry("t.fails", "GET", "/t", null))
-                    .onException(List.of(TqlException.class.getName()), rendered -> rendered
+                    .onException(TqlException.class, rendered -> rendered
                             .getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 500))
                     .process(exchange -> {
                         throw failure;

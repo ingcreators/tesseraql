@@ -115,36 +115,36 @@ final class OperationsRoutes {
                         Pipeline.Handler.catching(TqlException.class, new ErrorResponseRenderer()),
                         Pipeline.Handler.catching(Exception.class, new ErrorResponseRenderer())));
 
-        HttpMounts.mount(context, "GET", "/_tesseraql/ops/batch/jobs",
+        HttpMounts.of(context).mount("GET", "/_tesseraql/ops/batch/jobs",
                 "ops.batch.jobs");
-        HttpMounts.mount(context, "GET", "/_tesseraql/ops/batch/executions",
+        HttpMounts.of(context).mount("GET", "/_tesseraql/ops/batch/executions",
                 "ops.batch.executions");
-        HttpMounts.mount(context, "GET", "/_tesseraql/ops/batch/executions/{id}",
+        HttpMounts.of(context).mount("GET", "/_tesseraql/ops/batch/executions/{id}",
                 "ops.batch.executionDetail");
-        HttpMounts.mount(context, "POST", "/_tesseraql/ops/batch/jobs/{jobId}/run",
+        HttpMounts.of(context).mount("POST", "/_tesseraql/ops/batch/jobs/{jobId}/run",
                 "ops.batch.run");
-        HttpMounts.mount(context, "POST", "/_tesseraql/ops/batch/executions/{id}/cancel",
+        HttpMounts.of(context).mount("POST", "/_tesseraql/ops/batch/executions/{id}/cancel",
                 "ops.batch.cancel");
-        HttpMounts.mount(context, "GET", "/_tesseraql/ops/batch/transfers/{id}/file",
+        HttpMounts.of(context).mount("GET", "/_tesseraql/ops/batch/transfers/{id}/file",
                 "ops.batch.transferFile");
-        HttpMounts.mount(context, "GET", "/_tesseraql/ops/console/transfers/{id}/file",
+        HttpMounts.of(context).mount("GET", "/_tesseraql/ops/console/transfers/{id}/file",
                 "ops.console.transferFile");
-        HttpMounts.mount(context, "GET", "/_tesseraql/ops/overview", "ops.overview");
-        HttpMounts.mount(context, "GET", "/_tesseraql/ops/lanes", "ops.lanes");
-        HttpMounts.mount(context, "GET", "/_tesseraql/ops/slow-sql", "ops.slowSql");
-        HttpMounts.mount(context, "GET", "/_tesseraql/ops/traces", "ops.traces");
-        HttpMounts.mount(context, "GET", "/_tesseraql/ops/traces/tree",
+        HttpMounts.of(context).mount("GET", "/_tesseraql/ops/overview", "ops.overview");
+        HttpMounts.of(context).mount("GET", "/_tesseraql/ops/lanes", "ops.lanes");
+        HttpMounts.of(context).mount("GET", "/_tesseraql/ops/slow-sql", "ops.slowSql");
+        HttpMounts.of(context).mount("GET", "/_tesseraql/ops/traces", "ops.traces");
+        HttpMounts.of(context).mount("GET", "/_tesseraql/ops/traces/tree",
                 "ops.traceTree");
-        HttpMounts.mount(context, "GET", "/_tesseraql/ops/traces/summary",
+        HttpMounts.of(context).mount("GET", "/_tesseraql/ops/traces/summary",
                 "ops.traceSummary");
-        HttpMounts.mount(context, "GET", "/_tesseraql/ops/traces/metrics",
+        HttpMounts.of(context).mount("GET", "/_tesseraql/ops/traces/metrics",
                 "ops.traceMetrics");
-        HttpMounts.mount(context, "GET", "/_tesseraql/ops/alerts", "ops.alerts");
-        HttpMounts.mount(context, "GET", "/_tesseraql/ops/pinning", "ops.pinning");
+        HttpMounts.of(context).mount("GET", "/_tesseraql/ops/alerts", "ops.alerts");
+        HttpMounts.of(context).mount("GET", "/_tesseraql/ops/pinning", "ops.pinning");
         // The business-route audit trail read surface (roadmap Phase 45): bearer-gated and
         // narrowed to the caller's tql.ops.view.<name> grants like every ops read.
         if (routeAudit != null) {
-            HttpMounts.mount(context, "GET", "/_tesseraql/ops/audit", "ops.audit");
+            HttpMounts.of(context).mount("GET", "/_tesseraql/ops/audit", "ops.audit");
             pipelines.pipeline("ops.audit")
                     .process(VIEW).process(requireAnyOpsView())
                     .process(jsonProcessor(
@@ -154,17 +154,17 @@ final class OperationsRoutes {
         // What each code catalog holds and a manual refresh (docs/lookups.md, decision 14).
         // The store is looked up per request rather than injected: an app with no catalogs/
         // simply answers an empty list, and the endpoints do not depend on start-up order.
-        HttpMounts.mount(context, "GET", "/_tesseraql/ops/catalogs", "ops.catalogs");
-        HttpMounts.mount(context, "POST", "/_tesseraql/ops/catalogs/{name}/refresh",
+        HttpMounts.of(context).mount("GET", "/_tesseraql/ops/catalogs", "ops.catalogs");
+        HttpMounts.of(context).mount("POST", "/_tesseraql/ops/catalogs/{name}/refresh",
                 "ops.catalogs.refresh");
         // The outbox delivery log and dead-letter redelivery (roadmap Phase 20).
-        HttpMounts.mount(context, "GET", "/_tesseraql/ops/outbox", "ops.outbox");
-        HttpMounts.mount(context, "POST", "/_tesseraql/ops/outbox/{id}/redeliver",
+        HttpMounts.of(context).mount("GET", "/_tesseraql/ops/outbox", "ops.outbox");
+        HttpMounts.of(context).mount("POST", "/_tesseraql/ops/outbox/{id}/redeliver",
                 "ops.outbox.redeliver");
         // The messaging-channel queue event log and dead-letter redelivery, mirroring the
         // outbox surface (docs/silent-tolerance.md O1).
-        HttpMounts.mount(context, "GET", "/_tesseraql/ops/events", "ops.events");
-        HttpMounts.mount(context, "POST", "/_tesseraql/ops/events/{id}/redeliver",
+        HttpMounts.of(context).mount("GET", "/_tesseraql/ops/events", "ops.events");
+        HttpMounts.of(context).mount("POST", "/_tesseraql/ops/events/{id}/redeliver",
                 "ops.events.redeliver");
         // Health for load balancers and deploy tooling (roadmap Phase 45): unauthenticated by
         // design, exposing only the status word - details stay behind the authorized ops API.
@@ -180,7 +180,7 @@ final class OperationsRoutes {
         // the scrape is authorized like the rest of the ops API unless the operator
         // explicitly opts a cluster-internal scraper out of auth.
         if (metrics != null && metrics.enabled()) {
-            HttpMounts.mount(context, "GET", "/_tesseraql/metrics", "ops.metrics");
+            HttpMounts.of(context).mount("GET", "/_tesseraql/metrics", "ops.metrics");
             var metricsRoute = pipelines.pipeline("ops.metrics");
             if (!metrics.unauthenticated()) {
                 metricsRoute = metricsRoute.process(VIEW)
@@ -349,26 +349,26 @@ final class OperationsRoutes {
         // authenticates the same principal and re-runs its own grant checks — the shell adds
         // reach, never authority. A caller without tql.ops.view.<thisApp> is refused with the
         // 404-shaped TQL-BATCH-4040, the same answer an unknown resource gives.
-        HttpMounts.mount(context, "GET", "/_tesseraql/ops/data/overview",
+        HttpMounts.of(context).mount("GET", "/_tesseraql/ops/data/overview",
                 "ops.data.overview");
-        HttpMounts.mount(context, "GET", "/_tesseraql/ops/data/jobs", "ops.data.jobs");
-        HttpMounts.mount(context, "GET", "/_tesseraql/ops/data/traces",
+        HttpMounts.of(context).mount("GET", "/_tesseraql/ops/data/jobs", "ops.data.jobs");
+        HttpMounts.of(context).mount("GET", "/_tesseraql/ops/data/traces",
                 "ops.data.traces");
-        HttpMounts.mount(context, "GET", "/_tesseraql/ops/data/transfers",
+        HttpMounts.of(context).mount("GET", "/_tesseraql/ops/data/transfers",
                 "ops.data.transfers");
-        HttpMounts.mount(context, "GET", "/_tesseraql/ops/data/outbox",
+        HttpMounts.of(context).mount("GET", "/_tesseraql/ops/data/outbox",
                 "ops.data.outbox");
-        HttpMounts.mount(context, "GET", "/_tesseraql/ops/data/events",
+        HttpMounts.of(context).mount("GET", "/_tesseraql/ops/data/events",
                 "ops.data.events");
-        HttpMounts.mount(context, "GET", "/_tesseraql/ops/data/audit",
+        HttpMounts.of(context).mount("GET", "/_tesseraql/ops/data/audit",
                 "ops.data.audit");
-        HttpMounts.mount(context, "GET", "/_tesseraql/ops/data/executions/{id}",
+        HttpMounts.of(context).mount("GET", "/_tesseraql/ops/data/executions/{id}",
                 "ops.data.execution");
-        HttpMounts.mount(context, "POST", "/_tesseraql/ops/data/jobs/run",
+        HttpMounts.of(context).mount("POST", "/_tesseraql/ops/data/jobs/run",
                 "ops.data.jobRun");
-        HttpMounts.mount(context, "POST", "/_tesseraql/ops/data/outbox/{id}/redeliver",
+        HttpMounts.of(context).mount("POST", "/_tesseraql/ops/data/outbox/{id}/redeliver",
                 "ops.data.outboxRedeliver");
-        HttpMounts.mount(context, "POST", "/_tesseraql/ops/data/events/{id}/redeliver",
+        HttpMounts.of(context).mount("POST", "/_tesseraql/ops/data/events/{id}/redeliver",
                 "ops.data.eventsRedeliver");
 
         pipelines.pipeline("ops.data.overview")

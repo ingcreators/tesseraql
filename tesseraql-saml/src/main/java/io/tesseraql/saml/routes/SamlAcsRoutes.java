@@ -104,25 +104,25 @@ final class SamlAcsRoutes {
                         Pipeline.Handler.catching(SamlException.class, this::unauthorized),
                         Pipeline.Handler.catching(Exception.class, this::badRequest)));
 
-        HttpMounts.mount(context, "POST", "/_tesseraql/saml/acs", "system.saml.acs");
+        HttpMounts.of(context).mount("POST", "/_tesseraql/saml/acs", "system.saml.acs");
         pipelines.pipeline("system.saml.acs").process(this::consume);
 
-        HttpMounts.mount(context, "GET", "/_tesseraql/saml/logout", "system.saml.logout");
+        HttpMounts.of(context).mount("GET", "/_tesseraql/saml/logout", "system.saml.logout");
         pipelines.pipeline("system.saml.logout").process(this::logout);
 
         if (metadata != null) {
-            HttpMounts.mount(context, "GET", "/_tesseraql/saml/metadata",
+            HttpMounts.of(context).mount("GET", "/_tesseraql/saml/metadata",
                     "system.saml.metadata");
             pipelines.pipeline("system.saml.metadata")
                     .process(this::serveMetadata);
         }
         if (endpoints != null && endpoints.idpSsoUrl() != null && endpoints.acsUrl() != null) {
-            HttpMounts.mount(context, "GET", "/_tesseraql/saml/login",
+            HttpMounts.of(context).mount("GET", "/_tesseraql/saml/login",
                     "system.saml.login");
             pipelines.pipeline("system.saml.login").process(this::login);
         }
         if (endpoints != null && endpoints.idpSloUrl() != null) {
-            HttpMounts.mount(context, "GET", "/_tesseraql/saml/slo", "system.saml.slo");
+            HttpMounts.of(context).mount("GET", "/_tesseraql/saml/slo", "system.saml.slo");
             pipelines.pipeline("system.saml.slo").process(this::inboundLogout);
         }
     }

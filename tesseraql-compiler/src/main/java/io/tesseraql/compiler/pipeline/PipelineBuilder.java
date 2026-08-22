@@ -20,6 +20,7 @@ public final class PipelineBuilder {
     private final List<Pipeline.Handler> handlers = new ArrayList<>();
     private int handoffAt = -1;
     private String laneExecutor;
+    private volatile int version;
 
     PipelineBuilder(String id, List<Pipeline.Handler> inherited) {
         this.id = id;
@@ -34,6 +35,7 @@ public final class PipelineBuilder {
     /** Appends a processor. */
     public PipelineBuilder process(Step processor) {
         steps.add(processor);
+        version++;
         return this;
     }
 
@@ -50,16 +52,29 @@ public final class PipelineBuilder {
         }
         handoffAt = steps.size();
         laneExecutor = executorRef;
+        version++;
         return this;
     }
 
     /** Adds an error clause ahead of the inherited ones, so the more specific match wins. */
-    public PipelineBuilder onException(List<String> caught, Step renderer) {
-        handlers.add(0, new Pipeline.Handler(caught, renderer));
+    public PipelineBuilder onException(Class<? extends Throwable> caught, Step renderer) {
+        handlers.add(0, Pipeline.Handler.catching(caught, renderer));
+        version++;
         return this;
     }
 
     public Pipeline build() {
         return new Pipeline(id, steps, handlers, handoffAt, laneExecutor);
+    }
+
+    /**
+     * How many times this builder has been appended to, so a registry can tell a chain that is
+     * still being compiled from one it already built (docs/vertx-native.md decision 4). The
+     * compiler registers a pipeline before filling it — deliberately, so a forgotten hand-back
+     * cannot lose a route — which means "registered" and "finished" are different moments, and a
+     * cache keyed on registration alone would freeze the half-built chain a racing lookup saw.
+     */
+    int version() {
+        return version;
     }
 }

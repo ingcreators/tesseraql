@@ -36,7 +36,7 @@ final class OpsShellRoutes {
                         Pipeline.Handler.catching(TqlException.class, new ErrorResponseRenderer()),
                         Pipeline.Handler.catching(Exception.class, new ErrorResponseRenderer())));
 
-        HttpMounts.mount(context, "GET",
+        HttpMounts.of(context).mount("GET",
                 "/_tesseraql/ops/console/{member}/transfers/{id}/file",
                 "ops.shell.transferFile");
         pipelines.pipeline("ops.shell.transferFile")

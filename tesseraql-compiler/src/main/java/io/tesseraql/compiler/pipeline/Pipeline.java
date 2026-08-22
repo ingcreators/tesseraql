@@ -30,12 +30,14 @@ public record Pipeline(String id, List<Step> steps, List<Handler> handlers, int 
     }
 
     /**
-     * One error clause: the exception class names it catches, and the processor that answers.
+     * One error clause: the exception classes it catches, and the processor that answers.
      *
-     * <p>Class names rather than classes, matched up the failure's own hierarchy, because that is
-     * how the route model spelled it and how a reader checks it.
+     * <p>Classes rather than class names (docs/vertx-native.md decision 4): the route model that
+     * could only spell a name is gone, and every declaration site has the class in its hand. The
+     * match walks the failure's own hierarchy, so the most specific clause wins regardless of
+     * declaration order — which is the behaviour the name-match always had.
      */
-    public record Handler(List<String> caught, Step renderer) {
+    public record Handler(List<Class<? extends Throwable>> caught, Step renderer) {
 
         public Handler {
             caught = List.copyOf(caught);
@@ -43,7 +45,7 @@ public record Pipeline(String id, List<Step> steps, List<Handler> handlers, int 
 
         /** One clause, spelled the way the framework's own routes spell it. */
         public static Handler catching(Class<? extends Throwable> type, Step renderer) {
-            return new Handler(List.of(type.getName()), renderer);
+            return new Handler(List.of(type), renderer);
         }
     }
 }

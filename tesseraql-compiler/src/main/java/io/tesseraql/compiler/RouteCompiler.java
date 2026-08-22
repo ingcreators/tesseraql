@@ -134,10 +134,10 @@ public final class RouteCompiler {
         // builder's configure() was copied into each route it went on to create — and
         // here it is an argument, so a reload cannot accumulate a second copy.
         pipelines = Pipelines.of(context).compiling(java.util.List.of(
-                new Pipeline.Handler(java.util.List.of(TqlException.class.getName()),
+                Pipeline.Handler.catching(TqlException.class,
                         new ErrorResponseRenderer(i18n, onErrorByRoute,
                                 manifest.appHome(), errorHeaders)),
-                new Pipeline.Handler(java.util.List.of(Exception.class.getName()),
+                Pipeline.Handler.catching(Exception.class,
                         new ErrorResponseRenderer(i18n, onErrorByRoute,
                                 manifest.appHome(), errorHeaders))));
         for (RouteFile routeFile : manifest.routes()) {
@@ -1875,7 +1875,7 @@ public final class RouteCompiler {
         String wirePath = io.tesseraql.compiler.binding.WireNames.wirePath(path);
         switch (method) {
             case "GET", "POST", "PUT", "PATCH", "DELETE" -> io.tesseraql.pipeline.HttpMounts
-                    .mount(context, method, wirePath, pipeline);
+                    .of(context).mount(method, wirePath, pipeline);
             default ->
                 throw new TqlException(UNSUPPORTED_RECIPE, "Unsupported HTTP method: " + method);
         }
