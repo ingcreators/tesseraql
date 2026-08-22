@@ -27,7 +27,7 @@ that sweep touched the same files; the names section says what it changed.
 
 ### The message is one bag, and the two directions inside it barely meet
 
-[`Message`](../tesseraql-pipeline/src/main/java/io/tesseraql/pipeline/Message.java) holds a single
+`Message` holds a single
 case-insensitive map. Four unrelated things are in it at once: real request headers, query and path
 parameters, form fields, the request's own metadata (`tql.http.method`, `path`, `uri`, `query`,
 `rawQuery`, the peer addresses) — and the response being written.
@@ -51,7 +51,7 @@ stops it being.
 ### Three mechanisms exist only to survive the one bag
 
 **1. A filter in both directions, and a prefix rule that cannot be got wrong twice.**
-[`HeaderFilter`](../tesseraql-pipeline/src/main/java/io/tesseraql/pipeline/HeaderFilter.java) (58
+`HeaderFilter` (58
 lines) decides which names may enter the message and which may leave it, because internal state and
 wire headers share a namespace. [camel-removal.md](camel-removal.md) slice 6c records what that
 costs: renaming the prefix from `tql.` to `Tesseraql` disables acting roles everywhere, silently,
@@ -67,7 +67,7 @@ implements it. Every one of them is a step saying that the bag it is about to wr
 holds the request that arrived.
 
 **3. A URL re-parser, because a parameter's value is not trustworthy where it is stored.**
-[`PathTemplate`](../tesseraql-core/src/main/java/io/tesseraql/core/http/PathTemplate.java) (90
+`PathTemplate` (90
 lines) writes the diagnosis itself:
 
 > The HTTP transport publishes path parameters as message headers, but it publishes query
@@ -140,7 +140,7 @@ does not ask a conversion table what a `String` is.
 
 [`Pipeline`](../tesseraql-compiler/src/main/java/io/tesseraql/compiler/pipeline/Pipeline.java) is a
 49-line record: steps, handlers, handoff index, lane name.
-[`RoutePipeline`](../tesseraql-runtime/src/main/java/io/tesseraql/runtime/RoutePipeline.java) is
+`RoutePipeline` is
 229 lines that copy all four into fields of its own and redeclare `Handler` as a structurally
 identical private record. Three consequences, all of them leftovers from when resolving a pipeline
 meant turning endpoint URIs into producers:
@@ -364,16 +364,28 @@ thing in this repository to rediscover.
 
 **0. The names, alone.** Decision 7 — the class renames and the two missed sentences; the prose
 already landed as #960. No behaviour, no test changes, lands by itself so that every diff after it
-is attributable to a structural change.
+is attributable to a structural change. **Done, #962.** The rename pass caught a third missed
+sentence: `RouteCompiler`'s own class Javadoc still emitted "an in-memory {@code @link
+RouteBuilder}" that "configures the REST transport" — a broken link to a deleted type, describing
+a transport that left with it, on the first file a compiler reader opens.
 
 **1. The completion, and the span that never carried its error.** Decision 5. Small, self-contained,
 and it ships a defect fix — which is also the acceptance: a route that fails under a declared
-clause produces a span with the exception on it, asserted rather than assumed.
+clause produces a span with the exception on it, asserted rather than assumed. **Done, #963**,
+`RouteFailureSpanTest` pinning the property through a real pipeline run, clause and envelope
+included.
 
 **2. The runner and the registry.** Decision 4, including the mount table's lock. One cache, one
 invalidation, one `Handler`. The existing reload suites are the acceptance: a saved route serves
 its new body, a deleted one answers 404, and an MCP call after a reload runs the recompiled
-pipeline.
+pipeline. **Done, #964, and the one-cache decision met a fact this document had not counted**: the
+compiler registers a builder *before* filling it — deliberately, so a forgotten hand-back cannot
+lose a route — which makes "registered" and "finished" different moments. The registry's built
+cache is therefore version-checked against the builder's mutation count; a cache keyed on
+registration alone would have frozen the half-built chain a racing lookup saw, where the old
+build-per-call shape self-healed. `PipelinesCacheTest` pins all three faces of that. One shape
+note: `List.of(TqlException.class)` is not a `List<Class<? extends Throwable>>`, so the clause
+API stayed single-class (`catching`, `onException(Class, Step)`) rather than list-typed.
 
 **3. The response side.** Decision 1, outbound half. ~140 `setHeader` sites and the 10
 `removeHeaders("*")` sites move to a response object; `HeaderFilter.leaves` and `NEVER_LEAVES` are
@@ -385,6 +397,12 @@ being written fails a test rather than a deployment.
 Decisions 1 and 2 are the expensive half, and the outbound direction is the cheap proof that the
 split is real. Slices 0 to 2 stand on their own and do not depend on it.
 
+**Done, #965, and the abort clause did not fire** — no shim, wire behaviour unchanged, 854 runtime
+tests green. The one miss the suite caught mid-migration is the exact genre the clause watched
+for: the MCP bridge's dynamic response headers (`Mcp-Session-Id`, the `WWW-Authenticate` that
+carries RFC 9728's `resource_metadata`) were still copied onto the message, and silently stopped
+reaching the wire until two integration suites said so.
+
 **4. The request side.** Decision 1 inbound, and decision 2. The 169 reads split into headers and
 parameters, `Headers` loses everything but the wire names, `PlatformHttpHeaders` goes, the `tql.`
 prefix and both directions of `HeaderFilter` go, and the binder stops reading parameters out of a
@@ -393,12 +411,30 @@ parameters instead of re-deriving them. The form's three representations become 
 constants become one accessor, and the attachments become the framework's own `Part` — taking the
 `jakarta.activation` import out of the pipeline module.
 
+**Done, #966, and `PathTemplate` left entirely** rather than staying as a template reader — its
+last runtime caller went with the binder's fallback, and rule 10 does the rest. The mount carries
+the *declared* template now; the edge applies `WireNames` on the way onto the router and maps the
+match back, so the stand-ins are invisible outside one file. Both regressions the suite caught
+were the same shape — a wire header swept into a parameter read (the OIDC callback's `Cookie`)
+and per-module form parsers still reading a body the edge no longer writes (login, OAuth consent,
+IAM admin's repeated-field bulk selection, SAML ACS, the workshop) — which is the collision the
+slice exists to make impossible, caught one last time on the way out.
+
 **5. One exchange.** Decision 3. Mechanical once 3 and 4 have landed, and worth its own slice for
 the same reason slice 3b of [camel-removal.md](camel-removal.md) was: a mechanical change across
-many files must not share a diff with a change of behaviour.
+many files must not share a diff with a change of behaviour. **Done, #967**: `Message` deleted,
+the body on the exchange, and the two internal step-to-step signals (the polled file's name, the
+queue message key) as exchange properties — which is what properties are for.
 
 **6. The transport by constructor.** Decision 6. Last because it is independent and small, and
 because doing it earlier would put an unrelated change in the middle of the ones that need review.
+**Done, #968, with one lesson the suite taught**: the declared options must still resolve early in
+boot. `vertxOptions(config)` is where a `tesseraql.http.workerThreads` that cannot be a pool is
+refused, and `HttpThreadingIntegrationTest` pins that the refusal *names the key* — moved naively
+to server construction, the same failure surfaced wrapped and anonymous. The options are resolved
+where the binds used to happen and handed to the server later. `tesseraqlVertx` stays in the
+registry as the published record of the transport (the multi-app suite reads it to assert one host
+= one instance); `tesseraqlVertxOptions` and `findSingleByType` are deleted.
 
 ## What the acceptance is, for all of it
 
@@ -407,3 +443,13 @@ The same thing that made the edge change and the Camel removal checkable, and it
 through the pipeline's internals at all. A shape change that keeps every one of those green has not
 changed what a request means. The unit tests that read headers off a message are the ones expected
 to change, and they are the ones being made to say what they mean.
+
+That is how it went: seven slices, #962 to #968, each landed on a green full-reactor verify, with
+the suite catching every semantic miss the mechanical migration made — and nothing else. One
+post-merge flake is recorded here because it is not this campaign's: `MultiAppReplaceIntegrationTest`
+saw a single 502 on one main run (green on the same commit re-run, and on every neighbouring run).
+That 502 is [the relay's documented residual](../tesseraql-runtime/src/main/java/io/tesseraql/runtime/StackRelay.java)
+— a request whose connection died mid-flight is deliberately not replayed, because replaying a
+request the origin may have acted on is a worse defect than the 502 it saves — so the test's
+"every response a 200" holds only outside that window. Narrowing the window (or teaching the test
+about it) is a runtime-replace follow-up, not a pipeline one.
