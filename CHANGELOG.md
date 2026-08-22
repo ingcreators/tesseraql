@@ -146,6 +146,20 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **The Studio data browser parses its view state once, and the group split finishes.** The
+  browse page hand-parsed the `fcN/foN/fvN` filter slots while the CSV export read the same
+  grammar through `StudioSupport.dataFilters` — two spellings of one grammar, and a drift
+  (say, the default operator changing in one place) would have exported a different row set
+  than the page shows. One parse (`StudioSupport.dataFilterSlots`) now feeds both, along with
+  the sort-direction and combinator normalizations that had the same two spellings. The
+  row-edit links build from the page's typed rows inside the fetch instead of casting the
+  model back apart afterwards; `studio.data.editForm`/`update` read the row key once; the
+  source-editor address is built by one helper at its five call sites; the editable/readOnly
+  pair by one helper at its seven. The 378-line `configFlagsDataMessages` group was four
+  unrelated features sharing a method — config+flags, the data browser and the i18n message
+  editor are their own groups now, and the stranded migration-page comment sits above the
+  provider it describes.
+
 - **The ops/account providers carry their boot state as it was handed over.**
   `OpsAccountProviders` mirrored its 26-component `Deps` record into 26 fields through a
   copying constructor — ~70 lines of transcription in which two components were silently

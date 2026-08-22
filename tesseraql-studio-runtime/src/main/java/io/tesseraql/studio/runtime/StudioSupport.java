@@ -183,20 +183,59 @@ final class StudioSupport {
     static final int ROUTE_FORM_INPUT_SLOTS = 10;
     static final int DATA_EDIT_SLOTS = 20;
 
+    /** One filter slot as the form echoes it; {@code cond} is present when a column is chosen. */
+    record FilterSlot(Map<String, Object> row, StudioDataService.FilterCond cond) {
+    }
+
+    /**
+     * The data browser's filter slots {@code fcN/foN/fvN}, each as the row the form echoes plus
+     * the condition it declares — the one parse of the filter grammar. The browse page and the
+     * CSV export both read it (the page via the slots, the export via {@link #dataFilters}), so
+     * the exported rows are exactly the rows the page shows; a second spelling of the grammar
+     * is how the two would drift apart.
+     */
+    static java.util.List<FilterSlot> dataFilterSlots(Map<String, Object> params) {
+        java.util.List<FilterSlot> slots = new java.util.ArrayList<>();
+        for (int i = 0; i < DATA_FILTER_SLOTS; i++) {
+            String column = str(params, "fc" + i);
+            String op = str(params, "fo" + i) == null ? "contains" : str(params, "fo" + i);
+            String value = params.get("fv" + i) == null ? "" : String.valueOf(params.get("fv" + i));
+            Map<String, Object> row = new java.util.LinkedHashMap<>();
+            row.put("column", column == null ? "" : column);
+            row.put("op", op);
+            row.put("value", value);
+            slots.add(new FilterSlot(row,
+                    column == null ? null : new StudioDataService.FilterCond(column, op, value)));
+        }
+        return slots;
+    }
+
     /** Assembles the data browser's filter conditions from the indexed slot params {@code fcN/foN/fvN}. */
     static java.util.List<StudioDataService.FilterCond> dataFilters(
             Map<String, Object> params) {
-        java.util.List<StudioDataService.FilterCond> filters = new java.util.ArrayList<>();
-        for (int i = 0; i < DATA_FILTER_SLOTS; i++) {
-            String column = str(params, "fc" + i);
-            if (column == null) {
-                continue;
-            }
-            String op = str(params, "fo" + i) == null ? "contains" : str(params, "fo" + i);
-            String value = params.get("fv" + i) == null ? "" : String.valueOf(params.get("fv" + i));
-            filters.add(new StudioDataService.FilterCond(column, op, value));
-        }
-        return filters;
+        return dataFilterSlots(params).stream().map(FilterSlot::cond)
+                .filter(java.util.Objects::nonNull).toList();
+    }
+
+    /** The data browser's sort-direction slot: {@code desc} on request, else {@code asc}. */
+    static String dataSortDir(Map<String, Object> params) {
+        return "desc".equalsIgnoreCase(String.valueOf(params.get("dir"))) ? "desc" : "asc";
+    }
+
+    /** The data browser's filter-combinator slot: {@code or} on request, else {@code and}. */
+    static String dataCombinator(Map<String, Object> params) {
+        return "or".equalsIgnoreCase(String.valueOf(params.get("combinator"))) ? "or" : "and";
+    }
+
+    /** The source editor's address for one app-relative path. */
+    static String sourceEditorUrl(String path) {
+        return "/_tesseraql/studio/ui/source?path=" + urlEncode(path);
+    }
+
+    /** The edit-affordance pair every authoring page's model carries. */
+    static void putEditFlags(Map<String, Object> model, boolean canEdit) {
+        model.put("editable", canEdit);
+        model.put("readOnly", !canEdit);
     }
 
     /** The URL-encoded query string (table + combinator + filter slots + sort) reused by the links. */
