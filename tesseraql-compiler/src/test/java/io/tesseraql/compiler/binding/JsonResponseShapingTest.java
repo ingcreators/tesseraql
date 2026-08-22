@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.tesseraql.pipeline.Beans;
 import io.tesseraql.pipeline.Exchange;
-import io.tesseraql.pipeline.Headers;
 import io.tesseraql.pipeline.TesseraqlProperties;
 import io.tesseraql.yaml.model.ResponseSpec;
 import java.util.List;
@@ -54,9 +53,9 @@ class JsonResponseShapingTest {
                 List.of(new ResponseSpec.StatusWhen("main.rowCount == 0", 404)));
         Exchange missing = render(response, Map.of("main", Map.of("rows", List.of(),
                 "rowCount", 0)));
-        assertThat(missing.getMessage().getHeader(Headers.HTTP_RESPONSE_CODE)).isEqualTo(404);
+        assertThat(missing.response().status()).isEqualTo(404);
         Exchange found = render(response, Map.of("main", Map.of("rows",
                 List.of(Map.of("id", 1)), "rowCount", 1)));
-        assertThat(found.getMessage().getHeader(Headers.HTTP_RESPONSE_CODE)).isEqualTo(200);
+        assertThat(found.response().status()).isEqualTo(200);
     }
 }

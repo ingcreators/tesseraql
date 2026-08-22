@@ -25,7 +25,7 @@ public final class PageHeaders implements Step {
         }
         Map<String, Object> page = (Map<String, Object>) raw;
         if (page.get("totalRows") instanceof Number total) {
-            exchange.getMessage().setHeader("X-Total-Count", String.valueOf(total.longValue()));
+            exchange.response().header("X-Total-Count", String.valueOf(total.longValue()));
         }
         String uri = exchange.getMessage().getHeader(Headers.HTTP_URI, String.class);
         if (uri == null) {
@@ -52,7 +52,7 @@ public final class PageHeaders implements Step {
                     .append(">; rel=\"prev\"");
         }
         if (link.length() > 0) {
-            exchange.getMessage().setHeader("Link", link.toString());
+            exchange.response().header("Link", link.toString());
         }
     }
 

@@ -43,10 +43,10 @@ public final class FileResponseRenderer implements Step {
         response.model().forEach((key, expr) -> model.put(key,
                 evaluation.resolve(Arrays.asList(String.valueOf(expr).split("\\.")))));
 
-        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, response.effectiveStatus());
-        exchange.getMessage().setHeader(Headers.CONTENT_TYPE, response.effectiveContentType());
+        exchange.response().status(response.effectiveStatus());
+        exchange.response().header(Headers.CONTENT_TYPE, response.effectiveContentType());
         if (response.filename() != null && !response.filename().isBlank()) {
-            exchange.getMessage().setHeader("Content-Disposition",
+            exchange.response().header("Content-Disposition",
                     "attachment; filename=\"" + sanitizeFilename(response.filename()) + "\"");
         }
         exchange.getMessage().setBody(Templates.render(appHome, templateName, model));

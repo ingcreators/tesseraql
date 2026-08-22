@@ -23,6 +23,7 @@ public final class Exchange {
 
     private final Beans beans;
     private final Message message = new Message();
+    private final Response response = new Response();
     private final Map<String, Object> properties = new LinkedHashMap<>();
     private final List<Completion> completions = new ArrayList<>();
     private Exception exception;
@@ -35,6 +36,16 @@ public final class Exchange {
 
     public Message getMessage() {
         return message;
+    }
+
+    /**
+     * The response this route is writing (docs/vertx-native.md structural decision 1).
+     *
+     * <p>Separate from the message so that writing a response never means clearing a request:
+     * the message keeps what arrived, this starts empty, and the edge writes only this.
+     */
+    public Response response() {
+        return response;
     }
 
     /** What this runtime bound, for a step that needs a service rather than a value. */

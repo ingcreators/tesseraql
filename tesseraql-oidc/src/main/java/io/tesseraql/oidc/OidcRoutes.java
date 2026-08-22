@@ -121,7 +121,7 @@ final class OidcRoutes {
         if (next != null) {
             // Scoped to the OIDC endpoints, so this one follows the base path they are
             // mounted under rather than the session cookie's (docs/base-path.md).
-            exchange.getMessage().setHeader("Set-Cookie", NEXT_COOKIE + "=" + encode(next)
+            exchange.response().header("Set-Cookie", NEXT_COOKIE + "=" + encode(next)
                     + "; Path=" + io.tesseraql.pipeline.BasePath.url(exchange, "/_tesseraql/oidc")
                     + "; HttpOnly; SameSite=Lax; Max-Age=600");
         }
@@ -172,7 +172,7 @@ final class OidcRoutes {
         // (docs/access-governance.md structural decision 8, layer A).
         String sessionId = sessions.create(principal,
                 io.tesseraql.pipeline.auth.SignInAdmission.admitted(exchange));
-        exchange.getMessage().setHeader("Set-Cookie",
+        exchange.response().header("Set-Cookie",
                 io.tesseraql.security.session.SessionCookie.issue(sessions.cookieName(),
                         sessionId, io.tesseraql.pipeline.CookiePath.of(exchange)));
         redirect(exchange, postLoginTarget(exchange));
@@ -189,7 +189,7 @@ final class OidcRoutes {
     private void logout(Exchange exchange) {
         String sessionId = cookieValue(header(exchange, "Cookie"), sessions.cookieName());
         sessions.invalidate(sessionId);
-        exchange.getMessage().setHeader("Set-Cookie",
+        exchange.response().header("Set-Cookie",
                 io.tesseraql.security.session.SessionCookie.expire(sessions.cookieName(),
                         io.tesseraql.pipeline.CookiePath.of(exchange)));
         try {
@@ -271,15 +271,15 @@ final class OidcRoutes {
      * decision 7).
      */
     private void redirect(Exchange exchange, String location) {
-        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 302);
-        exchange.getMessage().setHeader("Location",
+        exchange.response().status(302);
+        exchange.response().header("Location",
                 io.tesseraql.pipeline.BasePath.url(exchange, location));
         exchange.getMessage().setBody(null);
     }
 
     private void ok(Exchange exchange) {
-        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 200);
-        exchange.getMessage().setHeader(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
+        exchange.response().status(200);
+        exchange.response().header(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
         exchange.getMessage().setBody("{\"ok\":true}");
     }
 
@@ -308,9 +308,8 @@ final class OidcRoutes {
 
     /** The framework envelope, so a federation error reads like every other error. */
     private void respondError(Exchange exchange, TqlErrorCode code, String message) {
-        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE,
-                ErrorResponseRenderer.httpStatus(code));
-        exchange.getMessage().setHeader(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
+        exchange.response().status(ErrorResponseRenderer.httpStatus(code));
+        exchange.response().header(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
         exchange.getMessage().setBody(FederationErrors.body(code, message));
     }
 

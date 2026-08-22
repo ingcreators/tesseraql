@@ -68,11 +68,11 @@ final class CopilotProxyRoutes {
         copyHeader(exchange, request, "HX-Request");
         HttpResponse<String> response = client.send(request.build(),
                 HttpResponse.BodyHandlers.ofString());
-        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, response.statusCode());
-        response.headers().firstValue("Content-Type").ifPresent(value -> exchange.getMessage()
-                .setHeader(Headers.CONTENT_TYPE, value));
-        response.headers().firstValue("Location").ifPresent(value -> exchange.getMessage()
-                .setHeader("Location", value));
+        exchange.response().status(response.statusCode());
+        response.headers().firstValue("Content-Type")
+                .ifPresent(value -> exchange.response().header(Headers.CONTENT_TYPE, value));
+        response.headers().firstValue("Location")
+                .ifPresent(value -> exchange.response().header("Location", value));
         exchange.getMessage().setBody(response.body());
     }
 

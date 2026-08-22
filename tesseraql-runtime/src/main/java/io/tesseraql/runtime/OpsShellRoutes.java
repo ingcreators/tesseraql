@@ -64,7 +64,7 @@ final class OpsShellRoutes {
                         target.getMessage().setBody(exchange.getMessage().getBody());
                     })
                     .ifPresent(answered -> {
-                        exchange.getMessage().setHeaders(answered.getMessage().getHeaders());
+                        exchange.response().becomeCopyOf(answered.response());
                         exchange.getMessage().setBody(answered.getMessage().getBody());
                         if (answered.getException() != null) {
                             exchange.setException(answered.getException());
@@ -87,12 +87,11 @@ final class OpsShellRoutes {
             Thread.currentThread().interrupt();
             throw new java.io.IOException("interrupted", ex);
         }
-        exchange.getMessage().removeHeaders("*");
-        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, response.statusCode());
-        response.headers().firstValue("Content-Type").ifPresent(value -> exchange.getMessage()
-                .setHeader(Headers.CONTENT_TYPE, value));
-        response.headers().firstValue("Content-Disposition").ifPresent(value -> exchange
-                .getMessage().setHeader("Content-Disposition", value));
+        exchange.response().status(response.statusCode());
+        response.headers().firstValue("Content-Type")
+                .ifPresent(value -> exchange.response().header(Headers.CONTENT_TYPE, value));
+        response.headers().firstValue("Content-Disposition").ifPresent(
+                value -> exchange.response().header("Content-Disposition", value));
         exchange.getMessage().setBody(response.body());
     }
 }

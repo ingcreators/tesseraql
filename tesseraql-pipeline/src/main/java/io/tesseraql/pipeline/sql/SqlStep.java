@@ -331,14 +331,13 @@ public class SqlStep implements Step {
         } catch (java.io.IOException ex) {
             throw executionError(ex);
         }
-        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 200);
+        exchange.response().status(200);
         boolean split = spec.splitBy() != null && !spec.splitBy().isBlank();
-        exchange.getMessage().setHeader(Headers.CONTENT_TYPE,
+        exchange.response().header(Headers.CONTENT_TYPE,
                 split ? "application/zip" : codec.contentType());
-        exchange.getMessage().setHeader("Content-Disposition",
-                "attachment; filename=\"" + (split
-                        ? zipName(filename)
-                        : filename) + "\"");
+        exchange.response().header("Content-Disposition", "attachment; filename=\"" + (split
+                ? zipName(filename)
+                : filename) + "\"");
         exchange.addOnCompletion(done -> tempStore.delete(ref));
     }
 

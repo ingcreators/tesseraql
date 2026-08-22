@@ -125,8 +125,8 @@ final class TokenExchangeRoutes {
         principal = tokens.narrowed(principal, appName,
                 acting == null ? null : String.valueOf(acting));
 
-        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 200);
-        exchange.getMessage().setHeader(Headers.CONTENT_TYPE, "application/json");
+        exchange.response().status(200);
+        exchange.response().header(Headers.CONTENT_TYPE, "application/json");
         exchange.getMessage().setBody(
                 MAPPER.writeValueAsString(tokens.mint(principal, appName)));
     }

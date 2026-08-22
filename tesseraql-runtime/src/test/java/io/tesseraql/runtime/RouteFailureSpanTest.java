@@ -10,7 +10,6 @@ import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.telemetry.Span;
 import io.tesseraql.core.telemetry.Tracer;
 import io.tesseraql.pipeline.Exchange;
-import io.tesseraql.pipeline.Headers;
 import io.tesseraql.pipeline.RuntimeContext;
 import io.tesseraql.pipeline.TesseraqlProperties;
 import java.util.List;
@@ -62,7 +61,7 @@ class RouteFailureSpanTest {
             Pipelines.of(context).compiling(List.of()).pipeline("t.fails")
                     .process(new RouteTelemetry("t.fails", "GET", "/t", null))
                     .onException(TqlException.class, rendered -> rendered
-                            .getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 500))
+                            .response().status(500))
                     .process(exchange -> {
                         throw failure;
                     });
@@ -71,7 +70,7 @@ class RouteFailureSpanTest {
                     .run("t.fails", exchange -> exchange.setFromRouteId("t.fails"))
                     .orElseThrow();
 
-            assertThat(answered.getMessage().getHeader(Headers.HTTP_RESPONSE_CODE))
+            assertThat(answered.response().status())
                     .as("the clause answered")
                     .isEqualTo(500);
             assertThat(span.ended).isTrue();
@@ -90,8 +89,7 @@ class RouteFailureSpanTest {
 
             Pipelines.of(context).compiling(List.of()).pipeline("t.ok")
                     .process(new RouteTelemetry("t.ok", "GET", "/t", null))
-                    .process(exchange -> exchange.getMessage()
-                            .setHeader(Headers.HTTP_RESPONSE_CODE, 200));
+                    .process(exchange -> exchange.response().status(200));
 
             RoutePipelines.of(context).run("t.ok", exchange -> exchange.setFromRouteId("t.ok"))
                     .orElseThrow();

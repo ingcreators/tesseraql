@@ -6,7 +6,6 @@ import io.tesseraql.core.telemetry.NoopTracer;
 import io.tesseraql.core.telemetry.Span;
 import io.tesseraql.core.telemetry.Tracer;
 import io.tesseraql.pipeline.Exchange;
-import io.tesseraql.pipeline.Headers;
 import io.tesseraql.pipeline.Step;
 import io.tesseraql.pipeline.TesseraqlProperties;
 import java.util.Map;
@@ -81,7 +80,7 @@ public final class RouteTelemetry implements Step {
         if (failure != null) {
             span.recordError(failure);
         }
-        Object status = exchange.getMessage().getHeader(Headers.HTTP_RESPONSE_CODE);
+        Object status = exchange.response().status();
         if (status != null) {
             span.attribute("status", status);
         }

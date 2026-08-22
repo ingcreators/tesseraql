@@ -268,8 +268,7 @@ final class StudioRoutes {
     private Step json(Function<Exchange, Object> handler) {
         return exchange -> {
             Object result = handler.apply(exchange);
-            exchange.getMessage().setHeader(Headers.CONTENT_TYPE,
-                    "application/json; charset=utf-8");
+            exchange.response().header(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
             exchange.getMessage().setBody(mapper.writeValueAsString(result));
         };
     }

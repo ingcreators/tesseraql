@@ -52,9 +52,8 @@ public final class AttachmentListProcessor implements Step {
             item.put("createdAt", a.createdAt() == null ? null : a.createdAt().toString());
             items.add(item);
         }
-        exchange.getMessage().removeHeaders("*", Headers.CONTENT_TYPE);
-        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 200);
-        exchange.getMessage().setHeader(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
+        exchange.response().status(200);
+        exchange.response().header(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
         exchange.getMessage().setBody(FileImportProcessor.MAPPER.writeValueAsString(items));
     }
 }

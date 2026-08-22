@@ -88,12 +88,12 @@ class HtmlResponseRendererViewTest {
         String region = partial.getMessage().getBody(String.class);
         assertThat(region).doesNotContain("<html").contains("hc-datagrid")
                 .startsWith("<div id=\"page-content\"");
-        assertThat(partial.getMessage().getHeader("Vary", String.class))
+        assertThat(partial.response().header("Vary"))
                 .contains("HX-Request");
 
         Exchange direct = exchangeFor(renderer, Map.of(), Map.of());
         assertThat(direct.getMessage().getBody(String.class)).contains("<html");
-        assertThat(direct.getMessage().getHeader("Vary", String.class))
+        assertThat(direct.response().header("Vary"))
                 .contains("HX-Request");
     }
 
@@ -113,7 +113,7 @@ class HtmlResponseRendererViewTest {
         Exchange always = exchangeFor(shellRenderer(dir, "always"), Map.of(),
                 Map.of("HX-Request", "true"));
         assertThat(always.getMessage().getBody(String.class)).contains("<html");
-        assertThat(always.getMessage().getHeader("Vary", String.class)).isNull();
+        assertThat(always.response().header("Vary")).isNull();
 
         Exchange never = exchangeFor(shellRenderer(dir, "never"), Map.of(), Map.of());
         assertThat(never.getMessage().getBody(String.class))

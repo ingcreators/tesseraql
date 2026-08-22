@@ -30,7 +30,7 @@ public final class McpToolResultRenderer implements Step {
             throw new TqlException(RENDER_ERROR, "Failed to serialize MCP tool result: "
                     + ex.getMessage());
         }
-        exchange.getMessage().setHeader(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
+        exchange.response().header(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
         exchange.getMessage().setBody(json);
     }
 }

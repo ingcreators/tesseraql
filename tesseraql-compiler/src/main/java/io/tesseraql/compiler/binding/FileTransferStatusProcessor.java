@@ -53,9 +53,8 @@ public final class FileTransferStatusProcessor implements Step {
                 body.put("fileUrl", urlPath + "/" + status.transferId() + "/file");
             }
         }
-        exchange.getMessage().removeHeaders("*", Headers.CONTENT_TYPE);
-        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 200);
-        exchange.getMessage().setHeader(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
+        exchange.response().status(200);
+        exchange.response().header(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
         exchange.getMessage().setBody(
                 FileImportProcessor.MAPPER.writeValueAsString(body));
     }

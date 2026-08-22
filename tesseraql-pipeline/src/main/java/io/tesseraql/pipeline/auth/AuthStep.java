@@ -116,7 +116,7 @@ public class AuthStep implements Step {
         String cookieHeader = exchange.getMessage().getHeader("Cookie", String.class);
         String fresh = sessions.rotate(sessions.sessionIdFromCookie(cookieHeader));
         if (fresh != null) {
-            exchange.getMessage().setHeader("Set-Cookie",
+            exchange.response().header("Set-Cookie",
                     io.tesseraql.security.session.SessionCookie.issue(sessions.cookieName(),
                             fresh, io.tesseraql.pipeline.CookiePath.of(exchange)));
         }
@@ -401,9 +401,9 @@ public class AuthStep implements Step {
 
     /** A 302 that ends the route here — the activation redirects, never a rendered page. */
     private static void redirect(Exchange exchange, String location) {
-        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 302);
-        exchange.getMessage().setHeader("Location", location);
-        exchange.getMessage().setHeader(Headers.CONTENT_TYPE, "text/plain; charset=utf-8");
+        exchange.response().status(302);
+        exchange.response().header("Location", location);
+        exchange.response().header(Headers.CONTENT_TYPE, "text/plain; charset=utf-8");
         exchange.getMessage().setBody("");
         exchange.setRouteStop(true);
     }

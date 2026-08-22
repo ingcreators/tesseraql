@@ -69,7 +69,7 @@ final class ResponseHeaders {
                 String headerValue = resolved instanceof Map || resolved instanceof List
                         ? MAPPER.writeValueAsString(resolved)
                         : String.valueOf(resolved);
-                exchange.getMessage().setHeader(name, headerValue);
+                exchange.response().header(name, headerValue);
             } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
                 throw new TqlException(RENDER_ERROR, "Failed to serialize header " + name);
             }

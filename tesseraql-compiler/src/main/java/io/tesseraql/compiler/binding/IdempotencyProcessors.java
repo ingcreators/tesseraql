@@ -62,10 +62,9 @@ public final class IdempotencyProcessors {
                 case IdempotencyStore.Replay replay -> {
                     exchange.setProperty(REPLAY_PROPERTY, true);
                     exchange.getMessage().setBody(replay.body());
-                    exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, replay.status());
+                    exchange.response().status(replay.status());
                     if (replay.contentType() != null) {
-                        exchange.getMessage().setHeader(Headers.CONTENT_TYPE,
-                                replay.contentType());
+                        exchange.response().header(Headers.CONTENT_TYPE, replay.contentType());
                     }
                 }
                 case IdempotencyStore.Conflict conflict ->
@@ -91,11 +90,9 @@ public final class IdempotencyProcessors {
             if (key == null || key.isBlank()) {
                 return;
             }
-            int status = exchange.getMessage().getHeader(Headers.HTTP_RESPONSE_CODE, 200,
-                    Integer.class);
+            int status = exchange.response().statusOr200();
             String body = exchange.getMessage().getBody(String.class);
-            String contentType = exchange.getMessage().getHeader(Headers.CONTENT_TYPE,
-                    String.class);
+            String contentType = exchange.response().header(Headers.CONTENT_TYPE);
             store(exchange).complete(scope, key, status, body, contentType);
         }
     }

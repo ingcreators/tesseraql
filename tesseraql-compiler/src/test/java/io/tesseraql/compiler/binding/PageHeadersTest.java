@@ -26,8 +26,8 @@ class PageHeadersTest {
         Exchange exchange = exchange(Map.of("number", 2L, "size", 20, "hasNext", true,
                 "totalRows", 45L), "/items", "q=bolt&page=2");
         new PageHeaders().process(exchange);
-        assertThat(exchange.getMessage().getHeader("X-Total-Count")).isEqualTo("45");
-        assertThat(exchange.getMessage().getHeader("Link", String.class))
+        assertThat(exchange.response().header("X-Total-Count")).isEqualTo("45");
+        assertThat(exchange.response().header("Link"))
                 .contains("</items?q=bolt&page=3>; rel=\"next\"")
                 .contains("</items?q=bolt&page=1>; rel=\"prev\"");
     }
@@ -37,7 +37,7 @@ class PageHeadersTest {
         Exchange exchange = exchange(Map.of("number", 1L, "size", 2, "hasNext", true,
                 "next", 42), "/items", null);
         new PageHeaders().process(exchange);
-        assertThat(exchange.getMessage().getHeader("Link", String.class))
+        assertThat(exchange.response().header("Link"))
                 .isEqualTo("</items?after=42>; rel=\"next\"");
     }
 
@@ -46,6 +46,6 @@ class PageHeadersTest {
         Exchange exchange = exchange(Map.of("number", 1L, "size", 20, "hasNext", false),
                 "/items", null);
         new PageHeaders().process(exchange);
-        assertThat(exchange.getMessage().getHeader("Link")).isNull();
+        assertThat(exchange.response().header("Link")).isNull();
     }
 }
