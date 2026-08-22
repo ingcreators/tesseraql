@@ -6,7 +6,6 @@ import io.tesseraql.core.expr.EvaluationContext;
 import io.tesseraql.core.inbox.InboxStore;
 import io.tesseraql.pipeline.CookiePath;
 import io.tesseraql.pipeline.Exchange;
-import io.tesseraql.pipeline.Headers;
 import io.tesseraql.pipeline.TesseraqlProperties;
 import io.tesseraql.security.Principal;
 import io.tesseraql.yaml.menu.MenuSpec;
@@ -168,14 +167,14 @@ final class ShellChrome {
         }
         String active = io.tesseraql.security.Activation.actingRole(principal);
         String base = io.tesseraql.pipeline.BasePath.of(exchange.beans());
-        String uri = exchange.getMessage().getHeader(Headers.HTTP_URI, String.class);
+        String uri = exchange.request().uri();
         String path = uri == null
                 ? "/"
                 : uri.indexOf('?') < 0
                         ? uri
                         : uri.substring(0, uri.indexOf('?'));
         String within = path.startsWith(base) ? path.substring(base.length()) : path;
-        String query = exchange.getMessage().getHeader(Headers.HTTP_QUERY, String.class);
+        String query = exchange.request().query();
         String suffix = query == null || query.isBlank() ? "" : "?" + query;
         List<Map<String, Object>> options = new ArrayList<>();
         for (io.tesseraql.security.Principal.RoleGrant grant : held) {
@@ -204,7 +203,7 @@ final class ShellChrome {
      */
     void readThemePreference() {
         cookieTheme = validTheme(cookieValue(
-                exchange.getMessage().getHeader("Cookie", String.class), "tesseraql_theme"));
+                exchange.request().header("Cookie"), "tesseraql_theme"));
         storedTheme = null;
         Principal principal = sessionPrincipal();
         if (principal != null) {
@@ -261,8 +260,7 @@ final class ShellChrome {
                     TesseraqlProperties.SHORTCUT_STORE_BEAN,
                     ShortcutStore.class);
             if (shortcutStore != null) {
-                String currentHref = exchange.getMessage().getHeader(Headers.HTTP_URI,
-                        String.class);
+                String currentHref = exchange.request().uri();
                 List<Map<String, Object>> pins = new ArrayList<>();
                 boolean pinnedCurrent = false;
                 for (ShortcutStore.Shortcut pin : shortcutStore

@@ -65,7 +65,7 @@ class HtmlResponseRendererViewTest {
         Exchange exchange = new Exchange(
                 Beans.NONE);
         exchange.setProperty(TesseraqlProperties.CONTEXT, context);
-        requestHeaders.forEach((name, value) -> exchange.getMessage().setHeader(name, value));
+        requestHeaders.forEach((name, value) -> exchange.request().header(name, value));
         renderer.process(exchange);
         return exchange;
     }

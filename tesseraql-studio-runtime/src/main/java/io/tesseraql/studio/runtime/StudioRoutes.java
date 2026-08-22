@@ -80,7 +80,7 @@ final class StudioRoutes {
 
         pipelines.pipeline("studio.explorer")
                 .process(AUTH).process(json(exchange -> studio
-                        .explorer(exchange.getMessage().getHeader("q", String.class))));
+                        .explorer(exchange.request().param("q"))));
 
         pipelines.pipeline("studio.source")
                 .process(AUTH).process(json(exchange -> {
@@ -213,7 +213,7 @@ final class StudioRoutes {
 
     /** An optional boolean query flag: true only when the header is exactly {@code "true"}. */
     private static boolean flag(Exchange exchange, String name) {
-        return "true".equals(exchange.getMessage().getHeader(name, String.class));
+        return "true".equals(exchange.request().param(name));
     }
 
     /** The audit actor: the authenticated caller's login id (or subject), or null (backlog D6). */
@@ -232,7 +232,7 @@ final class StudioRoutes {
     }
 
     private static String require(Exchange exchange, String name) {
-        String value = exchange.getMessage().getHeader(name, String.class);
+        String value = exchange.request().param(name);
         if (value == null || value.isBlank()) {
             throw new io.tesseraql.core.error.TqlException(
                     new io.tesseraql.core.error.TqlErrorCode(

@@ -38,7 +38,7 @@ public final class LocaleResolution implements Step {
                 return tag;
             }
         }
-        String header = exchange.getMessage().getHeader("Accept-Language", String.class);
+        String header = exchange.request().header("Accept-Language");
         String negotiated = negotiate(header);
         return negotiated != null ? negotiated : settings.defaultTag();
     }
@@ -46,9 +46,7 @@ public final class LocaleResolution implements Step {
     /** Reads one preference source; the context map is not built yet, so query reads headers. */
     private static String preference(Exchange exchange, String source) {
         if (source.startsWith("query.")) {
-            // platform-http exposes query parameters as message headers.
-            return exchange.getMessage().getHeader(
-                    source.substring("query.".length()), String.class);
+            return exchange.request().param(source.substring("query.".length()));
         }
         if (source.startsWith("preference.")) {
             // The stored user preference (roadmap Phase 48): resolved through the runtime's

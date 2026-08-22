@@ -14,9 +14,6 @@ import io.tesseraql.pipeline.HttpMounts;
 import io.tesseraql.pipeline.RuntimeContext;
 import io.tesseraql.pipeline.TesseraqlProperties;
 import io.tesseraql.pipeline.auth.AuthStep;
-import java.net.URLDecoder;
-import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -96,33 +93,11 @@ final class IamAdminRoutes {
     }
 
     /**
-     * Every value of a repeated urlencoded form field. platform-http pre-parses a browser
-     * form post into a Map body (the LoginRoutes precedent) — a repeated field may
-     * arrive as a collection value — and a raw string body is parsed by hand otherwise.
+     * Every value of a repeated urlencoded form field: the form has one representation, and it
+     * is multi-valued by construction (docs/vertx-native.md decision 2).
      */
     private static List<String> formValues(Exchange exchange, String name) {
-        List<String> values = new ArrayList<>();
-        Object body = exchange.getMessage().getBody();
-        if (body instanceof Map<?, ?> form) {
-            Object value = form.get(name);
-            if (value instanceof Iterable<?> many) {
-                many.forEach(each -> values.add(String.valueOf(each)));
-            } else if (value != null) {
-                values.add(String.valueOf(value));
-            }
-            return values;
-        }
-        String raw = exchange.getMessage().getBody(String.class);
-        if (raw != null && !raw.isBlank()) {
-            for (String pair : raw.split("&")) {
-                int eq = pair.indexOf('=');
-                if (eq > 0 && name.equals(URLDecoder.decode(pair.substring(0, eq),
-                        StandardCharsets.UTF_8))) {
-                    values.add(URLDecoder.decode(pair.substring(eq + 1),
-                            StandardCharsets.UTF_8));
-                }
-            }
-        }
-        return values;
+        List<String> values = exchange.request().formFields().get(name);
+        return values == null ? List.of() : values;
     }
 }

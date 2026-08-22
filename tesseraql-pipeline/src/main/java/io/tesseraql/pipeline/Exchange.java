@@ -23,6 +23,7 @@ public final class Exchange {
 
     private final Beans beans;
     private final Message message = new Message();
+    private final Request request = new Request();
     private final Response response = new Response();
     private final Map<String, Object> properties = new LinkedHashMap<>();
     private final List<Completion> completions = new ArrayList<>();
@@ -36,6 +37,15 @@ public final class Exchange {
 
     public Message getMessage() {
         return message;
+    }
+
+    /**
+     * The request as it arrived (docs/vertx-native.md structural decision 1): wire headers,
+     * metadata, and parameters, each in its own place. Immutable in spirit — the edge fills it,
+     * steps read it — though a caller that builds an exchange by hand fills it the same way.
+     */
+    public Request request() {
+        return request;
     }
 
     /**

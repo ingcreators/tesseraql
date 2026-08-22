@@ -44,7 +44,7 @@ public final class IdempotencyProcessors {
 
         @Override
         public void process(io.tesseraql.pipeline.Exchange exchange) {
-            String key = exchange.getMessage().getHeader(KEY_HEADER, String.class);
+            String key = exchange.request().header(KEY_HEADER);
             if (key == null || key.isBlank()) {
                 if (required) {
                     throw new TqlException(KEY_REQUIRED,
@@ -86,7 +86,7 @@ public final class IdempotencyProcessors {
             if (Boolean.TRUE.equals(exchange.getProperty(REPLAY_PROPERTY))) {
                 return;
             }
-            String key = exchange.getMessage().getHeader(KEY_HEADER, String.class);
+            String key = exchange.request().header(KEY_HEADER);
             if (key == null || key.isBlank()) {
                 return;
             }
@@ -107,8 +107,8 @@ public final class IdempotencyProcessors {
     }
 
     private static String requestHash(Exchange exchange) {
-        String method = exchange.getMessage().getHeader(Headers.HTTP_METHOD, "", String.class);
-        String path = exchange.getMessage().getHeader(Headers.HTTP_PATH, "", String.class);
+        String method = exchange.request().method() == null ? "" : exchange.request().method();
+        String path = exchange.request().path() == null ? "" : exchange.request().path();
         String body = exchange.getMessage().getBody(String.class);
         if (body == null) {
             body = "";

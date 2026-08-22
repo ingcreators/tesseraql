@@ -52,7 +52,7 @@ public final class AttachmentUploadProcessor implements Step {
         if (service == null) {
             throw new TqlException(NO_SERVICE, "Attachment service is not configured");
         }
-        String recordId = exchange.getMessage().getHeader(recordKey, String.class);
+        String recordId = exchange.request().param(recordKey);
         UploadPart part = resolvePart(exchange);
         try (InputStream content = part.content()) {
             if (content == null) {
@@ -102,7 +102,7 @@ public final class AttachmentUploadProcessor implements Step {
         exchange.response().status(201);
         // 201 identifies what it created (docs/vocabulary-cleanup.md slice 3): the
         // attachment's own subtree URL under the upload path.
-        String uri = exchange.getMessage().getHeader(Headers.HTTP_URI, String.class);
+        String uri = exchange.request().uri();
         if (uri != null && !uri.isBlank()) {
             exchange.response().header("Location", uri + "/" + a.id());
         }
@@ -112,18 +112,18 @@ public final class AttachmentUploadProcessor implements Step {
 
     /** The uploaded part: the first multipart file part (preferring {@code file}), or the raw body. */
     private static UploadPart resolvePart(Exchange exchange) throws Exception {
-        String contentType = exchange.getMessage().getHeader(Headers.CONTENT_TYPE, String.class);
+        String contentType = exchange.request().header(Headers.CONTENT_TYPE);
         if (contentType != null
                 && contentType.toLowerCase(Locale.ROOT).startsWith("multipart/")) {
-            java.util.Map<String, jakarta.activation.DataHandler> attachments = exchange
-                    .getMessage().attachments();
-            if (attachments != null && !attachments.isEmpty()) {
-                jakarta.activation.DataHandler handler = attachments.get("file");
+            java.util.Map<String, io.tesseraql.pipeline.Part> attachments = exchange
+                    .request().attachments();
+            if (!attachments.isEmpty()) {
+                io.tesseraql.pipeline.Part handler = attachments.get("file");
                 if (handler == null) {
                     handler = attachments.values().iterator().next();
                 }
-                return new UploadPart(handler.getName(), handler.getContentType(),
-                        handler.getInputStream());
+                return new UploadPart(handler.filename(), handler.contentType(),
+                        handler.open());
             }
         }
         Object raw = exchange.getMessage().getBody();

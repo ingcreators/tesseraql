@@ -62,17 +62,17 @@ final class WorkshopRoutes {
     }
 
     private void answerPublic(Exchange exchange) throws Exception {
-        String op = exchange.getMessage().getHeader("op", String.class);
+        String op = exchange.request().param("op");
         if (op == null || !WorkshopOps.PUBLIC.contains(op)) {
             throw WorkshopTargets.notFound(op);
         }
         Map<String, Object> params = new LinkedHashMap<>(StudioSupport.parseQueryString(
-                exchange.getMessage().getHeader(Headers.HTTP_QUERY, String.class)));
+                exchange.request().query()));
         respond(exchange, op, params);
     }
 
     private void answer(Exchange exchange, String verb) throws Exception {
-        String op = exchange.getMessage().getHeader("op", String.class);
+        String op = exchange.request().param("op");
         Principal principal = exchange.getProperty(TesseraqlProperties.PRINCIPAL,
                 Principal.class);
         java.util.List<String> permissions = principal == null
@@ -88,7 +88,7 @@ final class WorkshopRoutes {
         }
         Map<String, Object> params = "GET".equals(verb)
                 ? new LinkedHashMap<>(StudioSupport.parseQueryString(
-                        exchange.getMessage().getHeader(Headers.HTTP_QUERY, String.class)))
+                        exchange.request().query()))
                 : formParams(exchange);
         // Identity is the member's own verdict, never the wire's.
         params.put("permissions", permissions);
@@ -118,12 +118,8 @@ final class WorkshopRoutes {
     /** The urlencoded form: platform-http pre-parses it to a map body; a raw string is parsed. */
     private static Map<String, Object> formParams(Exchange exchange) {
         Map<String, Object> params = new LinkedHashMap<>();
-        Object body = exchange.getMessage().getBody();
-        if (body instanceof Map<?, ?> form) {
-            form.forEach((key, value) -> params.put(String.valueOf(key), value));
-        } else if (body instanceof String raw) {
-            params.putAll(StudioSupport.parseQueryString(raw));
-        }
+        exchange.request().formFields()
+                .forEach((name, values) -> params.put(name, values.get(0)));
         return params;
     }
 }

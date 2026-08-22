@@ -4,7 +4,6 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
@@ -28,7 +27,6 @@ public final class Message {
      */
     private final Map<String, Object> headers = new java.util.TreeMap<>(
             String.CASE_INSENSITIVE_ORDER);
-    private final Map<String, jakarta.activation.DataHandler> attachments = new LinkedHashMap<>();
     private Object body;
 
     /** The header's value, or null. */
@@ -108,68 +106,6 @@ public final class Message {
 
     public void setBody(Object body) {
         this.body = body;
-    }
-
-    /**
-     * Uploaded parts, by field name.
-     *
-     * <p>Three processors read these and the edge writes them; a {@code DataSource} because that
-     * is what a part is — a name, a content type and a stream you may read once.
-     */
-    public Map<String, jakarta.activation.DataHandler> attachments() {
-        return attachments;
-    }
-
-    /** A file on disk as an uploaded part, under the name the client gave it. */
-    public static jakarta.activation.DataHandler part(java.nio.file.Path file, String contentType,
-            String filename) {
-        return new jakarta.activation.DataHandler(new jakarta.activation.DataSource() {
-            @Override
-            public InputStream getInputStream() throws IOException {
-                return java.nio.file.Files.newInputStream(file);
-            }
-
-            @Override
-            public java.io.OutputStream getOutputStream() {
-                throw new UnsupportedOperationException("An uploaded part is read-only");
-            }
-
-            @Override
-            public String getContentType() {
-                return contentType == null ? "application/octet-stream" : contentType;
-            }
-
-            @Override
-            public String getName() {
-                return filename == null ? file.getFileName().toString() : filename;
-            }
-        });
-    }
-
-    /** Bytes as an uploaded part. */
-    public static jakarta.activation.DataHandler part(String name, byte[] bytes,
-            String contentType) {
-        return new jakarta.activation.DataHandler(new jakarta.activation.DataSource() {
-            @Override
-            public InputStream getInputStream() {
-                return new ByteArrayInputStream(bytes);
-            }
-
-            @Override
-            public java.io.OutputStream getOutputStream() {
-                throw new UnsupportedOperationException("An uploaded part is read-only");
-            }
-
-            @Override
-            public String getContentType() {
-                return contentType == null ? "application/octet-stream" : contentType;
-            }
-
-            @Override
-            public String getName() {
-                return name;
-            }
-        });
     }
 
     /** The framework's own conversions, declared rather than discovered. */

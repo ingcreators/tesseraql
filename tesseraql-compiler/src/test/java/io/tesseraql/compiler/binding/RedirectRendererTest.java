@@ -70,7 +70,7 @@ class RedirectRendererTest {
 
         Exchange htmx = new Exchange(context.beans());
         htmx.setProperty(TesseraqlProperties.CONTEXT, Map.of("params", Map.of("id", 42)));
-        htmx.getMessage().setHeader("HX-Request", "true");
+        htmx.request().header("HX-Request", "true");
         renderer.process(htmx);
         assertThat(htmx.response().header("HX-Redirect")).isEqualTo("/apps/shop-a/items/42");
     }
@@ -95,7 +95,7 @@ class RedirectRendererTest {
                 Beans.NONE);
         exchange.setProperty(TesseraqlProperties.CONTEXT, Map.of("params", Map.of("id", 42)));
         if (hxRequest != null) {
-            exchange.getMessage().setHeader("HX-Request", hxRequest);
+            exchange.request().header("HX-Request", hxRequest);
         }
         return exchange;
     }

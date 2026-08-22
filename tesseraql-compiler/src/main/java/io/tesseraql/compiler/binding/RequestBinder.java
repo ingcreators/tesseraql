@@ -6,7 +6,6 @@ import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.expr.EvaluationContext;
 import io.tesseraql.pipeline.Exchange;
-import io.tesseraql.pipeline.Headers;
 import io.tesseraql.pipeline.Step;
 import io.tesseraql.pipeline.TesseraqlProperties;
 import io.tesseraql.yaml.model.Binding;
@@ -46,8 +45,6 @@ public final class RequestBinder implements Step {
      */
     private final String urlPath;
     private final java.util.List<String> pathParams;
-    /** Declared path-parameter name → the router's wire name (WireNames). */
-    private final Map<String, String> wireNames;
     private final java.nio.file.Path appHome;
     private final ObjectMapper mapper = new ObjectMapper();
     /** Pre-compiled {@code requiredWhen} conditions (roadmap Phase 40) — bad syntax fails the build. */
@@ -72,7 +69,7 @@ public final class RequestBinder implements Step {
         this.route = route;
         this.urlPath = urlPath;
         this.pathParams = declaredPathParams(urlPath);
-        this.wireNames = WireNames.of(this.pathParams);
+
         this.appHome = appHome;
         route.input().forEach((name, field) -> {
             if (field.requiredWhen() != null && !field.requiredWhen().isBlank()) {
@@ -188,16 +185,20 @@ public final class RequestBinder implements Step {
         exchange.setProperty(TesseraqlProperties.CONTEXT, context);
         exchange.setProperty(TesseraqlProperties.SQL_PARAMS, resolveSqlParams(context));
 
-        // Declared inputs are bound into the context now; drop their message headers so inbound
-        // form fields (platform-http exposes them as headers, possibly multi-line) are not echoed
-        // back as response headers.
-        for (String name : route.input().keySet()) {
-            exchange.getMessage().removeHeader(name);
-        }
     }
 
     private Map<String, Object> parseBody(Exchange exchange) {
-        // platform-http parses browser form posts into a Map body; use it directly.
+        // A form has one representation (docs/vertx-native.md decision 2): the edge parsed it
+        // into request().formFields(), and the third path this used to carry — parsing a raw
+        // urlencoded body itself — parsed what the edge had already parsed.
+        if (!exchange.request().formFields().isEmpty()) {
+            Map<String, Object> form = new LinkedHashMap<>();
+            exchange.request().formFields().forEach((name, values) -> form.put(name,
+                    values.size() == 1 ? values.get(0) : new java.util.ArrayList<>(values)));
+            return form;
+        }
+        // A programmatic caller (an MCP primitive, a delegated workflow step) hands the bound
+        // values as a Map body; use it directly.
         if (exchange.getMessage().getBody() instanceof Map<?, ?> formBody) {
             Map<String, Object> form = new LinkedHashMap<>();
             formBody.forEach((key, value) -> form.put(String.valueOf(key), value));
@@ -207,10 +208,6 @@ public final class RequestBinder implements Step {
         if (raw == null || raw.isBlank()) {
             return Map.of();
         }
-        String contentType = exchange.getMessage().getHeader(Headers.CONTENT_TYPE, String.class);
-        if (contentType != null && contentType.contains("application/x-www-form-urlencoded")) {
-            return parseForm(raw);
-        }
         try {
             @SuppressWarnings("unchecked")
             Map<String, Object> parsed = mapper.readValue(raw, Map.class);
@@ -218,22 +215,6 @@ public final class RequestBinder implements Step {
         } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
             throw new TqlException(FIELD_REJECTED, "Request body is not valid JSON");
         }
-    }
-
-    /** Parses a browser form post body so command routes accept plain HTML forms (design ch. 6.4). */
-    private static Map<String, Object> parseForm(String raw) {
-        Map<String, Object> form = new LinkedHashMap<>();
-        for (String pair : raw.split("&")) {
-            int eq = pair.indexOf('=');
-            if (eq < 0) {
-                continue;
-            }
-            form.put(java.net.URLDecoder.decode(pair.substring(0, eq),
-                    java.nio.charset.StandardCharsets.UTF_8),
-                    java.net.URLDecoder.decode(pair.substring(eq + 1),
-                            java.nio.charset.StandardCharsets.UTF_8));
-        }
-        return form;
     }
 
     private void guardMassAssignment(Exchange exchange, Map<String, Object> body) {
@@ -299,42 +280,27 @@ public final class RequestBinder implements Step {
         if (body.containsKey(name) && body.get(name) != null) {
             return String.valueOf(body.get(name));
         }
-        return exchange.getMessage().getHeader(name, String.class);
+        java.util.List<String> query = exchange.request().queryParams().get(name);
+        if (query != null && !query.isEmpty()) {
+            return query.get(0);
+        }
+        return exchange.request().header(name);
     }
 
     /**
-     * The request's path parameters, read off the URL against this route's own template.
+     * The request's path parameters: what the router matched, under the declared names.
      *
-     * <p>Not off the message headers the router publishes them in: the transport puts query
-     * parameters and form-body fields there too, under their own names, so a query parameter
-     * sharing a path parameter's name arrives joined with it and a body field of that name
-     * replaces it. {@code path.id} means the URL.
-     *
-     * <p>A document reached without a URL of its own (an MCP primitive, a delegated workflow
-     * step) declares no path parameters, so this is empty and nothing reads it.
+     * <p>{@code path.id} means the URL, and this is the URL — the edge maps the router's
+     * wire-safe stand-ins back before any step runs (docs/vertx-native.md decision 2), so the
+     * re-parse that used to recover these from the URI string has nothing left to recover. A
+     * document reached without a URL of its own (an MCP primitive, a delegated workflow step)
+     * declares no path parameters, so this is empty and nothing reads it.
      */
     private Map<String, String> pathValues(Exchange exchange) {
         if (pathParams.isEmpty()) {
             return Map.of();
         }
-        String requestPath = exchange.getMessage()
-                .getHeader(Headers.HTTP_URI, String.class);
-        Map<String, String> values = io.tesseraql.core.http.PathTemplate.values(urlPath,
-                requestPath);
-        if (!values.isEmpty()) {
-            return values;
-        }
-        // No URL to read (a direct: invocation of a mounted route, a test harness): fall back
-        // to the router's headers, which is what this always used and is correct whenever
-        // nothing else claimed those names.
-        Map<String, String> fallback = new LinkedHashMap<>();
-        for (String name : pathParams) {
-            String header = exchange.getMessage().getHeader(wireNames.get(name), String.class);
-            if (header != null) {
-                fallback.put(name, header);
-            }
-        }
-        return fallback;
+        return exchange.request().pathParams();
     }
 
     /** The {@code {name}} parameters a URL template declares, in template order. */

@@ -45,7 +45,7 @@ class LocaleResolutionTest {
     void principalPreferenceWinsOverAcceptLanguage() {
         Exchange exchange = exchange();
         exchange.setProperty(TesseraqlProperties.PRINCIPAL, principalWithLocale("ja"));
-        exchange.getMessage().setHeader("Accept-Language", "en");
+        exchange.request().header("Accept-Language", "en");
 
         assertThat(resolved(exchange)).isEqualTo("ja");
     }
@@ -62,7 +62,7 @@ class LocaleResolutionTest {
     void unsupportedPreferenceFallsThroughToAcceptLanguage() {
         Exchange exchange = exchange();
         exchange.setProperty(TesseraqlProperties.PRINCIPAL, principalWithLocale("de-DE"));
-        exchange.getMessage().setHeader("Accept-Language", "fr;q=0.9, ja;q=0.8");
+        exchange.request().header("Accept-Language", "fr;q=0.9, ja;q=0.8");
 
         assertThat(resolved(exchange)).isEqualTo("ja");
     }
@@ -70,7 +70,7 @@ class LocaleResolutionTest {
     @Test
     void acceptLanguageNegotiatesByQuality() {
         Exchange exchange = exchange();
-        exchange.getMessage().setHeader("Accept-Language", "ja;q=0.9, en;q=1.0");
+        exchange.request().header("Accept-Language", "ja;q=0.9, en;q=1.0");
 
         assertThat(resolved(exchange)).isEqualTo("en");
     }
@@ -83,7 +83,7 @@ class LocaleResolutionTest {
     @Test
     void malformedAcceptLanguageFallsBackToDefault() {
         Exchange exchange = exchange();
-        exchange.getMessage().setHeader("Accept-Language", ";;;not-a-header");
+        exchange.request().header("Accept-Language", ";;;not-a-header");
 
         assertThat(resolved(exchange)).isEqualTo("en");
     }
@@ -129,7 +129,7 @@ class LocaleResolutionTest {
         I18nSettings settings = new I18nSettings("en", List.of("en", "ja"),
                 List.of("query.lang"), MessageCatalog.empty());
         Exchange exchange = exchange();
-        exchange.getMessage().setHeader("lang", "ja");
+        exchange.request().queryParams().put("lang", java.util.List.of("ja"));
 
         new LocaleResolution(settings).process(exchange);
 

@@ -1,7 +1,6 @@
 package io.tesseraql.compiler.binding;
 
 import io.tesseraql.pipeline.Exchange;
-import io.tesseraql.pipeline.Headers;
 import io.tesseraql.pipeline.Step;
 import io.tesseraql.pipeline.TesseraqlProperties;
 import java.util.Map;
@@ -27,12 +26,12 @@ public final class PageHeaders implements Step {
         if (page.get("totalRows") instanceof Number total) {
             exchange.response().header("X-Total-Count", String.valueOf(total.longValue()));
         }
-        String uri = exchange.getMessage().getHeader(Headers.HTTP_URI, String.class);
+        String uri = exchange.request().uri();
         if (uri == null) {
             return;
         }
         String path = uri.indexOf('?') < 0 ? uri : uri.substring(0, uri.indexOf('?'));
-        String query = exchange.getMessage().getHeader(Headers.HTTP_QUERY, String.class);
+        String query = exchange.request().query();
         StringBuilder link = new StringBuilder();
         Object next = page.get("next");
         boolean hasNext = Boolean.TRUE.equals(page.get("hasNext"));

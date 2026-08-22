@@ -33,7 +33,7 @@ public final class TenantResolution implements Step {
     @Override
     public void process(Exchange exchange) {
         String tenantId = switch (settings.resolver()) {
-            case HEADER -> exchange.getMessage().getHeader(settings.source(), String.class);
+            case HEADER -> exchange.request().header(settings.source());
             case CLAIM -> fromPrincipal(exchange);
             case HOST -> fromHost(exchange);
         };
@@ -64,7 +64,7 @@ public final class TenantResolution implements Step {
      * required): a crafted Host header can never smuggle an arbitrary tenant id.
      */
     private String fromHost(Exchange exchange) {
-        String host = exchange.getMessage().getHeader("Host", String.class);
+        String host = exchange.request().header("Host");
         if (host == null || host.isBlank()) {
             return null;
         }

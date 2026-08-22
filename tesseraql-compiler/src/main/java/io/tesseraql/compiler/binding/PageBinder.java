@@ -52,7 +52,7 @@ public final class PageBinder implements Step {
     }
 
     private static long positiveLong(Exchange exchange, String name, long fallback) {
-        String raw = exchange.getMessage().getHeader(name, String.class);
+        String raw = exchange.request().param(name);
         if (raw == null || raw.isBlank()) {
             return fallback;
         }

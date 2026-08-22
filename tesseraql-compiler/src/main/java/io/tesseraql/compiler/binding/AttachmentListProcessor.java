@@ -38,7 +38,7 @@ public final class AttachmentListProcessor implements Step {
         if (service == null) {
             throw new TqlException(NO_SERVICE, "Attachment service is not configured");
         }
-        String recordId = exchange.getMessage().getHeader(recordKey, String.class);
+        String recordId = exchange.request().param(recordKey);
         List<Map<String, Object>> items = new ArrayList<>();
         for (AttachmentStore.Attachment a : service.list(entity, recordId)) {
             Map<String, Object> item = new LinkedHashMap<>();

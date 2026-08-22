@@ -39,8 +39,8 @@ public final class AttachmentDownloadProcessor implements Step {
         if (service == null) {
             throw new TqlException(NO_SERVICE, "Attachment service is not configured");
         }
-        String recordId = exchange.getMessage().getHeader(recordKey, String.class);
-        String attachmentId = exchange.getMessage().getHeader(idParam, String.class);
+        String recordId = exchange.request().param(recordKey);
+        String attachmentId = exchange.request().param(idParam);
         Optional<AttachmentService.Fetched> fetched = service.fetch(attachmentId, entity, recordId);
         if (fetched.isEmpty()) {
             throw new TqlException(UNKNOWN, "Unknown attachment: " + attachmentId);

@@ -40,7 +40,7 @@ class TenantResolutionTest {
         TenancySettings settings = new TenancySettings(
                 true, "shared-schema", ResolverType.HEADER, "X-Tenant-Id", true);
         Exchange exchange = exchange();
-        exchange.getMessage().setHeader("X-Tenant-Id", "acme");
+        exchange.request().header("X-Tenant-Id", "acme");
 
         new TenantResolution(settings).process(exchange);
 
@@ -113,7 +113,7 @@ class TenantResolutionTest {
         TenantResolution resolution = new TenantResolution(settings);
 
         Exchange exchange = exchange();
-        exchange.getMessage().setHeader("Host", "Acme.example.com:8443");
+        exchange.request().header("Host", "Acme.example.com:8443");
         resolution.process(exchange);
         assertThat(exchange.getProperty(TesseraqlProperties.TENANT, TenantContext.class).id())
                 .isEqualTo("acme");
@@ -122,7 +122,7 @@ class TenantResolutionTest {
         for (String host : List.of("acme.other.com", "a.b.example.com", "ac_me.example.com",
                 "example.com")) {
             Exchange denied = exchange();
-            denied.getMessage().setHeader("Host", host);
+            denied.request().header("Host", host);
             assertThatThrownBy(() -> resolution.process(denied))
                     .isInstanceOf(TqlException.class)
                     .hasMessageContaining("TQL-TENANT-4001");

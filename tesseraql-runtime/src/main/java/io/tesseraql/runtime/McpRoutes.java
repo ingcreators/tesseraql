@@ -3,7 +3,6 @@ package io.tesseraql.runtime;
 import io.tesseraql.compiler.pipeline.Pipeline;
 import io.tesseraql.compiler.pipeline.Pipelines;
 import io.tesseraql.mcp.McpHttpHandler;
-import io.tesseraql.pipeline.Headers;
 import io.tesseraql.pipeline.HttpMounts;
 import io.tesseraql.pipeline.RuntimeContext;
 import io.tesseraql.pipeline.Step;
@@ -49,10 +48,10 @@ final class McpRoutes {
     private Step bridge() {
         return exchange -> {
             McpHttpHandler.Request request = new McpHttpHandler.Request(
-                    exchange.getMessage().getHeader(Headers.HTTP_METHOD, "POST", String.class),
-                    exchange.getMessage().getHeader("Authorization", String.class),
-                    exchange.getMessage().getHeader(McpHttpHandler.SESSION_HEADER, String.class),
-                    exchange.getMessage().getHeader("MCP-Protocol-Version", String.class),
+                    exchange.request().method() == null ? "POST" : exchange.request().method(),
+                    exchange.request().header("Authorization"),
+                    exchange.request().header(McpHttpHandler.SESSION_HEADER),
+                    exchange.request().header("MCP-Protocol-Version"),
                     exchange.getMessage().getBody(String.class));
             McpHttpHandler.Response response = handler.handle(request);
             exchange.response().status(response.status());

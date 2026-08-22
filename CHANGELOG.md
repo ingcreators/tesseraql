@@ -136,6 +136,23 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **A parameter has a source, and the source is declared** (docs/vertx-native.md structural
+  decisions 1 and 2, slice 4). The request is its own object now: wire headers, metadata
+  (method, path, URI, query, peer addresses) and parameters each in their own place, with one
+  merged view — `param()`, path then query then form, declared once — instead of a bag whose
+  insertion order decided which value won. What leaves with the bag: the inbound header filter
+  and the `tql.` prefix rule with its acting-role trap (internal state no longer shares a
+  namespace with the wire); the runtime URL re-parse (`PathTemplate`) that recovered path
+  parameters the router had already matched, in the binder and in the policy gate both; the
+  form's three representations (fields into headers, a Map body, and per-module urlencoded
+  re-parsers in login, OAuth consent, IAM admin, SAML and the workshop); and the two query
+  constants whose "decoded" contract had been documentation-only since the edge rewrite —
+  `query()` is raw, which is what every reader needed. Uploaded parts are the framework's own
+  `Part` (a name, a content type, a stream), taking the undeclared transitive
+  `jakarta.activation` dependency out of the pipeline module. Wire-safe path-parameter
+  stand-ins (`p0`) are confined to the edge: the router mounts them, the request builder maps
+  them back, and no step ever sees one.
+
 - **A response is its own object, and the wire is that object and nothing else**
   (docs/vertx-native.md structural decision 1, slice 3). The message used to be one bag holding
   the request, its parameters, and the response being written — and three mechanisms existed only

@@ -1865,17 +1865,16 @@ public final class RouteCompiler {
     /**
      * Records where a route answers (docs/http-edge.md decision 1).
      *
-     * <p>The router-facing template swaps non-wire-safe parameter names for positional stand-ins;
-     * the RequestBinder maps them back to the declared names (WireNames). The base path is not
-     * put on here: it used to arrive from the REST configuration this replaces, and the runtime's
-     * edge applies it at the mount, which is the one place that now knows about URLs at all
-     * (docs/base-path.md decision 5).
+     * <p>The mount carries the declared template as written; the runtime's edge swaps
+     * non-wire-safe parameter names for positional stand-ins on the way onto the router and maps
+     * the matched values back, so no step ever sees a {@code p0}
+     * (docs/vertx-native.md decision 2). The base path is applied at the edge too, the one place
+     * that now knows about URLs at all (docs/base-path.md decision 5).
      */
     private void mount(RuntimeContext context, String method, String path, String pipeline) {
-        String wirePath = io.tesseraql.compiler.binding.WireNames.wirePath(path);
         switch (method) {
             case "GET", "POST", "PUT", "PATCH", "DELETE" -> io.tesseraql.pipeline.HttpMounts
-                    .of(context).mount(method, wirePath, pipeline);
+                    .of(context).mount(method, path, pipeline);
             default ->
                 throw new TqlException(UNSUPPORTED_RECIPE, "Unsupported HTTP method: " + method);
         }

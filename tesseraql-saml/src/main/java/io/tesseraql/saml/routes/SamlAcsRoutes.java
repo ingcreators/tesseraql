@@ -21,7 +21,6 @@ import io.tesseraql.security.Principal;
 import io.tesseraql.security.federation.FederationErrors;
 import io.tesseraql.security.session.LoginRedirects;
 import io.tesseraql.security.session.SessionStore;
-import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Base64;
@@ -133,7 +132,7 @@ final class SamlAcsRoutes {
         String xml = new AuthnRequest(endpoints.spEntityId(), endpoints.acsUrl(),
                 endpoints.idpSsoUrl())
                 .toXml(requestId, Instant.now());
-        String relayState = exchange.getMessage().getHeader("RelayState", String.class);
+        String relayState = exchange.request().param("RelayState");
         if (security.replayGuard() != null) {
             // The pending id is consumed exactly once when InResponseTo comes back.
             security.replayGuard().storeRequest(requestId, relayState);
@@ -147,13 +146,13 @@ final class SamlAcsRoutes {
      * and answer with a LogoutResponse redirect (design ch. 10.14).
      */
     private void inboundLogout(Exchange exchange) {
-        String encoded = exchange.getMessage().getHeader("SAMLRequest", String.class);
+        String encoded = exchange.request().param("SAMLRequest");
         if (encoded == null) {
             throw new SamlException("Missing SAMLRequest");
         }
-        String relayState = exchange.getMessage().getHeader("RelayState", String.class);
-        String sigAlg = exchange.getMessage().getHeader("SigAlg", String.class);
-        String signature = exchange.getMessage().getHeader("Signature", String.class);
+        String relayState = exchange.request().param("RelayState");
+        String sigAlg = exchange.request().param("SigAlg");
+        String signature = exchange.request().param("Signature");
         if (security.requireSignedLogout() || signature != null) {
             if (security.idpKey() == null) {
                 throw new SamlException("No pinned IdP key to verify the logout signature");
@@ -163,7 +162,7 @@ final class SamlAcsRoutes {
         }
         LogoutRequest.Parsed request = LogoutRequest.parse(SamlRedirect.decodeAndInflate(encoded));
 
-        String sessionId = cookieValue(exchange.getMessage().getHeader("Cookie", String.class),
+        String sessionId = cookieValue(exchange.request().header("Cookie"),
                 sessions.cookieName());
         sessions.invalidate(sessionId);
         exchange.response().header("Set-Cookie",
@@ -178,7 +177,7 @@ final class SamlAcsRoutes {
 
     /** Single logout: invalidate the local session, clear the cookie, and redirect to the IdP SLO. */
     private void logout(Exchange exchange) {
-        String sessionId = cookieValue(exchange.getMessage().getHeader("Cookie", String.class),
+        String sessionId = cookieValue(exchange.request().header("Cookie"),
                 sessions.cookieName());
         SessionStore.Session session = sessions.session(sessionId);
         sessions.invalidate(sessionId);
@@ -243,10 +242,8 @@ final class SamlAcsRoutes {
         // not free (docs/credential-throttle.md). The IdP owns the credential; only
         // failures count, so a real login is never throttled.
         String throttleAddress = io.tesseraql.security.session.SessionStore.ClientInfo.of(null,
-                exchange.getMessage().getHeader("X-Forwarded-For", String.class),
-                exchange.getMessage().getHeader(
-                        io.tesseraql.pipeline.Headers.REMOTE_ADDRESS,
-                        String.class))
+                exchange.request().header("X-Forwarded-For"),
+                exchange.request().remoteAddress())
                 .remoteAddr();
         if (throttle != null
                 && throttle.retryAfter("saml", null, throttleAddress).isPresent()) {
@@ -263,11 +260,10 @@ final class SamlAcsRoutes {
     }
 
     private void consumeValidated(Exchange exchange) throws Exception {
-        // platform-http may expose a form field as a header; otherwise parse the urlencoded body.
-        String encoded = exchange.getMessage().getHeader("SAMLResponse", String.class);
-        if (encoded == null) {
-            encoded = formParam(exchange.getMessage().getBody(String.class), "SAMLResponse");
-        }
+        // The POST binding's field is a form field, and the redirect binding's a query
+        // parameter; param() answers both from the request's own maps
+        // (docs/vertx-native.md decision 2).
+        String encoded = exchange.request().param("SAMLResponse");
         if (encoded == null) {
             throw new SamlException("Missing SAMLResponse");
         }
@@ -312,13 +308,9 @@ final class SamlAcsRoutes {
                         principal.subject())));
     }
 
-    /** The RelayState the IdP echoed back (header or form field), URL-decoded, or null. */
+    /** The RelayState the IdP echoed back (query or form field), or null. */
     private static String returnedRelayState(Exchange exchange) {
-        String relayState = exchange.getMessage().getHeader("RelayState", String.class);
-        if (relayState == null) {
-            relayState = formParam(exchange.getMessage().getBody(String.class), "RelayState");
-        }
-        return relayState;
+        return exchange.request().param("RelayState");
     }
 
     /**
@@ -336,10 +328,7 @@ final class SamlAcsRoutes {
                     .consumeRequest(assertion.inResponseTo())
                     .orElseThrow(() -> new SamlException(
                             "InResponseTo does not match a pending request (replay or forgery)"));
-            String returned = exchange.getMessage().getHeader("RelayState", String.class);
-            if (returned == null) {
-                returned = formParam(exchange.getMessage().getBody(String.class), "RelayState");
-            }
+            String returned = exchange.request().param("RelayState");
             if (!storedRelayState.isEmpty() && !storedRelayState.equals(returned)) {
                 throw new SamlException("RelayState does not match the original request");
             }
@@ -418,23 +407,6 @@ final class SamlAcsRoutes {
         }
         List<String> found = assertion.attributes().get(attribute);
         return found == null ? List.of() : List.copyOf(found);
-    }
-
-    private static String formParam(String form, String name) {
-        if (form == null || form.isBlank()) {
-            return null;
-        }
-        for (String pair : form.split("&")) {
-            int eq = pair.indexOf('=');
-            if (eq < 0) {
-                continue;
-            }
-            String key = URLDecoder.decode(pair.substring(0, eq), StandardCharsets.UTF_8);
-            if (name.equals(key)) {
-                return URLDecoder.decode(pair.substring(eq + 1), StandardCharsets.UTF_8);
-            }
-        }
-        return null;
     }
 
     private void unauthorized(Exchange exchange) {

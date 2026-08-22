@@ -53,7 +53,7 @@ public final class HttpCacheProcessor implements Step {
         }
         String tag = "\"" + hex(bytes) + "\"";
         exchange.response().header("ETag", tag);
-        String ifNoneMatch = exchange.getMessage().getHeader("If-None-Match", String.class);
+        String ifNoneMatch = exchange.request().header("If-None-Match");
         if (tag.equals(ifNoneMatch)) {
             exchange.response().status(304);
             exchange.getMessage().setBody("");

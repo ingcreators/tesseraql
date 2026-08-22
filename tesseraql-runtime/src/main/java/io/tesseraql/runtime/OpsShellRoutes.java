@@ -47,12 +47,12 @@ final class OpsShellRoutes {
     private void download(Exchange exchange) throws java.io.IOException {
         Principal principal = exchange.getProperty(TesseraqlProperties.PRINCIPAL, Principal.class);
         Map<String, Object> params = new LinkedHashMap<>();
-        params.put("member", exchange.getMessage().getHeader("member", String.class));
-        params.put("slot", exchange.getMessage().getHeader("slot", String.class));
+        params.put("member", exchange.request().param("member"));
+        params.put("slot", exchange.request().param("slot"));
         params.put("permissions", principal == null ? null : principal.permissions());
         OpsShellProviders.Selected selected = OpsShellProviders.select(params, targets,
                 io.tesseraql.opsui.OpsScope.VIEW_PREFIX);
-        String id = exchange.getMessage().getHeader("id", String.class);
+        String id = exchange.request().param("id");
         String url = targets.downloadUrl(selected.member(), selected.canary(), id);
         if (url == null) {
             // The unhosted boot: the member is this runtime, so the local handler answers. Run
@@ -60,7 +60,7 @@ final class OpsShellRoutes {
             // (docs/camel-removal.md decision 1), and a template was the only way to ask for it.
             exchange.beans().lookup(RoutePipelines.BEAN, RoutePipelines.class)
                     .run("ops.console.transferFile", target -> {
-                        target.getMessage().setHeaders(exchange.getMessage().getHeaders());
+                        target.request().becomeCopyOf(exchange.request());
                         target.getMessage().setBody(exchange.getMessage().getBody());
                     })
                     .ifPresent(answered -> {
@@ -75,7 +75,7 @@ final class OpsShellRoutes {
         java.net.http.HttpRequest.Builder request = java.net.http.HttpRequest
                 .newBuilder(java.net.URI.create(url))
                 .timeout(java.time.Duration.ofSeconds(30));
-        String cookie = exchange.getMessage().getHeader("Cookie", String.class);
+        String cookie = exchange.request().header("Cookie");
         if (cookie != null) {
             request.header("Cookie", cookie);
         }

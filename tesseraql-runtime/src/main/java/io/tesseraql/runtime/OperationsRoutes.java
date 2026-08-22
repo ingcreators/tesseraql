@@ -275,7 +275,7 @@ final class OperationsRoutes {
         pipelines.pipeline("ops.traceSummary")
                 .process(VIEW).process(requireAnyOpsView())
                 .process(jsonProcessor(exchange -> dashboard.traceSummaries(
-                        exchange.getMessage().getHeader("filter", String.class),
+                        exchange.request().param("filter"),
                         viewScope(exchange))));
 
         pipelines.pipeline("ops.traceMetrics")
@@ -304,7 +304,7 @@ final class OperationsRoutes {
                 .process(VIEW)
                 .process(jsonProcessor(exchange -> {
                     io.tesseraql.core.catalog.CatalogStore store = catalogStore(exchange);
-                    String name = exchange.getMessage().getHeader("name", String.class);
+                    String name = exchange.request().param("name");
                     // A catalog belongs to the application this runtime serves, so refreshing
                     // one is acting on that application: tql.ops.run.<thisApp>, and out of
                     // scope reads exactly like unknown.
@@ -410,13 +410,12 @@ final class OperationsRoutes {
                 .process(BROWSER).process(CSRF)
                 .process(jsonProcessor(exchange -> {
                     Map<String, Object> values = new LinkedHashMap<>();
-                    if (exchange.getMessage().getBody() instanceof Map<?, ?> form) {
-                        form.forEach((key, value) -> values.put(String.valueOf(key), value));
-                    }
+                    exchange.request().formFields()
+                            .forEach((name, fields) -> values.put(name, fields.get(0)));
                     Principal principal = exchange.getProperty(TesseraqlProperties.PRINCIPAL,
                             Principal.class);
                     Map<String, Object> params = new LinkedHashMap<>();
-                    params.put("id", exchange.getMessage().getHeader("id", String.class));
+                    params.put("id", exchange.request().param("id"));
                     params.put("values", values);
                     params.put("actor", principal == null ? null : principal.loginId());
                     return invokeProvider(exchange, "ops.jobRun", params);
@@ -454,11 +453,11 @@ final class OperationsRoutes {
         return providers.require(name).invoke(params);
     }
 
-    /** The named headers (path/query/form values) as provider params, nulls kept out. */
+    /** The named path/query/form values as provider params, nulls kept out. */
     private static Map<String, Object> headerParams(Exchange exchange, String... names) {
         Map<String, Object> params = new LinkedHashMap<>();
         for (String name : names) {
-            Object value = exchange.getMessage().getHeader(name);
+            Object value = exchange.request().param(name);
             if (value != null) {
                 params.put(name, value);
             }
@@ -469,13 +468,13 @@ final class OperationsRoutes {
     /** Requeues a FAILED/DEAD event; outside the caller's scope it reads as unknown. */
     private Object redeliverOutboxEvent(Exchange exchange) {
         return actions.redeliverOutbox(
-                exchange.getMessage().getHeader("id", String.class), runScope(exchange));
+                exchange.request().param("id"), runScope(exchange));
     }
 
     /** Requeues a DEAD queue message; outside the caller's scope it reads as unknown. */
     private Object redeliverChannelEvent(Exchange exchange) {
         return actions.redeliverEvent(
-                exchange.getMessage().getHeader("id", String.class), runScope(exchange));
+                exchange.request().param("id"), runScope(exchange));
     }
 
     private Map<String, Object> channelEventMap(io.tesseraql.core.messaging.ChannelEvent event) {
@@ -565,7 +564,7 @@ final class OperationsRoutes {
     }
 
     private Object runJob(Exchange exchange) {
-        String jobId = exchange.getMessage().getHeader("jobId", String.class);
+        String jobId = exchange.request().param("jobId");
         Principal principal = exchange.getProperty(TesseraqlProperties.PRINCIPAL, Principal.class);
         JobExecution execution = actions.runJob(jobId, () -> parseBody(exchange),
                 principal == null ? null : principal.loginId(), runScope(exchange));
@@ -589,7 +588,7 @@ final class OperationsRoutes {
             io.tesseraql.core.error.TqlDomain.BATCH, 4043);
 
     private Object cancelExecution(Exchange exchange) {
-        String id = exchange.getMessage().getHeader("id", String.class);
+        String id = exchange.request().param("id");
         JobExecution execution = actions.findExecution(id, runScope(exchange));
         if (execution == null) {
             throw OpsActions.notFound("Execution '" + id + "'");
@@ -607,7 +606,7 @@ final class OperationsRoutes {
     }
 
     private Object executionDetail(Exchange exchange) {
-        String id = exchange.getMessage().getHeader("id", String.class);
+        String id = exchange.request().param("id");
         JobExecution execution = actions.findExecution(id, viewScope(exchange));
         if (execution == null) {
             throw OpsActions.notFound("Execution '" + id + "'");
@@ -698,7 +697,7 @@ final class OperationsRoutes {
      * download's refusal).
      */
     private void transferFile(Exchange exchange) throws java.io.IOException {
-        String id = exchange.getMessage().getHeader("id", String.class);
+        String id = exchange.request().param("id");
         io.tesseraql.core.files.FileTransferService.TransferStatus status = transfers
                 .status(id).orElse(null);
         if (status == null || !viewScope(exchange).test(status.appName())) {

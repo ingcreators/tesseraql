@@ -102,7 +102,7 @@ final class DeployRoutes {
      * mirrors. Either path throws the standard 401 when the credential does not resolve.
      */
     private Principal authenticate(Exchange exchange) throws Exception {
-        String authorization = exchange.getMessage().getHeader("Authorization", String.class);
+        String authorization = exchange.request().header("Authorization");
         if (authorization != null
                 && authorization.regionMatches(true, 0, "Bearer ", 0, "Bearer ".length())) {
             JwtAuthenticator jwt = exchange.beans().lookup(
@@ -114,7 +114,7 @@ final class DeployRoutes {
             }
             return jwt.authenticate(authorization);
         }
-        String cookie = exchange.getMessage().getHeader("Cookie", String.class);
+        String cookie = exchange.request().header("Cookie");
         Principal principal = new BrowserAuthenticator(sessions).authenticate(cookie);
         new CsrfValidator(sessions).validate(cookie, csrfToken(exchange));
         return principal;
@@ -127,8 +127,8 @@ final class DeployRoutes {
      * attribute platform-http mirrors into a header.
      */
     private static String csrfToken(Exchange exchange) {
-        String header = exchange.getMessage().getHeader("X-CSRF-Token", String.class);
-        return header != null ? header : exchange.getMessage().getHeader("_csrf", String.class);
+        String header = exchange.request().header("X-CSRF-Token");
+        return header != null ? header : exchange.request().param("_csrf");
     }
 
     /**
@@ -140,8 +140,8 @@ final class DeployRoutes {
      */
     private static void respond(Exchange exchange, AppUpgrader.UpgradeResult result,
             boolean canary) throws Exception {
-        boolean htmx = "true".equals(exchange.getMessage().getHeader("HX-Request", String.class));
-        String accept = exchange.getMessage().getHeader("Accept", String.class);
+        boolean htmx = "true".equals(exchange.request().header("HX-Request"));
+        String accept = exchange.request().header("Accept");
         // Inbound form fields surfaced as headers must not echo back onto the response.
         if (htmx || (accept != null && accept.contains("text/html"))) {
             String target = io.tesseraql.pipeline.BasePath.url(exchange,
@@ -180,12 +180,12 @@ final class DeployRoutes {
      * envelope bytes as if they were a package.
      */
     private static InputStream packageStream(Exchange exchange) throws Exception {
-        String contentType = exchange.getMessage().getHeader(Headers.CONTENT_TYPE, String.class);
+        String contentType = exchange.request().header(Headers.CONTENT_TYPE);
         if (contentType != null
                 && contentType.toLowerCase(java.util.Locale.ROOT).startsWith("multipart/")) {
-            java.util.Map<String, jakarta.activation.DataHandler> attachments = exchange
-                    .getMessage().attachments();
-            jakarta.activation.DataHandler part = null;
+            java.util.Map<String, io.tesseraql.pipeline.Part> attachments = exchange
+                    .request().attachments();
+            io.tesseraql.pipeline.Part part = null;
             if (attachments != null && !attachments.isEmpty()) {
                 part = attachments.get("file") != null
                         ? attachments.get("file")
@@ -195,7 +195,7 @@ final class DeployRoutes {
                 throw new TqlException(EMPTY_BODY, "The multipart deploy request carried no"
                         + " file part with the .tqlapp package bytes");
             }
-            return part.getInputStream();
+            return part.open();
         }
         return exchange.getMessage().getBody(InputStream.class);
     }
@@ -221,7 +221,7 @@ final class DeployRoutes {
     }
 
     private static String query(Exchange exchange, String name) {
-        Object value = exchange.getMessage().getHeader(name);
+        Object value = exchange.request().param(name);
         return value == null ? null : String.valueOf(value);
     }
 

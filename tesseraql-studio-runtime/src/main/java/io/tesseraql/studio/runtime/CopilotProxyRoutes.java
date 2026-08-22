@@ -49,7 +49,7 @@ final class CopilotProxyRoutes {
     }
 
     private void forward(Exchange exchange) throws Exception {
-        String member = exchange.getMessage().getHeader("member", String.class);
+        String member = exchange.request().param("member");
         int port;
         try {
             port = origins.port(member, false);
@@ -77,7 +77,7 @@ final class CopilotProxyRoutes {
     }
 
     private static void copyHeader(Exchange exchange, HttpRequest.Builder request, String name) {
-        String value = exchange.getMessage().getHeader(name, String.class);
+        String value = exchange.request().header(name);
         if (value != null) {
             request.header(name, value);
         }
