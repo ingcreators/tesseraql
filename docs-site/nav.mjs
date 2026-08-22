@@ -269,4 +269,6 @@ export const EXCLUDED = [
   'camel-removal.md',
   // The request pipeline's shape after Camel: one bag split into a request and a response, 2026-08-21.
   'vertx-native.md',
+  // Splitting the 2,344-line TesseraqlRuntime.start into named pieces, 2026-08-22.
+  'boot-phases.md',
 ];
