@@ -146,6 +146,13 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **The job runner and the ops dashboard assemble from their own classes**
+  (docs/boot-phases.md slice 3). The runner closures — one execution honouring the declared
+  datasource and per-tenant routing, wrapped in the after-chaining walk — move verbatim to
+  `JobRunners.chained(...)`; the dashboard's probe-builder chain moves to
+  `OpsDashboards.assemble(...)`, taking the trace-log unwrap and the live datasource probe
+  only it uses. Both are pure assembly over already-built stores; behaviour is unchanged.
+
 - **The `ops.*` and `account.*` providers register from their own class**
   (docs/boot-phases.md slice 2). The ~370-line fluent chain that built the runtime's provider
   registry — batch visibility, traces, transfers, outbox, the whole account surface, invites,
