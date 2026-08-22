@@ -429,6 +429,14 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **`response.session.rotate` either rotates or refuses — never a silent no-op.** Only the JSON
+  and command builders applied the declaration; on a page recipe it compiled, booted, and
+  served while rotating nothing — a session-fixation control that silently does not exist, on
+  exactly the post-sign-in confirmation page it is written for. Pages honour it now (safe
+  beside the shell's theme cookie, since every Set-Cookie writer appends), and a recipe with no
+  browser session to rotate — exports, imports, webhooks, queue consumers — refuses the
+  declaration at build time with the recipe named.
+
 - **Set-Cookie appends everywhere a cookie is written.** The response's header map was built
   multi-valued because Set-Cookie repeats (RFC 6265), and then every writer — session issue and
   expiry across login, OIDC and SAML, session rotation, the shell's theme re-sync, and a
