@@ -7,7 +7,6 @@ import io.tesseraql.core.telemetry.RecordingMeter;
 import io.tesseraql.core.telemetry.RecordingTracer;
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.net.ServerSocket;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -53,7 +52,7 @@ class TelemetryIntegrationTest {
     @BeforeAll
     static void start() throws Exception {
         appHome = prepareAppHome();
-        runtime = TesseraqlRuntime.start(appHome, freePort(), TRACER, METER);
+        runtime = TesseraqlRuntime.start(appHome, 0, TRACER, METER);
         seedDatabase();
     }
 
@@ -177,9 +176,4 @@ class TelemetryIntegrationTest {
         }
     }
 
-    private static int freePort() throws IOException {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            return socket.getLocalPort();
-        }
-    }
 }

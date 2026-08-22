@@ -7,7 +7,6 @@ import io.tesseraql.pipeline.TesseraqlProperties;
 import io.tesseraql.security.session.SessionStore;
 import io.tesseraql.security.totp.Totp;
 import java.io.IOException;
-import java.net.ServerSocket;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -43,7 +42,7 @@ class TotpIntegrationTest {
     @BeforeAll
     static void start() throws Exception {
         appHome = prepareAppHome();
-        runtime = TesseraqlRuntime.start(appHome, freePort());
+        runtime = TesseraqlRuntime.start(appHome, 0);
         mainDataSource = runtime.context().lookup("main", javax.sql.DataSource.class);
         try (java.sql.Connection connection = mainDataSource.getConnection();
                 java.sql.Statement statement = connection.createStatement()) {
@@ -202,12 +201,6 @@ class TotpIntegrationTest {
         }
         return response.headers().firstValue("Set-Cookie").map(c -> c.split(";")[0])
                 .orElse(null);
-    }
-
-    private static int freePort() throws IOException {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            return socket.getLocalPort();
-        }
     }
 
     private static Path prepareAppHome() throws IOException {

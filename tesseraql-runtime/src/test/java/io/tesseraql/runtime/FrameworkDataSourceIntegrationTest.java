@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.IOException;
-import java.net.ServerSocket;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
@@ -49,7 +48,7 @@ class FrameworkDataSourceIntegrationTest {
         }
         frameworkUrl = POSTGRES.getJdbcUrl().replaceAll("/[^/?]+(\\?|$)", "/framework_state$1");
         appHome = prepareAppHome();
-        runtime = TesseraqlRuntime.start(appHome, freePort());
+        runtime = TesseraqlRuntime.start(appHome, 0);
     }
 
     @AfterAll
@@ -126,7 +125,7 @@ class FrameworkDataSourceIntegrationTest {
                 """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
                 POSTGRES.getPassword()));
         try {
-            assertThatThrownBy(() -> TesseraqlRuntime.start(broken, freePort()))
+            assertThatThrownBy(() -> TesseraqlRuntime.start(broken, 0))
                     .hasMessageContaining("no-such-pool")
                     .hasMessageContaining("tesseraql.framework.datasource");
         } finally {
@@ -143,12 +142,6 @@ class FrameworkDataSourceIntegrationTest {
                 ResultSet rs = statement.executeQuery(sql)) {
             rs.next();
             return rs.getLong(1);
-        }
-    }
-
-    private static int freePort() throws IOException {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            return socket.getLocalPort();
         }
     }
 

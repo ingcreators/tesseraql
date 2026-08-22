@@ -188,7 +188,7 @@ public final class StudioRuntimeExtension implements RuntimeExtension {
         new CopilotRoutes(copilotService, studioEdit,
                 seams.appName()).install(context);
         seams.postStart().accept(() -> CopilotRoutes.registerStream(context,
-                seams.port(), copilotService, studioEdit, seams.appName()));
+                seams.port().getAsInt(), copilotService, studioEdit, seams.appName()));
         // Providers backing the bundled studio app (design ch. 16, 47).
         StudioProviders.register(serviceProviders, new StudioProviders.Deps(studio,
                 studioEdit, studioTests, studioScaffold, studioData, copilotService,

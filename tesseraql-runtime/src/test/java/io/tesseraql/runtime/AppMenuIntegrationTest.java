@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.net.ServerSocket;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -52,8 +51,8 @@ class AppMenuIntegrationTest {
     static void start() throws Exception {
         menuAppHome = prepareAppHome(true);
         plainAppHome = prepareAppHome(false);
-        menuRuntime = TesseraqlRuntime.start(menuAppHome, freePort());
-        plainRuntime = TesseraqlRuntime.start(plainAppHome, freePort());
+        menuRuntime = TesseraqlRuntime.start(menuAppHome, 0);
+        plainRuntime = TesseraqlRuntime.start(plainAppHome, 0);
     }
 
     @AfterAll
@@ -319,9 +318,4 @@ class AppMenuIntegrationTest {
         }
     }
 
-    private static int freePort() throws IOException {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            return socket.getLocalPort();
-        }
-    }
 }

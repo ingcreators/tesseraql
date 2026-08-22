@@ -13,7 +13,6 @@ import io.tesseraql.core.telemetry.RingTracer;
 import io.tesseraql.observability.OpenTelemetryTracer;
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.net.ServerSocket;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -57,7 +56,7 @@ class BatchOtelTraceIntegrationTest {
                 new OpenTelemetryTracer(sdk));
 
         appHome = prepareAppHome();
-        runtime = TesseraqlRuntime.start(appHome, freePort(), tracer, NoopMeter.INSTANCE);
+        runtime = TesseraqlRuntime.start(appHome, 0, tracer, NoopMeter.INSTANCE);
         seedDatabase();
     }
 
@@ -151,9 +150,4 @@ class BatchOtelTraceIntegrationTest {
         }
     }
 
-    private static int freePort() throws IOException {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            return socket.getLocalPort();
-        }
-    }
 }

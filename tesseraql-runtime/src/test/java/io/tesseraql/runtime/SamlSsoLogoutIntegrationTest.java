@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.tesseraql.saml.SamlRedirect;
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.net.ServerSocket;
 import java.net.URI;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
@@ -56,7 +55,7 @@ class SamlSsoLogoutIntegrationTest {
     static void start() throws Exception {
         keyPair = SamlTestSupport.generateKeyPair();
         appHome = prepareAppHome();
-        runtime = TesseraqlRuntime.start(appHome, freePort());
+        runtime = TesseraqlRuntime.start(appHome, 0);
         client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build();
     }
 
@@ -206,9 +205,4 @@ class SamlSsoLogoutIntegrationTest {
         }
     }
 
-    private static int freePort() throws IOException {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            return socket.getLocalPort();
-        }
-    }
 }

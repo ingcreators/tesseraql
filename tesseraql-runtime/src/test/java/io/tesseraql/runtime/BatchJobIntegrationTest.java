@@ -10,7 +10,6 @@ import io.tesseraql.operations.batch.StepExecution;
 import io.tesseraql.operations.batch.StepStatus;
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.net.ServerSocket;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -58,7 +57,7 @@ class BatchJobIntegrationTest {
     static void start() throws Exception {
         startPartnerApi();
         appHome = prepareAppHome();
-        runtime = TesseraqlRuntime.start(appHome, freePort());
+        runtime = TesseraqlRuntime.start(appHome, 0);
         seedDatabase();
     }
 
@@ -1538,9 +1537,4 @@ class BatchJobIntegrationTest {
         }
     }
 
-    private static int freePort() throws IOException {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            return socket.getLocalPort();
-        }
-    }
 }

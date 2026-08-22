@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
-import java.net.ServerSocket;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -54,7 +53,7 @@ class AppMigrationIntegrationTest {
     void migratesTheApplicationAndItsNamedDatasourcesIdempotently() throws Exception {
         appHome = prepareMainApp();
 
-        runtime = TesseraqlRuntime.start(appHome, freePort());
+        runtime = TesseraqlRuntime.start(appHome, 0);
 
         // The main app's two migrations created and seeded its table; the route can query it.
         HttpResponse<String> items = get("/api/items");
@@ -81,7 +80,7 @@ class AppMigrationIntegrationTest {
 
         // Restarting the same version applies nothing new (idempotent boot).
         runtime.close();
-        runtime = TesseraqlRuntime.start(appHome, freePort());
+        runtime = TesseraqlRuntime.start(appHome, 0);
         assertThat(get("/api/items").statusCode()).isEqualTo(200);
         assertThat(historyCount("tql_schema_history_demo_app")).isEqualTo(2);
     }
@@ -95,7 +94,7 @@ class AppMigrationIntegrationTest {
         }
         appHome = prepareTenantApp();
 
-        runtime = TesseraqlRuntime.start(appHome, freePort());
+        runtime = TesseraqlRuntime.start(appHome, 0);
 
         // The same migration ran once per tenant schema.
         try (Connection connection = connect();
@@ -269,9 +268,4 @@ class AppMigrationIntegrationTest {
         }
     }
 
-    private static int freePort() throws IOException {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            return socket.getLocalPort();
-        }
-    }
 }

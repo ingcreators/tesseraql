@@ -7,7 +7,6 @@ import io.tesseraql.security.Principal;
 import io.tesseraql.security.session.SessionStore;
 import io.tesseraql.yaml.notify.NotifyEvents;
 import java.io.IOException;
-import java.net.ServerSocket;
 import java.net.URI;
 import java.net.URLDecoder;
 import java.net.http.HttpClient;
@@ -46,7 +45,7 @@ class RecoveryIntegrationTest {
     @BeforeAll
     static void start() throws Exception {
         appHome = prepareAppHome();
-        runtime = TesseraqlRuntime.start(appHome, freePort());
+        runtime = TesseraqlRuntime.start(appHome, 0);
         javax.sql.DataSource main = runtime.context().lookup("main", javax.sql.DataSource.class);
         try (java.sql.Connection connection = main.getConnection();
                 java.sql.Statement statement = connection.createStatement()) {
@@ -218,12 +217,6 @@ class RecoveryIntegrationTest {
         }
         return response.headers().firstValue("Set-Cookie").map(c -> c.split(";")[0])
                 .orElse(null);
-    }
-
-    private static int freePort() throws IOException {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            return socket.getLocalPort();
-        }
     }
 
     private static Path prepareAppHome() throws IOException {

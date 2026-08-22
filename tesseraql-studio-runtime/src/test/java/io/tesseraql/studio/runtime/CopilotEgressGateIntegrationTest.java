@@ -6,7 +6,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.runtime.TesseraqlRuntime;
 import java.io.IOException;
-import java.net.ServerSocket;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Comparator;
@@ -34,7 +33,7 @@ class CopilotEgressGateIntegrationTest {
     void aCopilotWithoutAnyAllowListFailsTheBootWithTheYamlToAdd() throws Exception {
         Path appHome = prepareAppHome("");
         try {
-            assertThatThrownBy(() -> TesseraqlRuntime.start(appHome, freePort()))
+            assertThatThrownBy(() -> TesseraqlRuntime.start(appHome, 0))
                     .isInstanceOf(IllegalStateException.class)
                     .cause()
                     .isInstanceOf(TqlException.class)
@@ -57,7 +56,7 @@ class CopilotEgressGateIntegrationTest {
                         - api.partner.example
                 """);
         try {
-            assertThatThrownBy(() -> TesseraqlRuntime.start(appHome, freePort()))
+            assertThatThrownBy(() -> TesseraqlRuntime.start(appHome, 0))
                     .isInstanceOf(IllegalStateException.class)
                     .cause()
                     .isInstanceOf(TqlException.class)
@@ -77,18 +76,12 @@ class CopilotEgressGateIntegrationTest {
                       allowedHosts:
                         - api.example.com
                 """);
-        try (TesseraqlRuntime runtime = TesseraqlRuntime.start(appHome, freePort())) {
+        try (TesseraqlRuntime runtime = TesseraqlRuntime.start(appHome, 0)) {
             // Booting at all is the assertion: an egress allow-list the runtime
             // refused would have thrown out of start().
             assertThat(runtime.port()).isPositive();
         } finally {
             delete(appHome);
-        }
-    }
-
-    private static int freePort() throws IOException {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            return socket.getLocalPort();
         }
     }
 

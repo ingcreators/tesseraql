@@ -11,7 +11,6 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.io.UncheckedIOException;
 import java.net.InetSocketAddress;
-import java.net.ServerSocket;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -65,7 +64,7 @@ class CommandProvisioningIntegrationTest {
         provider.createContext("/scim/v2/Groups", CommandProvisioningIntegrationTest::handleGroup);
         provider.start();
         appHome = prepareAppHome(provider.getAddress().getPort());
-        runtime = TesseraqlRuntime.start(appHome, freePort());
+        runtime = TesseraqlRuntime.start(appHome, 0);
         seedDatabase();
     }
 
@@ -262,9 +261,4 @@ class CommandProvisioningIntegrationTest {
         }
     }
 
-    private static int freePort() throws IOException {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            return socket.getLocalPort();
-        }
-    }
 }

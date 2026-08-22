@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.tesseraql.operations.rate.JdbcRateLeaseStore;
 import java.io.IOException;
-import java.net.ServerSocket;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -39,8 +38,8 @@ class ClusterRateLimitIntegrationTest {
     static void start() throws Exception {
         homeA = prepareAppHome();
         homeB = prepareAppHome();
-        nodeA = TesseraqlRuntime.start(homeA, freePort());
-        nodeB = TesseraqlRuntime.start(homeB, freePort());
+        nodeA = TesseraqlRuntime.start(homeA, 0);
+        nodeB = TesseraqlRuntime.start(homeB, 0);
     }
 
     @AfterAll
@@ -104,12 +103,6 @@ class ClusterRateLimitIntegrationTest {
         // total stays far below the 40 a wide-open route (or ~2×5×windows a per-node limiter)
         // would allow. The lower bound proves the leased budget actually serves requests.
         assertThat(allowed).isBetween(5, 14);
-    }
-
-    private static int freePort() throws IOException {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            return socket.getLocalPort();
-        }
     }
 
     private static Path prepareAppHome() throws IOException {
