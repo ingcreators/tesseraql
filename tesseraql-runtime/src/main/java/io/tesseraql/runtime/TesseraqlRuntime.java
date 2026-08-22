@@ -2033,28 +2033,30 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 params::get, java.util.Locale.ENGLISH);
     }
 
-    /** Runs a batch job by id and returns its final execution record (design ch. 26). */
+    /**
+     * Runs a batch job by id and returns its final execution record (design ch. 26) — the same
+     * execution the ops console and the scheduler run, so the job's declaration is honoured
+     * here too: a {@code perTenant} job runs once per configured tenant and this returns the
+     * last execution. (It used to run once with no tenant context on this path only, which made
+     * the same job behave differently via the API than via the console.)
+     */
     public JobExecution runJob(String jobId, Map<String, Object> params) {
-        JobFile jobFile = jobs.get(jobId);
-        if (jobFile == null) {
-            throw new IllegalArgumentException("Unknown job: " + jobId);
-        }
-        return jobExecutor.run(jobFile, jobDataSource(jobFile),
-                jobOwners.getOrDefault(jobId, appName), bindJobParams(jobFile, params), "manual",
-                null);
+        JobFile jobFile = JobRunners.require(jobs, jobId);
+        return JobRunners.runOne(jobFile, jobOwners.getOrDefault(jobId, appName),
+                bindJobParams(jobFile, params), "manual", null,
+                mainDataSource, dataSources, config, tenantDataSources, jobExecutor);
     }
 
     /**
-     * Runs a batch job once per configured tenant, each on its own datasource and tenant context
-     * (design ch. 30.3), returning every execution record.
+     * Runs a batch job once per configured tenant regardless of its {@code perTenant}
+     * declaration, each on its own datasource and tenant context (design ch. 30.3), returning
+     * every execution record.
      */
     public List<JobExecution> runJobForAllTenants(String jobId, Map<String, Object> params) {
-        JobFile jobFile = jobs.get(jobId);
-        if (jobFile == null) {
-            throw new IllegalArgumentException("Unknown job: " + jobId);
-        }
+        JobFile jobFile = JobRunners.require(jobs, jobId);
         List<JobExecution> executions = new java.util.ArrayList<>();
-        javax.sql.DataSource jobPool = jobDataSource(jobFile);
+        javax.sql.DataSource jobPool = JobRunners.jobDataSource(jobFile, mainDataSource,
+                dataSources);
         for (String tenantId : TenantRegistry.tenantIds(config, mainDataSource,
                 tenantDataSources)) {
             executions.add(jobExecutor.run(jobFile,
@@ -2066,20 +2068,6 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     "manual", null));
         }
         return executions;
-    }
-
-    /** The pool a job's declared {@code datasource:} selects; {@code main} absent a declaration. */
-    private javax.sql.DataSource jobDataSource(JobFile jobFile) {
-        String declared = jobFile.definition().datasource();
-        if (declared == null || declared.isBlank() || "main".equals(declared)) {
-            return mainDataSource;
-        }
-        javax.sql.DataSource pool = dataSources.get(declared);
-        if (pool == null) {
-            throw new IllegalArgumentException("Job datasource '" + declared
-                    + "' is not declared");
-        }
-        return pool;
     }
 
     public JobRepository jobRepository() {
