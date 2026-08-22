@@ -66,8 +66,7 @@ final class CopilotRoutes {
                     String message = requireMessage(exchange);
                     String actor = actor(exchange);
                     boolean canEdit = studioEdit.canEdit(permissions(exchange));
-                    if ("true".equals(exchange.getMessage().getHeader("HX-Request",
-                            String.class))) {
+                    if ("true".equals(exchange.request().header("HX-Request"))) {
                         String turn = copilot.begin(actor, message, canEdit);
                         exchange.response().status(200);
                         exchange.response().header(Headers.CONTENT_TYPE,
@@ -156,7 +155,7 @@ final class CopilotRoutes {
 
     /** The urlencoded form's message field (platform-http may pre-parse it to a header). */
     private static String requireMessage(Exchange exchange) {
-        String message = exchange.getMessage().getHeader("message", String.class);
+        String message = exchange.request().param("message");
         if (message == null) {
             String raw = exchange.getMessage().getBody(String.class);
             if (raw != null) {

@@ -71,10 +71,8 @@ final class OidcRoutes {
             return;
         }
         String address = io.tesseraql.security.session.SessionStore.ClientInfo.of(null,
-                exchange.getMessage().getHeader("X-Forwarded-For", String.class),
-                exchange.getMessage().getHeader(
-                        io.tesseraql.pipeline.Headers.REMOTE_ADDRESS,
-                        String.class))
+                exchange.request().header("X-Forwarded-For"),
+                exchange.request().remoteAddress())
                 .remoteAddr();
         if (throttle.retryAfter("oidc", null, address).isPresent()) {
             throw new OidcException("Too many failed callbacks; retry later");
@@ -180,14 +178,14 @@ final class OidcRoutes {
 
     /** The post-login target: the sanitized {@code next} carried since /login, else the default. */
     private String postLoginTarget(Exchange exchange) {
-        String cookie = cookieValue(header(exchange, "Cookie"), NEXT_COOKIE);
+        String cookie = cookieValue(exchange.request().header("Cookie"), NEXT_COOKIE);
         String next = cookie == null ? null : URLDecoder.decode(cookie, StandardCharsets.UTF_8);
         return LoginRedirects.sanitize(next, config.postLoginUrl());
     }
 
     /** Ends the local session and, when the OP advertises one, redirects to its logout endpoint. */
     private void logout(Exchange exchange) {
-        String sessionId = cookieValue(header(exchange, "Cookie"), sessions.cookieName());
+        String sessionId = cookieValue(exchange.request().header("Cookie"), sessions.cookieName());
         sessions.invalidate(sessionId);
         exchange.response().header("Set-Cookie",
                 io.tesseraql.security.session.SessionCookie.expire(sessions.cookieName(),
@@ -314,7 +312,7 @@ final class OidcRoutes {
     }
 
     private static String header(Exchange exchange, String name) {
-        return exchange.getMessage().getHeader(name, String.class);
+        return exchange.request().param(name);
     }
 
     private static String queryString(Map<String, String> params) {

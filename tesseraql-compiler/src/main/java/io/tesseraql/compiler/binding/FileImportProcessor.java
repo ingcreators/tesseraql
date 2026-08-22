@@ -74,17 +74,17 @@ public final class FileImportProcessor implements Step {
      * raw request body.
      */
     private static InputStream body(Exchange exchange) throws Exception {
-        String contentType = exchange.getMessage().getHeader(Headers.CONTENT_TYPE, String.class);
+        String contentType = exchange.request().header(Headers.CONTENT_TYPE);
         if (contentType != null
                 && contentType.toLowerCase(java.util.Locale.ROOT).startsWith("multipart/")) {
-            java.util.Map<String, jakarta.activation.DataHandler> attachments = exchange
-                    .getMessage().attachments();
-            if (attachments != null && !attachments.isEmpty()) {
-                jakarta.activation.DataHandler part = attachments.get("file");
+            java.util.Map<String, io.tesseraql.pipeline.Part> attachments = exchange
+                    .request().attachments();
+            if (!attachments.isEmpty()) {
+                io.tesseraql.pipeline.Part part = attachments.get("file");
                 if (part == null) {
                     part = attachments.values().iterator().next();
                 }
-                return part.getInputStream();
+                return part.open();
             }
         }
         Object body = exchange.getMessage().getBody();

@@ -106,7 +106,7 @@ class ErrorResponseRendererTest {
                 .builder(new TqlErrorCode(TqlDomain.WORKFLOW, 3202))
                 .details(Map.of("code", "not-funded", "message", "The request is not funded."))
                 .build());
-        exchange.getMessage().setHeader("HX-Request", "true");
+        exchange.request().header("HX-Request", "true");
 
         new ErrorResponseRenderer().process(exchange);
 
@@ -123,7 +123,7 @@ class ErrorResponseRendererTest {
                         "step", "header", "expectedRows", 1, "actualRows", 0,
                         "hint", "The record may have been changed by another user")))
                 .build());
-        exchange.getMessage().setHeader("HX-Request", "true");
+        exchange.request().header("HX-Request", "true");
 
         new ErrorResponseRenderer().process(exchange);
 
@@ -144,7 +144,7 @@ class ErrorResponseRendererTest {
         // The failing route declares onError: the error fragment is retargeted/reswapped.
         Exchange steered = exchangeWith(
                 TqlException.builder(new TqlErrorCode(TqlDomain.FIELD, 4220)).build());
-        steered.getMessage().setHeader("HX-Request", "true");
+        steered.request().header("HX-Request", "true");
         steered.setProperty(TesseraqlProperties.FAILURE_ROUTE_ID, "members.create");
         renderer.process(steered);
         assertThat(steered.response().header("HX-Retarget")).isEqualTo("#flash");
@@ -153,7 +153,7 @@ class ErrorResponseRendererTest {
         // A route without onError keeps htmx's defaults (no steering headers).
         Exchange plain = exchangeWith(
                 TqlException.builder(new TqlErrorCode(TqlDomain.FIELD, 4220)).build());
-        plain.getMessage().setHeader("HX-Request", "true");
+        plain.request().header("HX-Request", "true");
         plain.setProperty(TesseraqlProperties.FAILURE_ROUTE_ID, "other.route");
         renderer.process(plain);
         assertThat(plain.response().header("HX-Retarget")).isNull();
@@ -231,7 +231,7 @@ class ErrorResponseRendererTest {
                                 "message", "orders.qty.exceeds"))))
                 .build());
         exchange.setProperty(io.tesseraql.pipeline.TesseraqlProperties.LOCALE, "ja");
-        exchange.getMessage().setHeader("HX-Request", "true");
+        exchange.request().header("HX-Request", "true");
 
         new ErrorResponseRenderer(i18n).process(exchange);
 
@@ -251,7 +251,7 @@ class ErrorResponseRendererTest {
                         Map.of("field", "email", "code", "duplicate",
                                 "message", "members.email.duplicate"))))
                 .build());
-        exchange.getMessage().setHeader("HX-Request", "true");
+        exchange.request().header("HX-Request", "true");
 
         new ErrorResponseRenderer().process(exchange);
 
@@ -286,7 +286,7 @@ class ErrorResponseRendererTest {
                         Map.of("rule", "uniqueEmail", "field", "email", "code", "duplicate",
                                 "message", "members.email.duplicate"))))
                 .build());
-        exchange.getMessage().setHeader("HX-Request", "true");
+        exchange.request().header("HX-Request", "true");
 
         new ErrorResponseRenderer().process(exchange);
 

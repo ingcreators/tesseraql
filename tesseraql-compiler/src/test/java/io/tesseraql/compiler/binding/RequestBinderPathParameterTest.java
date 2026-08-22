@@ -3,7 +3,6 @@ package io.tesseraql.compiler.binding;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.tesseraql.pipeline.Exchange;
-import io.tesseraql.pipeline.Headers;
 import io.tesseraql.pipeline.RuntimeContext;
 import io.tesseraql.yaml.SimpleYamlParser;
 import io.tesseraql.yaml.model.RouteDefinition;
@@ -69,12 +68,12 @@ class RequestBinderPathParameterTest {
         return new SimpleYamlParser().parseRoute(yaml, "users.detail");
     }
 
-    private static Exchange request(String uri, String body, Map<String, Object> headers) {
+    private static Exchange request(String uri, String body, Map<String, String> pathParams) {
         Exchange exchange = new Exchange(context.beans());
         if (uri != null) {
-            exchange.getMessage().setHeader(Headers.HTTP_URI, uri);
+            exchange.request().uri(uri);
         }
-        headers.forEach((name, value) -> exchange.getMessage().setHeader(name, value));
+        exchange.request().pathParams().putAll(pathParams);
         exchange.getMessage().setBody(body);
         return exchange;
     }
@@ -95,12 +94,13 @@ class RequestBinderPathParameterTest {
     }
 
     /**
-     * A query parameter of the same name reaches the header the router set. Reading the header
-     * answered the two values joined, so even {@code ?id=u1} on {@code /users/u1} missed.
+     * A query parameter of the same name lives in its own map now — the bag used to hand the
+     * two values joined, so even {@code ?id=u1} on {@code /users/u1} missed.
      */
     @Test
     void aQueryParameterOfTheSameNameCannotDisplaceIt() {
-        Exchange exchange = request("/users/u1?id=u2", null, Map.of("id", "u1,u2"));
+        Exchange exchange = request("/users/u1?id=u2", null, Map.of("id", "u1"));
+        exchange.request().queryParams().put("id", java.util.List.of("u2"));
         new RequestBinder(UNTYPED, "/users/{id}").process(exchange);
 
         assertThat(namespace(exchange, "path")).containsEntry("id", "u1");
@@ -121,11 +121,12 @@ class RequestBinderPathParameterTest {
     }
 
     /**
-     * With no URL to read — a {@code direct:} invocation of a mounted route — the router's
-     * header is still honoured, because nothing else claimed that name.
+     * With no URL of its own — a programmatic invocation of a mounted route — the caller's
+     * path parameters are the path parameters: the value's owner is the map, not a URI string
+     * this test would have to fabricate.
      */
     @Test
-    void withoutARequestUrlTheRoutersHeaderStillAnswers() {
+    void withoutARequestUrlTheCallersPathParamsStillAnswer() {
         Exchange exchange = request(null, null, Map.of("id", "u1"));
         new RequestBinder(UNTYPED, "/users/{id}").process(exchange);
 

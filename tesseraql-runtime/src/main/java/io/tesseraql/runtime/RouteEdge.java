@@ -63,6 +63,8 @@ final class RouteEdge {
 
     private final RuntimeContext runtimeContext;
     private final Map<String, Route> mounted = new ConcurrentHashMap<>();
+    /** Per route: the router's wire-safe parameter name back to the declared one (WireNames). */
+    private final Map<String, Map<String, String>> declaredNames = new ConcurrentHashMap<>();
     /** What each mounted route was mounted as, so a reload can tell a moved URL from a stable one. */
     private final Map<String, io.tesseraql.pipeline.HttpMounts.Mount> at = new ConcurrentHashMap<>();
     private volatile io.vertx.ext.web.Router router;
@@ -141,6 +143,7 @@ final class RouteEdge {
     private void remount(io.tesseraql.pipeline.HttpMounts.Mount mount, String routeId) {
         unmount(routeId);
         at.put(routeId, mount);
+        declaredNames.put(routeId, wireToDeclared(mount.path()));
         mounted.put(routeId, router.route(HttpMethod.valueOf(mount.method()), path(mount.path()))
                 .order(AFTER_THE_GATE)
                 .handler(HttpEdgeBeans.bodyHandler(runtimeContext))
@@ -154,6 +157,7 @@ final class RouteEdge {
             route.remove();
         }
         at.remove(routeId);
+        declaredNames.remove(routeId);
     }
 
     private void mount(io.vertx.ext.web.Router router,
@@ -164,6 +168,7 @@ final class RouteEdge {
                     + mount.path() + " names pipeline " + routeId + ", which was not compiled");
         }
         at.put(routeId, mount);
+        declaredNames.put(routeId, wireToDeclared(mount.path()));
         // The body handler is the router's own — the instance the platform consumer would have used,
         // with whatever the server configured on it — so an upload spools where it already
         // spooled and a form parses the way it already parsed.
@@ -182,9 +187,14 @@ final class RouteEdge {
      * knows about URLs at all.
      */
     private String path(String declared) {
+        // The declared template first passes WireNames: the router only accepts
+        // [A-Za-z][A-Za-z0-9]* as a parameter name, which excludes non-ASCII names and even
+        // {order_id}, so a non-wire-safe name mounts as a positional stand-in the request
+        // builder maps back (docs/vertx-native.md decision 2).
+        String wired = io.tesseraql.compiler.binding.WireNames.wirePath(declared);
         StringBuilder mountedPath = new StringBuilder(
                 io.tesseraql.pipeline.BasePath.of(runtimeContext.beans()));
-        for (String segment : declared.split("/", -1)) {
+        for (String segment : wired.split("/", -1)) {
             if (segment.isEmpty()) {
                 continue;
             }
@@ -198,6 +208,22 @@ final class RouteEdge {
         return mountedPath.length() == 0 ? "/" : mountedPath.toString();
     }
 
+    /** Wire name to declared name for {@code declared}'s parameters, in template order. */
+    private static Map<String, String> wireToDeclared(String declared) {
+        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("\\{([^{}]+)}")
+                .matcher(declared);
+        java.util.List<String> names = new java.util.ArrayList<>();
+        while (matcher.find()) {
+            names.add(matcher.group(1));
+        }
+        Map<String, String> back = new java.util.LinkedHashMap<>();
+        for (int at = 0; at < names.size(); at++) {
+            back.put(io.tesseraql.compiler.binding.WireNames.wireName(names.get(at), at),
+                    names.get(at));
+        }
+        return back;
+    }
+
     private void serve(RoutingContext ctx, String routeId) {
         // Asked of the registry per request, which is what makes hot reload a swap: a recompiled
         // route replaces its entry there and this handler picks the new chain up on the next
@@ -209,7 +235,8 @@ final class RouteEdge {
             return;
         }
         Context connection = ctx.vertx().getOrCreateContext();
-        Exchange exchange = request(ctx, routeId);
+        Exchange exchange = request(ctx, routeId, declaredNames.getOrDefault(routeId,
+                Map.of()));
         // Counted here, because this is the only place that knows (docs/camel-removal.md
         // decision 1). It used to be registered in Camel's inflight repository under the route
         // id, so the shutdown strategy would wait for it — and that worked exactly as long as
@@ -283,7 +310,8 @@ final class RouteEdge {
      * assigned so a repeated name becomes a list, and path parameters land after query parameters
      * because that is the order a route already reads them in.
      */
-    private Exchange request(RoutingContext ctx, String routeId) {
+    private Exchange request(RoutingContext ctx, String routeId,
+            Map<String, String> declaredNames) {
         HttpServerRequest request = ctx.request();
         Exchange exchange = new Exchange(runtimeContext.beans());
         // Which route this is, which a route running on a route never has to be told. Two
@@ -292,61 +320,53 @@ final class RouteEdge {
         // that cannot say which route it is drops that segment out of every link a shared
         // template emits, and thirty-one Studio assertions with it.
         exchange.setFromRouteId(routeId);
-        // A plain message: the request and the response are the handler's, not the message's.
-        // The platform-http HttpMessage carried them so a processor could reach the raw Vert.x
-        // objects, and nothing in this framework ever did.
-        io.tesseraql.pipeline.Message message = exchange.getMessage();
-        Map<String, Object> headers = new java.util.LinkedHashMap<>();
-        headers.put(Headers.HTTP_PATH, ctx.normalizedPath());
-        applyInbound(headers, request.headers());
-        if (!ctx.queryParams().isEmpty()) {
-            applyInbound(headers, ctx.queryParams());
-        }
-        ctx.pathParams().forEach((name, value) -> appendEntry(headers, name, value));
+        io.tesseraql.pipeline.Request built = exchange.request();
+        built.method(request.method().toString())
+                .path(ctx.normalizedPath())
+                .uri(request.uri())
+                .absoluteUrl(request.absoluteURI())
+                .query(request.query());
         if (request.localAddress() != null) {
-            headers.put(io.tesseraql.pipeline.Headers.LOCAL_ADDRESS,
-                    request.localAddress());
+            built.localAddress(String.valueOf(request.localAddress()));
         }
         if (request.remoteAddress() != null) {
-            headers.put(io.tesseraql.pipeline.Headers.REMOTE_ADDRESS,
-                    request.remoteAddress());
+            built.remoteAddress(String.valueOf(request.remoteAddress()));
         }
-        headers.put(Headers.HTTP_METHOD, request.method().toString());
-        headers.put(Headers.HTTP_URL, request.absoluteURI());
-        headers.put(Headers.HTTP_URI, request.uri());
-        headers.put(Headers.HTTP_QUERY, request.query());
-        headers.put(Headers.HTTP_RAW_QUERY, request.query());
-        body(ctx, exchange, message, headers);
-        message.setHeaders(headers);
-        attachments(ctx, message);
+        // No inbound filter: internal state never shares this namespace any more, so a
+        // client-sent tql.-anything is just a header nothing reads (docs/vertx-native.md
+        // decision 1).
+        request.headers().forEach(entry -> built.addHeader(entry.getKey(), entry.getValue()));
+        ctx.queryParams().forEach(entry -> built.queryParams()
+                .computeIfAbsent(entry.getKey(), name -> new java.util.ArrayList<>(1))
+                .add(entry.getValue()));
+        // The router matched wire-safe stand-ins (WireNames); a step reads the declared name,
+        // so the mapping back happens here and no later step sees a p0
+        // (docs/vertx-native.md decision 2).
+        ctx.pathParams().forEach((wire, value) -> built.pathParams()
+                .put(declaredNames.getOrDefault(wire, wire), value));
+        body(ctx, exchange, built);
+        attachments(ctx, built);
         return exchange;
     }
 
     /**
-     * The body a route expects, which is three different things.
-     *
-     * <p>A form — urlencoded or the non-file parts of a multipart — arrives as a {@code Map} body
-     * <em>and</em> as headers, both appended so a repeated field is a list. That duplication is
-     * not tidiness: one binder reads the map and another reads the header, and a route written
-     * against either has to keep working. Everything else is the raw buffer, which is what a JSON
-     * body has always been.
+     * The body a route expects: a form has one representation, and it is
+     * {@code request().formFields()} (docs/vertx-native.md decision 2). It used to arrive three
+     * ways at once — a {@code Map} body, the same fields appended into the header bag, and a raw
+     * urlencoded body the binder could parse a third time — kept consistent by nothing but the
+     * code that wrote all three. Everything that is not a form is the raw bytes, which is what a
+     * JSON body has always been.
      */
     private static void body(RoutingContext ctx, Exchange exchange,
-            io.tesseraql.pipeline.Message message, Map<String, Object> headers) {
+            io.tesseraql.pipeline.Request built) {
         if (isForm(ctx)) {
-            Map<String, Object> form = new java.util.LinkedHashMap<>();
             io.vertx.core.MultiMap attributes = ctx.request().formAttributes();
             for (String name : attributes.names()) {
                 for (String value : attributes.getAll(name)) {
-                    if (!io.tesseraql.pipeline.HeaderFilter.enters(name)) {
-                        continue;
-                    }
-                    appendEntry(headers, name, value);
-                    appendEntry(form, name, value);
+                    built.formFields()
+                            .computeIfAbsent(name, field -> new java.util.ArrayList<>(1))
+                            .add(value);
                 }
-            }
-            if (!form.isEmpty()) {
-                message.setBody(form);
             }
             return;
         }
@@ -357,12 +377,12 @@ final class RouteEdge {
             // body, a multipart deploy reading its part, and an export reading its own response
             // all failed on the same missing conversion, which is a good argument for the
             // adapter handing over a type the framework already knows.
-            message.setBody(ctx.body().buffer().getBytes());
+            exchange.getMessage().setBody(ctx.body().buffer().getBytes());
         }
     }
 
     /** Uploaded parts, as the attachments three processors already read them off the message. */
-    private static void attachments(RoutingContext ctx, io.tesseraql.pipeline.Message message) {
+    private static void attachments(RoutingContext ctx, io.tesseraql.pipeline.Request built) {
         java.util.List<io.vertx.ext.web.FileUpload> uploads = ctx.fileUploads();
         if (uploads.isEmpty()) {
             return;
@@ -370,7 +390,7 @@ final class RouteEdge {
         for (io.vertx.ext.web.FileUpload upload : uploads) {
             // The spooled file, named as the client named it: a part is a name, a content type
             // and a stream, which is all three readers ever asked of it.
-            message.attachments().put(upload.name(), io.tesseraql.pipeline.Message.part(
+            built.attachments().put(upload.name(), io.tesseraql.pipeline.Part.of(
                     java.nio.file.Path.of(upload.uploadedFileName()), upload.contentType(),
                     upload.fileName()));
         }
@@ -385,40 +405,6 @@ final class RouteEdge {
         String lower = contentType.toLowerCase(java.util.Locale.ROOT);
         return lower.startsWith("multipart/form-data")
                 || lower.startsWith("application/x-www-form-urlencoded");
-    }
-
-    /** Request headers and query parameters, filtered and appended the way a consumer does it. */
-    private static void applyInbound(Map<String, Object> headers,
-            io.vertx.core.MultiMap source) {
-        source.forEach(entry -> {
-            String name = entry.getKey();
-            String value = entry.getValue();
-            if (io.tesseraql.pipeline.HeaderFilter.enters(name)) {
-                appendEntry(headers, name, value);
-            }
-        });
-    }
-
-    /**
-     * Appends a value under {@code name}, so a repeated header or field becomes a list.
-     *
-     * <p>This was {@code CollectionHelper.appendEntry}, and the behaviour is load-bearing: one
-     * binder reads a repeated form field as a list and another reads the single value, so a
-     * second value must not silently replace the first.
-     */
-    private static void appendEntry(Map<String, Object> into, String name, Object value) {
-        Object existing = into.get(name);
-        if (existing == null) {
-            into.put(name, value);
-            return;
-        }
-        if (existing instanceof java.util.List<?> list) {
-            java.util.List<Object> appended = new java.util.ArrayList<>(list);
-            appended.add(value);
-            into.put(name, appended);
-            return;
-        }
-        into.put(name, new java.util.ArrayList<>(java.util.List.of(existing, value)));
     }
 
     /**

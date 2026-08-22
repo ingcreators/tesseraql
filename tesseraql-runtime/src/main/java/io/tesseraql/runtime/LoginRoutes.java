@@ -62,10 +62,8 @@ final class LoginRoutes {
     /** The presented address, the ClientInfo resolution: XFF first, else the peer. */
     static String presentedAddress(Exchange exchange) {
         return SessionStore.ClientInfo.of(null,
-                exchange.getMessage().getHeader("X-Forwarded-For", String.class),
-                exchange.getMessage().getHeader(
-                        io.tesseraql.pipeline.Headers.REMOTE_ADDRESS,
-                        String.class))
+                exchange.request().header("X-Forwarded-For"),
+                exchange.request().remoteAddress())
                 .remoteAddr();
     }
 
@@ -219,8 +217,8 @@ final class LoginRoutes {
     }
 
     private void logout(Exchange exchange) throws Exception {
-        String cookie = exchange.getMessage().getHeader("Cookie", String.class);
-        String token = exchange.getMessage().getHeader("X-CSRF-Token", String.class);
+        String cookie = exchange.request().header("Cookie");
+        String token = exchange.request().header("X-CSRF-Token");
         if (token == null) {
             Object field = parseBody(exchange).get("_csrf");
             token = field == null ? null : String.valueOf(field);
@@ -240,14 +238,14 @@ final class LoginRoutes {
      * this request is an ordinary sign-out: cookie cleared, back to the login page.
      */
     private void logoutDevice(Exchange exchange) throws Exception {
-        String cookie = exchange.getMessage().getHeader("Cookie", String.class);
+        String cookie = exchange.request().header("Cookie");
         String sessionId = sessions.sessionIdFromCookie(cookie);
         SessionStore.Session session = sessionId == null ? null : sessions.session(sessionId);
         if (session == null) {
             throw new TqlException(PolicyEngine.UNAUTHORIZED, "No session");
         }
         Map<String, Object> body = parseBody(exchange);
-        String token = exchange.getMessage().getHeader("X-CSRF-Token", String.class);
+        String token = exchange.request().header("X-CSRF-Token");
         if (token == null) {
             Object field = body.get("_csrf");
             token = field == null ? null : String.valueOf(field);
@@ -269,13 +267,13 @@ final class LoginRoutes {
 
     /** Invalidates the caller's other sessions, keeping the one that made this request. */
     private void logoutOthers(Exchange exchange) throws Exception {
-        String cookie = exchange.getMessage().getHeader("Cookie", String.class);
+        String cookie = exchange.request().header("Cookie");
         String sessionId = sessions.sessionIdFromCookie(cookie);
         SessionStore.Session session = sessionId == null ? null : sessions.session(sessionId);
         if (session == null) {
             throw new TqlException(PolicyEngine.UNAUTHORIZED, "No session");
         }
-        String token = exchange.getMessage().getHeader("X-CSRF-Token", String.class);
+        String token = exchange.request().header("X-CSRF-Token");
         if (token == null) {
             Object field = parseBody(exchange).get("_csrf");
             token = field == null ? null : String.valueOf(field);
@@ -297,14 +295,14 @@ final class LoginRoutes {
      * person's other sessions see the elevation at their next sign-in.
      */
     private void elevate(Exchange exchange) throws Exception {
-        String cookie = exchange.getMessage().getHeader("Cookie", String.class);
+        String cookie = exchange.request().header("Cookie");
         String sessionId = sessions.sessionIdFromCookie(cookie);
         SessionStore.Session session = sessionId == null ? null : sessions.session(sessionId);
         if (session == null) {
             throw new TqlException(PolicyEngine.UNAUTHORIZED, "No session");
         }
         Map<String, Object> body = parseBody(exchange);
-        String token = exchange.getMessage().getHeader("X-CSRF-Token", String.class);
+        String token = exchange.request().header("X-CSRF-Token");
         if (token == null) {
             Object field = body.get("_csrf");
             token = field == null ? null : String.valueOf(field);
@@ -362,25 +360,23 @@ final class LoginRoutes {
     }
 
     private static boolean isFormPost(Exchange exchange) {
-        String contentType = exchange.getMessage().getHeader(Headers.CONTENT_TYPE, String.class);
+        String contentType = exchange.request().header(Headers.CONTENT_TYPE);
         return contentType != null && contentType.contains("application/x-www-form-urlencoded");
     }
 
     /** Shared with the recovery endpoints (roadmap Phase 50), same package. */
     @SuppressWarnings("unchecked")
     static Map<String, Object> parseBody(Exchange exchange) throws Exception {
-        // platform-http may pre-parse a browser form post into a Map body; use it directly.
-        if (exchange.getMessage().getBody() instanceof Map<?, ?> formBody) {
+        // A form has one representation (docs/vertx-native.md decision 2): the edge parsed it.
+        if (!exchange.request().formFields().isEmpty()) {
             Map<String, Object> form = new LinkedHashMap<>();
-            formBody.forEach((key, value) -> form.put(String.valueOf(key), value));
+            exchange.request().formFields()
+                    .forEach((name, values) -> form.put(name, values.get(0)));
             return form;
         }
         String raw = exchange.getMessage().getBody(String.class);
         if (raw == null || raw.isBlank()) {
             return Map.of();
-        }
-        if (isFormPost(exchange)) {
-            return parseForm(raw);
         }
         return mapper.readValue(raw, Map.class);
     }

@@ -173,7 +173,7 @@ public final class HtmlResponseRenderer implements Step {
         // to be discarded on view: routes); `v` and `views` are reserved names the constructor
         // refuses, so the view models below can never be shadowed.
         compiledModel.forEach((key, expr) -> model.put(key, expr.eval(evaluation)));
-        String uri = exchange.getMessage().getHeader(Headers.HTTP_URI, String.class);
+        String uri = exchange.request().uri();
         String pagePath = uri == null
                 ? ""
                 : uri.indexOf('?') < 0 ? uri : uri.substring(0, uri.indexOf('?'));
@@ -232,7 +232,7 @@ public final class HtmlResponseRenderer implements Step {
         // a page under /_tesseraql/studio/<member>/ publishes it, and the link builder
         // rewrites the studio-addressed links the shared templates emit — so the studio
         // app tree stays member-agnostic while every emitted link carries the segment.
-        String studioMember = exchange.getMessage().getHeader("member", String.class);
+        String studioMember = exchange.request().param("member");
         String fromRoute = exchange.getFromRouteId();
         if (studioMember != null && fromRoute != null && fromRoute.startsWith("tql.studio.")) {
             model.put(io.tesseraql.yaml.template.BasePathLinkBuilder.STUDIO_MEMBER_VARIABLE,
@@ -266,10 +266,9 @@ public final class HtmlResponseRenderer implements Step {
         // #page-content region (a hand-written bare fragment) renders whole either way.
         String shellMode = response.effectiveShell();
         boolean partialRequest = "true".equals(
-                exchange.getMessage().getHeader("HX-Request", String.class))
-                && !"true".equals(exchange.getMessage().getHeader("HX-Boosted", String.class))
-                && !"true".equals(exchange.getMessage()
-                        .getHeader("HX-History-Restore-Request", String.class));
+                exchange.request().header("HX-Request"))
+                && !"true".equals(exchange.request().header("HX-Boosted"))
+                && !"true".equals(exchange.request().header("HX-History-Restore-Request"));
         boolean region = "never".equals(shellMode)
                 || ("auto".equals(shellMode) && partialRequest);
         java.util.Locale locale = java.util.Locale.forLanguageTag(tag);
@@ -287,7 +286,7 @@ public final class HtmlResponseRenderer implements Step {
         headers.apply(exchange, evaluation);
         if ("auto".equals(shellMode)) {
             // The negotiated response differs by HX-Request, so caches must key on it.
-            String vary = exchange.getMessage().getHeader("Vary", String.class);
+            String vary = exchange.response().header("Vary");
             exchange.response().header("Vary", vary == null || vary.isBlank()
                     ? "HX-Request"
                     : vary.contains("HX-Request") ? vary : vary + ", HX-Request");

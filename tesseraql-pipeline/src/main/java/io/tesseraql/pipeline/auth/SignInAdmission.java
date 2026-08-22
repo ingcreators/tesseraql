@@ -31,11 +31,9 @@ public final class SignInAdmission {
      */
     public static SessionStore.ClientInfo admitted(Exchange exchange) {
         SessionStore.ClientInfo client = SessionStore.ClientInfo.of(
-                exchange.getMessage().getHeader("User-Agent", String.class),
-                exchange.getMessage().getHeader("X-Forwarded-For", String.class),
-                exchange.getMessage().getHeader(
-                        io.tesseraql.pipeline.Headers.REMOTE_ADDRESS,
-                        String.class));
+                exchange.request().header("User-Agent"),
+                exchange.request().header("X-Forwarded-For"),
+                exchange.request().remoteAddress());
         allowList(exchange).admit(client.remoteAddr());
         return client;
     }

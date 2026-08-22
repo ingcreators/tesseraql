@@ -25,7 +25,7 @@ public final class FileTransferStatusProcessor implements Step {
 
     @Override
     public void process(Exchange exchange) throws Exception {
-        String transferId = exchange.getMessage().getHeader("transferId", String.class);
+        String transferId = exchange.request().param("transferId");
         FileTransferService transfers = exchange.beans().lookup(
                 TesseraqlProperties.FILE_TRANSFER_BEAN,
                 FileTransferService.class);

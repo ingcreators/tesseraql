@@ -65,7 +65,7 @@ public final class RedirectRenderer implements Step {
         if (location == null || !location.startsWith("/_tesseraql/studio/ui")) {
             return location;
         }
-        String member = exchange.getMessage().getHeader("member", String.class);
+        String member = exchange.request().param("member");
         String route = exchange.getFromRouteId();
         if (member == null || route == null || !route.startsWith("tql.studio.")) {
             return location;
@@ -75,7 +75,7 @@ public final class RedirectRenderer implements Step {
     }
 
     private static boolean isHtmxRequest(Exchange exchange) {
-        return "true".equalsIgnoreCase(exchange.getMessage().getHeader("HX-Request", String.class));
+        return "true".equalsIgnoreCase(exchange.request().header("HX-Request"));
     }
 
     /**

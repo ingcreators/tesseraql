@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.tesseraql.pipeline.Beans;
 import io.tesseraql.pipeline.Exchange;
-import io.tesseraql.pipeline.Headers;
 import io.tesseraql.pipeline.TesseraqlProperties;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -16,8 +15,7 @@ class PageHeadersTest {
         Exchange exchange = new Exchange(
                 Beans.NONE);
         exchange.setProperty(TesseraqlProperties.CONTEXT, Map.of("page", page));
-        exchange.getMessage().setHeader(Headers.HTTP_URI, uri);
-        exchange.getMessage().setHeader(Headers.HTTP_QUERY, query);
+        exchange.request().uri(uri).query(query);
         return exchange;
     }
 

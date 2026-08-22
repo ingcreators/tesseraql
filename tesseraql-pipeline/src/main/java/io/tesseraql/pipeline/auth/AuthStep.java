@@ -113,7 +113,7 @@ public class AuthStep implements Step {
         if (sessions == null) {
             return;
         }
-        String cookieHeader = exchange.getMessage().getHeader("Cookie", String.class);
+        String cookieHeader = exchange.request().header("Cookie");
         String fresh = sessions.rotate(sessions.sessionIdFromCookie(cookieHeader));
         if (fresh != null) {
             exchange.response().header("Set-Cookie",
@@ -127,7 +127,7 @@ public class AuthStep implements Step {
             case "bearer" ->
                 bean(exchange, JwtAuthenticator.class, TesseraqlProperties.JWT_AUTHENTICATOR_BEAN)
                         .authenticate(
-                                exchange.getMessage().getHeader("Authorization", String.class));
+                                exchange.request().header("Authorization"));
             case "api-key" -> apiKeyAuthenticate(exchange);
             case "mtls" -> mtlsAuthenticate(exchange);
             case "browser" -> browserAuthenticate(exchange);
@@ -145,9 +145,9 @@ public class AuthStep implements Step {
     private Principal apiKeyAuthenticate(Exchange exchange) {
         ApiKeyAuthenticator authenticator = bean(exchange, ApiKeyAuthenticator.class,
                 TesseraqlProperties.API_KEY_AUTHENTICATOR_BEAN);
-        String key = exchange.getMessage().getHeader(authenticator.header(), String.class);
+        String key = exchange.request().header(authenticator.header());
         if (key == null) {
-            String authorization = exchange.getMessage().getHeader("Authorization", String.class);
+            String authorization = exchange.request().header("Authorization");
             if (authorization != null
                     && authorization.regionMatches(true, 0, "ApiKey ", 0, "ApiKey ".length())) {
                 key = authorization.substring("ApiKey ".length()).trim();
@@ -168,7 +168,7 @@ public class AuthStep implements Step {
         String header = authenticator.header();
         String certificate = header == null
                 ? null
-                : exchange.getMessage().getHeader(header, String.class);
+                : exchange.request().header(header);
         return authenticator.authenticate(certificate);
     }
 
@@ -180,7 +180,7 @@ public class AuthStep implements Step {
     private Principal browserAuthenticate(Exchange exchange) {
         SessionStore sessions = bean(exchange, SessionStore.class,
                 TesseraqlProperties.SESSION_STORE_BEAN);
-        String cookie = exchange.getMessage().getHeader("Cookie", String.class);
+        String cookie = exchange.request().header("Cookie");
         Principal principal = new BrowserAuthenticator(sessions).authenticate(cookie);
         if (principal != null) {
             // Feeds the idle window and the "last active" column; the store throttles
@@ -246,7 +246,7 @@ public class AuthStep implements Step {
             return declared;
         }
         String resolved = io.tesseraql.security.policy.PolicyTemplate.resolve(declared,
-                pathTemplate, wirePath(exchange));
+                exchange.request().pathParams());
         if (resolved == null) {
             throw new TqlException(PolicyEngine.FORBIDDEN, "Policy '" + declared + "' resolves"
                     + " from this request's path, which names no application it can check");
@@ -281,10 +281,8 @@ public class AuthStep implements Step {
         // The presented address, resolved exactly as the session records it: the edge's
         // forwarded value when there is one, else the peer of the connection.
         String address = SessionStore.ClientInfo.of(null,
-                exchange.getMessage().getHeader("X-Forwarded-For", String.class),
-                exchange.getMessage().getHeader(
-                        io.tesseraql.pipeline.Headers.REMOTE_ADDRESS,
-                        String.class))
+                exchange.request().header("X-Forwarded-For"),
+                exchange.request().remoteAddress())
                 .remoteAddr();
         exchange.setProperty(TesseraqlProperties.PRINCIPAL,
                 io.tesseraql.security.GrantConditions.narrow(principal, address,
@@ -317,8 +315,7 @@ public class AuthStep implements Step {
             return;
         }
         java.util.List<Principal.RoleGrant> held = Activation.grantsFor(principal, member);
-        String encoded = exchange.getMessage().getHeader(TesseraqlProperties.ACTING_ROLE_HEADER,
-                String.class);
+        String encoded = exchange.request().header(TesseraqlProperties.ACTING_ROLE_HEADER);
         if (encoded != null && !encoded.isBlank()) {
             String requested = java.net.URLDecoder.decode(encoded,
                     java.nio.charset.StandardCharsets.UTF_8);
@@ -357,14 +354,14 @@ public class AuthStep implements Step {
      * answer instead (the {@code ErrorResponseRenderer} login-bounce test, restated here).
      */
     private static boolean wantsHtmlNavigation(Exchange exchange) {
-        if ("true".equals(exchange.getMessage().getHeader("HX-Request", String.class))) {
+        if ("true".equals(exchange.request().header("HX-Request"))) {
             return false;
         }
-        Object method = exchange.getMessage().getHeader(Headers.HTTP_METHOD);
+        Object method = exchange.request().method();
         if (method != null && !"GET".equalsIgnoreCase(String.valueOf(method))) {
             return false;
         }
-        String accept = exchange.getMessage().getHeader("Accept", String.class);
+        String accept = exchange.request().header("Accept");
         return accept != null && accept.contains("text/html");
     }
 
@@ -390,12 +387,12 @@ public class AuthStep implements Step {
 
     /** The request's wire path (the member never sees the {@code _as} segment — relay-stripped). */
     private static String wirePath(Exchange exchange) {
-        String path = exchange.getMessage().getHeader(Headers.HTTP_URI, String.class);
+        String path = exchange.request().uri();
         return path == null || !path.startsWith("/") || path.startsWith("//") ? "/" : path;
     }
 
     private static String querySuffix(Exchange exchange) {
-        String query = exchange.getMessage().getHeader(Headers.HTTP_QUERY, String.class);
+        String query = exchange.request().query();
         return query == null || query.isBlank() ? "" : "?" + query;
     }
 
@@ -417,9 +414,9 @@ public class AuthStep implements Step {
     private void csrf(Exchange exchange) {
         CsrfValidator validator = new CsrfValidator(
                 bean(exchange, SessionStore.class, TesseraqlProperties.SESSION_STORE_BEAN));
-        String header = exchange.getMessage().getHeader("X-CSRF-Token", String.class);
+        String header = exchange.request().header("X-CSRF-Token");
         String token = header != null ? header : formField(exchange, "_csrf");
-        validator.validate(exchange.getMessage().getHeader("Cookie", String.class), token);
+        validator.validate(exchange.request().header("Cookie"), token);
     }
 
     /**
@@ -428,11 +425,7 @@ public class AuthStep implements Step {
      * (and also exposes fields as message headers), so both are reusable reads.
      */
     private static String formField(Exchange exchange, String name) {
-        Object body = exchange.getMessage().getBody();
-        if (body instanceof java.util.Map<?, ?> form && form.get(name) != null) {
-            return String.valueOf(form.get(name));
-        }
-        return exchange.getMessage().getHeader(name, String.class);
+        return exchange.request().param(name);
     }
 
     /**

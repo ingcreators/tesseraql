@@ -102,9 +102,9 @@ final class OAuthRoutes {
     /** The document behind one member's path-inserted well-known: its resource id, and the
      * issuer as the one entry in {@code authorization_servers}. */
     private void resourceMetadata(Exchange exchange) throws Exception {
-        String path = exchange.getMessage().getHeader(Headers.HTTP_PATH, String.class);
+        String path = exchange.request().path();
         if (path == null || path.isBlank()) {
-            path = exchange.getMessage().getHeader(Headers.HTTP_URI, String.class);
+            path = exchange.request().uri();
         }
         String resource = flow.issuer()
                 + path.substring("/.well-known/oauth-protected-resource".length());
@@ -225,7 +225,7 @@ final class OAuthRoutes {
         java.util.Map<String, String> form = formBody(exchange);
         String clientId = form.get("client_id");
         String clientSecret = form.get("client_secret");
-        String authorization = exchange.getMessage().getHeader("Authorization", String.class);
+        String authorization = exchange.request().header("Authorization");
         if (authorization != null && authorization.startsWith("Basic ")) {
             String[] credentials = new String(java.util.Base64.getDecoder().decode(
                     authorization.substring(6)), StandardCharsets.UTF_8).split(":", 2);
@@ -294,12 +294,12 @@ final class OAuthRoutes {
                 java.util.Map.of("error", code)));
     }
 
-    /** platform-http may pre-parse a form post into a Map body; both shapes are accepted. */
+    /** The form has one representation (docs/vertx-native.md decision 2): the edge parsed it. */
     private java.util.Map<String, String> formBody(Exchange exchange) {
-        if (exchange.getMessage().getBody() instanceof java.util.Map<?, ?> parsed) {
+        if (!exchange.request().formFields().isEmpty()) {
             java.util.Map<String, String> form = new java.util.LinkedHashMap<>();
-            parsed.forEach((key, value) -> form.put(String.valueOf(key),
-                    value == null ? null : String.valueOf(value)));
+            exchange.request().formFields()
+                    .forEach((name, values) -> form.put(name, values.get(0)));
             return form;
         }
         return Params.parse(exchange.getMessage().getBody(String.class));
@@ -316,7 +316,7 @@ final class OAuthRoutes {
      * everything else lands on the consent page with the request echoed in the query.
      */
     private void authorize(Exchange exchange) {
-        String query = exchange.getMessage().getHeader(Headers.HTTP_QUERY, String.class);
+        String query = exchange.request().query();
         SessionStore.Session session = session(exchange);
         if (session == null) {
             redirect(exchange, 302, "/_tesseraql/login?redirect="
@@ -342,15 +342,7 @@ final class OAuthRoutes {
             redirect(exchange, 302, "/_tesseraql/login");
             return;
         }
-        // platform-http may pre-parse a browser form post into a Map body; use it directly.
-        java.util.Map<String, String> form;
-        if (exchange.getMessage().getBody() instanceof java.util.Map<?, ?> parsed) {
-            form = new java.util.LinkedHashMap<>();
-            parsed.forEach((key, value) -> form.put(String.valueOf(key),
-                    value == null ? null : String.valueOf(value)));
-        } else {
-            form = Params.parse(exchange.getMessage().getBody(String.class));
-        }
+        java.util.Map<String, String> form = formBody(exchange);
         String expected = session.csrfToken();
         if (expected == null || !expected.equals(form.get("_csrf"))) {
             exchange.response().status(403);
@@ -376,7 +368,7 @@ final class OAuthRoutes {
     }
 
     private SessionStore.Session session(Exchange exchange) {
-        String cookie = exchange.getMessage().getHeader("Cookie", String.class);
+        String cookie = exchange.request().header("Cookie");
         if (cookie == null) {
             return null;
         }

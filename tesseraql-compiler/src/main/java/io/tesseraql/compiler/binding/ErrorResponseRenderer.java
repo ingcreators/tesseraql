@@ -145,7 +145,7 @@ public final class ErrorResponseRenderer implements Step {
                 return;
             }
         }
-        if ("true".equals(exchange.getMessage().getHeader("HX-Request", String.class))) {
+        if ("true".equals(exchange.request().header("HX-Request"))) {
             exchange.response().header(Headers.CONTENT_TYPE, "text/html; charset=utf-8");
             applySecurityHeaders(exchange);
             applyOnError(exchange);
@@ -167,21 +167,21 @@ public final class ErrorResponseRenderer implements Step {
      * page cannot loop.
      */
     private static boolean wantsHtmlLoginRedirect(Exchange exchange) {
-        if ("true".equals(exchange.getMessage().getHeader("HX-Request", String.class))) {
+        if ("true".equals(exchange.request().header("HX-Request"))) {
             return false;
         }
-        Object method = exchange.getMessage().getHeader(Headers.HTTP_METHOD);
+        Object method = exchange.request().method();
         if (method != null && !"GET".equalsIgnoreCase(String.valueOf(method))) {
             return false;
         }
-        String accept = exchange.getMessage().getHeader("Accept", String.class);
+        String accept = exchange.request().header("Accept");
         return accept != null && accept.contains("text/html");
     }
 
     /** Emits a 302 to the login page, preserving the original target as a sanitized {@code redirect}. */
     private static void redirectToLogin(Exchange exchange) {
-        String path = exchange.getMessage().getHeader(Headers.HTTP_URI, String.class);
-        String query = exchange.getMessage().getHeader(Headers.HTTP_QUERY, String.class);
+        String path = exchange.request().uri();
+        String query = exchange.request().query();
         String wirePath = path == null || !path.startsWith("/") || path.startsWith("//")
                 ? "/"
                 : path;

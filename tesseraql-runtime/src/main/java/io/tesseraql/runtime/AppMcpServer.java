@@ -220,7 +220,7 @@ final class AppMcpServer {
         Exchange out = pipelines.run(routeId, exchange -> {
             exchange.getMessage().setBody(body);
             if (context.authorization() != null) {
-                exchange.getMessage().setHeader("Authorization", context.authorization());
+                exchange.request().header("Authorization", context.authorization());
             }
         }).orElse(null);
         if (out == null) {

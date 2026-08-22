@@ -102,9 +102,9 @@ final class TokenExchangeRoutes {
      * reaches the minting path.
      */
     private void exchange(Exchange exchange) throws Exception {
-        String cookie = exchange.getMessage().getHeader("Cookie", String.class);
+        String cookie = exchange.request().header("Cookie");
         java.util.Map<String, Object> body = LoginRoutes.parseBody(exchange);
-        String token = exchange.getMessage().getHeader("X-CSRF-Token", String.class);
+        String token = exchange.request().header("X-CSRF-Token");
         if (token == null) {
             Object field = body.get("_csrf");
             token = field == null ? null : String.valueOf(field);

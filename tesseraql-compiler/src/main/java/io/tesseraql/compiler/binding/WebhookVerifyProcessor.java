@@ -51,10 +51,8 @@ public final class WebhookVerifyProcessor implements Step {
         }
         exchange.getMessage().setBody(body);
 
-        String signature = exchange.getMessage().getHeader(verifier.signatureHeader(),
-                String.class);
-        String timestamp = exchange.getMessage().getHeader(verifier.timestampHeader(),
-                String.class);
+        String signature = exchange.request().header(verifier.signatureHeader());
+        String timestamp = exchange.request().header(verifier.timestampHeader());
         if (signature == null || signature.isBlank() || timestamp == null || timestamp.isBlank()) {
             throw new TqlException(INVALID_SIGNATURE, "Webhook '" + routeId
                     + "' is missing its signature or timestamp header");
@@ -83,7 +81,7 @@ public final class WebhookVerifyProcessor implements Step {
             throw new TqlException(NO_STORE, "Webhook replay store is not configured");
         }
         String deliveryId = verifier.idHeader()
-                .map(header -> exchange.getMessage().getHeader(header, String.class))
+                .map(header -> exchange.request().header(header))
                 .filter(value -> value != null && !value.isBlank())
                 .orElse(signature);
         Instant expiresAt = Instant.ofEpochSecond(epochSeconds).plus(verifier.tolerance());

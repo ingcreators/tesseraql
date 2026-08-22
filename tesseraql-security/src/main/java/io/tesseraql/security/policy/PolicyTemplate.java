@@ -48,17 +48,17 @@ public final class PolicyTemplate {
      * than to fail: a path that names no usable segment is a request that named no application,
      * which is a denial, not a server fault.
      *
-     * @param policyId    the compiled template, e.g. {@code tql.iam.write.{name}}
-     * @param pathTemplate the route's own URL template, e.g.
-     *                     {@code /_tesseraql/admin/applications/{name}/roles/assign}
-     * @param requestPath the path of the request being authorized
+     * @param policyId   the compiled template, e.g. {@code tql.iam.write.{name}}
+     * @param pathValues the request's path parameters as the router matched them — the URL's
+     *                   values by construction, which is what this class used to re-derive from
+     *                   the URI string when the transport also published them as spoofable
+     *                   headers (docs/vertx-native.md decision 2)
      */
-    public static String resolve(String policyId, String pathTemplate, String requestPath) {
+    public static String resolve(String policyId, Map<String, String> pathValues) {
         if (policyId == null) {
             return null;
         }
-        Map<String, String> values = io.tesseraql.core.http.PathTemplate.values(pathTemplate,
-                requestPath);
+        Map<String, String> values = pathValues;
         Matcher matcher = PLACEHOLDER.matcher(policyId);
         StringBuilder out = new StringBuilder();
         while (matcher.find()) {
