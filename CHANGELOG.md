@@ -146,6 +146,13 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **The `ops.*` and `account.*` providers register from their own class**
+  (docs/boot-phases.md slice 2). The ~370-line fluent chain that built the runtime's provider
+  registry — batch visibility, traces, transfers, outbox, the whole account surface, invites,
+  sessions, TOTP, delegation and the password change — moves verbatim from the boot to
+  `OpsAccountProviders`, grouped the way `StudioProviders` is; the boot builds its registry
+  with one call. Registration order and lambda bodies are unchanged.
+
 - **The `iam.*` administration providers register from their own class**
   (docs/boot-phases.md slice 1). The ~360-line grant-administration block — grant views, role
   and grant editors, delegated administration, elevation, reviews, requests, groups,
