@@ -50,6 +50,40 @@ class PipelinesCacheTest {
         }
     }
 
+    /**
+     * A lookup racing the compiler thread never tears. The builder's step list is filled on the
+     * reloader's thread while {@code find} copies it on request threads; unsynchronized, the
+     * copy threw {@code ConcurrentModificationException} on the request thread — a 500 for the
+     * caller whose save it wasn't. The chain a racing lookup sees may still be the one mid-fill
+     * (the test above pins that), but it is always a consistent snapshot.
+     */
+    @Test
+    void aLookupRacingTheCompilerNeverTears() throws Exception {
+        try (RuntimeContext context = new RuntimeContext()) {
+            Pipelines pipelines = Pipelines.of(context);
+            PipelineBuilder builder = pipelines.compiling(List.of()).pipeline("t.raced");
+            java.util.concurrent.atomic.AtomicReference<Throwable> torn = new java.util.concurrent.atomic.AtomicReference<>();
+            Thread reader = new Thread(() -> {
+                try {
+                    while (!Thread.currentThread().isInterrupted()) {
+                        pipelines.find("t.raced").ifPresent(pipeline -> pipeline.steps().size());
+                    }
+                } catch (Throwable failure) {
+                    torn.set(failure);
+                }
+            });
+            reader.start();
+            for (int at = 0; at < 5_000; at++) {
+                builder.process(exchange -> {
+                });
+            }
+            reader.interrupt();
+            reader.join(5_000);
+            assertThat(torn.get()).as("a racing lookup must never observe a torn chain")
+                    .isNull();
+        }
+    }
+
     @Test
     void aRecompileReplacesWhatEveryLookupGets() {
         try (RuntimeContext context = new RuntimeContext()) {
