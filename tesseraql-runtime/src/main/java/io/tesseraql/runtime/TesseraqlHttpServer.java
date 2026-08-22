@@ -34,28 +34,44 @@ final class TesseraqlHttpServer implements RuntimeContext.Service {
     private final RuntimeContext runtimeContext;
     private final String host;
     private final int port;
+    private final Vertx shared;
+    private final VertxOptions options;
     private Vertx vertx;
     private Vertx created;
     private HttpServer server;
 
-    TesseraqlHttpServer(RuntimeContext runtimeContext, String host, int port) {
+    /**
+     * The transport is passed, not looked up (docs/vertx-native.md decision 6). The code that
+     * constructs this server is the code that already decided whether the host's shared Vert.x
+     * carries it or the declared options build one — the by-type registry lookup this replaces
+     * answered null when more than one instance matched, and a second bound instance made the
+     * server silently build a third with default pools, the exact default docs/http-threading.md
+     * decision 1 exists to prevent.
+     *
+     * @param shared  the host's Vert.x, ridden and never closed; null when standalone
+     * @param options what to build one from when standalone; null falls back to defaults
+     */
+    TesseraqlHttpServer(RuntimeContext runtimeContext, String host, int port, Vertx shared,
+            VertxOptions options) {
         this.runtimeContext = runtimeContext;
         this.host = host;
         this.port = port;
+        this.shared = shared;
+        this.options = options;
     }
 
     @Override
     public void start() throws Exception {
-        vertx = runtimeContext.findSingleByType(Vertx.class);
+        vertx = shared;
         if (vertx == null) {
-            VertxOptions options = runtimeContext.findSingleByType(VertxOptions.class);
             created = options == null ? Vertx.vertx() : Vertx.vertx(options);
             vertx = created;
-            // Bound so the rest of the runtime finds the same instance the way it finds a shared
-            // one: a surface should not have to know whether the host provided it.
-            runtimeContext.bind("tesseraqlVertx", created);
             LOG.debug("Created a Vert.x instance for this runtime");
         }
+        // The published fact: which transport this runtime serves on. The multi-app suite reads
+        // it to assert that every member of one host rides one instance
+        // (docs/http-threading.md decision 4).
+        runtimeContext.bind(io.tesseraql.pipeline.TesseraqlProperties.VERTX_BEAN, vertx);
         Router router = Router.router(vertx);
         runtimeContext.bind(HttpEdgeBeans.ROUTER, router);
         runtimeContext.bind(HttpEdgeBeans.BODY_HANDLER,

@@ -665,20 +665,23 @@ public final class TesseraqlRuntime implements AutoCloseable {
         };
         context.bind(TesseraqlProperties.TEMP_STORE_BEAN, tempStore);
 
-        // The transport this runtime serves on (docs/http-threading.md decisions 1 and 4).
-        // Hosted, the host built one instance for every runtime and sized it, so this runtime
-        // rides it and closes nothing: the runtime resolves both Vertx and VertxOptions by type from
-        // this registry, and it closes only an instance it built itself. Standalone, the options
-        // are what stop the server from inheriting a default sized for a framework where blocking
-        // is the exception.
-        if (hostContext != null && hostContext.vertx() != null) {
-            context.bind(TesseraqlProperties.VERTX_BEAN, hostContext.vertx());
+        // The transport this runtime serves on (docs/http-threading.md decisions 1 and 4) is
+        // handed to the server at construction below (docs/vertx-native.md decision 6): hosted,
+        // the host's instance, ridden and never closed; standalone, the declared options, which
+        // are what stop the server from inheriting a default sized for a framework where
+        // blocking is the exception.
+        final io.vertx.core.Vertx sharedTransport = hostContext == null
+                ? null
+                : hostContext.vertx();
+        if (sharedTransport != null) {
             warnOnMemberThreadSizing(manifest.config(),
                     io.tesseraql.yaml.app.ApplicationName.of(manifest.config()));
-        } else {
-            context.bind(TesseraqlProperties.VERTX_OPTIONS_BEAN,
-                    vertxOptions(manifest.config()));
         }
+        // Resolved here, not at server construction: a declared thread count that cannot be a
+        // pool refuses the boot while the failure still names the key that caused it.
+        final io.vertx.core.VertxOptions standaloneTransportOptions = sharedTransport != null
+                ? null
+                : vertxOptions(manifest.config());
 
         // The default HTTP header filter drops response caching headers wholesale; declarative
         // route caching (docs/response-shaping.md) needs Cache-Control on the wire, so the
@@ -1375,7 +1378,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
             AppMigrations.migrate(
                     io.tesseraql.yaml.migration.SchemaHistoryName.of(manifest.config()),
                     appHome, manifest.config(), dataSource, tenantDataSources, dataSources::get);
-            context.addService(new TesseraqlHttpServer(context, "0.0.0.0", port));
+            context.addService(new TesseraqlHttpServer(context, "0.0.0.0", port,
+                    sharedTransport, standaloneTransportOptions));
             new RouteCompiler().appName(appName)
                     .functions(modules.functions()).compile(context, manifest);
             // Mounted apps (jar-bundled system apps and config-listed directories, design ch. 32)
