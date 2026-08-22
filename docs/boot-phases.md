@@ -97,13 +97,22 @@ construction order.
 1. **`IamAdminProviders`.** The ~360-line `iam.*` grant-administration block moves verbatim to
    `IamAdminProviders.register(serviceProviders, deps)` beside `OpsShellProviders`. Its two
    lazy `context.lookup` suppliers move with it unchanged — they are lazy because
-   `IDENTITY_SERVICE_BEAN` binds later, and that stays true.
+   `IDENTITY_SERVICE_BEAN` binds later, and that stays true. **Done, #988** — one capture the
+   map missed (`manifest`, a single orgunit read), and its lesson: a config-key read that
+   *moves file* drifts the generated config reference, so the regen runs on moves, not only on
+   adds and removes.
 2. **`OpsAccountProviders`.** The ~375-line fluent chain moves the same way. One class, three
    register methods (`ops`, `account`, `iam` session/credential) in chain order — the
    `StudioProviders` grouping precedent, state as fields so the lambda bodies stay verbatim.
+   **Done, #989** — the real capture list was 26 values, eleven beyond what reading the chain
+   suggested; the compiler's enumeration of them is itself the argument for the extraction.
+   Landed with a latent test race retired in passing: `StackReconcilerSweepTest`'s fake host
+   shared a plain map and list across threads, and once failed asserting a list did not
+   contain the very element its own error message printed.
 3. **`JobRunners` + `OpsDashboards`.** The `runOne`/`jobRunner` closures become a small factory
    returning the two runnables; the dashboard's eight-probe builder chain moves next to it.
-   Both are pure assembly over already-built stores.
+   Both are pure assembly over already-built stores. **Done, #990**, taking `traceLogOf` and
+   the datasource probe with the dashboard — both had no other caller.
 4. **The construct-and-bind prefix becomes three builders.** `RuntimePools` (datasources,
    framework pool, tenant pools, lanes, telemetry, diagnostics — everything the catch releases),
    `RuntimeStores` (session through attachments: the P12–P16 store ladder), and
@@ -112,6 +121,18 @@ construction order.
    riskiest slice and deliberately last: re-measure after slices 1–3, and if `start` is already
    a readable ~900 lines of named calls plus this prefix, **stopping there is an allowed
    outcome** — the abort clause, stated up front like vertx-native's.
+   **Done in narrowed form — `RuntimePools` alone, plus the whole leak.** Shipping found the
+   leak did not need the other two builders: hoisting the boot's `try` to start right after the
+   pools phase (the `return` moves inside it) puts every later failure — stores, messaging,
+   compile, start — onto the catch that releases the record, and `RuntimePools` releases its
+   own partial work for failures inside itself. With the leak retired by ownership,
+   `RuntimeStores` and `RuntimeMessaging` would have carried names only, for a bind ladder
+   whose comments already name its rungs — the abort clause, applied to two-thirds of the
+   slice. A pools-phase refusal keeps its own message (the wrapper applies only after the
+   record is handed back), which is the key-naming contract the threading suite pins.
+   `BootFailureReleaseTest` pins both failure behaviours by watching for the pool's own
+   surviving threads. `start` measured 2,344 lines at the campaign's start and 1,396 after
+   this slice; the largest method left in the tree is a 378-line provider group.
 
 Not in any slice: the MCP assembly, `systemNav`, the token-issuance block, the sweeps — each is
 30–70 lines with a comment that names it, and extraction would trade a visible sequence for a

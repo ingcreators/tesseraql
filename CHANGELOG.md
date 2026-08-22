@@ -146,6 +146,19 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **The boot's releasable substrate builds as one named phase, and a failed boot releases what
+  it took on every path** (docs/boot-phases.md slice 4, closing the campaign). `RuntimePools`
+  builds the datasource pools, the framework pool, telemetry, lanes, the diagnostics rings and
+  the tenant pools — exactly what the boot's failure path must release — and releases its own
+  partial work when a refusal happens inside it (an unknown `tesseraql.framework.datasource`
+  name used to leave every pool's threads alive for the life of the process). The boot's `try`
+  now starts right after that phase, so every later failure releases the record through the
+  one catch; a pools-phase refusal keeps its own key-naming message. `BootFailureReleaseTest`
+  pins both behaviours by watching for the pool's surviving threads. `TesseraqlRuntime.start`:
+  2,344 lines at the campaign's start, 1,396 after it; the `RuntimeStores`/`RuntimeMessaging`
+  naming-only builders were dropped under the design's abort clause — with the leak retired by
+  ownership they carried names for a bind ladder whose comments already name its rungs.
+
 - **The job runner and the ops dashboard assemble from their own classes**
   (docs/boot-phases.md slice 3). The runner closures — one execution honouring the declared
   datasource and per-tenant routing, wrapped in the after-chaining walk — move verbatim to
