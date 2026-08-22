@@ -429,6 +429,14 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **One Content-Disposition filename sanitizer, everywhere a download names its file.** Four
+  writers carried their own regex and disagreed: the attachment, transfer and operations
+  downloads stripped CR/LF and the double quote but let a backslash through — `report.pdf\`
+  escapes the closing quote and leaves the quoted-string unterminated, which download parsers
+  resolve differently (filename spoofing and extension confusion, reachable from a
+  client-supplied upload filename) — and the SQL export's writer sanitized nothing at all. The
+  strictest regex now lives once (`ContentDisposition` in core) and all five sites use it.
+
 - **Three resource leaks on the runtime's own surfaces.** A server whose close timed out
   leaked its created Vert.x permanently — event loops and acceptor threads alive for the rest
   of the process, because the stop had no `finally` and the context logs a failed stop and

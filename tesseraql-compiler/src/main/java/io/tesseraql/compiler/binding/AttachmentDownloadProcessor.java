@@ -55,7 +55,7 @@ public final class AttachmentDownloadProcessor implements Step {
         exchange.response().status(200);
         exchange.response().header(Headers.CONTENT_TYPE, contentType);
         exchange.response().header("Content-Disposition",
-                "attachment; filename=\"" + filename.replaceAll("[\\r\\n\"]", "_") + "\"");
+                io.tesseraql.core.http.ContentDisposition.attachment(filename));
         exchange.setBody(f.content());
     }
 }
