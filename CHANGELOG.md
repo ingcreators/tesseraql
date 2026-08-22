@@ -146,6 +146,13 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **The `iam.*` administration providers register from their own class**
+  (docs/boot-phases.md slice 1). The ~360-line grant-administration block — grant views, role
+  and grant editors, delegated administration, elevation, reviews, requests, groups,
+  conditions, attributes, recompute — moves verbatim from the runtime boot to
+  `IamAdminProviders`, taking its two private helpers with it; the boot calls one named method
+  where the block stood. Registration order and lambda bodies are unchanged.
+
 - **The Studio providers register in feature groups.** `StudioProviders.register` was one
   1,909-line fluent statement — 85 registrations in a single expression, the second-largest
   method in the tree. It is eleven feature-group methods now (explorer, composers, routes and
