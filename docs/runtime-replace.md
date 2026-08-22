@@ -626,3 +626,14 @@ Each gated on the slice it blocks, with a recommendation:
    wanted eventually; it is out of this design's scope, deferred to the grants work.** The
    section above is the standing record the grants work inherits — deploy is one of its
    customers, the target shape is sketched there, and the interim holds until it ships.
+6. **Narrowing the mid-flight 502 window** — *gates nothing; the swap's one documented
+   residual.* A request whose connection dies mid-flight during a replace is deliberately not
+   replayed (`StackRelay`, the non-replay rule above: replaying a request the origin may have
+   acted on is a worse defect than the 502 it saves), and both
+   [camel-removal.md](camel-removal.md) and [vertx-native.md](vertx-native.md) observed it as a
+   single-run flake of `MultiAppReplaceIntegrationTest` before the test learned to tolerate the
+   one transient (its sibling `StackDeployIntegrationTest`'s treatment). Recommended, recorded
+   here for its owner: reuse the `replayable` predicate the 503 leg already computes
+   (`GET`/`HEAD`) to also retry an idempotent request that died mid-flight — a deliberate
+   change to the non-replay decision, which is why it waits for this design's owner rather
+   than riding a pipeline campaign.

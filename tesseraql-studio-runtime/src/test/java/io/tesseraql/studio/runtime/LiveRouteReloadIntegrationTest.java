@@ -112,6 +112,52 @@ class LiveRouteReloadIntegrationTest {
         assertThat(pingVersion()).isEqualTo(before);
     }
 
+    /**
+     * A stub leaves with its route. A parse-broken route drops out of the manifest, so a later
+     * reload matches it to neither the old routes nor the new — deleting the broken file used
+     * to leave its stub serving TQL-ROUTE-3103 on the deleted URL until restart, when the
+     * honest answer is the 404 every other deleted route gets.
+     */
+    @Test
+    void aDeletedBrokenRouteStopsServingItsStub() throws Exception {
+        Path dir = appHome.resolve("web/api/ghost");
+        Files.createDirectories(dir);
+        Files.writeString(dir.resolve("ghost.sql"), "select 'boo' as answer\n");
+        Files.writeString(dir.resolve("get.yml"), """
+                version: tesseraql/v1
+                id: ghost
+                kind: route
+                recipe: query-json
+                security:
+                  auth: public
+                sources:
+                  main:
+                    sql:
+                      file: ghost.sql
+                      mode: query
+                response:
+                  json:
+                    status: 200
+                    body:
+                      data: main.rows
+                """);
+        assertThat(studioPost("/_tesseraql/studio/reload", "").statusCode()).isEqualTo(200);
+        assertThat(get("/api/ghost").statusCode()).isEqualTo(200);
+
+        // An unparseable document: the route leaves the manifest and its endpoint stubs.
+        Files.writeString(dir.resolve("get.yml"), "::: not yaml :::\n\t");
+        assertThat(studioPost("/_tesseraql/studio/reload", "").statusCode()).isEqualTo(200);
+        assertThat(get("/api/ghost").statusCode()).isEqualTo(500);
+        assertThat(get("/api/ghost").body()).contains("TQL-ROUTE-3103");
+
+        // Deleting the broken file removes the stub with it.
+        Files.delete(dir.resolve("get.yml"));
+        Files.delete(dir.resolve("ghost.sql"));
+        Files.delete(dir);
+        assertThat(studioPost("/_tesseraql/studio/reload", "").statusCode()).isEqualTo(200);
+        assertThat(get("/api/ghost").statusCode()).isEqualTo(404);
+    }
+
     @Test
     void aNewRouteMountsAndARemovedRouteUnmountsWithoutARestart() throws Exception {
         // The instant loop (roadmap Phase 42): a brand-new route file serves after a reload.

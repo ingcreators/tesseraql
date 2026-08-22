@@ -683,11 +683,6 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 ? null
                 : vertxOptions(manifest.config());
 
-        // The default HTTP header filter drops response caching headers wholesale; declarative
-        // route caching (docs/response-shaping.md) needs Cache-Control on the wire, so the
-        // runtime's strategy keeps the full default filter minus exactly that header — request
-        // hop-by-hop headers still never echo back. Bound by name now that no component holds it
-        // (docs/http-edge.md decision 1).
         // SSE endpoints register on the platform's Vert.x router, which exists only once
         // the context (and with it the HTTP server) has started — collected here, run
         // right after context.start() (see SseRoutes for why they are not compiled pipelines).

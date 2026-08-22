@@ -335,9 +335,13 @@ public class SqlStep implements Step {
         boolean split = spec.splitBy() != null && !spec.splitBy().isBlank();
         exchange.response().header(Headers.CONTENT_TYPE,
                 split ? "application/zip" : codec.contentType());
-        exchange.response().header("Content-Disposition", "attachment; filename=\"" + (split
-                ? zipName(filename)
-                : filename) + "\"");
+        // The filename is route-author data (export.filename / the route id), but it is the one
+        // Content-Disposition writer that sanitized nothing — a quote or control character in a
+        // route file reached the wire verbatim.
+        exchange.response().header("Content-Disposition",
+                io.tesseraql.core.http.ContentDisposition.attachment(split
+                        ? zipName(filename)
+                        : filename));
         exchange.addOnCompletion(done -> tempStore.delete(ref));
     }
 

@@ -440,6 +440,44 @@ All notable changes to TesseraQL are documented here. The format follows
   "undeclared stays ephemeral" is now literally true), and every integration test boots on
   port 0 instead of racing — the `freePort()` helpers left with their callers.
 
+- **The replace suite tolerates the swap's one documented transient, and the records around it
+  agree.** `MultiAppReplaceIntegrationTest` asserted 200 on every sample fired through a
+  replace — asserting the absence of exactly the 502 the swap is documented to produce (a
+  request whose connection dies mid-flight is deliberately not replayed), the same shape its
+  sibling `StackDeployIntegrationTest` already tolerates; it now allows that one transient and
+  stays strict beyond it. The follow-up that would narrow the window lives where its owner
+  looks (docs/runtime-replace.md open question 6, with the concrete proposal both campaign
+  docs half-carried), the vertx-native design doc carries a shipped banner and corrections for
+  what reading it against the tree found (the `PathTemplate` decision superseded in shipping,
+  a `List.of` "constraint" that is not real Java, two bold pre-fix claims now marked fixed),
+  `PolicyTemplate`'s contract paragraph describes the mechanism that exists rather than the
+  one that was deleted, and the one dead source link in `docs/` points at the renamed class.
+
+- **A deleted broken route stops serving its stub, and the dead surface the review found is
+  gone.** A parse-broken route drops out of the manifest, so a later reload matched it to
+  neither the old routes nor the new — deleting the broken file left its TQL-ROUTE-3103 stub
+  serving on the deleted URL until restart. The reloader keeps a ledger of stubbed routes and
+  removes a stub whose route is gone (the honest 404), and removing a pipeline now removes its
+  mount row too, so the table stops accumulating debris. Swept with it: `Response.removeHeader`
+  and `hasHeader` (no callers, no story), `Headers.FILE_NAME` (its javadoc described a hand-off
+  that actually rides the `POLLED_FILE_NAME` exchange property — a documented header that was
+  silently ignored if written), and three comments describing mechanisms deleted with the
+  one-bag message.
+
+- **Malformed Basic credentials at the token endpoint answer `invalid_client`, not a 500.**
+  Invalid base64 in the `Authorization: Basic` header threw out of the decode into the generic
+  error envelope — a server-error claim for what RFC 6749 §5.2 defines as a client that failed
+  to authenticate. Every other client-authentication failure already spoke the OAuth wire
+  vocabulary; the unreadable header now does too.
+
+- **One Content-Disposition filename sanitizer, everywhere a download names its file.** Four
+  writers carried their own regex and disagreed: the attachment, transfer and operations
+  downloads stripped CR/LF and the double quote but let a backslash through — `report.pdf\`
+  escapes the closing quote and leaves the quoted-string unterminated, which download parsers
+  resolve differently (filename spoofing and extension confusion, reachable from a
+  client-supplied upload filename) — and the SQL export's writer sanitized nothing at all. The
+  strictest regex now lives once (`ContentDisposition` in core) and all five sites use it.
+
 - **Three resource leaks on the runtime's own surfaces.** A server whose close timed out
   leaked its created Vert.x permanently — event loops and acceptor threads alive for the rest
   of the process, because the stop had no `finally` and the context logs a failed stop and
@@ -795,12 +833,13 @@ All notable changes to TesseraQL are documented here. The format follows
   outright. `path.id` could be an id the caller chose, and so could `params.id` and every
   `sql.params` expression reading either — a route addressed to one row operating on another.
 
-  Path parameters are now read off the request's URL, matched against the route's own template
-  (`PathTemplate`, aligned from the end so a base path is ignored); the message header remains
-  the answer only where there is no URL to read, such as a `direct:` invocation. A declared
-  input sharing a path parameter's name still **types and validates** that path parameter
-  (typed path parameters) — it no longer *sources* it, so such a name can no longer double as a
-  body field.
+  Path parameters are now read off the request's URL. (This first shipped as a `PathTemplate`
+  re-parse aligned from the end so a base path is ignored; within this same release the
+  vertx-native campaign replaced the re-parse with the router's own match —
+  `request().pathParams()` — and `PathTemplate` left the tree. The guarantee is unchanged: the
+  URL, never a steerable field.) A declared input sharing a path parameter's name still
+  **types and validates** that path parameter (typed path parameters) — it no longer *sources*
+  it, so such a name can no longer double as a body field.
 
 ### Added
 

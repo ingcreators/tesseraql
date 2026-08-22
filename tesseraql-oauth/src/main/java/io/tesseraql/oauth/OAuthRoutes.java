@@ -227,8 +227,17 @@ final class OAuthRoutes {
         String clientSecret = form.get("client_secret");
         String authorization = exchange.request().header("Authorization");
         if (authorization != null && authorization.startsWith("Basic ")) {
-            String[] credentials = new String(java.util.Base64.getDecoder().decode(
-                    authorization.substring(6)), StandardCharsets.UTF_8).split(":", 2);
+            String[] credentials;
+            try {
+                credentials = new String(java.util.Base64.getDecoder().decode(
+                        authorization.substring(6)), StandardCharsets.UTF_8).split(":", 2);
+            } catch (IllegalArgumentException malformed) {
+                // RFC 6749 §5.2: credentials that cannot be read are a client that failed to
+                // authenticate — invalid_client on the wire vocabulary, not the 500 the
+                // generic envelope answered when the base64 threw here.
+                error(exchange, 401, "invalid_client");
+                return;
+            }
             clientId = credentials[0];
             clientSecret = credentials.length > 1 ? credentials[1] : null;
         }
