@@ -85,16 +85,22 @@ final class TesseraqlHttpServer implements RuntimeContext.Service {
 
     @Override
     public void stop() throws Exception {
-        if (server != null) {
-            server.close().toCompletionStage().toCompletableFuture()
-                    .get(BIND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-            server = null;
+        // The created Vertx closes even when the server's close times out or throws: the
+        // context logs a failed stop and moves on, so a leak here was permanent — event loops
+        // and acceptor threads alive for the rest of the process.
+        try {
+            if (server != null) {
+                server.close().toCompletionStage().toCompletableFuture()
+                        .get(BIND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+                server = null;
+            }
+        } finally {
+            if (created != null) {
+                created.close().toCompletionStage().toCompletableFuture()
+                        .get(BIND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+                created = null;
+            }
+            vertx = null;
         }
-        if (created != null) {
-            created.close().toCompletionStage().toCompletableFuture()
-                    .get(BIND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-            created = null;
-        }
-        vertx = null;
     }
 }

@@ -62,20 +62,9 @@ public final class Response {
         return values == null || values.isEmpty() ? null : values.get(0);
     }
 
-    /** Forgets {@code name}. */
-    public Response removeHeader(String name) {
-        headers.remove(name);
-        return this;
-    }
-
     /** Every header, in name order, for the edge that writes them onto the wire. */
     public Map<String, List<String>> headers() {
         return headers;
-    }
-
-    /** Whether any value is set under {@code name}. */
-    public boolean hasHeader(String name) {
-        return headers.containsKey(name);
     }
 
     /** Copies {@code from}'s status and headers onto this response, replacing what was here. */

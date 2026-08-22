@@ -142,7 +142,6 @@ final class DeployRoutes {
             boolean canary) throws Exception {
         boolean htmx = "true".equals(exchange.request().header("HX-Request"));
         String accept = exchange.request().header("Accept");
-        // Inbound form fields surfaced as headers must not echo back onto the response.
         if (htmx || (accept != null && accept.contains("text/html"))) {
             String target = io.tesseraql.pipeline.BasePath.url(exchange,
                     "/_tesseraql/ops/console/deploy?deployed=" + encode(result.appName())
@@ -202,9 +201,12 @@ final class DeployRoutes {
 
     /** The uploaded package, spooled off-heap; the caller deletes it when done. */
     private static Path spool(Exchange exchange) throws Exception {
-        InputStream body = packageStream(exchange);
         Path spooled = Files.createTempFile("tesseraql-deploy", ".tqlapp");
-        try {
+        // The part's stream closes here on every path — Files.copy does not close its source,
+        // and an open handle per deploy leaked a descriptor until GC (and on Windows raced the
+        // body handler's end-of-response upload deletion). The sibling readers
+        // (FileImportProcessor, AttachmentUploadProcessor) already close theirs.
+        try (InputStream body = packageStream(exchange)) {
             long bytes = body == null
                     ? 0
                     : Files.copy(body,

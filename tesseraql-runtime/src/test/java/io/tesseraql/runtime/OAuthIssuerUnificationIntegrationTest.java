@@ -150,6 +150,22 @@ class OAuthIssuerUnificationIntegrationTest {
 
     @Test
     @org.junit.jupiter.api.Order(1)
+    void malformedBasicCredentialsAreInvalidClientNotAServerError() throws Exception {
+        // RFC 6749 §5.2: credentials that cannot be read are a client that failed to
+        // authenticate. The base64 decode used to throw into the generic envelope — a 500
+        // claiming the server failed when the caller's header was the problem.
+        HttpResponse<String> refused = CLIENT.send(HttpRequest.newBuilder(
+                URI.create("http://localhost:" + port + "/_tesseraql/oauth/token"))
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .header("Authorization", "Basic %%%not-base64%%%")
+                .POST(HttpRequest.BodyPublishers.ofString("grant_type=authorization_code"))
+                .build(), HttpResponse.BodyHandlers.ofString());
+
+        assertThat(refused.statusCode()).isEqualTo(401);
+        assertThat(refused.body()).contains("invalid_client");
+    }
+
+    @Test
     void withoutASessionAuthorizeBouncesThroughLogin() throws Exception {
         HttpResponse<String> bounced = CLIENT.send(HttpRequest.newBuilder(
                 URI.create("http://localhost:" + port + authorizeQuery())).build(),
