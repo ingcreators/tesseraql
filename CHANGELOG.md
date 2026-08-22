@@ -429,6 +429,12 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **Malformed Basic credentials at the token endpoint answer `invalid_client`, not a 500.**
+  Invalid base64 in the `Authorization: Basic` header threw out of the decode into the generic
+  error envelope — a server-error claim for what RFC 6749 §5.2 defines as a client that failed
+  to authenticate. Every other client-authentication failure already spoke the OAuth wire
+  vocabulary; the unreadable header now does too.
+
 - **One Content-Disposition filename sanitizer, everywhere a download names its file.** Four
   writers carried their own regex and disagreed: the attachment, transfer and operations
   downloads stripped CR/LF and the double quote but let a backslash through — `report.pdf\`
