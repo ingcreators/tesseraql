@@ -10,7 +10,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -32,8 +31,13 @@ class StackReconcilerSweepTest {
     /** A host whose stable slot is a map, so convergence is observable without a runtime. */
     private static final class FakeHost implements StackReconciler.HostOperations {
 
-        final Map<String, InstalledApp> stable = new HashMap<>();
-        final List<String> operations = new ArrayList<>();
+        // Written by the reconciler's sweep thread, read by the test thread: without the
+        // concurrent types there is no happens-before, and the test once failed asserting a
+        // list "did not contain" the very element its own error message printed - the element
+        // arrived between the check and the formatting.
+        final Map<String, InstalledApp> stable = new java.util.concurrent.ConcurrentHashMap<>();
+        final List<String> operations = java.util.Collections
+                .synchronizedList(new ArrayList<>());
 
         @Override
         public Set<String> appNames() {
