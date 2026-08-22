@@ -60,7 +60,7 @@ public final class OidcRuntimeExtension implements RuntimeExtension {
                     RealmConfig.class);
             linker = new OidcUserLinker(identity, realm, config.provision());
         }
-        new OidcRouteBuilder(config, discovery, stateStore, http, sessions, linker,
+        new OidcRoutes(config, discovery, stateStore, http, sessions, linker,
                 context.bean(TesseraqlProperties.CREDENTIAL_THROTTLE_BEAN,
                         io.tesseraql.security.throttle.CredentialThrottle.class))
                 .install(context.runtime());

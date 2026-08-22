@@ -7,7 +7,7 @@ import java.util.Map;
 /**
  * The login-method model for the bundled login page (the {@code auth.loginMethods} service): which
  * sign-in methods are available and where each begins, derived from config. Password login is always
- * wired ({@link LoginRouteBuilder}); the OIDC and SAML buttons appear when those extensions are
+ * wired ({@link LoginRoutes}); the OIDC and SAML buttons appear when those extensions are
  * enabled ({@code tesseraql.oidc.enabled} / {@code tesseraql.saml.enabled}) — and an operator can
  * "switch" to SSO-only by turning the password form off
  * ({@code tesseraql.console.login.password.enabled: false}). Template-ready (maps and scalars only).

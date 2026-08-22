@@ -46,7 +46,7 @@ import java.util.Map;
  * contract. The authority is an operational guardrail, not isolation between distrusting teams
  * (docs/runtime-replace.md states the boundary): those get separate stacks.
  */
-final class DeployRouteBuilder {
+final class DeployRoutes {
 
     /** TQL-FIELD-2001: the deploy request carried no package bytes in its body. */
     private static final TqlErrorCode EMPTY_BODY = new TqlErrorCode(TqlDomain.FIELD, 2001);
@@ -56,7 +56,7 @@ final class DeployRouteBuilder {
     private final HostContext.DeployPen pen;
     private final SessionStore sessions;
 
-    DeployRouteBuilder(HostContext.DeployPen pen, SessionStore sessions) {
+    DeployRoutes(HostContext.DeployPen pen, SessionStore sessions) {
         this.pen = pen;
         this.sessions = sessions;
     }

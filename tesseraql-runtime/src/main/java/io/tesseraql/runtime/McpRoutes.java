@@ -16,11 +16,11 @@ import io.tesseraql.pipeline.Step;
  * route security, so there is no transport-level auth gate - discovery is open and a tool that
  * declares a policy enforces it on call.
  */
-final class McpRouteBuilder {
+final class McpRoutes {
 
     private final McpHttpHandler handler;
 
-    McpRouteBuilder(McpHttpHandler handler) {
+    McpRoutes(McpHttpHandler handler) {
         this.handler = handler;
     }
 

@@ -26,7 +26,7 @@ import java.util.Map;
  * door. The caller's own identity is what authorizes: {@code permissions} and {@code actor}
  * are stamped from the authenticated principal here, never trusted off the wire.
  */
-final class WorkshopRouteBuilder {
+final class WorkshopRoutes {
 
     private static final AuthStep BROWSER = new AuthStep("authenticate", "browser", null, null);
     private static final AuthStep CSRF = new AuthStep("csrf");
@@ -34,7 +34,7 @@ final class WorkshopRouteBuilder {
     private final ObjectMapper mapper = new ObjectMapper();
     private final StudioEdit studioEdit;
 
-    WorkshopRouteBuilder(StudioEdit studioEdit) {
+    WorkshopRoutes(StudioEdit studioEdit) {
         this.studioEdit = studioEdit;
     }
 

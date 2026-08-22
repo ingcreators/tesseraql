@@ -16,7 +16,7 @@ import org.junit.jupiter.api.Test;
  * contract ({@code docs/hypermedia-ui.md}) hard-reference kit behaviors, events, recipes, and
  * named module exports by name. If a future WebJar bump renames or drops one, pages break at
  * runtime with no compile error — this test fails the build instead. The version is resolved from
- * the classpath (same as {@link AssetsRouteBuilder}), so a clean bump keeps the guard green as
+ * the classpath (same as {@link AssetRoutes}), so a clean bump keeps the guard green as
  * long as the symbols we depend on survive.
  */
 class HypermediaComponentsManifestTest {
@@ -71,7 +71,7 @@ class HypermediaComponentsManifestTest {
         assertThat(bundle).contains(REQUIRED_BUNDLE_EXPORTS);
     }
 
-    /** Reads a file from the resolved WebJar, mirroring {@code AssetsRouteBuilder}'s lookup. */
+    /** Reads a file from the resolved WebJar, mirroring {@code AssetRoutes}'s lookup. */
     private static InputStream webjarResource(String path) {
         String version = new org.webjars.WebJarVersionLocator().version(WEBJAR);
         assertThat(version).as("hypermedia-components WebJar on the classpath").isNotNull();

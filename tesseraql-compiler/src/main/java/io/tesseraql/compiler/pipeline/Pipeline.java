@@ -41,7 +41,7 @@ public record Pipeline(String id, List<Step> steps, List<Handler> handlers, int 
             caught = List.copyOf(caught);
         }
 
-        /** One clause, spelled the way a route builder spells it. */
+        /** One clause, spelled the way the framework's own routes spell it. */
         public static Handler catching(Class<? extends Throwable> type, Step renderer) {
             return new Handler(List.of(type.getName()), renderer);
         }

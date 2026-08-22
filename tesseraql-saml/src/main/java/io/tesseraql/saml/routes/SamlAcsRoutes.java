@@ -37,10 +37,10 @@ import java.util.UUID;
  * /logout}), and SP metadata ({@code GET /metadata}). A validation failure returns 401 without
  * leaking assertion contents.
  */
-final class SamlAcsRouteBuilder {
+final class SamlAcsRoutes {
 
     private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory
-            .getLogger(SamlAcsRouteBuilder.class);
+            .getLogger(SamlAcsRoutes.class);
 
     private final ObjectMapper mapper = new ObjectMapper();
     private final SamlResponseValidator validator;
@@ -67,24 +67,24 @@ final class SamlAcsRouteBuilder {
         }
     }
 
-    SamlAcsRouteBuilder(SamlResponseValidator validator, SamlAttributeMapping mapping,
+    SamlAcsRoutes(SamlResponseValidator validator, SamlAttributeMapping mapping,
             SessionStore sessions) {
         this(validator, mapping, sessions, null, null, null, SamlSecurity.none());
     }
 
-    SamlAcsRouteBuilder(SamlResponseValidator validator, SamlAttributeMapping mapping,
+    SamlAcsRoutes(SamlResponseValidator validator, SamlAttributeMapping mapping,
             SessionStore sessions, SamlUserLinker linker, SpMetadata metadata,
             SamlEndpoints endpoints) {
         this(validator, mapping, sessions, linker, metadata, endpoints, SamlSecurity.none());
     }
 
-    SamlAcsRouteBuilder(SamlResponseValidator validator, SamlAttributeMapping mapping,
+    SamlAcsRoutes(SamlResponseValidator validator, SamlAttributeMapping mapping,
             SessionStore sessions, SamlUserLinker linker, SpMetadata metadata,
             SamlEndpoints endpoints, SamlSecurity security) {
         this(validator, mapping, sessions, linker, metadata, endpoints, security, null);
     }
 
-    SamlAcsRouteBuilder(SamlResponseValidator validator, SamlAttributeMapping mapping,
+    SamlAcsRoutes(SamlResponseValidator validator, SamlAttributeMapping mapping,
             SessionStore sessions, SamlUserLinker linker, SpMetadata metadata,
             SamlEndpoints endpoints, SamlSecurity security,
             io.tesseraql.security.throttle.CredentialThrottle throttle) {
@@ -245,7 +245,7 @@ final class SamlAcsRouteBuilder {
         String throttleAddress = io.tesseraql.security.session.SessionStore.ClientInfo.of(null,
                 exchange.getMessage().getHeader("X-Forwarded-For", String.class),
                 exchange.getMessage().getHeader(
-                        io.tesseraql.pipeline.PlatformHttpHeaders.REMOTE_ADDRESS,
+                        io.tesseraql.pipeline.Headers.REMOTE_ADDRESS,
                         String.class))
                 .remoteAddr();
         if (throttle != null

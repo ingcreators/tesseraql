@@ -291,7 +291,7 @@ class MultiAppGatewayIntegrationTest {
     /**
      * The framework's own endpoints move under the prefix with the application's.
      *
-     * <p>They are mounted by hand in the runtime's route builders — forty-seven
+     * <p>They are mounted by hand in the runtime's own routes — forty-seven
      * {@code rest().get("/_tesseraql/…")} calls across five classes — not through the
      * compiler's single mount point. Setting the prefix on Camel's context-wide REST
      * configuration reaches all of them at once (docs/base-path.md); concatenating it per route

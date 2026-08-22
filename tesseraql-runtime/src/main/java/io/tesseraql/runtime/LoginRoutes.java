@@ -35,7 +35,7 @@ import java.util.Optional;
  * OIDC and SAML logins (the optional extensions) create the <em>same</em> session, so any
  * {@code auth: browser} route is satisfied however the session was established.
  */
-final class LoginRouteBuilder {
+final class LoginRoutes {
 
     private static final String LOGIN_PATH = "/_tesseraql/login";
 
@@ -47,7 +47,7 @@ final class LoginRouteBuilder {
     private final io.tesseraql.security.throttle.CredentialThrottle throttle;
     private final io.tesseraql.identity.IdentityService identity;
 
-    LoginRouteBuilder(PasswordAuthenticator authenticator, RealmConfig realm,
+    LoginRoutes(PasswordAuthenticator authenticator, RealmConfig realm,
             SessionStore sessions, io.tesseraql.core.credential.TotpStore totp,
             io.tesseraql.security.throttle.CredentialThrottle throttle,
             io.tesseraql.identity.IdentityService identity) {
@@ -64,7 +64,7 @@ final class LoginRouteBuilder {
         return SessionStore.ClientInfo.of(null,
                 exchange.getMessage().getHeader("X-Forwarded-For", String.class),
                 exchange.getMessage().getHeader(
-                        io.tesseraql.pipeline.PlatformHttpHeaders.REMOTE_ADDRESS,
+                        io.tesseraql.pipeline.Headers.REMOTE_ADDRESS,
                         String.class))
                 .remoteAddr();
     }

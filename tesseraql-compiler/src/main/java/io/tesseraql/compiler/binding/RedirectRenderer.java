@@ -82,7 +82,7 @@ public final class RedirectRenderer implements Step {
     /**
      * The one htmx-aware redirect (docs/vocabulary-cleanup.md slice 3): an htmx caller gets
      * {@code 204 + HX-Redirect} (a swap would inline the target page), everyone else the given
-     * 3xx + {@code Location}. Framework route builders use this instead of hand-rolling the
+     * 3xx + {@code Location}. Framework routes use this instead of hand-rolling the
      * negotiation.
      *
      * <p>The location is base-relative and acquires the application's prefix here

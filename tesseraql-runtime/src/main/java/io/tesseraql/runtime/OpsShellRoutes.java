@@ -22,11 +22,11 @@ import java.util.Map;
  * proxies the member's own browser-face download with the caller's cookie, and on the unhosted
  * boot — where the one member is this runtime itself — it forwards to the local handler.
  */
-final class OpsShellRouteBuilder {
+final class OpsShellRoutes {
 
     private final OpsShellProviders.Targets targets;
 
-    OpsShellRouteBuilder(OpsShellProviders.Targets targets) {
+    OpsShellRoutes(OpsShellProviders.Targets targets) {
         this.targets = targets;
     }
 

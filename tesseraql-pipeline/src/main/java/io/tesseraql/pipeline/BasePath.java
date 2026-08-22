@@ -9,7 +9,7 @@ import io.tesseraql.core.http.BasePaths;
  * <p>{@link BasePaths} states the rule; this reads the running application's value. It is bound in
  * the runtime's registry rather than threaded through constructors, for the same reason
  * {@link TesseraqlProperties#RESPONSE_HEADERS_BEAN} is: the surfaces that need it are hand-written
- * route builders and processors the compiler never sees.
+ * framework routes and processors the compiler never sees.
  *
  * <p>Under an active role (docs/application-roles.md structural decision 5) the effective prefix
  * for this request is {@code basePath + "/_as/" + role} — the exchange-aware reads append it, so

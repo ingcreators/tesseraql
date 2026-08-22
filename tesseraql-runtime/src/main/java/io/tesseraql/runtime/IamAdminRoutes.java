@@ -34,7 +34,7 @@ import java.util.Set;
  * changed alongside what was selected, so a stale selection cannot read as a completed
  * action (docs/silent-tolerance.md O10).
  */
-final class IamAdminRouteBuilder {
+final class IamAdminRoutes {
 
     private static final String USERS = "/_tesseraql/admin/users";
 
@@ -97,7 +97,7 @@ final class IamAdminRouteBuilder {
 
     /**
      * Every value of a repeated urlencoded form field. platform-http pre-parses a browser
-     * form post into a Map body (the LoginRouteBuilder precedent) — a repeated field may
+     * form post into a Map body (the LoginRoutes precedent) — a repeated field may
      * arrive as a collection value — and a raw string body is parsed by hand otherwise.
      */
     private static List<String> formValues(Exchange exchange, String name) {

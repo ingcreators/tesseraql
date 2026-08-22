@@ -14,14 +14,13 @@ import java.util.Locale;
  * only part still being asked for — and asking for it kept {@code camel-platform-http-vertx} in
  * the build along with the REST configuration that carried the base path.
  *
- * <p>A mount names the {@code direct:} endpoint rather than the route id, because that is what the
- * call site already had in its hand: the id lives on the {@code from(...)} on the next line. The
- * edge resolves one to the other by reading the route model, which is the same place it reads the
- * pipeline from.
+ * <p>A mount names the pipeline that answers it, and the edge looks that pipeline up in the
+ * registry by the same id (docs/camel-removal.md structural decision 1). It used to name a
+ * {@code direct:} endpoint the edge resolved by reading the route model; both left with slice 2b.
  */
 public final class HttpMounts {
 
-    /** Registry name, so a route builder can declare a mount and the edge can read them all. */
+    /** Registry name, so an installer can declare a mount and the edge can read them all. */
     public static final String BEAN = "tesseraqlHttpMounts";
 
     /**

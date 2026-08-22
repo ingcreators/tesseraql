@@ -40,6 +40,15 @@ public final class Headers {
     /** A polled or uploaded file's name. */
     public static final String FILE_NAME = "tql.file.name";
 
+    /** The address the connection arrived on. */
+    public static final String LOCAL_ADDRESS = "tql.http.localAddress";
+
+    /**
+     * The peer's address — what a role's network condition and the session record resolve
+     * against, which is why the edge has to set it on every exchange it builds.
+     */
+    public static final String REMOTE_ADDRESS = "tql.http.remoteAddress";
+
     private Headers() {
     }
 }

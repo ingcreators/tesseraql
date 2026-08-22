@@ -34,7 +34,7 @@ public final class SignInAdmission {
                 exchange.getMessage().getHeader("User-Agent", String.class),
                 exchange.getMessage().getHeader("X-Forwarded-For", String.class),
                 exchange.getMessage().getHeader(
-                        io.tesseraql.pipeline.PlatformHttpHeaders.REMOTE_ADDRESS,
+                        io.tesseraql.pipeline.Headers.REMOTE_ADDRESS,
                         String.class));
         allowList(exchange).admit(client.remoteAddr());
         return client;
