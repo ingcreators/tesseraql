@@ -2,7 +2,6 @@ package io.tesseraql.compiler.binding;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.audit.RouteAuditSink;
-import io.tesseraql.pipeline.Completion;
 import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.pipeline.Headers;
 import io.tesseraql.pipeline.Step;
@@ -52,17 +51,7 @@ public final class RouteAudit implements Step {
     @Override
     public void process(Exchange exchange) {
         long startedNanos = System.nanoTime();
-        exchange.addOnCompletion(new Completion() {
-            @Override
-            public void onComplete(Exchange completed) {
-                record(completed, startedNanos);
-            }
-
-            @Override
-            public void onFailure(Exchange failed) {
-                record(failed, startedNanos);
-            }
-        });
+        exchange.addOnCompletion(done -> record(done, startedNanos));
     }
 
     private void record(Exchange exchange, long startedNanos) {

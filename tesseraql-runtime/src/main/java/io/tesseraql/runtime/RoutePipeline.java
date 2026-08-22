@@ -2,7 +2,6 @@ package io.tesseraql.runtime;
 
 import io.tesseraql.compiler.pipeline.Pipeline;
 import io.tesseraql.compiler.pipeline.Pipelines;
-import io.tesseraql.pipeline.Completion;
 import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.pipeline.RuntimeContext;
 import io.tesseraql.pipeline.Step;
@@ -25,9 +24,6 @@ import java.util.Optional;
  * rather than half-run.
  */
 final class RoutePipeline {
-
-    private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory
-            .getLogger(RoutePipeline.class);
 
     private final List<Step> steps;
     private final List<Handler> handlers;
@@ -140,7 +136,10 @@ final class RoutePipeline {
                 throw new IllegalStateException(unrenderable);
             }
         } finally {
-            done(exchange);
+            // The completion guarantee (docs/vertx-native.md decision 5): the audit row, the
+            // permits, the span and the streamed body all ride on this one call, and the failure
+            // mode of missing it is silent and only on the error path.
+            exchange.drain();
         }
     }
 
@@ -173,39 +172,6 @@ final class RoutePipeline {
             throw failed.getCause() instanceof Exception cause
                     ? cause
                     : new IllegalStateException(failed.getCause());
-        }
-    }
-
-    /**
-     * The completion guarantee: what Camel's unit of work runs whether the exchange succeeded or
-     * failed, and the thing docs/http-edge.md named as most likely to be got wrong.
-     *
-     * <p>Five places in this framework register one — the route audit row, the per-route
-     * concurrency permit, the lane permit, the telemetry span, and the SQL producer's streamed
-     * body — and every one of them leaks or goes missing on the error path if nobody runs it. Not
-     * one of them asks the unit of work for anything else, which is why draining the
-     * registrations is the whole of what has to be reproduced rather than a first approximation
-     * of it.
-     *
-     * <p>Drained the way the unit of work drained them, so a completion runs here exactly as it
-     * did on a route: {@code onFailure} when the exchange is still failed, {@code onComplete}
-     * when the envelope above has already answered for it.
-     */
-    private static void done(Exchange exchange) {
-        boolean failed = exchange.getException() != null;
-        for (Completion completion : exchange.handoverCompletions()) {
-            try {
-                if (failed) {
-                    completion.onFailure(exchange);
-                } else {
-                    completion.onComplete(exchange);
-                }
-            } catch (RuntimeException ignored) {
-                // One completion failing must not strand the ones after it: an audit row that
-                // cannot be written is not a reason to leak a permit. Camel's helper made the
-                // same choice, and it is the reason this loop is a loop rather than a stream.
-                LOG.warn("A completion of route {} failed", exchange.getFromRouteId(), ignored);
-            }
         }
     }
 

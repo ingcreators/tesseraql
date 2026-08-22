@@ -339,17 +339,7 @@ public class SqlStep implements Step {
                 "attachment; filename=\"" + (split
                         ? zipName(filename)
                         : filename) + "\"");
-        exchange.addOnCompletion(new io.tesseraql.pipeline.Completion() {
-            @Override
-            public void onComplete(Exchange completed) {
-                tempStore.delete(ref);
-            }
-
-            @Override
-            public void onFailure(Exchange failed) {
-                tempStore.delete(ref);
-            }
-        });
+        exchange.addOnCompletion(done -> tempStore.delete(ref));
     }
 
     /**
