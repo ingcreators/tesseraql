@@ -101,10 +101,11 @@ public final class AttachmentUploadProcessor implements Step {
         body.put("checksum", a.checksum());
         exchange.response().status(201);
         // 201 identifies what it created (docs/vocabulary-cleanup.md slice 3): the
-        // attachment's own subtree URL under the upload path.
-        String uri = exchange.request().uri();
-        if (uri != null && !uri.isBlank()) {
-            exchange.response().header("Location", uri + "/" + a.id());
+        // attachment's own subtree URL under the upload path — the path, because uri()
+        // carries the query string and the id would land glued onto it.
+        String path = exchange.request().path();
+        if (path != null && !path.isBlank()) {
+            exchange.response().header("Location", path + "/" + a.id());
         }
         exchange.response().header(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
         exchange.setBody(FileImportProcessor.MAPPER.writeValueAsString(body));

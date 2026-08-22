@@ -148,6 +148,25 @@ class StackActivationIntegrationTest {
                 .isEqualTo(200);
     }
 
+    /**
+     * The redirects carry the query once. {@code request().uri()} is path <em>plus</em> query,
+     * and the locations append the query themselves — reading the full URI doubled it
+     * ({@code ?tab=a?tab=a}), on the activation redirect and inside the picker's
+     * {@code redirect} parameter alike.
+     */
+    @Test
+    void anActivationRedirectCarriesTheQueryOnce() throws Exception {
+        HttpResponse<String> activated = get("/shop-a/admin/users?tab=audit", solo);
+        assertThat(activated.statusCode()).isEqualTo(302);
+        assertThat(activated.headers().firstValue("Location").orElse(""))
+                .isEqualTo("/shop-a/_as/shop-a.sales/admin/users?tab=audit");
+
+        HttpResponse<String> picker = get("/shop-a/admin/users?tab=audit", kenji);
+        assertThat(picker.statusCode()).isEqualTo(302);
+        assertThat(picker.headers().firstValue("Location").orElse("")).isEqualTo(
+                "/_tesseraql/roles?app=shop-a&redirect=%2Fshop-a%2Fadmin%2Fusers%3Ftab%3Daudit");
+    }
+
     @Test
     void aForgedRoleNarrowsNeverWidens() throws Exception {
         // A browser gets the picker (the human fix is choosing again) …

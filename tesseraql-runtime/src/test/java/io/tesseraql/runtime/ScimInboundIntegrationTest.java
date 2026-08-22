@@ -79,6 +79,10 @@ class ScimInboundIntegrationTest {
         String id = createdUser.get("id").asText();
         assertThat(id).isNotBlank();
         assertThat(createdUser.get("userName").asText()).isEqualTo("asmith");
+        // RFC 7644 §3.3: the 201 identifies the created resource — the path plus the id, never
+        // the query string an IdP may have appended to the create URL.
+        assertThat(created.headers().firstValue("Location").orElse(""))
+                .isEqualTo("/scim/v2/Users/" + id);
 
         HttpResponse<String> fetched = send("GET", "/scim/v2/Users/" + id, null);
         assertThat(fetched.statusCode()).isEqualTo(200);

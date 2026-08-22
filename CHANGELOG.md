@@ -429,6 +429,14 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **Redirects and Location headers built from the request no longer double the query string.**
+  `request().uri()` is the path *plus* the query, and three builders treated it as the path:
+  the role-activation redirect appended the query again (`…/admin/users?tab=audit?tab=audit`,
+  and the same corrupted target inside the role picker's `redirect` parameter), and the SCIM
+  and attachment-upload 201 `Location` headers glued the created id onto the query
+  (`/scim/v2/Users?x=1/<id>`) whenever the caller appended one. All three now build from the
+  path and append what they mean to append.
+
 - **The OIDC callback no longer decodes the caller's cookie after issuing the session.** The
   post-login target rode the `tql_oidc_next` cookie — a value any client can present — and was
   URL-decoded after the session's `Set-Cookie` was written; a malformed percent-escape threw
