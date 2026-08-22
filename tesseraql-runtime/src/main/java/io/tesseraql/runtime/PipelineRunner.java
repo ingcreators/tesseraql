@@ -31,6 +31,23 @@ final class PipelineRunner {
      * produces, not an imitation of it.
      */
     static void run(Pipeline pipeline, Exchange exchange) {
+        run(pipeline, exchange, true);
+    }
+
+    /**
+     * Runs the chain; with {@code drainOnDone} false the caller owns the completion drain.
+     *
+     * <p>Draining here — before the caller has read the body — is right for every caller that
+     * consumes the exchange synchronously, and wrong for the one that has not written the wire
+     * yet: the HTTP edge streams the body <em>after</em> this returns, and the completions delete
+     * the streamed body's backing file, release the route's concurrency permit and end its span.
+     * Draining first deleted an export's spool while the download read it (a contract only
+     * unlink-while-open filesystems honoured, and a blob store does not), let a bounded route
+     * stream on unboundedly many connections, and timed a download as if streaming were free.
+     * The edge drains in its own {@code finally}, after the wire write; a caller that defers
+     * must guarantee that call the way {@link Exchange#drain()} documents.
+     */
+    static void run(Pipeline pipeline, Exchange exchange, boolean drainOnDone) {
         List<Step> steps = pipeline.steps();
         try {
             for (int at = 0; at < steps.size(); at++) {
@@ -73,7 +90,9 @@ final class PipelineRunner {
             // The completion guarantee (docs/vertx-native.md decision 5): the audit row, the
             // permits, the span and the streamed body all ride on this one call, and the failure
             // mode of missing it is silent and only on the error path.
-            exchange.drain();
+            if (drainOnDone) {
+                exchange.drain();
+            }
         }
     }
 

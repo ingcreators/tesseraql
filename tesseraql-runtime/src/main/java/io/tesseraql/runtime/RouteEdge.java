@@ -246,7 +246,11 @@ final class RouteEdge {
         inFlight.incrementAndGet();
         Thread.ofVirtual().name("tql-route-" + routeId).start(() -> {
             try {
-                PipelineRunner.run(pipeline, exchange);
+                // The drain is deferred to this thread's finally: respond() reads the body — a
+                // streamed one to its last byte — before the completions delete its backing
+                // file, release the route's permits and end its span. Draining inside run()
+                // did all three before a byte reached the wire (docs/vertx-native.md).
+                PipelineRunner.run(pipeline, exchange, false);
                 respond(ctx, connection, exchange);
             } catch (Throwable unrendered) {
                 // A failure no clause claimed. The pipeline's envelope answers everything a route
@@ -257,6 +261,7 @@ final class RouteEdge {
                 LOG.error("Route {} failed with nothing to render it", routeId, unrendered);
                 failed(ctx, connection);
             } finally {
+                exchange.drain();
                 if (inFlight.decrementAndGet() == 0) {
                     synchronized (idle) {
                         idle.notifyAll();
