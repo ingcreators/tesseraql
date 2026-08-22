@@ -12,6 +12,11 @@ import java.util.List;
  * the shape of the code. That was the point of keeping them: a rewrite of the compiler's *text*
  * would have made every one of those sites a place to introduce a difference, and the differences
  * would have been invisible against a 1,900-line diff.
+ *
+ * <p>Mutation and {@link #build()} are synchronized: a hot reload fills a builder on the watcher
+ * thread while {@code Pipelines.find} builds it on request threads, and an unsynchronized list
+ * copied mid-append threw on the request thread. The lock makes every build a consistent
+ * snapshot; the registry's version check keeps a mid-compile snapshot from being cached.
  */
 public final class PipelineBuilder {
 
@@ -20,7 +25,7 @@ public final class PipelineBuilder {
     private final List<Pipeline.Handler> handlers = new ArrayList<>();
     private int handoffAt = -1;
     private String laneExecutor;
-    private volatile int version;
+    private int version;
 
     PipelineBuilder(String id, List<Pipeline.Handler> inherited) {
         this.id = id;
@@ -33,7 +38,7 @@ public final class PipelineBuilder {
     }
 
     /** Appends a processor. */
-    public PipelineBuilder process(Step processor) {
+    public synchronized PipelineBuilder process(Step processor) {
         steps.add(processor);
         version++;
         return this;
@@ -45,7 +50,7 @@ public final class PipelineBuilder {
      * <p>One per pipeline: {@code admission.lane} is a single handoff, and a second one would mean
      * two answers to the question of which pool a step belongs to.
      */
-    public PipelineBuilder lane(String executorRef) {
+    public synchronized PipelineBuilder lane(String executorRef) {
         if (handoffAt >= 0) {
             throw new IllegalStateException(
                     "Pipeline " + id + " already hands off to lane '" + laneExecutor + "'");
@@ -57,13 +62,14 @@ public final class PipelineBuilder {
     }
 
     /** Adds an error clause ahead of the inherited ones, so the more specific match wins. */
-    public PipelineBuilder onException(Class<? extends Throwable> caught, Step renderer) {
+    public synchronized PipelineBuilder onException(Class<? extends Throwable> caught,
+            Step renderer) {
         handlers.add(0, Pipeline.Handler.catching(caught, renderer));
         version++;
         return this;
     }
 
-    public Pipeline build() {
+    public synchronized Pipeline build() {
         return new Pipeline(id, steps, handlers, handoffAt, laneExecutor);
     }
 
@@ -74,7 +80,7 @@ public final class PipelineBuilder {
      * cannot lose a route — which means "registered" and "finished" are different moments, and a
      * cache keyed on registration alone would freeze the half-built chain a racing lookup saw.
      */
-    int version() {
+    synchronized int version() {
         return version;
     }
 }
