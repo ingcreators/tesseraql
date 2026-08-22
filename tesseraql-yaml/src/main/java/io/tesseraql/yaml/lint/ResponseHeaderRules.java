@@ -22,11 +22,51 @@ final class ResponseHeaderRules implements LintRule {
 
     private static final String RESPONSE_HEADER_WEAKENS_DEFAULT = "TQL-SEC-4134";
 
+    private static final String RESPONSE_HEADER_RESERVED = "TQL-SEC-4139";
+
     @Override
     public void lint(LintContext context, AppManifest manifest,
             List<LintFinding> findings) {
+        lintReservedNames(context.appHome(), manifest, findings);
         lintResponseHeaderDefaults(context.appHome(), manifest,
                 manifest.config(), findings);
+    }
+
+    /**
+     * Refuses a declared response header the transport owns (docs/vertx-native.md decision 1's
+     * surviving half): a `Content-Length` disagreeing with the body the edge writes truncates
+     * the response or hangs the keep-alive connection, `Connection`/`Transfer-Encoding` are
+     * smuggling-shaped protocol violations, and the `tql.` namespace exists because it never
+     * leaves. The HTTP edge drops these at the wire as the runtime backstop; the lint is where
+     * an author learns it, at build time, with the route named.
+     */
+    void lintReservedNames(Path appHome, AppManifest manifest, List<LintFinding> findings) {
+        for (RouteFile route : manifest.routes()) {
+            var response = route.definition().response();
+            if (response == null) {
+                continue;
+            }
+            String source = appHome.relativize(route.source()).toString();
+            if (response.html() != null) {
+                lintReserved(route, response.html().headers(), source, findings);
+            }
+            if (response.json() != null) {
+                lintReserved(route, response.json().headers(), source, findings);
+            }
+        }
+    }
+
+    private void lintReserved(RouteFile route, java.util.Map<String, Object> declaredHeaders,
+            String source, List<LintFinding> findings) {
+        for (String name : declaredHeaders.keySet()) {
+            if (io.tesseraql.core.http.ReservedHeaders.neverDeclared(name)) {
+                findings.add(new LintFinding(RESPONSE_HEADER_RESERVED, ERROR, source,
+                        "Route '" + route.definition().id() + "' declares the response header '"
+                                + name + "', which the transport owns — framing and connection"
+                                + " control are computed from the body the server writes, and"
+                                + " the tql. namespace never leaves the runtime"));
+            }
+        }
     }
 
     /**
@@ -49,6 +89,13 @@ final class ResponseHeaderRules implements LintRule {
         }
         if (defaults.isEmpty()) {
             return;
+        }
+        for (String name : defaults.headers().keySet()) {
+            if (io.tesseraql.core.http.ReservedHeaders.neverDeclared(name)) {
+                findings.add(new LintFinding(RESPONSE_HEADER_RESERVED, ERROR, "config",
+                        "The default response header '" + name + "' is one the transport owns"
+                                + " — it is never sent, on any route"));
+            }
         }
         for (RouteFile route : manifest.routes()) {
             var response = route.definition().response();
