@@ -176,7 +176,7 @@ the files themselves.
 
 ## The example gallery is dogfooded
 
-[`examples/scaffold-demo-app`](../examples/scaffold-demo-app) is exactly
+[`examples/scaffold-demo-app`](https://github.com/ingcreators/tesseraql/tree/main/examples/scaffold-demo-app) is exactly
 `tesseraql new scaffold-demo` plus `tesseraql scaffold crud --table items` — not a byte of
 hand editing — and CI keeps it that way: it regenerates the app and asserts the committed
 tree is byte-identical, lints it, runs its suites at full branch coverage, and drives the

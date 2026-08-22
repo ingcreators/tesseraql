@@ -13,7 +13,7 @@ move: see [hosting.md's deploy section](hosting.md#deploying-one-application).
 TesseraQL is pre-1.0: backward compatibility is not yet a goal, so a minor release may
 change Java APIs, YAML contracts, and generated artifacts without a deprecation period.
 Every notable change — breaking ones called out explicitly — is recorded per release in
-[CHANGELOG.md](../CHANGELOG.md) (Keep a Changelog format, semantic versioning). Read the
+[CHANGELOG.md](https://github.com/ingcreators/tesseraql/blob/main/CHANGELOG.md) (Keep a Changelog format, semantic versioning). Read the
 entries for the whole span you are crossing, not just the latest version, before touching
 anything.
 
@@ -90,7 +90,7 @@ Verify with `tesseraql --version`. The install channels are described in
 
 Before an upgrade reaches production:
 
-1. Read [CHANGELOG.md](../CHANGELOG.md) for every version between the one you run and the
+1. Read [CHANGELOG.md](https://github.com/ingcreators/tesseraql/blob/main/CHANGELOG.md) for every version between the one you run and the
    one you are adopting; note the breaking changes.
 2. Upgrade the CLI, bump `tesseraql.version`, and refresh `modules.lock` in one change.
 3. `tesseraql lint --app .` and `tesseraql test --app .` pass with the new version.

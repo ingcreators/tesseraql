@@ -5,8 +5,8 @@ migrations, environment profiles, logging, metrics, and the safety valves — an
 whatever your stack, even where the examples use the reference setup. The reference
 deployment is a small VPS (e.g. Lightsail) running Docker containers deployed by
 Kamal 2, fronted by Cloudflare (DNS, CDN, WAF) through a Cloudflare Tunnel, with a managed
-PostgreSQL database. [deploy/Dockerfile](../deploy/Dockerfile) and
-[deploy/kamal/deploy.yml](../deploy/kamal/deploy.yml) — templates shipped in the framework
+PostgreSQL database. [deploy/Dockerfile](https://github.com/ingcreators/tesseraql/blob/main/deploy/Dockerfile) and
+[deploy/kamal/deploy.yml](https://github.com/ingcreators/tesseraql/blob/main/deploy/kamal/deploy.yml) — templates shipped in the framework
 repository — are the starting points.
 
 ```
@@ -400,7 +400,7 @@ give the scraper a token via `bearer_token_file`, or set
 `tesseraql.metrics.unauthenticated: true` for a cluster-internal scrape the network already
 guards. OTLP push (`tesseraql.otel.otlp.endpoint`) is independent and now carries the same
 histograms. A ready-made Grafana dashboard ships at
-[deploy/grafana/tesseraql-dashboard.json](../deploy/grafana/tesseraql-dashboard.json).
+[deploy/grafana/tesseraql-dashboard.json](https://github.com/ingcreators/tesseraql/blob/main/deploy/grafana/tesseraql-dashboard.json).
 
 ## Next
 

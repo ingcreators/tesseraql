@@ -8,6 +8,16 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Published docs cannot link above the site root.** A `](../…)` link in a published page
+  renders on the docs site as a 404 — the site serves `docs/` alone — while working on
+  GitHub, so the break was invisible to authors. `PublishedLinkReachabilityTest` now fails
+  the build for any page the nav manifest publishes whose link (inline or reference-style)
+  escapes into the repo tree; internal documents, which render only on GitHub, stay free to
+  use one. Landed failing against the tree's eight escapes and the escapes then fixed: the
+  deploy templates, the fonts and scaffold example apps, and the CHANGELOG now link their
+  absolute GitHub addresses, and the YAML-surface generator emits the schema directory's
+  GitHub address (regenerated).
+
 - **The pipeline module's contracts are pinned where they live, and coverage is measurable.**
   `tesseraql-pipeline` carried 25 main sources and no direct tests — `param()`'s path→query→form
   order, the response's replace-vs-append header semantics, the completion drain's
