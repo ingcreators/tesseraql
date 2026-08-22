@@ -1,26 +1,30 @@
 package io.tesseraql.studio.runtime;
 
 import static io.tesseraql.studio.runtime.StudioSupport.DATA_EDIT_SLOTS;
-import static io.tesseraql.studio.runtime.StudioSupport.DATA_FILTER_SLOTS;
 import static io.tesseraql.studio.runtime.StudioSupport.LOG;
 import static io.tesseraql.studio.runtime.StudioSupport.MENU_ICON_OPTIONS;
 import static io.tesseraql.studio.runtime.StudioSupport.ROUTE_FORM_INPUT_SLOTS;
 import static io.tesseraql.studio.runtime.StudioSupport.ROW_EDIT_REJECTED;
 import static io.tesseraql.studio.runtime.StudioSupport.actorOf;
+import static io.tesseraql.studio.runtime.StudioSupport.dataCombinator;
+import static io.tesseraql.studio.runtime.StudioSupport.dataFilterSlots;
 import static io.tesseraql.studio.runtime.StudioSupport.dataFilters;
 import static io.tesseraql.studio.runtime.StudioSupport.dataQueryBase;
 import static io.tesseraql.studio.runtime.StudioSupport.dataRowKey;
+import static io.tesseraql.studio.runtime.StudioSupport.dataSortDir;
 import static io.tesseraql.studio.runtime.StudioSupport.menuIndex;
 import static io.tesseraql.studio.runtime.StudioSupport.menuVisibility;
 import static io.tesseraql.studio.runtime.StudioSupport.parseIndex;
 import static io.tesseraql.studio.runtime.StudioSupport.parseJsonObject;
 import static io.tesseraql.studio.runtime.StudioSupport.parsePage;
 import static io.tesseraql.studio.runtime.StudioSupport.parseQueryString;
+import static io.tesseraql.studio.runtime.StudioSupport.putEditFlags;
 import static io.tesseraql.studio.runtime.StudioSupport.putIfPresent;
 import static io.tesseraql.studio.runtime.StudioSupport.rebindPolicyEngine;
 import static io.tesseraql.studio.runtime.StudioSupport.requireCopilot;
 import static io.tesseraql.studio.runtime.StudioSupport.requireExplicitConfirm;
 import static io.tesseraql.studio.runtime.StudioSupport.requiredParam;
+import static io.tesseraql.studio.runtime.StudioSupport.sourceEditorUrl;
 import static io.tesseraql.studio.runtime.StudioSupport.str;
 import static io.tesseraql.studio.runtime.StudioSupport.tryInvoke;
 import static io.tesseraql.studio.runtime.StudioSupport.urlEncode;
@@ -131,7 +135,9 @@ final class StudioProviders {
         providers.routesAndMenu(serviceProviders);
         providers.healthSecurityPolicyTry(serviceProviders);
         providers.connectorsAndIdentityWizards(serviceProviders);
-        providers.configFlagsDataMessages(serviceProviders);
+        providers.configAndFlags(serviceProviders);
+        providers.dataBrowser(serviceProviders);
+        providers.messagesEditor(serviceProviders);
         providers.snippetBuilders(serviceProviders);
         providers.decisionsCalendarsJobs(serviceProviders);
         providers.schemaAndMigrationRuns(serviceProviders);
@@ -148,8 +154,7 @@ final class StudioProviders {
                             .explorer(studio.explorer(q));
                     // Edit affordances follow the caller's edit permission (backlog D6).
                     boolean canEdit = studioEdit.canEdit(params.get("permissions"));
-                    model.put("editable", canEdit);
-                    model.put("readOnly", !canEdit);
+                    putEditFlags(model, canEdit);
                     // Offer the scaffold action only when B3 is on and the caller may edit.
                     model.put("scaffoldEnabled", scaffoldEnabled && canEdit);
                     // Echo the filter query (Studio backlog C4) so the input keeps its value.
@@ -175,9 +180,7 @@ final class StudioProviders {
                         Map<String, Object> row = new java.util.LinkedHashMap<>();
                         row.put("label", route.method() + " " + route.path() + " · "
                                 + route.id());
-                        row.put("url", "/_tesseraql/studio/ui/source?path="
-                                + java.net.URLEncoder.encode(route.source(),
-                                        java.nio.charset.StandardCharsets.UTF_8));
+                        row.put("url", sourceEditorUrl(route.source()));
                         entries.add(row);
                         int slash = route.source().lastIndexOf('/');
                         if (slash > 0) {
@@ -188,9 +191,7 @@ final class StudioProviders {
                             .jobs()) {
                         Map<String, Object> row = new java.util.LinkedHashMap<>();
                         row.put("label", "job " + job.id());
-                        row.put("url", "/_tesseraql/studio/ui/source?path="
-                                + java.net.URLEncoder.encode(job.source(),
-                                        java.nio.charset.StandardCharsets.UTF_8));
+                        row.put("url", sourceEditorUrl(job.source()));
                         entries.add(row);
                     }
                     java.util.List<Map<String, Object>> folders = new java.util.ArrayList<>();
@@ -580,8 +581,7 @@ final class StudioProviders {
                     boolean canEdit = studioEdit.canEdit(params.get("permissions"));
                     Map<String, Object> model = new java.util.LinkedHashMap<>();
                     model.put("form", studio.routeForm(path));
-                    model.put("editable", canEdit);
-                    model.put("readOnly", !canEdit);
+                    putEditFlags(model, canEdit);
                     // Framework-derived options (roadmap Phase 57): the same surfaces
                     // the shipped JSON Schema is drift-tested against, so the schema,
                     // the linter, and this form can never disagree.
@@ -671,8 +671,7 @@ final class StudioProviders {
                         rows.add(row);
                     }
                     Map<String, Object> model = new java.util.LinkedHashMap<>();
-                    model.put("editable", canEdit);
-                    model.put("readOnly", !canEdit);
+                    putEditFlags(model, canEdit);
                     model.put("items", rows);
                     model.put("hasItems", !rows.isEmpty());
                     model.put("roleOptions", studio.knownRoles());
@@ -773,9 +772,7 @@ final class StudioProviders {
                         boolean editable = finding.source() != null
                                 && finding.source().contains("/");
                         row.put("sourceUrl", editable
-                                ? "/_tesseraql/studio/ui/source?path=" + java.net.URLEncoder
-                                        .encode(finding.source(),
-                                                java.nio.charset.StandardCharsets.UTF_8)
+                                ? sourceEditorUrl(finding.source())
                                 : null);
                         rows.add(row);
                     }
@@ -832,10 +829,8 @@ final class StudioProviders {
                         if (unknown) {
                             unknownPolicies++;
                         }
-                        route.put("sourceUrl", "/_tesseraql/studio/ui/source?path="
-                                + java.net.URLEncoder.encode(
-                                        String.valueOf(route.get("source")),
-                                        java.nio.charset.StandardCharsets.UTF_8));
+                        route.put("sourceUrl",
+                                sourceEditorUrl(String.valueOf(route.get("source"))));
                     }
                     // Reverse index: which routes each policy guards, so a policy links to
                     // its consumers and a policy used by none is flagged as dead config.
@@ -1000,8 +995,7 @@ final class StudioProviders {
                     Map<String, Object> model = new java.util.LinkedHashMap<>(
                             studio.connectorsView());
                     model.put("saved", params.get("saved"));
-                    model.put("editable", canEdit);
-                    model.put("readOnly", !canEdit);
+                    putEditFlags(model, canEdit);
                     return model;
                 })
                 .register("studio.connectors.egress", params -> {
@@ -1140,8 +1134,8 @@ final class StudioProviders {
                 });
     }
 
-    /** Config, flags, the data browser and messages. */
-    private void configFlagsDataMessages(
+    /** The config viewer/editor and feature flags. */
+    private void configAndFlags(
             io.tesseraql.core.service.ServiceProviders serviceProviders) {
         serviceProviders
                 .register("studio.config", params -> {
@@ -1217,11 +1211,18 @@ final class StudioProviders {
                     studioEdit.requireEdit(params.get("principalPermissions"));
                     studio.removeFlag(str(params, "name"), actorOf(params));
                     return Map.of("removed", true);
-                })
-                // Data browser (read-only): paginated rows of a chosen table over the dev
-                // datasource, opt-in via tesseraql.studio.dataBrowser.enabled. The table is
-                // validated against the live catalog (no injection); a query error surfaces as
-                // a message rather than a 500.
+                });
+    }
+
+    /**
+     * The data browser (docs/analytics-experience.md; Track J4): paginated rows of a chosen
+     * table, opt-in via {@code tesseraql.studio.dataBrowser.enabled}, with PK-scoped row
+     * editing and the CSV export of the current view. The table is validated against the live
+     * catalog (no injection); a query error surfaces as a message rather than a 500.
+     */
+    private void dataBrowser(
+            io.tesseraql.core.service.ServiceProviders serviceProviders) {
+        serviceProviders
                 .register("studio.data", params -> {
                     Map<String, Object> model = new java.util.LinkedHashMap<>();
                     model.put("enabled", studioData.isEnabled());
@@ -1250,35 +1251,21 @@ final class StudioProviders {
                     // Sort/filter state is echoed to the model so the form + prev/next/export
                     // links keep it; the service validates the columns against the real table.
                     String sortColumn = str(params, "sort");
-                    String sortDir = "desc".equalsIgnoreCase(String.valueOf(
-                            params.get("dir"))) ? "desc" : "asc";
+                    String sortDir = dataSortDir(params);
                     model.put("sortColumn", sortColumn == null ? "" : sortColumn);
                     model.put("sortDir", sortDir);
-                    String combinator = "or".equalsIgnoreCase(String.valueOf(
-                            params.get("combinator"))) ? "or" : "and";
+                    String combinator = dataCombinator(params);
                     model.put("combinator", combinator);
                     // Up to DATA_FILTER_SLOTS conditions from indexed slots fcN/foN/fvN,
-                    // combined by the combinator (AND/OR).
-                    java.util.List<StudioDataService.FilterCond> filters = new java.util.ArrayList<>();
-                    java.util.List<Map<String, Object>> filterRows = new java.util.ArrayList<>();
-                    for (int i = 0; i < DATA_FILTER_SLOTS; i++) {
-                        String column = str(params, "fc" + i);
-                        String op = str(params, "fo" + i) == null
-                                ? "contains"
-                                : str(params, "fo" + i);
-                        String value = params.get("fv" + i) == null
-                                ? ""
-                                : String.valueOf(params.get("fv" + i));
-                        Map<String, Object> row = new java.util.LinkedHashMap<>();
-                        row.put("column", column == null ? "" : column);
-                        row.put("op", op);
-                        row.put("value", value);
-                        filterRows.add(row);
-                        if (column != null) {
-                            filters.add(
-                                    new StudioDataService.FilterCond(column, op, value));
-                        }
-                    }
+                    // combined by the combinator (AND/OR) - the one parse of the filter
+                    // grammar, shared with the CSV export so the exported rows are exactly
+                    // the rows this page shows.
+                    java.util.List<StudioSupport.FilterSlot> slots = dataFilterSlots(params);
+                    java.util.List<StudioDataService.FilterCond> filters = slots.stream()
+                            .map(StudioSupport.FilterSlot::cond)
+                            .filter(java.util.Objects::nonNull).toList();
+                    java.util.List<Map<String, Object>> filterRows = slots.stream()
+                            .map(StudioSupport.FilterSlot::row).toList();
                     model.put("filterRows", filterRows);
                     // Whether any filter/sort is active — drives the "Clear filters" control
                     // and keeps the filter disclosure open. The count labels the summary.
@@ -1286,6 +1273,13 @@ final class StudioProviders {
                     model.put("filterCount", filters.size());
                     model.put("queryBase", dataQueryBase(datasource, table, combinator,
                             sortColumn, sortDir, filterRows));
+                    // Row editing (Track J4): the edit affordance appears only when
+                    // the editor opt-in, the caller's edit permission, AND a primary
+                    // key all line up; links carry the PK columns and the row's values.
+                    // Non-main data is derived data, so the editor never leaves main.
+                    boolean rowEditable = "main".equals(datasource)
+                            && studioData.isEditEnabled()
+                            && studioEdit.canEdit(params.get("permissions"));
                     try {
                         int page = parseIndex(params.get("page"));
                         StudioDataService.DataPage data = studioData.browse(datasource,
@@ -1334,67 +1328,16 @@ final class StudioProviders {
                         model.put("hasPrev", data.page() > 0);
                         model.put("nextPage", data.page() + 1);
                         model.put("prevPage", data.page() - 1);
+                        if (rowEditable) {
+                            model.put("editHrefs", editHrefs(data.table(), data.columns(),
+                                    data.rows(),
+                                    studioData.primaryKey(data.table())));
+                        }
                     } catch (RuntimeException ex) {
                         model.put("error", ex.getMessage());
                     }
-                    // Row editing (Track J4): the edit affordance appears only when
-                    // the editor opt-in, the caller's edit permission, AND a primary
-                    // key all line up; links carry the PK columns and the row's values.
-                    // Non-main data is derived data, so the editor never leaves main.
-                    boolean rowEditable = "main".equals(datasource)
-                            && studioData.isEditEnabled()
-                            && studioEdit.canEdit(params.get("permissions"));
                     model.put("editEnabled", rowEditable);
                     model.put("updated", params.get("updated"));
-                    Object columns = model.get("columns");
-                    Object rowMaps = model.get("rows");
-                    if (rowEditable && columns instanceof java.util.List<?> cols
-                            && rowMaps instanceof java.util.List<?> shownRows) {
-                        java.util.List<String> pk = studioData.primaryKey(
-                                String.valueOf(model.get("table")));
-                        java.util.List<Integer> indexes = new java.util.ArrayList<>();
-                        for (String column : pk) {
-                            int at = -1;
-                            for (int i = 0; i < cols.size(); i++) {
-                                if (String.valueOf(cols.get(i))
-                                        .equalsIgnoreCase(column)) {
-                                    at = i;
-                                    break;
-                                }
-                            }
-                            indexes.add(at);
-                        }
-                        boolean complete = !pk.isEmpty() && !indexes.contains(-1);
-                        java.util.List<String> editHrefs = new java.util.ArrayList<>();
-                        for (Object rowObject : shownRows) {
-                            String href = null;
-                            if (complete && rowObject instanceof Map<?, ?> row
-                                    && row.get(
-                                            "cells") instanceof java.util.List<?> cells) {
-                                StringBuilder link = new StringBuilder(
-                                        "/_tesseraql/studio/ui/data/edit?table="
-                                                + urlEncode(String.valueOf(
-                                                        model.get("table"))));
-                                boolean ok = true;
-                                for (int i = 0; i < pk.size(); i++) {
-                                    Map<?, ?> cell = (Map<?, ?>) cells
-                                            .get(indexes.get(i));
-                                    if (Boolean.TRUE.equals(cell.get("isNull"))) {
-                                        ok = false;
-                                        break;
-                                    }
-                                    link.append("&k").append(i).append('=')
-                                            .append(urlEncode(pk.get(i)));
-                                    link.append("&v").append(i).append('=').append(
-                                            urlEncode(String.valueOf(
-                                                    cell.get("value"))));
-                                }
-                                href = ok ? link.toString() : null;
-                            }
-                            editHrefs.add(href);
-                        }
-                        model.put("editHrefs", editHrefs);
-                    }
                     return model;
                 })
                 // Data browser CSV export: the current view (table + filter + sort) as CSV,
@@ -1406,12 +1349,12 @@ final class StudioProviders {
                     String table = String.valueOf(params.get("table"));
                     Map<String, Object> model = new java.util.LinkedHashMap<>();
                     model.put("table", table);
+                    Map<String, String> rowKey = dataRowKey(params);
                     try {
-                        StudioDataService.RowView row = studioData.row(table,
-                                dataRowKey(params));
+                        StudioDataService.RowView row = studioData.row(table, rowKey);
                         model.put("pkColumns", row.pkColumns());
                         model.put("fields", row.fields());
-                        model.put("keyPairs", dataRowKey(params).entrySet().stream()
+                        model.put("keyPairs", rowKey.entrySet().stream()
                                 .map(e -> Map.of("column", e.getKey(),
                                         "value", e.getValue()))
                                 .toList());
@@ -1434,8 +1377,9 @@ final class StudioProviders {
                         Object value = params.get("cv" + i);
                         changes.put(column, value == null ? "" : String.valueOf(value));
                     }
+                    Map<String, String> rowKey = dataRowKey(params);
                     try {
-                        studioData.updateRow(table, dataRowKey(params), changes);
+                        studioData.updateRow(table, rowKey, changes);
                     } catch (IllegalArgumentException | IllegalStateException ex) {
                         throw new io.tesseraql.core.error.TqlException(ROW_EDIT_REJECTED,
                                 ex.getMessage());
@@ -1443,7 +1387,7 @@ final class StudioProviders {
                     // Audit the row identity and the columns touched — never the values
                     // (the browser may hold sensitive business data).
                     studio.recordDataEdit(actorOf(params), table + " ["
-                            + String.join(", ", dataRowKey(params).entrySet().stream()
+                            + String.join(", ", rowKey.entrySet().stream()
                                     .map(e -> e.getKey() + "=" + e.getValue()).toList())
                             + "] set " + String.join(", ", changes.keySet()));
                     return Map.of("updated", table);
@@ -1457,20 +1401,65 @@ final class StudioProviders {
                                 StudioDataService.normalizeDatasource(str(params, "ds")),
                                 str(params, "table"),
                                 str(params, "sort"),
-                                "desc".equalsIgnoreCase(String.valueOf(params.get("dir")))
-                                        ? "desc"
-                                        : "asc",
-                                "or".equalsIgnoreCase(String.valueOf(
-                                        params.get("combinator"))) ? "or" : "and",
+                                dataSortDir(params), dataCombinator(params),
                                 dataFilters(params)));
                     } catch (RuntimeException ex) {
                         return Map.of("csv", "# " + ex.getMessage() + "\r\n");
                     }
-                })
-                // i18n message editor (governance/authoring): a key × locale table over the
-                // app's messages/<locale>.yml catalogs, flagging missing translations; the set
-                // action upserts one translation (edit-gated + audited). The message resolver
-                // and client catalog read messages/ live, so an edit is served immediately.
+                });
+    }
+
+    /**
+     * The browse page's row-edit links, parallel to its rows (Track J4): each carries the PK
+     * columns and the row's values; a null in a key cell drops that row's link, and a table
+     * whose primary key is absent from the shown columns links nothing.
+     */
+    private static java.util.List<String> editHrefs(String table, java.util.List<String> columns,
+            java.util.List<java.util.List<String>> rows, java.util.List<String> pk) {
+        java.util.List<Integer> indexes = new java.util.ArrayList<>();
+        for (String column : pk) {
+            int at = -1;
+            for (int i = 0; i < columns.size(); i++) {
+                if (columns.get(i).equalsIgnoreCase(column)) {
+                    at = i;
+                    break;
+                }
+            }
+            indexes.add(at);
+        }
+        boolean complete = !pk.isEmpty() && !indexes.contains(-1);
+        java.util.List<String> hrefs = new java.util.ArrayList<>();
+        for (java.util.List<String> values : rows) {
+            String href = null;
+            if (complete) {
+                StringBuilder link = new StringBuilder(
+                        "/_tesseraql/studio/ui/data/edit?table=" + urlEncode(table));
+                boolean ok = true;
+                for (int i = 0; i < pk.size(); i++) {
+                    String value = values.get(indexes.get(i));
+                    if (value == null) {
+                        ok = false;
+                        break;
+                    }
+                    link.append("&k").append(i).append('=').append(urlEncode(pk.get(i)));
+                    link.append("&v").append(i).append('=').append(urlEncode(value));
+                }
+                href = ok ? link.toString() : null;
+            }
+            hrefs.add(href);
+        }
+        return hrefs;
+    }
+
+    /**
+     * The i18n message editor (governance/authoring): a key × locale table over the app's
+     * {@code messages/<locale>.yml} catalogs, flagging missing translations; the set action
+     * upserts one translation (edit-gated + audited). The message resolver and client catalog
+     * read {@code messages/} live, so an edit is served immediately.
+     */
+    private void messagesEditor(
+            io.tesseraql.core.service.ServiceProviders serviceProviders) {
+        serviceProviders
                 .register("studio.messages", params -> {
                     Map<String, Map<String, String>> catalogs = studio.messageCatalogs();
                     java.util.List<String> locales = new java.util.ArrayList<>(
@@ -1513,21 +1502,19 @@ final class StudioProviders {
                     studio.setMessage(str(params, "locale"), str(params, "key"),
                             value == null ? "" : String.valueOf(value), actorOf(params));
                     return Map.of("saved", true);
-                })
-        // New migration page (Studio backlog: migration authoring): the form shows the
-        // next versioned number for the main datasource; the create writes a Flyway
-        // migration under db/…/migration and the result links to the source editor.
-        ;
+                });
     }
 
     /** Snippet builders: migrations, SQL, validations, decisions. */
     private void snippetBuilders(io.tesseraql.core.service.ServiceProviders serviceProviders) {
         serviceProviders
+                // New migration page (Studio backlog: migration authoring): the form shows the
+                // next versioned number for the main datasource; the create writes a Flyway
+                // migration under db/…/migration and the result links to the source editor.
                 .register("studio.migration.new", params -> {
                     boolean canEdit = studioEdit.canEdit(params.get("permissions"));
                     Map<String, Object> model = new java.util.LinkedHashMap<>();
-                    model.put("editable", canEdit);
-                    model.put("readOnly", !canEdit);
+                    putEditFlags(model, canEdit);
                     model.put("nextVersion", studio.nextMigrationVersion("main", null));
                     // The DDL builder's table dropdown is populated from the schema overlay.
                     io.tesseraql.studio.DocService migrationDoc = new io.tesseraql.studio.DocService(
@@ -1577,8 +1564,7 @@ final class StudioProviders {
                     java.util.List<String> tables = new io.tesseraql.studio.DocService(
                             manifest).tableNames();
                     Map<String, Object> model = new java.util.LinkedHashMap<>();
-                    model.put("editable", canEdit);
-                    model.put("readOnly", !canEdit);
+                    putEditFlags(model, canEdit);
                     model.put("tables", tables);
                     model.put("hasTables", !tables.isEmpty());
                     return model;
@@ -1863,9 +1849,7 @@ final class StudioProviders {
                     model.put("filename", result.filename());
                     model.put("version", result.version());
                     model.put("repeatable", result.repeatable());
-                    model.put("editorUrl", "/_tesseraql/studio/ui/source?path="
-                            + java.net.URLEncoder.encode(result.path(),
-                                    java.nio.charset.StandardCharsets.UTF_8));
+                    model.put("editorUrl", sourceEditorUrl(result.path()));
                     return model;
                 })
                 // Refresh schema (docs/studio-schema-lifecycle.md): live introspection
@@ -2149,8 +2133,7 @@ final class StudioProviders {
             // explicit acknowledgment when configured, and follow the caller's edit permission.
             model.put("conflict", conflict);
             model.put("confirmApply", confirmApply);
-            model.put("editable", canEdit);
-            model.put("readOnly", !canEdit);
+            putEditFlags(model, canEdit);
             return model;
         }
     }

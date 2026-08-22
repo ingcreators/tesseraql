@@ -146,6 +146,39 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **The Studio data browser parses its view state once, and the group split finishes.** The
+  browse page hand-parsed the `fcN/foN/fvN` filter slots while the CSV export read the same
+  grammar through `StudioSupport.dataFilters` — two spellings of one grammar, and a drift
+  (say, the default operator changing in one place) would have exported a different row set
+  than the page shows. One parse (`StudioSupport.dataFilterSlots`) now feeds both, along with
+  the sort-direction and combinator normalizations that had the same two spellings. The
+  row-edit links build from the page's typed rows inside the fetch instead of casting the
+  model back apart afterwards; `studio.data.editForm`/`update` read the row key once; the
+  source-editor address is built by one helper at its five call sites; the editable/readOnly
+  pair by one helper at its seven. The 378-line `configFlagsDataMessages` group was four
+  unrelated features sharing a method — config+flags, the data browser and the i18n message
+  editor are their own groups now, and the stranded migration-page comment sits above the
+  provider it describes.
+
+- **The ops/account providers carry their boot state as it was handed over.**
+  `OpsAccountProviders` mirrored its 26-component `Deps` record into 26 fields through a
+  copying constructor — ~70 lines of transcription in which two components were silently
+  renamed in transit, one more place for a pairing to be miswired whenever a dependency is
+  added. The class now holds the record itself. The beans that bind after the provider chain
+  builds — identity, realm, TOTP, delegation — resolve through four call-time accessors
+  instead of ~25 inline registry-lookup blocks (the idiom `IamAdminProviders` already used;
+  its own `grantContracts` now composes the suppliers instead of re-spelling their lookups),
+  and the session store, bound once before registration from the same handed-over instance,
+  is read from that state everywhere — `account.password.change` was the one caller
+  re-looking it up through the registry. Session rows render through one `orEmpty` helper,
+  and the admin's per-subject session view builds ordered rows — `Map.of` had left its
+  column order to the JVM's hashing while the cross-subject page ordered deliberately.
+  Providers now register in the group their section describes: `auth.loginMethods` moved
+  from the ops group to the account surface, the per-subject session-administration trio
+  moved beside the cross-subject sessions page, and the two comment blocks stranded above
+  bare statement terminators by the extraction's method split describe their own
+  neighbours again.
+
 - **One execution path for batch jobs, however a job is started** (BREAKING for embedders).
   `JobRunners` re-implemented the runtime's datasource selection and per-tenant loop line for
   line — down to the error strings — so a fix to either copy would have silently applied to
