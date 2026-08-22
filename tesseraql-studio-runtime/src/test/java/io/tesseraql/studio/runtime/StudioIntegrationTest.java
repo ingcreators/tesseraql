@@ -3613,6 +3613,30 @@ class StudioIntegrationTest {
         assertThat(response.body()).contains("value=\"id\"").contains("value=\"email\"");
     }
 
+    /**
+     * The gate keys are the member's own verdict, never the wire's (docs/studio-shell.md): the
+     * workshop stamps both spellings from its authenticated principal AFTER the wire's fields.
+     * The demoting direction is the one a stamp gap would break — before the stamp covered
+     * {@code principalPermissions}, a wire field of that name reached the gate as data and a
+     * riding value would have flipped the editor's model read-only.
+     */
+    @Test
+    void workshopStampsBothGateSpellingsOverWireFields() throws Exception {
+        HttpResponse<String> spoofed = getWithCookie(
+                "/_tesseraql/studio/data/studio.menu.view?principalPermissions=bogus",
+                adminCookie);
+        assertThat(spoofed.statusCode()).isEqualTo(200);
+        assertThat(MAPPER.readTree(spoofed.body()).get("editable").asBoolean()).isTrue();
+
+        // The promoting direction: a viewer's forged grant opens nothing - the door refuses
+        // on the real principal before any provider runs.
+        HttpResponse<String> forged = getWithCookie(
+                "/_tesseraql/studio/data/studio.menu.view?permissions=tql.studio.edit.*"
+                        + "&principalPermissions=tql.studio.edit.*",
+                viewerCookie);
+        assertThat(forged.statusCode()).isEqualTo(404);
+    }
+
     // The UI form posts go to /_tesseraql/studio/user-admin/ui/** (browser auth): carry the admin session
     // cookie and its CSRF token. The bearer is harmless on these routes (browser auth ignores it).
     private static HttpResponse<String> postForm(String path, String form) throws Exception {

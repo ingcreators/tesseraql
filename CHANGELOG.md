@@ -146,6 +146,23 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **Studio's edit gate owns its key resolution, and the workshop stamps both spellings**
+  (docs/studio-shell.md). A provider's caller identity rides its params under one of two
+  spellings — `principalPermissions` where a route had to keep `permissions` free for a data
+  field of that name, else `permissions` — and every provider picked its spelling by hand,
+  with the mapping invisible from the provider file: the next copy-paste gate was one wrong
+  key away from always-deny, or from judging a wire-writable field. `StudioEdit` now has
+  params-taking `canEdit`/`requireEdit` overloads that resolve the spelling in one place, and
+  all ~60 gates go through them. What makes the fallback safe is closed structurally at the
+  transport: the member's workshop door (and the unhosted in-process target) stamps BOTH
+  spellings from its own authenticated principal after the wire's fields — before this,
+  `principalPermissions` was the unstamped one and reached providers as wire data, held safe
+  only by the door's atom check happening to test the same grant — and the token-authorized
+  public path strips both keys and `actor` from the wire, having no principal to stamp from.
+  Pinned from both directions: a value riding the wire's `principalPermissions` can no longer
+  demote an editor's page to read-only, and a viewer's forged grant still refuses 404-shaped
+  at the door.
+
 - **The Studio data browser parses its view state once, and the group split finishes.** The
   browse page hand-parsed the `fcN/foN/fvN` filter slots while the CSV export read the same
   grammar through `StudioSupport.dataFilters` — two spellings of one grammar, and a drift

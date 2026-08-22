@@ -51,7 +51,9 @@ surface mounts the studio app through a topology graft over the portal's static 
 studio app tree went member-shaped everywhere — the ops-console `{member}` precedent, the
 unhosted boot serving the same tree over an in-process target as a switcher of one; the
 member's workshop API (`/_tesseraql/studio/data/{op}`) answers the export table on enumerated
-verbs, stamps `permissions` and `actor` from its own authenticated principal, and refuses
+verbs, stamps `permissions`, `principalPermissions` and `actor` from its own authenticated
+principal (both gate spellings, so neither can arrive as a wire field; the token-authorized
+public path strips all three instead, having no principal to stamp from), and refuses
 without the atom 404-shaped (`TQL-STUDIO-4043`; unreachable is `TQL-STUDIO-5030`); and
 Copilot's send is the one proxied hop, its stream reached at the member's own prefixed
 address through the gateway. Four implementation decisions the design left open, recorded

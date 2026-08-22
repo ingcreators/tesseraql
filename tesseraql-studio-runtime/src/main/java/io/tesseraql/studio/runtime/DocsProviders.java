@@ -94,7 +94,7 @@ final class DocsProviders {
                                     : String.valueOf(params.get("dir")));
                     // The refresh action's gate and the honest empty state
                     // (docs/studio-schema-lifecycle.md).
-                    model.put("editable", studioEdit.canEdit(params.get("permissions")));
+                    model.put("editable", studioEdit.canEdit(params));
                     model.put("schemaCorrupt", doc.schemaCorrupt());
                     return model;
                 })
@@ -146,7 +146,7 @@ final class DocsProviders {
                     Map<String, Object> model = new java.util.LinkedHashMap<>();
                     model.put("appName", doc.appName());
                     // The capture action's gate (docs/studio-schema-lifecycle.md).
-                    model.put("editable", studioEdit.canEdit(params.get("permissions")));
+                    model.put("editable", studioEdit.canEdit(params));
                     model.put("hasApiBaseline", doc.hasApiBaseline());
                     io.tesseraql.studio.DocViews.applyApiChangelog(model,
                             doc.apiChangelog());
