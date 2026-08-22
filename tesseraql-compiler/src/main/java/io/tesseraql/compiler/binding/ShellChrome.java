@@ -347,7 +347,7 @@ final class ShellChrome {
             // The same Path as the session cookie: the preference belongs to whoever is signed
             // in, and follows the sign-in across the stack or stays with the one application
             // (docs/base-path.md decision 4).
-            exchange.response().header("Set-Cookie", "tesseraql_theme=" + storedTheme
+            exchange.response().addHeader("Set-Cookie", "tesseraql_theme=" + storedTheme
                     + "; Path=" + CookiePath.of(exchange)
                     + "; Max-Age=31536000; SameSite=Lax");
         }

@@ -264,6 +264,7 @@ public final class RouteCompiler {
 
     private void buildRoute(RuntimeContext context, Path appHome, RouteFile routeFile) {
         RouteDefinition definition = routeFile.definition();
+        requireRotationHonoured(definition);
         switch (definition.recipe()) {
             case "query-json", "command-json" -> buildJson(context, routeFile);
             case "query-html", "page" -> buildTemplatePage(context, appHome, routeFile);
@@ -348,6 +349,29 @@ public final class RouteCompiler {
             return route.process(new AuthStep("rotate"));
         }
         return route;
+    }
+
+    /**
+     * Refuses {@code response.session.rotate} on a recipe whose builder does not apply it. The
+     * declaration used to compile, boot, and serve on page and export recipes while rotating
+     * nothing — a session-fixation control that silently does not exist is worse than one the
+     * build refuses with the recipe named (docs/silent-tolerance.md).
+     */
+    private void requireRotationHonoured(RouteDefinition definition) {
+        boolean declared = definition.response() != null
+                && definition.response().session() != null
+                && definition.response().session().rotates();
+        if (!declared) {
+            return;
+        }
+        switch (definition.recipe()) {
+            case "query-json", "command-json", "query-html", "page" -> {
+            }
+            default -> throw new TqlException(UNSUPPORTED_RECIPE, "Route '" + definition.id()
+                    + "': response.session.rotate is not honoured by recipe '"
+                    + definition.recipe() + "' — a browser session belongs to the JSON,"
+                    + " command and page recipes");
+        }
     }
 
     /** The terminal renderer: a redirect when declared, otherwise the JSON response. */
@@ -790,6 +814,7 @@ public final class RouteCompiler {
             throw new TqlException(UNSUPPORTED_RECIPE, "Route '" + definition.id()
                     + "': queue-consume mounts no sources: — the pipeline is its steps:");
         }
+        requireRotationHonoured(definition);
         String routeId = "queue." + definition.id();
         PipelineBuilder route = pipelines.pipeline(routeId);
         applyCommonGovernance(route, definition.id(), "QUEUE", "/" + definition.id(),
@@ -1000,7 +1025,12 @@ public final class RouteCompiler {
      */
     private void buildTemplatePage(RuntimeContext context, Path appHome, RouteFile routeFile) {
         Path routeDir = routeFile.source().getParent();
-        PipelineBuilder route = pipelineThroughSql(context, routeFile);
+        // Rotation is honoured on pages the way buildJson honours it: the post-sign-in or
+        // post-elevation confirmation page is exactly where a declared rotate belongs, and the
+        // declaration used to compile here and rotate nothing. Safe beside the shell's theme
+        // cookie because every Set-Cookie writer appends now.
+        PipelineBuilder route = applySessionRotation(
+                pipelineThroughSql(context, routeFile), routeFile.definition());
         if (routeFile.definition().response().file() != null) {
             route.process(new io.tesseraql.compiler.binding.FileResponseRenderer(
                     routeFile.definition().response().file(), appHome, routeDir));

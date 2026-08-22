@@ -435,6 +435,43 @@ All notable changes to TesseraQL are documented here. The format follows
   to authenticate. Every other client-authentication failure already spoke the OAuth wire
   vocabulary; the unreadable header now does too.
 
+- **One Content-Disposition filename sanitizer, everywhere a download names its file.** Four
+  writers carried their own regex and disagreed: the attachment, transfer and operations
+  downloads stripped CR/LF and the double quote but let a backslash through — `report.pdf\`
+  escapes the closing quote and leaves the quoted-string unterminated, which download parsers
+  resolve differently (filename spoofing and extension confusion, reachable from a
+  client-supplied upload filename) — and the SQL export's writer sanitized nothing at all. The
+  strictest regex now lives once (`ContentDisposition` in core) and all five sites use it.
+
+- **Three resource leaks on the runtime's own surfaces.** A server whose close timed out
+  leaked its created Vert.x permanently — event loops and acceptor threads alive for the rest
+  of the process, because the stop had no `finally` and the context logs a failed stop and
+  moves on. The ops-shell's proxied transfer-file download built a new `HttpClient` per request
+  (a selector thread and connection pool each, released only at GC) and materialized the whole
+  file on the heap — on the one surface that exists because it streams; it now shares one
+  client and streams the body to the wire, with a completion closing the stream on the path
+  that never gets there. And a deploy upload never closed the part's stream (`Files.copy` does
+  not close its source) — a descriptor per deploy until GC, and on Windows a race against the
+  body handler's end-of-response upload deletion.
+
+- **`response.session.rotate` either rotates or refuses — never a silent no-op.** Only the JSON
+  and command builders applied the declaration; on a page recipe it compiled, booted, and
+  served while rotating nothing — a session-fixation control that silently does not exist, on
+  exactly the post-sign-in confirmation page it is written for. Pages honour it now (safe
+  beside the shell's theme cookie, since every Set-Cookie writer appends), and a recipe with no
+  browser session to rotate — exports, imports, webhooks, queue consumers — refuses the
+  declaration at build time with the recipe named.
+
+- **Set-Cookie appends everywhere a cookie is written.** The response's header map was built
+  multi-valued because Set-Cookie repeats (RFC 6265), and then every writer — session issue and
+  expiry across login, OIDC and SAML, session rotation, the shell's theme re-sync, and a
+  declared `Set-Cookie` in a route's `headers:` block — used the replacing `header()`. No
+  current pipeline puts two cookies on one exchange, so nothing broke yet; the day one does
+  (rotation on an HTML page, a declared cookie beside a rotated session), the second write
+  silently discards the first — for the rotation pair, a browser keeping an already-invalidated
+  session id and a signed-out user. All cookie writers now use `addHeader`, which is what the
+  method was built for.
+
 - **A request racing a hot reload no longer answers 404, and never crashes on a torn chain.**
   The reloader removed a changed route's pipeline before recompiling it, so every save under
   live traffic opened a window in which the mounted URL answered 404; the compiler's

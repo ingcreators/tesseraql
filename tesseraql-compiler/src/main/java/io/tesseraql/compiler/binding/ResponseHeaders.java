@@ -69,7 +69,14 @@ final class ResponseHeaders {
                 String headerValue = resolved instanceof Map || resolved instanceof List
                         ? MAPPER.writeValueAsString(resolved)
                         : String.valueOf(resolved);
-                exchange.response().header(name, headerValue);
+                if ("set-cookie".equalsIgnoreCase(name)) {
+                    // Set-Cookie is the header that repeats (RFC 6265): a declared cookie joins
+                    // the ones a step already wrote — a session rotated earlier in the pipeline
+                    // must not be silently replaced by a declared cookie, or vice versa.
+                    exchange.response().addHeader(name, headerValue);
+                } else {
+                    exchange.response().header(name, headerValue);
+                }
             } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
                 throw new TqlException(RENDER_ERROR, "Failed to serialize header " + name);
             }

@@ -343,7 +343,7 @@ final class LoginRoutes {
     }
 
     private static void setSessionCookie(Exchange exchange, String cookie) {
-        exchange.response().header("Set-Cookie", cookie);
+        exchange.response().addHeader("Set-Cookie", cookie);
     }
 
     private static String str(Object value) {
