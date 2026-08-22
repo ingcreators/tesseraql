@@ -198,13 +198,19 @@ public final class RouteReloader {
         changes.addAll(added);
         for (String id : changes) {
             try {
-                stopAndRemove(id);
+                // No removal first: the compiler's registration replaces the pipeline in place,
+                // so a request racing this save runs the old chain or the new one. Removing
+                // before compiling opened a window in which a mounted URL answered 404 on
+                // every save under live traffic.
                 new RouteCompiler().appName(appName).functions(functions)
                         .compile(context, reloaded, true, Set.of(id));
                 (before.containsKey(id) ? reloadedIds : addedIds).add(id);
             } catch (Exception ex) {
                 // Per-route isolation (roadmap Phase 42): the broken definition serves a clear
-                // 500 carrying its compile error; every other route keeps serving.
+                // 500 carrying its compile error; every other route keeps serving. The failed
+                // compile may have left a partially filled chain registered — removed here, so
+                // the stub is what answers.
+                stopAndRemove(id);
                 RouteFile route = now.get(id);
                 failed.add(new RouteFailure(id, route.httpMethod(), route.urlPath(),
                         String.valueOf(ex.getMessage())));
@@ -224,13 +230,16 @@ public final class RouteReloader {
             Map<String, String> beforeWorkflow = workflowRoutePaths(current);
             Map<String, String> nowWorkflow = workflowRoutePaths(reloaded);
             for (String id : beforeWorkflow.keySet()) {
-                try {
-                    stopAndRemove(id);
-                } catch (Exception ex) {
-                    LOG.warn("Could not stop transition route {} before reload: {}", id,
-                            ex.getMessage());
-                }
+                // Only a transition that is gone is removed; one that survives is recompiled
+                // in place below, so a request racing the reload runs the old chain or the
+                // new one, never a 404 (the same rule as the route loop above).
                 if (!nowWorkflow.containsKey(id)) {
+                    try {
+                        stopAndRemove(id);
+                    } catch (Exception ex) {
+                        LOG.warn("Could not stop transition route {} before reload: {}", id,
+                                ex.getMessage());
+                    }
                     removed.add(id);
                 }
             }
@@ -241,6 +250,7 @@ public final class RouteReloader {
                             .compile(context, reloaded, true, Set.of(id));
                     (beforeWorkflow.containsKey(id) ? reloadedIds : addedIds).add(id);
                 } catch (Exception ex) {
+                    stopAndRemove(id);
                     failed.add(new RouteFailure(id, "POST", transition.getValue(),
                             String.valueOf(ex.getMessage())));
                     LOG.warn("Transition route {} failed to compile on reload: {}", id,

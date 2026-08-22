@@ -119,6 +119,41 @@ class AppLinterResponseHeadersTest {
                 && f.source().equals("web/api/items/get.yml"));
     }
 
+    /**
+     * A declared header the transport owns is refused at build time (TQL-SEC-4139): the edge
+     * would drop it at the wire, and a declaration that is never sent is a promise the app
+     * cannot keep — framing names corrupt the response, and the {@code tql.} namespace never
+     * leaves the runtime.
+     */
+    @Test
+    void refusesADeclaredTransportOwnedHeader(@TempDir Path dir) throws Exception {
+        List<LintFinding> findings = new AppLinter().lint(app(dir,
+                "    headers:\n      Content-Length: \"100\"\n      tql.acting.role: admin"));
+
+        assertThat(findings.stream()
+                .filter(f -> f.code().equals("TQL-SEC-4139") && f.isError())
+                .count()).isEqualTo(2);
+    }
+
+    /** The app-wide defaults are held to the same rule, named as config. */
+    @Test
+    void refusesAReservedDefaultHeader(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), """
+                tesseraql:
+                  app:
+                    name: t
+                  security:
+                    responseHeaders:
+                      Connection: close
+                """);
+
+        List<LintFinding> findings = new AppLinter().lint(dir);
+
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-SEC-4139") && f.isError()
+                && f.source().equals("config"));
+    }
+
     /** And a declared JSON header the defaults say nothing about is not a finding. */
     @Test
     void leavesAJsonHeaderWithNoMatchingDefaultAlone(@TempDir Path dir) throws Exception {
