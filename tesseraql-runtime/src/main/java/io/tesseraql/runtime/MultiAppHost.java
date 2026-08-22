@@ -313,7 +313,10 @@ public final class MultiAppHost implements AutoCloseable, StackReconciler.HostOp
                 LOG.info("Hosting the stack surface (sign-in, account, portal) at the origin"
                         + " scope from {}", surfaceHome);
             }
-        } catch (RuntimeException ex) {
+        } catch (RuntimeException | Error ex) {
+            // Same clause as the runtime's own boot catch: a member failing with an Error (a
+            // broken service descriptor in its module jars) must release the members already
+            // started, not just a member failing with a refusal.
             host.slots.values().forEach(slot -> closeQuietly(slot.runtime()));
             if (frameworkPool != null) {
                 frameworkPool.close();

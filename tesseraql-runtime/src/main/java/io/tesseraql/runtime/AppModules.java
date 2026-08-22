@@ -74,7 +74,18 @@ final class AppModules implements AutoCloseable {
         }
         URLClassLoader loader = new URLClassLoader("tesseraql-modules",
                 urls.toArray(new URL[0]), AppModules.class.getClassLoader());
-        return new AppModules(loader, ExpressionFunctions.load(loader));
+        try {
+            return new AppModules(loader, ExpressionFunctions.load(loader));
+        } catch (RuntimeException | Error ex) {
+            // Function discovery over a broken jar (a ServiceConfigurationError names its
+            // descriptor) must not strand the loader it just opened over that jar.
+            try {
+                loader.close();
+            } catch (IOException ignored) {
+                // The discovery failure is the one to rethrow.
+            }
+            throw ex;
+        }
     }
 
     /** The jars of one directory in stable (sorted) classpath order; absent dir → none. */

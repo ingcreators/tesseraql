@@ -131,8 +131,29 @@ public final class TesseraqlRuntime implements AutoCloseable {
         static LoadedApp of(Path appHome, java.io.File extraModules) {
             AppModules modules = AppModules.load(appHome,
                     ManifestLoader.configOnly(appHome), extraModules);
-            return new LoadedApp(modules,
-                    new ManifestLoader().load(appHome, modules.functions()));
+            try {
+                return new LoadedApp(modules,
+                        new ManifestLoader().load(appHome, modules.functions()));
+            } catch (RuntimeException | Error ex) {
+                closeQuietly(modules);
+                throw ex;
+            }
+        }
+
+        /**
+         * Runs one start path owning the loader this record just built: until the call reaches
+         * the boot's own failure handling, a thrown refusal — a malformed {@code server.port},
+         * the pools phase releasing itself before the hoisted {@code try} — would strand the
+         * application's module classloader and its open jar handles. Closing twice is fine:
+         * the boot's catch may already have released it, and a closed loader closes quietly.
+         */
+        TesseraqlRuntime startOwning(java.util.function.Supplier<TesseraqlRuntime> body) {
+            try {
+                return body.get();
+            } catch (RuntimeException | Error ex) {
+                closeQuietly(modules);
+                throw ex;
+            }
         }
     }
 
@@ -143,11 +164,14 @@ public final class TesseraqlRuntime implements AutoCloseable {
     public static TesseraqlRuntime start(Path appHome,
             DataSources.MainDatasourceOverride override) {
         LoadedApp app = LoadedApp.of(appHome, null);
-        int port = app.manifest().config().getString("server.port").map(Integer::parseInt)
-                .orElse(8080);
-        return start(appHome, app.manifest(), port,
-                new io.tesseraql.core.telemetry.RingTracer(ringCapacity(app.manifest())),
-                io.tesseraql.core.telemetry.NoopMeter.INSTANCE, override, null, app.modules());
+        return app.startOwning(() -> {
+            int port = app.manifest().config().getString("server.port").map(Integer::parseInt)
+                    .orElse(8080);
+            return start(appHome, app.manifest(), port,
+                    new io.tesseraql.core.telemetry.RingTracer(ringCapacity(app.manifest())),
+                    io.tesseraql.core.telemetry.NoopMeter.INSTANCE, override, null,
+                    app.modules());
+        });
     }
 
     /** Starts the runtime against {@code appHome} on an explicit port (used by tests). */
@@ -159,24 +183,25 @@ public final class TesseraqlRuntime implements AutoCloseable {
     public static TesseraqlRuntime start(Path appHome, int port,
             DataSources.MainDatasourceOverride override) {
         LoadedApp app = LoadedApp.of(appHome, null);
-        return start(appHome, app.manifest(), port,
+        return app.startOwning(() -> start(appHome, app.manifest(), port,
                 new io.tesseraql.core.telemetry.RingTracer(ringCapacity(app.manifest())),
-                io.tesseraql.core.telemetry.NoopMeter.INSTANCE, override, null, app.modules());
+                io.tesseraql.core.telemetry.NoopMeter.INSTANCE, override, null, app.modules()));
     }
 
     /** Starts the runtime with an explicit tracer (used to wire observability). */
     public static TesseraqlRuntime start(Path appHome, int port,
             io.tesseraql.core.telemetry.Tracer tracer) {
         LoadedApp app = LoadedApp.of(appHome, null);
-        return start(appHome, app.manifest(), port, tracer,
-                io.tesseraql.core.telemetry.NoopMeter.INSTANCE, null, null, app.modules());
+        return app.startOwning(() -> start(appHome, app.manifest(), port, tracer,
+                io.tesseraql.core.telemetry.NoopMeter.INSTANCE, null, null, app.modules()));
     }
 
     /** Starts the runtime with an explicit tracer and meter (used to wire observability). */
     public static TesseraqlRuntime start(Path appHome, int port,
             io.tesseraql.core.telemetry.Tracer tracer, io.tesseraql.core.telemetry.Meter meter) {
         LoadedApp app = LoadedApp.of(appHome, null);
-        return start(appHome, app.manifest(), port, tracer, meter, null, null, app.modules());
+        return app.startOwning(() -> start(appHome, app.manifest(), port, tracer, meter, null,
+                null, app.modules()));
     }
 
     /**
@@ -192,11 +217,12 @@ public final class TesseraqlRuntime implements AutoCloseable {
         // Hosted (stack) mode had no tracing at all, so the console's trace pages behind `tesseraql host`
         // were permanently empty (docs/audit-hardening.md Decision 7). An app hosted in a stack is
         // the same app: it gets the same in-process ring every other start path gets.
-        return start(appHome, withBasePath(app.manifest(), host.basePath()), port,
+        return app.startOwning(() -> start(appHome, withBasePath(app.manifest(), host.basePath()),
+                port,
                 new io.tesseraql.core.telemetry.RingTracer(ringCapacity(app.manifest())),
                 io.tesseraql.core.telemetry.NoopMeter.INSTANCE, host.mainDataSourceOverride(),
                 host.frameworkDataSource(), true, host.cookiePath(), host,
-                app.modules());
+                app.modules()));
     }
 
     /**
@@ -1777,28 +1803,38 @@ public final class TesseraqlRuntime implements AutoCloseable {
             return new TesseraqlRuntime(context, dataSources, boundPort, jobRepository, jobExecutor,
                     outboxStore, jobs, jobOwners, appName, hostedApps, lanes, tenantDataSources,
                     manifest.config(), pinningSource, otelSdk, opsDashboard, outboxSink, modules);
-        } catch (Exception ex) {
+        } catch (Exception | Error ex) {
             // A failed boot releases what it took (docs/audit-hardening.md Decision 5). Closing
             // the TesseraQL objects is not enough: everything registered through addService above
             // — the HTTP server, the notify bridge, the LISTEN connection — is started and stopped
             // by the context, so a boot that fails after context.start() left a bound port behind
-            // and the next attempt failed on an address already in use.
+            // and the next attempt failed on an address already in use. Errors release the same
+            // way: ServiceLoader over an application's module jars throws
+            // ServiceConfigurationError for a broken descriptor, and a catch that let it through
+            // stranded every pool for the rest of the process.
             //
             // Each step is best-effort for the same reason the ordering matters: on this path one
             // failing close must not strand the resources after it, and the exception that
-            // actually explains the boot failure is the one being rethrown.
+            // actually explains the boot failure is the one being rethrown. Executors close
+            // before the pools their work borrows connections from — close()'s order.
             closeQuietly(context::close);
             closeQuietly(pinningSource);
             closeQuietly(otelSdk);
-            closeQuietly(tenantDataSources);
             closeQuietly(lanes);
+            closeQuietly(tenantDataSources);
             dataSources.values().forEach(TesseraqlRuntime::closeQuietly);
             closeQuietly(modules);
-            // The cause's message rides the wrapper: a boot refusal must keep naming the key
-            // that caused it (the workerThreads contract HttpThreadingIntegrationTest pins),
-            // and the hoisted try now wraps refusals that used to propagate raw.
-            throw new IllegalStateException(
-                    "Failed to start TesseraQL runtime: " + ex.getMessage(), ex);
+            // A refusal keeps its code and its key-naming message on every path — the contract
+            // the pools phase already pins (BootFailureReleaseTest) — and an Error is not this
+            // method's to relabel; the wrapper marks a failure the boot did not anticipate.
+            if (ex instanceof io.tesseraql.core.error.TqlException refusal) {
+                throw refusal;
+            }
+            if (ex instanceof Error error) {
+                throw error;
+            }
+            throw new IllegalStateException("Failed to start TesseraQL runtime: "
+                    + (ex.getMessage() != null ? ex.getMessage() : ex), ex);
         }
     }
 

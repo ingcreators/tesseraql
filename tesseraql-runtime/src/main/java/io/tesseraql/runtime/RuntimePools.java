@@ -181,13 +181,14 @@ record RuntimePools(Map<String, HikariDataSource> dataSources, HikariDataSource 
                     slowSqlLog, pinningMonitor, pinningSource, tenantDataSources);
         } catch (RuntimeException | Error failure) {
             // This phase owns what it built until the record is handed back: released here in
-            // the same order the boot's catch releases the whole record, so a refusal (an
-            // unknown framework datasource name, catalogs beside tenant pools) leaves no pool,
-            // exporter or recording behind.
+            // the same order the boot's catch and close() release — executors before the pools
+            // their work borrows connections from — so a refusal (an unknown framework
+            // datasource name, catalogs beside tenant pools) leaves no pool, exporter or
+            // recording behind.
             TesseraqlRuntime.closeQuietly(pinningSource);
             TesseraqlRuntime.closeQuietly(otelSdk);
-            TesseraqlRuntime.closeQuietly(tenantDataSources);
             TesseraqlRuntime.closeQuietly(lanes);
+            TesseraqlRuntime.closeQuietly(tenantDataSources);
             if (dataSources != null) {
                 dataSources.values().forEach(TesseraqlRuntime::closeQuietly);
             }

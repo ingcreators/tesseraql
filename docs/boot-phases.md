@@ -134,6 +134,20 @@ construction order.
    surviving threads. `start` measured 2,344 lines at the campaign's start and 1,396 after
    this slice; the largest method left in the tree is a 378-line provider group.
 
+   **Revised by the post-campaign review.** The hoist had split refusals into two exception
+   types: a pools-phase `TqlException` escaped raw with its code, while the same class of
+   config refusal after the phase surfaced as `IllegalStateException` — the code invisible
+   unless a caller unwrapped the cause. The boot's catch now releases and rethrows
+   `TqlException` raw on every path (one refusal contract, the one the pools phase already
+   pinned); the `Failed to start TesseraQL runtime` wrapper marks only a failure the boot did
+   not anticipate. The same review closed three leak paths the slice's observable could not
+   see: the catch takes `Error` too (ServiceLoader over an application's module jars throws
+   `ServiceConfigurationError` for a broken descriptor, and the old clause let it strand every
+   pool), each start overload owns the module classloader until the boot's own handling takes
+   over (a malformed `server.port` or a pools-phase refusal used to strand the loader and its
+   open jar handles), and the failure paths release executors before the pools their work
+   borrows connections from — `close()`'s order, which the catch had inverted.
+
 Not in any slice: the MCP assembly, `systemNav`, the token-issuance block, the sweeps — each is
 30–70 lines with a comment that names it, and extraction would trade a visible sequence for a
 file hop. If slice 4 runs, they stay where they are either way.
