@@ -50,8 +50,9 @@ final class SchemaReference {
         JsonNode defs = MAPPER.readTree(defsFile.toFile());
         StringBuilder md = new StringBuilder();
         md.append("# YAML surface reference\n\n")
-                .append("Generated from the [shipped JSON Schemas](../tesseraql-yaml/src/"
-                        + "main/resources/schema) — the ones the loader, the editors, and the "
+                .append("Generated from the [shipped JSON Schemas](https://github.com/"
+                        + "ingcreators/tesseraql/tree/main/tesseraql-yaml/src/main/resources/"
+                        + "schema) — the ones the loader, the editors, and the "
                         + "linter share — on every refresh, so this page cannot drift from "
                         + "what the framework accepts. One document = one file in the app "
                         + "tree, and each kind has its own schema: routes under `web/` and "

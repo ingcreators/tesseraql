@@ -104,7 +104,7 @@ registered under the family name carried in the font itself — so
 `font-family: 'Noto Sans JP'` works as soon as `NotoSansJP-Regular.ttf` is in `fonts/`.
 Registration order is file-name order, deterministic across machines. The examples ship
 `TesseraQL Sample Gothic`, a small renamed Noto Sans JP glyph subset (OFL 1.1, see
-[`examples/user-admin-app/fonts/README.md`](../examples/user-admin-app/fonts/README.md));
+[`examples/user-admin-app/fonts/README.md`](https://github.com/ingcreators/tesseraql/blob/main/examples/user-admin-app/fonts/README.md));
 real applications should ship complete fonts.
 
 ## Deterministic output
