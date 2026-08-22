@@ -429,6 +429,16 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A queue delivery whose pipeline failed is no longer marked consumed.** The consumer checked
+  only the exchange's exception, but a `queue.<id>` pipeline inherits the route error clauses,
+  and the runner clears the exception (moving it to `EXCEPTION_CAUGHT`) before rendering the
+  envelope — so a failed delivery (a constraint violation, a database outage mid-batch) rolled
+  back its transaction, rendered a 500 nobody reads, and was acknowledged: silent message loss
+  with no retry and no dead-letter. The consumer now reads the failure where the envelope puts
+  it — the caught exception, or a 4xx/5xx status — and records it for retry like any other
+  failed delivery. The same blind spot was already fixed for MCP tool calls; the queue consumer
+  had kept the exception-only check.
+
 - **A failing route's span now carries its exception** (docs/vertx-native.md decision 5,
   slice 1). The telemetry completion recorded the error in its failure branch, and that branch
   was unreachable: the pipeline answers every failure it has a clause for *before* draining, so

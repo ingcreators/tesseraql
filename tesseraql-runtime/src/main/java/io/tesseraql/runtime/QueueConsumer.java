@@ -102,7 +102,21 @@ final class QueueConsumer {
                             "No compiled route behind queue consumer '"
                                     + subscription.routeId() + "'"));
             if (result.getException() != null) {
-                failed(subscription, message, result.getException().getMessage());
+                failed(subscription, message, failureText(result.getException()));
+                return;
+            }
+            // A failure the route's own error clauses answered is still a failed delivery: the
+            // runner moves the exception to EXCEPTION_CAUGHT before rendering the envelope, so
+            // an exception check alone would read a rolled-back transaction as consumed.
+            Throwable rendered = result.getProperty(TesseraqlProperties.EXCEPTION_CAUGHT,
+                    Throwable.class);
+            if (rendered != null) {
+                failed(subscription, message, failureText(rendered));
+                return;
+            }
+            Integer status = result.response().status();
+            if (status != null && status >= 400) {
+                failed(subscription, message, "delivery answered status " + status);
                 return;
             }
             // The dedup processor stashed the resolved idempotency key; recording it with the
@@ -110,8 +124,13 @@ final class QueueConsumer {
             String idemKey = result.getProperty(TesseraqlProperties.QUEUE_IDEM_KEY, String.class);
             store.markConsumed(message.id(), subscription.channel(), subscription.topic(), idemKey);
         } catch (RuntimeException ex) {
-            failed(subscription, message, ex.getMessage());
+            failed(subscription, message, failureText(ex));
         }
+    }
+
+    /** The failure text for the status row: the message when the exception has one. */
+    private static String failureText(Throwable failure) {
+        return failure.getMessage() != null ? failure.getMessage() : failure.toString();
     }
 
     /**
