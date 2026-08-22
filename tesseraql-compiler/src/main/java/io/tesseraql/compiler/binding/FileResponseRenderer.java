@@ -47,13 +47,8 @@ public final class FileResponseRenderer implements Step {
         exchange.response().header(Headers.CONTENT_TYPE, response.effectiveContentType());
         if (response.filename() != null && !response.filename().isBlank()) {
             exchange.response().header("Content-Disposition",
-                    "attachment; filename=\"" + sanitizeFilename(response.filename()) + "\"");
+                    io.tesseraql.core.http.ContentDisposition.attachment(response.filename()));
         }
         exchange.setBody(Templates.render(appHome, templateName, model));
-    }
-
-    /** Keeps the download filename header-safe (no quotes or control characters). */
-    private static String sanitizeFilename(String filename) {
-        return filename.replaceAll("[\\\\\"\\r\\n]", "_");
     }
 }

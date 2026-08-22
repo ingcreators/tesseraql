@@ -429,6 +429,14 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **One Content-Disposition filename sanitizer, everywhere a download names its file.** Four
+  writers carried their own regex and disagreed: the attachment, transfer and operations
+  downloads stripped CR/LF and the double quote but let a backslash through — `report.pdf\`
+  escapes the closing quote and leaves the quoted-string unterminated, which download parsers
+  resolve differently (filename spoofing and extension confusion, reachable from a
+  client-supplied upload filename) — and the SQL export's writer sanitized nothing at all. The
+  strictest regex now lives once (`ContentDisposition` in core) and all five sites use it.
+
 - **A request racing a hot reload no longer answers 404, and never crashes on a torn chain.**
   The reloader removed a changed route's pipeline before recompiling it, so every save under
   live traffic opened a window in which the mounted URL answered 404; the compiler's
