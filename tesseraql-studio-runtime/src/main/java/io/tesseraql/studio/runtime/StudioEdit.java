@@ -71,4 +71,33 @@ final class StudioEdit {
                             + " (or " + Atoms.STUDIO_EDIT_PREFIX + "*)");
         }
     }
+
+    /**
+     * The gate as a provider calls it: the caller's identity rides a provider's params under
+     * one of two spellings — {@code principalPermissions} where a route had to keep
+     * {@code permissions} free for a data field of that name (a menu item's own visibility,
+     * say), else {@code permissions}. Both are router-controlled on every path: a declared
+     * route binds them from {@code principal.permissions}, and the workshop stamps both from
+     * its own authenticated principal after the wire's fields, so the fallback can never read
+     * a caller-writable value. Providers gate through these overloads so the next provider
+     * cannot pick a wrong spelling.
+     */
+    boolean canEdit(java.util.Map<String, Object> params) {
+        return canEdit(identityOf(params));
+    }
+
+    /** Rejects a mutating action when the params' caller identity may not edit (403). */
+    void requireEdit(java.util.Map<String, Object> params) {
+        requireEdit(identityOf(params));
+    }
+
+    private static Object identityOf(java.util.Map<String, Object> params) {
+        // A null map is a caller with no identity at all - deny, like every other non-list.
+        // (A null literal also resolves to this overload, being the more specific type.)
+        if (params == null) {
+            return null;
+        }
+        Object principal = params.get("principalPermissions");
+        return principal != null ? principal : params.get("permissions");
+    }
 }

@@ -165,8 +165,10 @@ interface WorkshopTargets {
                 }
                 // The identity stamp the hosted path's member applies from its own
                 // authenticated principal: in process there is no second principal — the
-                // caller's own binding is it.
-                params.put("permissions", permissions == null ? List.of() : permissions);
+                // caller's own binding is it. Both gate spellings, like the hosted door.
+                List<String> stamped = permissions == null ? List.of() : permissions;
+                params.put("permissions", stamped);
+                params.put("principalPermissions", stamped);
                 return providers.get().require(op).invoke(params);
             }
         };

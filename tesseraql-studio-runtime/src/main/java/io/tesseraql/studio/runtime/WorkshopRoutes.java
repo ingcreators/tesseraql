@@ -68,6 +68,11 @@ final class WorkshopRoutes {
         }
         Map<String, Object> params = new LinkedHashMap<>(StudioSupport.parseQueryString(
                 exchange.request().query()));
+        // No session here, so nothing stamps identity: the wire must not smuggle the keys the
+        // stamped paths carry. The share providers authorize by their signed token alone.
+        params.remove("permissions");
+        params.remove("principalPermissions");
+        params.remove("actor");
         respond(exchange, op, params);
     }
 
@@ -90,8 +95,11 @@ final class WorkshopRoutes {
                 ? new LinkedHashMap<>(StudioSupport.parseQueryString(
                         exchange.request().query()))
                 : formParams(exchange);
-        // Identity is the member's own verdict, never the wire's.
+        // Identity is the member's own verdict, never the wire's — under both spellings a
+        // provider's gate reads (StudioEdit's params overloads), so neither can arrive as a
+        // wire field.
         params.put("permissions", permissions);
+        params.put("principalPermissions", permissions);
         params.put("actor", principal == null
                 ? null
                 : principal.loginId() != null ? principal.loginId() : principal.subject());
