@@ -2,7 +2,6 @@ package io.tesseraql.runtime;
 
 import io.tesseraql.opsui.PollSourceStatus;
 import io.tesseraql.pipeline.Exchange;
-import io.tesseraql.pipeline.Headers;
 import io.tesseraql.pipeline.RuntimeContext;
 import io.tesseraql.pipeline.Step;
 import java.io.InputStream;
@@ -177,9 +176,10 @@ final class PollLoop implements RuntimeContext.Service {
         Exchange exchange = new Exchange(context.beans());
         try {
             fetched = source.fetch(file);
-            exchange.getMessage().setHeader(Headers.FILE_NAME, file.name());
+            exchange.setProperty(io.tesseraql.pipeline.TesseraqlProperties.POLLED_FILE_NAME,
+                    file.name());
             try (InputStream content = Files.newInputStream(fetched.path())) {
-                exchange.getMessage().setBody(content);
+                exchange.setBody(content);
                 importer.process(exchange);
             }
             source.archive(file, move);

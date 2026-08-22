@@ -86,7 +86,7 @@ final class LoginRoutes {
         exchange.response().status(429);
         exchange.response().header("Retry-After", String.valueOf(Math.max(1, wait.toSeconds())));
         exchange.response().header(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
-        exchange.getMessage().setBody(mapper.writeValueAsString(Map.of("error", Map.of(
+        exchange.setBody(mapper.writeValueAsString(Map.of("error", Map.of(
                 "code", "TQL-RATE-4292",
                 "message", "Too many attempts; retry later"))));
     }
@@ -211,7 +211,7 @@ final class LoginRoutes {
         // as <meta name="csrf-token">, and a command-line client parses no HTML. Returning it
         // grants no new capability: the same value already reaches any authenticated browser
         // through that tag, and a hostile page still cannot read a cross-origin response body.
-        exchange.getMessage().setBody(mapper.writeValueAsString(
+        exchange.setBody(mapper.writeValueAsString(
                 Map.of("ok", true, "loginId", principal.get().loginId(),
                         "csrfToken", sessions.csrfToken(sessionId))));
     }
@@ -374,7 +374,7 @@ final class LoginRoutes {
                     .forEach((name, values) -> form.put(name, values.get(0)));
             return form;
         }
-        String raw = exchange.getMessage().getBody(String.class);
+        String raw = exchange.getBody(String.class);
         if (raw == null || raw.isBlank()) {
             return Map.of();
         }

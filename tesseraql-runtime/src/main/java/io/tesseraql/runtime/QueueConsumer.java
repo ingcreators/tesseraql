@@ -94,8 +94,8 @@ final class QueueConsumer {
         try {
             Exchange result = pipelines()
                     .run("queue." + subscription.routeId(), exchange -> {
-                        exchange.getMessage().setBody(message.payloadJson());
-                        exchange.getMessage().setHeader(TesseraqlProperties.QUEUE_MESSAGE_KEY,
+                        exchange.setBody(message.payloadJson());
+                        exchange.setProperty(TesseraqlProperties.QUEUE_MESSAGE_KEY,
                                 message.key());
                     })
                     .orElseThrow(() -> new IllegalStateException(

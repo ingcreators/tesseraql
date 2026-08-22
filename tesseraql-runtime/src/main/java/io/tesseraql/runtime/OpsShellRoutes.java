@@ -61,11 +61,11 @@ final class OpsShellRoutes {
             exchange.beans().lookup(RoutePipelines.BEAN, RoutePipelines.class)
                     .run("ops.console.transferFile", target -> {
                         target.request().becomeCopyOf(exchange.request());
-                        target.getMessage().setBody(exchange.getMessage().getBody());
+                        target.setBody(exchange.getBody());
                     })
                     .ifPresent(answered -> {
                         exchange.response().becomeCopyOf(answered.response());
-                        exchange.getMessage().setBody(answered.getMessage().getBody());
+                        exchange.setBody(answered.getBody());
                         if (answered.getException() != null) {
                             exchange.setException(answered.getException());
                         }
@@ -92,6 +92,6 @@ final class OpsShellRoutes {
                 .ifPresent(value -> exchange.response().header(Headers.CONTENT_TYPE, value));
         response.headers().firstValue("Content-Disposition").ifPresent(
                 value -> exchange.response().header("Content-Disposition", value));
-        exchange.getMessage().setBody(response.body());
+        exchange.setBody(response.body());
     }
 }

@@ -104,7 +104,7 @@ public final class ScimRoutes {
 
     private void createUser(Exchange exchange) throws Exception {
         com.fasterxml.jackson.databind.JsonNode payload = mapper.readTree(
-                exchange.getMessage().getBody(String.class));
+                exchange.getBody(String.class));
         ScimUser request = mapper.treeToValue(payload, ScimUser.class);
         ScimUser created = users.create(request);
         if (capture != null) {
@@ -134,7 +134,7 @@ public final class ScimRoutes {
     private void replaceUser(Exchange exchange) throws Exception {
         String id = exchange.request().param("id");
         com.fasterxml.jackson.databind.JsonNode payload = mapper.readTree(
-                exchange.getMessage().getBody(String.class));
+                exchange.getBody(String.class));
         ScimUser request = mapper.treeToValue(payload, ScimUser.class);
         ScimUser replaced = users.replace(id, request);
         if (capture != null) {
@@ -146,7 +146,7 @@ public final class ScimRoutes {
     private void patchUser(Exchange exchange) throws Exception {
         String id = exchange.request().param("id");
         io.tesseraql.scim.ScimPatchRequest patch = mapper.readValue(
-                exchange.getMessage().getBody(String.class),
+                exchange.getBody(String.class),
                 io.tesseraql.scim.ScimPatchRequest.class);
         ScimUser patched = users.patch(id, patch);
         if (capture != null) {
@@ -158,11 +158,11 @@ public final class ScimRoutes {
     private void deleteUser(Exchange exchange) {
         users.delete(exchange.request().param("id"));
         exchange.response().status(204);
-        exchange.getMessage().setBody(null);
+        exchange.setBody(null);
     }
 
     private void createGroup(Exchange exchange) throws Exception {
-        ScimGroup request = mapper.readValue(exchange.getMessage().getBody(String.class),
+        ScimGroup request = mapper.readValue(exchange.getBody(String.class),
                 ScimGroup.class);
         ScimGroup created = groups.create(request);
         exchange.response().header("Location",
@@ -194,7 +194,7 @@ public final class ScimRoutes {
 
     private void replaceGroup(Exchange exchange) throws Exception {
         String id = exchange.request().param("id");
-        ScimGroup request = mapper.readValue(exchange.getMessage().getBody(String.class),
+        ScimGroup request = mapper.readValue(exchange.getBody(String.class),
                 ScimGroup.class);
         respond(exchange, 200, groups.replace(id, request));
     }
@@ -202,7 +202,7 @@ public final class ScimRoutes {
     private void patchGroup(Exchange exchange) throws Exception {
         String id = exchange.request().param("id");
         io.tesseraql.scim.ScimPatchRequest patch = mapper.readValue(
-                exchange.getMessage().getBody(String.class),
+                exchange.getBody(String.class),
                 io.tesseraql.scim.ScimPatchRequest.class);
         respond(exchange, 200, groups.patch(id, patch));
     }
@@ -210,13 +210,13 @@ public final class ScimRoutes {
     private void deleteGroup(Exchange exchange) {
         groups.delete(exchange.request().param("id"));
         exchange.response().status(204);
-        exchange.getMessage().setBody(null);
+        exchange.setBody(null);
     }
 
     private void respond(Exchange exchange, int status, Object body) throws Exception {
         exchange.response().status(status);
         exchange.response().header(Headers.CONTENT_TYPE, SCIM_JSON);
-        exchange.getMessage().setBody(mapper.writeValueAsString(body));
+        exchange.setBody(mapper.writeValueAsString(body));
     }
 
     private void scimError(Exchange exchange) throws Exception {

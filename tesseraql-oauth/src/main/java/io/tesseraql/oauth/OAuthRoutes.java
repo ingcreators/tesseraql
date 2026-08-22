@@ -114,7 +114,7 @@ final class OAuthRoutes {
         document.put("bearer_methods_supported", java.util.List.of("header"));
         exchange.response().status(200);
         exchange.response().header(Headers.CONTENT_TYPE, "application/json");
-        exchange.getMessage().setBody(MAPPER.writeValueAsString(document));
+        exchange.setBody(MAPPER.writeValueAsString(document));
     }
 
     /**
@@ -140,7 +140,7 @@ final class OAuthRoutes {
                 java.util.List.of("none", "client_secret_basic"));
         exchange.response().status(200);
         exchange.response().header(Headers.CONTENT_TYPE, "application/json");
-        exchange.getMessage().setBody(MAPPER.writeValueAsString(document));
+        exchange.setBody(MAPPER.writeValueAsString(document));
     }
 
     /**
@@ -156,7 +156,7 @@ final class OAuthRoutes {
     private void register(Exchange exchange) throws Exception {
         com.fasterxml.jackson.databind.JsonNode metadata;
         try {
-            String body = exchange.getMessage().getBody(String.class);
+            String body = exchange.getBody(String.class);
             metadata = MAPPER.readTree(body == null ? "" : body);
         } catch (com.fasterxml.jackson.core.JacksonException unparsable) {
             error(exchange, 400, "invalid_client_metadata");
@@ -212,7 +212,7 @@ final class OAuthRoutes {
         exchange.response().status(201);
         exchange.response().header(Headers.CONTENT_TYPE, "application/json");
         exchange.response().header("Cache-Control", "no-store");
-        exchange.getMessage().setBody(MAPPER.writeValueAsString(answer));
+        exchange.setBody(MAPPER.writeValueAsString(answer));
     }
 
     /**
@@ -265,7 +265,7 @@ final class OAuthRoutes {
             exchange.response().status(200);
             exchange.response().header(Headers.CONTENT_TYPE, "application/json");
             exchange.response().header("Cache-Control", "no-store");
-            exchange.getMessage().setBody(MAPPER.writeValueAsString(body));
+            exchange.setBody(MAPPER.writeValueAsString(body));
         } catch (org.apache.cxf.rs.security.oauth2.provider.OAuthServiceException refused) {
             error(exchange, 400, refused.getMessage() == null
                     ? "invalid_grant"
@@ -290,7 +290,7 @@ final class OAuthRoutes {
         exchange.response().status(status);
         exchange.response().header(Headers.CONTENT_TYPE, "application/json");
         exchange.response().header("Cache-Control", "no-store");
-        exchange.getMessage().setBody(MAPPER.writeValueAsString(
+        exchange.setBody(MAPPER.writeValueAsString(
                 java.util.Map.of("error", code)));
     }
 
@@ -302,12 +302,12 @@ final class OAuthRoutes {
                     .forEach((name, values) -> form.put(name, values.get(0)));
             return form;
         }
-        return Params.parse(exchange.getMessage().getBody(String.class));
+        return Params.parse(exchange.getBody(String.class));
     }
 
     private void jwks(Exchange exchange) {
         exchange.response().header(Headers.CONTENT_TYPE, "application/json");
-        exchange.getMessage().setBody(JwksDocuments.render(keys.published(accessTokenLifetime)));
+        exchange.setBody(JwksDocuments.render(keys.published(accessTokenLifetime)));
     }
 
     /**
@@ -346,7 +346,7 @@ final class OAuthRoutes {
         String expected = session.csrfToken();
         if (expected == null || !expected.equals(form.get("_csrf"))) {
             exchange.response().status(403);
-            exchange.getMessage().setBody("");
+            exchange.setBody("");
             return;
         }
         Principal principal = session.principal();
@@ -378,6 +378,6 @@ final class OAuthRoutes {
     private static void redirect(Exchange exchange, int status, String location) {
         exchange.response().status(status);
         exchange.response().header("Location", location);
-        exchange.getMessage().setBody("");
+        exchange.setBody("");
     }
 }

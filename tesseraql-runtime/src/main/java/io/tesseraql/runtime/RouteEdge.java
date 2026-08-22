@@ -377,7 +377,7 @@ final class RouteEdge {
             // body, a multipart deploy reading its part, and an export reading its own response
             // all failed on the same missing conversion, which is a good argument for the
             // adapter handing over a type the framework already knows.
-            exchange.getMessage().setBody(ctx.body().buffer().getBytes());
+            exchange.setBody(ctx.body().buffer().getBytes());
         }
     }
 
@@ -426,7 +426,7 @@ final class RouteEdge {
     }
 
     private void respond(RoutingContext ctx, Context connection, Exchange exchange) {
-        Object body = exchange.getMessage().getBody();
+        Object body = exchange.getBody();
         if (body instanceof InputStream stream) {
             // Streamed on the thread that is already ours, so a download costs no worker and no
             // heap — the coupling docs/http-edge.md decision 1 expects to die by evacuation,
@@ -438,7 +438,7 @@ final class RouteEdge {
                 ? null
                 : body instanceof byte[] bytes
                         ? Buffer.buffer(bytes)
-                        : Buffer.buffer(exchange.getMessage().getBody(String.class));
+                        : Buffer.buffer(exchange.getBody(String.class));
         connection.runOnContext(reply -> {
             if (ctx.response().ended()) {
                 return;

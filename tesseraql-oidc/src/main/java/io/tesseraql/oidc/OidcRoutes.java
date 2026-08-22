@@ -272,13 +272,13 @@ final class OidcRoutes {
         exchange.response().status(302);
         exchange.response().header("Location",
                 io.tesseraql.pipeline.BasePath.url(exchange, location));
-        exchange.getMessage().setBody(null);
+        exchange.setBody(null);
     }
 
     private void ok(Exchange exchange) {
         exchange.response().status(200);
         exchange.response().header(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
-        exchange.getMessage().setBody("{\"ok\":true}");
+        exchange.setBody("{\"ok\":true}");
     }
 
     private void unauthorized(Exchange exchange) {
@@ -308,7 +308,7 @@ final class OidcRoutes {
     private void respondError(Exchange exchange, TqlErrorCode code, String message) {
         exchange.response().status(ErrorResponseRenderer.httpStatus(code));
         exchange.response().header(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
-        exchange.getMessage().setBody(FederationErrors.body(code, message));
+        exchange.setBody(FederationErrors.body(code, message));
     }
 
     private static String header(Exchange exchange, String name) {

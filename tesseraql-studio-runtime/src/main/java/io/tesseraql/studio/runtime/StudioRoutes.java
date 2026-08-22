@@ -96,7 +96,7 @@ final class StudioRoutes {
                 .process(AUTH).process(json(exchange -> {
                     studioEdit.requireEdit(permissions(exchange));
                     String path = requirePath(exchange);
-                    String content = exchange.getMessage().getBody(String.class);
+                    String content = exchange.getBody(String.class);
                     studio.saveDraft(path, content == null ? "" : content);
                     Map<String, Object> result = new LinkedHashMap<>();
                     result.put("saved", path);
@@ -106,7 +106,7 @@ final class StudioRoutes {
         pipelines.pipeline("studio.preview")
                 .process(AUTH).process(json(exchange -> {
                     String path = requirePath(exchange);
-                    return studio.preview(path, exchange.getMessage().getBody(String.class));
+                    return studio.preview(path, exchange.getBody(String.class));
                 }));
 
         // The render endpoint takes two text inputs (the draft content and the sample model), so it
@@ -244,7 +244,7 @@ final class StudioRoutes {
 
     /** Parses the request body as a JSON object, or null when the body is blank or not JSON. */
     private com.fasterxml.jackson.databind.JsonNode readBody(Exchange exchange) {
-        String body = exchange.getMessage().getBody(String.class);
+        String body = exchange.getBody(String.class);
         if (body == null || body.isBlank()) {
             return null;
         }
@@ -269,7 +269,7 @@ final class StudioRoutes {
         return exchange -> {
             Object result = handler.apply(exchange);
             exchange.response().header(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
-            exchange.getMessage().setBody(mapper.writeValueAsString(result));
+            exchange.setBody(mapper.writeValueAsString(result));
         };
     }
 }

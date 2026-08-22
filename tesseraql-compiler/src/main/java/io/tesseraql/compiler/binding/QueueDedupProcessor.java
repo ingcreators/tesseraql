@@ -64,7 +64,7 @@ public final class QueueDedupProcessor implements Step {
     @SuppressWarnings("unchecked")
     private String resolveKey(Exchange exchange) {
         if (idempotencyKey == null || idempotencyKey.isBlank()) {
-            return exchange.getMessage().getHeader(TesseraqlProperties.QUEUE_MESSAGE_KEY,
+            return exchange.getProperty(TesseraqlProperties.QUEUE_MESSAGE_KEY,
                     String.class);
         }
         Map<String, Object> context = exchange.getProperty(TesseraqlProperties.CONTEXT, Map.class);

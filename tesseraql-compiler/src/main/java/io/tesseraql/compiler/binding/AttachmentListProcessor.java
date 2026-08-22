@@ -54,6 +54,6 @@ public final class AttachmentListProcessor implements Step {
         }
         exchange.response().status(200);
         exchange.response().header(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
-        exchange.getMessage().setBody(FileImportProcessor.MAPPER.writeValueAsString(items));
+        exchange.setBody(FileImportProcessor.MAPPER.writeValueAsString(items));
     }
 }

@@ -141,7 +141,7 @@ public final class ErrorResponseRenderer implements Step {
             if (page != null) {
                 exchange.response().header(Headers.CONTENT_TYPE, "text/html; charset=utf-8");
                 applySecurityHeaders(exchange);
-                exchange.getMessage().setBody(page);
+                exchange.setBody(page);
                 return;
             }
         }
@@ -149,11 +149,11 @@ public final class ErrorResponseRenderer implements Step {
             exchange.response().header(Headers.CONTENT_TYPE, "text/html; charset=utf-8");
             applySecurityHeaders(exchange);
             applyOnError(exchange);
-            exchange.getMessage().setBody(htmxFragment(error));
+            exchange.setBody(htmxFragment(error));
             return;
         }
         exchange.response().header(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
-        exchange.getMessage().setBody(mapper.writeValueAsString(body));
+        exchange.setBody(mapper.writeValueAsString(body));
     }
 
     /** The bundled login page (the browser-session entry point for the admin console). */
@@ -209,7 +209,7 @@ public final class ErrorResponseRenderer implements Step {
         exchange.response().header("Location", location + "?redirect="
                 + java.net.URLEncoder.encode(target, java.nio.charset.StandardCharsets.UTF_8));
         exchange.response().header(Headers.CONTENT_TYPE, "text/plain; charset=utf-8");
-        exchange.getMessage().setBody("");
+        exchange.setBody("");
     }
 
     /**

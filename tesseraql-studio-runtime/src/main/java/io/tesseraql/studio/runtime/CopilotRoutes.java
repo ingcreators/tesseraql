@@ -73,7 +73,7 @@ final class CopilotRoutes {
                                 "text/html; charset=utf-8");
                         // The placeholder's hx-get is markup, not a template — it carries the
                         // app's prefix from here (docs/base-path.md).
-                        exchange.getMessage().setBody(CopilotFragments.entryHtml(
+                        exchange.setBody(CopilotFragments.entryHtml(
                                 new CopilotService.Entry("user", message, null))
                                 + CopilotFragments.placeholder(io.tesseraql.pipeline.BasePath.url(
                                         exchange, page + "/stream?turn=" + turn))
@@ -157,7 +157,7 @@ final class CopilotRoutes {
     private static String requireMessage(Exchange exchange) {
         String message = exchange.request().param("message");
         if (message == null) {
-            String raw = exchange.getMessage().getBody(String.class);
+            String raw = exchange.getBody(String.class);
             if (raw != null) {
                 for (String pair : raw.split("&")) {
                     int eq = pair.indexOf('=');

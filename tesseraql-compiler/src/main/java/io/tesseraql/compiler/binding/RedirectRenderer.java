@@ -99,6 +99,6 @@ public final class RedirectRenderer implements Step {
             exchange.response().status(status);
             exchange.response().header("Location", target);
         }
-        exchange.getMessage().setBody("");
+        exchange.setBody("");
     }
 }

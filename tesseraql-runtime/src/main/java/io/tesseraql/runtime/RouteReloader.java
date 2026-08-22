@@ -453,7 +453,7 @@ public final class RouteReloader {
                         exchange.response().status(500);
                         exchange.response().header(Headers.CONTENT_TYPE,
                                 "application/json; charset=utf-8");
-                        exchange.getMessage().setBody("{\"error\":{\"code\":\"" + COMPILE_FAILED
+                        exchange.setBody("{\"error\":{\"code\":\"" + COMPILE_FAILED
                                 + "\",\"message\":\"Route failed to compile; see the server log"
                                 + " for the cause\"}}");
                     });

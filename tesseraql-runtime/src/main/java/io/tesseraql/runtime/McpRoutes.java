@@ -52,12 +52,12 @@ final class McpRoutes {
                     exchange.request().header("Authorization"),
                     exchange.request().header(McpHttpHandler.SESSION_HEADER),
                     exchange.request().header("MCP-Protocol-Version"),
-                    exchange.getMessage().getBody(String.class));
+                    exchange.getBody(String.class));
             McpHttpHandler.Response response = handler.handle(request);
             exchange.response().status(response.status());
             response.headers()
                     .forEach((name, value) -> exchange.response().header(name, value));
-            exchange.getMessage().setBody(response.body());
+            exchange.setBody(response.body());
         };
     }
 }

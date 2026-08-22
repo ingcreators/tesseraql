@@ -199,12 +199,12 @@ public final class RequestBinder implements Step {
         }
         // A programmatic caller (an MCP primitive, a delegated workflow step) hands the bound
         // values as a Map body; use it directly.
-        if (exchange.getMessage().getBody() instanceof Map<?, ?> formBody) {
+        if (exchange.getBody() instanceof Map<?, ?> formBody) {
             Map<String, Object> form = new LinkedHashMap<>();
             formBody.forEach((key, value) -> form.put(String.valueOf(key), value));
             return form;
         }
-        String raw = exchange.getMessage().getBody(String.class);
+        String raw = exchange.getBody(String.class);
         if (raw == null || raw.isBlank()) {
             return Map.of();
         }

@@ -401,7 +401,7 @@ public class AuthStep implements Step {
         exchange.response().status(302);
         exchange.response().header("Location", location);
         exchange.response().header(Headers.CONTENT_TYPE, "text/plain; charset=utf-8");
-        exchange.getMessage().setBody("");
+        exchange.setBody("");
         exchange.setRouteStop(true);
     }
 

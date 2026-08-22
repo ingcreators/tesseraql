@@ -291,7 +291,7 @@ public final class HtmlResponseRenderer implements Step {
                     ? "HX-Request"
                     : vary.contains("HX-Request") ? vary : vary + ", HX-Request");
         }
-        exchange.getMessage().setBody(html);
+        exchange.setBody(html);
     }
 
     static Object interpolate(Object value, EvaluationContext evaluation) {

@@ -218,7 +218,7 @@ final class AppMcpServer {
     private static Outcome call(RoutePipelines pipelines, String routeId, Object body,
             McpCallContext context) {
         Exchange out = pipelines.run(routeId, exchange -> {
-            exchange.getMessage().setBody(body);
+            exchange.setBody(body);
             if (context.authorization() != null) {
                 exchange.request().header("Authorization", context.authorization());
             }
@@ -230,7 +230,7 @@ final class AppMcpServer {
         if (out.getException() != null) {
             return new Outcome(null, null, out.getException());
         }
-        return new Outcome(out.getMessage().getBody(String.class),
+        return new Outcome(out.getBody(String.class),
                 out.response().status(), null);
     }
 

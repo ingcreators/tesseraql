@@ -35,7 +35,7 @@ class ErrorResponseRendererTest {
 
         new ErrorResponseRenderer().process(exchange);
 
-        String body = exchange.getMessage().getBody(String.class);
+        String body = exchange.getBody(String.class);
         assertThat(exchange.response().status()).isEqualTo(409);
         assertThat(body).contains("\"code\":\"TQL-SQL-4090\"")
                 .contains("\"message\":\"Conflict\"")
@@ -59,7 +59,7 @@ class ErrorResponseRendererTest {
 
         new ErrorResponseRenderer().process(exchange);
 
-        String body = exchange.getMessage().getBody(String.class);
+        String body = exchange.getBody(String.class);
         assertThat(exchange.response().status()).isEqualTo(422);
         assertThat(body).contains("\"code\":\"TQL-WORKFLOW-3202\"")
                 .contains("\"message\":\"Unprocessable Entity\"")
@@ -110,7 +110,7 @@ class ErrorResponseRendererTest {
 
         new ErrorResponseRenderer().process(exchange);
 
-        assertThat(exchange.getMessage().getBody(String.class))
+        assertThat(exchange.getBody(String.class))
                 .contains("hc-alert__body")
                 .contains("The request is not funded.");
     }
@@ -127,7 +127,7 @@ class ErrorResponseRendererTest {
 
         new ErrorResponseRenderer().process(exchange);
 
-        String body = exchange.getMessage().getBody(String.class);
+        String body = exchange.getBody(String.class);
         assertThat(exchange.response().header(Headers.CONTENT_TYPE))
                 .startsWith("text/html");
         assertThat(body).contains("class=\"hc-alert\" data-variant=\"error\"")
@@ -182,7 +182,7 @@ class ErrorResponseRendererTest {
 
         new ErrorResponseRenderer().process(exchange);
 
-        String body = exchange.getMessage().getBody(String.class);
+        String body = exchange.getBody(String.class);
         assertThat(exchange.response().status()).isEqualTo(422);
         assertThat(body).contains("\"code\":\"TQL-FIELD-4220\"")
                 .contains("\"message\":\"Unprocessable Entity\"")
@@ -208,7 +208,7 @@ class ErrorResponseRendererTest {
 
         new ErrorResponseRenderer().process(exchange);
 
-        String body = exchange.getMessage().getBody(String.class);
+        String body = exchange.getBody(String.class);
         assertThat(body).contains("\"message\":\"入力内容を確認してください\"")
                 .contains("\"message\":\"すでに登録されています。\"")
                 .contains("\"messageKey\":\"members.email.duplicate\"");
@@ -235,7 +235,7 @@ class ErrorResponseRendererTest {
 
         new ErrorResponseRenderer(i18n).process(exchange);
 
-        String body = exchange.getMessage().getBody(String.class);
+        String body = exchange.getBody(String.class);
         assertThat(body).contains("data-message-key=\"orders.qty.exceeds\"")
                 .contains("在庫 5 を超えています。")
                 // The entry's params ride along for the kit's client-side interpolation
@@ -255,7 +255,7 @@ class ErrorResponseRendererTest {
 
         new ErrorResponseRenderer().process(exchange);
 
-        assertThat(exchange.getMessage().getBody(String.class))
+        assertThat(exchange.getBody(String.class))
                 .contains("data-message-key=\"members.email.duplicate\"")
                 .doesNotContain("data-message-params");
     }
@@ -272,7 +272,7 @@ class ErrorResponseRendererTest {
 
         new ErrorResponseRenderer().process(exchange);
 
-        String body = exchange.getMessage().getBody(String.class);
+        String body = exchange.getBody(String.class);
         assertThat(body).contains("\"details\":{\"conflict\":{")
                 .contains("\"hintKey\":\"tql.conflict.stale\"")
                 .contains("他のユーザーによってレコードが変更または削除された可能性があります");
@@ -290,7 +290,7 @@ class ErrorResponseRendererTest {
 
         new ErrorResponseRenderer().process(exchange);
 
-        String body = exchange.getMessage().getBody(String.class);
+        String body = exchange.getBody(String.class);
         assertThat(exchange.response().status()).isEqualTo(422);
         assertThat(body).contains("hc-alert__error")
                 .contains("data-field=\"email\"")
