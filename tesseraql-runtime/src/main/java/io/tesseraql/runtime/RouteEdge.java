@@ -1,6 +1,7 @@
 package io.tesseraql.runtime;
 
 import io.tesseraql.compiler.pipeline.Pipelines;
+import io.tesseraql.core.http.ReservedHeaders;
 import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.pipeline.Headers;
 import io.tesseraql.pipeline.RuntimeContext;
@@ -13,6 +14,7 @@ import io.vertx.ext.web.Route;
 import io.vertx.ext.web.RoutingContext;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -424,6 +426,14 @@ final class RouteEdge {
             if (ctx.response().ended()) {
                 return;
             }
+            if (ctx.response().headWritten()) {
+                // The head is already on the wire, so a 500 cannot be written any more —
+                // setStatusCode here would throw on the event loop and leave the caller
+                // holding the connection until their own timeout. Closing it is the one
+                // honest signal left: a truncated response, now, instead of silence.
+                ctx.request().connection().close();
+                return;
+            }
             ctx.response().setStatusCode(500)
                     .putHeader("Content-Type", "application/json; charset=utf-8")
                     .end(UNRENDERED_FAILURE);
@@ -431,12 +441,17 @@ final class RouteEdge {
     }
 
     private void respond(RoutingContext ctx, Context connection, Exchange exchange) {
+        // The wire snapshot is validated here, on the route's thread, where a refusal can still
+        // answer 500 — a header Vert.x would refuse on the event loop (a line break in an
+        // interpolated value) refused there instead hangs the connection, past every net.
+        List<Map.Entry<String, String>> wire = wireHeaders(exchange);
+        int status = exchange.response().statusOr200();
         Object body = exchange.getBody();
         if (body instanceof InputStream stream) {
             // Streamed on the thread that is already ours, so a download costs no worker and no
             // heap — the coupling docs/http-edge.md decision 1 expects to die by evacuation,
             // dying here by ownership instead.
-            stream(ctx, connection, exchange, stream);
+            stream(ctx, connection, exchange, stream, status, wire);
             return;
         }
         Buffer buffer = body == null
@@ -448,7 +463,7 @@ final class RouteEdge {
             if (ctx.response().ended()) {
                 return;
             }
-            headers(ctx.response(), exchange);
+            headers(ctx.response(), status, wire);
             if (buffer == null) {
                 ctx.response().end();
             } else {
@@ -458,13 +473,13 @@ final class RouteEdge {
     }
 
     private void stream(RoutingContext ctx, Context connection, Exchange exchange,
-            InputStream body) {
+            InputStream body, int status, List<Map.Entry<String, String>> wire) {
         HttpServerResponse response = ctx.response();
         AtomicBoolean gone = new AtomicBoolean();
         connection.runOnContext(open -> {
             response.closeHandler(closed -> gone.set(true));
             response.exceptionHandler(failure -> gone.set(true));
-            headers(response, exchange);
+            headers(response, status, wire);
             response.setChunked(true);
         });
         try (InputStream in = body) {
@@ -474,8 +489,17 @@ final class RouteEdge {
                 write(connection, gone, response, Buffer.buffer(java.util.Arrays.copyOf(chunk,
                         read)));
             }
-        } catch (IOException unreadable) {
-            gone.set(true);
+        } catch (IOException | RuntimeException unreadable) {
+            // The head and some chunks are already on the wire, so no error body can follow.
+            // Ending would fake a complete response; leaving the connection open hung the
+            // caller until their own timeout — closing it mid-chunk is the one honest signal
+            // left. RuntimeException is caught here because body readers wrap their I/O
+            // (UncheckedIOException and kin), and escaping to the serve() net would try to
+            // write a 500 onto a committed response.
+            LOG.warn("Streaming the response of route {} failed mid-body; closing the connection",
+                    exchange.getFromRouteId(), unreadable);
+            connection.runOnContext(abort -> ctx.request().connection().close());
+            return;
         }
         connection.runOnContext(end -> {
             if (!gone.get() && !response.ended()) {
@@ -513,17 +537,51 @@ final class RouteEdge {
     /**
      * The wire is the response object, whole and nothing else (docs/vertx-native.md
      * decision 1). The outbound filter that used to decide this is gone with its reason: a
-     * response that never contained the request has no caller's cookie to be kept from echoing,
-     * and no internal name to be kept off the wire.
+     * response that never contained the request has no caller's cookie to be kept from echoing.
+     * What survives it is the transport's own claim, checked in {@link #wireHeaders}: framing
+     * and connection control belong to the server, and the {@code tql.} namespace never leaves.
      */
-    private void headers(HttpServerResponse response, Exchange exchange) {
-        response.setStatusCode(exchange.response().statusOr200());
+    private static void headers(HttpServerResponse response, int status,
+            List<Map.Entry<String, String>> wire) {
+        response.setStatusCode(status);
+        for (Map.Entry<String, String> header : wire) {
+            response.headers().add(header.getKey(), header.getValue());
+        }
+    }
+
+    /**
+     * The validated wire snapshot, taken on the route's thread.
+     *
+     * <p>Two checks. A transport-owned name ({@link ReservedHeaders}) is dropped with a warning:
+     * a declared {@code Content-Length} disagreeing with the body the edge actually writes
+     * truncates the response or hangs the keep-alive connection, and {@code AppLinter} refuses
+     * the declaration at build time — this is the runtime backstop for headers written by code.
+     * A value carrying a line break fails the request here, where the failure still renders a
+     * 500: Vert.x rightly refuses such a value, but its refusal fires inside
+     * {@code runOnContext}, past the virtual thread's net, and the outcome was a hung
+     * connection. Interpolated route headers can carry caller data, so this is reachable from
+     * a form field.
+     */
+    private static List<Map.Entry<String, String>> wireHeaders(Exchange exchange) {
+        List<Map.Entry<String, String>> wire = new java.util.ArrayList<>();
         exchange.response().headers().forEach((name, values) -> {
+            if (ReservedHeaders.neverDeclared(name)) {
+                LOG.warn("Route {} set response header '{}', which the transport owns;"
+                        + " not sent", exchange.getFromRouteId(), name);
+                return;
+            }
             for (String value : values) {
-                if (value != null) {
-                    response.headers().add(name, value);
+                if (value == null) {
+                    continue;
                 }
+                if (value.indexOf('\r') >= 0 || value.indexOf('\n') >= 0) {
+                    throw new IllegalStateException("Response header '" + name + "' of route "
+                            + exchange.getFromRouteId()
+                            + " carries a line break; refusing to write it");
+                }
+                wire.add(Map.entry(name, value));
             }
         });
+        return wire;
     }
 }

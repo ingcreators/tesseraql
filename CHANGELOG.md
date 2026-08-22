@@ -441,6 +441,30 @@ All notable changes to TesseraQL are documented here. The format follows
   sees is unchanged and deliberate: the chain as it stands, never cached (the registry's
   version check), never torn.
 
+- **A declared response header the transport owns no longer reaches the wire, and a header
+  value carrying a line break fails the request instead of hanging it.** Deleting the outbound
+  header filter (its reason — request echo — became unrepresentable) also deleted the only
+  thing keeping framing and connection-control names out of a route's declared `headers:`
+  block: a declared `Content-Length` disagreeing with the body truncated the response or hung
+  the keep-alive connection, `Connection`/`Transfer-Encoding` were smuggling-shaped protocol
+  violations, and a `tql.`-named header leaked the internal namespace. And an interpolated
+  header value carrying a caller-supplied line break was refused by Vert.x *on the event loop*,
+  past the virtual thread's net — the connection hung until the caller's timeout, reachable
+  from a form field. The reserved names live once (`ReservedHeaders` in core): `AppLinter`
+  refuses a declared one at build time (`TQL-SEC-4139`, defaults included), the edge drops one
+  written by code at the wire with a warning, and the edge validates values on the route's own
+  thread, where a line break still renders as a 500.
+
+- **A response body that fails mid-stream closes the connection instead of hanging it.** Once
+  the head and the first chunks are on the wire no error body can follow, and the edge's error
+  paths left the third and worst outcome: an `IOException` from the body skipped the terminal
+  chunk and left the connection open until the caller's own timeout, and an unchecked failure
+  (an `UncheckedIOException` from a wrapped reader) escaped to the last-resort net, which tried
+  to write a 500 onto the committed response and threw on the event loop — connection still
+  open. The edge now closes the connection on a mid-body failure — a truncated response, now,
+  instead of silence — and the last-resort net closes rather than writes when the head is
+  already out.
+
 - **Redirects and Location headers built from the request no longer double the query string.**
   `request().uri()` is the path *plus* the query, and three builders treated it as the path:
   the role-activation redirect appended the query again (`…/admin/users?tab=audit?tab=audit`,
