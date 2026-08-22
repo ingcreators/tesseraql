@@ -279,7 +279,7 @@ Keys are declared in `config/application.yml` and `config/tesseraql.yml`, overri
 
 | Key | Read by | Documented in |
 | --- | --- | --- |
-| `tesseraql.orgunit.mode` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java), [OrgUnitRules.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/OrgUnitRules.java), [OrgUnitSettings.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/org/OrgUnitSettings.java) | [data-scoping](data-scoping.md) |
+| `tesseraql.orgunit.mode` | [IamAdminProviders.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/IamAdminProviders.java), [OrgUnitRules.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/OrgUnitRules.java), [OrgUnitSettings.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/org/OrgUnitSettings.java) | [data-scoping](data-scoping.md) |
 
 ## tesseraql.otel
 
