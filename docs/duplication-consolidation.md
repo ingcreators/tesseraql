@@ -262,7 +262,10 @@ Fourteen, in the recommended order. Each is one PR, branched from fresh origin/m
 7. **`ConfinedPath`** — the primitive, with the security-loaded adopters: runtime file
    scopes and assets, the template resolver, the zip-slip guard, the PDF resolvers.
 8. **`ConfinedPath` sweep** — the remaining adopters (yaml, studio, cli, apptasks) and the
-   path-guard ledger.
+   path-guard ledger. *Shipped as one change with slice 7*: the sweep turned out to be
+   thirteen mechanical conversions of one shape, and the ledger — written first — caught a
+   twenty-third guard the survey had missed (the catalog store's), which argued for landing
+   the ledger with the adopters rather than a slice later.
 9. **`ErrorEnvelope`** — the primitive lifted from `FederationErrors`, seven adopters, the
    two shape defects fixed, the envelope ledger.
 10. **The status ledger** — every registered code mapped or explicitly recorded; the

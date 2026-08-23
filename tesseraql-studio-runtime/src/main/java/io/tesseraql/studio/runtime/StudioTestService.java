@@ -341,10 +341,10 @@ final class StudioTestService {
                 || binding.isSequence() || !binding.effectiveMode().startsWith("query")) {
             return null;
         }
-        Path sqlFile = routeDir.resolve(binding.file()).normalize();
-        if (!sqlFile.startsWith(appHome)) {
-            throw new IllegalArgumentException("SQL file escapes app home: " + binding.file());
-        }
+        Path sqlFile = io.tesseraql.core.files.ConfinedPath.under(appHome)
+                .confine(routeDir.resolve(binding.file()))
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "SQL file escapes app home: " + binding.file()));
         EvaluationContext evaluation = new EvaluationContext(context);
         Map<String, Object> bindParams = new LinkedHashMap<>();
         binding.params().forEach((name, expr) -> bindParams.put(name,

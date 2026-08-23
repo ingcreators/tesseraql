@@ -40,9 +40,12 @@ public final class FileSecretResolver implements SecretResolver {
 
     @Override
     public String resolve(String name) {
-        Path file = directory.resolve(name).normalize();
-        if (!file.startsWith(directory) || !file.getParent().equals(directory)
-                || !Files.isRegularFile(file)) {
+        Path file = io.tesseraql.core.files.ConfinedPath.under(directory).resolve(name)
+                // Stricter than confinement: secrets are a flat directory, no nesting.
+                .filter(resolved -> directory.equals(resolved.getParent()))
+                .filter(Files::isRegularFile)
+                .orElse(null);
+        if (file == null) {
             return null;
         }
         try {

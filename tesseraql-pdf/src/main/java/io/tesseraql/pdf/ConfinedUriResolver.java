@@ -16,10 +16,10 @@ final class ConfinedUriResolver implements FSUriResolver {
 
     private static final Logger LOG = Logger.getLogger(ConfinedUriResolver.class.getName());
 
-    private final Path root;
+    private final io.tesseraql.core.files.ConfinedPath root;
 
     ConfinedUriResolver(Path root) {
-        this.root = root == null ? null : root.toAbsolutePath().normalize();
+        this.root = root == null ? null : io.tesseraql.core.files.ConfinedPath.under(root);
     }
 
     @Override
@@ -50,8 +50,9 @@ final class ConfinedUriResolver implements FSUriResolver {
             if (!"file".equals(target.getScheme()) || root == null) {
                 return null;
             }
-            Path file = Path.of(target).toAbsolutePath().normalize();
-            return file.startsWith(root) ? file.toUri().toString() : null;
+            return root.confine(Path.of(target))
+                    .map(file -> file.toUri().toString())
+                    .orElse(null);
         } catch (IllegalArgumentException ex) {
             return null;
         }

@@ -144,14 +144,12 @@ public final class PdfFileCodec implements FileCodec {
             throw new TqlException(RENDER_FAILED,
                     "PDF template '" + spec.template() + "' is not a file");
         }
-        Path root = spec.resources() == null
-                ? template.getParent()
-                : spec.resources().toAbsolutePath().normalize();
-        if (!template.startsWith(root)) {
-            throw new TqlException(OUTSIDE_ROOT, "PDF template '" + template
-                    + "' is outside the app resource root '" + root + "'");
-        }
-        return PdfTemplates.render(root,
-                root.relativize(template).toString().replace('\\', '/'), model);
+        io.tesseraql.core.files.ConfinedPath root = io.tesseraql.core.files.ConfinedPath
+                .under(spec.resources() == null ? template.getParent() : spec.resources());
+        Path confined = root.confine(template)
+                .orElseThrow(() -> new TqlException(OUTSIDE_ROOT, "PDF template '" + template
+                        + "' is outside the app resource root '" + root.root() + "'"));
+        return PdfTemplates.render(root.root(),
+                root.root().relativize(confined).toString().replace('\\', '/'), model);
     }
 }

@@ -94,8 +94,9 @@ final class MailRules implements LintRule {
                     || template.contains("${")) {
                 continue;
             }
-            Path resolved = appHome.resolve(template).normalize();
-            if (!resolved.startsWith(appHome) || !Files.isRegularFile(resolved)) {
+            Path resolved = io.tesseraql.core.files.ConfinedPath.under(appHome)
+                    .resolve(template).filter(Files::isRegularFile).orElse(null);
+            if (resolved == null) {
                 findings.add(new LintFinding(INVALID_MAIL_CHANNEL, ERROR, configSource,
                         "Mail channel '" + name + "': template '" + template
                                 + "' is not a file inside the app home"));

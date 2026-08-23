@@ -18,7 +18,8 @@ import java.util.Map;
  */
 final class FileScopes implements DatasourceFilePathResolver {
 
-    private record ResolvedScope(Path root, boolean partitionByTenant) {
+    private record ResolvedScope(io.tesseraql.core.files.ConfinedPath root,
+            boolean partitionByTenant) {
     }
 
     private final Map<String, Map<String, ResolvedScope>> byDatasource;
@@ -71,7 +72,8 @@ final class FileScopes implements DatasourceFilePathResolver {
                 Map<String, ResolvedScope> scopes = new LinkedHashMap<>();
                 DuckDbDatasources.fileScopes(config, datasource)
                         .forEach((scopeName, scope) -> scopes.put(scopeName, new ResolvedScope(
-                                DuckDbDatasources.resolveRoot(appHome, scope.root()),
+                                io.tesseraql.core.files.ConfinedPath.under(
+                                        DuckDbDatasources.resolveRoot(appHome, scope.root())),
                                 scope.partitionByTenant())));
                 byDatasource.put(datasource, scopes);
             }
@@ -112,19 +114,17 @@ final class FileScopes implements DatasourceFilePathResolver {
                     "File scope '" + name + "' is not declared under tesseraql.datasources."
                             + datasource + ".duckdb.fileScopes");
         }
-        Path path = scope.root();
+        Path path = scope.root().root();
         if (scope.partitionByTenant()) {
             path = path.resolve(tenantSegment(name, context));
         }
         if (!suffix.isEmpty()) {
             path = path.resolve(suffix.substring(1));
         }
-        Path normalized = path.normalize();
-        if (!normalized.startsWith(scope.root())) {
-            throw new TqlException(FilePathResolver.UNSUPPORTED_CODE,
-                    "File scope '" + name + "' resolved outside its root");
-        }
-        return normalized.toString();
+        return scope.root().confine(path)
+                .orElseThrow(() -> new TqlException(FilePathResolver.UNSUPPORTED_CODE,
+                        "File scope '" + name + "' resolved outside its root"))
+                .toString();
     }
 
     /**

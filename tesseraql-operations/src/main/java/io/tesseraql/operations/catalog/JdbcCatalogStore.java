@@ -417,13 +417,12 @@ public final class JdbcCatalogStore implements CatalogStore {
      * document, and a catalog is not a way to read an arbitrary path off the host.
      */
     private String fileSql(String name, CatalogSpec spec) {
-        java.nio.file.Path home = appHome.toAbsolutePath().normalize();
-        java.nio.file.Path file = home.resolve("catalogs").resolve(spec.file()).normalize();
-        if (!file.startsWith(home.resolve("catalogs"))
-                || !java.nio.file.Files.isRegularFile(file)) {
-            throw new TqlException(CatalogSpec.INVALID_SOURCE, "Catalog '" + name + "': file '"
-                    + spec.file() + "' does not resolve to a SQL file under catalogs/");
-        }
+        java.nio.file.Path file = io.tesseraql.core.files.ConfinedPath
+                .under(appHome.resolve("catalogs")).resolve(spec.file())
+                .filter(java.nio.file.Files::isRegularFile)
+                .orElseThrow(() -> new TqlException(CatalogSpec.INVALID_SOURCE, "Catalog '"
+                        + name + "': file '" + spec.file()
+                        + "' does not resolve to a SQL file under catalogs/"));
         try {
             return java.nio.file.Files.readString(file);
         } catch (java.io.IOException ex) {

@@ -456,8 +456,9 @@ final class AssetRoutes implements RuntimeContext.Service {
         if (relative.isBlank()) {
             return null;
         }
-        Path file = root.resolve(relative).normalize();
-        return file.startsWith(root) && Files.isRegularFile(file) ? file : null;
+        return io.tesseraql.core.files.ConfinedPath.under(root).resolve(relative)
+                .filter(Files::isRegularFile)
+                .orElse(null);
     }
 
     private static String requestPath(String raw, String mount) {

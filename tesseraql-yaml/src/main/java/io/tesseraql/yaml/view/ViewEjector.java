@@ -489,14 +489,15 @@ public final class ViewEjector {
 
     /** A slot template resolves colocated-first, then under templates/, app-home-confined. */
     private static String resolveTemplate(Path appHome, Path routeDir, String template) {
-        Path home = appHome.toAbsolutePath().normalize();
+        io.tesseraql.core.files.ConfinedPath home = io.tesseraql.core.files.ConfinedPath
+                .under(appHome);
         Path colocated = routeDir.toAbsolutePath().normalize().resolve(template).normalize();
-        Path file = Files.isRegularFile(colocated)
+        Path candidate = Files.isRegularFile(colocated)
                 ? colocated
-                : home.resolve("templates").resolve(template).normalize();
-        require(file.startsWith(home) && Files.isRegularFile(file),
-                "slot template does not resolve: " + template);
-        return home.relativize(file).toString().replace('\\', '/');
+                : home.root().resolve("templates").resolve(template);
+        Path file = home.confine(candidate).filter(Files::isRegularFile).orElse(null);
+        require(file != null, "slot template does not resolve: " + template);
+        return home.root().relativize(file).toString().replace('\\', '/');
     }
 
     private static void cell(StringBuilder html, ViewSpec.Column column,

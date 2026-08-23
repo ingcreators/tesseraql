@@ -8,6 +8,23 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **Path confinement is one primitive, and the guard holds against a relative root**
+  (`ConfinedPath`, docs/duplication-consolidation.md campaign 2). Twenty-two sites carried
+  their own `resolve().normalize()` + `startsWith(root)` sequence and disagreed on the one
+  thing that makes it hold: both sides must be absolutized and normalized. The template
+  resolver compared against the app home as it arrived, so a relative or `..`-carrying app
+  home made its guard vacuous; the file-scope and asset guards absolutized neither side.
+  The root is canonicalized once in the primitive; what escaping means stays with each
+  caller (a render error, a package refusal, a lint finding, a 404). Adopters: file
+  scopes, asset routes, the template resolvers (route, preview, view-eject), the
+  `.tqlapp` and DuckDB-bundle zip-slip guards, the PDF template root and resource
+  resolver, the file connectors, the mail template (runtime and lint), the catalog file
+  readers (store and lint — the store's guard was a twenty-third site the survey missed,
+  found by the new ledger), the secret directory (keeping its stricter no-nesting rule),
+  the scaffold writer, the classpath app source, the draft store, and the Studio doc and
+  test services. `PathGuardLedgerTest` names the hand-rolled shape's remaining
+  occurrences (the primitive, and three prefix classifications that confine nothing); a
+  new one is refused by default.
 - **An outbound call's span never ends clean on a failure.** `HttpCallClient` recorded an
   error on its `tesseraql.http.call` span only for the two constructed refusals; a status
   refusal recorded but an unknown credential, an unserializable body, or a plain bug ended

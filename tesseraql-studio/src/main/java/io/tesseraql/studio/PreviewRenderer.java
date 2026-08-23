@@ -482,16 +482,17 @@ final class PreviewRenderer {
      * app-home-relative path.
      */
     private String resolveRouteTemplate(String routePath, String template) {
-        Path home = appHome.get();
+        io.tesseraql.core.files.ConfinedPath home = io.tesseraql.core.files.ConfinedPath
+                .under(appHome.get());
         Path routeDir = resolve.apply(routePath).getParent();
         Path colocated = routeDir.resolve(template).normalize();
-        Path file = Files.isRegularFile(colocated)
+        Path candidate = Files.isRegularFile(colocated)
                 ? colocated
-                : home.resolve("templates").resolve(template).normalize();
-        if (!file.startsWith(home)) {
-            throw new TqlException(RENDER, "Template escapes app home: " + template);
-        }
-        return home.relativize(file).toString().replace('\\', '/');
+                : home.root().resolve("templates").resolve(template);
+        Path file = home.confine(candidate)
+                .orElseThrow(() -> new TqlException(RENDER,
+                        "Template escapes app home: " + template));
+        return home.root().relativize(file).toString().replace('\\', '/');
     }
 
     /**

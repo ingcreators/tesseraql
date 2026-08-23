@@ -955,12 +955,9 @@ public final class DocService {
     }
 
     private Path resolve(String relativePath) {
-        Path resolved = appHome.resolve(relativePath).normalize();
-        if (!resolved.startsWith(appHome)) {
-            throw new TqlException(TRAVERSAL,
-                    "Path escapes app home: " + relativePath);
-        }
-        return resolved;
+        return io.tesseraql.core.files.ConfinedPath.under(appHome).resolve(relativePath)
+                .orElseThrow(() -> new TqlException(TRAVERSAL,
+                        "Path escapes app home: " + relativePath));
     }
 
     /**

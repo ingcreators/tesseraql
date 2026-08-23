@@ -206,12 +206,13 @@ final class DuckDbCommand implements Callable<Integer> {
 
     /** Unzips {@code bundle} into {@code cache}, refusing entries that escape it. */
     static void unzip(Path bundle, Path cache) throws IOException {
+        io.tesseraql.core.files.ConfinedPath root = io.tesseraql.core.files.ConfinedPath
+                .under(cache);
         try (ZipInputStream zip = new ZipInputStream(Files.newInputStream(bundle))) {
             for (ZipEntry entry = zip.getNextEntry(); entry != null; entry = zip.getNextEntry()) {
-                Path target = cache.resolve(entry.getName()).normalize();
-                if (!target.startsWith(cache)) {
-                    throw new IOException("Bundle entry escapes the cache: " + entry.getName());
-                }
+                String name = entry.getName();
+                Path target = root.resolve(name).orElseThrow(
+                        () -> new IOException("Bundle entry escapes the cache: " + name));
                 if (entry.isDirectory()) {
                     Files.createDirectories(target);
                     continue;
