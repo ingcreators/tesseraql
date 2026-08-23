@@ -179,22 +179,12 @@ final class DeployRoutes {
      * envelope bytes as if they were a package.
      */
     private static InputStream packageStream(Exchange exchange) throws Exception {
-        String contentType = exchange.request().header(Headers.CONTENT_TYPE);
-        if (contentType != null
-                && contentType.toLowerCase(java.util.Locale.ROOT).startsWith("multipart/")) {
-            java.util.Map<String, io.tesseraql.pipeline.Part> attachments = exchange
-                    .request().attachments();
-            io.tesseraql.pipeline.Part part = null;
-            if (attachments != null && !attachments.isEmpty()) {
-                part = attachments.get("file") != null
-                        ? attachments.get("file")
-                        : attachments.values().iterator().next();
-            }
-            if (part == null) {
-                throw new TqlException(EMPTY_BODY, "The multipart deploy request carried no"
-                        + " file part with the .tqlapp package bytes");
-            }
-            return part.open();
+        if (io.tesseraql.pipeline.Uploads.isMultipart(exchange)) {
+            return io.tesseraql.pipeline.Uploads.filePart(exchange)
+                    .orElseThrow(() -> new TqlException(EMPTY_BODY,
+                            "The multipart deploy request carried no file part with the"
+                                    + " .tqlapp package bytes"))
+                    .open();
         }
         return exchange.getBody(InputStream.class);
     }

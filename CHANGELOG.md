@@ -68,6 +68,16 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **Three small copies became one each** (docs/duplication-consolidation.md, campaign 4's
+  follow-ons). `AtomicFiles.replace` is the write-then-atomically-replace five sites carried
+  by copy — the CLI update cache alone had drifted to a plain move, so a crash mid-replace
+  could tear it; the temp file now never survives a failure at any site.
+  `Uploads.filePart` is the multipart file-part selection three upload surfaces carried by
+  copy (their comments already cross-referenced each other); what an absent part means
+  stays with each caller. `PgListenLoop` is the LISTEN-service lifecycle the pg-notify
+  consumer and the cross-node topic bridge mirrored by copy — the reconnect arm one of
+  them "learned the hard way" and the connection-release the other's comment records
+  fixing now live once, for both.
 - **One escaper, and the quote is always escaped** (`Escapes`,
   docs/duplication-consolidation.md campaign 4). Ten private `escape()` copies existed;
   two dropped the double quote — unsafe the moment output lands inside a quoted

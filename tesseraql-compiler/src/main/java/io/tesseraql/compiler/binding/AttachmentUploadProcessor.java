@@ -14,7 +14,6 @@ import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -114,18 +113,10 @@ public final class AttachmentUploadProcessor implements Step {
     /** The uploaded part: the first multipart file part (preferring {@code file}), or the raw body. */
     private static UploadPart resolvePart(Exchange exchange) throws Exception {
         String contentType = exchange.request().header(Headers.CONTENT_TYPE);
-        if (contentType != null
-                && contentType.toLowerCase(Locale.ROOT).startsWith("multipart/")) {
-            java.util.Map<String, io.tesseraql.pipeline.Part> attachments = exchange
-                    .request().attachments();
-            if (!attachments.isEmpty()) {
-                io.tesseraql.pipeline.Part handler = attachments.get("file");
-                if (handler == null) {
-                    handler = attachments.values().iterator().next();
-                }
-                return new UploadPart(handler.filename(), handler.contentType(),
-                        handler.open());
-            }
+        io.tesseraql.pipeline.Part handler = io.tesseraql.pipeline.Uploads.filePart(exchange)
+                .orElse(null);
+        if (handler != null) {
+            return new UploadPart(handler.filename(), handler.contentType(), handler.open());
         }
         Object raw = exchange.getBody();
         InputStream in;

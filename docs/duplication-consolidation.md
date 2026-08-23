@@ -234,6 +234,8 @@ sleep and `closeQuietly` copies consolidate where campaign follow-ons touch thei
 ## Slices
 
 Fourteen, in the recommended order. Each is one PR, branched from fresh origin/main.
+**All shipped 2026-08-23** (#1014-#1026; slices 7 and 8 landed as one PR, recorded below);
+the departures each slice found are recorded inline where the plan said something else.
 
 1. **This design** — plus nav/ErrorIndex registration.
 2. **Instruments and one-line defects** — the config-reference regex, `OpenApiGenerator`'s

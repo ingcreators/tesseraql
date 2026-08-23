@@ -1,6 +1,5 @@
 package io.tesseraql.runtime;
 
-import io.tesseraql.pipeline.RuntimeContext;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -14,93 +13,44 @@ import org.slf4j.LoggerFactory;
  * The receiving side of the cross-node topic bus (docs/realtime.md): a dedicated PostgreSQL
  * connection that {@code LISTEN}s on {@link CrossNodeTopicBus#CHANNEL} and forwards each
  * notification's {@code tenant|topic} payload to this node's local {@link LiveStreams} — never
- * back onto the bus, so a signal crosses the database exactly once. Mirrors the pg-notify
- * messaging consumer's lifecycle ({@link PgNotifyListener}): a runtime service that starts with
- * the context, reconnects with backoff on a connection loss, and stops cleanly. Signals are a
- * freshness hint with no durability to recover, so unlike the messaging listener there is
- * nothing to drain after a reconnect — subscribers simply refresh on their next signal.
+ * back onto the bus, so a signal crosses the database exactly once. The connection, thread,
+ * reconnect and stop lifecycle is {@link PgListenLoop}'s, shared with the pg-notify messaging
+ * consumer this class used to mirror by copy. Signals are a freshness hint with no durability
+ * to recover, so unlike the messaging listener there is nothing to drain after a reconnect —
+ * subscribers simply refresh on their next signal.
  */
-final class TopicNotifyBridge implements RuntimeContext.Service {
-
-    /** Whether this service is running; a stop is asked for, not waited on. */
-    private volatile boolean running;
+final class TopicNotifyBridge extends PgListenLoop {
 
     private static final Logger LOG = LoggerFactory.getLogger(TopicNotifyBridge.class);
-    private static final long RECONNECT_DELAY_MS = 5_000;
     private static final int POLL_TIMEOUT_MS = 30_000;
 
-    private final DataSource dataSource;
     private final LiveStreams local;
-    private volatile Thread thread;
-    private volatile Connection connection;
 
     TopicNotifyBridge(DataSource dataSource, LiveStreams local) {
-        this.dataSource = dataSource;
+        super(dataSource, LOG, "tql-live-topics", "Live-topic listen", "Live-topic forward");
         this.local = local;
     }
 
     @Override
-    public void start() {
-        running = true;
-        thread = new Thread(this::run, "tql-live-topics");
-        thread.setDaemon(true);
-        thread.start();
+    void started() {
         LOG.info("Cross-node live-view topics listening on '{}'", CrossNodeTopicBus.CHANNEL);
     }
 
     @Override
-    public void stop() {
-        running = false;
-        Thread current = thread;
-        if (current != null) {
-            current.interrupt();
+    void session(Connection conn) throws SQLException {
+        conn.setAutoCommit(true);
+        try (Statement statement = conn.createStatement()) {
+            statement.execute("LISTEN " + CrossNodeTopicBus.CHANNEL);
         }
-        closeQuietly(connection);
-    }
-
-    private void run() {
-        while (running) {
-            try {
-                listen();
-            } catch (SQLException ex) {
-                if (!running) {
-                    return;
-                }
-                LOG.warn("Live-topic listen connection lost; reconnecting: {}", ex.getMessage());
-                sleep(RECONNECT_DELAY_MS);
-            } catch (RuntimeException ex) {
-                // The sibling listener learned this the hard way: without it, one unchecked
-                // exception ends cross-node live-view signalling for the life of the process.
-                if (!running) {
-                    return;
-                }
-                LOG.warn("Live-topic forward failed; continuing: {}", ex.getMessage());
-                sleep(RECONNECT_DELAY_MS);
+        PGConnection pg = conn.unwrap(PGConnection.class);
+        while (running()) {
+            PGNotification[] notifications = pg.getNotifications(POLL_TIMEOUT_MS);
+            if (notifications == null) {
+                continue;
             }
-        }
-    }
-
-    private void listen() throws SQLException {
-        Connection conn = dataSource.getConnection();
-        connection = conn;
-        try {
-            conn.setAutoCommit(true);
-            try (Statement statement = conn.createStatement()) {
-                statement.execute("LISTEN " + CrossNodeTopicBus.CHANNEL);
+            for (PGNotification notification : notifications) {
+                forward(notification.getParameter());
             }
-            PGConnection pg = conn.unwrap(PGConnection.class);
-            while (running) {
-                PGNotification[] notifications = pg.getNotifications(POLL_TIMEOUT_MS);
-                if (notifications == null) {
-                    continue;
-                }
-                for (PGNotification notification : notifications) {
-                    forward(notification.getParameter());
-                }
-            }
-        } finally {
-            closeQuietly(conn);
-            connection = null;
         }
     }
 
@@ -112,23 +62,5 @@ final class TopicNotifyBridge implements RuntimeContext.Service {
         }
         String tenant = payload.substring(0, bar);
         local.emit(tenant.isEmpty() ? null : tenant, payload.substring(bar + 1));
-    }
-
-    private static void sleep(long millis) {
-        try {
-            Thread.sleep(millis);
-        } catch (InterruptedException ex) {
-            Thread.currentThread().interrupt();
-        }
-    }
-
-    private static void closeQuietly(Connection connection) {
-        if (connection != null) {
-            try {
-                connection.close();
-            } catch (SQLException ignored) {
-                // best effort: the thread is ending or reconnecting
-            }
-        }
     }
 }
