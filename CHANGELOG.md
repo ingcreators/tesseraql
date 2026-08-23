@@ -176,6 +176,19 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **Enrichment references run through the statement primitive, and their labels land the
+  declared policy** (docs/sql-execution-shapes.md slice 2). `KeyedReference`'s SQL fetch —
+  the batched lookup behind every `enrich:` on routes, exports and batch steps — adopts
+  `SqlStatement`: bounded, classified, and **spanned** (`surface=enrich`, one span per batch
+  of keys, parented on the request or job-step span; values stay typed because a reference's
+  columns are composed into rows a writer binds). **Behavioral, recorded** (the parent
+  design's structural decision 7, the last of the four label policies): reference rows carry
+  **normalized** labels instead of the raw label plus a lowercase shadow. For the lowercase
+  binds and match columns enrichments use in practice, nothing changes on any dialect; a
+  reference SQL whose alias is *quoted mixed case* now publishes exactly that alias — the
+  lowercase duplicate entry is gone. `KeyedReference` leaves the `SqlExecutorLedgerTest`
+  ledger.
+
 - **The job `sql:` step runs through the statement primitive**
   (docs/sql-execution-shapes.md slice 1). `SqlStepRunner` adopts `SqlStatement` for its one
   statement per step — prepare, bind, bound, execute-and-count, classification and the span

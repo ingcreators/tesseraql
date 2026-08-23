@@ -73,7 +73,6 @@ class SqlExecutorLedgerTest {
             "tesseraql-test-core/src/main/java/io/tesseraql/test/SuiteContext.java",
             "tesseraql-test-core/src/main/java/io/tesseraql/test/WorkflowCases.java",
             "tesseraql-yaml/src/main/java/io/tesseraql/yaml/calendar/Calendars.java",
-            "tesseraql-yaml/src/main/java/io/tesseraql/yaml/enrich/KeyedReference.java",
             "tesseraql-yaml/src/main/java/io/tesseraql/yaml/workflow/ColumnWorkflowStore.java"));
 
     @Test

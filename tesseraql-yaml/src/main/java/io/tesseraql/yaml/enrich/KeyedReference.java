@@ -13,8 +13,6 @@ import io.tesseraql.yaml.http.OutboundGateway;
 import io.tesseraql.yaml.model.EnrichSpec;
 import io.tesseraql.yaml.model.HttpCallSpec;
 import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.util.ArrayList;
@@ -77,6 +75,17 @@ public final class KeyedReference {
 
         /** Records that an enrichment degraded to empty, for the operator who has to see it. */
         void degraded(String enrichment);
+
+        /**
+         * The statement layer the reference query runs through
+         * (docs/sql-execution-shapes.md): the surface's tracer and span parent ride it. The
+         * default carries none — the per-phase policy (structural decision 3), right for a
+         * surface whose own phase span is the span; a per-request surface overrides with its
+         * tracer so each reference batch opens a {@code surface=enrich} span.
+         */
+        default io.tesseraql.core.sql.SqlStatement statements() {
+            return io.tesseraql.core.sql.SqlStatement.onCallerConnections();
+        }
     }
 
     /**
@@ -103,6 +112,7 @@ public final class KeyedReference {
     private final List<SqlNode> nodes;
     private final String sourcePath;
     private final String datasource;
+    private final String dialect;
     private final Bounds bounds;
     private final int batchSize;
     private final int maxKeys;
@@ -116,6 +126,7 @@ public final class KeyedReference {
         this.nodes = List.copyOf(nodes);
         this.sourcePath = sourcePath;
         this.datasource = datasource;
+        this.dialect = dialect;
         this.bounds = bounds == null ? Bounds.none() : bounds;
         this.batchSize = spec.batchSize() != null && spec.batchSize() > 0
                 ? spec.batchSize()
@@ -376,42 +387,44 @@ public final class KeyedReference {
         io.tesseraql.core.sql.AmbientBinds.seed(params, evaluation);
         params.put("keys", keysBind(batch, matchColumns));
         BoundSql bound = SqlRenderer.render(nodes, params, environment.scopeResolver(), context);
-        try (PreparedStatement statement = connection.prepareStatement(bound.sql())) {
-            if (bounds.timeoutSeconds() > 0) {
-                statement.setQueryTimeout(bounds.timeoutSeconds());
-            }
-            for (int i = 0; i < bound.parameters().size(); i++) {
-                statement.setObject(i + 1, bound.parameters().get(i).value());
-            }
-            try (ResultSet resultSet = statement.executeQuery()) {
-                ResultSetMetaData metaData = resultSet.getMetaData();
-                List<Map<String, Object>> rows = new ArrayList<>();
-                int maxRows = bounds.maxRows();
-                while (resultSet.next()) {
-                    // The reference is materialized like any other result, so a reference
-                    // wider than the app's row cap fails here rather than filling the heap.
-                    if (maxRows >= 0 && rows.size() >= maxRows) {
-                        throw TqlException.builder(MATERIALIZATION_OVERFLOW)
-                                .message("enrich '" + name + "': the reference returned more"
-                                        + " than maxRows=" + maxRows + " rows for one batch"
-                                        + " (narrow the reference query, or raise"
-                                        + " materialize.maxRows)")
-                                .source(sourcePath)
-                                .build();
+        // The statement layer (docs/sql-execution-shapes.md slice 2): prepare, bind, bound,
+        // classify and the span are the primitive's; the read stays this class's — the cap,
+        // its refusal, and values kept typed, because a reference's columns are composed into
+        // rows a writer binds (structural decision 1).
+        io.tesseraql.core.sql.SqlStatement statements = environment.statements()
+                .surface("enrich")
+                .timeoutSeconds(bounds.timeoutSeconds());
+        return statements.read(connection, sourcePath == null ? name : sourcePath, bound,
+                (resultSet, span) -> {
+                    ResultSetMetaData metaData = resultSet.getMetaData();
+                    List<Map<String, Object>> rows = new ArrayList<>();
+                    int maxRows = bounds.maxRows();
+                    while (resultSet.next()) {
+                        // The reference is materialized like any other result, so a reference
+                        // wider than the app's row cap fails here rather than filling the heap.
+                        if (maxRows >= 0 && rows.size() >= maxRows) {
+                            throw TqlException.builder(MATERIALIZATION_OVERFLOW)
+                                    .message("enrich '" + name + "': the reference returned more"
+                                            + " than maxRows=" + maxRows + " rows for one batch"
+                                            + " (narrow the reference query, or raise"
+                                            + " materialize.maxRows)")
+                                    .source(sourcePath)
+                                    .build();
+                        }
+                        Map<String, Object> row = new LinkedHashMap<>();
+                        for (int col = 1; col <= metaData.getColumnCount(); col++) {
+                            // The one label answer every JDBC path asks (structural decision 4,
+                            // the parent design's declared policy): normalized, not the raw
+                            // label with a lowercase shadow — a quoted mixed-case alias keeps
+                            // exactly its own spelling now.
+                            row.put(io.tesseraql.core.dialect.ResultRows.label(dialect,
+                                    metaData.getColumnLabel(col)), resultSet.getObject(col));
+                        }
+                        rows.add(row);
                     }
-                    Map<String, Object> row = new LinkedHashMap<>();
-                    for (int col = 1; col <= metaData.getColumnCount(); col++) {
-                        String label = metaData.getColumnLabel(col);
-                        Object value = resultSet.getObject(col);
-                        row.put(label, value);
-                        // Oracle answers uppercase labels; binds are written lowercase.
-                        row.putIfAbsent(label.toLowerCase(java.util.Locale.ROOT), value);
-                    }
-                    rows.add(row);
-                }
-                return rows;
-            }
-        }
+                    span.attribute("rowCount", rows.size());
+                    return rows;
+                });
     }
 
     /** The key set as it binds: a list of values for one column, a list of rows for several. */

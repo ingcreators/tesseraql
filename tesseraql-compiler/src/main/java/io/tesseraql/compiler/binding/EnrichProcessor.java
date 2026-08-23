@@ -102,6 +102,19 @@ public final class EnrichProcessor implements Step {
             }
 
             @Override
+            public io.tesseraql.core.sql.SqlStatement statements() {
+                io.tesseraql.core.telemetry.Tracer tracer = exchange.beans().lookup(
+                        TesseraqlProperties.TRACER_BEAN,
+                        io.tesseraql.core.telemetry.Tracer.class);
+                return io.tesseraql.core.sql.SqlStatement.onCallerConnections()
+                        .tracer(tracer != null
+                                ? tracer
+                                : io.tesseraql.core.telemetry.NoopTracer.INSTANCE)
+                        .spanParent(exchange.getProperty(TesseraqlProperties.TRACE_CONTEXT,
+                                io.tesseraql.core.telemetry.SpanContext.class));
+            }
+
+            @Override
             public io.tesseraql.core.sql.ScopeResolver scopeResolver() {
                 io.tesseraql.core.sql.ScopeResolver resolver = exchange.beans().lookup(
                         TesseraqlProperties.SCOPE_RESOLVER_BEAN,
