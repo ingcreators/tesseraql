@@ -234,9 +234,14 @@ Fourteen, in the recommended order. Each is one PR, branched from fresh origin/m
    key, the two size-parse adoptions, `StackSettings`'s duration parse; reference regen.
 3. **Egress adoption, identity trio** — `OidcHttp`, `HttpJwksFetcher`, `SamlMetadataSource`
    through the gateway; inline allow-list gates retire; JWKS gains the proxy selector.
-4. **Egress adoption, provisioning and copilot** — `ScimOutboundClient` (bounded at last),
-   `CopilotService`; the copilot boot gate keeps its boot-time refusal, resolved against the
-   gateway's list.
+4. **Egress adoption, provisioning** — `ScimOutboundClient` (bounded at last). **Departure,
+   recorded at implementation: `CopilotService` stays on its own client.** Its primary path
+   is a streaming SSE read (`BodyHandlers.ofLines`), which the gateway's raw form — a
+   complete byte-array response — cannot carry; it is dev-only (the Studio ships only in
+   dev), already bounded (10s connect / 60s request), and already boot-gated against the
+   same allow-list (`TQL-SEC-4085`). Splitting its two calls across two transports would
+   trade one honest ledger entry for a seam nobody can reason about; it stays listed on the
+   HTTP ledger with this reason, like the Vert.x relay.
 5. **`LoopbackCall`** — the primitive plus its six adopters; the per-request client and the
    unbounded download body die here.
 6. **The HTTP ledger** — `HttpClientLedgerTest`; `DeployCommand` timeouts;

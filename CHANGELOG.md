@@ -19,6 +19,13 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **SCIM outbound provisioning leaves through the outbound gateway**
+  (docs/duplication-consolidation.md, campaign 1). **The SCIM provider's host must now be in
+  `tesseraql.http.outbound.allowedHosts`**, and every provisioning call runs under the
+  configured timeouts, the per-host circuit breaker, and the `tesseraql.http.call` span. The
+  client used to build its own JDK client with no timeout at all — a hung provider hung the
+  provisioning thread indefinitely. A gateway refusal reaches the outbox as a 502 carrying
+  the classified message, so delivery retries and the operator reads the fix.
 - **OIDC, JWKS, and SAML-metadata fetches leave through the outbound gateway**
   (docs/duplication-consolidation.md, campaign 1). Discovery, the token exchange, a
   `jwksUri` key-set fetch, and an IdP-metadata URL now ride the same egress policy as every

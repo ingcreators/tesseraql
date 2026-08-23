@@ -1,36 +1,40 @@
 package io.tesseraql.scim;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.tesseraql.core.error.TqlException;
+import io.tesseraql.yaml.http.OutboundGateway;
+import io.tesseraql.yaml.model.HttpCallSpec;
 import java.io.IOException;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 /**
- * A client that provisions users and groups to a downstream SCIM provider over HTTP (design ch. 10.15
- * outbound). Each call carries the target's bearer token and the SCIM media type; non-success
- * responses become {@link ScimException}s carrying the remote status.
+ * A client that provisions users and groups to a downstream SCIM provider over HTTP (design ch.
+ * 10.15 outbound), through the runtime's {@link OutboundGateway}
+ * (docs/duplication-consolidation.md, campaign 1): the provider's host must be in the egress
+ * allow-list, and every call runs under the configured timeouts, the per-host circuit breaker,
+ * and the {@code tesseraql.http.call} span. It used to build its own JDK client with <em>no
+ * timeout at all</em> — a hung provider hung the provisioning thread indefinitely, the exact
+ * defect class the gateway exists to close. Each call carries the target's bearer token and the
+ * SCIM media type; non-success responses become {@link ScimException}s carrying the remote
+ * status, and a gateway refusal (denied host, open circuit, transport failure) becomes a 502
+ * carrying the gateway's classified message, so the outbox retries and the operator reads the
+ * fix.
  */
 public final class ScimOutboundClient {
 
     private static final String SCIM_JSON = "application/scim+json";
 
     private final ScimTarget target;
-    private final HttpClient http;
+    private final OutboundGateway gateway;
     private final ObjectMapper mapper = new ObjectMapper();
 
-    public ScimOutboundClient(ScimTarget target) {
-        this(target, HttpClient.newHttpClient());
-    }
-
-    public ScimOutboundClient(ScimTarget target, HttpClient http) {
+    public ScimOutboundClient(ScimTarget target, OutboundGateway gateway) {
         this.target = target;
-        this.http = http;
+        this.gateway = gateway;
     }
 
     /** Creates the user on the provider and returns the created resource (with its remote id). */
@@ -83,24 +87,20 @@ public final class ScimOutboundClient {
         }
         Map<String, Object> patch = Map.of(
                 "schemas", List.of(ScimPatchRequest.SCHEMA), "Operations", operations);
-        try {
-            HttpResponse<String> response = exchange(request("PATCH",
-                    target.groupsUrl() + "/" + remoteId, mapper.writeValueAsString(patch)).build());
-            if (response.statusCode() != 200 && response.statusCode() != 204) {
-                throw new ScimException(response.statusCode(), null,
-                        "SCIM member sync rejected by provider: " + response.statusCode());
-            }
-        } catch (IOException ex) {
-            throw new ScimException(502, null, "SCIM provider unreachable: " + ex.getMessage());
+        OutboundGateway.RawResponse response = exchange("PATCH",
+                target.groupsUrl() + "/" + remoteId, write(patch));
+        if (response.status() != 200 && response.status() != 204) {
+            throw new ScimException(response.status(), null,
+                    "SCIM member sync rejected by provider: " + response.status());
         }
     }
 
     private void deleteAt(String url) {
-        HttpResponse<String> response = exchange(request("DELETE", url, null).build());
-        if (response.statusCode() != 204 && response.statusCode() != 200
-                && response.statusCode() != 404) {
-            throw new ScimException(response.statusCode(), null,
-                    "SCIM delete rejected by provider: " + response.statusCode());
+        OutboundGateway.RawResponse response = exchange("DELETE", url, null);
+        if (response.status() != 204 && response.status() != 200
+                && response.status() != 404) {
+            throw new ScimException(response.status(), null,
+                    "SCIM delete rejected by provider: " + response.status());
         }
     }
 
@@ -109,40 +109,46 @@ public final class ScimOutboundClient {
     }
 
     private <T> T send(String method, String url, Object body, Class<T> type, int... okStatuses) {
-        try {
-            HttpResponse<String> response = exchange(
-                    request(method, url, mapper.writeValueAsString(body)).build());
-            for (int ok : okStatuses) {
-                if (response.statusCode() == ok) {
+        OutboundGateway.RawResponse response = exchange(method, url, write(body));
+        for (int ok : okStatuses) {
+            if (response.status() == ok) {
+                try {
                     return mapper.readValue(response.body(), type);
+                } catch (IOException ex) {
+                    throw new ScimException(502, null,
+                            "SCIM provider answered an unparseable resource: " + ex.getMessage());
                 }
             }
-            throw new ScimException(response.statusCode(), null,
-                    "SCIM " + method + " rejected by provider: " + response.statusCode());
-        } catch (IOException ex) {
-            throw new ScimException(502, null, "SCIM provider unreachable: " + ex.getMessage());
         }
+        throw new ScimException(response.status(), null,
+                "SCIM " + method + " rejected by provider: " + response.status());
     }
 
-    private HttpResponse<String> exchange(HttpRequest request) {
+    private OutboundGateway.RawResponse exchange(String method, String url, String body) {
+        Map<String, String> headers = new LinkedHashMap<>();
+        headers.put("Authorization", "Bearer " + target.bearerToken());
+        headers.put("Accept", SCIM_JSON);
+        if (body != null) {
+            headers.put("Content-Type", SCIM_JSON);
+        }
         try {
-            return http.send(request, HttpResponse.BodyHandlers.ofString());
-        } catch (IOException ex) {
-            throw new ScimException(502, null, "SCIM provider unreachable: " + ex.getMessage());
-        } catch (InterruptedException ex) {
-            Thread.currentThread().interrupt();
-            throw new ScimException(502, null, "SCIM provider call interrupted");
+            return gateway.exchange(
+                    new HttpCallSpec(method, url, Map.of(), null, null, null, null, null, null),
+                    body == null ? null : body.getBytes(StandardCharsets.UTF_8), headers);
+        } catch (TqlException refused) {
+            // Denied host, open circuit, or a transport failure: already classified by the
+            // gateway. 502 keeps the outbox retrying; the message carries the fix.
+            throw new ScimException(502, null,
+                    "SCIM provider unreachable: " + refused.getMessage());
         }
     }
 
-    private HttpRequest.Builder request(String method, String url, String body) {
-        HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(url))
-                .header("Authorization", "Bearer " + target.bearerToken())
-                .header("Accept", SCIM_JSON);
-        if (body == null) {
-            return builder.method(method, HttpRequest.BodyPublishers.noBody());
+    private String write(Object body) {
+        try {
+            return mapper.writeValueAsString(body);
+        } catch (IOException ex) {
+            throw new ScimException(502, null,
+                    "SCIM request body is not serializable: " + ex.getMessage());
         }
-        return builder.header("Content-Type", SCIM_JSON)
-                .method(method, HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8));
     }
 }
