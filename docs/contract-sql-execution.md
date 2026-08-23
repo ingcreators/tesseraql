@@ -267,14 +267,28 @@ Seven, in dependency order. Slice 1 is shipped; slice 6 is
    transfers stop being invisible. Existing span sites gain `surface`.
 6. **The bundled managed Group set** — `external_id`, the nine statements, the all-or-nothing
    configuration resolution, the boot refusal.
-7. **One executor** — `ContractStatement` renames to `SqlStatement`; `SqlDefaults` becomes the
-   single read of `tesseraql.sql.timeoutSeconds`; the non-pipeline executors
-   (`SqlStepRunner`, `KeyedReference`, `ValidationRules`, `TransitionExecutor`,
-   `WorkflowSweeper`, `JdbcFileTransferService`, `DecisionTables` for its bound/classify half)
-   adopt the primitive, batch failures carry their kind (structural decision 8), labels
-   converge (structural decision 7); then, as its own final step with its own tests, `SqlStep`
-   and `TransactionalCommandProcessor` adopt the statement layer. The slice retires ~726 lines
-   of hand-rolled JDBC; the boilerplate guard below keeps them retired.
+7. **One executor** — `ContractStatement` renames to `SqlStatement` (its exception to
+   `SqlStatementException`, `contract()` to `sqlId()`); `SqlDefaults` becomes the single read
+   of `tesseraql.sql.timeoutSeconds` (the six reads with three default expressions collapse);
+   the primitive gains the general seams — a declared `surface`, a span parent, caller-rendered
+   `BoundSql` forms, a positional-values form for framework-built statements, and a
+   `ResultSetReader` so a streaming or capping caller owns its read while the primitive owns
+   prepare/bind/bound/classify/span; writes go through `execute()`/`getUpdateCount()` so a
+   DuckDB maintenance call stops being special. **Adopted here**: `WorkflowSweeper` (all three
+   statements). **Recorded rather than converted, each with its reason, each already bounded
+   (slice 2) and classified or spanned where it matters**: the batch runners and
+   `KeyedReference` read under row caps or into spools — their reads stay their own until a
+   capped/streaming read is worth pulling into the primitive, and their failure wrappers now
+   carry the classified kind (structural decision 8); `ValidationRules`,
+   `TransitionExecutor` and `DecisionTables` are compiler-built objects whose tracer exists
+   only per-request — threading a per-call `SqlStatement` through them is `SqlStep`/
+   `TransactionalCommandProcessor`'s conversion, deferred with it as its own change with its
+   own tests (the original structural decision 1's stance, kept); `JdbcFileTransferService`
+   keeps slice 5's per-phase spans — a span per imported row would be noise.
+   `StudioDataService` and the fixed-SQL stores stay out by design. **The ledger guard below
+   is the teeth**: every `prepareStatement` site in main sources is named in
+   `SqlExecutorLedgerTest`, a new hand-rolled executor fails the build, and an adoption
+   shrinks the list — `WorkflowSweeper` already left it.
 
 ## Guards
 
@@ -284,10 +298,10 @@ Seven, in dependency order. Slice 1 is shipped; slice 6 is
   dialect files; `external_id` inherits it.
 - **A no-`returning` guard** over the bundled contract SQL.
 - **`GeneratedReferenceTest`** regenerates on any new configuration key or error message.
-- **A JDBC-boilerplate guard** (lands with slice 7): a source-scan test — the pattern the stub
-  ledger and `ScaffoldedConfigKeysTest` already use — asserting that `prepareStatement` on
-  rendered SQL appears only in the primitive and in the named framework stores, with an explicit
-  allow-list that shrinks as slices land and fails when a new hand-rolled executor appears.
+- **The JDBC-boilerplate ledger** (`SqlExecutorLedgerTest`, shipped with slice 7): every main
+  source file calling `prepareStatement` is named; a new entry is refused by default (route it
+  through `SqlStatement`, or add it in review with a reason), and an adoption shrinks the
+  list.
 
 ## Test plan
 

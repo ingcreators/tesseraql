@@ -11,8 +11,6 @@ import io.tesseraql.core.workflow.WorkflowStore;
 import io.tesseraql.core.workflow.WorkflowTaskStore;
 import io.tesseraql.yaml.notify.NotifyEvents.CompiledNotify;
 import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -71,7 +69,7 @@ final class WorkflowSweeper {
     private final DataSource dataSource;
     /** Absence resolution for reassign fallbacks (roadmap Phase 52); nullable. */
     private final io.tesseraql.core.workflow.DelegationStore delegations;
-    private int sqlTimeoutSeconds = io.tesseraql.core.sql.ContractStatement.DEFAULT_TIMEOUT_SECONDS;
+    private io.tesseraql.core.sql.SqlStatement statements;
 
     WorkflowSweeper(List<Rule> rules, WorkflowTaskStore taskStore, WorkflowStore workflowStore,
             OutboxStore outboxStore, String appName, DataSource dataSource,
@@ -83,6 +81,8 @@ final class WorkflowSweeper {
         this.appName = appName;
         this.dataSource = dataSource;
         this.delegations = delegations;
+        this.statements = io.tesseraql.core.sql.SqlStatement.on(dataSource)
+                .surface("workflow");
     }
 
     /**
@@ -94,7 +94,13 @@ final class WorkflowSweeper {
      * has been bounded by {@code tesseraql.sql.timeoutSeconds} all along.
      */
     WorkflowSweeper sqlTimeoutSeconds(int seconds) {
-        this.sqlTimeoutSeconds = Math.max(0, seconds);
+        this.statements = statements.timeoutSeconds(seconds);
+        return this;
+    }
+
+    /** The tracer each sweep statement spans through (docs/contract-sql-execution.md slice 7). */
+    WorkflowSweeper tracer(io.tesseraql.core.telemetry.Tracer tracer) {
+        this.statements = statements.tracer(tracer);
         return this;
     }
 
@@ -183,15 +189,11 @@ final class WorkflowSweeper {
     /** App-mode state advance: a conditional UPDATE of the business table's state column. */
     private int advanceColumn(Connection connection, Escalate escalate,
             WorkflowTaskStore.Overdue task) throws SQLException {
-        try (PreparedStatement ps = connection.prepareStatement("update " + escalate.table()
-                + " set " + escalate.stateColumn() + " = ? where " + escalate.keyColumn()
-                + " = ? and " + escalate.stateColumn() + " = ?")) {
-            applyTimeout(ps);
-            ps.setString(1, escalate.toState());
-            ps.setString(2, task.docId());
-            ps.setString(3, task.state());
-            return ps.executeUpdate();
-        }
+        return statements.update(connection, "workflow.sweep.advance",
+                "update " + escalate.table() + " set " + escalate.stateColumn()
+                        + " = ? where " + escalate.keyColumn() + " = ? and "
+                        + escalate.stateColumn() + " = ?",
+                List.of(escalate.toState(), task.docId(), task.state()));
     }
 
     /** Runs the escalation transition's command with the document key and system audit binds. */
@@ -204,13 +206,7 @@ final class WorkflowSweeper {
         params.put("key", task.docId());
         params.put("audit", audit);
         BoundSql bound = SqlRenderer.render(escalate.commandNodes(), params);
-        try (PreparedStatement ps = connection.prepareStatement(bound.sql())) {
-            applyTimeout(ps);
-            for (int i = 0; i < bound.parameters().size(); i++) {
-                ps.setObject(i + 1, bound.parameters().get(i).value());
-            }
-            ps.executeUpdate();
-        }
+        statements.update(connection, "workflow.sweep.escalate", bound);
     }
 
     /**
@@ -247,21 +243,8 @@ final class WorkflowSweeper {
         params.put("docId", task.docId());
         params.put("state", task.state());
         BoundSql bound = SqlRenderer.render(rule.reassignNodes(), params);
-        try (PreparedStatement ps = connection.prepareStatement(bound.sql())) {
-            applyTimeout(ps);
-            for (int i = 0; i < bound.parameters().size(); i++) {
-                ps.setObject(i + 1, bound.parameters().get(i).value());
-            }
-            try (ResultSet rs = ps.executeQuery()) {
-                return rs.next() ? rs.getString(1) : null;
-            }
-        }
-    }
-
-    private void applyTimeout(PreparedStatement statement) throws SQLException {
-        if (sqlTimeoutSeconds > 0) {
-            statement.setQueryTimeout(sqlTimeoutSeconds);
-        }
+        return statements.read(connection, "workflow.sweep.reassign", bound,
+                rs -> rs.next() ? rs.getString(1) : null);
     }
 
     private static TqlException error(Exception ex) {

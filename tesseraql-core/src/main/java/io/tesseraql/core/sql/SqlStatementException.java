@@ -12,26 +12,26 @@ import java.sql.SQLException;
  *
  * <p>It is a {@link SQLException} rather than a wrapper around one, and it repeats the cause's
  * SQLState and vendor code, because contract SQL failures already travel as SQLExceptions through
- * every caller of {@link ContractStatement}: an existing {@code catch (SQLException)} keeps
+ * every caller of {@link SqlStatement}: an existing {@code catch (SQLException)} keeps
  * catching, and {@link SqlErrors} keeps classifying, whether it is handed this or the driver's own.
  */
-public final class ContractSqlException extends SQLException {
+public final class SqlStatementException extends SQLException {
 
     @Serial
     private static final long serialVersionUID = 1L;
 
-    private final String contract;
+    private final String sqlId;
     private final SqlErrorKind kind;
 
-    ContractSqlException(String contract, SQLException cause) {
+    SqlStatementException(String sqlId, SQLException cause) {
         super(cause.getMessage(), cause.getSQLState(), cause.getErrorCode(), cause);
-        this.contract = contract;
+        this.sqlId = sqlId;
         this.kind = SqlErrors.classify(cause);
     }
 
-    /** The contract whose SQL failed, as the caller named it (e.g. {@code scim.users.create}). */
-    public String contract() {
-        return contract;
+    /** The statement whose SQL failed, as the caller named it (e.g. {@code scim.users.create}). */
+    public String sqlId() {
+        return sqlId;
     }
 
     /** What the failure means, classified across dialects. */

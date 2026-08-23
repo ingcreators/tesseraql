@@ -802,10 +802,9 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             dataSource, delegationStore)
                             // The sweep's escalate/reassign SQL ran unbounded inside its own
                             // transaction (docs/contract-sql-execution.md slice 2).
-                            .sqlTimeoutSeconds(manifest.config()
-                                    .getString("tesseraql.sql.timeoutSeconds")
-                                    .map(Integer::parseInt)
-                                    .orElse(io.tesseraql.core.sql.ContractStatement.DEFAULT_TIMEOUT_SECONDS));
+                            .sqlTimeoutSeconds(io.tesseraql.yaml.config.SqlDefaults
+                                    .timeoutSeconds(manifest.config()))
+                            .tracer(effectiveTracer);
                     context.bind(TesseraqlProperties.WORKFLOW_SWEEPER_BEAN,
                             workflowSweeper);
                 }
@@ -827,8 +826,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
             // The same bound routes and commands run under: an export query or an after-SQL
             // statement held a pooled connection for as long as the driver allowed.
             fileTransfers
-                    .sqlTimeoutSeconds(manifest.config().getString("tesseraql.sql.timeoutSeconds")
-                            .map(Integer::parseInt).orElse(30))
+                    .sqlTimeoutSeconds(io.tesseraql.yaml.config.SqlDefaults
+                            .timeoutSeconds(manifest.config()))
                     .tracer(effectiveTracer);
             fileTransfers.ensureSchema();
             context.bind(TesseraqlProperties.FILE_TRANSFER_BEAN, fileTransfers);
@@ -936,8 +935,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     // The same bound routes and commands run under: a batch statement held a pooled
                     // connection for as long as the driver would let it, which on a job is the
                     // longest anything goes unnoticed — nobody is waiting for the response.
-                    .sqlTimeoutSeconds(manifest.config().getString("tesseraql.sql.timeoutSeconds")
-                            .map(Integer::parseInt).orElse(30))
+                    .sqlTimeoutSeconds(io.tesseraql.yaml.config.SqlDefaults
+                            .timeoutSeconds(manifest.config()))
                     // A job has no request to read configuration from, so a step's default row
                     // ceiling arrives the same way its timeout does (docs/export-pipeline.md, dec. 7).
                     .resultBounds(
@@ -1526,10 +1525,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     // A sign-in's contract now runs under the same bound a page's query does
                     // (docs/contract-sql-execution.md structural decision 3): it ran unbounded,
                     // holding a pooled connection, on the one path nobody can work around.
-                    .sqlTimeoutSeconds(manifest.config()
-                            .getString("tesseraql.sql.timeoutSeconds")
-                            .map(Integer::parseInt)
-                            .orElse(io.tesseraql.core.sql.ContractStatement.DEFAULT_TIMEOUT_SECONDS));
+                    .sqlTimeoutSeconds(io.tesseraql.yaml.config.SqlDefaults
+                            .timeoutSeconds(manifest.config()));
             RealmConfig realm = IdentityConfigFactory.defaultRealm(manifest.config(), appHome);
             context.bind(TesseraqlProperties.IDENTITY_SERVICE_BEAN, identity);
             context.bind(TesseraqlProperties.IDENTITY_REALM_BEAN, realm);

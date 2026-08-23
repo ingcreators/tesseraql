@@ -1488,10 +1488,7 @@ public final class RouteCompiler {
      * resolution, so a binding's endpoint and a command's own bounds cannot default apart.
      */
     private int defaultTimeoutSeconds() {
-        return config.getString("tesseraql.sql.timeoutSeconds")
-                .map(Integer::parseInt)
-                .map(value -> Math.max(0, value))
-                .orElse(30);
+        return Math.max(0, io.tesseraql.yaml.config.SqlDefaults.timeoutSeconds(config));
     }
 
     /**

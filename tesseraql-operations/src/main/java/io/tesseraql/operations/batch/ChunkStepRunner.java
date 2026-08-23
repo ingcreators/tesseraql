@@ -144,8 +144,11 @@ final class ChunkStepRunner {
             result.put("skipped", sink.skipped);
             return result;
         } catch (SQLException ex) {
+            // Structural decision 8: the wrapper keeps its code and gains the classification.
             TqlException failure = TqlException.builder(StepContext.STEP_ERROR)
-                    .message("Step '" + step.id() + "' failed: " + ex.getMessage())
+                    .message("Step '" + step.id() + "' failed ("
+                            + io.tesseraql.core.dialect.SqlErrors.classify(ex) + "): "
+                            + ex.getMessage())
                     .source(readerId)
                     .cause(ex)
                     .build();

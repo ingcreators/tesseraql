@@ -19,9 +19,10 @@ import java.util.Map;
 import javax.sql.DataSource;
 
 /**
- * Runs <em>contract SQL</em> — the 2-way SQL a deployment supplies to satisfy a framework contract,
- * as distinct from the SQL an application writes for its own routes and the SQL the framework
- * writes for its own stores (docs/contract-sql-execution.md).
+ * The one statement primitive (docs/contract-sql-execution.md structural decision 1): where
+ * rendered SQL meets JDBC. First extracted for <em>contract SQL</em> — the 2-way SQL a deployment
+ * supplies to satisfy a framework contract — and generalized in slice 7 so every executor of
+ * declared SQL is a caller; the {@code surface} attribute says which one.
  *
  * <p>Identity contracts and SCIM contracts each grew their own executor, and the two diverged from
  * the route pipeline and from each other on everything that happens after rendering. What all three
@@ -39,7 +40,7 @@ import javax.sql.DataSource;
  * <p>Instances are immutable and cheap; {@link #dialect(String)}, {@link #timeoutSeconds(int)} and
  * {@link #rawLabels()} return a new one.
  */
-public final class ContractStatement {
+public final class SqlStatement {
 
     /**
      * The statement timeout applied when a caller declares none — the same default of 30 seconds
@@ -53,20 +54,25 @@ public final class ContractStatement {
     private final int timeoutSeconds;
     private final boolean rawLabels;
     private final Tracer tracer;
+    private final String surface;
+    private final io.tesseraql.core.telemetry.SpanContext spanParent;
 
-    private ContractStatement(DataSource dataSource, String dialect, int timeoutSeconds,
-            boolean rawLabels, Tracer tracer) {
+    private SqlStatement(DataSource dataSource, String dialect, int timeoutSeconds,
+            boolean rawLabels, Tracer tracer, String surface,
+            io.tesseraql.core.telemetry.SpanContext spanParent) {
         this.dataSource = dataSource;
         this.dialect = dialect;
         this.timeoutSeconds = Math.max(0, timeoutSeconds);
         this.rawLabels = rawLabels;
         this.tracer = tracer == null ? NoopTracer.INSTANCE : tracer;
+        this.surface = surface == null ? "contract" : surface;
+        this.spanParent = spanParent;
     }
 
-    /** Contract SQL against {@code dataSource}, bounded by {@link #DEFAULT_TIMEOUT_SECONDS}. */
-    public static ContractStatement on(DataSource dataSource) {
-        return new ContractStatement(dataSource, null, DEFAULT_TIMEOUT_SECONDS, false,
-                NoopTracer.INSTANCE);
+    /** Statements against {@code dataSource}, bounded by {@link #DEFAULT_TIMEOUT_SECONDS}. */
+    public static SqlStatement on(DataSource dataSource) {
+        return new SqlStatement(dataSource, null, DEFAULT_TIMEOUT_SECONDS, false,
+                NoopTracer.INSTANCE, "contract", null);
     }
 
     /**
@@ -77,13 +83,38 @@ public final class ContractStatement {
      * <p>Left unset, labels come back exactly as the driver reports them and generated keys use
      * {@link Statement#RETURN_GENERATED_KEYS}.
      */
-    public ContractStatement dialect(String dialect) {
-        return new ContractStatement(dataSource, dialect, timeoutSeconds, rawLabels, tracer);
+    public SqlStatement dialect(String dialect) {
+        return new SqlStatement(dataSource, dialect, timeoutSeconds, rawLabels, tracer, surface,
+                spanParent);
     }
 
     /** The same executor bounded by {@code seconds}; an explicit {@code 0} removes the bound. */
-    public ContractStatement timeoutSeconds(int seconds) {
-        return new ContractStatement(dataSource, dialect, seconds, rawLabels, tracer);
+    public SqlStatement timeoutSeconds(int seconds) {
+        return new SqlStatement(dataSource, dialect, seconds, rawLabels, tracer, surface,
+                spanParent);
+    }
+
+    /** The declared bound, for callers that thread it onward (e.g. into decision lookups). */
+    public int timeoutSeconds() {
+        return timeoutSeconds;
+    }
+
+    /**
+     * The same executor stamping {@code surface} on its spans (docs/contract-sql-execution.md
+     * structural decision 5): which kind of caller this statement serves —
+     * {@code route} | {@code command} | {@code job} | {@code chunk} | {@code contract} |
+     * {@code validation} | {@code workflow} | {@code transfer} | {@code enrich} |
+     * {@code decision}.
+     */
+    public SqlStatement surface(String surface) {
+        return new SqlStatement(dataSource, dialect, timeoutSeconds, rawLabels, tracer, surface,
+                spanParent);
+    }
+
+    /** The same executor parenting its spans on {@code parent} (null roots a new trace). */
+    public SqlStatement spanParent(io.tesseraql.core.telemetry.SpanContext parent) {
+        return new SqlStatement(dataSource, dialect, timeoutSeconds, rawLabels, tracer, surface,
+                parent);
     }
 
     /**
@@ -92,8 +123,9 @@ public final class ContractStatement {
      * structural decision 5) — so a slow sign-in or provisioning call stops being an
      * unexplained gap in its trace. Absent a tracer, spans are a no-op.
      */
-    public ContractStatement tracer(Tracer tracer) {
-        return new ContractStatement(dataSource, dialect, timeoutSeconds, rawLabels, tracer);
+    public SqlStatement tracer(Tracer tracer) {
+        return new SqlStatement(dataSource, dialect, timeoutSeconds, rawLabels, tracer, surface,
+                spanParent);
     }
 
     /**
@@ -103,8 +135,9 @@ public final class ContractStatement {
      * names are camelCase, and a quoted alias passes Oracle's folding untouched; the dialect keeps
      * steering the generated-key branch, which is about the driver, not the labels.
      */
-    public ContractStatement rawLabels() {
-        return new ContractStatement(dataSource, dialect, timeoutSeconds, true, tracer);
+    public SqlStatement rawLabels() {
+        return new SqlStatement(dataSource, dialect, timeoutSeconds, true, tracer, surface,
+                spanParent);
     }
 
     /**
@@ -116,7 +149,7 @@ public final class ContractStatement {
 
     /** Executes a read contract and returns its rows, keyed by the contract's own aliases. */
     public List<Map<String, Object>> query(String contract, String sql,
-            Map<String, Object> params) throws ContractSqlException {
+            Map<String, Object> params) throws SqlStatementException {
         try (Connection connection = dataSource.getConnection()) {
             return query(connection, contract, sql, params);
         } catch (SQLException ex) {
@@ -126,7 +159,7 @@ public final class ContractStatement {
 
     /** As {@link #query(String, String, Map)}, on the caller's own connection. */
     public List<Map<String, Object>> query(Connection connection, String contract, String sql,
-            Map<String, Object> params) throws ContractSqlException {
+            Map<String, Object> params) throws SqlStatementException {
         BoundSql bound = SqlRenderer.render(sql, params);
         Span span = started(contract, "query");
         try (PreparedStatement statement = prepare(connection, bound, List.of());
@@ -135,7 +168,7 @@ public final class ContractStatement {
             span.attribute("rowCount", rows.size());
             return rows;
         } catch (SQLException ex) {
-            ContractSqlException named = classified(contract, ex);
+            SqlStatementException named = classified(contract, ex);
             span.recordError(named);
             throw named;
         } finally {
@@ -145,27 +178,27 @@ public final class ContractStatement {
 
     /** Executes a read contract and returns its first row, or {@code null} when it returns none. */
     public Map<String, Object> queryOne(String contract, String sql, Map<String, Object> params)
-            throws ContractSqlException {
+            throws SqlStatementException {
         List<Map<String, Object>> rows = query(contract, sql, params);
         return rows.isEmpty() ? null : rows.get(0);
     }
 
     /** As {@link #queryOne(String, String, Map)}, on the caller's own connection. */
     public Map<String, Object> queryOne(Connection connection, String contract, String sql,
-            Map<String, Object> params) throws ContractSqlException {
+            Map<String, Object> params) throws SqlStatementException {
         List<Map<String, Object>> rows = query(connection, contract, sql, params);
         return rows.isEmpty() ? null : rows.get(0);
     }
 
     /** Executes a write contract and returns the number of rows it affected. */
     public int update(String contract, String sql, Map<String, Object> params)
-            throws ContractSqlException {
+            throws SqlStatementException {
         return update(contract, sql, params, List.of()).affectedRows();
     }
 
     /** As {@link #update(String, String, Map)}, on the caller's own connection. */
     public int update(Connection connection, String contract, String sql,
-            Map<String, Object> params) throws ContractSqlException {
+            Map<String, Object> params) throws SqlStatementException {
         return update(connection, contract, sql, params, List.of()).affectedRows();
     }
 
@@ -177,7 +210,7 @@ public final class ContractStatement {
      * two dialects that have it.
      */
     public WriteResult update(String contract, String sql, Map<String, Object> params,
-            List<String> keys) throws ContractSqlException {
+            List<String> keys) throws SqlStatementException {
         try (Connection connection = dataSource.getConnection()) {
             return update(connection, contract, sql, params, keys);
         } catch (SQLException ex) {
@@ -187,18 +220,22 @@ public final class ContractStatement {
 
     /** As {@link #update(String, String, Map, List)}, on the caller's own connection. */
     public WriteResult update(Connection connection, String contract, String sql,
-            Map<String, Object> params, List<String> keys) throws ContractSqlException {
+            Map<String, Object> params, List<String> keys) throws SqlStatementException {
         BoundSql bound = SqlRenderer.render(sql, params);
         Span span = started(contract, "update");
         try (PreparedStatement statement = prepare(connection, bound, keys)) {
-            int affected = statement.executeUpdate();
+            // execute + getUpdateCount rather than executeUpdate: a statement can do work and
+            // hand back a result rather than a count, and a driver may refuse executeUpdate for
+            // it — DuckDB does, for DuckLake's maintenance calls. -1 is the honest "no count".
+            statement.execute();
+            int affected = statement.getUpdateCount();
             Map<String, Object> generated = keys.isEmpty()
                     ? Map.of()
                     : readGeneratedKeys(statement, keys);
             span.attribute("affectedRows", affected);
             return new WriteResult(affected, generated);
         } catch (SQLException ex) {
-            ContractSqlException named = classified(contract, ex);
+            SqlStatementException named = classified(contract, ex);
             span.recordError(named);
             throw named;
         } finally {
@@ -221,7 +258,7 @@ public final class ContractStatement {
      * that statement was given.
      */
     public <T> T transact(String contract, TransactionalBody<T> body)
-            throws ContractSqlException {
+            throws SqlStatementException {
         try (Connection connection = dataSource.getConnection()) {
             boolean previous = connection.getAutoCommit();
             connection.setAutoCommit(false);
@@ -330,18 +367,89 @@ public final class ContractStatement {
         return rows;
     }
 
-    /** One statement's span: the shared name, the contract surface, the contract's own name. */
-    private Span started(String contract, String mode) {
-        return tracer.start("tesseraql.sql.execute")
-                .attribute("surface", "contract")
-                .attribute("sqlId", contract)
+    /** A caller-owned read over the statement's open {@link ResultSet} — spooling, capping,
+     * shaping rows its own way — while this class owns prepare, bind, bound, classify and span. */
+    public interface ResultSetReader<T> {
+        T read(ResultSet resultSet) throws SQLException;
+    }
+
+    /**
+     * Executes a caller-rendered statement and hands its {@link ResultSet} to {@code reader} —
+     * the seam for executors whose reads stream or cap rather than materialize
+     * (docs/contract-sql-execution.md slice 7).
+     */
+    public <T> T read(Connection connection, String sqlId, BoundSql bound,
+            ResultSetReader<T> reader) throws SqlStatementException {
+        Span span = started(sqlId, "query");
+        try (PreparedStatement statement = prepare(connection, bound, List.of());
+                ResultSet resultSet = statement.executeQuery()) {
+            return reader.read(resultSet);
+        } catch (SQLException ex) {
+            SqlStatementException named = classified(sqlId, ex);
+            span.recordError(named);
+            throw named;
+        } finally {
+            span.end();
+        }
+    }
+
+    /** Executes a caller-rendered write and returns the rows it affected. */
+    public int update(Connection connection, String sqlId, BoundSql bound)
+            throws SqlStatementException {
+        Span span = started(sqlId, "update");
+        try (PreparedStatement statement = prepare(connection, bound, List.of())) {
+            statement.execute();
+            int affected = statement.getUpdateCount();
+            span.attribute("affectedRows", affected);
+            return affected;
+        } catch (SQLException ex) {
+            SqlStatementException named = classified(sqlId, ex);
+            span.recordError(named);
+            throw named;
+        } finally {
+            span.end();
+        }
+    }
+
+    /**
+     * Executes a framework-built statement — plain SQL with positional values, no 2-way render —
+     * under the same bound, classification and span as everything else.
+     */
+    public int update(Connection connection, String sqlId, String sql, List<Object> values)
+            throws SqlStatementException {
+        Span span = started(sqlId, "update");
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            if (timeoutSeconds > 0) {
+                statement.setQueryTimeout(timeoutSeconds);
+            }
+            for (int i = 0; i < values.size(); i++) {
+                statement.setObject(i + 1, values.get(i));
+            }
+            statement.execute();
+            int affected = statement.getUpdateCount();
+            span.attribute("affectedRows", affected);
+            return affected;
+        } catch (SQLException ex) {
+            SqlStatementException named = classified(sqlId, ex);
+            span.recordError(named);
+            throw named;
+        } finally {
+            span.end();
+        }
+    }
+
+    /** One statement's span: the shared name, the declared surface, the statement's own name. */
+    private Span started(String sqlId, String mode) {
+        return tracer.start("tesseraql.sql.execute", spanParent)
+                .attribute("surface", surface)
+                .attribute("sqlId", sqlId)
                 .attribute("mode", mode);
     }
 
     /** A driver's answer, named by the contract that asked and classified for the caller. */
-    private static ContractSqlException classified(String contract, SQLException ex) {
-        return ex instanceof ContractSqlException already
+    private static SqlStatementException classified(String contract, SQLException ex) {
+        return ex instanceof SqlStatementException already
                 ? already
-                : new ContractSqlException(contract, ex);
+                : new SqlStatementException(contract, ex);
     }
 }

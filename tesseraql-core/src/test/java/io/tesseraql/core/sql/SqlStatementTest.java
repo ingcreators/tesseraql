@@ -26,25 +26,25 @@ import org.junit.jupiter.api.Test;
  * the shared primitive does that two of those three did not: it bounds the statement, and it hands
  * the caller a classified failure instead of a driver's raw one.
  */
-class ContractStatementTest {
+class SqlStatementTest {
 
     private static final String SELECT = "select name from t where id = /*id*/'x'";
 
     @Test
-    void boundsEveryStatementByTheSameDefaultARouteRunsUnder() throws ContractSqlException {
+    void boundsEveryStatementByTheSameDefaultARouteRunsUnder() throws SqlStatementException {
         FakeDatabase database = new FakeDatabase(List.of("name"), List.of("Anne"));
 
-        ContractStatement.on(database.dataSource()).query("contract", SELECT, Map.of("id", "u1"));
+        SqlStatement.on(database.dataSource()).query("contract", SELECT, Map.of("id", "u1"));
 
         assertThat(database.calls).contains("setQueryTimeout(30)");
-        assertThat(ContractStatement.DEFAULT_TIMEOUT_SECONDS).isEqualTo(30);
+        assertThat(SqlStatement.DEFAULT_TIMEOUT_SECONDS).isEqualTo(30);
     }
 
     @Test
-    void bindsTheRenderedParameters() throws ContractSqlException {
+    void bindsTheRenderedParameters() throws SqlStatementException {
         FakeDatabase database = new FakeDatabase(List.of("name"), List.of("Anne"));
 
-        List<Map<String, Object>> rows = ContractStatement.on(database.dataSource())
+        List<Map<String, Object>> rows = SqlStatement.on(database.dataSource())
                 .query("contract", SELECT, Map.of("id", "u1"));
 
         assertThat(rows).containsExactly(Map.of("name", "Anne"));
@@ -52,20 +52,20 @@ class ContractStatementTest {
     }
 
     @Test
-    void anExplicitZeroOptsOutOfTheBound() throws ContractSqlException {
+    void anExplicitZeroOptsOutOfTheBound() throws SqlStatementException {
         FakeDatabase database = new FakeDatabase(List.of("name"), List.of("Anne"));
 
-        ContractStatement.on(database.dataSource()).timeoutSeconds(0)
+        SqlStatement.on(database.dataSource()).timeoutSeconds(0)
                 .query("contract", SELECT, Map.of("id", "u1"));
 
         assertThat(database.calls).noneMatch(call -> call.startsWith("setQueryTimeout"));
     }
 
     @Test
-    void boundsAWriteToo() throws ContractSqlException {
+    void boundsAWriteToo() throws SqlStatementException {
         FakeDatabase database = new FakeDatabase(List.of(), List.of());
 
-        int affected = ContractStatement.on(database.dataSource()).timeoutSeconds(7)
+        int affected = SqlStatement.on(database.dataSource()).timeoutSeconds(7)
                 .update("contract", "delete from t where id = /*id*/'x'", Map.of("id", "u1"));
 
         assertThat(affected).isEqualTo(1);
@@ -77,15 +77,15 @@ class ContractStatementTest {
         FakeDatabase database = new FakeDatabase(List.of(), List.of());
         database.failure = new SQLException("duplicate key value", "23505");
 
-        assertThatThrownBy(() -> ContractStatement.on(database.dataSource())
+        assertThatThrownBy(() -> SqlStatement.on(database.dataSource())
                 .query("scim.users.create", SELECT, Map.of("id", "u1")))
-                .isInstanceOf(ContractSqlException.class)
+                .isInstanceOf(SqlStatementException.class)
                 .isInstanceOf(SQLException.class)
                 .hasMessage("duplicate key value")
                 .satisfies(thrown -> {
-                    ContractSqlException failed = (ContractSqlException) thrown;
+                    SqlStatementException failed = (SqlStatementException) thrown;
                     assertThat(failed.kind()).isEqualTo(SqlErrorKind.UNIQUE_VIOLATION);
-                    assertThat(failed.contract()).isEqualTo("scim.users.create");
+                    assertThat(failed.sqlId()).isEqualTo("scim.users.create");
                     // SQLState and vendor code travel with it, so a caller still asking the
                     // question the old way gets the same answer.
                     assertThat(SqlErrors.isUniqueViolation(failed)).isTrue();
@@ -97,43 +97,43 @@ class ContractStatementTest {
         FakeDatabase database = new FakeDatabase(List.of(), List.of());
         database.failure = new SQLException("insert or update violates foreign key", "23503");
 
-        assertThatThrownBy(() -> ContractStatement.on(database.dataSource())
+        assertThatThrownBy(() -> SqlStatement.on(database.dataSource())
                 .update("scim.groups.addMember", SELECT, Map.of("id", "u1")))
-                .asInstanceOf(InstanceOfAssertFactories.type(ContractSqlException.class))
-                .extracting(ContractSqlException::kind)
+                .asInstanceOf(InstanceOfAssertFactories.type(SqlStatementException.class))
+                .extracting(SqlStatementException::kind)
                 .isEqualTo(SqlErrorKind.FOREIGN_KEY_VIOLATION);
     }
 
     @Test
     void readsLabelsAsTheDriverReportsThemUnlessADialectSaysOtherwise()
-            throws ContractSqlException {
+            throws SqlStatementException {
         FakeDatabase upper = new FakeDatabase(List.of("USER_ID"), List.of("u1"));
         FakeDatabase quoted = new FakeDatabase(List.of("displayName"), List.of("Anne"));
 
-        assertThat(ContractStatement.on(upper.dataSource()).dialect("oracle")
+        assertThat(SqlStatement.on(upper.dataSource()).dialect("oracle")
                 .queryOne("contract", SELECT, Map.of("id", "u1")))
                 .containsOnlyKeys("user_id");
         // A SCIM contract quotes its camelCase aliases on every dialect, and a quoted alias passes
         // Oracle's folding untouched — which is why an executor with no dialect loses nothing.
-        assertThat(ContractStatement.on(quoted.dataSource())
+        assertThat(SqlStatement.on(quoted.dataSource())
                 .queryOne("contract", SELECT, Map.of("id", "u1")))
                 .containsOnlyKeys("displayName");
     }
 
     @Test
-    void aReadThatMatchesNothingIsNoRowRatherThanAFailure() throws ContractSqlException {
+    void aReadThatMatchesNothingIsNoRowRatherThanAFailure() throws SqlStatementException {
         FakeDatabase database = new FakeDatabase(List.of("name"), List.of());
 
-        assertThat(ContractStatement.on(database.dataSource())
+        assertThat(SqlStatement.on(database.dataSource())
                 .queryOne("contract", SELECT, Map.of("id", "u1"))).isNull();
     }
 
     @Test
     void aDeclaredKeyReachesTheDriverAsColumnNamesWhereTheDialectHonoursThem()
-            throws ContractSqlException {
+            throws SqlStatementException {
         FakeDatabase database = new FakeDatabase(List.of("id"), List.of(7));
 
-        ContractStatement.WriteResult written = ContractStatement.on(database.dataSource())
+        SqlStatement.WriteResult written = SqlStatement.on(database.dataSource())
                 .dialect("postgres")
                 .update("scim.users.create", "insert into t (name) values (/*name*/'x')",
                         Map.of("name", "Anne"), List.of("id"));
@@ -147,10 +147,10 @@ class ContractStatementTest {
 
     @Test
     void aDialectWithoutKeyColumnsFallsBackToTheDriversGeneratedKeys()
-            throws ContractSqlException {
+            throws SqlStatementException {
         FakeDatabase database = new FakeDatabase(List.of("GENERATED_KEY"), List.of(7));
 
-        ContractStatement.WriteResult written = ContractStatement.on(database.dataSource())
+        SqlStatement.WriteResult written = SqlStatement.on(database.dataSource())
                 .dialect("mysql")
                 .update("scim.users.create", "insert into t (name) values (/*name*/'x')",
                         Map.of("name", "Anne"), List.of("id"));
@@ -162,10 +162,10 @@ class ContractStatementTest {
     }
 
     @Test
-    void aWriteDeclaringNoKeysAsksTheDriverForNone() throws ContractSqlException {
+    void aWriteDeclaringNoKeysAsksTheDriverForNone() throws SqlStatementException {
         FakeDatabase database = new FakeDatabase(List.of(), List.of());
 
-        int affected = ContractStatement.on(database.dataSource())
+        int affected = SqlStatement.on(database.dataSource())
                 .update("contract", "delete from t where id = /*id*/'x'", Map.of("id", "u1"));
 
         assertThat(affected).isEqualTo(1);
@@ -173,20 +173,20 @@ class ContractStatementTest {
     }
 
     @Test
-    void rawLabelsKeepTheDriversLabelsEvenUnderADialect() throws ContractSqlException {
+    void rawLabelsKeepTheDriversLabelsEvenUnderADialect() throws SqlStatementException {
         FakeDatabase upper = new FakeDatabase(List.of("USER_ID"), List.of("u1"));
 
         // The dialect steers the generated-key branch; the declared label policy stays raw
         // (docs/contract-sql-execution.md structural decision 7).
-        assertThat(ContractStatement.on(upper.dataSource()).dialect("oracle").rawLabels()
+        assertThat(SqlStatement.on(upper.dataSource()).dialect("oracle").rawLabels()
                 .queryOne("contract", SELECT, Map.of("id", "u1")))
                 .containsOnlyKeys("USER_ID");
     }
 
     @Test
-    void aTransactionCommitsWhatItsBodyWrote() throws ContractSqlException {
+    void aTransactionCommitsWhatItsBodyWrote() throws SqlStatementException {
         FakeDatabase database = new FakeDatabase(List.of(), List.of());
-        ContractStatement statements = ContractStatement.on(database.dataSource());
+        SqlStatement statements = SqlStatement.on(database.dataSource());
 
         int affected = statements.transact("scim.groups.create", connection -> statements
                 .update(connection, "scim.groups.addMember",
@@ -201,24 +201,24 @@ class ContractStatementTest {
     void aFailureInsideTheTransactionRollsItBackAndKeepsItsStatementsName() {
         FakeDatabase database = new FakeDatabase(List.of(), List.of());
         database.failure = new SQLException("value too long", "22001");
-        ContractStatement statements = ContractStatement.on(database.dataSource());
+        SqlStatement statements = SqlStatement.on(database.dataSource());
 
         assertThatThrownBy(() -> statements.transact("scim.groups.create",
                 connection -> statements.update(connection, "scim.groups.addMember",
                         "insert into m (g) values (/*g*/'x')", Map.of("g", "g1"))))
-                .asInstanceOf(InstanceOfAssertFactories.type(ContractSqlException.class))
-                .extracting(ContractSqlException::contract)
+                .asInstanceOf(InstanceOfAssertFactories.type(SqlStatementException.class))
+                .extracting(SqlStatementException::sqlId)
                 .isEqualTo("scim.groups.addMember");
         assertThat(database.calls).contains("rollback");
         assertThat(database.calls).doesNotContain("commit");
     }
 
     @Test
-    void everyStatementOpensTheSharedSpanWithTheContractSurface() throws ContractSqlException {
+    void everyStatementOpensTheSharedSpanWithTheContractSurface() throws SqlStatementException {
         io.tesseraql.core.telemetry.RecordingTracer tracer = new io.tesseraql.core.telemetry.RecordingTracer();
         FakeDatabase database = new FakeDatabase(List.of("name"), List.of("Anne"));
 
-        ContractStatement.on(database.dataSource()).tracer(tracer)
+        SqlStatement.on(database.dataSource()).tracer(tracer)
                 .query("scim.users.list", SELECT, Map.of("id", "u1"));
 
         assertThat(tracer.spans()).hasSize(1);
@@ -237,9 +237,9 @@ class ContractStatementTest {
         FakeDatabase database = new FakeDatabase(List.of(), List.of());
         database.failure = new SQLException("duplicate key value", "23505");
 
-        assertThatThrownBy(() -> ContractStatement.on(database.dataSource()).tracer(tracer)
+        assertThatThrownBy(() -> SqlStatement.on(database.dataSource()).tracer(tracer)
                 .update("scim.users.create", SELECT, Map.of("id", "u1")))
-                .isInstanceOf(ContractSqlException.class);
+                .isInstanceOf(SqlStatementException.class);
 
         assertThat(tracer.spans()).hasSize(1);
         assertThat(tracer.spans().get(0).error()).isTrue();
@@ -278,6 +278,8 @@ class ContractStatementTest {
                 case "prepareStatement" -> proxy(PreparedStatement.class);
                 case "executeQuery" -> fail(proxy(ResultSet.class));
                 case "executeUpdate" -> fail(1);
+                case "execute" -> fail(Boolean.TRUE);
+                case "getUpdateCount" -> 1;
                 case "getGeneratedKeys" -> proxy(ResultSet.class);
                 case "getMetaData" -> proxy(ResultSetMetaData.class);
                 case "getColumnCount" -> labels.size();

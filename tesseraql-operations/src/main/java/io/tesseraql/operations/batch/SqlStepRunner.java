@@ -81,8 +81,13 @@ final class SqlStepRunner {
                     sqlPath.toString(), mode, durationMs, rows, startedAt));
             return result;
         } catch (SQLException ex) {
+            // The wrapper keeps its code and gains the portable classification (structural
+            // decision 8, docs/contract-sql-execution.md): a foreign-key violation from bad
+            // input and a dropped table stopped reporting identically.
             TqlException failure = TqlException.builder(StepContext.STEP_ERROR)
-                    .message("Step '" + step.id() + "' failed: " + ex.getMessage())
+                    .message("Step '" + step.id() + "' failed ("
+                            + io.tesseraql.core.dialect.SqlErrors.classify(ex) + "): "
+                            + ex.getMessage())
                     .source(sqlPath.toString())
                     .cause(ex)
                     .build();

@@ -108,6 +108,8 @@ class WorkflowSweeperBoundTest {
                 case "prepareStatement" -> proxy(PreparedStatement.class);
                 case "executeQuery" -> proxy(ResultSet.class);
                 case "executeUpdate" -> 1;
+                case "execute" -> Boolean.TRUE;
+                case "getUpdateCount" -> 1;
                 case "next" -> nextRow();
                 case "getString" -> "bob";
                 default -> defaultValue(method.getReturnType());
