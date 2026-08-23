@@ -55,13 +55,9 @@ final class DraftStore {
 
     /** Resolves an app-relative path, refusing any escape from the app home (design ch. 20.2). */
     Path resolve(String relativePath) {
-        Path home = appHome();
-        Path resolved = home.resolve(relativePath).normalize();
-        if (!resolved.startsWith(home)) {
-            throw new TqlException(TRAVERSAL,
-                    "Path escapes app home: " + relativePath);
-        }
-        return resolved;
+        return io.tesseraql.core.files.ConfinedPath.under(appHome()).resolve(relativePath)
+                .orElseThrow(() -> new TqlException(TRAVERSAL,
+                        "Path escapes app home: " + relativePath));
     }
 
     /**
@@ -270,13 +266,10 @@ final class DraftStore {
     }
 
     private Path draftPath(String relativePath) {
-        Path drafts = appHome().resolve("work/studio/drafts").normalize();
-        Path resolved = drafts.resolve(relativePath).normalize();
-        if (!resolved.startsWith(drafts)) {
-            throw new TqlException(TRAVERSAL,
-                    "Draft path escapes drafts dir: " + relativePath);
-        }
-        return resolved;
+        return io.tesseraql.core.files.ConfinedPath
+                .under(appHome().resolve("work/studio/drafts")).resolve(relativePath)
+                .orElseThrow(() -> new TqlException(TRAVERSAL,
+                        "Draft path escapes drafts dir: " + relativePath));
     }
 
     /** The sidecar recording the source a draft is based on (Studio backlog D5). */

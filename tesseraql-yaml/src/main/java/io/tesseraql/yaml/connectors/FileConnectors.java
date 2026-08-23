@@ -177,8 +177,8 @@ public final class FileConnectors {
         }
         java.nio.file.Path candidate = appHome.resolve(path).normalize().toAbsolutePath();
         for (String declared : allowedPaths) {
-            java.nio.file.Path root = appHome.resolve(declared).normalize().toAbsolutePath();
-            if (candidate.startsWith(root)) {
+            if (io.tesseraql.core.files.ConfinedPath.under(appHome.resolve(declared))
+                    .contains(candidate)) {
                 return candidate;
             }
         }

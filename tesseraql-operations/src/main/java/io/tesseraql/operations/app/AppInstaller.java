@@ -147,16 +147,16 @@ public final class AppInstaller {
     }
 
     private void extract(Path tqlapp, Path target) throws IOException {
-        Path root = target.toAbsolutePath().normalize();
+        io.tesseraql.core.files.ConfinedPath root = io.tesseraql.core.files.ConfinedPath
+                .under(target);
         try (ZipInputStream zip = new ZipInputStream(Files.newInputStream(tqlapp))) {
             ZipEntry entry;
             while ((entry = zip.getNextEntry()) != null) {
-                Path resolved = root.resolve(entry.getName()).normalize();
-                if (!resolved.startsWith(root)) {
-                    throw new TqlException(INVALID_PACKAGE,
-                            "Package entry escapes install root (design ch. 20.2): "
-                                    + entry.getName());
-                }
+                String name = entry.getName();
+                Path resolved = root.resolve(name)
+                        .orElseThrow(() -> new TqlException(INVALID_PACKAGE,
+                                "Package entry escapes install root (design ch. 20.2): "
+                                        + name));
                 if (entry.isDirectory()) {
                     Files.createDirectories(resolved);
                 } else {

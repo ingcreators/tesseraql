@@ -85,12 +85,9 @@ public final class ScaffoldWriter {
 
     /** The path-confinement guardrail (design ch. 20.2): generated files stay in the app home. */
     private static Path confine(Path home, String relativePath) {
-        Path target = home.resolve(relativePath).normalize();
-        if (!target.startsWith(home)) {
-            throw new TqlException(TRAVERSAL,
-                    "Scaffolded path escapes the app home: " + relativePath);
-        }
-        return target;
+        return io.tesseraql.core.files.ConfinedPath.under(home).resolve(relativePath)
+                .orElseThrow(() -> new TqlException(TRAVERSAL,
+                        "Scaffolded path escapes the app home: " + relativePath));
     }
 
     private static String read(Path target) {

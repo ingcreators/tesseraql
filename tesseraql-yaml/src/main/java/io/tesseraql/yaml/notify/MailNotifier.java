@@ -89,11 +89,11 @@ public final class MailNotifier {
     public void send(NotificationChannels.Channel channel, NotifyEvents.Envelope envelope,
             OutboxEvent event, String hostOverride, Integer portOverride) {
         String template = channel.require("template");
-        Path resolved = appHome.resolve(template).normalize();
-        if (!resolved.startsWith(appHome) || !Files.isRegularFile(resolved)) {
-            throw new TqlException(MAIL_CHANNEL, "Mail channel '" + channel.name()
-                    + "': template '" + template + "' is not a file inside the app home");
-        }
+        Path resolved = io.tesseraql.core.files.ConfinedPath.under(appHome).resolve(template)
+                .filter(Files::isRegularFile)
+                .orElseThrow(() -> new TqlException(MAIL_CHANNEL, "Mail channel '"
+                        + channel.name() + "': template '" + template
+                        + "' is not a file inside the app home"));
 
         Map<String, Object> model = new LinkedHashMap<>();
         model.put("payload", envelope.payload());

@@ -48,15 +48,16 @@ public final class ClasspathAppSource implements AppSource {
 
     @Override
     public Path materialize(Path workRoot) {
-        Path target = workRoot.resolve(name).normalize();
+        io.tesseraql.core.files.ConfinedPath root = io.tesseraql.core.files.ConfinedPath
+                .under(workRoot.resolve(name));
+        Path target = root.root();
         try {
             Files.createDirectories(target);
             for (String entry : readIndex()) {
-                Path file = target.resolve(entry).normalize();
-                if (!file.startsWith(target)) {
-                    throw new TqlException(TRAVERSAL,
-                            "App '" + name + "' index entry escapes the app root: " + entry);
-                }
+                Path file = root.resolve(entry)
+                        .orElseThrow(() -> new TqlException(TRAVERSAL,
+                                "App '" + name + "' index entry escapes the app root: "
+                                        + entry));
                 Files.createDirectories(file.getParent());
                 try (InputStream in = require(resourceRoot + "/" + entry)) {
                     Files.copy(in, file, StandardCopyOption.REPLACE_EXISTING);

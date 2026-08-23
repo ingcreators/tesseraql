@@ -77,9 +77,10 @@ final class CatalogLocaleRules implements LintRule {
             if (spec.file() == null || spec.file().isBlank()) {
                 return;
             }
-            Path dir = appHome.resolve("catalogs");
-            Path file = dir.resolve(spec.file()).normalize();
-            if (!file.startsWith(dir) || !Files.isRegularFile(file)) {
+            boolean inside = io.tesseraql.core.files.ConfinedPath
+                    .under(appHome.resolve("catalogs"))
+                    .resolve(spec.file()).filter(Files::isRegularFile).isPresent();
+            if (!inside) {
                 findings.add(new LintFinding(CATALOG_FILE_OUTSIDE_CATALOGS, ERROR, "catalogs/",
                         "Catalog '" + name + "': file '" + spec.file() + "' is not a SQL file"
                                 + " under catalogs/"));

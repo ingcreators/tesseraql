@@ -29,16 +29,20 @@ final class TemplateResolution {
      * with the app's template engine.
      */
     static String resolve(Path appHome, Path routeDir, String template) {
+        // The guard used to compare against appHome as it arrived — a relative or
+        // ..-carrying app home made it vacuous; ConfinedPath canonicalizes both sides.
+        io.tesseraql.core.files.ConfinedPath home = io.tesseraql.core.files.ConfinedPath
+                .under(appHome);
         Path colocated = routeDir.toAbsolutePath().normalize().resolve(template).normalize();
-        Path file = Files.isRegularFile(colocated)
+        Path candidate = Files.isRegularFile(colocated)
                 ? colocated
-                : appHome.resolve("templates").resolve(template).normalize();
-        if (!file.startsWith(appHome)) {
-            throw new TqlException(RENDER_ERROR, "Template escapes app home: " + template);
-        }
+                : home.root().resolve("templates").resolve(template);
+        Path file = home.confine(candidate)
+                .orElseThrow(() -> new TqlException(RENDER_ERROR,
+                        "Template escapes app home: " + template));
         if (!Files.isRegularFile(file)) {
             throw new TqlException(RENDER_ERROR, "Template not found: " + template);
         }
-        return appHome.relativize(file).toString().replace('\\', '/');
+        return home.root().relativize(file).toString().replace('\\', '/');
     }
 }
