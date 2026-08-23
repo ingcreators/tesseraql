@@ -4,7 +4,6 @@ import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.operations.app.InstalledApp;
-import java.io.IOException;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -467,24 +466,20 @@ public final class MultiAppHost implements AutoCloseable, StackReconciler.HostOp
     private void awaitReady(InstalledApp entry, TesseraqlRuntime runtime) {
         String url = "http://localhost:" + runtime.port() + entry.basePath()
                 + "/_tesseraql/health/ready";
-        java.net.http.HttpClient probe = java.net.http.HttpClient.newBuilder()
-                .connectTimeout(java.time.Duration.ofSeconds(2)).build();
         String lastAnswer = "no answer";
         for (int attempt = 0; attempt < READY_ATTEMPTS; attempt++) {
             try {
-                java.net.http.HttpResponse<String> response = probe.send(
-                        java.net.http.HttpRequest.newBuilder(java.net.URI.create(url))
-                                .timeout(java.time.Duration.ofSeconds(2)).build(),
-                        java.net.http.HttpResponse.BodyHandlers.ofString());
-                if (response.statusCode() == 200) {
+                LoopbackCall.Response response = LoopbackCall
+                        .to("GET", url, java.time.Duration.ofSeconds(2)).send();
+                if (response.status() == 200) {
                     return;
                 }
-                lastAnswer = "HTTP " + response.statusCode();
-            } catch (IOException notYet) {
+                lastAnswer = "HTTP " + response.status();
+            } catch (LoopbackCall.Unreachable notYet) {
+                if (Thread.currentThread().isInterrupted()) {
+                    break;
+                }
                 lastAnswer = notYet.getMessage();
-            } catch (InterruptedException interrupted) {
-                Thread.currentThread().interrupt();
-                break;
             }
             try {
                 Thread.sleep(READY_INTERVAL_MILLIS);

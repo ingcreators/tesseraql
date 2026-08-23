@@ -24,14 +24,6 @@ import java.util.Map;
  */
 final class OpsShellRoutes {
 
-    /**
-     * One client for every proxied download: each {@code newHttpClient()} owns a selector
-     * thread and a connection pool released only at GC, and this surface built one per
-     * request. Thread-safe by contract, shared for the life of the runtime.
-     */
-    private static final java.net.http.HttpClient CLIENT = java.net.http.HttpClient
-            .newHttpClient();
-
     private final OpsShellProviders.Targets targets;
 
     OpsShellRoutes(OpsShellProviders.Targets targets) {
@@ -80,30 +72,23 @@ final class OpsShellRoutes {
                     });
             return;
         }
-        java.net.http.HttpRequest.Builder request = java.net.http.HttpRequest
-                .newBuilder(java.net.URI.create(url))
-                .timeout(java.time.Duration.ofSeconds(30));
-        String cookie = exchange.request().header("Cookie");
-        if (cookie != null) {
-            request.header("Cookie", cookie);
-        }
-        java.net.http.HttpResponse<java.io.InputStream> response;
+        // Streamed, not buffered: this surface exists because it streams bytes
+        // (docs/stack-shells.md structural decision 2), and the proxied branch was the one
+        // place that materialized the whole transfer file on the heap. The edge reads the
+        // stream to the wire and closes it; the member's Content-Length is recomputed by
+        // the transport like every response header the edge frames itself.
+        LoopbackCall.Streaming response;
         try {
-            // Streamed, not buffered: this surface exists because it streams bytes
-            // (docs/stack-shells.md structural decision 2), and the proxied branch was the one
-            // place that materialized the whole transfer file on the heap. The edge reads the
-            // stream to the wire and closes it; the member's Content-Length is recomputed by
-            // the transport like every response header the edge frames itself.
-            response = CLIENT.send(request.build(),
-                    java.net.http.HttpResponse.BodyHandlers.ofInputStream());
-        } catch (InterruptedException ex) {
-            Thread.currentThread().interrupt();
-            throw new java.io.IOException("interrupted", ex);
+            response = LoopbackCall.to("GET", url, java.time.Duration.ofSeconds(30))
+                    .cookie(exchange.request().header("Cookie"))
+                    .stream();
+        } catch (LoopbackCall.Unreachable ex) {
+            throw new java.io.IOException(ex.getMessage(), ex);
         }
-        exchange.response().status(response.statusCode());
-        response.headers().firstValue("Content-Type")
+        exchange.response().status(response.status());
+        response.header("Content-Type")
                 .ifPresent(value -> exchange.response().header(Headers.CONTENT_TYPE, value));
-        response.headers().firstValue("Content-Disposition").ifPresent(
+        response.header("Content-Disposition").ifPresent(
                 value -> exchange.response().header("Content-Disposition", value));
         java.io.InputStream body = response.body();
         // The edge closes the stream after writing it; the completion is the net for the

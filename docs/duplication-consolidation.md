@@ -92,10 +92,16 @@ converted site keeps its own outer domain exception (an `OidcException` stays an
 
 A `LoopbackCall` primitive (working name) owns the intra-stack hop: one shared pooled
 client, mandatory connect and request timeouts, the forward header set (`Cookie`,
-`X-CSRF-Token`, `Content-Type`, `Authorization`) and the copy-back header set declared in
-one reviewable place, the `404 → not-found / non-2xx → unreachable / unparseable-body`
-triad mapped once, and a span. `OpsShellProviders` and `WorkshopTargets` are today
-near-identical programs differing in URL shape and error text; they become two callers.
+`X-CSRF-Token`, `Content-Type`, `Authorization`) declared in one reviewable place, the
+shared form/query encoding, a streaming form for the transfer-file proxy, and one transport
+failure signal each caller maps to its own refusal. `OpsShellProviders` and
+`WorkshopTargets` are today near-identical programs differing in URL shape and error text;
+they become two callers. Two details settled at implementation, against the first draft: the
+`404 / non-2xx / unparseable` triad stays with each caller rather than in the primitive —
+the workshop hop re-throws the member's own error code where the ops hop deliberately does
+not, so "mapped once" would have flattened a real difference — and the hop opens no
+client-side span, because the member's own pipeline opens the authoritative span and a
+second one would double every shell navigation in the trace.
 Punching a loopback hole through the egress gateway instead was considered and rejected: the
 allow-list's meaning ("what may this stack reach outside itself") should not acquire an
 asterisk.
@@ -242,8 +248,11 @@ Fourteen, in the recommended order. Each is one PR, branched from fresh origin/m
    same allow-list (`TQL-SEC-4085`). Splitting its two calls across two transports would
    trade one honest ledger entry for a seam nobody can reason about; it stays listed on the
    HTTP ledger with this reason, like the Vert.x relay.
-5. **`LoopbackCall`** — the primitive plus its six adopters; the per-request client and the
-   unbounded download body die here.
+5. **`LoopbackCall`** — the primitive plus its six adopters; the per-request client dies
+   here. Recorded at implementation: the streamed download's *body* transfer remains
+   governed by the edge's connection lifecycle rather than a request timer — the JDK
+   client's request timeout runs to the response headers, and buffering the body to bound
+   it would defeat the reason the streaming surface exists.
 6. **The HTTP ledger** — `HttpClientLedgerTest`; `DeployCommand` timeouts;
    `HttpCallClient`'s span records unchecked failures; the transfer service's spans gain
    their parent.

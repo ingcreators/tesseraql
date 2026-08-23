@@ -6,12 +6,6 @@ import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.service.ServiceProviders;
 import io.tesseraql.runtime.HostContext;
-import java.net.URI;
-import java.net.URLEncoder;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Base64;
 import java.util.LinkedHashMap;
@@ -51,7 +45,6 @@ interface WorkshopTargets {
     /** The hosted shell: HTTP over loopback, the member's port resolved live per call. */
     static WorkshopTargets of(List<String> members, HostContext.MemberOrigins origins) {
         ObjectMapper mapper = new ObjectMapper();
-        HttpClient client = HttpClient.newHttpClient();
         return new WorkshopTargets() {
             @Override
             public List<String> memberNames() {
@@ -68,49 +61,27 @@ interface WorkshopTargets {
                     throw notFound(member);
                 }
                 String verb = WorkshopOps.OPS.get(op);
-                StringBuilder form = new StringBuilder();
-                params.forEach((key, value) -> {
-                    if (value == null) {
-                        return;
-                    }
-                    if (form.length() > 0) {
-                        form.append('&');
-                    }
-                    form.append(URLEncoder.encode(key, StandardCharsets.UTF_8)).append('=')
-                            .append(URLEncoder.encode(String.valueOf(value),
-                                    StandardCharsets.UTF_8));
-                });
+                String form = io.tesseraql.runtime.LoopbackCall.encode(params);
                 String url = "http://localhost:" + port + "/" + member
                         + "/_tesseraql/studio/data/"
                         + (WorkshopOps.PUBLIC.contains(op) ? "public/" : "") + op
-                        + ("GET".equals(verb) && form.length() > 0 ? "?" + form : "");
-                HttpRequest.Builder request = HttpRequest.newBuilder(URI.create(url))
-                        .timeout(Duration.ofSeconds(60));
-                if (cookie != null) {
-                    request.header("Cookie", cookie);
-                }
+                        + ("GET".equals(verb) && !form.isEmpty() ? "?" + form : "");
+                io.tesseraql.runtime.LoopbackCall call = io.tesseraql.runtime.LoopbackCall
+                        .to(verb, url, Duration.ofSeconds(60)).cookie(cookie);
                 if ("POST".equals(verb)) {
-                    request.header("Content-Type", "application/x-www-form-urlencoded")
-                            .POST(HttpRequest.BodyPublishers.ofString(form.toString()));
-                    if (csrf != null) {
-                        request.header("X-CSRF-Token", csrf);
-                    }
+                    call.csrf(csrf).form(form);
                 }
-                HttpResponse<String> response;
+                io.tesseraql.runtime.LoopbackCall.Response response;
                 try {
-                    response = client.send(request.build(),
-                            HttpResponse.BodyHandlers.ofString());
-                } catch (Exception ex) {
-                    if (ex instanceof InterruptedException) {
-                        Thread.currentThread().interrupt();
-                    }
+                    response = call.send();
+                } catch (io.tesseraql.runtime.LoopbackCall.Unreachable ex) {
                     throw new TqlException(UNREACHABLE,
                             "The workshop for '" + member + "' did not answer");
                 }
-                if (response.statusCode() == 404) {
+                if (response.status() == 404) {
                     throw notFound(member);
                 }
-                if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                if (response.status() < 200 || response.status() >= 300) {
                     // The member's own refusal (a 403 atom refusal, a 4xx input rejection)
                     // rides back as-is: re-throw its code so the surface answers with the
                     // member's verdict rather than inventing one.
@@ -130,7 +101,7 @@ interface WorkshopTargets {
                 }
             }
 
-            private TqlException memberError(HttpResponse<String> response) {
+            private TqlException memberError(io.tesseraql.runtime.LoopbackCall.Response response) {
                 try {
                     Map<?, ?> body = mapper.readValue(response.body(), Map.class);
                     if (body.get("error") instanceof Map<?, ?> error
@@ -144,7 +115,7 @@ interface WorkshopTargets {
                     // Fall through to the generic refusal below.
                 }
                 return new TqlException(UNREACHABLE, "The workshop call was refused ("
-                        + response.statusCode() + ")");
+                        + response.status() + ")");
             }
         };
     }
