@@ -46,7 +46,6 @@ class SqlExecutorLedgerTest {
             "tesseraql-operations/src/main/java/io/tesseraql/operations/audit/JdbcRouteAuditStore.java",
             "tesseraql-operations/src/main/java/io/tesseraql/operations/batch/ChunkStepRunner.java",
             "tesseraql-operations/src/main/java/io/tesseraql/operations/batch/JobRepository.java",
-            "tesseraql-operations/src/main/java/io/tesseraql/operations/batch/SqlStepRunner.java",
             "tesseraql-operations/src/main/java/io/tesseraql/operations/catalog/JdbcCatalogStore.java",
             "tesseraql-operations/src/main/java/io/tesseraql/operations/credential/JdbcCredentialTokenStore.java",
             "tesseraql-operations/src/main/java/io/tesseraql/operations/credential/JdbcTotpStore.java",

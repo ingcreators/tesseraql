@@ -358,6 +358,24 @@ class SqlStatementTest {
     }
 
     @Test
+    void aDeclaredAttributeRidesEverySpanTheExecutorOpens() throws Exception {
+        io.tesseraql.core.telemetry.RecordingTracer tracer = new io.tesseraql.core.telemetry.RecordingTracer();
+        FakeDatabase database = new FakeDatabase(List.of("name"), List.of("Anne"));
+        BoundSql bound = SqlRenderer.render(SELECT, Map.of("id", "u1"));
+
+        SqlStatement statements = SqlStatement.on(database.dataSource()).tracer(tracer)
+                .surface("job")
+                .attribute("stepId", "deactivatePending");
+        statements.read("jobs/maintenance.sql", bound, (resultSet, span) -> resultSet.next());
+        statements.update("jobs/maintenance.sql", bound);
+
+        assertThat(tracer.spans()).hasSize(2)
+                .allSatisfy(span -> assertThat(span.attributes())
+                        .containsEntry("surface", "job")
+                        .containsEntry("stepId", "deactivatePending"));
+    }
+
+    @Test
     void aFetchSizeReadPreparesForwardOnlyAndCursorsAtThatSize() throws Exception {
         FakeDatabase database = new FakeDatabase(List.of("name"), List.of("Anne"));
         BoundSql bound = SqlRenderer.render(SELECT, Map.of("id", "u1"));
