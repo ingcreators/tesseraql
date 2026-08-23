@@ -62,12 +62,16 @@ import java.util.Map;
  *                 on the result"): a falsy guard skips the step, which records
  *                 {@code steps.<name>.skipped} instead of a result — the declared branch point
  *                 for decision outputs ("level 1 approves directly, others open a workflow")
+ * @param out      the OUT parameters of a {@code mode: call} statement
+ *                 (docs/sql-execution-shapes.md structural decision 7): each name to its
+ *                 declared JDBC type keyword; the statement binds them as {@code out.<name>}
+ *                 bind sites, and the values publish as {@code steps.<name>.out.<name>}
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record Binding(String file, String contract, String mode, Map<String, String> params,
         String service, HttpSourceSpec http, Materialize materialize, String sequence,
         java.util.List<String> keys, Expect expect, Integer timeoutSeconds, String datasource,
-        String spool, String when, Map<String, EnrichSpec> enrich) {
+        String spool, String when, Map<String, EnrichSpec> enrich, Map<String, String> out) {
 
     public Binding {
         params = params == null ? Map.of() : Map.copyOf(params);
@@ -75,6 +79,18 @@ public record Binding(String file, String contract, String mode, Map<String, Str
         enrich = enrich == null
                 ? Map.of()
                 : java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(enrich));
+        out = out == null
+                ? Map.of()
+                : java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(out));
+    }
+
+    /** The shape before a call step could declare OUT parameters. */
+    public Binding(String file, String contract, String mode, Map<String, String> params,
+            String service, HttpSourceSpec http, Materialize materialize, String sequence,
+            java.util.List<String> keys, Expect expect, Integer timeoutSeconds, String datasource,
+            String spool, String when, Map<String, EnrichSpec> enrich) {
+        this(file, contract, mode, params, service, http, materialize, sequence, keys, expect,
+                timeoutSeconds, datasource, spool, when, enrich, null);
     }
 
     /** The shape before an enrichment could nest under the source it transforms. */
@@ -120,7 +136,8 @@ public record Binding(String file, String contract, String mode, Map<String, Str
                 sql == null ? null : sql.datasource(),
                 spool,
                 when,
-                enrich);
+                enrich,
+                sql == null ? null : sql.out());
     }
 
     /**
@@ -148,7 +165,7 @@ public record Binding(String file, String contract, String mode, Map<String, Str
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record SqlArm(String file, String mode, Map<String, String> params,
             Materialize materialize, java.util.List<String> keys, Expect expect,
-            Integer timeoutSeconds, String datasource) {
+            Integer timeoutSeconds, String datasource, Map<String, String> out) {
 
         public SqlArm {
             // The arm is read directly wherever a slot holds one (an enrichment's reference, an
@@ -156,6 +173,17 @@ public record Binding(String file, String contract, String mode, Map<String, Str
             // the enclosing record's do — an absent params: is an empty map, not a null.
             params = params == null ? Map.of() : Map.copyOf(params);
             keys = keys == null ? java.util.List.of() : java.util.List.copyOf(keys);
+            out = out == null
+                    ? Map.of()
+                    : java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(out));
+        }
+
+        /** The shape before a call statement could declare OUT parameters. */
+        public SqlArm(String file, String mode, Map<String, String> params,
+                Materialize materialize, java.util.List<String> keys, Expect expect,
+                Integer timeoutSeconds, String datasource) {
+            this(file, mode, params, materialize, keys, expect, timeoutSeconds, datasource,
+                    null);
         }
 
         /** A plain SQL file arm. */

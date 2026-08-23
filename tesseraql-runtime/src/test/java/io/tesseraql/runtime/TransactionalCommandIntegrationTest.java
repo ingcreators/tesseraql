@@ -199,6 +199,18 @@ class TransactionalCommandIntegrationTest {
                 .contains("hc-alert__body");
     }
 
+    @Test
+    @Order(7)
+    void storedCallBindsInsAndPublishesDeclaredOuts() throws Exception {
+        HttpResponse<String> response = post("/api/orders/reprice", "{\"factor\": 21}",
+                Map.of());
+
+        assertThat(response.statusCode()).as(response.body()).isEqualTo(200);
+        // The OUT parameter came back by its declared name: registered by the rendered
+        // out.o_doubled bind site's position, published as steps.<id>.out.<name>.
+        assertThat(MAPPER.readTree(response.body()).path("doubled").asInt()).isEqualTo(42);
+    }
+
     private static HttpResponse<String> post(String path, String json,
             Map<String, String> extraHeaders) throws Exception {
         HttpRequest.Builder request = HttpRequest
@@ -281,6 +293,15 @@ class TransactionalCommandIntegrationTest {
                       constraint order_lines_product_fk foreign key (product_id)
                           references products (id))""");
             statement.execute("insert into customers (id, name) values (1, 'ACME')");
+            // The stored call the mode: call step invokes (docs/sql-execution-shapes.md
+            // structural decision 7): a function with OUT parameters, the shape PostgreSQL's
+            // driver serves through the call escape on its default escapeSyntaxCallMode.
+            statement.execute("""
+                    create function reprice(p_factor int, out o_doubled int)
+                    language plpgsql as $$
+                    begin
+                      o_doubled := p_factor * 2;
+                    end $$""");
             statement.execute(
                     "insert into products (id, name) values (10, 'Widget'), (11, 'Gadget')");
         }
@@ -390,6 +411,39 @@ class TransactionalCommandIntegrationTest {
                 """);
         Files.writeString(create.resolve("select-placed.sql"), """
                 select created_at from orders where id = /* orderId */1
+                """);
+
+        Path reprice = appHome.resolve("web/api/orders/reprice");
+        Files.createDirectories(reprice);
+        Files.writeString(reprice.resolve("post.yml"), """
+                version: tesseraql/v1
+                id: orders.reprice
+                kind: route
+                recipe: command-json
+                input:
+                  factor:
+                    type: integer
+                    required: true
+                security:
+                  auth: bearer
+                  policy: users.write
+                steps:
+                  - id: reprice
+                    sql:
+                      file: call-reprice.sql
+                      mode: call
+                      params:
+                        factor: body.factor
+                      out:
+                        o_doubled: integer
+                response:
+                  json:
+                    status: 200
+                    body:
+                      doubled: steps.reprice.out.o_doubled
+                """);
+        Files.writeString(reprice.resolve("call-reprice.sql"), """
+                {call reprice(/* factor */1, /* out.o_doubled */null)}
                 """);
 
         Path update = appHome.resolve("web/api/orders/update-status");

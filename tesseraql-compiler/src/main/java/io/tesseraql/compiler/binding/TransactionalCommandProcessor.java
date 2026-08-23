@@ -126,12 +126,27 @@ public final class TransactionalCommandProcessor implements Step {
      */
     private record Step(String name, List<SqlNode> nodes, String sourcePath,
             String mode, Map<String, String> params, List<String> keys, Binding.Expect expect,
-            String sequence, ExecutionBounds bounds, io.tesseraql.core.expr.Expr when) {
+            String sequence, ExecutionBounds bounds, io.tesseraql.core.expr.Expr when,
+            Map<String, Integer> outTypes) {
 
         boolean isSequence() {
             return sequence != null;
         }
     }
+
+    /**
+     * The JDBC types an {@code out:} declaration may name (docs/sql-execution-shapes.md
+     * structural decision 7); an unknown keyword fails the build, not the first request.
+     */
+    private static final Map<String, Integer> OUT_TYPE_KEYWORDS = Map.of(
+            "varchar", java.sql.Types.VARCHAR,
+            "numeric", java.sql.Types.NUMERIC,
+            "integer", java.sql.Types.INTEGER,
+            "bigint", java.sql.Types.BIGINT,
+            "boolean", java.sql.Types.BOOLEAN,
+            "date", java.sql.Types.DATE,
+            "timestamp", java.sql.Types.TIMESTAMP,
+            "double", java.sql.Types.DOUBLE);
 
     /**
      * Builds the processor for a command route.
@@ -242,15 +257,16 @@ public final class TransactionalCommandProcessor implements Step {
             if (binding.isSequence()) {
                 compiled.add(new Step(name, null, null, "sequence",
                         binding.params(), List.of(), null, binding.sequence(),
-                        boundsFor(binding), when));
+                        boundsFor(binding), when, Map.of()));
             } else {
                 Path file = stepFile.apply(binding.file());
                 // Steps default to update: a command writes.
                 String mode = binding.mode() == null || binding.mode().isBlank()
                         ? "update"
                         : binding.mode();
-                // Expectations and key capture count affected rows, which query mode never has.
-                if ("query".equals(mode)
+                // Expectations and key capture count affected rows, which query mode never has
+                // — and a call answers no count at all.
+                if (!"update".equals(mode)
                         && (binding.expect() != null || !binding.keys().isEmpty())) {
                     throw invalid("step '" + name + "': expect/keys need an update statement -"
                             + " declare mode: update");
@@ -258,7 +274,7 @@ public final class TransactionalCommandProcessor implements Step {
                 compiled.add(new Step(name, Sql2WayParser.parse(read(file), functions),
                         file.toString(), mode,
                         binding.params(), binding.keys(), binding.expect(), null,
-                        boundsFor(binding), when));
+                        boundsFor(binding), when, outTypes(name, mode, binding)));
             }
             seen.add(name);
         }
@@ -287,6 +303,31 @@ public final class TransactionalCommandProcessor implements Step {
         return new ExecutionBounds(timeout, maxRows, onOverflow);
     }
 
+    /**
+     * The declared OUT parameters of a {@code mode: call} step, compiled to their JDBC types
+     * (docs/sql-execution-shapes.md structural decision 7). Refusals happen here, at build:
+     * {@code out:} on any other mode, and an unknown type keyword.
+     */
+    private Map<String, Integer> outTypes(String name, String mode, Binding binding) {
+        if (binding.out().isEmpty()) {
+            return Map.of();
+        }
+        if (!"call".equals(mode)) {
+            throw invalid("step '" + name + "': out: applies to mode: call only");
+        }
+        Map<String, Integer> types = new LinkedHashMap<>();
+        binding.out().forEach((outName, keyword) -> {
+            Integer type = OUT_TYPE_KEYWORDS.get(keyword);
+            if (type == null) {
+                throw invalid("step '" + name + "': out." + outName + " declares unknown type '"
+                        + keyword + "' - one of "
+                        + new java.util.TreeSet<>(OUT_TYPE_KEYWORDS.keySet()));
+            }
+            types.put(outName, type);
+        });
+        return java.util.Collections.unmodifiableMap(types);
+    }
+
     /** Fail-fast validation of one step declaration (runs at route build time). */
     private void validate(String name, Binding binding, java.util.Set<String> earlier) {
         if (binding.isContract() || binding.isService()) {
@@ -309,6 +350,10 @@ public final class TransactionalCommandProcessor implements Step {
         if (binding.params().containsKey(AUDIT)) {
             throw invalid("step '" + name + "': the bind name 'audit' is reserved for the"
                     + " canonical audit binds");
+        }
+        if (binding.params().containsKey("out")) {
+            throw invalid("step '" + name + "': the bind name 'out' is reserved for a call"
+                    + " statement's OUT parameters (docs/sql-execution-shapes.md)");
         }
         for (Map.Entry<String, String> param : binding.params().entrySet()) {
             String expr = param.getValue();
@@ -695,7 +740,11 @@ public final class TransactionalCommandProcessor implements Step {
                 .timeoutSeconds(step.bounds().timeoutSeconds());
         String sqlId = step.sourcePath() == null ? step.name() : step.sourcePath();
         Map<String, Object> result = new LinkedHashMap<>();
-        if ("query".equals(step.mode())) {
+        if ("call".equals(step.mode())) {
+            // A stored call (docs/sql-execution-shapes.md structural decision 7): the OUT
+            // values publish as steps.<name>.out.<name>; a call answers no affected count.
+            result.put("out", stepStatements.call(connection, sqlId, bound, step.outTypes()));
+        } else if ("query".equals(step.mode())) {
             List<Map<String, Object>> rows = stepStatements.read(connection, sqlId, bound,
                     io.tesseraql.core.sql.SqlStatement.cappedRows(dialect,
                             step.bounds().maxRows(),

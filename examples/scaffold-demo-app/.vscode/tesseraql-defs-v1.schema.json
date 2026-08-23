@@ -565,9 +565,10 @@
                 "query",
                 "query-one",
                 "update",
-                "query-spool"
+                "query-spool",
+                "call"
               ],
-              "description": "How the statement runs and what it binds: `query` (rows), `query-one` (a single row), `update` (an affected-row count), or `query-spool` (rows streamed to a spool a later chunk: step reads, never held)."
+              "description": "How the statement runs and what it binds: `query` (rows), `query-one` (a single row), `update` (an affected-row count), `query-spool` (rows streamed to a spool a later chunk: step reads, never held), or `call` (a stored call on a command step, its OUT parameters declared under `out:`)."
             },
             "params": {
               "type": "object",
@@ -582,6 +583,13 @@
                 "type": "string"
               },
               "description": "Columns whose database-generated values are captured after an insert; they bind as `steps.<id>.keys.<column>`."
+            },
+            "out": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              },
+              "description": "The OUT parameters of a `mode: call` statement on a command step: each name to its JDBC type keyword (varchar, numeric, integer, bigint, boolean, date, timestamp, double). The statement binds them as `out.<name>` bind sites and the values publish as `steps.<id>.out.<name>`. Documented in transactional-writes.md."
             },
             "timeoutSeconds": {
               "type": "integer",

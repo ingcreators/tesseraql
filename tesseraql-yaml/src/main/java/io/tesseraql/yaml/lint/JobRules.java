@@ -142,6 +142,7 @@ final class JobRules implements LintRule {
                 StepRules.lintHttpMode(step, source, findings);
             }
             StepRules.lintStepEnrich(job, step, source, findings);
+            StepRules.lintSqlCall(step, source, findings);
             if (step.chunk() != null) {
                 ChunkRules.lintChunk(context, job, step, source, findings);
             }

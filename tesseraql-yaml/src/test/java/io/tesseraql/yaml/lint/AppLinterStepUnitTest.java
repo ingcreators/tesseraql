@@ -54,6 +54,21 @@ class AppLinterStepUnitTest {
     }
 
     @Test
+    void aStoredCallOnAJobStepIsRefusedInsteadOfRunningAsAPlainUpdate(@TempDir Path dir)
+            throws Exception {
+        List<LintFinding> findings = new AppLinter().lint(app(dir,
+                "    sql:\n      file: report.sql\n      mode: call\n"
+                        + "      out:\n        total: integer"));
+
+        // The runner's default branch would execute mode: call as an update, binding the
+        // out.* sites as null values (docs/sql-execution-shapes.md structural decision 7).
+        assertThat(findings).anySatisfy(finding -> {
+            assertThat(finding.message()).contains("command-step vocabulary");
+            assertThat(finding.severity()).isEqualTo("error");
+        });
+    }
+
+    @Test
     void aSqlArmBesideNotifyIsRefusedAtBuildNotAtThreeAm(@TempDir Path dir) throws Exception {
         List<LintFinding> findings = new AppLinter().lint(app(dir,
                 "    sql:\n      file: report.sql\n      mode: update\n"

@@ -782,6 +782,73 @@ public final class SqlStatement {
         return new Rows(connection, sqlId);
     }
 
+    /**
+     * Executes a stored call (docs/sql-execution-shapes.md structural decision 7): ordinary
+     * rendered 2-way SQL — the driver's call escape or the dialect's native syntax — whose OUT
+     * parameters are the bind sites in the reserved {@code out.} namespace. Each rendered
+     * parameter whose expression is {@code out.<name>} is registered by position with the JDBC
+     * type {@code outTypes} declares for that name; every other parameter binds its value as
+     * usual. The OUT values come back by declared name, shaped by
+     * {@link io.tesseraql.core.dialect.ResultRows#value} (they land in a response or the
+     * context, not in another bind).
+     *
+     * <p><b>All-or-nothing, both ways, per execution</b> (a 2-way branch can exclude a bind
+     * site at render time, so the render is what is checked): a rendered {@code out.*} with no
+     * declaration, or a declaration no bind site rendered, refuses naming the mismatch.
+     */
+    public Map<String, Object> call(Connection connection, String sqlId, BoundSql bound,
+            Map<String, Integer> outTypes) throws SqlStatementException {
+        Span span = started(sqlId, "call");
+        try (java.sql.CallableStatement statement = connection.prepareCall(bound.sql())) {
+            if (timeoutSeconds > 0) {
+                statement.setQueryTimeout(timeoutSeconds);
+            }
+            List<BoundParameter> parameters = bound.parameters();
+            Map<String, Integer> outPositions = new LinkedHashMap<>();
+            for (int i = 0; i < parameters.size(); i++) {
+                BoundParameter parameter = parameters.get(i);
+                String expression = parameter.expression();
+                if (expression != null && expression.startsWith("out.")) {
+                    String name = expression.substring("out.".length()).trim();
+                    Integer type = outTypes.get(name);
+                    if (type == null) {
+                        throw new IllegalStateException("Call '" + sqlId + "' renders OUT"
+                                + " parameter '" + name + "' that out: does not declare"
+                                + " (declared: " + outTypes.keySet() + ")");
+                    }
+                    statement.registerOutParameter(i + 1, type);
+                    outPositions.put(name, i + 1);
+                } else {
+                    statement.setObject(i + 1, parameter.value());
+                }
+            }
+            if (!outPositions.keySet().equals(outTypes.keySet())) {
+                java.util.Set<String> unrendered = new java.util.LinkedHashSet<>(
+                        outTypes.keySet());
+                unrendered.removeAll(outPositions.keySet());
+                throw new IllegalStateException("Call '" + sqlId + "' declares OUT parameter(s) "
+                        + unrendered + " that the rendered statement never binds - declare"
+                        + " exactly the out.* bind sites the SQL renders");
+            }
+            statement.execute();
+            Map<String, Object> outs = new LinkedHashMap<>();
+            for (Map.Entry<String, Integer> position : outPositions.entrySet()) {
+                outs.put(position.getKey(), io.tesseraql.core.dialect.ResultRows.value(
+                        statement.getObject(position.getValue())));
+            }
+            return outs;
+        } catch (SQLException ex) {
+            SqlStatementException named = classified(sqlId, ex);
+            span.recordError(named);
+            throw named;
+        } catch (RuntimeException ex) {
+            span.recordError(ex);
+            throw ex;
+        } finally {
+            span.end();
+        }
+    }
+
     /** One statement's span: the shared name, the declared surface, the statement's own name. */
     private Span started(String sqlId, String mode) {
         Span span = tracer.start("tesseraql.sql.execute", spanParent)
