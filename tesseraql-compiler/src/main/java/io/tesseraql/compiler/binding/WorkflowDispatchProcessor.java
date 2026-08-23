@@ -58,11 +58,11 @@ public final class WorkflowDispatchProcessor implements Step {
     private final String keyColumn;
     private final String dialect;
     private final String datasourceName;
-    private final int decisionTimeoutSeconds;
+    private final int sqlTimeoutSeconds;
 
     public WorkflowDispatchProcessor(String workflowId, String dispatchId, List<Member> members,
             DecisionTables decisions, String table, String keyColumn, String dialect,
-            String datasourceName, int decisionTimeoutSeconds) {
+            String datasourceName, int sqlTimeoutSeconds) {
         this.workflowId = workflowId;
         this.dispatchId = dispatchId;
         this.members = List.copyOf(members);
@@ -71,7 +71,7 @@ public final class WorkflowDispatchProcessor implements Step {
         this.keyColumn = keyColumn;
         this.dialect = dialect;
         this.datasourceName = datasourceName;
-        this.decisionTimeoutSeconds = decisionTimeoutSeconds;
+        this.sqlTimeoutSeconds = sqlTimeoutSeconds;
     }
 
     @Override
@@ -94,9 +94,9 @@ public final class WorkflowDispatchProcessor implements Step {
                 String docId = keyValue == null ? null : String.valueOf(keyValue);
                 Map<String, Object> decideContext = new LinkedHashMap<>(context);
                 decideContext.put("document", TransitionExecutor.loadDocument(connection,
-                        table, keyColumn, dialect, docId));
+                        table, keyColumn, dialect, docId, sqlTimeoutSeconds));
                 context.put(AmbientBinds.DECISION,
-                        decisions.evaluate(decideContext, connection, decisionTimeoutSeconds));
+                        decisions.evaluate(decideContext, connection, sqlTimeoutSeconds));
             }
         }
         // Attempts mutate the shared context (document, steps, audit, their own

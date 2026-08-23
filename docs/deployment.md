@@ -284,10 +284,11 @@ emits one line per request on the `tesseraql.access` logger —
 **SQL statement timeout.** Every route SQL statement is bounded by default: 30 seconds, the
 app-wide `tesseraql.sql.timeoutSeconds`, or a per-binding `timeoutSeconds:` override —
 an explicit `0` opts a deliberately long-running statement out. A runaway query is cancelled
-by the driver instead of holding a pool connection forever. The same key bounds **contract
-SQL** — the statements an identity realm and SCIM inbound provisioning run on a deployment's
-own schema — because there is no argument for a sign-in being allowed to run longer than a
-page.
+by the driver instead of holding a pool connection forever. The same key bounds **every
+declared statement**: contract SQL (an identity realm's, SCIM inbound provisioning's),
+workflow guards, stamps and escalation SQL, validation rules, decision lookups, enrichment
+lookups, and file-transfer SQL — because there is no argument for any of them being allowed
+to run longer than a page.
 
 **Connection pools.** Each `tesseraql.datasources.<name>` block tunes its HikariCP pool:
 `maximumPoolSize`, `minimumIdle`, `connectionTimeoutMillis`, `idleTimeoutMillis`,

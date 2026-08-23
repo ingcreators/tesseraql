@@ -304,6 +304,7 @@ public final class JdbcFileTransferService implements FileTransferService {
                           left join tql_job_execution e on e.job_execution_id = t.transfer_id
                         order by t.created_at desc
                         """ + fetchClause())) {
+            applyTimeout(statement);
             statement.setInt(1, limit);
             try (ResultSet rs = statement.executeQuery()) {
                 while (rs.next()) {
@@ -366,6 +367,7 @@ public final class JdbcFileTransferService implements FileTransferService {
                 PreparedStatement statement = connection.prepareStatement(
                         "select transfer_id, spool_uri from tql_file_transfer"
                                 + " where created_at < ? and spool_uri is not null")) {
+            applyTimeout(statement);
             statement.setTimestamp(1, Timestamp.from(cutoff));
             try (ResultSet rs = statement.executeQuery()) {
                 while (rs.next()) {
@@ -683,6 +685,7 @@ public final class JdbcFileTransferService implements FileTransferService {
                           (transfer_id, route_id, app_name, direction, format, filename,
                            after_timing, after_sql_file, params_json, row_count, created_at)
                         values (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)""")) {
+            applyTimeout(statement);
             statement.setString(1, transferId);
             statement.setString(2, routeId);
             statement.setString(3, appName);
@@ -724,6 +727,7 @@ public final class JdbcFileTransferService implements FileTransferService {
                 PreparedStatement statement = connection.prepareStatement(
                         "update tql_file_transfer set downloaded_at = ?"
                                 + " where transfer_id = ? and downloaded_at is null")) {
+            applyTimeout(statement);
             statement.setTimestamp(1, Timestamp.from(Instant.now()));
             statement.setString(2, transferId);
             return statement.executeUpdate() == 1;
@@ -737,6 +741,7 @@ public final class JdbcFileTransferService implements FileTransferService {
         try (Connection connection = dataSource.getConnection();
                 PreparedStatement statement = connection.prepareStatement(
                         "select * from tql_file_transfer where transfer_id = ?")) {
+            applyTimeout(statement);
             statement.setString(1, transferId);
             try (ResultSet rs = statement.executeQuery()) {
                 if (!rs.next()) {
@@ -765,6 +770,7 @@ public final class JdbcFileTransferService implements FileTransferService {
     private void update(String sql, SqlBindings bindings) {
         try (Connection connection = dataSource.getConnection();
                 PreparedStatement statement = connection.prepareStatement(sql)) {
+            applyTimeout(statement);
             bindings.bind(statement);
             statement.executeUpdate();
         } catch (SQLException ex) {

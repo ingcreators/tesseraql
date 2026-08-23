@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.tesseraql.core.error.TqlException;
+import io.tesseraql.core.sql.ScopeResolver;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -23,7 +24,8 @@ class ValidationRulesTest {
                 "endDate", null, null)));
 
         List<Map<String, Object>> violations = rules.evaluate(
-                Map.of("body", Map.of("startDate", "2026-01-01", "endDate", "2026-12-31")), null);
+                Map.of("body", Map.of("startDate", "2026-01-01", "endDate", "2026-12-31")), null,
+                ScopeResolver.UNSUPPORTED, 0, null);
 
         assertThat(violations).isEmpty();
     }
@@ -35,7 +37,8 @@ class ValidationRulesTest {
                 "endDate", "end-before-start", "members.dates.end-before-start")));
 
         List<Map<String, Object>> violations = rules.evaluate(
-                Map.of("body", Map.of("startDate", "2026-12-31", "endDate", "2026-01-01")), null);
+                Map.of("body", Map.of("startDate", "2026-12-31", "endDate", "2026-01-01")), null,
+                ScopeResolver.UNSUPPORTED, 0, null);
 
         assertThat(violations).containsExactly(Map.of(
                 "rule", "dateOrder",
@@ -50,7 +53,7 @@ class ValidationRulesTest {
                 "quantityPositive", null, "body.quantity > 0", "quantity", null, null)));
 
         List<Map<String, Object>> violations = rules.evaluate(
-                Map.of("body", Map.of("quantity", -1)), null);
+                Map.of("body", Map.of("quantity", -1)), null, ScopeResolver.UNSUPPORTED, 0, null);
 
         assertThat(violations).containsExactly(Map.of(
                 "rule", "quantityPositive",
@@ -66,7 +69,8 @@ class ValidationRulesTest {
 
         // No endDate in the body: the guard is falsy, so the comparison never runs.
         List<Map<String, Object>> violations = rules.evaluate(
-                Map.of("body", Map.of("startDate", "2026-01-01")), null);
+                Map.of("body", Map.of("startDate", "2026-01-01")), null, ScopeResolver.UNSUPPORTED,
+                0, null);
 
         assertThat(violations).isEmpty();
     }
@@ -78,7 +82,7 @@ class ValidationRulesTest {
                 ValidationRules.expression("b", null, "body.y > 0", "y", null, null)));
 
         List<Map<String, Object>> violations = rules.evaluate(
-                Map.of("body", Map.of("x", -1, "y", -1)), null);
+                Map.of("body", Map.of("x", -1, "y", -1)), null, ScopeResolver.UNSUPPORTED, 0, null);
 
         assertThat(violations).extracting(v -> v.get("rule")).containsExactly("a", "b");
     }
@@ -138,9 +142,11 @@ class ValidationRulesTest {
             ValidationRules rules = new ValidationRules(List.of(ValidationRules.expression(
                     "kanaName", null, "isKatakana(body.kanaName)", "kanaName", "not-kana", null)));
 
-            assertThat(rules.evaluate(Map.of("body", Map.of("kanaName", "カタカナ")), null))
+            assertThat(rules.evaluate(Map.of("body", Map.of("kanaName", "カタカナ")), null,
+                    ScopeResolver.UNSUPPORTED, 0, null))
                     .isEmpty();
-            assertThat(rules.evaluate(Map.of("body", Map.of("kanaName", "sato")), null))
+            assertThat(rules.evaluate(Map.of("body", Map.of("kanaName", "sato")), null,
+                    ScopeResolver.UNSUPPORTED, 0, null))
                     .singleElement()
                     .satisfies(violation -> assertThat(violation)
                             .containsEntry("code", "not-kana"));

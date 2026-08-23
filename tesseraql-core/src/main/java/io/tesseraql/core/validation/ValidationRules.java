@@ -119,34 +119,20 @@ public final class ValidationRules {
     }
 
     /**
-     * Evaluates every rule against the context, collecting all violations. Scope directives are
-     * rejected: a caller that can resolve them passes its resolver to the four-argument form.
-     */
-    public List<Map<String, Object>> evaluate(Map<String, Object> context, Connection connection)
-            throws SQLException {
-        return evaluate(context, connection, ScopeResolver.UNSUPPORTED, null);
-    }
-
-    /**
-     * Evaluates every rule, notifying {@code observer} of each rendered SQL rule so callers can
-     * record coverage traces (design ch. 14).
+     * Evaluates every rule against the context, collecting all violations; {@code observer} sees
+     * each rendered SQL rule so callers can record coverage traces (design ch. 14).
      *
      * <p>{@code scopeResolver} expands a {@code /*%scope … *&#47;} directive in a rule's SQL
      * (docs/data-scoping.md). A validation rule reads rows to decide whether a write is legal, so
      * it has to read them through the caller's own scope — otherwise the rule answers from rows
      * the caller cannot see. Callers with no request principal pass
      * {@link ScopeResolver#UNSUPPORTED}, which rejects the directive loudly.
-     */
-    public List<Map<String, Object>> evaluate(Map<String, Object> context, Connection connection,
-            ScopeResolver scopeResolver, BiConsumer<Rule, BoundSql> observer)
-            throws SQLException {
-        return evaluate(context, connection, scopeResolver, 0, observer);
-    }
-
-    /**
-     * As above, bounding each rule's statement at {@code timeoutSeconds} ({@code 0} disables it).
-     * A validation rule runs inside the command's open write transaction, so a rule that hangs
-     * pins that transaction and its pool connection for as long as the database allows.
+     *
+     * <p>{@code timeoutSeconds} bounds each rule's statement — a rule runs inside the command's
+     * open write transaction, so a rule that hangs pins that transaction and its pool connection
+     * for as long as the database allows. There is deliberately no overload that defaults it
+     * (docs/contract-sql-execution.md slice 2): a caller that wants no bound writes {@code 0}
+     * where everyone can see it.
      */
     public List<Map<String, Object>> evaluate(Map<String, Object> context, Connection connection,
             ScopeResolver scopeResolver, int timeoutSeconds, BiConsumer<Rule, BoundSql> observer)
