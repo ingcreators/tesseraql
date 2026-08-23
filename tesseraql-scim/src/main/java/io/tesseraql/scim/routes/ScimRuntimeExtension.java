@@ -100,8 +100,10 @@ public final class ScimRuntimeExtension implements RuntimeExtension {
                 readSql(manifest, "tesseraql.scim.users.replace"),
                 readSql(manifest, "tesseraql.scim.users.delete"),
                 readSql(manifest, "tesseraql.scim.users.findByUserName"),
-                readSqlOptional(manifest, "tesseraql.scim.users.count"));
+                readSqlOptional(manifest, "tesseraql.scim.users.count"),
+                readKeys(manifest.config().navigate("tesseraql.scim.users.keys")));
         return new ScimUserService(dataSource, contract)
+                .dialect(dialect(manifest.config()))
                 .sqlTimeoutSeconds(sqlTimeoutSeconds(manifest.config()));
     }
 
@@ -123,9 +125,43 @@ public final class ScimRuntimeExtension implements RuntimeExtension {
                 readSql(manifest, "tesseraql.scim.groups.listMembers"),
                 readSql(manifest, "tesseraql.scim.groups.addMember"),
                 readSql(manifest, "tesseraql.scim.groups.removeMember"),
-                readSqlOptional(manifest, "tesseraql.scim.groups.count"));
+                readSqlOptional(manifest, "tesseraql.scim.groups.count"),
+                readKeys(manifest.config().navigate("tesseraql.scim.groups.keys")));
         return new ScimGroupService(dataSource, contract)
+                .dialect(dialect(manifest.config()))
                 .sqlTimeoutSeconds(sqlTimeoutSeconds(manifest.config()));
+    }
+
+    /**
+     * The columns the store assigns on create (docs/contract-sql-execution.md structural
+     * decision 2), declared as a list or a comma-separated string — the same concept a command
+     * step declares as {@code sql.keys:}. Empty when the deployment's create supplies its own id.
+     */
+    static java.util.List<String> readKeys(Object value) {
+        if (value == null) {
+            return java.util.List.of();
+        }
+        if (value instanceof java.util.List<?> list) {
+            return list.stream().map(String::valueOf).toList();
+        }
+        return java.util.Arrays.stream(String.valueOf(value).split(","))
+                .map(String::trim)
+                .filter(name -> !name.isEmpty())
+                .toList();
+    }
+
+    /**
+     * The main datasource's dialect, resolved exactly as the runtime resolves it (the declared
+     * {@code dialect} key, else the JDBC URL). It steers the generated-key JDBC call; SCIM's
+     * result labels stay raw regardless (quoted camelCase aliases).
+     */
+    private static String dialect(AppConfig config) {
+        String prefix = "tesseraql.datasources.main.";
+        return config.getString(prefix + "dialect")
+                .orElseGet(() -> io.tesseraql.core.dialect.Dialect
+                        .fromJdbcUrl(config.getString(prefix + "jdbcUrl").orElse(""))
+                        .map(io.tesseraql.core.dialect.Dialect::id)
+                        .orElse(null));
     }
 
     /**

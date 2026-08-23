@@ -27,4 +27,12 @@ class ScimRuntimeExtensionTest {
         assertThat(ScimRuntimeExtension.sqlTimeoutSeconds(new AppConfig(Map.of())))
                 .isEqualTo(ContractStatement.DEFAULT_TIMEOUT_SECONDS);
     }
+
+    @Test
+    void declaredKeysReadAsAListOrACommaString() {
+        assertThat(ScimRuntimeExtension.readKeys(java.util.List.of("id"))).containsExactly("id");
+        assertThat(ScimRuntimeExtension.readKeys("id, tenant_id"))
+                .containsExactly("id", "tenant_id");
+        assertThat(ScimRuntimeExtension.readKeys(null)).isEmpty();
+    }
 }
