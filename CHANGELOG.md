@@ -8,6 +8,19 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A stalled over-limit drain closes its connection instead of wedging the client.** CI
+  produced a third shape of the `MultiAppGatewayDifferentialTest` flake with the
+  declared-remainder drain fix already in place: sixty seconds of silence on an open
+  connection — the drain stopped consuming, and nothing noticed. A probe against a raw
+  socket proved the symptom needs no lost 413 at all: a JDK HTTP/1.1 client cannot see an
+  early response until its own upload completes, so a server that merely stops reading
+  turns any flushed refusal into the client's timeout. The stall's cause did not reproduce
+  in 42 pinned-CPU runs and remains open, so the refusal now watches its own drain: zero
+  progress across five seconds logs the drained/declared/bound counters and closes the
+  connection — politeness has already failed on a wedged stream, and a prompt close is the
+  one answer the client can still see. The differential test also dumps every thread
+  (virtual ones included, via `jcmd`) before failing a timed-out send, so the next
+  occurrence in CI diagnoses itself.
 - **The stack reconciler's `close()` waits for the pass in flight.** It used to return
   while a pass was still applying and writing its status file, so the caller's next act —
   a host releasing the install root, a test deleting its temp directory — raced that write
