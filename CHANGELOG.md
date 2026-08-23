@@ -25,6 +25,18 @@ All notable changes to TesseraQL are documented here. The format follows
   test services. `PathGuardLedgerTest` names the hand-rolled shape's remaining
   occurrences (the primitive, and three prefix classifications that confine nothing); a
   new one is refused by default.
+- **Every refusal-numbered error code now answers the status question**
+  (`StatusMappingLedgerTest`, docs/duplication-consolidation.md campaign 3). The defect
+  class shipped twice before it had a guard — a refusal added without a mapping reads as
+  "Internal Server Error" (access-governance slices 2 and 7 each found one). The first run
+  of the audit found sixteen more refusals answering 500 and mapped them: eleven Studio
+  input rejections (overlay, calendar, job-policy, migration and wizard edits, escaping
+  paths and templates) now answer 400, the doc portal's unknown doc 404, the invitation
+  surface when not configured 404 (the account-surface precedent), the body limit 413, a
+  malformed decision scaffold 400, and the MCP transport's refusals 401/405. Every other
+  `4xxx` code answering 500 is recorded in the ledger with its reason (lint finding, boot
+  refusal, job-time failure, or a server fault wearing a refusal number); a new `4xxx`
+  code fails the build until its author maps it or records it.
 - **The error envelope is spelled in one place, and two drifted copies are fixed**
   (`ErrorEnvelope`, docs/duplication-consolidation.md campaign 3). Seven surfaces
   concatenated `{"error":{"code":…,"message":…}}` by hand with divergent or no escaping;
