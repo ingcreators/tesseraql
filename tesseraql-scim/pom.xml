@@ -32,6 +32,14 @@
       <artifactId>tesseraql-identity</artifactId>
       <version>${project.version}</version>
     </dependency>
+    <!-- The real outbound gateway, so the provisioner tests exercise the actual egress
+         policy (allow-list, status handling) rather than a fake's idea of it. -->
+    <dependency>
+      <groupId>io.tesseraql</groupId>
+      <artifactId>tesseraql-operations</artifactId>
+      <version>${project.version}</version>
+      <scope>test</scope>
+    </dependency>
     <dependency>
       <groupId>com.fasterxml.jackson.core</groupId>
       <artifactId>jackson-databind</artifactId>

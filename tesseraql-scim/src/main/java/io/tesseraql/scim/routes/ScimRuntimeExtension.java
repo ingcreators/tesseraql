@@ -51,8 +51,13 @@ public final class ScimRuntimeExtension implements RuntimeExtension {
                     buildAttributeCapture(context)).install(context.runtime());
         }
         if (flag(manifest.config(), "tesseraql.scim.outbound.enabled")) {
+            // Provisioning calls leave through the runtime's outbound gateway, so the SCIM
+            // provider's host must be in tesseraql.http.outbound.allowedHosts like every
+            // other outbound destination (docs/duplication-consolidation.md, campaign 1).
             context.bind(TesseraqlProperties.OUTBOX_EVENT_SINK_BEAN,
-                    outboundSink(manifest, context.dataSource()));
+                    outboundSink(manifest, context.dataSource(),
+                            context.bean(TesseraqlProperties.OUTBOUND_GATEWAY_BEAN,
+                                    io.tesseraql.yaml.http.OutboundGateway.class)));
         }
     }
 
@@ -63,13 +68,13 @@ public final class ScimRuntimeExtension implements RuntimeExtension {
      * retry is preserved because a sink failure propagates.
      */
     private static OutboxEventSink outboundSink(AppManifest manifest,
-            javax.sql.DataSource dataSource) {
+            javax.sql.DataSource dataSource, io.tesseraql.yaml.http.OutboundGateway gateway) {
         ScimTarget target = new ScimTarget(
                 manifest.config().requireString("tesseraql.scim.outbound.target.url"),
                 manifest.config().getString("tesseraql.scim.outbound.target.token").orElse(""));
         JdbcScimResourceMapping mapping = new JdbcScimResourceMapping(dataSource);
         mapping.ensureSchema();
-        ScimOutboundClient client = new ScimOutboundClient(target);
+        ScimOutboundClient client = new ScimOutboundClient(target, gateway);
         ScimOutboundSink userSink = new ScimOutboundSink(new ScimProvisioner(client, mapping));
         ScimGroupOutboundSink groupSink = new ScimGroupOutboundSink(
                 new ScimGroupProvisioner(client, mapping));

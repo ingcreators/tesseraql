@@ -38,7 +38,7 @@ class ScimProvisionerTest {
         server.start();
         ScimTarget target = new ScimTarget(
                 "http://localhost:" + server.getAddress().getPort() + "/scim/v2", "secret-token");
-        provisioner = new ScimProvisioner(new ScimOutboundClient(target),
+        provisioner = new ScimProvisioner(new ScimOutboundClient(target, gateway()),
                 new ScimResourceMapping.InMemory());
     }
 
@@ -130,4 +130,17 @@ class ScimProvisionerTest {
             throw new RuntimeException(ex);
         }
     }
+
+    /** The real gateway over a localhost-allowing egress policy, untraced. */
+    private static io.tesseraql.yaml.http.OutboundGateway gateway() {
+        io.tesseraql.yaml.config.AppConfig config = new io.tesseraql.yaml.config.AppConfig(
+                java.util.Map.of("tesseraql", java.util.Map.of("http", java.util.Map.of(
+                        "outbound", java.util.Map.of("allowedHosts",
+                                java.util.List.of("localhost", "127.0.0.1"))))),
+                name -> null);
+        return new io.tesseraql.operations.http.HttpCallClient(
+                io.tesseraql.yaml.http.HttpOutbound.load(config), config,
+                io.tesseraql.core.telemetry.NoopTracer.INSTANCE, null);
+    }
+
 }
