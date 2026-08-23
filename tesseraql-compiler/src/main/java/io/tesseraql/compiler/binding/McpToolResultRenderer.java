@@ -18,7 +18,7 @@ public final class McpToolResultRenderer implements Step {
 
     private static final TqlErrorCode RENDER_ERROR = new TqlErrorCode(TqlDomain.MCP, 3001);
 
-    private final ObjectMapper mapper = new ObjectMapper();
+    private final ObjectMapper mapper = io.tesseraql.yaml.JsonMappers.constrained();
 
     @Override
     public void process(Exchange exchange) throws Exception {

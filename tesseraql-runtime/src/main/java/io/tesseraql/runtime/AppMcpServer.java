@@ -51,7 +51,7 @@ import java.util.Map;
  */
 final class AppMcpServer {
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
 
     private AppMcpServer() {
     }

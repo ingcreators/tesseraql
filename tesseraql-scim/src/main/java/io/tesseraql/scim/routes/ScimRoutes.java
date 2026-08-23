@@ -28,7 +28,7 @@ public final class ScimRoutes {
     private static final AuthStep AUTHORIZE = new AuthStep("authorize", null, "scim.manage", null);
     private static final String SCIM_JSON = "application/scim+json; charset=utf-8";
 
-    private final ObjectMapper mapper = new ObjectMapper();
+    private final ObjectMapper mapper = io.tesseraql.yaml.JsonMappers.constrained();
     private final ScimUserService users;
     private final ScimGroupService groups;
     private final io.tesseraql.scim.ScimAttributeCapture capture;

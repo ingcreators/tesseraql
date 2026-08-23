@@ -42,7 +42,7 @@ public final class McpServer {
     /** The MCP-reserved code for a {@code resources/read} of a uri the server does not serve. */
     static final int RESOURCE_NOT_FOUND = -32002;
 
-    private final ObjectMapper mapper = new ObjectMapper();
+    private final ObjectMapper mapper = McpJson.constrained();
     private final String name;
     private final String version;
     private final String instructions;

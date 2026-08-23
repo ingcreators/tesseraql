@@ -28,7 +28,7 @@ public final class AppUpgrader {
 
     private static final TqlErrorCode INCOMPATIBLE = new TqlErrorCode(TqlDomain.UPGRADE, 4090);
     private static final TqlErrorCode NO_TARGET = new TqlErrorCode(TqlDomain.UPGRADE, 4091);
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
     private static final int DEFAULT_CANARY_WEIGHT = 10;
 
     private final AppInstaller installer = new AppInstaller();

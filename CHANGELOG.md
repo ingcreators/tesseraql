@@ -68,6 +68,18 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **Every JSON parse declares its bounds** (`JsonMappers`,
+  docs/duplication-consolidation.md campaign 4). Seventy-seven bare
+  `new ObjectMapper()` constructions — several parsing untrusted request bodies (the
+  request binder, the MCP transport, the SCIM and OIDC routes) — carried whatever the
+  resolved Jackson defaults happened to be, while the YAML side had pinned explicit
+  `StreamReadConstraints` since docs/security-hardening.md. The JSON factory now pins the
+  same bounds, from one `JsonLimits` source shared with the YAML factory and with local
+  factories in the two modules below yaml (security's JWT/JWKS parsing, MCP's JSON-RPC
+  bodies), so the numbers cannot drift. The message catalog's per-call unconstrained YAML
+  read joins the constrained YAML factory. `JsonMapperLedgerTest` names the remaining
+  constructions with their reasons (the factories, two write-only YAML emitters, three
+  build-time tools on trusted input) and refuses a new one by default.
 - **`tesseraql.app.name` is never defaulted again**
   (docs/duplication-consolidation.md, campaign 4). Seven sites still read the raw key and
   defaulted it — to three different values — re-introducing exactly the shared identity

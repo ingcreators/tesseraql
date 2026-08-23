@@ -34,7 +34,7 @@ public final class PublishEvents {
     public static final TqlErrorCode INVALID_PUBLISH = new TqlErrorCode(TqlDomain.FIELD, 2010);
     private static final TqlErrorCode ENCODE_ERROR = new TqlErrorCode(TqlDomain.BATCH, 5312);
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
 
     private PublishEvents() {
     }

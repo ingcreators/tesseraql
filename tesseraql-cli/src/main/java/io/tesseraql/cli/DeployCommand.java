@@ -48,7 +48,7 @@ final class DeployCommand implements Callable<Integer> {
 
     private static final TqlErrorCode NOT_AN_INSTALL_ROOT = new TqlErrorCode(TqlDomain.UPGRADE,
             4092);
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
     private static final long POLL_MILLIS = 200;
 
     @Parameters(index = "0", arity = "0..1", paramLabel = "<package.tqlapp>", description = "The"

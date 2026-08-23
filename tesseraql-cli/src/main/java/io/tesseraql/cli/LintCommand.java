@@ -70,7 +70,7 @@ final class LintCommand implements Callable<Integer> {
     }
 
     private static void printJson(List<LintFinding> findings, long errors) throws Exception {
-        ObjectMapper mapper = new ObjectMapper();
+        ObjectMapper mapper = io.tesseraql.yaml.JsonMappers.constrained();
         ObjectNode document = mapper.createObjectNode();
         document.put("errors", errors);
         document.put("warnings", findings.size() - errors);

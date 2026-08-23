@@ -97,7 +97,7 @@ public final class JobExecutor {
 
     /** How long a run may go unheard from before it stops counting as an overlap. */
     private java.time.Duration livenessWindow = java.time.Duration.ofMinutes(5);
-    private final ObjectMapper mapper = new ObjectMapper();
+    private final ObjectMapper mapper = io.tesseraql.yaml.JsonMappers.constrained();
     private io.tesseraql.operations.outbox.JdbcOutboxStore notificationOutbox;
     private io.tesseraql.operations.http.HttpCallClient httpCallClient;
     private io.tesseraql.core.account.PreferenceStore preferenceStore;

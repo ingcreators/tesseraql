@@ -12,7 +12,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
  */
 public final class McpSchema {
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = McpJson.constrained();
 
     private final ObjectNode schema = MAPPER.createObjectNode();
     private final ObjectNode properties = MAPPER.createObjectNode();

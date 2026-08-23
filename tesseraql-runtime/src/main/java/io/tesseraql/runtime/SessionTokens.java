@@ -27,7 +27,7 @@ final class SessionTokens {
 
     private static final System.Logger LOG = System.getLogger(SessionTokens.class.getName());
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
 
     private final JwtConfig jwt;
     private final Duration lifetime;

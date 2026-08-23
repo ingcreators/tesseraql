@@ -80,7 +80,7 @@ final class JobCommand implements Callable<Integer> {
     @Mixin
     ConfigOptions configOptions;
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
 
     @Override
     public Integer call() throws Exception {

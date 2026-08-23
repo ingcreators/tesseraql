@@ -14,7 +14,7 @@ import java.util.function.Function;
  */
 public final class OidcDiscovery {
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
 
     private final URI discoveryUri;
     private final Function<URI, byte[]> fetcher;

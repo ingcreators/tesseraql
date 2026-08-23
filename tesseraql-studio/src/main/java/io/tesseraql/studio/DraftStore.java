@@ -35,7 +35,7 @@ final class DraftStore {
         StudioService.PreviewResult compile(String relativePath, String content);
     }
 
-    private final ObjectMapper jsonMapper = new ObjectMapper();
+    private final ObjectMapper jsonMapper = io.tesseraql.yaml.JsonMappers.constrained();
     private final Supplier<Path> appHome;
     private final boolean readOnly;
     private final Compiler compiler;

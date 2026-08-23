@@ -48,7 +48,7 @@ final class TokenExchangeRoutes {
      */
     private static final TqlErrorCode NO_SIGNING_KEY = new TqlErrorCode(TqlDomain.SEC, 4146);
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
 
     private final SessionStore sessions;
     private final SessionTokens tokens;

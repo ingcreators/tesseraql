@@ -23,7 +23,7 @@ import java.util.Optional;
  */
 public final class ModulesLock {
 
-    private static final ObjectMapper MAPPER = new ObjectMapper()
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained()
             .enable(SerializationFeature.INDENT_OUTPUT);
 
     /** One resolved artifact pinned by coordinate and checksum. */

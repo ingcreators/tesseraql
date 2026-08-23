@@ -63,7 +63,7 @@ public final class HttpCallClient implements io.tesseraql.yaml.http.OutboundGate
     private final AppConfig config;
     private final Tracer tracer;
     private final Meter meter;
-    private final ObjectMapper mapper = new ObjectMapper();
+    private final ObjectMapper mapper = io.tesseraql.yaml.JsonMappers.constrained();
     private final LongSupplier clock;
     private final Map<Long, HttpClient> clients = new ConcurrentHashMap<>();
     private final Map<String, Breaker> breakers = new ConcurrentHashMap<>();

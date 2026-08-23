@@ -31,7 +31,7 @@ final class ResponseHeaders {
 
     private static final TqlErrorCode RENDER_ERROR = new TqlErrorCode(TqlDomain.ROUTE, 3001);
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
 
     private final Map<String, Object> declared;
     private final Map<String, Expr> guards;

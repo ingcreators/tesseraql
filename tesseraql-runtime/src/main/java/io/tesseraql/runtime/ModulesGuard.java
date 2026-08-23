@@ -48,7 +48,7 @@ final class ModulesGuard {
      */
     static final TqlErrorCode MODULES_DIVERGED = new TqlErrorCode(TqlDomain.APP, 4217);
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
 
     private ModulesGuard() {
     }

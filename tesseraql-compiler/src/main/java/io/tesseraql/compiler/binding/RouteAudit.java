@@ -22,7 +22,7 @@ import java.util.TreeMap;
  */
 public final class RouteAudit implements Step {
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
 
     private final String routeId;
     private final String method;

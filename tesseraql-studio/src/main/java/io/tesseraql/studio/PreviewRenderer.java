@@ -48,7 +48,7 @@ final class PreviewRenderer {
     private static final TqlErrorCode RENDER = new TqlErrorCode(TqlDomain.STUDIO, 4222);
 
     private final SimpleYamlParser parser = new SimpleYamlParser();
-    private final ObjectMapper jsonMapper = new ObjectMapper();
+    private final ObjectMapper jsonMapper = io.tesseraql.yaml.JsonMappers.constrained();
     private final Supplier<Path> appHome;
     private final Function<String, String> source;
     private final Function<String, String> sourceIfExists;

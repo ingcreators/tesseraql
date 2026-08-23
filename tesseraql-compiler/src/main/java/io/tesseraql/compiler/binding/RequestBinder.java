@@ -40,7 +40,7 @@ public final class RequestBinder implements Step {
     private final RouteDefinition route;
     private final java.util.List<String> pathParams;
     private final java.nio.file.Path appHome;
-    private final ObjectMapper mapper = new ObjectMapper();
+    private final ObjectMapper mapper = io.tesseraql.yaml.JsonMappers.constrained();
     /** Pre-compiled {@code requiredWhen} conditions (roadmap Phase 40) — bad syntax fails the build. */
     private final Map<String, io.tesseraql.core.expr.Expr> requiredWhen = new LinkedHashMap<>();
 

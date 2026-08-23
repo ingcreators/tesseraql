@@ -24,7 +24,7 @@ public final class ReportHistory {
     public static final int DEFAULT_MAX_ENTRIES = 20;
 
     private static final TqlErrorCode HISTORY_ERROR = new TqlErrorCode(TqlDomain.REPORT, 2006);
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
 
     private ReportHistory() {
     }

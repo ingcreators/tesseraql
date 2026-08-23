@@ -18,7 +18,7 @@ import java.util.Map;
 public final class JsonReporter {
 
     private static final TqlErrorCode REPORT_ERROR = new TqlErrorCode(TqlDomain.REPORT, 1001);
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
 
     private JsonReporter() {
     }

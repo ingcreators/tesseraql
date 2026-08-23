@@ -38,7 +38,7 @@ import java.util.stream.Stream;
 public final class AppDocGenerator {
 
     private static final TqlErrorCode GEN_ERROR = new TqlErrorCode(TqlDomain.REPORT, 2004);
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
 
     private final RouteSpecGenerator routeSpecGenerator = new RouteSpecGenerator();
     private final TestSuiteLoader suiteLoader = new TestSuiteLoader();

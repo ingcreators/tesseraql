@@ -38,7 +38,7 @@ final class LoginRoutes {
 
     private static final String LOGIN_PATH = "/_tesseraql/login";
 
-    private static final ObjectMapper mapper = new ObjectMapper();
+    private static final ObjectMapper mapper = io.tesseraql.yaml.JsonMappers.constrained();
     private final PasswordAuthenticator authenticator;
     private final RealmConfig realm;
     private final SessionStore sessions;

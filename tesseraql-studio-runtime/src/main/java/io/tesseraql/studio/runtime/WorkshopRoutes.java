@@ -31,7 +31,7 @@ final class WorkshopRoutes {
     private static final AuthStep BROWSER = new AuthStep("authenticate", "browser", null, null);
     private static final AuthStep CSRF = new AuthStep("csrf");
 
-    private final ObjectMapper mapper = new ObjectMapper();
+    private final ObjectMapper mapper = io.tesseraql.yaml.JsonMappers.constrained();
     private final StudioEdit studioEdit;
 
     WorkshopRoutes(StudioEdit studioEdit) {

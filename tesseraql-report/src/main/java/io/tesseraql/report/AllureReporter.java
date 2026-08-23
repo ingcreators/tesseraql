@@ -23,7 +23,7 @@ import java.util.UUID;
 public final class AllureReporter {
 
     private static final TqlErrorCode REPORT_ERROR = new TqlErrorCode(TqlDomain.REPORT, 1003);
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
 
     private AllureReporter() {
     }

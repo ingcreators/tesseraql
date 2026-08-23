@@ -24,7 +24,7 @@ import java.util.TreeMap;
 public final class HtmxContractGenerator {
 
     private static final TqlErrorCode GEN_ERROR = new TqlErrorCode(TqlDomain.REPORT, 2002);
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
 
     /** Builds the contract document tree (deterministically ordered). */
     public Map<String, Object> generate(AppManifest manifest) {

@@ -32,7 +32,7 @@ final class AuditTrail {
     /** The columns the trail can be ordered by, in header order. */
     static final List<String> SORT_COLUMNS = List.of("at", "actor", "action", "target");
 
-    private final ObjectMapper jsonMapper = new ObjectMapper();
+    private final ObjectMapper jsonMapper = io.tesseraql.yaml.JsonMappers.constrained();
     private final Supplier<Path> appHome;
 
     AuditTrail(Supplier<Path> appHome) {

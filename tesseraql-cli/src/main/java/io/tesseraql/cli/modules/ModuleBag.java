@@ -27,7 +27,7 @@ public final class ModuleBag {
     /** The manifest's file name at the bag's root. */
     public static final String FILE_NAME = "bag.json";
 
-    private static final ObjectMapper MAPPER = new ObjectMapper()
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained()
             .enable(SerializationFeature.INDENT_OUTPUT);
 
     /** One collected artifact and the declaration that asked for it. */

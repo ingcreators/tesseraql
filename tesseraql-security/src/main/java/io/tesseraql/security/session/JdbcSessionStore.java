@@ -36,7 +36,7 @@ public final class JdbcSessionStore implements SessionStore {
     private final Duration idleTimeout;
     private final Integer maxPerSubject;
     private final String cookieName;
-    private final ObjectMapper mapper = new ObjectMapper();
+    private final ObjectMapper mapper = io.tesseraql.security.SecurityJson.constrained();
     /** Node-local last-touch instants, keyed by session id; entries die with the session. */
     private final ConcurrentMap<String, Instant> touched = new ConcurrentHashMap<>();
 

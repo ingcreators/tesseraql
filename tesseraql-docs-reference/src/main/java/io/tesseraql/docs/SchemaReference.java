@@ -25,7 +25,7 @@ import java.util.List;
  */
 final class SchemaReference {
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
 
     /** The path prefix marking a shared *property* definition, inlined rather than linked. */
     private static final String SHARED_PROPERTY = "/$defs/shared/";

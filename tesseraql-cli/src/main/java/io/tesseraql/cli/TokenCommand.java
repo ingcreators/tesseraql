@@ -45,7 +45,7 @@ import picocli.CommandLine.Option;
 @Command(name = "token", description = "Obtain a bearer token: mint one from an app's HS256 secret (--app), or sign in to a running application and exchange (--url).")
 public final class TokenCommand implements Callable<Integer> {
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
 
     @Option(names = {"--app"}, description = "Path to the app home; mints locally from its config.")
     Path app;

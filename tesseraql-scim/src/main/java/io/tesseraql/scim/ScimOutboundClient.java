@@ -30,7 +30,7 @@ public final class ScimOutboundClient {
 
     private final ScimTarget target;
     private final OutboundGateway gateway;
-    private final ObjectMapper mapper = new ObjectMapper();
+    private final ObjectMapper mapper = io.tesseraql.yaml.JsonMappers.constrained();
 
     public ScimOutboundClient(ScimTarget target, OutboundGateway gateway) {
         this.target = target;

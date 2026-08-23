@@ -30,7 +30,7 @@ import java.util.TreeSet;
 public final class OpenApiDiff {
 
     private static final TqlErrorCode DIFF_ERROR = new TqlErrorCode(TqlDomain.REPORT, 2008);
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
     private static final Set<String> HTTP_METHODS = Set.of("get", "put", "post", "delete", "patch",
             "head", "options", "trace");
 
