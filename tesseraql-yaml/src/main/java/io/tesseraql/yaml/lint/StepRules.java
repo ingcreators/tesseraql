@@ -60,6 +60,26 @@ final class StepRules {
     }
 
     /**
+     * A stored call is command-step vocabulary for now (docs/sql-execution-shapes.md structural
+     * decision 7, the job side recorded as deferred): a job {@code sql:} step declaring
+     * {@code mode: call} or {@code out:} would otherwise run as a plain update with its OUT
+     * bind sites bound as null values — the author's declaration silently meaning something
+     * else.
+     */
+    static void lintSqlCall(io.tesseraql.yaml.model.PipelineStep step, String source,
+            List<LintFinding> findings) {
+        if (step.sql() == null || !step.sql().isSql()) {
+            return;
+        }
+        if ("call".equals(step.sql().effectiveMode()) || !step.sql().out().isEmpty()) {
+            findings.add(new LintFinding(LintCodes.STEP_WORK_SHAPE, ERROR, source,
+                    "Step '" + step.id() + "': mode: call and out: are command-step vocabulary -"
+                            + " run the stored call from a command route"
+                            + " (docs/sql-execution-shapes.md records the job-side direction)"));
+        }
+    }
+
+    /**
      * An arm's {@code mode:} values are the mechanism's (docs/unified-sources.md decision 19a).
      * A call reads: it either holds its rows ({@code query}) or spools them
      * ({@code query-spool}). {@code update} or {@code query-one} on an {@code http:} arm is a

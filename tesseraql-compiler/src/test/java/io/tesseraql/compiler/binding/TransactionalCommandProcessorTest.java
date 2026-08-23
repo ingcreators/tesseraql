@@ -211,6 +211,52 @@ class TransactionalCommandProcessorTest {
         assertThat(processor(steps)).isNotNull();
     }
 
+    @Test
+    void rejectsOutOnANonCallStep() throws Exception {
+        Map<String, Binding> steps = Map.of("header", new Binding(sql("header.sql"), null,
+                "update", Map.of(), null, null, null, null, java.util.List.of(), null, null,
+                null, null, null, null, Map.of("total", "integer")));
+
+        assertThatThrownBy(() -> processor(steps))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("out: applies to mode: call only");
+    }
+
+    @Test
+    void rejectsAnUnknownOutTypeKeyword() throws Exception {
+        Map<String, Binding> steps = Map.of("reprice", new Binding(sql("call.sql"), null,
+                "call", Map.of(), null, null, null, null, java.util.List.of(), null, null,
+                null, null, null, null, Map.of("total", "money")));
+
+        assertThatThrownBy(() -> processor(steps))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("unknown type 'money'");
+    }
+
+    @Test
+    void rejectsExpectOnACallStep() throws Exception {
+        Map<String, Binding> steps = Map.of("reprice", new Binding(sql("call.sql"), null,
+                "call", Map.of(), null, null, null, null, java.util.List.of(),
+                new Binding.Expect(1, null), null, null, null, null, null,
+                Map.of("total", "integer")));
+
+        assertThatThrownBy(() -> processor(steps))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("expect/keys need an update statement");
+    }
+
+    @Test
+    void rejectsTheReservedOutBindName() throws Exception {
+        Map<String, Binding> steps = Map.of("reprice", new Binding(sql("call.sql"), null,
+                "call", Map.of("out", "body.out"), null, null, null, null,
+                java.util.List.of(), null, null, null, null, null, null,
+                Map.of("total", "integer")));
+
+        assertThatThrownBy(() -> processor(steps))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("'out' is reserved");
+    }
+
     /** These tests cover construction and step compilation, not execution bounds. */
     private static final ExecutionBounds UNBOUNDED = new ExecutionBounds(0, -1, "fail");
 

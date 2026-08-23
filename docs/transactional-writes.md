@@ -57,6 +57,7 @@ transaction rolls back. Each step publishes its result into the execution contex
 | `steps.<name>.keys.<column>` | generated keys captured via `keys:` |
 | `steps.<name>.rows` / `rowCount` | result of a `query` step |
 | `steps.<name>.value` | the allocated value of a `sequence:` step |
+| `steps.<name>.out.<name>` | the OUT parameter values of a `mode: call` step |
 | `outbox.eventId` | the outbox event id, when the route declares `outbox:` |
 
 Steps default to `mode: update`. A step references only request sources and *earlier* steps;
@@ -70,6 +71,37 @@ a one-step pipeline like any other — there is no second spelling — so it pub
 Oracle honor requested column names (`RETURNING` / `RETURNING INTO`); MySQL and SQL Server
 return the auto-increment/identity value, which is mapped to the first declared key. Keys
 are read from the first inserted row.
+
+### Stored calls
+
+`mode: call` runs a stored procedure or function through the driver's call interface. The
+statement is ordinary 2-way SQL — the JDBC call escape or the dialect's native syntax — and
+an OUT parameter is a bind site in the reserved `out.` namespace, typed by an `out:`
+declaration on the step:
+
+```yaml
+steps:
+  - id: reprice
+    sql:
+      file: reprice-order.sql
+      mode: call
+      params: { orderId: path.id }
+      out: { new_total: numeric }
+```
+
+```sql
+{call reprice_order(/* orderId */'o-1', /* out.new_total */null)}
+```
+
+The rendered positions do the bookkeeping: every bind site whose expression starts with
+`out.` is registered as an output of the declared type instead of binding a value, and the
+values come back as `steps.<name>.out.<name>` for later steps and the response. The
+declaration is all-or-nothing per execution: a rendered `out.*` the step does not declare,
+or a declared name the statement never renders, is refused naming the mismatch. `expect:`
+and `keys:` do not apply — a call answers no affected-row count. On PostgreSQL the JDBC
+driver's `escapeSyntaxCallMode` connection property decides whether `{call …}` invokes a
+function (the default) or a procedure; that is the driver's documented contract, set on the
+datasource where it matters.
 
 ### Multi-row inserts
 

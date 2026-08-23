@@ -498,6 +498,42 @@ class SqlStatementTest {
         assertThat(database.calls).contains("clearBatch");
     }
 
+    @Test
+    void aCallRegistersOutBindSitesByPositionAndAnswersThemByName() throws Exception {
+        FakeDatabase database = new FakeDatabase(List.of(), List.of(0, 42));
+        BoundSql bound = SqlRenderer.render(
+                "{call reprice(/* factor */1, /* out.doubled */null)}", Map.of("factor", 21));
+
+        Map<String, Object> outs = SqlStatement.onCallerConnections()
+                .call(database.dataSource().getConnection(), "orders/reprice.sql", bound,
+                        Map.of("doubled", java.sql.Types.INTEGER));
+
+        assertThat(outs).containsExactly(Map.entry("doubled", 42));
+        // Types.INTEGER = 4: the declared keyword reached the driver at the rendered position.
+        assertThat(database.calls)
+                .anyMatch(call -> call.startsWith("prepareCall("))
+                .contains("setObject(1,21)", "registerOutParameter(2,4)", "execute");
+    }
+
+    @Test
+    void aCallRefusesTheDeclarationMismatchBothWays() {
+        FakeDatabase database = new FakeDatabase(List.of(), List.of(0, 42));
+        BoundSql bound = SqlRenderer.render(
+                "{call reprice(/* factor */1, /* out.doubled */null)}", Map.of("factor", 21));
+
+        assertThatThrownBy(() -> SqlStatement.onCallerConnections()
+                .call(database.dataSource().getConnection(), "orders/reprice.sql", bound,
+                        Map.of()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("out: does not declare");
+        assertThatThrownBy(() -> SqlStatement.onCallerConnections()
+                .call(database.dataSource().getConnection(), "orders/reprice.sql", bound,
+                        Map.of("doubled", java.sql.Types.INTEGER,
+                                "never_rendered", java.sql.Types.INTEGER)))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("never binds");
+    }
+
     /** A JDBC stack that records what was asked of it and answers one row (or the failure set). */
     private static final class FakeDatabase implements InvocationHandler {
 
@@ -528,6 +564,7 @@ class SqlStatementTest {
             return switch (method.getName()) {
                 case "getConnection" -> proxy(Connection.class);
                 case "prepareStatement" -> proxy(PreparedStatement.class);
+                case "prepareCall" -> proxy(java.sql.CallableStatement.class);
                 case "executeQuery" -> fail(proxy(ResultSet.class));
                 case "executeUpdate" -> fail(1);
                 case "execute" -> fail(Boolean.TRUE);

@@ -126,9 +126,10 @@ The SQL arm: a colocated 2-way SQL file and how it is run. The keys of the mecha
 | Property | Type | Description |
 | --- | --- | --- |
 | `file` | string | A colocated 2-way SQL file, relative to the declaring document (must exist; TQL-SQL-2103). This arm's acquisition target, the role `url` plays for `http`. |
-| `mode` | string | How the statement runs and what it binds: `query` (rows), `query-one` (a single row), `update` (an affected-row count), or `query-spool` (rows streamed to a spool a later chunk: step reads, never held). |
+| `mode` | string | How the statement runs and what it binds: `query` (rows), `query-one` (a single row), `update` (an affected-row count), `query-spool` (rows streamed to a spool a later chunk: step reads, never held), or `call` (a stored call on a command step, its OUT parameters declared under `out:`). |
 | `params` | map of string | Each bind name to the bindable path supplying its value, such as `path.id`, `params.unit` or `principal.claim.tenant_id`. |
 | `keys` | array of string | Columns whose database-generated values are captured after an insert; they bind as `steps.<id>.keys.<column>`. |
+| `out` | map of string | The OUT parameters of a `mode: call` statement on a command step: each name to its JDBC type keyword (varchar, numeric, integer, bigint, boolean, date, timestamp, double). The statement binds them as `out.<name>` bind sites and the values publish as `steps.<id>.out.<name>`. Documented in transactional-writes.md. |
 | `timeoutSeconds` | integer ≥ 0 | Per-binding SQL statement timeout override; 0 disables. Default: tesseraql.sql.timeoutSeconds, else 30s. |
 | `datasource` | string | The named connector this read runs on, overriding the document's. Legal on a read only: a batch step owns its own transaction so an extract elsewhere splits nothing, while a write on another connector would be a second transaction nothing owns (TQL-YAML-1037). |
 | `materialize` | [object](#stepssqlmaterialize) | Bounds on how much of the result is held in memory. |
@@ -517,9 +518,10 @@ The SQL arm: a colocated 2-way SQL file and how it is run. The keys of the mecha
 | Property | Type | Description |
 | --- | --- | --- |
 | `file` | string | A colocated 2-way SQL file, relative to the declaring document (must exist; TQL-SQL-2103). This arm's acquisition target, the role `url` plays for `http`. |
-| `mode` | string | How the statement runs and what it binds: `query` (rows), `query-one` (a single row), `update` (an affected-row count), or `query-spool` (rows streamed to a spool a later chunk: step reads, never held). |
+| `mode` | string | How the statement runs and what it binds: `query` (rows), `query-one` (a single row), `update` (an affected-row count), `query-spool` (rows streamed to a spool a later chunk: step reads, never held), or `call` (a stored call on a command step, its OUT parameters declared under `out:`). |
 | `params` | map of string | Each bind name to the bindable path supplying its value, such as `path.id`, `params.unit` or `principal.claim.tenant_id`. |
 | `keys` | array of string | Columns whose database-generated values are captured after an insert; they bind as `steps.<id>.keys.<column>`. |
+| `out` | map of string | The OUT parameters of a `mode: call` statement on a command step: each name to its JDBC type keyword (varchar, numeric, integer, bigint, boolean, date, timestamp, double). The statement binds them as `out.<name>` bind sites and the values publish as `steps.<id>.out.<name>`. Documented in transactional-writes.md. |
 | `timeoutSeconds` | integer ≥ 0 | Per-binding SQL statement timeout override; 0 disables. Default: tesseraql.sql.timeoutSeconds, else 30s. |
 | `datasource` | string | The named connector this read runs on, overriding the document's. Legal on a read only: a batch step owns its own transaction so an extract elsewhere splits nothing, while a write on another connector would be a second transaction nothing owns (TQL-YAML-1037). |
 | `materialize` | [object](#pipelinesqlmaterialize) | Bounds on how much of the result is held in memory. |
@@ -925,9 +927,10 @@ The SQL arm: a colocated 2-way SQL file and how it is run. The keys of the mecha
 | Property | Type | Description |
 | --- | --- | --- |
 | `file` | string | A colocated 2-way SQL file, relative to the declaring document (must exist; TQL-SQL-2103). This arm's acquisition target, the role `url` plays for `http`. |
-| `mode` | string | How the statement runs and what it binds: `query` (rows), `query-one` (a single row), `update` (an affected-row count), or `query-spool` (rows streamed to a spool a later chunk: step reads, never held). |
+| `mode` | string | How the statement runs and what it binds: `query` (rows), `query-one` (a single row), `update` (an affected-row count), `query-spool` (rows streamed to a spool a later chunk: step reads, never held), or `call` (a stored call on a command step, its OUT parameters declared under `out:`). |
 | `params` | map of string | Each bind name to the bindable path supplying its value, such as `path.id`, `params.unit` or `principal.claim.tenant_id`. |
 | `keys` | array of string | Columns whose database-generated values are captured after an insert; they bind as `steps.<id>.keys.<column>`. |
+| `out` | map of string | The OUT parameters of a `mode: call` statement on a command step: each name to its JDBC type keyword (varchar, numeric, integer, bigint, boolean, date, timestamp, double). The statement binds them as `out.<name>` bind sites and the values publish as `steps.<id>.out.<name>`. Documented in transactional-writes.md. |
 | `timeoutSeconds` | integer ≥ 0 | Per-binding SQL statement timeout override; 0 disables. Default: tesseraql.sql.timeoutSeconds, else 30s. |
 | `datasource` | string | The named connector this read runs on, overriding the document's. Legal on a read only: a batch step owns its own transaction so an extract elsewhere splits nothing, while a write on another connector would be a second transaction nothing owns (TQL-YAML-1037). |
 | `materialize` | [object](#bindingsqlmaterialize) | Bounds on how much of the result is held in memory. |

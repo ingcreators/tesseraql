@@ -8,6 +8,23 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **A command step can run a stored call: `mode: call` with declared OUT parameters**
+  (docs/sql-execution-shapes.md structural decision 7). The statement is ordinary 2-way SQL —
+  the JDBC call escape or the dialect's native syntax — and an OUT parameter is a bind site
+  in the reserved `out.` namespace, typed by an `out:` declaration on the step
+  (`out: { new_total: numeric }`); the rendered positions do the bookkeeping, so no new
+  syntax enters the SQL grammar. Values come back as `steps.<id>.out.<name>` for later steps
+  and the response. The declaration is all-or-nothing per execution — a rendered `out.*` the
+  step does not declare, or a declared name the statement never renders, refuses naming the
+  mismatch — and `expect:`/`keys:` are refused on a call (it answers no affected-row count),
+  as are unknown type keywords and the reserved `out` bind name, all at build. Underneath,
+  the primitive gained the one form that needs `prepareCall`, spanned (`mode=call`),
+  bounded and classified like every other statement. Deliberate v1 boundaries, recorded in
+  the design: OUT only (INOUT extends the same scheme when asked for), no
+  `{? = call f(…)}` return-value form (`mode: query` over `select f(…)` covers it), and
+  command steps only — a job `sql:` step declaring `mode: call`/`out:` is a build error
+  instead of silently running as an update, with the job-side direction recorded.
+
 - **A chunk writer can execute in JDBC batches: `chunk.batch: true`**
   (docs/sql-execution-shapes.md structural decisions 5 and 6). The writer then queues each
   row and executes one `executeBatch` per `commitEvery` slice, before the commit that
