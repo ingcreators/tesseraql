@@ -387,6 +387,15 @@ final class StepContext {
             }
 
             @Override
+            public io.tesseraql.core.sql.SqlStatement statements() {
+                // One statement per batch of keys, not per row — few enough that a reference
+                // fetch earns a span of its own even inside a chunk's phase span.
+                return io.tesseraql.core.sql.SqlStatement.onCallerConnections()
+                        .tracer(tracer())
+                        .spanParent(parentSpan());
+            }
+
+            @Override
             public io.tesseraql.core.sql.ScopeResolver scopeResolver() {
                 // A batch run has no principal, so there is no data scope to render under —
                 // the same stance the reader and writer already take.
