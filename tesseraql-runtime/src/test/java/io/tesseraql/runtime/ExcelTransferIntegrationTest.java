@@ -104,13 +104,17 @@ class ExcelTransferIntegrationTest {
 
     @Test
     void placementModeExportLandsColumnsAtYamlDeclaredPositions() throws Exception {
-        // Reuses the imported people; runs after the round-trip test by method order is not
-        // guaranteed, so seed independently.
-        HTTP.send(HttpRequest.newBuilder(
+        // Reuses the imported people; method order is not guaranteed, so seed independently —
+        // and AWAIT the seed like every other test here: the import is asynchronous, and a
+        // sleep lost the race on a loaded CI box once, so the report exported an empty table
+        // and the template held no row for the assertion to read (the sheet-row NPE).
+        HttpResponse<String> seeded = HTTP.send(HttpRequest.newBuilder(
                 URI.create("http://localhost:" + runtime.port() + "/api/people/import"))
                 .POST(HttpRequest.BodyPublishers.ofByteArray(workbook()))
                 .build(), HttpResponse.BodyHandlers.ofString());
-        Thread.sleep(300);
+        String seedId = MAPPER.readTree(seeded.body()).get("transferId").asText();
+        assertThat(awaitTerminal("/api/people/import/" + seedId).get("status").asText())
+                .isEqualTo("COMPLETED");
 
         HttpResponse<String> started = HTTP.send(HttpRequest.newBuilder(
                 URI.create("http://localhost:" + runtime.port() + "/api/people/report"))
