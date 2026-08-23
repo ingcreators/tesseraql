@@ -21,6 +21,10 @@ asynchronous extraction by changing the recipe, not the column layout.
   per-row SQL run in the background while the client polls for the outcome, including per-row
   rejections.
 
+An uploaded import rides the runtime's request-body bound,
+`tesseraql.http.maxBodyBytes` (default 10 MB; see deployment.md) — a feed larger than that
+needs the bound raised, and the refusal is a 413 naming the key rather than a mystery.
+
 Every transfer is also tracked as a batch execution, so imports and exports show up app-scoped
 in the [operations console](ops-console.md). Imports can alternatively be driven by polling a local or SFTP/FTPS
 directory instead of an HTTP upload — see [connectors.md](connectors.md).

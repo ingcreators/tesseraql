@@ -115,12 +115,18 @@ that decide how much work the runtime does at once.
 | `tesseraql.http.workerThreads` | 10 | Concurrent route executions |
 | `tesseraql.http.eventLoopThreads` | `2 x cores` | Connection I/O; blocking work never runs here |
 | `tesseraql.http.maxInFlight` | `workerThreads x 4` | Requests held at once before refusing |
+| `tesseraql.http.maxBodyBytes` | 10 MB | Largest request body, uploads included; `-1` removes the bound |
 
 **Beyond `maxInFlight` the runtime answers 503 with `Retry-After`**, immediately, rather than
 adding the request to a queue with no bound. Four times the worker count leaves room for the
 ordinary burst a queue exists to absorb while keeping the queue a number you can see. A caller
 that gets this refusal should retry; a monitor that sees it should read it as "this runtime is
 at capacity", which is `TQL-RATE-4293`.
+
+**Beyond `maxBodyBytes` the runtime answers 413 with `TQL-SEC-4150`**, draining what remains of
+the upload so the refusal actually arrives (an unread stream leaves the client stuck writing).
+The one number covers JSON bodies and streamed file uploads alike, so a deployment taking large
+imports raises it — and `-1` removes the bound where an edge proxy already enforces one.
 
 ### The front door's share of each member
 

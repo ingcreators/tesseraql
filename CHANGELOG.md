@@ -6,6 +6,25 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ## Unreleased
 
+### Fixed
+
+- **The request-body limit is declared, and its refusal no longer wedges the client**
+  (`tesseraql.http.maxBodyBytes`, default 10 MB, `-1` removes the bound). The Vert.x 5
+  transport upgrade silently changed the body handler's default from unlimited to 10 MB — a
+  borrowed bound nothing declared (docs/camel-removal.md's defect class), which quietly
+  capped every request body and file upload in every app. Worse, the over-limit path failed
+  the request with an untyped 413 and never read the rest of the upload: once the
+  transport's window filled, a mid-upload client blocked in its own write never saw the
+  answer — the recurring five-minute CI hang in `MultiAppGatewayDifferentialTest`, three
+  occurrences before a stack trace said where. The bound is now the framework's, documented
+  in deployment.md and file-transfers.md; the refusal is typed (`TQL-SEC-4150`, naming the
+  key) and **drains** the remaining upload — bounded at one more limit's worth — so the 413
+  arrives, the connection stays reusable, and the gateway in front relays the app's own
+  refusal instead of reading a mid-request teardown as a 502. The differential test now
+  pins the discipline (the same connection answers the next request after a refusal) and
+  bounds every probe at sixty seconds, so a future stall is a diagnosable failure rather
+  than a silent five-minute timeout.
+
 ### Added
 
 - **A command step can run a stored call: `mode: call` with declared OUT parameters**
