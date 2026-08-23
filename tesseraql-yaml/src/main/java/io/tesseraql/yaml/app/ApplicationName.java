@@ -65,6 +65,18 @@ public final class ApplicationName {
     private ApplicationName() {
     }
 
+    /**
+     * The declared name when it is present and segment-safe, else empty — the tolerant read
+     * for backstops that must not own this refusal (the name rule does): a boot check that
+     * fences other declarations against the name skips the fence rather than refusing twice
+     * (docs/duplication-consolidation.md, campaign 4).
+     */
+    public static java.util.Optional<String> ifValid(AppConfig config) {
+        return config.getString("tesseraql.app.name").map(String::trim)
+                .filter(name -> !name.isEmpty())
+                .filter(name -> segmentViolation(name) == null);
+    }
+
     /** The declared name, or {@link #MISSING} / {@link #UNSAFE_SEGMENT}. */
     public static String of(AppConfig config) {
         String declared = config.getString("tesseraql.app.name").map(String::trim)

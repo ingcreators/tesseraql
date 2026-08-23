@@ -455,7 +455,7 @@ public final class CopilotService {
                 Use the tools to read before you write. Propose changes by saving DRAFTS \
                 (never claim anything is live): a human reviews and applies every draft in \
                 the editor. Keep answers short and concrete.""".formatted(
-                manifest.config().getString("tesseraql.app.name").orElse("app")));
+                io.tesseraql.yaml.app.ApplicationName.of(manifest.config())));
     }
 
     private static JsonNode chatMessage(String role, String content) {

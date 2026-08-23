@@ -419,7 +419,7 @@ final class JobCommand implements Callable<Integer> {
                         io.tesseraql.yaml.http.HttpOutbound.load(manifest.config()),
                         manifest.config(), io.tesseraql.core.telemetry.NoopTracer.INSTANCE,
                         io.tesseraql.core.telemetry.NoopMeter.INSTANCE));
-        String appName = manifest.config().getString("tesseraql.app.name").orElse("app");
+        String appName = io.tesseraql.yaml.app.ApplicationName.of(manifest.config());
         return new Wiring(main, repository, executor, appName);
     }
 

@@ -68,6 +68,18 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **`tesseraql.app.name` is never defaulted again**
+  (docs/duplication-consolidation.md, campaign 4). Seven sites still read the raw key and
+  defaulted it — to three different values — re-introducing exactly the shared identity
+  `ApplicationName`'s javadoc records as the bug it exists to prevent: the route compiler,
+  the CLI job runner, Studio's service, doc and copilot surfaces, and both API-contract
+  generators now refuse an unnamed application (`TQL-YAML-1404`) like the boot already
+  does, and the OpenTelemetry service name is the app's identity instead of a `tesseraql`
+  constant that merged every unnamed application in traces. The security factory's two
+  tolerant backstops read through the new `ApplicationName.ifValid` (they deliberately do
+  not own the refusal — the name rule does). `AppNameReadLedgerTest` names the remaining
+  raw readers (the accessor, the lint on this very key, the package installer) and refuses
+  a new one by default.
 - **The intra-stack hop is one primitive** (`LoopbackCall`,
   docs/duplication-consolidation.md campaign 1): the ops shell's delegated calls and
   transfer-file download proxy, the Studio shell's workshop and copilot-send hops, the API
