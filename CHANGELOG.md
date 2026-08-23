@@ -156,6 +156,22 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **A SCIM group and its membership land together or not at all**
+  (docs/contract-sql-execution.md structural decision 4, slice 4). A group create ran the
+  insert, then one statement per member, then a re-read — each on its own pooled connection
+  with no transaction, so a failure part-way left a group holding some of the members the
+  client sent while the client was told the create failed; replace had the same shape with its
+  membership reconcile. `ContractStatement` gains the transactional form the command processor
+  has always used — one connection, several statements, one commit, roll back on any failure —
+  and the SCIM group create and replace run inside it, re-reading the resource they return on
+  the same connection. A failed member add now rolls the whole create back (open question 3's
+  recommendation): the client asked for a group with members and was told the request failed,
+  so a partial group is the one outcome nothing downstream expects. The per-add
+  unique-violation tolerance is gone with the per-add connections — inside a transaction a
+  violation aborts the whole transaction on PostgreSQL — and duplicate member values
+  deduplicate in Java before any statement runs, which is where a within-request duplicate
+  always belonged.
+
 - **BREAKING: a SCIM contract is plain SQL, and the store's assigned id is a declared key**
   (docs/contract-sql-execution.md structural decision 2, slice 3). A SCIM create had to be
   `insert … returning` so the service could learn the assigned id, and replace/delete had to

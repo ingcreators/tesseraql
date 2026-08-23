@@ -183,6 +183,36 @@ class ContractStatementTest {
                 .containsOnlyKeys("USER_ID");
     }
 
+    @Test
+    void aTransactionCommitsWhatItsBodyWrote() throws ContractSqlException {
+        FakeDatabase database = new FakeDatabase(List.of(), List.of());
+        ContractStatement statements = ContractStatement.on(database.dataSource());
+
+        int affected = statements.transact("scim.groups.create", connection -> statements
+                .update(connection, "scim.groups.addMember",
+                        "insert into m (g) values (/*g*/'x')", Map.of("g", "g1")));
+
+        assertThat(affected).isEqualTo(1);
+        assertThat(database.calls).contains("setAutoCommit(false)", "commit");
+        assertThat(database.calls).doesNotContain("rollback");
+    }
+
+    @Test
+    void aFailureInsideTheTransactionRollsItBackAndKeepsItsStatementsName() {
+        FakeDatabase database = new FakeDatabase(List.of(), List.of());
+        database.failure = new SQLException("value too long", "22001");
+        ContractStatement statements = ContractStatement.on(database.dataSource());
+
+        assertThatThrownBy(() -> statements.transact("scim.groups.create",
+                connection -> statements.update(connection, "scim.groups.addMember",
+                        "insert into m (g) values (/*g*/'x')", Map.of("g", "g1"))))
+                .asInstanceOf(InstanceOfAssertFactories.type(ContractSqlException.class))
+                .extracting(ContractSqlException::contract)
+                .isEqualTo("scim.groups.addMember");
+        assertThat(database.calls).contains("rollback");
+        assertThat(database.calls).doesNotContain("commit");
+    }
+
     /** A JDBC stack that records what was asked of it and answers one row (or the failure set). */
     private static final class FakeDatabase implements InvocationHandler {
 
