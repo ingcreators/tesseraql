@@ -114,6 +114,16 @@ final class ChunkRules {
                             + "': chunk skipLimit must not be negative (was " + chunk.skipLimit()
                             + ")"));
         }
+        // Structural decision 6 (docs/sql-execution-shapes.md): skip semantics are per-row by
+        // definition, and a JDBC batch cannot attribute a member failure to one row on every
+        // driver — the two declarations contradict each other.
+        if (chunk.batches() && "skip".equals(chunk.onError())) {
+            findings.add(new LintFinding(LintCodes.STEP_REFERENCE_UNRESOLVED, ERROR, source,
+                    "Step '" + step.id()
+                            + "': chunk batch: true requires the default onError: fail - a"
+                            + " batched writer cannot attribute a failure to one row, so it"
+                            + " cannot skip; drop batch:, or drop onError: skip"));
+        }
         chunk.enrich().forEach((name, enrich) -> {
             if (enrich.sql() == null || enrich.sql().file() == null
                     || enrich.sql().file().isBlank()) {

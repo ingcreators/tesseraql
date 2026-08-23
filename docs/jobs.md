@@ -360,6 +360,16 @@ rows advance the checkpoint like processed ones: they were handled and recorded,
 Processed and skipped counts land on the step execution (`affectedRows` / `skippedRows`),
 the operations API (`skips` on the execution detail), and the console's steps table.
 
+**Batching the writer.** `batch: true` executes the writer in JDBC batches of `commitEvery`
+rows — one round trip per committed slice instead of one per row, which is the difference
+that matters on a high-volume load against a remote database. The trade is declared: a
+batch cannot attribute a member failure to one row on every driver, so `batch: true`
+requires the default `onError: fail` (declaring it with `onError: skip` fails the build),
+and a writer failure fails the chunk, which reruns from its last committed checkpoint —
+the restart contract is unchanged. Rows whose 2-way SQL renders differently (an `/*%if*/`
+branching on a row's values) still execute in row order: the pending batch flushes whenever
+the statement shape changes.
+
 Two lints guard the restart contract, because it lives in the reader's SQL where only the
 build can see it: a reader without `order by` is an error (`TQL-BATCH-4207` — the resume
 point would be undefined), and a reader that never binds `chunk.after` is a warning

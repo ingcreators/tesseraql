@@ -608,6 +608,180 @@ public final class SqlStatement {
         }
     }
 
+    /**
+     * A reusable writer over one connection (docs/sql-execution-shapes.md structural
+     * decision 5): one prepared statement per rendered-SQL text, cached for the handle's
+     * lifetime, so a caller that executes the same statement ten thousand times prepares it
+     * once. Two verbs: {@link #execute(BoundSql)} runs one row now; {@link #add(BoundSql)}
+     * queues it into a JDBC batch that {@link #flush()} executes.
+     *
+     * <p>2-way SQL renders per row, so consecutive rows can render different statements.
+     * {@code add} preserves row order by <b>flushing the pending batch whenever the incoming
+     * row's SQL differs from it</b> — queuing per-variant and executing at the end would
+     * reorder writes against the same table. The batch win is real exactly when rows share a
+     * shape, which is the common case.
+     *
+     * <p>A flush is one executed statement and opens one span ({@code mode=batch}, the queued
+     * row count and the summed affected count as attributes); a single-row {@code execute}
+     * opens none — this handle serves callers that span per phase or per flush, never per row.
+     * {@link #close()} with rows still queued refuses: a handle must never drop queued writes
+     * on the floor.
+     */
+    public final class Rows implements AutoCloseable {
+
+        private final Connection connection;
+        private final String sqlId;
+        private final Map<String, PreparedStatement> prepared = new LinkedHashMap<>();
+        private PreparedStatement pending;
+        private int pendingRows;
+
+        private Rows(Connection connection, String sqlId) {
+            this.connection = connection;
+            this.sqlId = sqlId;
+        }
+
+        /** Runs one row now, via the cached prepared statement; flushes any pending batch
+         * first so mixed use keeps row order. Answers the affected-row count. */
+        public int execute(BoundSql bound) throws SqlStatementException {
+            flush();
+            try {
+                PreparedStatement statement = statementFor(bound.sql());
+                bindInto(statement, bound);
+                statement.execute();
+                return statement.getUpdateCount();
+            } catch (SQLException ex) {
+                throw classified(sqlId, ex);
+            }
+        }
+
+        /** Queues one row for the next {@link #flush()}, flushing first when its rendered SQL
+         * differs from the pending batch's. */
+        public void add(BoundSql bound) throws SqlStatementException {
+            try {
+                PreparedStatement statement = statementFor(bound.sql());
+                if (pending != null && pending != statement) {
+                    flush();
+                }
+                bindInto(statement, bound);
+                statement.addBatch();
+                pending = statement;
+                pendingRows++;
+            } catch (SQLException ex) {
+                throw classified(sqlId, ex);
+            }
+        }
+
+        /** Executes the pending batch as one statement and answers the summed affected count
+         * ({@code SUCCESS_NO_INFO} counts as zero); a no-op when nothing is queued. */
+        public int flush() throws SqlStatementException {
+            if (pending == null || pendingRows == 0) {
+                return 0;
+            }
+            Span span = started(sqlId, "batch").attribute("batchSize", pendingRows);
+            try {
+                int[] counts = pending.executeBatch();
+                int affected = 0;
+                for (int count : counts) {
+                    affected += Math.max(count, 0);
+                }
+                span.attribute("affectedRows", affected);
+                return affected;
+            } catch (SQLException ex) {
+                SqlStatementException named = classified(sqlId, ex);
+                span.recordError(named);
+                throw named;
+            } finally {
+                pending = null;
+                pendingRows = 0;
+                span.end();
+            }
+        }
+
+        /**
+         * Drops the queued rows without executing them — the abort path's explicit answer
+         * (the transaction they belonged to is rolling back), so {@link #close()} can stay a
+         * refusal on the path that merely forgot to flush.
+         */
+        public void discard() throws SqlStatementException {
+            if (pending != null) {
+                try {
+                    pending.clearBatch();
+                } catch (SQLException ex) {
+                    throw classified(sqlId, ex);
+                }
+            }
+            pending = null;
+            pendingRows = 0;
+        }
+
+        /** Closes the cached statements; refuses — after closing them — when rows were queued
+         * and never flushed, because dropping them silently is the one wrong answer. */
+        @Override
+        public void close() throws SqlStatementException {
+            SQLException closing = null;
+            for (PreparedStatement statement : prepared.values()) {
+                try {
+                    statement.close();
+                } catch (SQLException ex) {
+                    if (closing == null) {
+                        closing = ex;
+                    } else {
+                        closing.addSuppressed(ex);
+                    }
+                }
+            }
+            prepared.clear();
+            if (pendingRows > 0) {
+                int dropped = pendingRows;
+                pendingRows = 0;
+                pending = null;
+                throw new IllegalStateException(dropped + " queued row(s) were never flushed"
+                        + " - flush() before close(), or the writes are silently lost");
+            }
+            if (closing != null) {
+                throw classified(sqlId, closing);
+            }
+        }
+
+        /** The statement for one rendered SQL text, prepared once under the declared bound. */
+        private PreparedStatement statementFor(String sql) throws SQLException {
+            PreparedStatement cached = prepared.get(sql);
+            if (cached != null) {
+                return cached;
+            }
+            PreparedStatement statement = connection.prepareStatement(sql);
+            try {
+                if (timeoutSeconds > 0) {
+                    statement.setQueryTimeout(timeoutSeconds);
+                }
+            } catch (SQLException | RuntimeException ex) {
+                try {
+                    statement.close();
+                } catch (SQLException suppressed) {
+                    ex.addSuppressed(suppressed);
+                }
+                throw ex;
+            }
+            prepared.put(sql, statement);
+            return statement;
+        }
+
+        private void bindInto(PreparedStatement statement, BoundSql bound) throws SQLException {
+            for (int i = 0; i < bound.parameters().size(); i++) {
+                statement.setObject(i + 1, bound.parameters().get(i).value());
+            }
+        }
+    }
+
+    /**
+     * A reusable writer over {@code connection} for the statement the caller names — the
+     * prepare-once/execute-many shape a chunk writer has and every one-shot form lacks
+     * (docs/sql-execution-shapes.md structural decision 5).
+     */
+    public Rows rows(Connection connection, String sqlId) {
+        return new Rows(connection, sqlId);
+    }
+
     /** One statement's span: the shared name, the declared surface, the statement's own name. */
     private Span started(String sqlId, String mode) {
         Span span = tracer.start("tesseraql.sql.execute", spanParent)

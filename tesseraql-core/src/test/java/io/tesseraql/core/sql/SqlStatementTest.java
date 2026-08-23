@@ -415,6 +415,89 @@ class SqlStatementTest {
         assertThat(database.calls).contains("getConnection", "setQueryTimeout(30)");
     }
 
+    @Test
+    void aRowsHandlePreparesOncePerRenderedSqlText() throws Exception {
+        FakeDatabase database = new FakeDatabase(List.of(), List.of());
+        BoundSql bound = SqlRenderer.render("delete from t where id = /*id*/'x'",
+                Map.of("id", "u1"));
+
+        try (SqlStatement.Rows rows = SqlStatement.onCallerConnections()
+                .rows(database.dataSource().getConnection(), "writer.sql")) {
+            rows.execute(bound);
+            rows.execute(bound);
+        }
+
+        assertThat(database.calls.stream().filter(call -> call.startsWith("prepareStatement(")))
+                .hasSize(1);
+        assertThat(database.calls.stream().filter(call -> call.equals("execute"))).hasSize(2);
+    }
+
+    @Test
+    void aRowsHandleFlushesInRowOrderWhenTheRenderedSqlChanges() throws Exception {
+        FakeDatabase database = new FakeDatabase(List.of(), List.of());
+        BoundSql first = SqlRenderer.render("insert into t (a) values (/*a*/'x')",
+                Map.of("a", "1"));
+        BoundSql second = SqlRenderer.render("update t set a = /*a*/'x'", Map.of("a", "2"));
+
+        try (SqlStatement.Rows rows = SqlStatement.onCallerConnections()
+                .rows(database.dataSource().getConnection(), "writer.sql")) {
+            rows.add(first);
+            rows.add(second);
+            rows.add(first);
+            rows.flush();
+        }
+
+        // Order is row order: the pending batch flushes whenever the incoming row's SQL
+        // differs from it, so an insert and its update never swap places.
+        assertThat(database.calls.stream()
+                .filter(call -> call.equals("addBatch") || call.equals("executeBatch")))
+                .containsExactly("addBatch", "executeBatch", "addBatch", "executeBatch",
+                        "addBatch", "executeBatch");
+    }
+
+    @Test
+    void aFlushIsOneStatementAndOpensOneBatchSpan() throws Exception {
+        io.tesseraql.core.telemetry.RecordingTracer tracer = new io.tesseraql.core.telemetry.RecordingTracer();
+        FakeDatabase database = new FakeDatabase(List.of(), List.of());
+        BoundSql bound = SqlRenderer.render("insert into t (a) values (/*a*/'x')",
+                Map.of("a", "1"));
+
+        try (SqlStatement.Rows rows = SqlStatement.onCallerConnections().tracer(tracer)
+                .rows(database.dataSource().getConnection(), "writer.sql")) {
+            rows.add(bound);
+            rows.add(bound);
+            assertThat(rows.flush()).isEqualTo(2);
+        }
+
+        assertThat(tracer.spans()).hasSize(1);
+        assertThat(tracer.spans().get(0).attributes())
+                .containsEntry("mode", "batch")
+                .containsEntry("batchSize", 2)
+                .containsEntry("affectedRows", 2);
+    }
+
+    @Test
+    void aRowsHandleRefusesToCloseWithQueuedRowsAndDiscardIsTheAbortPathsAnswer()
+            throws Exception {
+        FakeDatabase database = new FakeDatabase(List.of(), List.of());
+        BoundSql bound = SqlRenderer.render("insert into t (a) values (/*a*/'x')",
+                Map.of("a", "1"));
+
+        SqlStatement.Rows forgotten = SqlStatement.onCallerConnections()
+                .rows(database.dataSource().getConnection(), "writer.sql");
+        forgotten.add(bound);
+        assertThatThrownBy(forgotten::close)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("never flushed");
+
+        SqlStatement.Rows aborted = SqlStatement.onCallerConnections()
+                .rows(database.dataSource().getConnection(), "writer.sql");
+        aborted.add(bound);
+        aborted.discard();
+        aborted.close();
+        assertThat(database.calls).contains("clearBatch");
+    }
+
     /** A JDBC stack that records what was asked of it and answers one row (or the failure set). */
     private static final class FakeDatabase implements InvocationHandler {
 
@@ -423,6 +506,7 @@ class SqlStatementTest {
         private final List<Object> row;
         private SQLException failure;
         private boolean rowRead;
+        private int batched;
 
         private FakeDatabase(List<String> labels, List<Object> row) {
             this.labels = labels;
@@ -448,6 +532,9 @@ class SqlStatementTest {
                 case "executeUpdate" -> fail(1);
                 case "execute" -> fail(Boolean.TRUE);
                 case "getUpdateCount" -> 1;
+                case "addBatch" -> queued();
+                case "executeBatch" -> drained();
+                case "clearBatch" -> cleared();
                 case "getGeneratedKeys" -> proxy(ResultSet.class);
                 case "getMetaData" -> proxy(ResultSetMetaData.class);
                 case "getColumnCount" -> labels.size();
@@ -463,6 +550,27 @@ class SqlStatementTest {
                 throw failure;
             }
             return answer;
+        }
+
+        private Object queued() {
+            batched++;
+            return null;
+        }
+
+        private Object drained() throws SQLException {
+            if (failure != null) {
+                batched = 0;
+                throw failure;
+            }
+            int[] counts = new int[batched];
+            java.util.Arrays.fill(counts, 1);
+            batched = 0;
+            return counts;
+        }
+
+        private Object cleared() {
+            batched = 0;
+            return null;
         }
 
         private boolean nextRow() {

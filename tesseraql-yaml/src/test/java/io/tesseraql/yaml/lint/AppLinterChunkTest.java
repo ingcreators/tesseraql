@@ -49,6 +49,23 @@ class AppLinterChunkTest {
     }
 
     @Test
+    void aBatchedWriterRefusesSkipSemantics(@TempDir Path dir) throws Exception {
+        List<LintFinding> findings = new AppLinter().lint(app(dir,
+                "      reader:\n        sql:\n          file: reader.sql\n      writer:\n"
+                        + "        sql:\n          file: writer.sql\n      batch: true\n"
+                        + "      onError: skip",
+                "select id from orders where id > /* chunk.after */ 0 order by id\n"));
+
+        // Structural decision 6 (docs/sql-execution-shapes.md): skip semantics are per-row,
+        // and a JDBC batch cannot attribute a member failure to one row on every driver.
+        assertThat(findings).anySatisfy(finding -> {
+            assertThat(finding.message())
+                    .contains("batch: true requires the default onError: fail");
+            assertThat(finding.severity()).isEqualTo("error");
+        });
+    }
+
+    @Test
     void aReaderThatNeverBindsTheCheckpointIsAWarning(@TempDir Path dir) throws Exception {
         List<LintFinding> findings = new AppLinter().lint(app(dir,
                 "      reader:\n        sql:\n          file: reader.sql\n      writer:\n        sql:\n          file: writer.sql",

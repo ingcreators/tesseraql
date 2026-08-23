@@ -838,6 +838,7 @@ Restartable per-row processing: a reader, a writer, and committed checkpoints, s
 | `onError` | string | `fail` (default) fails the step on the first writer error; `skip` records the row in `tql_job_skips` and continues, up to `skipLimit`. |
 | `skipLimit` | integer ≥ 0 | How many skipped rows the step tolerates before failing anyway, so a systematically broken load does not run to completion looking fine. |
 | `enrich` | map of [enrichment](#enrichment) | Keyed references folded into each window before the writer sees it, so a writer may bind a column the reader's query never selected. A reference failure fails the window, not the row. |
+| `batch` | boolean | `true` executes the writer in JDBC batches of `commitEvery` rows — one round trip per committed slice instead of one per row. Requires the default `onError: fail`: a batch cannot attribute a member failure to one row, so a failure fails the chunk, which reruns from its last checkpoint. Documented in jobs.md. |
 
 ### fileColumn
 
