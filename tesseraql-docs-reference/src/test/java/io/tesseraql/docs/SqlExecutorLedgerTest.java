@@ -65,7 +65,6 @@ class SqlExecutorLedgerTest {
             "tesseraql-operations/src/main/java/io/tesseraql/operations/workflow/JdbcDelegationStore.java",
             "tesseraql-operations/src/main/java/io/tesseraql/operations/workflow/JdbcWorkflowStore.java",
             "tesseraql-operations/src/main/java/io/tesseraql/operations/workflow/JdbcWorkflowTaskStore.java",
-            "tesseraql-pipeline/src/main/java/io/tesseraql/pipeline/sql/SqlStep.java",
             "tesseraql-runtime/src/main/java/io/tesseraql/runtime/CrossNodeTopicBus.java",
             "tesseraql-saml/src/main/java/io/tesseraql/saml/routes/SamlReplayGuard.java",
             "tesseraql-scim/src/main/java/io/tesseraql/scim/JdbcScimResourceMapping.java",

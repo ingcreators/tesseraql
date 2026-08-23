@@ -275,20 +275,53 @@ Seven, in dependency order. Slice 1 is shipped; slice 6 is
    `ResultSetReader` so a streaming or capping caller owns its read while the primitive owns
    prepare/bind/bound/classify/span; writes go through `execute()`/`getUpdateCount()` so a
    DuckDB maintenance call stops being special. **Adopted here**: `WorkflowSweeper` (all three
-   statements). **Recorded rather than converted, each with its reason, each already bounded
-   (slice 2) and classified or spanned where it matters**: the batch runners and
-   `KeyedReference` read under row caps or into spools — their reads stay their own until a
-   capped/streaming read is worth pulling into the primitive, and their failure wrappers now
-   carry the classified kind (structural decision 8); `ValidationRules`,
-   `TransitionExecutor` and `DecisionTables` are compiler-built objects whose tracer exists
-   only per-request — threading a per-call `SqlStatement` through them is `SqlStep`/
-   `TransactionalCommandProcessor`'s conversion, deferred with it as its own change with its
-   own tests (the original structural decision 1's stance, kept); `JdbcFileTransferService`
+   statements). The slice originally recorded the pipeline executors rather than converting
+   them; **that residual was resolved after the campaign closed** — see "The residual,
+   resolved" below. What stays recorded with its reason: the batch runners and
+   `KeyedReference` read under row caps or into spools — their reads stay their own until
+   pulling them through the reader seam is worth a change of their own, and their failure
+   wrappers carry the classified kind (structural decision 8); `JdbcFileTransferService`
    keeps slice 5's per-phase spans — a span per imported row would be noise.
    `StudioDataService` and the fixed-SQL stores stay out by design. **The ledger guard below
    is the teeth**: every `prepareStatement` site in main sources is named in
    `SqlExecutorLedgerTest`, a new hand-rolled executor fails the build, and an adoption
    shrinks the list — `WorkflowSweeper` already left it.
+
+## The residual, resolved (post-campaign, #1006 and the route-path follow-up)
+
+Slice 7 deferred `SqlStep` and `TransactionalCommandProcessor` — and, riding their
+conversion, the compiler-built `ValidationRules`, `DecisionTables` and `TransitionExecutor` —
+as its own change with its own tests. That change is done, in two parts:
+
+1. **The command path** (#1006). `TransactionalCommandProcessor` builds one `SqlStatement`
+   per exchange (cheap immutable; the tracer looked up per request, the span parent the route
+   span) and runs its steps and the workflow-assign query through it; the compiler-built three
+   take that per-exchange statement **as an argument** where they took a bare timeout, so a
+   validation rule, a table-backed decision lookup, a workflow guard, stamp and document load
+   execute bounded, classified and spanned. `surface` gained `validation`, `decision` and
+   `workflow`. The primitive gained the seams this demanded: a `SpannedReader` (a caller-owned
+   read stamps what only it knows — its row count — onto the statement's span), `cappedRows`
+   (the materialize-with-`maxRows` read, overflow answered by the caller so each surface keeps
+   its own refusal message), a positional-values query form, a caller-rendered write form with
+   declared keys, `onCallerConnections()` for executors that only ride someone else's
+   transaction, and a reader's mid-read refusal recorded on the span. One recorded delta: a
+   command step's generated-key prepare on an *unknown* dialect id now follows the primitive's
+   documented `RETURN_GENERATED_KEYS` rule instead of defaulting to named key columns; every
+   supported dialect id resolves, so no configured deployment changes.
+
+2. **The route path.** `SqlStep` converts fully — query, update, the pagination count wrapper,
+   and the export path: the primitive gained `fetchSize(int)`, which prepares reads
+   forward-only/read-only at the profile's fetch size, so the spooling export streams exactly
+   as before while prepare/bind/bound/classify/span become the primitive's; the export's
+   transaction bracket, spool orchestration and codec write stay in the step, inside the
+   reader. The step's per-process span is replaced by the primitive's per-statement spans —
+   the slice-5 principle applied literally, so a paged route's count query and an export's
+   named queries now each show as their own `surface=route` statement instead of hiding
+   inside one span. An update runs `execute()`/`getUpdateCount()` like every other write.
+
+With those, **every executor of rendered 2-way SQL meets JDBC through the primitive** except
+the deliberately recorded spool/cap readers above; the five converted files left the
+`SqlExecutorLedgerTest` ledger, which only shrinks from here.
 
 ## Guards
 

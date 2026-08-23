@@ -357,6 +357,46 @@ class SqlStatementTest {
                 .hasMessageContaining("caller-supplied");
     }
 
+    @Test
+    void aFetchSizeReadPreparesForwardOnlyAndCursorsAtThatSize() throws Exception {
+        FakeDatabase database = new FakeDatabase(List.of("name"), List.of("Anne"));
+        BoundSql bound = SqlRenderer.render(SELECT, Map.of("id", "u1"));
+
+        SqlStatement.on(database.dataSource()).fetchSize(500)
+                .read("web/api/export.sql", bound, (resultSet, span) -> resultSet.next());
+
+        // TYPE_FORWARD_ONLY=1003, CONCUR_READ_ONLY=1007: the streaming prepare an export uses
+        // so the driver cursors instead of buffering the whole result.
+        assertThat(database.calls)
+                .anyMatch(call -> call.startsWith("prepareStatement(")
+                        && call.endsWith(",1003,1007)"))
+                .contains("setFetchSize(500)");
+    }
+
+    @Test
+    void aDefaultReadKeepsTheDriversPlainPrepare() throws Exception {
+        FakeDatabase database = new FakeDatabase(List.of("name"), List.of("Anne"));
+        BoundSql bound = SqlRenderer.render(SELECT, Map.of("id", "u1"));
+
+        SqlStatement.on(database.dataSource())
+                .read("web/api/users.sql", bound, (resultSet, span) -> resultSet.next());
+
+        assertThat(database.calls).noneMatch(call -> call.startsWith("setFetchSize"));
+    }
+
+    @Test
+    void aDataSourceLevelWriteOpensItsOwnConnectionPerStatement() throws Exception {
+        FakeDatabase database = new FakeDatabase(List.of(), List.of());
+        BoundSql bound = SqlRenderer.render("delete from t where id = /*id*/'x'",
+                Map.of("id", "u1"));
+
+        int affected = SqlStatement.on(database.dataSource())
+                .update("web/api/users/delete.sql", bound);
+
+        assertThat(affected).isEqualTo(1);
+        assertThat(database.calls).contains("getConnection", "setQueryTimeout(30)");
+    }
+
     /** A JDBC stack that records what was asked of it and answers one row (or the failure set). */
     private static final class FakeDatabase implements InvocationHandler {
 
