@@ -3,7 +3,7 @@ package io.tesseraql.identity;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
-import io.tesseraql.core.sql.ContractStatement;
+import io.tesseraql.core.sql.SqlStatement;
 import io.tesseraql.security.Principal;
 import java.sql.SQLException;
 import java.util.ArrayList;
@@ -32,7 +32,7 @@ public final class IdentityService {
 
     private final Function<String, DataSource> datasources;
     private final String dialect;
-    private int sqlTimeoutSeconds = ContractStatement.DEFAULT_TIMEOUT_SECONDS;
+    private int sqlTimeoutSeconds = SqlStatement.DEFAULT_TIMEOUT_SECONDS;
     private io.tesseraql.core.telemetry.Tracer tracer;
 
     public IdentityService(Function<String, DataSource> datasources) {
@@ -110,13 +110,13 @@ public final class IdentityService {
     }
 
     /** The contract executor for a realm's datasource, reading labels under the app's dialect. */
-    private ContractStatement statements(RealmConfig realm) {
+    private SqlStatement statements(RealmConfig realm) {
         DataSource dataSource = datasources.apply(realm.datasource());
         if (dataSource == null) {
             throw new TqlException(NO_DATASOURCE,
                     "No datasource '" + realm.datasource() + "' for realm " + realm.id());
         }
-        return ContractStatement.on(dataSource).dialect(dialect)
+        return SqlStatement.on(dataSource).dialect(dialect)
                 .timeoutSeconds(sqlTimeoutSeconds).tracer(tracer);
     }
 

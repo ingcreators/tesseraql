@@ -400,8 +400,8 @@ final class JobCommand implements Callable<Integer> {
         // execution + transfer rows and the console download works either way.
         io.tesseraql.operations.files.JdbcFileTransferService transfers = new io.tesseraql.operations.files.JdbcFileTransferService(
                 repository, tempStore, main, io.tesseraql.core.files.FileCodecs.discover());
-        transfers.sqlTimeoutSeconds(manifest.config().getString("tesseraql.sql.timeoutSeconds")
-                .map(Integer::parseInt).orElse(30));
+        transfers.sqlTimeoutSeconds(
+                io.tesseraql.yaml.config.SqlDefaults.timeoutSeconds(manifest.config()));
         transfers.ensureSchema();
         // push: steps deliver through an owned, lazily-started push service — a run
         // without a push step never pays for it, and the JVM exits with the command.
@@ -409,8 +409,8 @@ final class JobCommand implements Callable<Integer> {
         io.tesseraql.runtime.FilePushService filePush = new io.tesseraql.runtime.FilePushService(
                 io.tesseraql.yaml.connectors.FileConnectors.push(manifest.config()), app);
         JobExecutor executor = new JobExecutor(repository, tempStore)
-                .sqlTimeoutSeconds(manifest.config().getString("tesseraql.sql.timeoutSeconds")
-                        .map(Integer::parseInt).orElse(30))
+                .sqlTimeoutSeconds(
+                        io.tesseraql.yaml.config.SqlDefaults.timeoutSeconds(manifest.config()))
                 // notify: steps enqueue on the durable outbox; the serving runtime delivers.
                 .notificationOutbox(outbox)
                 .fileTransfers(transfers, app)

@@ -418,7 +418,7 @@ Keys are declared in `config/application.yml` and `config/tesseraql.yml`, overri
 
 | Key | Read by | Documented in |
 | --- | --- | --- |
-| `tesseraql.sql.timeoutSeconds` | [JobCommand.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-cli/src/main/java/io/tesseraql/cli/JobCommand.java), [RouteCompiler.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-compiler/src/main/java/io/tesseraql/compiler/RouteCompiler.java), [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java), +1 more | [deployment](deployment.md) |
+| `tesseraql.sql.timeoutSeconds` | [SqlDefaults.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/config/SqlDefaults.java) | [deployment](deployment.md) |
 
 ## tesseraql.studio
 

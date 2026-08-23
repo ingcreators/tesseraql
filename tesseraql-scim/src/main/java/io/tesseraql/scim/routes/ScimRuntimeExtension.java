@@ -3,7 +3,6 @@ package io.tesseraql.scim.routes;
 import io.tesseraql.compiler.ext.ExtensionContext;
 import io.tesseraql.compiler.ext.RuntimeExtension;
 import io.tesseraql.core.outbox.OutboxEventSink;
-import io.tesseraql.core.sql.ContractStatement;
 import io.tesseraql.pipeline.TesseraqlProperties;
 import io.tesseraql.scim.JdbcScimResourceMapping;
 import io.tesseraql.scim.ScimContract;
@@ -87,9 +86,7 @@ public final class ScimRuntimeExtension implements RuntimeExtension {
      * that pins the key name can read it without booting a runtime.
      */
     static int sqlTimeoutSeconds(AppConfig config) {
-        return config.getString("tesseraql.sql.timeoutSeconds")
-                .map(Integer::parseInt)
-                .orElse(ContractStatement.DEFAULT_TIMEOUT_SECONDS);
+        return io.tesseraql.yaml.config.SqlDefaults.timeoutSeconds(config);
     }
 
     /** Builds the SCIM user service from the configured contract SQL files (design ch. 10.15). */

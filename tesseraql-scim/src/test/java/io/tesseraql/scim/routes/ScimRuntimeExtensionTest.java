@@ -2,7 +2,7 @@ package io.tesseraql.scim.routes;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.tesseraql.core.sql.ContractStatement;
+import io.tesseraql.core.sql.SqlStatement;
 import io.tesseraql.yaml.config.AppConfig;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -25,7 +25,7 @@ class ScimRuntimeExtensionTest {
     @Test
     void anUnsetKeyIsTheSameThirtySecondsARouteDefaultsTo() {
         assertThat(ScimRuntimeExtension.sqlTimeoutSeconds(new AppConfig(Map.of())))
-                .isEqualTo(ContractStatement.DEFAULT_TIMEOUT_SECONDS);
+                .isEqualTo(SqlStatement.DEFAULT_TIMEOUT_SECONDS);
     }
 
     @Test

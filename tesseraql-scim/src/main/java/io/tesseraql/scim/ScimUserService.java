@@ -1,7 +1,7 @@
 package io.tesseraql.scim;
 
 import io.tesseraql.core.dialect.SqlErrors;
-import io.tesseraql.core.sql.ContractStatement;
+import io.tesseraql.core.sql.SqlStatement;
 import java.sql.SQLException;
 import java.util.List;
 import java.util.Map;
@@ -16,10 +16,10 @@ import javax.sql.DataSource;
 public final class ScimUserService {
 
     private final ScimContract contract;
-    private ContractStatement statements;
+    private SqlStatement statements;
 
     public ScimUserService(DataSource dataSource, ScimContract contract) {
-        this.statements = ContractStatement.on(dataSource);
+        this.statements = SqlStatement.on(dataSource);
         this.contract = contract;
     }
 
@@ -64,7 +64,7 @@ public final class ScimUserService {
      */
     public ScimUser create(ScimUser user) {
         try {
-            ContractStatement.WriteResult written = statements.update("scim.users.create",
+            SqlStatement.WriteResult written = statements.update("scim.users.create",
                     contract.createSql(), ScimUserMapper.toParams(user), contract.keys());
             String id = written.keys().isEmpty()
                     ? user.id()

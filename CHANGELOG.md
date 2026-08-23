@@ -176,6 +176,27 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **The statement primitive is `SqlStatement`, the timeout key is read once, and a new
+  hand-rolled executor fails the build** (docs/contract-sql-execution.md slice 7, closing the
+  campaign). `ContractStatement` described its first adopter, not its shape: it renames to
+  `io.tesseraql.core.sql.SqlStatement` (`ContractSqlException` → `SqlStatementException`,
+  `contract()` → `sqlId()`) and gains the general seams — a declared `surface` for its spans, a
+  span parent, caller-rendered `BoundSql` forms, a positional-values form for framework-built
+  statements, and a `ResultSetReader` so a streaming caller owns its read while the primitive
+  owns prepare, bind, bound, classify and span; writes run through
+  `execute()`/`getUpdateCount()`, so a statement a driver refuses `executeUpdate` for (DuckDB's
+  maintenance calls) stops being special. `tesseraql.sql.timeoutSeconds` — read in six places
+  with three different default expressions — is resolved in exactly one
+  (`io.tesseraql.yaml.config.SqlDefaults`). The workflow sweeper's three statements adopt the
+  primitive outright (bounded, classified, spanned as `surface=workflow`); batch step and chunk
+  failures keep TQL-BATCH-5002 and now carry the portable classification in it, so a
+  foreign-key violation from bad input and a dropped table stop reporting identically. And
+  `SqlExecutorLedgerTest` names every `prepareStatement` site in the main sources: a new
+  hand-rolled executor — the defect class this campaign closed — now fails the build unless it
+  is added in review with a reason, while an adoption just shrinks the list. The executors that
+  keep their own statement code are each recorded in the design document with the reason
+  (capped or spooling reads, compile-time construction whose tracer exists only per request).
+
 - **Every executed statement opens one span, and the surface is an attribute**
   (docs/contract-sql-execution.md structural decision 5, slice 5). Route reads, job steps and
   chunks each opened `tesseraql.sql.execute`; the transactional command processor — the

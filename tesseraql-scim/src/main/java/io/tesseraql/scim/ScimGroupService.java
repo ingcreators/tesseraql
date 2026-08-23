@@ -1,7 +1,7 @@
 package io.tesseraql.scim;
 
 import io.tesseraql.core.dialect.SqlErrors;
-import io.tesseraql.core.sql.ContractStatement;
+import io.tesseraql.core.sql.SqlStatement;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.LinkedHashSet;
@@ -20,12 +20,12 @@ import javax.sql.DataSource;
 public final class ScimGroupService {
 
     private final ScimGroupContract contract;
-    private ContractStatement statements;
+    private SqlStatement statements;
     /** Mints an id before the insert when set (the bundled managed set); null otherwise. */
     private java.util.function.Supplier<String> idSupplier;
 
     public ScimGroupService(DataSource dataSource, ScimGroupContract contract) {
-        this.statements = ContractStatement.on(dataSource);
+        this.statements = SqlStatement.on(dataSource);
         this.contract = contract;
     }
 
@@ -90,7 +90,7 @@ public final class ScimGroupService {
                     minted = idSupplier.get();
                     params.put("id", minted);
                 }
-                ContractStatement.WriteResult written = statements.update(connection,
+                SqlStatement.WriteResult written = statements.update(connection,
                         "scim.groups.create", contract.createSql(), params, contract.keys());
                 String id = !written.keys().isEmpty()
                         ? string(written.keys().values().iterator().next())
