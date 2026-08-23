@@ -19,23 +19,13 @@ final class SyntaxSpans {
         out.append("</span>");
     }
 
-    /** Appends {@code text} with the HTML metacharacters {@code & < >} escaped. */
+    /** Appends {@code text} HTML-escaped (the shared four: {@code & < > "}). */
     static void escape(StringBuilder out, String text) {
-        for (int i = 0; i < text.length(); i++) {
-            char c = text.charAt(i);
-            switch (c) {
-                case '&' -> out.append("&amp;");
-                case '<' -> out.append("&lt;");
-                case '>' -> out.append("&gt;");
-                default -> out.append(c);
-            }
-        }
+        out.append(io.tesseraql.core.text.Escapes.html(text));
     }
 
     /** The whole string as escaped plain text (no token spans) — for unknown/unsupported files. */
     static String escapePlain(String text) {
-        StringBuilder out = new StringBuilder(text.length());
-        escape(out, text);
-        return out.toString();
+        return io.tesseraql.core.text.Escapes.html(text);
     }
 }

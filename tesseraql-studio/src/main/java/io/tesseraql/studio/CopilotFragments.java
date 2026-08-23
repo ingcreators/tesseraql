@@ -81,7 +81,6 @@ public final class CopilotFragments {
     }
 
     private static String escape(String value) {
-        return value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-                .replace("\"", "&quot;");
+        return io.tesseraql.core.text.Escapes.html(value);
     }
 }

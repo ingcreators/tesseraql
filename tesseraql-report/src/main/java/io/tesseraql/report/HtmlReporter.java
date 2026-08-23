@@ -38,6 +38,6 @@ public final class HtmlReporter {
         if (value == null) {
             return "";
         }
-        return value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+        return io.tesseraql.core.text.Escapes.html(value);
     }
 }

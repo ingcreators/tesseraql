@@ -608,7 +608,9 @@ public final class ViewEjector {
     }
 
     private static String escape(String text) {
-        return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+        // The quote is escaped now too: this copy dropped it, which is unsafe the moment a
+        // label lands inside a quoted attribute (docs/duplication-consolidation.md, camp. 4).
+        return io.tesseraql.core.text.Escapes.html(text);
     }
 
     private static void require(boolean condition, String message) {

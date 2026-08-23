@@ -391,8 +391,7 @@ public final class ErrorResponseRenderer implements Step {
     }
 
     private static String escape(String value) {
-        return value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-                .replace("\"", "&quot;");
+        return io.tesseraql.core.text.Escapes.html(value);
     }
 
     /** Maps an error code to an HTTP status (design ch. 37.4). */

@@ -1,13 +1,18 @@
 package io.tesseraql.security.session;
 
-/** Minimal HTTP {@code Cookie} header parsing. */
-final class Cookies {
+/**
+ * Minimal HTTP {@code Cookie} header parsing. Public since docs/duplication-consolidation.md
+ * campaign 4: three surfaces carried byte-identical copies, one of them naming this class's
+ * package-private visibility as the reason — and the copies had already drifted on whether a
+ * value is trimmed.
+ */
+public final class Cookies {
 
     private Cookies() {
     }
 
     /** Returns the value of the named cookie from a {@code Cookie} header, or {@code null}. */
-    static String value(String cookieHeader, String name) {
+    public static String value(String cookieHeader, String name) {
         if (cookieHeader == null) {
             return null;
         }
