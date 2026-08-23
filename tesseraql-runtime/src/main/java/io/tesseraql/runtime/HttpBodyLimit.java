@@ -67,8 +67,8 @@ final class HttpBodyLimit {
                 .putHeader("Content-Type", "application/json; charset=utf-8")
                 // The code, not a message built from the request — the same envelope
                 // discipline the admission gate's refusal follows.
-                .end("{\"error\":{\"code\":\"" + BODY_TOO_LARGE
-                        + "\",\"message\":\"The request body exceeds"
-                        + " tesseraql.http.maxBodyBytes (" + maxBodyBytes + " bytes)\"}}");
+                .end(io.tesseraql.core.error.ErrorEnvelope.json(BODY_TOO_LARGE,
+                        "The request body exceeds tesseraql.http.maxBodyBytes ("
+                                + maxBodyBytes + " bytes)"));
     }
 }

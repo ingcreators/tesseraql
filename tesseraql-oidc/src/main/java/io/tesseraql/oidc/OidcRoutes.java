@@ -332,7 +332,7 @@ final class OidcRoutes {
     private void respondError(Exchange exchange, TqlErrorCode code, String message) {
         exchange.response().status(ErrorResponseRenderer.httpStatus(code));
         exchange.response().header(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
-        exchange.setBody(FederationErrors.body(code, message));
+        exchange.setBody(io.tesseraql.core.error.ErrorEnvelope.json(code, message));
     }
 
     private static String header(Exchange exchange, String name) {

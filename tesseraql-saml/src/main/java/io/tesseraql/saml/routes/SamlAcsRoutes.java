@@ -437,6 +437,6 @@ final class SamlAcsRoutes {
         exchange.response()
                 .status(io.tesseraql.compiler.binding.ErrorResponseRenderer.httpStatus(code));
         exchange.response().header(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
-        exchange.setBody(FederationErrors.body(code, message));
+        exchange.setBody(io.tesseraql.core.error.ErrorEnvelope.json(code, message));
     }
 }

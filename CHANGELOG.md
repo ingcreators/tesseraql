@@ -25,6 +25,18 @@ All notable changes to TesseraQL are documented here. The format follows
   test services. `PathGuardLedgerTest` names the hand-rolled shape's remaining
   occurrences (the primitive, and three prefix classifications that confine nothing); a
   new one is refused by default.
+- **The error envelope is spelled in one place, and two drifted copies are fixed**
+  (`ErrorEnvelope`, docs/duplication-consolidation.md campaign 3). Seven surfaces
+  concatenated `{"error":{"code":…,"message":…}}` by hand with divergent or no escaping;
+  the one correct copy (the federation endpoints') moved to core, and every pre-route
+  writer — the edge's unrendered failure, the admission, body-limit and SSE refusals, the
+  reload stub, the relay, the login throttle — builds through it. **Two shape defects died
+  with the copies:** the relay's envelope had drifted to a message-less
+  `{"error":{"code":…}}`, and the MCP transport still shipped the flat `{"error":"…"}`
+  shape the federation endpoints retired — its refusals are now coded (`TQL-MCP-4263`
+  unauthorized, `TQL-MCP-4264` method not allowed). The login throttle's code is a typed
+  constant instead of a string literal. `ErrorEnvelopeLedgerTest` refuses a new
+  hand-spelled envelope by default.
 - **An outbound call's span never ends clean on a failure.** `HttpCallClient` recorded an
   error on its `tesseraql.http.call` span only for the two constructed refusals; a status
   refusal recorded but an unknown credential, an unserializable body, or a plain bug ended

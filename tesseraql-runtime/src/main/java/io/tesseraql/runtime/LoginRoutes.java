@@ -72,8 +72,7 @@ final class LoginRoutes {
      * with Retry-After. Reveals the throttle, never the account.
      */
     static void renderThrottled(Exchange exchange, boolean browserForm,
-            java.time.Duration wait, com.fasterxml.jackson.databind.ObjectMapper mapper,
-            String next) throws Exception {
+            java.time.Duration wait, String next) throws Exception {
         if (browserForm) {
             redirect(exchange, 303, LOGIN_PATH + "?error=rate"
                     + (next == null
@@ -85,10 +84,13 @@ final class LoginRoutes {
         exchange.response().status(429);
         exchange.response().header("Retry-After", String.valueOf(Math.max(1, wait.toSeconds())));
         exchange.response().header(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
-        exchange.setBody(mapper.writeValueAsString(Map.of("error", Map.of(
-                "code", "TQL-RATE-4292",
-                "message", "Too many attempts; retry later"))));
+        exchange.setBody(io.tesseraql.core.error.ErrorEnvelope.json(THROTTLED,
+                "Too many attempts; retry later"));
     }
+
+    /** TQL-RATE-4292: too many sign-in attempts from this address (HTTP 429). */
+    private static final io.tesseraql.core.error.TqlErrorCode THROTTLED = new io.tesseraql.core.error.TqlErrorCode(
+            io.tesseraql.core.error.TqlDomain.RATE, 4292);
 
     void install(RuntimeContext context) {
         Pipelines.Compilation pipelines = Pipelines.of(context)
@@ -145,7 +147,7 @@ final class LoginRoutes {
         String address = presentedAddress(exchange);
         var wait = throttle.retryAfter("login", loginId, address);
         if (wait.isPresent()) {
-            renderThrottled(exchange, browserForm, wait.get(), mapper, next);
+            renderThrottled(exchange, browserForm, wait.get(), next);
             return;
         }
 

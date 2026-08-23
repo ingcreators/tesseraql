@@ -141,8 +141,8 @@ public final class SseRoutes {
                         // covered quotes and backslashes but not control characters. The detail
                         // belongs in the log.
                         LOG.debug("SSE stream {} refused: {}", path, refusal.getMessage());
-                        response.end("{\"error\":{\"code\":\"" + refusal.code()
-                                + "\",\"message\":\"The request was refused\"}}");
+                        response.end(io.tesseraql.core.error.ErrorEnvelope
+                                .json(refusal.code(), "The request was refused"));
                     }
                 });
             } catch (IOException ended) {
