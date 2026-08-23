@@ -185,6 +185,44 @@ class HttpCallClientTest {
         assertThat(http.proxy()).contains(java.net.ProxySelector.getDefault());
     }
 
+    /**
+     * Every failure leaves on the span — the status refusal, and unchecked failures alike.
+     * A span that never records its exception has an unreachable error branch (the
+     * Completion defect class, docs/vertx-native.md).
+     */
+    @Test
+    void aFailedCallRecordsItsErrorOnTheSpan() {
+        io.tesseraql.core.telemetry.RecordingTracer tracer = new io.tesseraql.core.telemetry.RecordingTracer();
+        AppConfig config = config(Map.of("allowedHosts", List.of("localhost")));
+        HttpCallClient traced = new HttpCallClient(HttpOutbound.load(config), config, tracer,
+                meter);
+        responseStatus = 500;
+
+        assertThatThrownBy(() -> traced.call(call("GET", "/x"), Map.of(), null))
+                .isInstanceOf(TqlException.class);
+
+        assertThat(tracer.spans()).hasSize(1);
+        assertThat(tracer.spans().get(0).error()).isTrue();
+    }
+
+    /** An unknown credential is an unchecked failure inside the span; it must not end clean. */
+    @Test
+    void anUncheckedFailureRecordsOnTheSpanToo() {
+        io.tesseraql.core.telemetry.RecordingTracer tracer = new io.tesseraql.core.telemetry.RecordingTracer();
+        AppConfig config = config(Map.of("allowedHosts", List.of("localhost")));
+        HttpCallClient traced = new HttpCallClient(HttpOutbound.load(config), config, tracer,
+                meter);
+        HttpCallSpec withCredential = new HttpCallSpec("GET", "http://localhost:" + port + "/x",
+                Map.of(), Map.of(), "missing-credential", null, null, null, null);
+
+        assertThatThrownBy(() -> traced.call(withCredential, Map.of(), null))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("missing-credential");
+
+        assertThat(tracer.spans()).hasSize(1);
+        assertThat(tracer.spans().get(0).error()).isTrue();
+    }
+
     @Test
     void anAllowedCallDoesNotCountAnEgressDenial() {
         HttpCallClient client = client(Map.of("allowedHosts", List.of("localhost")));

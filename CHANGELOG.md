@@ -8,6 +8,14 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **An outbound call's span never ends clean on a failure.** `HttpCallClient` recorded an
+  error on its `tesseraql.http.call` span only for the two constructed refusals; a status
+  refusal recorded but an unknown credential, an unserializable body, or a plain bug ended
+  the span clean — the Completion defect class (docs/vertx-native.md). Every failure now
+  leaves on the span, and `tesseraql deploy`'s upload — the last CLI call with no timeout
+  at all — is bounded. The `HttpClientLedgerTest` ledger now names every main-source HTTP
+  client construction; a new one is refused by default
+  (docs/duplication-consolidation.md, campaign 1 closes here).
 - **Generated OpenAPI documents carry the application's declared version.** The generator
   read the unprefixed `app.version` where every other reader reads `tesseraql.app.version`,
   so the `info.version` of every generated document was the `1.0.0` fallback whatever the

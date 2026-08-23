@@ -254,8 +254,11 @@ Fourteen, in the recommended order. Each is one PR, branched from fresh origin/m
    client's request timeout runs to the response headers, and buffering the body to bound
    it would defeat the reason the streaming surface exists.
 6. **The HTTP ledger** — `HttpClientLedgerTest`; `DeployCommand` timeouts;
-   `HttpCallClient`'s span records unchecked failures; the transfer service's spans gain
-   their parent.
+   `HttpCallClient`'s span records unchecked failures. Corrected at implementation: the
+   transfer service's spans do **not** gain a parent — a transfer runs detached from the
+   request that started it (the caller gets the transfer id back immediately), so a root
+   span is the correct shape, exactly as a job's is; the survey misread the missing parent
+   as a defect.
 7. **`ConfinedPath`** — the primitive, with the security-loaded adopters: runtime file
    scopes and assets, the template resolver, the zip-slip guard, the PDF resolvers.
 8. **`ConfinedPath` sweep** — the remaining adopters (yaml, studio, cli, apptasks) and the

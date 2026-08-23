@@ -201,8 +201,13 @@ final class DeployCommand implements Callable<Integer> {
         String target = url.replaceAll("/+$", "") + "/_tesseraql/deploy"
                 + (query.isEmpty() ? "" : "?" + query);
         try {
-            java.net.http.HttpResponse<String> response = java.net.http.HttpClient.newHttpClient()
+            // Bounded like every other outbound call (docs/duplication-consolidation.md,
+            // campaign 1): this upload had no timeout at all. The request bound is generous
+            // because a bundle is tens of megabytes over whatever link reaches the stack.
+            java.net.http.HttpResponse<String> response = java.net.http.HttpClient.newBuilder()
+                    .connectTimeout(java.time.Duration.ofSeconds(10)).build()
                     .send(java.net.http.HttpRequest.newBuilder(java.net.URI.create(target))
+                            .timeout(java.time.Duration.ofMinutes(5))
                             .header("Authorization", "Bearer " + token)
                             .header("Content-Type", "application/octet-stream")
                             .POST(java.net.http.HttpRequest.BodyPublishers.ofFile(tqlapp))

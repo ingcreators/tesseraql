@@ -146,6 +146,12 @@ public final class HttpCallClient implements io.tesseraql.yaml.http.OutboundGate
                     + "' failed: " + ex.getMessage(), ex);
             span.recordError(failure);
             throw failure;
+        } catch (RuntimeException | Error ex) {
+            // An unchecked failure must not end the span clean — the Completion defect class
+            // (docs/vertx-native.md): a span that never records its exception has an
+            // unreachable error branch. Not a remote failure, so the breaker stays untouched.
+            span.recordError(ex);
+            throw ex;
         } finally {
             span.end();
         }
@@ -174,10 +180,8 @@ public final class HttpCallClient implements io.tesseraql.yaml.http.OutboundGate
                     breaker.recordFailure(clock.getAsLong(), outbound.circuitBreakerThreshold(),
                             openDuration());
                 }
-                TqlException failure = new TqlException(CALL_FAILED, "http-call to '" + host
+                throw new TqlException(CALL_FAILED, "http-call to '" + host
                         + "' returned HTTP " + status);
-                span.recordError(failure);
-                throw failure;
             }
             breaker.recordSuccess();
             return result(status, response);
@@ -191,6 +195,13 @@ public final class HttpCallClient implements io.tesseraql.yaml.http.OutboundGate
                     + "' failed: " + ex.getMessage(), ex);
             span.recordError(failure);
             throw failure;
+        } catch (RuntimeException | Error ex) {
+            // Every failure leaves on the span — the status refusal above, an unknown
+            // credential, a body that will not serialize, or a plain bug. A span that never
+            // records its exception has an unreachable error branch (the Completion defect
+            // class, docs/vertx-native.md).
+            span.recordError(ex);
+            throw ex;
         } finally {
             span.end();
         }
