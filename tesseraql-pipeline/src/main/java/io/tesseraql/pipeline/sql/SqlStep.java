@@ -11,7 +11,6 @@ import io.tesseraql.core.spool.SpoolKind;
 import io.tesseraql.core.spool.SpoolRef;
 import io.tesseraql.core.spool.SpoolWriter;
 import io.tesseraql.core.spool.TempStore;
-import io.tesseraql.core.sql.BoundParameter;
 import io.tesseraql.core.sql.BoundSql;
 import io.tesseraql.core.sql.ScopeResolver;
 import io.tesseraql.core.sql.Sql2WayParser;
@@ -25,11 +24,6 @@ import io.tesseraql.pipeline.tenant.TenantRouting;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.ResultSetMetaData;
-import java.sql.SQLException;
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -125,92 +119,90 @@ public class SqlStep implements Step {
     @Override
     @SuppressWarnings("unchecked")
     public void process(Exchange exchange) throws Exception {
-        io.tesseraql.core.telemetry.SpanContext parent = exchange.getProperty(
-                TesseraqlProperties.TRACE_CONTEXT, io.tesseraql.core.telemetry.SpanContext.class);
-        io.tesseraql.core.telemetry.Span span = tracer(exchange)
-                .start("tesseraql.sql.execute", parent)
-                .attribute("surface", "route")
-                .attribute("sqlId", sqlPath)
-                .attribute("mode", mode);
-        try {
-            Map<String, Object> params = exchange.getProperty(
-                    TesseraqlProperties.SQL_PARAMS, Map.of(), Map.class);
-            Map<String, Object> scopeContext = exchange.getProperty(
-                    TesseraqlProperties.CONTEXT, Map.of(), Map.class);
-            BoundSql bound = SqlRenderer.render(nodes(exchange), params, scopeResolver(exchange),
-                    scopeContext, filePathResolver(exchange));
-            DataSource dataSource = dataSource(exchange);
+        Map<String, Object> params = exchange.getProperty(
+                TesseraqlProperties.SQL_PARAMS, Map.of(), Map.class);
+        Map<String, Object> scopeContext = exchange.getProperty(
+                TesseraqlProperties.CONTEXT, Map.of(), Map.class);
+        BoundSql bound = SqlRenderer.render(nodes(exchange), params, scopeResolver(exchange),
+                scopeContext, filePathResolver(exchange));
+        DataSource dataSource = dataSource(exchange);
+        // The statement layer, per exchange (docs/contract-sql-execution.md structural
+        // decision 1): each statement this step runs — the main query or update, the count
+        // wrapper, an export's extraction and its named queries — executes bounded, classified
+        // and spanned (surface=route) through the one primitive. Cheap immutable; the tracer is
+        // looked up per request.
+        io.tesseraql.core.sql.SqlStatement statements = io.tesseraql.core.sql.SqlStatement
+                .on(dataSource)
+                .dialect(dialect)
+                .timeoutSeconds(queryTimeoutSeconds)
+                .surface("route")
+                .tracer(tracer(exchange))
+                .spanParent(exchange.getProperty(TesseraqlProperties.TRACE_CONTEXT,
+                        io.tesseraql.core.telemetry.SpanContext.class));
 
-            if ("query-export".equals(mode)) {
-                export(exchange, dataSource, bound);
-                return;
-            }
-            if (!"query".equals(mode) && !"update".equals(mode)) {
-                throw new TqlException(UNSUPPORTED_MODE,
-                        "Unsupported SQL mode '" + mode
-                                + "' (supported: query, update, query-export)");
-            }
-            Map<String, Object> context = exchange.getProperty(
-                    TesseraqlProperties.CONTEXT, Map.class);
-            long startNanos = System.nanoTime();
-            long startedAt = System.currentTimeMillis();
-            // Declarative pagination (roadmap Phase 41): the main query of a page:-declaring
-            // route executes with the dialect's clause appended (one extra row answers hasNext),
-            // and the `page` context entry carries the metadata renderers and views read.
-            io.tesseraql.pipeline.PageRequest page = exchange.getProperty(TesseraqlProperties.PAGE,
-                    io.tesseraql.pipeline.PageRequest.class);
-            boolean paged = page != null && "query".equals(mode)
-                    && MAIN.equals(resultKey);
-            Map<String, Object> result;
-            if (paged) {
-                result = executeQuery(dataSource, paginated(bound, page));
-                List<Map<String, Object>> rows = (List<Map<String, Object>>) result.get("rows");
-                boolean hasNext = rows.size() > page.size();
-                if (hasNext) {
-                    rows = new java.util.ArrayList<>(rows.subList(0, page.size()));
-                    result.put("rows", rows);
-                    result.put("rowCount", rows.size());
-                }
-                Map<String, Object> info = new java.util.LinkedHashMap<>();
-                info.put("number", page.number());
-                info.put("size", page.size());
-                info.put("hasNext", hasNext);
-                info.put("hasPrev", page.number() > 1);
-                if (page.by() != null && !rows.isEmpty()) {
-                    info.put("next", rows.get(rows.size() - 1).get(page.by()));
-                }
-                if (page.count()) {
-                    long total = countAll(dataSource, bound);
-                    info.put("totalRows", total);
-                    info.put("totalPages", Math.max(1,
-                            (total + page.size() - 1) / page.size()));
-                }
-                if (context != null) {
-                    context.put("page", info);
-                }
-            } else {
-                result = "update".equals(mode)
-                        ? executeUpdate(dataSource, bound)
-                        : executeQuery(dataSource, bound);
-            }
-
-            String countKey = "update".equals(mode) ? "affectedRows" : "rowCount";
-            Object count = result.get(countKey);
-            span.attribute(countKey, count);
-            long durationMs = (System.nanoTime() - startNanos) / 1_000_000L;
-            long rows = count instanceof Number number ? number.longValue() : 0L;
-            slowSqlLog(exchange).record(new io.tesseraql.core.diag.SqlExecution(
-                    sqlPath, mode, durationMs, rows, startedAt));
-            if (context != null) {
-                io.tesseraql.pipeline.ContextResults.put(context, resultKey, result);
-            }
-            exchange.setBody(result);
-        } catch (RuntimeException ex) {
-            span.recordError(ex);
-            throw ex;
-        } finally {
-            span.end();
+        if ("query-export".equals(mode)) {
+            export(exchange, dataSource, statements, bound);
+            return;
         }
+        if (!"query".equals(mode) && !"update".equals(mode)) {
+            throw new TqlException(UNSUPPORTED_MODE,
+                    "Unsupported SQL mode '" + mode
+                            + "' (supported: query, update, query-export)");
+        }
+        Map<String, Object> context = exchange.getProperty(
+                TesseraqlProperties.CONTEXT, Map.class);
+        long startNanos = System.nanoTime();
+        long startedAt = System.currentTimeMillis();
+        // Declarative pagination (roadmap Phase 41): the main query of a page:-declaring
+        // route executes with the dialect's clause appended (one extra row answers hasNext),
+        // and the `page` context entry carries the metadata renderers and views read.
+        io.tesseraql.pipeline.PageRequest page = exchange.getProperty(TesseraqlProperties.PAGE,
+                io.tesseraql.pipeline.PageRequest.class);
+        boolean paged = page != null && "query".equals(mode)
+                && MAIN.equals(resultKey);
+        Map<String, Object> result;
+        if (paged) {
+            result = executeQuery(statements, paginated(bound, page));
+            List<Map<String, Object>> rows = (List<Map<String, Object>>) result.get("rows");
+            boolean hasNext = rows.size() > page.size();
+            if (hasNext) {
+                rows = new java.util.ArrayList<>(rows.subList(0, page.size()));
+                result.put("rows", rows);
+                result.put("rowCount", rows.size());
+            }
+            Map<String, Object> info = new java.util.LinkedHashMap<>();
+            info.put("number", page.number());
+            info.put("size", page.size());
+            info.put("hasNext", hasNext);
+            info.put("hasPrev", page.number() > 1);
+            if (page.by() != null && !rows.isEmpty()) {
+                info.put("next", rows.get(rows.size() - 1).get(page.by()));
+            }
+            if (page.count()) {
+                long total = countAll(statements, bound);
+                info.put("totalRows", total);
+                info.put("totalPages", Math.max(1,
+                        (total + page.size() - 1) / page.size()));
+            }
+            if (context != null) {
+                context.put("page", info);
+            }
+        } else {
+            result = "update".equals(mode)
+                    ? executeUpdate(statements, bound)
+                    : executeQuery(statements, bound);
+        }
+
+        String countKey = "update".equals(mode) ? "affectedRows" : "rowCount";
+        Object count = result.get(countKey);
+        long durationMs = (System.nanoTime() - startNanos) / 1_000_000L;
+        long rows = count instanceof Number number ? number.longValue() : 0L;
+        slowSqlLog(exchange).record(new io.tesseraql.core.diag.SqlExecution(
+                sqlPath, mode, durationMs, rows, startedAt));
+        if (context != null) {
+            io.tesseraql.pipeline.ContextResults.put(context, resultKey, result);
+        }
+        exchange.setBody(result);
     }
 
     private io.tesseraql.core.telemetry.Tracer tracer(Exchange exchange) {
@@ -265,7 +257,8 @@ public class SqlStep implements Step {
      * by the compiled route, so synchronous exports share the file-export machinery. The spool is
      * deleted when the exchange completes.
      */
-    private void export(Exchange exchange, DataSource dataSource, BoundSql bound) {
+    private void export(Exchange exchange, DataSource dataSource,
+            io.tesseraql.core.sql.SqlStatement statements, BoundSql bound) {
         FileCodec codec = exchange.getProperty(TesseraqlProperties.EXPORT_CODEC, FileCodec.class);
         FileWriteSpec spec = exchange.getProperty(TesseraqlProperties.EXPORT_SPEC,
                 FileWriteSpec.class);
@@ -278,7 +271,9 @@ public class SqlStep implements Step {
         List<SpooledRows> spools = new java.util.ArrayList<>();
         SpoolRef ref;
         // Stream large exports per the dialect's profile so the driver uses a cursor instead of
-        // buffering the whole result set in memory (design ch. 42, 28).
+        // buffering the whole result set in memory (design ch. 42, 28). The primitive prepares
+        // forward-only at the profile's fetch size; the transaction bracket the profile demands
+        // stays here, on the connection this method owns.
         io.tesseraql.core.dialect.StreamingProfile profile = io.tesseraql.core.dialect.StreamingProfiles
                 .forDialect(dialect);
         try (Connection connection = dataSource.getConnection()) {
@@ -286,33 +281,40 @@ public class SqlStep implements Step {
             if (profile.autoCommitOff()) {
                 connection.setAutoCommit(false);
             }
-            try (PreparedStatement statement = connection.prepareStatement(bound.sql(),
-                    ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY)) {
-                applyTimeout(statement);
-                statement.setFetchSize(profile.fetchSize());
-                bindParameters(statement, bound.parameters());
+            try {
                 SpoolKind kind = "csv".equals(codec.format()) ? SpoolKind.CSV : SpoolKind.BINARY;
                 SpoolWriter writer = tempStore.createWriter(kind);
-                // The writer closes first (listed first); toRef() is only valid after close.
-                try (writer; ResultSet resultSet = statement.executeQuery()) {
-                    io.tesseraql.core.files.ExportRowCap cap = io.tesseraql.core.files.ExportWrite
-                            .effectiveCap(codec, spec, exchange.getProperty(
-                                    TesseraqlProperties.EXPORT_ROW_CAP,
-                                    io.tesseraql.core.files.ExportRowCap.class));
-                    Map<String, Object> values = composedValues(exchange, connection, tempStore,
-                            cap, spools);
-                    io.tesseraql.core.files.ResultSetRows extraction = new io.tesseraql.core.files.ResultSetRows(
-                            resultSet, dialect, cap, EXECUTION_ERROR);
-                    io.tesseraql.core.files.ExportWrite.write(codec, spec, tempStore, extraction,
-                            exchange.getProperty(TesseraqlProperties.EXPORT_ENRICHER,
-                                    io.tesseraql.core.files.RowEnricher.class),
-                            exchange.getProperty(TesseraqlProperties.EXPORT_ENRICH_WINDOW, 0,
-                                    Integer.class),
-                            values, filename,
-                            new io.tesseraql.core.spool.SpoolOutput(writer));
-                    writer.incrementRows(extraction.count());
-                }
-                ref = writer.toRef();
+                ref = statements.fetchSize(profile.fetchSize()).read(connection, sqlPath, bound,
+                        (resultSet, span) -> {
+                            // The writer closes before the statement; toRef() is only valid
+                            // after close, so it answers outside this try. The reader's
+                            // contract is SQLException, so an I/O failure travels unchecked
+                            // and the outer catch unwraps it to the code it always mapped to.
+                            try (writer) {
+                                io.tesseraql.core.files.ExportRowCap cap = io.tesseraql.core.files.ExportWrite
+                                        .effectiveCap(codec, spec, exchange.getProperty(
+                                                TesseraqlProperties.EXPORT_ROW_CAP,
+                                                io.tesseraql.core.files.ExportRowCap.class));
+                                Map<String, Object> values = composedValues(exchange, connection,
+                                        statements, tempStore, cap, spools);
+                                io.tesseraql.core.files.ResultSetRows extraction = new io.tesseraql.core.files.ResultSetRows(
+                                        resultSet, dialect, cap, EXECUTION_ERROR);
+                                io.tesseraql.core.files.ExportWrite.write(codec, spec, tempStore,
+                                        extraction,
+                                        exchange.getProperty(TesseraqlProperties.EXPORT_ENRICHER,
+                                                io.tesseraql.core.files.RowEnricher.class),
+                                        exchange.getProperty(
+                                                TesseraqlProperties.EXPORT_ENRICH_WINDOW, 0,
+                                                Integer.class),
+                                        values, filename,
+                                        new io.tesseraql.core.spool.SpoolOutput(writer));
+                                writer.incrementRows(extraction.count());
+                                span.attribute("rowCount", extraction.count());
+                            } catch (java.io.IOException ex) {
+                                throw new java.io.UncheckedIOException(ex);
+                            }
+                            return writer.toRef();
+                        });
             } finally {
                 if (profile.autoCommitOff()) {
                     connection.commit();
@@ -321,6 +323,8 @@ public class SqlStep implements Step {
             }
         } catch (TqlException ex) {
             throw ex;
+        } catch (java.io.UncheckedIOException ex) {
+            throw executionError(ex.getCause());
         } catch (Exception ex) {
             throw executionError(ex);
         } finally {
@@ -355,8 +359,8 @@ public class SqlStep implements Step {
      */
     @SuppressWarnings("unchecked")
     private Map<String, Object> composedValues(Exchange exchange, Connection connection,
-            TempStore tempStore, io.tesseraql.core.files.ExportRowCap cap,
-            List<SpooledRows> spools) {
+            io.tesseraql.core.sql.SqlStatement statements, TempStore tempStore,
+            io.tesseraql.core.files.ExportRowCap cap, List<SpooledRows> spools) {
         Map<String, Object> resolved = exchange.getProperty(TesseraqlProperties.EXPORT_VALUES,
                 Map.of(), Map.class);
         List<io.tesseraql.core.files.ExportQuery> queries = exchange.getProperty(
@@ -369,18 +373,18 @@ public class SqlStep implements Step {
         Map<String, Object> values = new LinkedHashMap<>(resolved);
         for (io.tesseraql.core.files.ExportQuery query : queries) {
             BoundSql bound = SqlRenderer.render(exportQueryNodes(exchange, query), params);
-            try (PreparedStatement statement = connection.prepareStatement(bound.sql())) {
-                applyTimeout(statement);
-                bindParameters(statement, bound.parameters());
-                try (ResultSet resultSet = statement.executeQuery()) {
-                    // Spooled like the extraction, and counted by the same ceiling: a cap that
-                    // bounds the subject and lets a named query run unbounded bounds nothing
-                    // (docs/export-pipeline.md, decision 15).
-                    values.put(query.name(), io.tesseraql.core.files.ExportWrite.namedResult(
-                            tempStore, new io.tesseraql.core.files.ResultSetRows(resultSet,
-                                    dialect, cap, EXECUTION_ERROR),
-                            spools));
-                }
+            try {
+                // Spooled like the extraction, and counted by the same ceiling: a cap that
+                // bounds the subject and lets a named query run unbounded bounds nothing
+                // (docs/export-pipeline.md, decision 15).
+                values.put(query.name(),
+                        statements.read(connection, query.sqlFile().toString(), bound,
+                                (resultSet, span) -> io.tesseraql.core.files.ExportWrite
+                                        .namedResult(tempStore,
+                                                new io.tesseraql.core.files.ResultSetRows(
+                                                        resultSet, dialect, cap,
+                                                        EXECUTION_ERROR),
+                                                spools)));
             } catch (java.sql.SQLException ex) {
                 throw executionError(ex);
             }
@@ -445,41 +449,55 @@ public class SqlStep implements Step {
     }
 
     /** The total row count: the rendered query wrapped in {@code select count(*)}. */
-    private long countAll(DataSource dataSource, BoundSql bound) {
+    private long countAll(io.tesseraql.core.sql.SqlStatement statements, BoundSql bound) {
         BoundSql counting = new BoundSql(
                 "select count(*) as tql_total from (\n" + stripTerminator(bound.sql())
                         + "\n) tql_count",
                 bound.parameters(), bound.sourceMap(), bound.coverageTrace(), bound.variant());
-        Map<String, Object> result = executeQuery(dataSource, counting);
-        @SuppressWarnings("unchecked")
-        List<Map<String, Object>> rows = (List<Map<String, Object>>) result.get("rows");
-        Object total = rows.isEmpty() ? 0L : rows.get(0).values().iterator().next();
-        return total instanceof Number number ? number.longValue() : 0L;
-    }
-
-    private Map<String, Object> executeQuery(DataSource dataSource, BoundSql bound) {
-        try (Connection connection = dataSource.getConnection();
-                PreparedStatement statement = connection.prepareStatement(bound.sql())) {
-            applyTimeout(statement);
-            bindParameters(statement, bound.parameters());
-            try (ResultSet resultSet = statement.executeQuery()) {
-                List<Map<String, Object>> rows = readRows(resultSet);
-                Map<String, Object> result = new LinkedHashMap<>();
-                result.put("rows", rows);
-                result.put("rowCount", rows.size());
-                return result;
-            }
+        try {
+            Object total = statements.read(sqlPath, counting,
+                    (resultSet, span) -> resultSet.next() ? resultSet.getObject(1) : 0L);
+            return total instanceof Number number ? number.longValue() : 0L;
         } catch (java.sql.SQLException ex) {
             throw executionError(ex);
         }
     }
 
-    private Map<String, Object> executeUpdate(DataSource dataSource, BoundSql bound) {
-        try (Connection connection = dataSource.getConnection();
-                PreparedStatement statement = connection.prepareStatement(bound.sql())) {
-            applyTimeout(statement);
-            bindParameters(statement, bound.parameters());
-            int affected = statement.executeUpdate();
+    private Map<String, Object> executeQuery(io.tesseraql.core.sql.SqlStatement statements,
+            BoundSql bound) {
+        try {
+            List<Map<String, Object>> rows = statements.read(sqlPath, bound,
+                    io.tesseraql.core.sql.SqlStatement.cappedRows(dialect, maxRows, overflow()));
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("rows", rows);
+            result.put("rowCount", rows.size());
+            return result;
+        } catch (java.sql.SQLException ex) {
+            throw executionError(ex);
+        }
+    }
+
+    /** The caller's half of the capped read: warn truncates with a log, fail refuses. */
+    private io.tesseraql.core.sql.SqlStatement.RowOverflow overflow() {
+        return () -> {
+            if ("warn".equals(onOverflow)) {
+                LOG.log(System.Logger.Level.WARNING,
+                        "Result truncated at maxRows={0} for {1}", maxRows,
+                        sqlPath);
+                return;
+            }
+            throw TqlException.builder(MATERIALIZATION_OVERFLOW)
+                    .message("Result exceeds maxRows=" + maxRows
+                            + " (use pagination or query-export)")
+                    .source(sqlPath)
+                    .build();
+        };
+    }
+
+    private Map<String, Object> executeUpdate(io.tesseraql.core.sql.SqlStatement statements,
+            BoundSql bound) {
+        try {
+            int affected = statements.update(sqlPath, bound);
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("affectedRows", affected);
             return result;
@@ -519,66 +537,4 @@ public class SqlStep implements Step {
         };
     }
 
-    /**
-     * Bounds the statement by the endpoint's timeout (roadmap Phase 45): the compiler passes
-     * the per-binding override or the app default, so a runaway query is cancelled by the
-     * driver instead of holding a pool connection forever. 0 = unbounded (explicit opt-out).
-     */
-    private void applyTimeout(PreparedStatement statement) throws SQLException {
-        int seconds = queryTimeoutSeconds;
-        if (seconds > 0) {
-            statement.setQueryTimeout(seconds);
-        }
-    }
-
-    private void bindParameters(PreparedStatement statement, List<BoundParameter> parameters)
-            throws java.sql.SQLException {
-        for (int i = 0; i < parameters.size(); i++) {
-            statement.setObject(i + 1, parameters.get(i).value());
-        }
-    }
-
-    private List<Map<String, Object>> readRows(ResultSet resultSet) throws java.sql.SQLException {
-        ResultSetMetaData metaData = resultSet.getMetaData();
-        int columnCount = metaData.getColumnCount();
-        boolean warn = "warn".equals(onOverflow);
-        List<Map<String, Object>> rows = new ArrayList<>();
-        while (resultSet.next()) {
-            if (maxRows >= 0 && rows.size() >= maxRows) {
-                if (warn) {
-                    LOG.log(System.Logger.Level.WARNING,
-                            "Result truncated at maxRows={0} for {1}", maxRows,
-                            sqlPath);
-                    break;
-                }
-                throw TqlException.builder(MATERIALIZATION_OVERFLOW)
-                        .message("Result exceeds maxRows=" + maxRows
-                                + " (use pagination or query-export)")
-                        .source(sqlPath)
-                        .build();
-            }
-            Map<String, Object> row = new LinkedHashMap<>();
-            for (int col = 1; col <= columnCount; col++) {
-                row.put(io.tesseraql.core.dialect.Labels.normalize(
-                        dialect, metaData.getColumnLabel(col)),
-                        normalize(resultSet.getObject(col)));
-            }
-            rows.add(row);
-        }
-        return rows;
-    }
-
-    /** Normalizes JDBC temporal types to ISO-8601 strings for stable JSON output. */
-    private static Object normalize(Object value) {
-        if (value instanceof java.sql.Timestamp timestamp) {
-            return timestamp.toInstant().toString();
-        }
-        if (value instanceof java.sql.Date date) {
-            return date.toLocalDate().toString();
-        }
-        if (value instanceof java.sql.Time time) {
-            return time.toLocalTime().toString();
-        }
-        return value;
-    }
 }

@@ -176,6 +176,25 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **The route pipeline's statements all run through the primitive — the contract SQL
+  campaign's recorded residual is resolved** (docs/contract-sql-execution.md "The residual,
+  resolved"). `SqlStep` — the executor behind every route query, update, pagination count and
+  synchronous export — adopts `SqlStatement`'s statement layer: prepare, bind, bound,
+  execute-and-count, the capped materializing read, classification and the span are the
+  primitive's, while the step keeps what is the route's — rendering with scopes and file
+  placeholders, pagination shaping, tenant routing, the slow-SQL log, and the export's
+  transaction bracket, spool orchestration and codec write (now inside the primitive's reader
+  seam). For the streaming export the primitive gained `fetchSize(int)`, preparing reads
+  forward-only/read-only at the dialect profile's fetch size, so a large export cursors
+  exactly as before; data-source-level `read`/`update` forms open one connection per
+  statement, the route shape. The step's one-per-request span becomes the primitive's
+  one-per-statement spans (structural decision 5 applied literally): a paged route's count
+  query and an export's named queries now appear as their own `surface=route` statements. A
+  route `mode: update` runs `execute()`/`getUpdateCount()` like every other write. `SqlStep`
+  leaves the `SqlExecutorLedgerTest` ledger — every executor of rendered 2-way SQL now meets
+  JDBC through the primitive except the deliberately recorded spool/cap readers (batch,
+  `KeyedReference`, `JdbcFileTransferService`).
+
 - **The command transaction's statements all run through the primitive**
   (docs/contract-sql-execution.md structural decision 1 — the residual slice 7 recorded, first
   half). `TransactionalCommandProcessor` adopts `SqlStatement`'s statement layer for its steps

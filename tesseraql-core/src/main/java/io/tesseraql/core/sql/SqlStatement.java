@@ -56,10 +56,11 @@ public final class SqlStatement {
     private final Tracer tracer;
     private final String surface;
     private final io.tesseraql.core.telemetry.SpanContext spanParent;
+    private final int fetchSize;
 
     private SqlStatement(DataSource dataSource, String dialect, int timeoutSeconds,
             boolean rawLabels, Tracer tracer, String surface,
-            io.tesseraql.core.telemetry.SpanContext spanParent) {
+            io.tesseraql.core.telemetry.SpanContext spanParent, int fetchSize) {
         this.dataSource = dataSource;
         this.dialect = dialect;
         this.timeoutSeconds = Math.max(0, timeoutSeconds);
@@ -67,12 +68,13 @@ public final class SqlStatement {
         this.tracer = tracer == null ? NoopTracer.INSTANCE : tracer;
         this.surface = surface == null ? "contract" : surface;
         this.spanParent = spanParent;
+        this.fetchSize = Math.max(0, fetchSize);
     }
 
     /** Statements against {@code dataSource}, bounded by {@link #DEFAULT_TIMEOUT_SECONDS}. */
     public static SqlStatement on(DataSource dataSource) {
         return new SqlStatement(dataSource, null, DEFAULT_TIMEOUT_SECONDS, false,
-                NoopTracer.INSTANCE, "contract", null);
+                NoopTracer.INSTANCE, "contract", null, 0);
     }
 
     /**
@@ -82,7 +84,7 @@ public final class SqlStatement {
      */
     public static SqlStatement onCallerConnections() {
         return new SqlStatement(null, null, DEFAULT_TIMEOUT_SECONDS, false,
-                NoopTracer.INSTANCE, "contract", null);
+                NoopTracer.INSTANCE, "contract", null, 0);
     }
 
     /** The data source, where this executor owns its connections; refuses where it does not. */
@@ -104,13 +106,13 @@ public final class SqlStatement {
      */
     public SqlStatement dialect(String dialect) {
         return new SqlStatement(dataSource, dialect, timeoutSeconds, rawLabels, tracer, surface,
-                spanParent);
+                spanParent, fetchSize);
     }
 
     /** The same executor bounded by {@code seconds}; an explicit {@code 0} removes the bound. */
     public SqlStatement timeoutSeconds(int seconds) {
         return new SqlStatement(dataSource, dialect, seconds, rawLabels, tracer, surface,
-                spanParent);
+                spanParent, fetchSize);
     }
 
     /** The declared bound, for callers that thread it onward (e.g. into decision lookups). */
@@ -127,13 +129,13 @@ public final class SqlStatement {
      */
     public SqlStatement surface(String surface) {
         return new SqlStatement(dataSource, dialect, timeoutSeconds, rawLabels, tracer, surface,
-                spanParent);
+                spanParent, fetchSize);
     }
 
     /** The same executor parenting its spans on {@code parent} (null roots a new trace). */
     public SqlStatement spanParent(io.tesseraql.core.telemetry.SpanContext parent) {
         return new SqlStatement(dataSource, dialect, timeoutSeconds, rawLabels, tracer, surface,
-                parent);
+                parent, fetchSize);
     }
 
     /**
@@ -144,7 +146,7 @@ public final class SqlStatement {
      */
     public SqlStatement tracer(Tracer tracer) {
         return new SqlStatement(dataSource, dialect, timeoutSeconds, rawLabels, tracer, surface,
-                spanParent);
+                spanParent, fetchSize);
     }
 
     /**
@@ -156,7 +158,19 @@ public final class SqlStatement {
      */
     public SqlStatement rawLabels() {
         return new SqlStatement(dataSource, dialect, timeoutSeconds, true, tracer, surface,
-                spanParent);
+                spanParent, fetchSize);
+    }
+
+    /**
+     * The same executor preparing its reads forward-only and read-only, fetching {@code rows} at
+     * a time — the streaming shape a spooling export needs so the driver cursors through the
+     * result instead of buffering it whole (docs/contract-sql-execution.md slice 7; the caller
+     * picks the size from its dialect's streaming profile). {@code 0} keeps the driver's default
+     * prepare. Reads only; the generated-key prepare of a write is unaffected.
+     */
+    public SqlStatement fetchSize(int rows) {
+        return new SqlStatement(dataSource, dialect, timeoutSeconds, rawLabels, tracer, surface,
+                spanParent, rows);
     }
 
     /**
@@ -287,15 +301,21 @@ public final class SqlStatement {
         // Per dialect capability: PostgreSQL/Oracle honour requested key columns; MySQL and
         // SQL Server only hand back the auto-increment/identity value. Oracle without the
         // column names answers with a ROWID, which is why the branch exists.
-        PreparedStatement statement = keys.isEmpty()
-                ? connection.prepareStatement(bound.sql())
-                : generatedKeyColumns()
+        PreparedStatement statement = !keys.isEmpty()
+                ? generatedKeyColumns()
                         ? connection.prepareStatement(bound.sql(), keys.toArray(String[]::new))
                         : connection.prepareStatement(bound.sql(),
-                                Statement.RETURN_GENERATED_KEYS);
+                                Statement.RETURN_GENERATED_KEYS)
+                : fetchSize > 0
+                        ? connection.prepareStatement(bound.sql(), ResultSet.TYPE_FORWARD_ONLY,
+                                ResultSet.CONCUR_READ_ONLY)
+                        : connection.prepareStatement(bound.sql());
         try {
             if (timeoutSeconds > 0) {
                 statement.setQueryTimeout(timeoutSeconds);
+            }
+            if (fetchSize > 0 && keys.isEmpty()) {
+                statement.setFetchSize(fetchSize);
             }
             List<BoundParameter> parameters = bound.parameters();
             for (int i = 0; i < parameters.size(); i++) {
@@ -430,6 +450,26 @@ public final class SqlStatement {
     public <T> T read(Connection connection, String sqlId, BoundSql bound,
             ResultSetReader<T> reader) throws SqlStatementException {
         return read(connection, sqlId, bound, (resultSet, span) -> reader.read(resultSet));
+    }
+
+    /** As {@link #read(Connection, String, BoundSql, SpannedReader)}, on a connection of this
+     * executor's own — the shape of a route statement, one connection per statement. */
+    public <T> T read(String sqlId, BoundSql bound, SpannedReader<T> reader)
+            throws SqlStatementException {
+        try (Connection connection = ownConnections().getConnection()) {
+            return read(connection, sqlId, bound, reader);
+        } catch (SQLException ex) {
+            throw classified(sqlId, ex);
+        }
+    }
+
+    /** As {@link #update(Connection, String, BoundSql)}, on a connection of this executor's own. */
+    public int update(String sqlId, BoundSql bound) throws SqlStatementException {
+        try (Connection connection = ownConnections().getConnection()) {
+            return update(connection, sqlId, bound);
+        } catch (SQLException ex) {
+            throw classified(sqlId, ex);
+        }
     }
 
     /** As {@link #read(Connection, String, BoundSql, ResultSetReader)}, with the span in reach. */
