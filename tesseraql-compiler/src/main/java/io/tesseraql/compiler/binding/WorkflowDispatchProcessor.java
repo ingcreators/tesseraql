@@ -88,15 +88,25 @@ public final class WorkflowDispatchProcessor implements Step {
         // connection — each attempt's own transaction re-reads what it advances.
         if (!decisions.isEmpty()) {
             DataSource dataSource = TenantRouting.dataSource(exchange, datasourceName);
+            // The statement layer, per exchange (docs/contract-sql-execution.md structural
+            // decision 1): the document load and the decision lookups run bounded, classified
+            // and spanned; the tracer is looked up per request.
+            io.tesseraql.core.sql.SqlStatement statements = io.tesseraql.core.sql.SqlStatement
+                    .onCallerConnections()
+                    .dialect(dialect)
+                    .timeoutSeconds(sqlTimeoutSeconds)
+                    .tracer(tracer(exchange))
+                    .spanParent(exchange.getProperty(TesseraqlProperties.TRACE_CONTEXT,
+                            io.tesseraql.core.telemetry.SpanContext.class));
             try (Connection connection = dataSource.getConnection()) {
                 EvaluationContext evaluation = new EvaluationContext(context);
                 Object keyValue = evaluation.resolve(List.of("path", "key"));
                 String docId = keyValue == null ? null : String.valueOf(keyValue);
                 Map<String, Object> decideContext = new LinkedHashMap<>(context);
                 decideContext.put("document", TransitionExecutor.loadDocument(connection,
-                        table, keyColumn, dialect, docId, sqlTimeoutSeconds));
+                        table, keyColumn, dialect, docId, statements));
                 context.put(AmbientBinds.DECISION,
-                        decisions.evaluate(decideContext, connection, sqlTimeoutSeconds));
+                        decisions.evaluate(decideContext, connection, statements));
             }
         }
         // Attempts mutate the shared context (document, steps, audit, their own
@@ -141,5 +151,12 @@ public final class WorkflowDispatchProcessor implements Step {
                         + "' found no member transition that holds")
                 .details(details)
                 .build();
+    }
+
+    /** This runtime's tracer, bound beside the pools; a hand-built context is a no-op. */
+    private static io.tesseraql.core.telemetry.Tracer tracer(Exchange exchange) {
+        io.tesseraql.core.telemetry.Tracer bound = exchange.beans().lookup(
+                TesseraqlProperties.TRACER_BEAN, io.tesseraql.core.telemetry.Tracer.class);
+        return bound != null ? bound : io.tesseraql.core.telemetry.NoopTracer.INSTANCE;
     }
 }

@@ -105,7 +105,9 @@ class DecisionTableSourceIntegrationTest {
         DecisionTables.TableSource source = DecisionSets.compileSource("shippingFee", decision,
                 "postgres");
         try (Connection connection = connect()) {
-            return source.evaluate(connection, inputs, effectiveAt, 5);
+            return source.evaluate(
+                    io.tesseraql.core.sql.SqlStatement.onCallerConnections().timeoutSeconds(5),
+                    connection, inputs, effectiveAt);
         }
     }
 

@@ -28,8 +28,8 @@ import org.junit.jupiter.api.Test;
  * The transition engine ran an application's guard SQL, its stamp UPDATE and its document load
  * with no statement bound at all, inside the command's open transaction — while threading a
  * timeout it only ever applied to decisions (docs/contract-sql-execution.md slice 2). These pin
- * the bound on each formerly-unbounded statement; reverting the {@code applyTimeout} calls turns
- * them red.
+ * the bound on each formerly-unbounded statement; the bound now rides the collaborators'
+ * {@code SqlStatement}, and dropping it there turns them red.
  */
 class TransitionExecutorBoundTest {
 
@@ -57,7 +57,9 @@ class TransitionExecutorBoundTest {
 
         assertThat(jdbc.calls.stream().filter(call -> call.equals("setQueryTimeout(17)")))
                 .hasSize(3);
-        assertThat(jdbc.calls).contains("executeUpdate");
+        // The primitive writes via execute + getUpdateCount (docs/contract-sql-execution.md
+        // slice 7), not executeUpdate.
+        assertThat(jdbc.calls).contains("execute");
     }
 
     @Test
@@ -90,7 +92,10 @@ class TransitionExecutorBoundTest {
                     default -> null;
                 });
         return new TransitionExecutor.Collaborators(store, null, ScopeResolver.UNSUPPORTED,
-                null, List.of(), timeoutSeconds, null);
+                null, List.of(),
+                io.tesseraql.core.sql.SqlStatement.onCallerConnections()
+                        .timeoutSeconds(timeoutSeconds),
+                null);
     }
 
     /** A JDBC stack that records what was asked of it; {@code next()} answers from the queue. */
@@ -120,7 +125,10 @@ class TransitionExecutorBoundTest {
             return switch (method.getName()) {
                 case "prepareStatement" -> proxy(PreparedStatement.class);
                 case "executeQuery" -> proxy(ResultSet.class);
-                case "executeUpdate" -> 1;
+                // The primitive's write path: execute answering false (an update count follows),
+                // then the count itself.
+                case "execute" -> Boolean.FALSE;
+                case "getUpdateCount" -> 1;
                 case "getMetaData" -> proxy(ResultSetMetaData.class);
                 case "getColumnCount" -> 0;
                 case "next" -> !nextAnswers.isEmpty() && nextAnswers.removeFirst();

@@ -466,31 +466,40 @@ public final class DecisionTables {
         /** The bind slot carrying the row-limit of a {@code hitPolicy: first} lookup. */
         public static final String LIMIT = "@limit";
 
-        /** Runs the generated lookup on the operation's connection, in its transaction. */
-        public Map<String, Object> evaluate(java.sql.Connection connection,
-                Map<String, Object> inputValues, Object effectiveAt, int timeoutSeconds) {
-            java.util.List<Map<String, Object>> hits = new ArrayList<>();
-            try (java.sql.PreparedStatement statement = connection.prepareStatement(sql)) {
-                if (timeoutSeconds > 0) {
-                    statement.setQueryTimeout(timeoutSeconds);
-                }
-                int index = 1;
-                for (String bind : binds) {
-                    statement.setObject(index++, switch (bind) {
-                        case EFFECTIVE_AT -> effectiveAt;
-                        case LIMIT -> 1;
-                        default -> inputValues.get(bind);
-                    });
-                }
-                try (java.sql.ResultSet results = statement.executeQuery()) {
-                    while (results.next() && hits.size() < 2) {
-                        Map<String, Object> row = new LinkedHashMap<>();
-                        for (String output : outputs) {
-                            row.put(output, results.getObject(output));
-                        }
-                        hits.add(row);
-                    }
-                }
+        /**
+         * Runs the generated lookup on the operation's connection, in its transaction, through
+         * {@code statements} — the caller's statement layer, which bounds, classifies and spans
+         * it ({@code surface=decision}) like every other declared statement
+         * (docs/contract-sql-execution.md structural decision 1). The read stays this record's:
+         * positional binds over generated SQL, values by declared output name (OQ6 — a row-map
+         * read here would be shape for shape's sake).
+         */
+        public Map<String, Object> evaluate(io.tesseraql.core.sql.SqlStatement statements,
+                java.sql.Connection connection, Map<String, Object> inputValues,
+                Object effectiveAt) {
+            java.util.List<Object> values = new ArrayList<>();
+            for (String bind : binds) {
+                values.add(switch (bind) {
+                    case EFFECTIVE_AT -> effectiveAt;
+                    case LIMIT -> 1;
+                    default -> inputValues.get(bind);
+                });
+            }
+            java.util.List<Map<String, Object>> hits;
+            try {
+                hits = statements.surface("decision").read(connection, name, sql, values,
+                        (results, span) -> {
+                            java.util.List<Map<String, Object>> read = new ArrayList<>();
+                            while (results.next() && read.size() < 2) {
+                                Map<String, Object> row = new LinkedHashMap<>();
+                                for (String output : outputs) {
+                                    row.put(output, results.getObject(output));
+                                }
+                                read.add(row);
+                            }
+                            span.attribute("rowCount", read.size());
+                            return read;
+                        });
             } catch (java.sql.SQLException ex) {
                 throw TqlException.builder(LOOKUP_FAILED)
                         .message("Decision '" + name + "': the generated lookup failed: "
@@ -578,12 +587,13 @@ public final class DecisionTables {
      * transaction, so a rate row committed by an earlier request is visible and the lookup
      * rides the command's isolation.
      *
-     * <p>There is deliberately no overload that defaults {@code timeoutSeconds}
-     * (docs/contract-sql-execution.md slice 2): a caller with no table-backed decision passes
-     * {@code null, 0} and the values mean what they say.
+     * <p>{@code statements} is the statement layer a table-backed lookup runs through — the
+     * caller's declared bound, tracer and span parent ride it (docs/contract-sql-execution.md
+     * structural decision 1). There is deliberately no overload that defaults it: a caller with
+     * no table-backed decision passes {@code null} for both and the values mean what they say.
      */
     public Map<String, Map<String, Object>> evaluate(Map<String, Object> context,
-            java.sql.Connection connection, int timeoutSeconds) {
+            java.sql.Connection connection, io.tesseraql.core.sql.SqlStatement statements) {
         Map<String, Map<String, Object>> decisions = new LinkedHashMap<>();
         EvaluationContext evaluation = new EvaluationContext(context);
         for (Use use : uses) {
@@ -597,8 +607,8 @@ public final class DecisionTables {
                 throw new TqlException(LOOKUP_FAILED, "Decision '" + use.source().name()
                         + "' is table-backed and needs the operation's connection");
             }
-            decisions.put(use.alias(), use.source().evaluate(connection, inputs,
-                    use.effectiveAt().eval(evaluation), timeoutSeconds));
+            decisions.put(use.alias(), use.source().evaluate(statements, connection, inputs,
+                    use.effectiveAt().eval(evaluation)));
         }
         return decisions;
     }

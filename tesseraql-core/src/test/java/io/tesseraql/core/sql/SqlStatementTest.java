@@ -247,6 +247,116 @@ class SqlStatementTest {
                 .containsEntry("sqlId", "scim.users.create");
     }
 
+    @Test
+    void aSpannedReaderStampsWhatOnlyItKnowsOntoTheStatementsSpan() throws Exception {
+        io.tesseraql.core.telemetry.RecordingTracer tracer = new io.tesseraql.core.telemetry.RecordingTracer();
+        FakeDatabase database = new FakeDatabase(List.of("name"), List.of("Anne"));
+        BoundSql bound = SqlRenderer.render(SELECT, Map.of("id", "u1"));
+
+        Integer count = SqlStatement.onCallerConnections().tracer(tracer)
+                .read(database.dataSource().getConnection(), "web/api/users.sql", bound,
+                        (resultSet, span) -> {
+                            int rows = 0;
+                            while (resultSet.next()) {
+                                rows++;
+                            }
+                            span.attribute("rowCount", rows);
+                            return rows;
+                        });
+
+        assertThat(count).isEqualTo(1);
+        assertThat(tracer.spans()).hasSize(1);
+        assertThat(tracer.spans().get(0).attributes())
+                .containsEntry("sqlId", "web/api/users.sql")
+                .containsEntry("rowCount", 1);
+    }
+
+    @Test
+    void aReaderRefusalIsRecordedOnTheStatementsSpan() throws Exception {
+        io.tesseraql.core.telemetry.RecordingTracer tracer = new io.tesseraql.core.telemetry.RecordingTracer();
+        FakeDatabase database = new FakeDatabase(List.of("name"), List.of("Anne"));
+        BoundSql bound = SqlRenderer.render(SELECT, Map.of("id", "u1"));
+
+        assertThatThrownBy(() -> SqlStatement.onCallerConnections().tracer(tracer)
+                .read(database.dataSource().getConnection(), "web/api/users.sql", bound,
+                        (resultSet, span) -> {
+                            throw new IllegalStateException("row cap");
+                        }))
+                .isInstanceOf(IllegalStateException.class);
+
+        // The refusal came from the caller-owned read, but it is this statement's failure: the
+        // span must not end clean under it.
+        assertThat(tracer.spans()).hasSize(1);
+        assertThat(tracer.spans().get(0).error()).isTrue();
+    }
+
+    @Test
+    void cappedRowsAsksTheCallerAboutTheRowPastTheCapAndTruncatesWhenItReturns()
+            throws Exception {
+        FakeDatabase database = new FakeDatabase(List.of("name"), List.of("Anne"));
+        BoundSql bound = SqlRenderer.render(SELECT, Map.of("id", "u1"));
+        List<String> overflowed = new ArrayList<>();
+
+        List<Map<String, Object>> rows = SqlStatement.onCallerConnections()
+                .read(database.dataSource().getConnection(), "web/api/users.sql", bound,
+                        SqlStatement.cappedRows(null, 0, () -> overflowed.add("asked")));
+
+        assertThat(rows).isEmpty();
+        assertThat(overflowed).containsExactly("asked");
+    }
+
+    @Test
+    void cappedRowsPropagatesTheCallersRefusal() {
+        FakeDatabase database = new FakeDatabase(List.of("name"), List.of("Anne"));
+        BoundSql bound = SqlRenderer.render(SELECT, Map.of("id", "u1"));
+
+        assertThatThrownBy(() -> SqlStatement.onCallerConnections()
+                .read(database.dataSource().getConnection(), "web/api/users.sql", bound,
+                        SqlStatement.cappedRows(null, 0, () -> {
+                            throw new IllegalStateException("exceeds maxRows");
+                        })))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("exceeds maxRows");
+    }
+
+    @Test
+    void aFrameworkBuiltReadBindsPositionalValuesUnderTheBound() throws Exception {
+        FakeDatabase database = new FakeDatabase(List.of("name"), List.of("Anne"));
+
+        Boolean found = SqlStatement.onCallerConnections()
+                .read(database.dataSource().getConnection(), "workflow.document",
+                        "select * from t where id = ?",
+                        java.util.Arrays.asList((Object) "o1"),
+                        (resultSet, span) -> resultSet.next());
+
+        assertThat(found).isTrue();
+        assertThat(database.calls).contains("setObject(1,o1)", "setQueryTimeout(30)");
+    }
+
+    @Test
+    void aCallerRenderedWriteCapturesItsDeclaredKeys() throws Exception {
+        FakeDatabase database = new FakeDatabase(List.of("id"), List.of(7));
+        BoundSql bound = SqlRenderer.render("insert into t (name) values (/*name*/'x')",
+                Map.of("name", "Anne"));
+
+        SqlStatement.WriteResult written = SqlStatement.onCallerConnections().dialect("postgres")
+                .update(database.dataSource().getConnection(), "orders/create.sql", bound,
+                        List.of("id"));
+
+        assertThat(written.affectedRows()).isEqualTo(1);
+        assertThat(written.keys()).containsEntry("id", 7);
+        assertThat(database.calls)
+                .anyMatch(call -> call.startsWith("prepareStatement(") && call.endsWith(",[id])"));
+    }
+
+    @Test
+    void aCallerConnectionsExecutorRefusesToOpenItsOwn() {
+        assertThatThrownBy(() -> SqlStatement.onCallerConnections()
+                .query("contract", SELECT, Map.of("id", "u1")))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("caller-supplied");
+    }
+
     /** A JDBC stack that records what was asked of it and answers one row (or the failure set). */
     private static final class FakeDatabase implements InvocationHandler {
 

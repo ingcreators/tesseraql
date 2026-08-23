@@ -12,9 +12,8 @@ import io.tesseraql.core.sql.ScopeResolver;
 import io.tesseraql.core.sql.Sql2WayParser;
 import io.tesseraql.core.sql.SqlNode;
 import io.tesseraql.core.sql.SqlRenderer;
+import io.tesseraql.core.sql.SqlStatement;
 import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.util.ArrayList;
@@ -128,16 +127,18 @@ public final class ValidationRules {
      * the caller cannot see. Callers with no request principal pass
      * {@link ScopeResolver#UNSUPPORTED}, which rejects the directive loudly.
      *
-     * <p>{@code timeoutSeconds} bounds each rule's statement — a rule runs inside the command's
-     * open write transaction, so a rule that hangs pins that transaction and its pool connection
-     * for as long as the database allows. There is deliberately no overload that defaults it
-     * (docs/contract-sql-execution.md slice 2): a caller that wants no bound writes {@code 0}
+     * <p>{@code statements} is the statement layer each SQL rule runs through
+     * (docs/contract-sql-execution.md structural decision 1): the caller's declared bound, tracer
+     * and span parent ride it, and each rule's statement executes bounded, classified and spanned
+     * ({@code surface=validation}) like every other declared statement. There is deliberately no
+     * overload that defaults it: a caller that wants no bound writes {@code timeoutSeconds(0)}
      * where everyone can see it.
      */
     public List<Map<String, Object>> evaluate(Map<String, Object> context, Connection connection,
-            ScopeResolver scopeResolver, int timeoutSeconds, BiConsumer<Rule, BoundSql> observer)
-            throws SQLException {
+            ScopeResolver scopeResolver, SqlStatement statements,
+            BiConsumer<Rule, BoundSql> observer) throws SQLException {
         EvaluationContext evaluation = new EvaluationContext(context);
+        SqlStatement ruleStatements = statements == null ? null : statements.surface("validation");
         List<Map<String, Object>> violations = new ArrayList<>();
         for (Rule rule : rules) {
             if (rule.when() != null && !rule.when().evalBoolean(evaluation)) {
@@ -149,7 +150,7 @@ public final class ValidationRules {
                 }
             } else {
                 violations.addAll(executeSql(rule, evaluation, context, connection, scopeResolver,
-                        timeoutSeconds, observer));
+                        ruleStatements, observer));
             }
         }
         return violations;
@@ -157,7 +158,7 @@ public final class ValidationRules {
 
     private static List<Map<String, Object>> executeSql(Rule rule, EvaluationContext evaluation,
             Map<String, Object> scopeContext, Connection connection, ScopeResolver scopeResolver,
-            int timeoutSeconds, BiConsumer<Rule, BoundSql> observer) throws SQLException {
+            SqlStatement statements, BiConsumer<Rule, BoundSql> observer) throws SQLException {
         Map<String, Object> params = new LinkedHashMap<>();
         rule.params().forEach((bindName, sourceExpr) -> params.put(bindName,
                 evaluation.resolve(Arrays.asList(sourceExpr.split("\\.")))));
@@ -168,30 +169,28 @@ public final class ValidationRules {
         if (observer != null) {
             observer.accept(rule, bound);
         }
-        List<Map<String, Object>> violations = new ArrayList<>();
-        try (PreparedStatement statement = connection.prepareStatement(bound.sql())) {
-            if (timeoutSeconds > 0) {
-                statement.setQueryTimeout(timeoutSeconds);
-            }
-            for (int i = 0; i < bound.parameters().size(); i++) {
-                statement.setObject(i + 1, bound.parameters().get(i).value());
-            }
-            try (ResultSet resultSet = statement.executeQuery()) {
-                ResultSetMetaData metaData = resultSet.getMetaData();
-                while (resultSet.next()) {
-                    Map<String, Object> violation = violation(rule);
-                    for (int col = 1; col <= metaData.getColumnCount(); col++) {
-                        Object value = resultSet.getObject(col);
-                        if (value != null) {
-                            violation.put(metaData.getColumnLabel(col).toLowerCase(Locale.ROOT),
-                                    value);
+        return statements.read(connection,
+                rule.sourcePath() == null ? rule.id() : rule.sourcePath(), bound,
+                (resultSet, span) -> {
+                    ResultSetMetaData metaData = resultSet.getMetaData();
+                    List<Map<String, Object>> violations = new ArrayList<>();
+                    while (resultSet.next()) {
+                        Map<String, Object> violation = violation(rule);
+                        for (int col = 1; col <= metaData.getColumnCount(); col++) {
+                            Object value = resultSet.getObject(col);
+                            if (value != null) {
+                                // Lower-cased by contract, not by dialect: the columns that
+                                // override a violation's defaults (field, code, message) match
+                                // by this spelling on every database.
+                                violation.put(metaData.getColumnLabel(col)
+                                        .toLowerCase(Locale.ROOT), value);
+                            }
                         }
+                        violations.add(violation);
                     }
-                    violations.add(violation);
-                }
-            }
-        }
-        return violations;
+                    span.attribute("rowCount", violations.size());
+                    return violations;
+                });
     }
 
     /** The declared defaults of a violation; a SQL rule's row columns override them. */

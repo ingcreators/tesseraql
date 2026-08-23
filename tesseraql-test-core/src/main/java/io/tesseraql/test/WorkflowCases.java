@@ -201,7 +201,7 @@ final class WorkflowCases {
             try {
                 inherited = new LinkedHashMap<>(io.tesseraql.yaml.decision.DecisionSets
                         .compileUses(dispatch.decide(), vendor)
-                        .evaluate(bindings, connection, 0));
+                        .evaluate(bindings, connection, suiteStatements()));
             } catch (io.tesseraql.core.error.TqlException miss) {
                 Map<String, Object> outcome = new LinkedHashMap<>();
                 outcome.put("workflow", def.id());
@@ -315,7 +315,7 @@ final class WorkflowCases {
                                     test.principal() == null
                                             ? null
                                             : test.principal().subject(),
-                                    List.of(), 0, observer),
+                                    List.of(), suiteStatements(), observer),
                             target.key(), bindings);
             session.advance(connection, bindings);
             if (transition.command() != null && !transition.commandFile().isBlank()) {
@@ -347,6 +347,15 @@ final class WorkflowCases {
                 return rows.isEmpty() ? null : rows.get(0);
             }
         }
+    }
+
+    /**
+     * The statement layer the executor's statements run through, on the suite's connection —
+     * an explicit timeoutSeconds(0): the suite runner has no configured bound
+     * (docs/contract-sql-execution.md slice 2).
+     */
+    private static io.tesseraql.core.sql.SqlStatement suiteStatements() {
+        return io.tesseraql.core.sql.SqlStatement.onCallerConnections().timeoutSeconds(0);
     }
 
     private Path workflowDir(io.tesseraql.yaml.model.WorkflowDefinition def) {

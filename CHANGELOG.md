@@ -176,6 +176,27 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **The command transaction's statements all run through the primitive**
+  (docs/contract-sql-execution.md structural decision 1 — the residual slice 7 recorded, first
+  half). `TransactionalCommandProcessor` adopts `SqlStatement`'s statement layer for its steps
+  and its workflow-assign query, and the compiler-built executors that ride its transaction —
+  `ValidationRules`, `DecisionTables` and `TransitionExecutor` — now take a per-exchange
+  `SqlStatement` (cheap immutable; the tracer is looked up per request) instead of a bare
+  timeout, so a validation rule, a decision lookup, a workflow guard, stamp and document load
+  execute bounded, classified and **spanned** — new `surface` values `validation`, `decision`
+  and `workflow` join the vocabulary, and those statements stop being unexplained gaps in
+  their traces. The primitive gains the seams this needed: a `SpannedReader` so a caller-owned
+  read can stamp what only it knows (its row count) onto the statement's span, a
+  `cappedRows` reader for the materialize-with-`maxRows` reads, a positional-values query
+  form, a caller-rendered write form with declared keys, `onCallerConnections()` for
+  executors that only ever ride someone else's transaction, and a reader's mid-read refusal
+  is now recorded on the span. Behavioral deltas, recorded: a command step's generated-key
+  prepare on an *unknown* dialect now follows the primitive's documented rule
+  (`RETURN_GENERATED_KEYS`) instead of defaulting to named key columns — every supported
+  dialect id resolves, so no configured deployment changes; and the four adopted files left
+  the `SqlExecutorLedgerTest` ledger. The signatures replaced took the timeout as an
+  argument; pre-1.0 this is a clean break, no bridge.
+
 - **The statement primitive is `SqlStatement`, the timeout key is read once, and a new
   hand-rolled executor fails the build** (docs/contract-sql-execution.md slice 7, closing the
   campaign). `ContractStatement` described its first adopter, not its shape: it renames to

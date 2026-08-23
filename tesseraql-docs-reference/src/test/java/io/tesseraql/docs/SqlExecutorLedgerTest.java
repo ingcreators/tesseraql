@@ -33,10 +33,7 @@ class SqlExecutorLedgerTest {
     private static final Path REPO = Path.of("..");
 
     private static final Set<String> LEDGER = new TreeSet<>(List.of(
-            "tesseraql-compiler/src/main/java/io/tesseraql/compiler/binding/TransactionalCommandProcessor.java",
-            "tesseraql-core/src/main/java/io/tesseraql/core/decision/DecisionTables.java",
             "tesseraql-core/src/main/java/io/tesseraql/core/sql/SqlStatement.java",
-            "tesseraql-core/src/main/java/io/tesseraql/core/validation/ValidationRules.java",
             "tesseraql-coverage-core/src/main/java/io/tesseraql/coverage/plan/MysqlPlanInspector.java",
             "tesseraql-coverage-core/src/main/java/io/tesseraql/coverage/plan/OraclePlanInspector.java",
             "tesseraql-coverage-core/src/main/java/io/tesseraql/coverage/plan/PostgresPlanInspector.java",
@@ -79,8 +76,7 @@ class SqlExecutorLedgerTest {
             "tesseraql-test-core/src/main/java/io/tesseraql/test/WorkflowCases.java",
             "tesseraql-yaml/src/main/java/io/tesseraql/yaml/calendar/Calendars.java",
             "tesseraql-yaml/src/main/java/io/tesseraql/yaml/enrich/KeyedReference.java",
-            "tesseraql-yaml/src/main/java/io/tesseraql/yaml/workflow/ColumnWorkflowStore.java",
-            "tesseraql-yaml/src/main/java/io/tesseraql/yaml/workflow/TransitionExecutor.java"));
+            "tesseraql-yaml/src/main/java/io/tesseraql/yaml/workflow/ColumnWorkflowStore.java"));
 
     @Test
     void everyPrepareStatementSiteIsOnTheLedger() throws IOException {

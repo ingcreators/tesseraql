@@ -13,6 +13,7 @@ import io.tesseraql.core.sql.ScopeResolver;
 import io.tesseraql.core.sql.Sql2WayParser;
 import io.tesseraql.core.sql.SqlNode;
 import io.tesseraql.core.sql.SqlRenderer;
+import io.tesseraql.core.sql.SqlStatement;
 import io.tesseraql.core.workflow.WorkflowStore;
 import io.tesseraql.core.workflow.WorkflowTaskStore;
 import io.tesseraql.yaml.decision.DecisionSets;
@@ -21,8 +22,6 @@ import io.tesseraql.yaml.model.WorkflowDefinition;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -98,14 +97,15 @@ public final class TransitionExecutor {
      * the caller's identity for task authority, the statement bound, and the optional guard-SQL
      * observer.
      *
-     * <p>{@code sqlTimeoutSeconds} bounds <em>every</em> statement the engine runs — the
-     * {@code decide:} lookups, the SQL guard, the document load and the stamp UPDATE — not only
-     * the decisions it was first threaded for (docs/contract-sql-execution.md slice 2). An
-     * explicit {@code 0} opts out; there is no unbounded default to forget.
+     * <p>{@code statements} is the statement layer <em>every</em> statement the engine runs goes
+     * through — the {@code decide:} lookups, the SQL guard, the document load and the stamp
+     * UPDATE (docs/contract-sql-execution.md structural decision 1). The caller's declared bound
+     * ({@code timeoutSeconds(0)} is the visible opt-out — there is no unbounded default to
+     * forget), tracer and span parent ride it; the engine stamps {@code surface=workflow}.
      */
     public record Collaborators(WorkflowStore store, WorkflowTaskStore taskStore,
             ScopeResolver scopes, String actorSubject, List<String> actorGroups,
-            int sqlTimeoutSeconds, GuardSqlObserver guardObserver) {
+            SqlStatement statements, GuardSqlObserver guardObserver) {
     }
 
     /**
@@ -170,15 +170,14 @@ public final class TransitionExecutor {
             throws SQLException {
         Object tenant = context.get("tenant");
         String tenantId = tenant == null ? null : String.valueOf(tenant);
+        SqlStatement statements = collaborators.statements().surface("workflow");
         collaborators.store().ensureInstance(connection, transition.docType(), docId,
                 transition.initial(), tenantId);
         context.put("document", loadDocument(connection, transition.table(),
-                transition.keyColumn(), transition.dialect(), docId,
-                collaborators.sqlTimeoutSeconds()));
+                transition.keyColumn(), transition.dialect(), docId, statements));
         if (!transition.decisions().isEmpty()) {
             context.put(io.tesseraql.core.sql.AmbientBinds.DECISION,
-                    transition.decisions().evaluate(context, connection,
-                            collaborators.sqlTimeoutSeconds()));
+                    transition.decisions().evaluate(context, connection, statements));
         }
         String current = collaborators.store().currentState(connection, transition.docType(),
                 docId);
@@ -207,16 +206,8 @@ public final class TransitionExecutor {
             if (collaborators.guardObserver() != null) {
                 collaborators.guardObserver().observe(transition.guardNodes(), bound);
             }
-            boolean holds;
-            try (PreparedStatement statement = connection.prepareStatement(bound.sql())) {
-                applyTimeout(statement, collaborators.sqlTimeoutSeconds());
-                for (int i = 0; i < bound.parameters().size(); i++) {
-                    statement.setObject(i + 1, bound.parameters().get(i).value());
-                }
-                try (ResultSet rows = statement.executeQuery()) {
-                    holds = rows.next();
-                }
-            }
+            boolean holds = statements.read(connection, "workflow.guard", bound,
+                    (rows, span) -> rows.next());
             if (!holds) {
                 // The renderer nests details under `error.details`, so the declared refusal
                 // rides the natural names: `code` is the app's refusal code, `message` its text.
@@ -347,15 +338,10 @@ public final class TransitionExecutor {
             sql.append(String.join(", ",
                     resolved.keySet().stream().map(column -> column + " = ?").toList()));
             sql.append(" where ").append(transition.keyColumn()).append(" = ?");
-            try (PreparedStatement statement = connection.prepareStatement(sql.toString())) {
-                applyTimeout(statement, collaborators.sqlTimeoutSeconds());
-                int index = 1;
-                for (Object value : resolved.values()) {
-                    statement.setObject(index++, value);
-                }
-                statement.setObject(index, docId);
-                statement.executeUpdate();
-            }
+            List<Object> values = new java.util.ArrayList<>(resolved.values());
+            values.add(docId);
+            collaborators.statements().surface("workflow")
+                    .update(connection, "workflow.stamp", sql.toString(), values);
             if (context.get("document") instanceof Map<?, ?> document) {
                 Map<String, Object> refreshed = new LinkedHashMap<>();
                 document.forEach((k, v) -> refreshed.put(String.valueOf(k), v));
@@ -381,34 +367,24 @@ public final class TransitionExecutor {
      * {@code decide:} (docs/transition-engine.md track B).
      */
     public static Map<String, Object> loadDocument(Connection connection, String table,
-            String keyColumn, String dialect, String docId, int timeoutSeconds)
+            String keyColumn, String dialect, String docId, SqlStatement statements)
             throws SQLException {
-        try (PreparedStatement ps = connection.prepareStatement("select * from "
-                + table + " where " + keyColumn + " = ?")) {
-            applyTimeout(ps, timeoutSeconds);
-            ps.setString(1, docId);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (!rs.next()) {
-                    return Map.of();
-                }
-                java.sql.ResultSetMetaData metaData = rs.getMetaData();
-                Map<String, Object> row = new LinkedHashMap<>();
-                for (int col = 1; col <= metaData.getColumnCount(); col++) {
-                    row.put(io.tesseraql.core.dialect.ResultRows.label(dialect,
-                            metaData.getColumnLabel(col)),
-                            io.tesseraql.core.dialect.ResultRows.value(rs.getObject(col)));
-                }
-                return row;
-            }
-        }
-    }
-
-    /** The statement bound (docs/contract-sql-execution.md slice 2); an explicit 0 opts out. */
-    private static void applyTimeout(PreparedStatement statement, int timeoutSeconds)
-            throws SQLException {
-        if (timeoutSeconds > 0) {
-            statement.setQueryTimeout(timeoutSeconds);
-        }
+        return statements.surface("workflow").read(connection, "workflow.document",
+                "select * from " + table + " where " + keyColumn + " = ?",
+                java.util.Arrays.asList((Object) docId),
+                (rs, span) -> {
+                    if (!rs.next()) {
+                        return Map.of();
+                    }
+                    java.sql.ResultSetMetaData metaData = rs.getMetaData();
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    for (int col = 1; col <= metaData.getColumnCount(); col++) {
+                        row.put(io.tesseraql.core.dialect.ResultRows.label(dialect,
+                                metaData.getColumnLabel(col)),
+                                io.tesseraql.core.dialect.ResultRows.value(rs.getObject(col)));
+                    }
+                    return row;
+                });
     }
 
     private static TqlException illegalTransition(CompiledTransition transition,
