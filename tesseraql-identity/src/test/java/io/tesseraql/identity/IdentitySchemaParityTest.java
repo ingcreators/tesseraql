@@ -39,6 +39,20 @@ class IdentitySchemaParityTest {
         }
     }
 
+    /**
+     * SCIM's {@code externalId} lives in {@code tql_groups.external_id}
+     * (docs/contract-sql-execution.md structural decision 6); a column added by hand to four
+     * files is the same forgotten-paste risk as a table, so the guard names it.
+     */
+    @Test
+    void everyDialectCarriesTheGroupExternalIdColumn() {
+        for (String dialect : DIALECTS) {
+            assertThat(DefaultIdentityPack.schema(dialect))
+                    .as("%s declares tql_groups.external_id", dialect)
+                    .contains("external_id");
+        }
+    }
+
     private static Set<String> tables(String dialect) {
         Set<String> names = new LinkedHashSet<>();
         Matcher matcher = CREATE_TABLE.matcher(DefaultIdentityPack.schema(dialect));

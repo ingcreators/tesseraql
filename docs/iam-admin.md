@@ -132,6 +132,20 @@ access changes without a trail saying so.
 
 Changes reach people at their next sign-in, like every grant change.
 
+**SCIM provisioning into the managed groups.** An identity provider can manage this same
+store over `/scim/v2/Groups` with no SQL written at all. Set
+`tesseraql.scim.groups.enabled`, configure none of the per-operation
+`tesseraql.scim.groups.<op>` keys, and the bundled contract set applies. `id` maps to
+`group_id` (minted as `grp-<uuid>`), and `externalId` maps to `external_id`.
+`displayName` maps to `group_name` **and** `group_code`: the code is what assignment rules
+join on, so it follows the name an administrator recognises — which also means a rename at
+the provisioning client renames the code. Declaring **all** of the operation keys means
+your own schema instead; declaring only some is refused at boot naming the missing keys,
+because two schemas mixed one statement at a time looks like a framework bug rather than a
+configuration one. Members provisioned this way are `tql_user_groups` rows with
+`source = 'scim'`, riding the same windows and the same sign-in resolution as any other
+membership.
+
 ## Eligible roles
 
 An **eligibility** says a person may take a role when they need it, and grants nothing

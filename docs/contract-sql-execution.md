@@ -214,11 +214,14 @@ Unchanged from the original. The blocked slice becomes: `tql_groups` gains an `e
 column across all four dialects; a bundled contract set of nine statements lands under
 `io/tesseraql/scim/pack/groups/`, dialect-suffixed only where pagination forces it; and
 `tesseraql.scim.groups.enabled` with no `tesseraql.scim.groups.<op>` key configured uses it.
+The bundled create's id is minted by the service as `grp-<uuid>` — the managed store's own
+shape — because `group_id` is a supplied column with nothing for a database to generate.
 
 The mapping is `id` → `group_id`, `displayName` → `group_name` **and** `group_code`,
 `externalId` → `external_id`. **A partly configured contract is refused at boot**, naming the
-missing keys: all nine set means the deployment's own SQL, none set means the bundled set, some
-set means two schemas mixed one statement at a time.
+missing keys: all eight operation keys set means the deployment's own SQL (`count` stays
+optional, as it always was), none set means the bundled set, some set means two schemas mixed
+one statement at a time.
 
 ## Structural decision 7 (new): the label policy is declared, and there are two of them
 

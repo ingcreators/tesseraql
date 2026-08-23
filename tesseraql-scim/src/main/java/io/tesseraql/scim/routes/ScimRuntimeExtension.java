@@ -110,14 +110,61 @@ public final class ScimRuntimeExtension implements RuntimeExtension {
                 .tracer(tracer);
     }
 
+    /** The per-operation SQL keys a deployment declares under {@code tesseraql.scim.groups.}. */
+    private static final java.util.List<String> GROUP_OPS = java.util.List.of("create",
+            "findById", "list", "replace", "delete", "listMembers", "addMember", "removeMember");
+
     /**
-     * Builds the SCIM group service from the configured contract SQL files, or {@code null} when
-     * group provisioning is disabled, leaving the {@code /Groups} endpoints unmounted.
+     * The declared group operations that are missing: empty means the deployment's own SQL,
+     * all of them means the bundled managed set, anything else is a boot refusal — two schemas
+     * mixed one statement at a time looks like a bug in the framework rather than in the
+     * configuration (docs/contract-sql-execution.md structural decision 6).
+     */
+    static java.util.List<String> missingGroupOps(AppConfig config) {
+        return GROUP_OPS.stream()
+                .filter(op -> config.getString("tesseraql.scim.groups." + op).isEmpty())
+                .toList();
+    }
+
+    /**
+     * True when no group operation is declared (the bundled set applies); a partial
+     * declaration is refused here, at boot, naming the missing keys.
+     */
+    static boolean useBundledGroupSet(AppConfig config) {
+        java.util.List<String> missing = missingGroupOps(config);
+        if (missing.size() == GROUP_OPS.size()) {
+            return true;
+        }
+        if (!missing.isEmpty()) {
+            throw new IllegalStateException("tesseraql.scim.groups is partially configured —"
+                    + " missing " + missing.stream()
+                            .map(op -> "tesseraql.scim.groups." + op)
+                            .collect(java.util.stream.Collectors.joining(", "))
+                    + ". Declare all of them for your own schema, or none of them to use the"
+                    + " bundled managed group set (docs/contract-sql-execution.md).");
+        }
+        return false;
+    }
+
+    /**
+     * Builds the SCIM group service — from the deployment's contract SQL when all operations
+     * are declared, from the bundled managed set when none are — or {@code null} when group
+     * provisioning is disabled, leaving the {@code /Groups} endpoints unmounted.
      */
     private static ScimGroupService buildGroupService(AppManifest manifest,
             javax.sql.DataSource dataSource, io.tesseraql.core.telemetry.Tracer tracer) {
         if (!flag(manifest.config(), "tesseraql.scim.groups.enabled")) {
             return null;
+        }
+        if (useBundledGroupSet(manifest.config())) {
+            // None declared: the bundled managed set against the managed identity schema,
+            // ids minted as grp-<uuid> because tql_groups.group_id is a supplied column.
+            return new ScimGroupService(dataSource,
+                    io.tesseraql.scim.ScimGroupPack.contract(dialect(manifest.config())))
+                    .idSupplier(io.tesseraql.scim.ScimGroupPack.idSupplier())
+                    .dialect(dialect(manifest.config()))
+                    .sqlTimeoutSeconds(sqlTimeoutSeconds(manifest.config()))
+                    .tracer(tracer);
         }
         ScimGroupContract contract = new ScimGroupContract(
                 readSql(manifest, "tesseraql.scim.groups.create"),
