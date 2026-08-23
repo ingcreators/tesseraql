@@ -10,7 +10,6 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Locale;
@@ -157,12 +156,11 @@ final class UpdateNotifier {
             return;
         }
         try {
-            Files.createDirectories(cacheFile.getParent());
-            Path tmp = cacheFile.resolveSibling(cacheFile.getFileName() + ".tmp");
-            try (var out = Files.newOutputStream(tmp)) {
-                properties.store(out, "TesseraQL CLI update check");
-            }
-            Files.move(tmp, cacheFile, StandardCopyOption.REPLACE_EXISTING);
+            // This copy alone dropped ATOMIC_MOVE; the shared replace restores it
+            // (docs/duplication-consolidation.md, campaign 4).
+            var buffer = new java.io.ByteArrayOutputStream();
+            properties.store(buffer, "TesseraQL CLI update check");
+            io.tesseraql.core.files.AtomicFiles.replace(cacheFile, buffer.toByteArray());
         } catch (IOException ex) {
             // Best-effort cache; a failed write just means we re-check next time.
         }

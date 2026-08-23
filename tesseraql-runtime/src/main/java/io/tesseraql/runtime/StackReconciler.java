@@ -8,7 +8,6 @@ import java.io.IOException;
 import java.nio.file.ClosedWatchServiceException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardWatchEventKinds;
 import java.nio.file.WatchKey;
 import java.nio.file.WatchService;
@@ -336,11 +335,9 @@ final class StackReconciler implements AutoCloseable {
     private void writeStatus(Status status) {
         try {
             Path dir = installRoot.resolve(".upgrade");
-            Files.createDirectories(dir);
-            Path temp = Files.createTempFile(dir, status.name(), ".tmp");
-            Files.write(temp, MAPPER.writeValueAsBytes(status));
-            Files.move(temp, dir.resolve(status.name() + ".status.json"),
-                    StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+            io.tesseraql.core.files.AtomicFiles.replace(
+                    dir.resolve(status.name() + ".status.json"),
+                    MAPPER.writeValueAsBytes(status));
         } catch (IOException unwritable) {
             // The outcome still happened and is in the log; a status file that cannot be
             // written must not fail the deploy it reports on.

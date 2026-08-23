@@ -8,7 +8,6 @@ import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Stream;
@@ -50,15 +49,11 @@ final class DatasetSpool {
                         java.time.Instant.now()));
                 return target;
             }
-            Files.createDirectories(directory);
-            Path temp = Files.createTempFile(directory, ".spool", ".tmp");
             try (InputStream in = blobStore.openInput(new BlobRef(attachment.storageKey(),
                     attachment.contentType(), attachment.byteSize(), attachment.checksum(),
                     attachment.createdAt()))) {
-                Files.copy(in, temp, StandardCopyOption.REPLACE_EXISTING);
+                io.tesseraql.core.files.AtomicFiles.replace(target, in);
             }
-            Files.move(temp, target, StandardCopyOption.ATOMIC_MOVE,
-                    StandardCopyOption.REPLACE_EXISTING);
             sweep();
             return target;
         } catch (IOException failure) {

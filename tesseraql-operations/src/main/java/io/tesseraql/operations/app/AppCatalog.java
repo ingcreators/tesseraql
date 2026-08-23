@@ -109,12 +109,10 @@ public final class AppCatalog {
             }
             // Atomic on purpose (docs/runtime-replace.md): a running host's reconciler reads
             // this file on every pass, and a torn read must be impossible rather than merely
-            // tolerated. Same-directory temp file, so the move stays one filesystem operation.
-            Path temp = Files.createTempFile(catalogFile.getParent(), "catalog", ".tmp");
-            Files.write(temp, MAPPER.writerWithDefaultPrettyPrinter()
-                    .writeValueAsBytes(List.copyOf(apps.values())));
-            Files.move(temp, catalogFile, java.nio.file.StandardCopyOption.ATOMIC_MOVE,
-                    java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            // tolerated.
+            io.tesseraql.core.files.AtomicFiles.replace(catalogFile,
+                    MAPPER.writerWithDefaultPrettyPrinter()
+                            .writeValueAsBytes(List.copyOf(apps.values())));
         } catch (IOException ex) {
             throw new UncheckedIOException(ex);
         }
