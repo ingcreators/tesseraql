@@ -156,6 +156,21 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **No declared statement runs unbounded** (docs/contract-sql-execution.md slice 2). Slice 1
+  bounded contract SQL; measuring the whole tree found the identical hole elsewhere. The
+  workflow transition engine ran an application's guard SQL, its stamp UPDATE and its document
+  load with no bound at all — inside the command's open transaction — while threading a timeout
+  it only ever applied to decision lookups; the collaborator is now honestly named
+  `sqlTimeoutSeconds` and bounds every statement the engine runs. The workflow sweeper ran an
+  application's escalate command and reassign resolver unbounded on every sweep; it now takes
+  the same `tesseraql.sql.timeoutSeconds` every other executor runs under. The
+  `ValidationRules` and `DecisionTables` overloads that defaulted the bound to `0` are gone —
+  an API that runs unbounded when the caller forgets to pass a value turns "forgot" into
+  "opted out", so a caller that wants no bound now writes `0` where everyone can see it. And
+  the file-transfer service's own `tql_file_transfer` bookkeeping statements, which bypassed
+  its `applyTimeout`, go through it. Behaviour changes exactly once: those statements are now
+  bounded.
+
 - **Contract SQL runs bounded, through one executor** (docs/contract-sql-execution.md,
   structural decisions 1 and 3, slice 1). The 2-way SQL a deployment supplies to satisfy a
   framework contract — an identity realm's contracts, SCIM inbound provisioning's — had grown

@@ -799,7 +799,13 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     workflowSweeper = new WorkflowSweeper(rules, taskStore, historyStore,
                             outboxStore,
                             io.tesseraql.yaml.app.ApplicationName.of(manifest.config()),
-                            dataSource, delegationStore);
+                            dataSource, delegationStore)
+                            // The sweep's escalate/reassign SQL ran unbounded inside its own
+                            // transaction (docs/contract-sql-execution.md slice 2).
+                            .sqlTimeoutSeconds(manifest.config()
+                                    .getString("tesseraql.sql.timeoutSeconds")
+                                    .map(Integer::parseInt)
+                                    .orElse(io.tesseraql.core.sql.ContractStatement.DEFAULT_TIMEOUT_SECONDS));
                     context.bind(TesseraqlProperties.WORKFLOW_SWEEPER_BEAN,
                             workflowSweeper);
                 }

@@ -571,17 +571,16 @@ public final class DecisionTables {
         return uses.isEmpty();
     }
 
-    /** Evaluates a {@code decide:} block that declares no table-backed decision. */
-    public Map<String, Map<String, Object>> evaluate(Map<String, Object> context) {
-        return evaluate(context, null, 0);
-    }
-
     /**
      * Evaluates every declared decision against the request context, in authored order, and
      * returns the {@code decision.*} namespace: outputs by decision alias. Table-backed
      * decisions run their generated SELECT on the given connection — the operation's own
      * transaction, so a rate row committed by an earlier request is visible and the lookup
      * rides the command's isolation.
+     *
+     * <p>There is deliberately no overload that defaults {@code timeoutSeconds}
+     * (docs/contract-sql-execution.md slice 2): a caller with no table-backed decision passes
+     * {@code null, 0} and the values mean what they say.
      */
     public Map<String, Map<String, Object>> evaluate(Map<String, Object> context,
             java.sql.Connection connection, int timeoutSeconds) {

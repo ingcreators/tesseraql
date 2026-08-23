@@ -132,7 +132,7 @@ class DecisionTablesTest {
                         "amount", "params.total"))));
 
         Map<String, Map<String, Object>> decisions = tables.evaluate(Map.of("params",
-                Map.of("category", "books", "total", 25000)));
+                Map.of("category", "books", "total", 25000)), null, 0);
 
         assertThat(decisions.get("approvalRoute"))
                 .containsEntry("route", "manager")
@@ -151,9 +151,9 @@ class DecisionTablesTest {
         DecisionTables tables = new DecisionTables(List.of(DecisionTables.use("routeBy", table,
                 Map.of("isOfficer", "principal.role == 'officer'"))));
 
-        assertThat(tables.evaluate(Map.of("principal", Map.of("role", "officer")))
+        assertThat(tables.evaluate(Map.of("principal", Map.of("role", "officer")), null, 0)
                 .get("routeBy")).containsEntry("route", "fast");
-        assertThat(tables.evaluate(Map.of("principal", Map.of("role", "clerk")))
+        assertThat(tables.evaluate(Map.of("principal", Map.of("role", "clerk")), null, 0)
                 .get("routeBy")).containsEntry("route", "standard");
     }
 }

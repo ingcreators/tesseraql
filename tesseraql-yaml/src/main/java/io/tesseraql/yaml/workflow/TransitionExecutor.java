@@ -95,12 +95,17 @@ public final class TransitionExecutor {
      * The per-call collaborators the engine core does not own: the state store (managed bean or
      * app-mode column store), the task store (or {@code null} — callers that do not model task
      * authority, like the suites, skip the check), the scope resolver for guard-file rendering,
-     * the caller's identity for task authority, the decision timeout, and the optional guard-SQL
+     * the caller's identity for task authority, the statement bound, and the optional guard-SQL
      * observer.
+     *
+     * <p>{@code sqlTimeoutSeconds} bounds <em>every</em> statement the engine runs — the
+     * {@code decide:} lookups, the SQL guard, the document load and the stamp UPDATE — not only
+     * the decisions it was first threaded for (docs/contract-sql-execution.md slice 2). An
+     * explicit {@code 0} opts out; there is no unbounded default to forget.
      */
     public record Collaborators(WorkflowStore store, WorkflowTaskStore taskStore,
             ScopeResolver scopes, String actorSubject, List<String> actorGroups,
-            int decisionTimeoutSeconds, GuardSqlObserver guardObserver) {
+            int sqlTimeoutSeconds, GuardSqlObserver guardObserver) {
     }
 
     /**
@@ -168,11 +173,12 @@ public final class TransitionExecutor {
         collaborators.store().ensureInstance(connection, transition.docType(), docId,
                 transition.initial(), tenantId);
         context.put("document", loadDocument(connection, transition.table(),
-                transition.keyColumn(), transition.dialect(), docId));
+                transition.keyColumn(), transition.dialect(), docId,
+                collaborators.sqlTimeoutSeconds()));
         if (!transition.decisions().isEmpty()) {
             context.put(io.tesseraql.core.sql.AmbientBinds.DECISION,
                     transition.decisions().evaluate(context, connection,
-                            collaborators.decisionTimeoutSeconds()));
+                            collaborators.sqlTimeoutSeconds()));
         }
         String current = collaborators.store().currentState(connection, transition.docType(),
                 docId);
@@ -203,6 +209,7 @@ public final class TransitionExecutor {
             }
             boolean holds;
             try (PreparedStatement statement = connection.prepareStatement(bound.sql())) {
+                applyTimeout(statement, collaborators.sqlTimeoutSeconds());
                 for (int i = 0; i < bound.parameters().size(); i++) {
                     statement.setObject(i + 1, bound.parameters().get(i).value());
                 }
@@ -341,6 +348,7 @@ public final class TransitionExecutor {
                     resolved.keySet().stream().map(column -> column + " = ?").toList()));
             sql.append(" where ").append(transition.keyColumn()).append(" = ?");
             try (PreparedStatement statement = connection.prepareStatement(sql.toString())) {
+                applyTimeout(statement, collaborators.sqlTimeoutSeconds());
                 int index = 1;
                 for (Object value : resolved.values()) {
                     statement.setObject(index++, value);
@@ -373,9 +381,11 @@ public final class TransitionExecutor {
      * {@code decide:} (docs/transition-engine.md track B).
      */
     public static Map<String, Object> loadDocument(Connection connection, String table,
-            String keyColumn, String dialect, String docId) throws SQLException {
+            String keyColumn, String dialect, String docId, int timeoutSeconds)
+            throws SQLException {
         try (PreparedStatement ps = connection.prepareStatement("select * from "
                 + table + " where " + keyColumn + " = ?")) {
+            applyTimeout(ps, timeoutSeconds);
             ps.setString(1, docId);
             try (ResultSet rs = ps.executeQuery()) {
                 if (!rs.next()) {
@@ -390,6 +400,14 @@ public final class TransitionExecutor {
                 }
                 return row;
             }
+        }
+    }
+
+    /** The statement bound (docs/contract-sql-execution.md slice 2); an explicit 0 opts out. */
+    private static void applyTimeout(PreparedStatement statement, int timeoutSeconds)
+            throws SQLException {
+        if (timeoutSeconds > 0) {
+            statement.setQueryTimeout(timeoutSeconds);
         }
     }
 

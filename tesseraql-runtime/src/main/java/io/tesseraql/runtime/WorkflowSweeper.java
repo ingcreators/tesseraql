@@ -71,6 +71,7 @@ final class WorkflowSweeper {
     private final DataSource dataSource;
     /** Absence resolution for reassign fallbacks (roadmap Phase 52); nullable. */
     private final io.tesseraql.core.workflow.DelegationStore delegations;
+    private int sqlTimeoutSeconds = io.tesseraql.core.sql.ContractStatement.DEFAULT_TIMEOUT_SECONDS;
 
     WorkflowSweeper(List<Rule> rules, WorkflowTaskStore taskStore, WorkflowStore workflowStore,
             OutboxStore outboxStore, String appName, DataSource dataSource,
@@ -82,6 +83,19 @@ final class WorkflowSweeper {
         this.appName = appName;
         this.dataSource = dataSource;
         this.delegations = delegations;
+    }
+
+    /**
+     * The bound every sweep statement runs under, in seconds; {@code 0} leaves it unset
+     * (docs/contract-sql-execution.md slice 2).
+     *
+     * <p>There was none: an application's escalate command and reassign resolver ran for as long
+     * as the driver allowed, inside the sweep's transaction, where the same statement on a route
+     * has been bounded by {@code tesseraql.sql.timeoutSeconds} all along.
+     */
+    WorkflowSweeper sqlTimeoutSeconds(int seconds) {
+        this.sqlTimeoutSeconds = Math.max(0, seconds);
+        return this;
     }
 
     /** Applies each overdue task's breach handling; returns the number escalated. */
@@ -167,11 +181,12 @@ final class WorkflowSweeper {
     }
 
     /** App-mode state advance: a conditional UPDATE of the business table's state column. */
-    private static int advanceColumn(Connection connection, Escalate escalate,
+    private int advanceColumn(Connection connection, Escalate escalate,
             WorkflowTaskStore.Overdue task) throws SQLException {
         try (PreparedStatement ps = connection.prepareStatement("update " + escalate.table()
                 + " set " + escalate.stateColumn() + " = ? where " + escalate.keyColumn()
                 + " = ? and " + escalate.stateColumn() + " = ?")) {
+            applyTimeout(ps);
             ps.setString(1, escalate.toState());
             ps.setString(2, task.docId());
             ps.setString(3, task.state());
@@ -180,7 +195,7 @@ final class WorkflowSweeper {
     }
 
     /** Runs the escalation transition's command with the document key and system audit binds. */
-    private static void runEscalateCommand(Connection connection, Escalate escalate,
+    private void runEscalateCommand(Connection connection, Escalate escalate,
             WorkflowTaskStore.Overdue task) throws SQLException {
         Map<String, Object> audit = new LinkedHashMap<>();
         audit.put("user", SYSTEM_ACTOR);
@@ -190,6 +205,7 @@ final class WorkflowSweeper {
         params.put("audit", audit);
         BoundSql bound = SqlRenderer.render(escalate.commandNodes(), params);
         try (PreparedStatement ps = connection.prepareStatement(bound.sql())) {
+            applyTimeout(ps);
             for (int i = 0; i < bound.parameters().size(); i++) {
                 ps.setObject(i + 1, bound.parameters().get(i).value());
             }
@@ -225,19 +241,26 @@ final class WorkflowSweeper {
         return null;
     }
 
-    private static String resolveAssignee(Connection connection, Rule rule,
+    private String resolveAssignee(Connection connection, Rule rule,
             WorkflowTaskStore.Overdue task) throws SQLException {
         Map<String, Object> params = new LinkedHashMap<>();
         params.put("docId", task.docId());
         params.put("state", task.state());
         BoundSql bound = SqlRenderer.render(rule.reassignNodes(), params);
         try (PreparedStatement ps = connection.prepareStatement(bound.sql())) {
+            applyTimeout(ps);
             for (int i = 0; i < bound.parameters().size(); i++) {
                 ps.setObject(i + 1, bound.parameters().get(i).value());
             }
             try (ResultSet rs = ps.executeQuery()) {
                 return rs.next() ? rs.getString(1) : null;
             }
+        }
+    }
+
+    private void applyTimeout(PreparedStatement statement) throws SQLException {
+        if (sqlTimeoutSeconds > 0) {
+            statement.setQueryTimeout(sqlTimeoutSeconds);
         }
     }
 
