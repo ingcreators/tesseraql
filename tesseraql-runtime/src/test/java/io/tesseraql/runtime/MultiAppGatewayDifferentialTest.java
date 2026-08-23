@@ -179,6 +179,34 @@ class MultiAppGatewayDifferentialTest {
 
         // And where the app does refuse, the refusal is the app's and arrives unchanged.
         assertSame(measure(12 * 1024 * 1024));
+
+        // The refusal trips while the client is still uploading, so the app must drain the
+        // rest — an unread stream wedges the client until something else times out
+        // (HttpBodyLimit; three CI hangs before this assertion existed). Drained, not
+        // closed: the same connection answers the next request, which is what pins the
+        // discipline. The refusal is also the framework's, typed.
+        try (HttpClient reused = HttpClient.newBuilder()
+                .version(HttpClient.Version.HTTP_1_1)
+                .connectTimeout(java.time.Duration.ofSeconds(10)).build()) {
+            HttpResponse<String> refused = reused.send(HttpRequest
+                    .newBuilder(URI.create(direct + "/" + APP + "/api/measure"))
+                    .timeout(java.time.Duration.ofSeconds(60))
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers
+                            .ofString(measure(12 * 1024 * 1024).body()))
+                    .build(), HttpResponse.BodyHandlers.ofString());
+            assertThat(refused.statusCode()).isEqualTo(413);
+            assertThat(refused.body()).contains("TQL-SEC-4150")
+                    .contains("tesseraql.http.maxBodyBytes");
+
+            HttpResponse<String> after = reused.send(HttpRequest
+                    .newBuilder(URI.create(direct + "/" + APP + "/api/items"))
+                    .timeout(java.time.Duration.ofSeconds(60)).build(),
+                    HttpResponse.BodyHandlers.ofString());
+            assertThat(after.statusCode())
+                    .as("the connection survives the refusal, drained clean")
+                    .isEqualTo(200);
+        }
     }
 
     private static Call measure(int bytes) {
@@ -315,12 +343,18 @@ class MultiAppGatewayDifferentialTest {
                 // negotiated — the HTTP/2 pseudo-header on one side, the upgrade offer on the
                 // other — rather than whether the answer survived the hop.
                 .version(version)
+                // Bounded, because an unbounded send turns any server-side stall into this
+                // class's five-minute timeout with no diagnostics — which is exactly how the
+                // over-limit wedge (HttpBodyLimit) surfaced in CI: three hangs before a stack
+                // trace said where. A minute is generous for the hundred-megabyte cases.
+                .timeout(java.time.Duration.ofSeconds(60))
                 .method(call.method, call.body == null
                         ? HttpRequest.BodyPublishers.noBody()
                         : HttpRequest.BodyPublishers.ofString(call.body));
         call.headers.forEach(builder::header);
         HttpRequest built = builder.build();
-        try (HttpClient client = HttpClient.newBuilder().version(version).build()) {
+        try (HttpClient client = HttpClient.newBuilder().version(version)
+                .connectTimeout(java.time.Duration.ofSeconds(10)).build()) {
             HttpResponse<InputStream> response = client.send(built,
                     HttpResponse.BodyHandlers.ofInputStream());
             MessageDigest digest = MessageDigest.getInstance("SHA-256");

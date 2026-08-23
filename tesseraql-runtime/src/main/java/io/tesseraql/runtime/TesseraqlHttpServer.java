@@ -36,6 +36,7 @@ final class TesseraqlHttpServer implements RuntimeContext.Service {
     private final int port;
     private final Vertx shared;
     private final VertxOptions options;
+    private final long maxBodyBytes;
     private Vertx vertx;
     private Vertx created;
     private HttpServer server;
@@ -54,12 +55,13 @@ final class TesseraqlHttpServer implements RuntimeContext.Service {
      * @param options what to build one from when standalone; null falls back to defaults
      */
     TesseraqlHttpServer(RuntimeContext runtimeContext, String host, int port, Vertx shared,
-            VertxOptions options) {
+            VertxOptions options, long maxBodyBytes) {
         this.runtimeContext = runtimeContext;
         this.host = host;
         this.port = port;
         this.shared = shared;
         this.options = options;
+        this.maxBodyBytes = maxBodyBytes;
     }
 
     @Override
@@ -77,7 +79,7 @@ final class TesseraqlHttpServer implements RuntimeContext.Service {
         Router router = Router.router(vertx);
         runtimeContext.bind(HttpEdgeBeans.ROUTER, router);
         runtimeContext.bind(HttpEdgeBeans.BODY_HANDLER,
-                HttpEdgeBeans.newBodyHandler());
+                HttpEdgeBeans.newBodyHandler(maxBodyBytes));
         server = vertx.createHttpServer(new HttpServerOptions())
                 .requestHandler(router);
         server.listen(port, host).toCompletionStage().toCompletableFuture()

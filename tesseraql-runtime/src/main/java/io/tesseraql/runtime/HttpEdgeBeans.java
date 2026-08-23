@@ -42,12 +42,20 @@ final class HttpEdgeBeans {
      * apply: uploads handled and deleted when the exchange ends, form attributes merged, the body
      * buffer preallocated. Stated here because they are now this framework's defaults rather than
      * another component's.
+     *
+     * <p>{@code maxBodyBytes} is the request-body ceiling, covering buffered bodies and streamed
+     * uploads alike. It is passed rather than left to {@code BodyHandler.create()} because the
+     * transport upgrade to Vert.x 5 changed that default from unlimited to 10 MB, silently — a
+     * borrowed bound nothing declared (docs/camel-removal.md's defect class). The number is the
+     * framework's now: {@code tesseraql.http.maxBodyBytes}, documented, with {@code -1} the
+     * visible opt-out.
      */
-    static BodyHandler newBodyHandler() {
+    static BodyHandler newBodyHandler(long maxBodyBytes) {
         return BodyHandler.create()
                 .setHandleFileUploads(true)
                 .setDeleteUploadedFilesOnEnd(true)
                 .setMergeFormAttributes(true)
-                .setPreallocateBodyBuffer(true);
+                .setPreallocateBodyBuffer(true)
+                .setBodyLimit(maxBodyBytes);
     }
 }

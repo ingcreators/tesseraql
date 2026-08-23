@@ -335,6 +335,37 @@ public final class TesseraqlRuntime implements AutoCloseable {
     }
 
     /**
+     * The request-body ceiling in bytes: {@code tesseraql.http.maxBodyBytes}, default 10 MB,
+     * {@code -1} the visible opt-out. It covers buffered bodies and streamed uploads alike, so a
+     * deployment taking large file imports raises it (docs/file-transfers.md).
+     *
+     * <p>Declared here because the transport upgrade to Vert.x 5 changed the underlying
+     * default from unlimited to 10 MB silently; a bound this consequential is the framework's to
+     * state, not a dependency's to change.
+     */
+    private static long maxBodyBytes(AppConfig config) {
+        java.util.Optional<String> declared = config.getString("tesseraql.http.maxBodyBytes");
+        if (declared.isEmpty()) {
+            return 10L * 1024 * 1024;
+        }
+        String text = declared.get().trim();
+        long value;
+        try {
+            value = Long.parseLong(text);
+        } catch (NumberFormatException notANumber) {
+            throw new io.tesseraql.core.error.TqlException(BAD_THREAD_COUNT,
+                    "tesseraql.http.maxBodyBytes must be a byte count, or -1 for unbounded,"
+                            + " got '" + text + "'");
+        }
+        if (value < 1 && value != -1) {
+            throw new io.tesseraql.core.error.TqlException(BAD_THREAD_COUNT,
+                    "tesseraql.http.maxBodyBytes must be a positive byte count, or -1 for"
+                            + " unbounded, got " + value);
+        }
+        return value;
+    }
+
+    /**
      * A declared thread count: absent, or a positive integer.
      *
      * <p>A thread pool sized from a typo is worse than one left at its default, because the
@@ -1169,7 +1200,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     io.tesseraql.yaml.migration.SchemaHistoryName.of(manifest.config()),
                     appHome, manifest.config(), dataSource, tenantDataSources, dataSources::get);
             TesseraqlHttpServer httpServer = new TesseraqlHttpServer(context, "0.0.0.0", port,
-                    sharedTransport, standaloneTransportOptions);
+                    sharedTransport, standaloneTransportOptions,
+                    maxBodyBytes(manifest.config()));
             context.addService(httpServer);
             new RouteCompiler().appName(appName)
                     .functions(modules.functions()).compile(context, manifest);
@@ -1807,6 +1839,9 @@ public final class TesseraqlRuntime implements AutoCloseable {
             // because the platform router does not exist until the HTTP server service has
             // started, and ordered ahead of every route registered before it.
             HttpAdmission.install(context, maxInFlight(manifest.config()));
+            // The over-limit refusal must not leave a mid-upload client wedged
+            // (docs/http-edge.md; the body limit trips while the client is still writing).
+            HttpBodyLimit.install(context, maxBodyBytes(manifest.config()));
             sseEndpoints.forEach(Runnable::run);
             LOG.info("TesseraQL runtime started on port {} for app {}", boundPort, appHome);
             return new TesseraqlRuntime(context, dataSources, boundPort, jobRepository, jobExecutor,
