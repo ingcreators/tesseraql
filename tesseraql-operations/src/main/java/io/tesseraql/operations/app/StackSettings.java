@@ -105,8 +105,11 @@ public final class StackSettings {
 
     /**
      * How often a host reconciles the install root without a filesystem event —
-     * {@code stack.reconcile.interval}, an ISO-8601 duration ({@code PT30S}) or a plain number of
-     * seconds. Absent means the built-in default; {@code 0} means events only.
+     * {@code stack.reconcile.interval}, the framework's short duration form ({@code 30s},
+     * {@code 5m}, or a plain number of seconds — {@link io.tesseraql.core.util.Durations}).
+     * Absent means the built-in default; {@code 0} means events only. It used to take ISO-8601
+     * ({@code PT30S}), the one duration key in the tree with its own grammar; pre-1.0 the
+     * grammar converges instead of both being carried.
      *
      * <p>It belongs to the stack file because it describes the install root rather than any
      * application: a directory shared between nodes needs the sweep, because a watch service sees
@@ -116,11 +119,8 @@ public final class StackSettings {
      */
     public Optional<java.time.Duration> reconcileInterval() {
         return config.getString("stack.reconcile.interval").flatMap(value -> {
-            String trimmed = value.trim();
             try {
-                return Optional.of(trimmed.chars().allMatch(Character::isDigit)
-                        ? java.time.Duration.ofSeconds(Long.parseLong(trimmed))
-                        : java.time.Duration.parse(trimmed));
+                return Optional.of(io.tesseraql.core.util.Durations.parse(value));
             } catch (RuntimeException unparseable) {
                 return Optional.empty();
             }

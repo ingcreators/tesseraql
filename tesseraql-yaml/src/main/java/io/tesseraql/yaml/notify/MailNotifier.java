@@ -221,7 +221,9 @@ public final class MailNotifier {
                 .open(transferId).orElseThrow(() -> new TqlException(DELIVERY_FAILED,
                         "Mail channel '" + channel.name() + "': attached transfer "
                                 + transferId + " has no downloadable file"));
-        long maxBytes = channel.setting("maxAttachmentBytes").map(Long::parseLong)
+        long maxBytes = channel.setting("maxAttachmentBytes")
+                .map(value -> io.tesseraql.core.util.Sizes.parseBytes(value,
+                        "maxAttachmentBytes on channel '" + channel.name() + "'"))
                 .orElse(DEFAULT_MAX_ATTACHMENT_BYTES);
         byte[] bytes = readCapped(channel, download, maxBytes);
 

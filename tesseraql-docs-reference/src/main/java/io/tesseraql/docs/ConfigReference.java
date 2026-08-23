@@ -28,16 +28,19 @@ import java.util.stream.Stream;
 final class ConfigReference {
 
     /**
-     * {@code config.getString("tesseraql.x.y")}, the typed variants beside it, and
-     * {@code navigate("...")}.
+     * {@code config.getString("tesseraql.x.y")}, the typed variants beside it,
+     * {@code requireString("...")}, and {@code navigate("...")}.
      *
      * <p>Without {@code navigate}, a key whose value is a block rather than a scalar — a list, or a
      * map of named entries — was invisible to this page. That is how
      * {@code tesseraql.security.jwt.audience} came to be a key an application <em>must</em> declare
      * and could not look up here, and the same gap hid the mTLS client registry and the policy map.
+     * Without {@code requireString}, the <em>mandatory</em> keys — the ones an operator most needs
+     * this page for — were invisible the same way: six of them, from the copilot endpoint to the
+     * SAML IdP key, were absent from the committed page when the gap was found.
      */
     private static final Pattern READ = Pattern.compile(
-            "(?:get(?:String|Boolean|Int|Integer|Long|List|Map|Duration)|navigate)\\(\\s*\""
+            "(?:get(?:String|Boolean|Int|Integer|Long|List|Map|Duration|Double)|requireString|navigate)\\(\\s*\""
                     + "((?:tesseraql|server|db)\\.[A-Za-z0-9_.<>-]*)\"");
 
     private static final String BLOB = "https://github.com/ingcreators/tesseraql/blob/main/";

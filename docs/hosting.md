@@ -139,7 +139,7 @@ so an idle sweep costs one small file read.
 # tesseraql-stack.yml
 stack:
   reconcile:
-    interval: PT15S      # or a plain number of seconds; 0 = filesystem events only
+    interval: 15s        # or a plain number of seconds; 0 = filesystem events only
 ```
 
 What this does **not** give you: choosing which node runs which application, separating batch work

@@ -8,6 +8,28 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **Generated OpenAPI documents carry the application's declared version.** The generator
+  read the unprefixed `app.version` where every other reader reads `tesseraql.app.version`,
+  so the `info.version` of every generated document was the `1.0.0` fallback whatever the
+  application declared.
+- **The configuration reference lists the mandatory keys.** The reference's scanner matched
+  read methods `AppConfig` does not have and missed two it does (`requireString`,
+  `getDouble`), so keys read only through those — six of them, all mandatory, from the
+  copilot endpoint to the SAML IdP key — were absent from the generated page.
+
+### Changed
+
+- **Byte-size configuration takes units, and an invalid value names its key**
+  (`tesseraql.temp.maxBytes`, a mail channel's `maxAttachmentBytes`). Both keys accepted
+  only a raw byte count while an attachment limit accepted `25MB`; the three now share one
+  parser (`TQL-YAML-1302` on an invalid value, naming the key, where before a raw
+  `NumberFormatException` named nothing).
+- **`stack.reconcile.interval` speaks the framework's duration form** (`30s`, `5m`, or a
+  plain number of seconds) instead of ISO-8601 — it was the one duration key in the tree
+  with its own grammar, so `30s` worked everywhere but there. An unparseable value still
+  falls back to the default, the recorded safe direction for a safety net; `PT15S` now
+  falls back too, which is why this is recorded.
+
 - **The request-body limit is declared, and its refusal no longer wedges the client**
   (`tesseraql.http.maxBodyBytes`, default 10 MB, `-1` removes the bound). The Vert.x 5
   transport upgrade silently changed the body handler's default from unlimited to 10 MB — a

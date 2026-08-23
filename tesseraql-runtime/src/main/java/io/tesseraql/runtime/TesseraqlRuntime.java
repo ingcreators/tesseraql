@@ -561,7 +561,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     io.tesseraql.operations.spool.JdbcTempStore jdbcTemp = new io.tesseraql.operations.spool.JdbcTempStore(
                             dataSource, tempScratch,
                             manifest.config().getString("tesseraql.temp.maxBytes")
-                                    .map(Long::parseLong)
+                                    .map(value -> io.tesseraql.core.util.Sizes.parseBytes(value,
+                                            "tesseraql.temp.maxBytes"))
                                     .orElse(io.tesseraql.operations.spool.JdbcTempStore.DEFAULT_MAX_BYTES));
                     jdbcTemp.ensureSchema();
                     yield jdbcTemp;
