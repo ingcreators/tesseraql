@@ -16,7 +16,6 @@ import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Callable;
@@ -151,7 +150,8 @@ public final class McpCommand implements Callable<Integer> {
     }
 
     private Integer serveHttp(McpServer server, Map<String, Path> applications) throws Exception {
-        Set<SecurityConfig.JwtConfig> contracts = jwtContracts(applications);
+        Map<SecurityConfig.JwtConfig, io.tesseraql.yaml.config.AppConfig> contracts = jwtContracts(
+                applications);
         if (contracts.size() > 1) {
             // One sign-in spans a stack; a server that verified each request against whichever
             // member it happened to pick would accept a token another member rejects.
@@ -161,10 +161,13 @@ public final class McpCommand implements Callable<Integer> {
                     + " transport.");
             return 2;
         }
-        SecurityConfig.JwtConfig jwt = contracts.isEmpty() ? null : contracts.iterator().next();
+        SecurityConfig.JwtConfig jwt = contracts.isEmpty()
+                ? null
+                : contracts.keySet().iterator().next();
         McpAuthenticator authenticator = jwt == null
                 ? null
-                : new JwtMcpAuthenticator(new JwtAuthenticator(jwt));
+                : new JwtMcpAuthenticator(
+                        new JwtAuthenticator(jwt, jwksFetcher(jwt, contracts.get(jwt))));
         if (authenticator == null && !isLoopback(bind) && !insecure) {
             System.err.println("Refusing to serve MCP on " + bind + " without authentication."
                     + " Configure tesseraql.security.jwt.secret, bind to localhost, or pass"
@@ -186,20 +189,40 @@ public final class McpCommand implements Callable<Integer> {
     }
 
     /**
-     * The distinct non-null bearer contracts the stack's members configure. Empty means no member
-     * configures one; two or more means they disagree and the HTTP transport refuses rather than
-     * picking a member whose contract the others reject.
+     * The distinct non-null bearer contracts the stack's members configure, each with the first
+     * application's config that declares it. Empty means no member configures one; two or more
+     * means they disagree and the HTTP transport refuses rather than picking a member whose
+     * contract the others reject.
      */
-    private static Set<SecurityConfig.JwtConfig> jwtContracts(Map<String, Path> applications) {
-        Set<SecurityConfig.JwtConfig> contracts = new LinkedHashSet<>();
+    private static Map<SecurityConfig.JwtConfig, io.tesseraql.yaml.config.AppConfig> jwtContracts(
+            Map<String, Path> applications) {
+        Map<SecurityConfig.JwtConfig, io.tesseraql.yaml.config.AppConfig> contracts = new LinkedHashMap<>();
         for (Path home : applications.values()) {
-            SecurityConfig security = SecurityConfigFactory
-                    .build(new ManifestLoader().load(home).config());
+            io.tesseraql.yaml.config.AppConfig config = new ManifestLoader().load(home).config();
+            SecurityConfig security = SecurityConfigFactory.build(config);
             if (security.jwt() != null) {
-                contracts.add(security.jwt());
+                contracts.putIfAbsent(security.jwt(), config);
             }
         }
         return contracts;
+    }
+
+    /**
+     * The JWKS fetcher for a {@code jwksUri} contract, or null when the contract carries a
+     * static key or an HS256 secret. It rides the declaring application's outbound egress
+     * policy (docs/duplication-consolidation.md, campaign 1) — the same allow-list the same
+     * configuration is held to when the application itself runs.
+     */
+    private static io.tesseraql.security.jwt.JwksFetcher jwksFetcher(SecurityConfig.JwtConfig jwt,
+            io.tesseraql.yaml.config.AppConfig config) {
+        if (jwt.jwksUri() == null || jwt.jwksUri().isBlank()) {
+            return null;
+        }
+        return new io.tesseraql.compiler.binding.GatewayJwksFetcher(
+                new io.tesseraql.operations.http.HttpCallClient(
+                        io.tesseraql.yaml.http.HttpOutbound.load(config), config,
+                        io.tesseraql.core.telemetry.NoopTracer.INSTANCE, null),
+                jwt.jwks().requestTimeout());
     }
 
     private static boolean isLoopback(String bind) {

@@ -123,6 +123,68 @@ class HttpCallClientTest {
                 });
     }
 
+    /**
+     * The raw form returns the response whatever its status — SCIM reads meaning out of a
+     * 404 and a token endpoint's error body is an answer — while the allow-list still
+     * applies (docs/duplication-consolidation.md, campaign 1).
+     */
+    @Test
+    void exchangeReturnsTheResponseWhateverItsStatus() {
+        HttpCallClient client = client(Map.of("allowedHosts", List.of("localhost")));
+        responseStatus = 404;
+        responseBody = "{\"detail\":\"gone\"}";
+
+        io.tesseraql.yaml.http.OutboundGateway.RawResponse response = client.exchange(
+                call("GET", "/users/9"), null, Map.of("Accept", "application/scim+json"));
+
+        assertThat(response.status()).isEqualTo(404);
+        assertThat(new String(response.body(), StandardCharsets.UTF_8)).contains("gone");
+        assertThat(response.header("Content-Type")).contains("application/json");
+        assertThat(lastHeaders.getFirst("Accept")).isEqualTo("application/scim+json");
+    }
+
+    @Test
+    void exchangeStillAppliesTheAllowListAndTheRefusalNamesTheFix() {
+        HttpCallClient client = client(Map.of("allowedHosts", List.of("api.partner.example")));
+
+        assertThatThrownBy(() -> client.exchange(call("GET", "/x"), null, Map.of()))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("TQL-BATCH-5305")
+                // The refusal spells the configuration to add, the copilot gate's precedent.
+                .hasMessageContaining("allowedHosts")
+                .hasMessageContaining("- localhost");
+        assertThat(hits.get()).isZero();
+    }
+
+    @Test
+    void exchangeSendsACallerAuthoredBody() {
+        HttpCallClient client = client(Map.of("allowedHosts", List.of("localhost")));
+
+        client.exchange(call("PUT", "/users/9"),
+                "{\"userName\":\"a\"}".getBytes(StandardCharsets.UTF_8),
+                Map.of("Content-Type", "application/scim+json"));
+
+        assertThat(lastMethod).isEqualTo("PUT");
+        assertThat(lastBody).isEqualTo("{\"userName\":\"a\"}");
+        assertThat(lastHeaders.getFirst("Content-Type")).isEqualTo("application/scim+json");
+    }
+
+    /**
+     * The regression the deleted per-module clients each carried on their own: the shared
+     * client must set a {@link java.net.ProxySelector}, because without one the JDK client
+     * ignores even {@code http(s).proxyHost} and cannot reach a provider behind a proxy.
+     */
+    @Test
+    void theSharedClientHonorsTheJvmProxySelector() throws Exception {
+        HttpCallClient client = client(Map.of("allowedHosts", List.of("localhost")));
+        java.lang.reflect.Method factory = HttpCallClient.class
+                .getDeclaredMethod("client", java.time.Duration.class);
+        factory.setAccessible(true);
+        java.net.http.HttpClient http = (java.net.http.HttpClient) factory
+                .invoke(client, java.time.Duration.ofSeconds(5));
+        assertThat(http.proxy()).contains(java.net.ProxySelector.getDefault());
+    }
+
     @Test
     void anAllowedCallDoesNotCountAnEgressDenial() {
         HttpCallClient client = client(Map.of("allowedHosts", List.of("localhost")));

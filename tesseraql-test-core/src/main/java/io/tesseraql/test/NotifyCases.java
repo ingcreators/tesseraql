@@ -128,22 +128,9 @@ final class NotifyCases {
                         "outbound", java.util.Map.of("allowedHosts",
                                 java.util.List.of("localhost", "127.0.0.1"))))),
                 name -> null);
-        io.tesseraql.operations.http.HttpCallClient client = new io.tesseraql.operations.http.HttpCallClient(
+        return new io.tesseraql.operations.http.HttpCallClient(
                 io.tesseraql.yaml.http.HttpOutbound.load(harness), harness,
                 io.tesseraql.core.telemetry.NoopTracer.INSTANCE,
                 io.tesseraql.core.telemetry.NoopMeter.INSTANCE);
-        return new io.tesseraql.yaml.http.OutboundGateway() {
-            @Override
-            public java.util.Map<String, Object> call(io.tesseraql.yaml.model.HttpCallSpec spec,
-                    java.util.Map<String, Object> context) {
-                return client.call(spec, context, null);
-            }
-
-            @Override
-            public java.util.Map<String, Object> call(io.tesseraql.yaml.model.HttpCallSpec spec,
-                    byte[] body, java.util.Map<String, String> headers) {
-                return client.call(spec, body, headers);
-            }
-        };
     }
 }

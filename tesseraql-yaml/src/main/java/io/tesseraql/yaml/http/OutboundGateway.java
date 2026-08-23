@@ -1,6 +1,7 @@
 package io.tesseraql.yaml.http;
 
 import io.tesseraql.yaml.model.HttpCallSpec;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -31,4 +32,27 @@ public interface OutboundGateway {
      * headers, and the gateway contributes what it is for: the policy.
      */
     Map<String, Object> call(HttpCallSpec spec, byte[] body, Map<String, String> headers);
+
+    /**
+     * The raw form (docs/duplication-consolidation.md, campaign 1): the same policy — the
+     * allow-list, the timeouts, the circuit breaker, the span — but the response comes back
+     * as it arrived, whatever its status. This exists for the callers that speak a protocol
+     * of their own over HTTP: SCIM reads meaning out of a 404, an OpenID token endpoint's
+     * error body is an answer, and SAML metadata is XML that a JSON-shaping result would
+     * destroy. The gateway still refuses a denied host or an open circuit, and still
+     * classifies a transport failure; what the <em>status</em> means is the caller's domain.
+     */
+    RawResponse exchange(HttpCallSpec spec, byte[] body, Map<String, String> headers);
+
+    /** One response as it arrived: the status, the body bytes, and the response headers. */
+    record RawResponse(int status, byte[] body, Map<String, List<String>> headers) {
+
+        /** The first value of a response header, matched case-insensitively. */
+        public java.util.Optional<String> header(String name) {
+            return headers.entrySet().stream()
+                    .filter(e -> e.getKey().equalsIgnoreCase(name))
+                    .flatMap(e -> e.getValue().stream())
+                    .findFirst();
+        }
+    }
 }

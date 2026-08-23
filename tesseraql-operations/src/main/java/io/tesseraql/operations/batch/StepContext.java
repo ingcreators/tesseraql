@@ -402,23 +402,8 @@ final class StepContext {
 
             @Override
             public io.tesseraql.yaml.http.OutboundGateway gateway() {
-                return httpCall() == null
-                        ? null
-                        : new io.tesseraql.yaml.http.OutboundGateway() {
-                            @Override
-                            public Map<String, Object> call(
-                                    io.tesseraql.yaml.model.HttpCallSpec spec,
-                                    Map<String, Object> callContext) {
-                                return httpCall().call(spec, callContext, null);
-                            }
-
-                            @Override
-                            public Map<String, Object> call(
-                                    io.tesseraql.yaml.model.HttpCallSpec spec,
-                                    byte[] body, Map<String, String> headers) {
-                                return httpCall().call(spec, body, headers);
-                            }
-                        };
+                // The client IS the gateway now (docs/duplication-consolidation.md, campaign 1).
+                return httpCall();
             }
 
             @Override

@@ -19,6 +19,19 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **OIDC, JWKS, and SAML-metadata fetches leave through the outbound gateway**
+  (docs/duplication-consolidation.md, campaign 1). Discovery, the token exchange, a
+  `jwksUri` key-set fetch, and an IdP-metadata URL now ride the same egress policy as every
+  `http:` step — the deny-by-default `tesseraql.http.outbound.allowedHosts`, the configured
+  timeouts, the per-host circuit breaker, the `tesseraql.http.call` span, and the JVM proxy
+  configuration. **The identity provider's host must now be allow-listed** for OIDC and
+  JWKS (SAML metadata and the Studio copilot already required it); the refusal spells the
+  exact configuration to add. Two hand-rolled JDK clients left the tree with this, and one
+  drift died with them: the JWKS fetcher never set a `ProxySelector`, so behind a corporate
+  proxy OIDC discovery succeeded while JWKS verification failed against the same IdP.
+  `TQL-SEC-4086` (the SAML metadata source's own denial) retired into the gateway's
+  `TQL-BATCH-5305`; a denied metadata host still refuses the boot rather than serving the
+  cached copy — the cache is for outages, not for policy.
 - **Byte-size configuration takes units, and an invalid value names its key**
   (`tesseraql.temp.maxBytes`, a mail channel's `maxAttachmentBytes`). Both keys accepted
   only a raw byte count while an attachment limit accepted `25MB`; the three now share one

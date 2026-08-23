@@ -35,6 +35,13 @@ class SamlMetadataSourceTest {
         return new ManifestLoader().load(dir);
     }
 
+    /** The real gateway over the manifest's own egress policy, untraced. */
+    private static io.tesseraql.yaml.http.OutboundGateway gateway(AppManifest manifest) {
+        return new io.tesseraql.operations.http.HttpCallClient(
+                io.tesseraql.yaml.http.HttpOutbound.load(manifest.config()), manifest.config(),
+                io.tesseraql.core.telemetry.NoopTracer.INSTANCE, null);
+    }
+
     @Test
     void fetchesCachesAndFallsBackWhenTheIdpIsDown(@TempDir Path dir) throws Exception {
         byte[] xml = "<EntityDescriptor/>".getBytes(StandardCharsets.UTF_8);
@@ -55,12 +62,12 @@ class SamlMetadataSourceTest {
             AppManifest manifest = app(dir, "127.0.0.1");
             String url = "http://127.0.0.1:" + idp.getAddress().getPort() + "/metadata";
 
-            assertThat(SamlMetadataSource.load(manifest, manifest.config(), url)).isEqualTo(xml);
+            assertThat(SamlMetadataSource.load(manifest, gateway(manifest), url)).isEqualTo(xml);
             assertThat(dir.resolve("work/saml/idp-metadata.xml")).exists();
 
             // The IdP goes down: the cached copy serves, so the boot survives the outage.
             up.set(false);
-            assertThat(SamlMetadataSource.load(manifest, manifest.config(), url)).isEqualTo(xml);
+            assertThat(SamlMetadataSource.load(manifest, gateway(manifest), url)).isEqualTo(xml);
         } finally {
             idp.stop(0);
         }
@@ -69,11 +76,11 @@ class SamlMetadataSourceTest {
     @Test
     void aDeniedHostAndAPlainHttpUrlOffLoopbackAreRefused(@TempDir Path dir) throws Exception {
         AppManifest manifest = app(dir, "idp.example.com");
-        assertThatThrownBy(() -> SamlMetadataSource.load(manifest, manifest.config(),
+        assertThatThrownBy(() -> SamlMetadataSource.load(manifest, gateway(manifest),
                 "https://other.example.com/metadata"))
                 .isInstanceOf(TqlException.class)
-                .hasMessageContaining("TQL-SEC-4086");
-        assertThatThrownBy(() -> SamlMetadataSource.load(manifest, manifest.config(),
+                .hasMessageContaining("TQL-BATCH-5305");
+        assertThatThrownBy(() -> SamlMetadataSource.load(manifest, gateway(manifest),
                 "http://idp.example.com/metadata"))
                 .isInstanceOf(TqlException.class)
                 .hasMessageContaining("TQL-SEC-4087");
@@ -83,7 +90,7 @@ class SamlMetadataSourceTest {
     void aRelativePathStaysAPlainFileRead(@TempDir Path dir) throws Exception {
         AppManifest manifest = app(dir, "idp.example.com");
         Files.writeString(dir.resolve("idp.xml"), "<EntityDescriptor/>");
-        assertThat(SamlMetadataSource.load(manifest, manifest.config(), "idp.xml"))
+        assertThat(SamlMetadataSource.load(manifest, gateway(manifest), "idp.xml"))
                 .asString(StandardCharsets.UTF_8).contains("EntityDescriptor");
     }
 }

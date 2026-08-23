@@ -52,7 +52,10 @@ public final class SamlRuntimeExtension implements RuntimeExtension {
         // https URL fetched at boot under the egress allow-list — else a key/cert file.
         java.security.PublicKey idpKey = config.getString("tesseraql.saml.idp.metadata")
                 .map(source -> IdpMetadata.signingKey(
-                        SamlMetadataSource.load(manifest, config, source)))
+                        SamlMetadataSource.load(manifest,
+                                context.bean(TesseraqlProperties.OUTBOUND_GATEWAY_BEAN,
+                                        io.tesseraql.yaml.http.OutboundGateway.class),
+                                source)))
                 .orElseGet(() -> SamlKeys.publicKey(
                         readBytes(manifest, config.requireString("tesseraql.saml.idp.publicKey"))));
         // Allowed clock skew for the assertion's time-bound conditions; unset keeps the

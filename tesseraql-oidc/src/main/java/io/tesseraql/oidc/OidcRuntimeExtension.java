@@ -46,7 +46,14 @@ public final class OidcRuntimeExtension implements RuntimeExtension {
                 SessionStore.class);
         Duration timeout = appConfig.getString("tesseraql.oidc.requestTimeout")
                 .map(Durations::parse).orElse(Duration.ofSeconds(5));
-        OidcHttp http = new OidcHttp(timeout);
+        // Discovery, the token exchange, and the ID-token JWKS fetch leave through the
+        // runtime's outbound gateway, so the OP's host must be in
+        // tesseraql.http.outbound.allowedHosts like every other outbound destination
+        // (docs/duplication-consolidation.md, campaign 1).
+        io.tesseraql.yaml.http.OutboundGateway gateway = context.bean(
+                TesseraqlProperties.OUTBOUND_GATEWAY_BEAN,
+                io.tesseraql.yaml.http.OutboundGateway.class);
+        OidcHttp http = new OidcHttp(gateway, timeout);
         OidcDiscovery discovery = OidcDiscovery.overHttp(config.discoveryUri(), http);
         // Flow state is ambient framework state (docs/framework-datasource.md).
         OidcStateStore stateStore = new OidcStateStore(context.frameworkDataSource());
@@ -60,7 +67,9 @@ public final class OidcRuntimeExtension implements RuntimeExtension {
                     RealmConfig.class);
             linker = new OidcUserLinker(identity, realm, config.provision());
         }
-        new OidcRoutes(config, discovery, stateStore, http, sessions, linker,
+        new OidcRoutes(config, discovery, stateStore, http,
+                new io.tesseraql.compiler.binding.GatewayJwksFetcher(gateway, timeout),
+                sessions, linker,
                 context.bean(TesseraqlProperties.CREDENTIAL_THROTTLE_BEAN,
                         io.tesseraql.security.throttle.CredentialThrottle.class))
                 .install(context.runtime());

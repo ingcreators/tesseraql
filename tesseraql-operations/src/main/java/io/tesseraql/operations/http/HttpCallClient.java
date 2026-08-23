@@ -48,10 +48,10 @@ import java.util.function.LongSupplier;
  * or an {@code expectStatus} mismatch fails the step but does not trip the breaker: it is a
  * deterministic rejection, not a sign the dependency is down.
  */
-public final class HttpCallClient {
+public final class HttpCallClient implements io.tesseraql.yaml.http.OutboundGateway {
 
-    /** TQL-BATCH-5305: an http-call targets a host outside the egress allow-list. */
-    private static final TqlErrorCode HOST_DENIED = new TqlErrorCode(TqlDomain.BATCH, 5305);
+    /** TQL-BATCH-5305, declared beside the policy so gateway callers can tell it apart. */
+    private static final TqlErrorCode HOST_DENIED = HttpOutbound.HOST_DENIED;
     /** TQL-BATCH-5306: the per-host circuit breaker is open. */
     private static final TqlErrorCode CIRCUIT_OPEN = new TqlErrorCode(TqlDomain.BATCH, 5306);
     /** TQL-BATCH-5307: the outbound call failed (transport error, timeout, or rejected status). */
@@ -87,6 +87,12 @@ public final class HttpCallClient {
         return call(spec, context, parent, null, Map.of());
     }
 
+    /** The {@code OutboundGateway} form: the same call, parented to the current trace root. */
+    @Override
+    public Map<String, Object> call(HttpCallSpec spec, Map<String, Object> context) {
+        return call(spec, context, null);
+    }
+
     /**
      * The same call with the body bytes and some headers supplied by the caller — a signed
      * delivery, whose HMAC covers the exact bytes on the wire, cannot let a second
@@ -94,36 +100,62 @@ public final class HttpCallClient {
      * gateway is for — the allow-list, the credential, the timeouts, the circuit breaker, the
      * span and the meters — applies unchanged.
      */
+    @Override
     public Map<String, Object> call(HttpCallSpec spec, byte[] body,
             Map<String, String> headers) {
         return call(spec, Map.of(), null, body, headers);
     }
 
+    /**
+     * The raw form of the seam (docs/duplication-consolidation.md, campaign 1): the same
+     * admission — allow-list, circuit breaker — the same timeouts, the same span, but the
+     * response returns as it arrived, whatever its status. A {@code 5xx} still counts against
+     * the breaker and a transport failure is still classified {@code TQL-BATCH-5307}; what a
+     * status <em>means</em> stays with the caller, because SCIM reads meaning out of a 404
+     * and a token endpoint's error body is an answer, not a fault.
+     */
+    @Override
+    public io.tesseraql.yaml.http.OutboundGateway.RawResponse exchange(HttpCallSpec spec,
+            byte[] body, Map<String, String> headers) {
+        URI uri = admit(spec, Map.of());
+        String host = uri.getHost();
+        Breaker breaker = admittedBreaker(host);
+        Span span = tracer.start("tesseraql.http.call", null)
+                .attribute("method", spec.effectiveMethod())
+                .attribute("host", host);
+        try {
+            HttpResponse<byte[]> response = send(spec, uri, Map.of(), body,
+                    headers == null ? Map.of() : headers);
+            int status = response.statusCode();
+            span.attribute("status", status);
+            if (status >= 500) {
+                breaker.recordFailure(clock.getAsLong(), outbound.circuitBreakerThreshold(),
+                        openDuration());
+            } else {
+                breaker.recordSuccess();
+            }
+            return new io.tesseraql.yaml.http.OutboundGateway.RawResponse(status,
+                    response.body(), response.headers().map());
+        } catch (IOException | InterruptedException ex) {
+            if (ex instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
+            breaker.recordFailure(clock.getAsLong(), outbound.circuitBreakerThreshold(),
+                    openDuration());
+            TqlException failure = new TqlException(CALL_FAILED, "http-call to '" + host
+                    + "' failed: " + ex.getMessage(), ex);
+            span.recordError(failure);
+            throw failure;
+        } finally {
+            span.end();
+        }
+    }
+
     private Map<String, Object> call(HttpCallSpec spec, Map<String, Object> context,
             SpanContext parent, byte[] rawBody, Map<String, String> extraHeaders) {
-        String url = buildUrl(spec, context);
-        URI uri = URI.create(url);
+        URI uri = admit(spec, context);
         String host = uri.getHost();
-        String scheme = uri.getScheme();
-        if (host == null || scheme == null
-                || !("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme))) {
-            throw new TqlException(INVALID_CALL, "http-call url '" + spec.url()
-                    + "' must be an absolute http or https URL");
-        }
-        if (!outbound.isHostAllowed(host)) {
-            // The denial is loud per-execution; the counter adds the fleet view — a rate
-            // of denials after a config rollout is the alertable regression
-            // (docs/poll-source-metrics.md).
-            meter.counter("tesseraql.egress.denied").increment(Map.of("host", host));
-            throw new TqlException(HOST_DENIED, "http-call host '" + host
-                    + "' is not in tesseraql.http.outbound.allowedHosts (deny by default)");
-        }
-
-        Breaker breaker = breakers.computeIfAbsent(host, h -> new Breaker());
-        if (breaker.isOpen(clock.getAsLong())) {
-            throw new TqlException(CIRCUIT_OPEN, "http-call circuit for host '" + host
-                    + "' is open after repeated failures");
-        }
+        Breaker breaker = admittedBreaker(host);
 
         Span span = tracer.start("tesseraql.http.call", parent)
                 .attribute("method", spec.effectiveMethod())
@@ -162,6 +194,44 @@ public final class HttpCallClient {
         } finally {
             span.end();
         }
+    }
+
+    /** Validates the target and applies the allow-list; the admission every form shares. */
+    private URI admit(HttpCallSpec spec, Map<String, Object> context) {
+        String url = buildUrl(spec, context);
+        URI uri = URI.create(url);
+        String host = uri.getHost();
+        String scheme = uri.getScheme();
+        if (host == null || scheme == null
+                || !("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme))) {
+            throw new TqlException(INVALID_CALL, "http-call url '" + spec.url()
+                    + "' must be an absolute http or https URL");
+        }
+        if (!outbound.isHostAllowed(host)) {
+            // The denial is loud per-execution; the counter adds the fleet view — a rate
+            // of denials after a config rollout is the alertable regression
+            // (docs/poll-source-metrics.md).
+            meter.counter("tesseraql.egress.denied").increment(Map.of("host", host));
+            throw new TqlException(HOST_DENIED, "Outbound host '" + host
+                    + "' is not in tesseraql.http.outbound.allowedHosts (egress is deny by"
+                    + " default); allow it:\n"
+                    + "tesseraql:\n"
+                    + "  http:\n"
+                    + "    outbound:\n"
+                    + "      allowedHosts:\n"
+                    + "        - " + host);
+        }
+        return uri;
+    }
+
+    /** The per-host breaker, refusing when its circuit is open. */
+    private Breaker admittedBreaker(String host) {
+        Breaker breaker = breakers.computeIfAbsent(host, h -> new Breaker());
+        if (breaker.isOpen(clock.getAsLong())) {
+            throw new TqlException(CIRCUIT_OPEN, "http-call circuit for host '" + host
+                    + "' is open after repeated failures");
+        }
+        return breaker;
     }
 
     private HttpResponse<byte[]> send(HttpCallSpec spec, URI uri, Map<String, Object> context,

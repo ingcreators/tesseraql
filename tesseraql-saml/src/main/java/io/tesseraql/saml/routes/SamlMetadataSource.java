@@ -3,34 +3,31 @@ package io.tesseraql.saml.routes;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
-import io.tesseraql.yaml.config.AppConfig;
-import io.tesseraql.yaml.http.HttpOutbound;
+import io.tesseraql.yaml.http.OutboundGateway;
 import io.tesseraql.yaml.manifest.AppManifest;
+import io.tesseraql.yaml.model.HttpCallSpec;
 import java.io.IOException;
 import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
  * Resolves the {@code tesseraql.saml.idp.metadata} setting to metadata bytes (docs/saml.md):
- * an app-home-relative file as before, or — new — an {@code https://} URL fetched at boot.
- * The metadata pins the IdP signing key, so a URL is held to the framework's egress
- * discipline: the host must be in {@code tesseraql.http.outbound.allowedHosts}
- * ({@code TQL-SEC-4086}, deny by default, the copilot-endpoint precedent) and plain
- * {@code http://} is refused off loopback ({@code TQL-SEC-4087}) — plaintext metadata would
- * be a key-injection channel. A successful fetch caches to {@code work/saml/idp-metadata.xml};
- * when the IdP's endpoint is unreachable at a later boot, the cached copy serves with a
- * warning, so an IdP outage never bricks the app.
+ * an app-home-relative file, or an {@code https://} URL fetched at boot through the runtime's
+ * {@link OutboundGateway} (docs/duplication-consolidation.md, campaign 1) — the metadata pins
+ * the IdP signing key, so a URL is held to the framework's egress discipline: the deny-by-default
+ * allow-list, the timeouts, the circuit breaker, and the {@code tesseraql.http.call} span, like
+ * every other outbound call. Plain {@code http://} is refused off loopback ({@code TQL-SEC-4087})
+ * — plaintext metadata would be a key-injection channel. A successful fetch caches to
+ * {@code work/saml/idp-metadata.xml}; when the IdP's endpoint is unreachable at a later boot, the
+ * cached copy serves with a warning, so an IdP outage never bricks the app.
  */
 final class SamlMetadataSource {
 
-    private static final TqlErrorCode HOST_DENIED = new TqlErrorCode(TqlDomain.SEC, 4086);
     private static final TqlErrorCode INSECURE_URL = new TqlErrorCode(TqlDomain.SEC, 4087);
     private static final Logger LOG = LoggerFactory.getLogger(SamlMetadataSource.class);
     private static final Duration FETCH_TIMEOUT = Duration.ofSeconds(10);
@@ -38,7 +35,7 @@ final class SamlMetadataSource {
     private SamlMetadataSource() {
     }
 
-    static byte[] load(AppManifest manifest, AppConfig config, String value) {
+    static byte[] load(AppManifest manifest, OutboundGateway gateway, String value) {
         if (!value.startsWith("http://") && !value.startsWith("https://")) {
             try {
                 return Files.readAllBytes(manifest.appHome().resolve(value).normalize());
@@ -53,28 +50,26 @@ final class SamlMetadataSource {
             throw new TqlException(INSECURE_URL, "SAML IdP metadata url '" + value
                     + "' must be https - the metadata pins the IdP signing key");
         }
-        if (!HttpOutbound.load(config).isHostAllowed(host)) {
-            throw new TqlException(HOST_DENIED, "SAML IdP metadata host '" + host
-                    + "' is not in tesseraql.http.outbound.allowedHosts (deny by default)");
-        }
         Path cache = manifest.appHome().resolve("work/saml/idp-metadata.xml");
         try {
-            HttpResponse<byte[]> response = HttpClient.newBuilder()
-                    .connectTimeout(FETCH_TIMEOUT)
-                    .followRedirects(HttpClient.Redirect.NEVER)
-                    .build()
-                    .send(HttpRequest.newBuilder(uri).timeout(FETCH_TIMEOUT).build(),
-                            HttpResponse.BodyHandlers.ofByteArray());
-            if (response.statusCode() != 200) {
+            String timeout = FETCH_TIMEOUT.toMillis() + "ms";
+            OutboundGateway.RawResponse response = gateway.exchange(
+                    new HttpCallSpec("GET", value, Map.of(), null, null, null, null,
+                            timeout, timeout),
+                    null, Map.of());
+            if (response.status() != 200) {
                 throw new IOException("IdP metadata endpoint answered HTTP "
-                        + response.statusCode());
+                        + response.status());
             }
             Files.createDirectories(cache.getParent());
             Files.write(cache, response.body());
             return response.body();
-        } catch (IOException | InterruptedException ex) {
-            if (ex instanceof InterruptedException) {
-                Thread.currentThread().interrupt();
+        } catch (IOException | TqlException ex) {
+            // The gateway's policy refusal is a configuration to fix, never something a cached
+            // copy may paper over; only an unreachable endpoint falls back to the cache.
+            if (ex instanceof TqlException refused
+                    && io.tesseraql.yaml.http.HttpOutbound.HOST_DENIED.equals(refused.code())) {
+                throw refused;
             }
             if (Files.isRegularFile(cache)) {
                 LOG.warn("SAML IdP metadata fetch from {} failed ({}); using the cached copy"

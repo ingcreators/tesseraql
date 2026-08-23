@@ -23,8 +23,9 @@ public final class OidcTokenValidator {
 
     private final JwtAuthenticator authenticator;
 
-    public OidcTokenValidator(OidcMetadata metadata, OidcConfig config) {
-        this(buildAuthenticator(metadata, config));
+    public OidcTokenValidator(OidcMetadata metadata, OidcConfig config,
+            io.tesseraql.security.jwt.JwksFetcher jwksFetcher) {
+        this(buildAuthenticator(metadata, config, jwksFetcher));
     }
 
     /**
@@ -38,7 +39,8 @@ public final class OidcTokenValidator {
         this.authenticator = authenticator;
     }
 
-    private static JwtAuthenticator buildAuthenticator(OidcMetadata metadata, OidcConfig config) {
+    private static JwtAuthenticator buildAuthenticator(OidcMetadata metadata, OidcConfig config,
+            io.tesseraql.security.jwt.JwksFetcher jwksFetcher) {
         OidcConfig.Claims claims = config.claims();
         JwtConfig jwt = new JwtConfig(
                 "RS256",
@@ -59,7 +61,7 @@ public final class OidcTokenValidator {
                 claims.tenant(),
                 claims.login(),
                 claims.name());
-        return new JwtAuthenticator(jwt);
+        return new JwtAuthenticator(jwt, jwksFetcher);
     }
 
     /**

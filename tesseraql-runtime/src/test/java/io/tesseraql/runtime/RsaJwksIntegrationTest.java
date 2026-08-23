@@ -193,13 +193,18 @@ class RsaJwksIntegrationTest {
                 POSTGRES.getPassword()));
         // Switch the example's bearer config from HS256 to RS256 backed by the local JWKS server.
         // refreshFloor: 0s lets a rotated-in kid be fetched immediately (no DoS-guard wait).
+        // The JWKS fetch leaves through the outbound gateway, so the test IdP's host is
+        // allow-listed like any other outbound destination.
         Path config = target.resolve("config/tesseraql.yml");
-        Files.writeString(config, Files.readString(config).replace(
-                "      secret: ${JWT_SECRET:dev-only-secret-change-me-in-production}",
-                "      algorithm: RS256\n"
-                        + "      jwksUri: http://127.0.0.1:" + jwksPort + "/jwks\n"
-                        + "      jwks:\n"
-                        + "        refreshFloor: 0s"));
+        Files.writeString(config, Files.readString(config)
+                .replace(
+                        "      secret: ${JWT_SECRET:dev-only-secret-change-me-in-production}",
+                        "      algorithm: RS256\n"
+                                + "      jwksUri: http://127.0.0.1:" + jwksPort + "/jwks\n"
+                                + "      jwks:\n"
+                                + "        refreshFloor: 0s")
+                .replace("        - localhost",
+                        "        - localhost\n        - 127.0.0.1"));
         return target;
     }
 

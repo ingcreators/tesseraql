@@ -283,6 +283,11 @@ class OidcLoginIntegrationTest {
                       enabled: false
                 """.formatted(opPort, CLIENT_ID, runtimePort),
                 java.nio.file.StandardOpenOption.APPEND);
+        // Discovery and the token exchange leave through the outbound gateway, so the mock
+        // OP's host is allow-listed like any other outbound destination.
+        Path config = target.resolve("config/tesseraql.yml");
+        Files.writeString(config, Files.readString(config).replace("        - localhost",
+                "        - localhost\n        - 127.0.0.1"));
         return target;
     }
 
