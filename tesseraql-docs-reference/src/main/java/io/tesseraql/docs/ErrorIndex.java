@@ -548,6 +548,7 @@ final class ErrorIndex {
             "module-scope.md", "runtime-replace.md", "stack-shells.md",
             "application-roles.md", "studio-shell.md", "module-channel.md",
             "access-governance.md", "http-threading.md", "contract-sql-execution.md",
+            "sql-execution-shapes.md",
             "http-edge.md", "camel-removal.md", "vertx-native.md", "boot-phases.md");
 
     /** Whether {@code name} is an internal planning document; shared with the config index. */
