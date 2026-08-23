@@ -8,6 +8,14 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **The stack reconciler's `close()` waits for the pass in flight.** It used to return
+  while a pass was still applying and writing its status file, so the caller's next act —
+  a host releasing the install root, a test deleting its temp directory — raced that write
+  (one of `StackReconcilerSweepTest`'s two flake shapes; the other was an ordering slip in
+  the test's own recording double, where the convergence poll's publication preceded the
+  operation log it went on to assert). The wait is bounded and reported, never forever;
+  the regression test blocks a pass mid-apply and pins that `close()` does not return
+  around it.
 - **The over-limit refusal's drain covers what the client declared, so the 413 always
   arrives.** Vert.x 5's body handler refuses a declared over-limit `Content-Length` *before
   reading any of the body*, so the drain's flat one-limit bound — calibrated for a refusal
