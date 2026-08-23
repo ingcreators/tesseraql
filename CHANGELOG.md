@@ -8,6 +8,20 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **The over-limit refusal's drain covers what the client declared, so the 413 always
+  arrives.** Vert.x 5's body handler refuses a declared over-limit `Content-Length` *before
+  reading any of the body*, so the drain's flat one-limit bound — calibrated for a refusal
+  that had already consumed a limit's worth — was always exceeded on this path: the server
+  closed the connection with data still unread, and that close is a TCP reset that can
+  destroy the 413 already in flight. Whether a client saw the refusal or a broken pipe (or,
+  through the gateway, sixty seconds of silence) was a race that only load decided — the
+  recurring `MultiAppGatewayDifferentialTest` stall, reproduced at will by pinning the build
+  to two CPUs (one failure in seven runs; ten of ten green with the fix). The drain now
+  covers the declared remainder — politeness extends to what the client said it owes, never
+  more — while an undeclared (chunked) stream and a stream running past its own declaration
+  keep the flat bound. The new regression test writes the whole declared body before reading
+  a byte, which makes the old reset deterministic instead of load-shaped.
+
 - **Path confinement is one primitive, and the guard holds against a relative root**
   (`ConfinedPath`, docs/duplication-consolidation.md campaign 2). Twenty-two sites carried
   their own `resolve().normalize()` + `startsWith(root)` sequence and disagreed on the one
