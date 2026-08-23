@@ -20,7 +20,7 @@ import java.util.TreeMap;
 public final class ReleaseEvidence {
 
     private static final TqlErrorCode ERROR = new TqlErrorCode(TqlDomain.REPORT, 2101);
-    private final ObjectMapper mapper = new ObjectMapper();
+    private final ObjectMapper mapper = io.tesseraql.yaml.JsonMappers.constrained();
 
     /** Builds the evidence document tree. */
     public Map<String, Object> build(AppManifest manifest, String appName, String appVersion) {

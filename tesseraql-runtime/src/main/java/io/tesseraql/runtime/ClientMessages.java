@@ -33,7 +33,7 @@ final class ClientMessages {
 
     private final Path messagesDir;
     private final String defaultTag;
-    private final ObjectMapper mapper = new ObjectMapper();
+    private final ObjectMapper mapper = io.tesseraql.yaml.JsonMappers.constrained();
     private final org.webjars.WebJarVersionLocator webJars = new org.webjars.WebJarVersionLocator();
 
     ClientMessages(Path appHome, String defaultTag) {

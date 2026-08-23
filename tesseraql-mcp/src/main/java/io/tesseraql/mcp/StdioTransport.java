@@ -23,7 +23,7 @@ import java.util.Optional;
  */
 public final class StdioTransport {
 
-    private final ObjectMapper mapper = new ObjectMapper();
+    private final ObjectMapper mapper = McpJson.constrained();
     private final McpServer server;
     private final InputStream in;
     private final OutputStream out;

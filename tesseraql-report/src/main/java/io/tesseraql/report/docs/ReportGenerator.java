@@ -52,7 +52,7 @@ import java.util.stream.Stream;
 public final class ReportGenerator {
 
     private static final TqlErrorCode GEN_ERROR = new TqlErrorCode(TqlDomain.REPORT, 2005);
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
 
     private final TestSuiteLoader suiteLoader = new TestSuiteLoader();
 

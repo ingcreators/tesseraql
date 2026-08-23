@@ -19,7 +19,7 @@ public record EvidenceSignature(String algorithm, String publicKey, String publi
         String signature) {
 
     private static final TqlErrorCode ERROR = new TqlErrorCode(TqlDomain.REPORT, 2102);
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
 
     /** Signs the evidence payload with a base64/PEM PKCS#8 Ed25519 private key. */
     public static EvidenceSignature sign(byte[] payload, String privateKey, String publicKey) {

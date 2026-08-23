@@ -71,7 +71,7 @@ public final class JdbcFileTransferService implements FileTransferService {
     private final DataSource dataSource;
     private final FileCodecs codecs;
     private final io.tesseraql.core.expr.ExpressionFunctions functions;
-    private final ObjectMapper mapper = new ObjectMapper();
+    private final ObjectMapper mapper = io.tesseraql.yaml.JsonMappers.constrained();
     private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
 
     private volatile String dialect;

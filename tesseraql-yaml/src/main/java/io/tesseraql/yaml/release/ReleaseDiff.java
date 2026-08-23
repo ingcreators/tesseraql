@@ -30,7 +30,7 @@ import java.util.TreeSet;
  */
 public final class ReleaseDiff {
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
 
     private ReleaseDiff() {
     }

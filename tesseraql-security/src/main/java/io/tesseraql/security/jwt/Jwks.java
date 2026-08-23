@@ -23,7 +23,7 @@ import java.util.Map;
  */
 public final class Jwks {
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.security.SecurityJson.constrained();
     private static final Base64.Decoder URL_DECODER = Base64.getUrlDecoder();
 
     private Jwks() {

@@ -78,7 +78,7 @@ final class SymbolsCommand implements Callable<Integer> {
         for (ManifestLoader.BrokenRoute route : brokenRoutes) {
             broken.add(new Broken(relative(home, route.source()), route.error()));
         }
-        ObjectMapper mapper = new ObjectMapper();
+        ObjectMapper mapper = io.tesseraql.yaml.JsonMappers.constrained();
         ObjectNode document = mapper.createObjectNode();
         SimpleYamlParser parser = new SimpleYamlParser();
         policies(document.putArray("policies"), config, home);

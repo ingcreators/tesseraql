@@ -69,7 +69,7 @@ final class OperationsRoutes {
         return row;
     }
 
-    private final ObjectMapper mapper = new ObjectMapper();
+    private final ObjectMapper mapper = io.tesseraql.yaml.JsonMappers.constrained();
     /** The shared find/scope/act cores both the JSON API and the console providers call. */
     private final OpsActions actions;
     private final JobRepository repository;

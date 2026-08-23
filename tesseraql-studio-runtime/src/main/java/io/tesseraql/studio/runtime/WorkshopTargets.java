@@ -44,7 +44,7 @@ interface WorkshopTargets {
 
     /** The hosted shell: HTTP over loopback, the member's port resolved live per call. */
     static WorkshopTargets of(List<String> members, HostContext.MemberOrigins origins) {
-        ObjectMapper mapper = new ObjectMapper();
+        ObjectMapper mapper = io.tesseraql.yaml.JsonMappers.constrained();
         return new WorkshopTargets() {
             @Override
             public List<String> memberNames() {

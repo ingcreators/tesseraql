@@ -41,7 +41,7 @@ final class SamlAcsRoutes {
     private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory
             .getLogger(SamlAcsRoutes.class);
 
-    private final ObjectMapper mapper = new ObjectMapper();
+    private final ObjectMapper mapper = io.tesseraql.yaml.JsonMappers.constrained();
     private final SamlResponseValidator validator;
     private final SamlAttributeMapping mapping;
     private final SessionStore sessions;

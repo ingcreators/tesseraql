@@ -28,7 +28,7 @@ public final class McpHttpHandler {
     public static final String SESSION_HEADER = "Mcp-Session-Id";
     private static final String JSON = "application/json; charset=utf-8";
 
-    private final ObjectMapper mapper = new ObjectMapper();
+    private final ObjectMapper mapper = McpJson.constrained();
     private final McpServer server;
     private final McpAuthenticator authenticator;
     /** How long an idle MCP session stays valid. */

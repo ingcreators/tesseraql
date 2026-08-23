@@ -17,7 +17,7 @@ import java.util.Map;
  */
 public final class JwksDocuments {
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
     private static final Base64.Encoder URL = Base64.getUrlEncoder().withoutPadding();
 
     private JwksDocuments() {

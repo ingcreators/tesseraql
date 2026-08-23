@@ -22,7 +22,7 @@ final class OutboxEvents {
 
     private final OutboxSpec outbox;
     private final String appName;
-    private final ObjectMapper mapper = new ObjectMapper();
+    private final ObjectMapper mapper = io.tesseraql.yaml.JsonMappers.constrained();
 
     OutboxEvents(OutboxSpec outbox, String appName) {
         this.outbox = outbox;

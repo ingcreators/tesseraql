@@ -20,7 +20,7 @@ import java.util.Set;
 public final class SarifReporter {
 
     private static final TqlErrorCode REPORT_ERROR = new TqlErrorCode(TqlDomain.REPORT, 1002);
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
 
     private SarifReporter() {
     }

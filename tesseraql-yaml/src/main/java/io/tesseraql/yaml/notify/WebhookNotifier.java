@@ -31,7 +31,7 @@ public final class WebhookNotifier {
     /** TQL-BATCH-5303: a webhook delivery was not accepted by the receiver. */
     private static final TqlErrorCode DELIVERY_FAILED = new TqlErrorCode(TqlDomain.BATCH, 5303);
 
-    private final ObjectMapper mapper = new ObjectMapper();
+    private final ObjectMapper mapper = io.tesseraql.yaml.JsonMappers.constrained();
     private final OutboundGateway gateway;
 
     public WebhookNotifier(OutboundGateway gateway) {

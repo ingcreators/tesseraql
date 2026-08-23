@@ -35,7 +35,7 @@ final class OidcRoutes {
     private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory
             .getLogger(OidcRoutes.class);
 
-    private final ObjectMapper mapper = new ObjectMapper();
+    private final ObjectMapper mapper = io.tesseraql.yaml.JsonMappers.constrained();
     private final OidcConfig config;
     private final OidcDiscovery discovery;
     private final OidcStateStore stateStore;

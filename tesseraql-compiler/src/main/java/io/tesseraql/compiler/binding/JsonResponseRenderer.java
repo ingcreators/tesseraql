@@ -34,7 +34,7 @@ public final class JsonResponseRenderer implements Step {
     private final Object compiledBody;
     private final java.util.List<CompiledStatus> statusWhen;
     private final ResponseHeaders headers;
-    private final ObjectMapper mapper = new ObjectMapper();
+    private final ObjectMapper mapper = io.tesseraql.yaml.JsonMappers.constrained();
 
     /** A pre-compiled statusWhen arm (roadmap Phase 41): first truthy condition wins. */
     record CompiledStatus(io.tesseraql.core.expr.Expr when, int status) {

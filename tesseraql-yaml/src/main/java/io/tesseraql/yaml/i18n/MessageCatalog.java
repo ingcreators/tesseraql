@@ -1,7 +1,5 @@
 package io.tesseraql.yaml.i18n;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
@@ -236,7 +234,7 @@ public final class MessageCatalog {
     private static Map<String, String> parseContent(InputStream content, String source) {
         Object tree;
         try {
-            tree = new ObjectMapper(new YAMLFactory()).readValue(content, Object.class);
+            tree = io.tesseraql.yaml.YamlMappers.constrained().readValue(content, Object.class);
         } catch (IOException ex) {
             throw new TqlException(INVALID_CATALOG, "Message catalog '" + source
                     + "' is not valid YAML: " + ex.getMessage());

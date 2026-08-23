@@ -30,7 +30,7 @@ final class StudioRoutes {
 
     private static final AuthStep AUTH = new AuthStep("authenticate", "bearer", null, null);
 
-    private final ObjectMapper mapper = new ObjectMapper();
+    private final ObjectMapper mapper = io.tesseraql.yaml.JsonMappers.constrained();
     private final StudioService studio;
     private final RouteReloader reloader;
     private final StudioTestService studioTests;

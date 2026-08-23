@@ -16,7 +16,7 @@ public final class ScimOutboundSink implements OutboxEventSink {
     public static final String DEPROVISION = "USER_DEPROVISIONED";
 
     private final ScimProvisioner provisioner;
-    private final ObjectMapper mapper = new ObjectMapper();
+    private final ObjectMapper mapper = io.tesseraql.yaml.JsonMappers.constrained();
 
     public ScimOutboundSink(ScimProvisioner provisioner) {
         this.provisioner = provisioner;

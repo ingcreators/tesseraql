@@ -23,7 +23,7 @@ import javax.sql.DataSource;
 public final class SchemaGenerator {
 
     private static final TqlErrorCode GEN_ERROR = new TqlErrorCode(TqlDomain.REPORT, 2007);
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
 
     private final CatalogIntrospector introspector = new CatalogIntrospector();
 

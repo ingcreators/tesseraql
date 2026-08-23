@@ -51,7 +51,7 @@ final class DeployRoutes {
     /** TQL-FIELD-2001: the deploy request carried no package bytes in its body. */
     private static final TqlErrorCode EMPTY_BODY = new TqlErrorCode(TqlDomain.FIELD, 2001);
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
 
     private final HostContext.DeployPen pen;
     private final SessionStore sessions;

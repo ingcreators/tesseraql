@@ -37,7 +37,7 @@ public final class NotifyEvents {
     public static final TqlErrorCode INVALID_NOTIFY = new TqlErrorCode(TqlDomain.FIELD, 2004);
     private static final TqlErrorCode ENCODE_ERROR = new TqlErrorCode(TqlDomain.BATCH, 5302);
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
 
     private NotifyEvents() {
     }

@@ -75,7 +75,7 @@ final class StackReconciler implements AutoCloseable {
     }
 
     private static final Logger LOG = LoggerFactory.getLogger(StackReconciler.class);
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
     /** Coalesces the burst a single deploy writes (catalogue + state) into one pass. */
     private static final long DEBOUNCE_MILLIS = 200;
 

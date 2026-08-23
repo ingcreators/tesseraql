@@ -43,7 +43,7 @@ public final class ErrorResponseRenderer implements Step {
      */
     private static final TqlErrorCode INTERNAL_ERROR = new TqlErrorCode(TqlDomain.ROUTE, 5000);
 
-    private final ObjectMapper mapper = new ObjectMapper();
+    private final ObjectMapper mapper = io.tesseraql.yaml.JsonMappers.constrained();
     private final I18nSettings i18n;
     private final Map<String, OnError> onErrorByRoute;
     private final java.nio.file.Path appHome;

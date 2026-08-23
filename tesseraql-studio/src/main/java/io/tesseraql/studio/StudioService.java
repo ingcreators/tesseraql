@@ -74,7 +74,7 @@ public final class StudioService {
     }
 
     private final SimpleYamlParser parser = new SimpleYamlParser();
-    private final ObjectMapper jsonMapper = new ObjectMapper();
+    private final ObjectMapper jsonMapper = io.tesseraql.yaml.JsonMappers.constrained();
     private final boolean readOnly;
     private final DraftStore draftStore;
     private final OverlayEditor overlayEditor;

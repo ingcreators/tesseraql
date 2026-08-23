@@ -17,7 +17,7 @@ public final class ScimGroupOutboundSink implements OutboxEventSink {
     public static final String DEPROVISION = "GROUP_DEPROVISIONED";
 
     private final ScimGroupProvisioner provisioner;
-    private final ObjectMapper mapper = new ObjectMapper();
+    private final ObjectMapper mapper = io.tesseraql.yaml.JsonMappers.constrained();
 
     public ScimGroupOutboundSink(ScimGroupProvisioner provisioner) {
         this.provisioner = provisioner;

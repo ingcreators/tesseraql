@@ -30,7 +30,7 @@ public final class AppCatalog {
     /** TQL-APP-4213: the catalogue already holds an application with this name. */
     private static final TqlErrorCode NAME_TAKEN = new TqlErrorCode(TqlDomain.APP, 4213);
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
 
     private final Path catalogFile;
     private final Map<String, InstalledApp> apps = new LinkedHashMap<>();

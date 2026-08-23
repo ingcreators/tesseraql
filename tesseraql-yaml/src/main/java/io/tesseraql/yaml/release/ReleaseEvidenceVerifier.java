@@ -22,7 +22,7 @@ import java.util.TreeMap;
 public final class ReleaseEvidenceVerifier {
 
     private static final TqlErrorCode ERROR = new TqlErrorCode(TqlDomain.REPORT, 2103);
-    private final ObjectMapper mapper = new ObjectMapper();
+    private final ObjectMapper mapper = io.tesseraql.yaml.JsonMappers.constrained();
 
     /** One reason the evidence does not match. */
     public record Mismatch(String subject, String reason) {

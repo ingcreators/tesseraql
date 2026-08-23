@@ -21,7 +21,7 @@ import java.util.TreeMap;
 public final class SbomGenerator {
 
     private static final TqlErrorCode ERROR = new TqlErrorCode(TqlDomain.REPORT, 2201);
-    private final ObjectMapper mapper = new ObjectMapper();
+    private final ObjectMapper mapper = io.tesseraql.yaml.JsonMappers.constrained();
 
     /** One resolved Maven dependency; {@code sha256} and {@code licenses} may be empty. */
     public record MavenComponent(String groupId, String artifactId, String version, String sha256,

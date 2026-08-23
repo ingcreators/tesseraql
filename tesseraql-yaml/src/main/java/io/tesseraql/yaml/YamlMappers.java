@@ -11,27 +11,20 @@ import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
  * into these mappers, so a bounded nesting depth is a hard requirement, not a nicety — a
  * dependency bump must not be able to widen it.
  */
-final class YamlMappers {
-
-    /**
-     * The most nesting a TesseraQL document may carry. Real app YAML nests only a handful of
-     * levels; this is generous headroom and far below the depth at which deserialization
-     * recursion threatens the stack.
-     */
-    private static final int MAX_NESTING_DEPTH = 100;
+public final class YamlMappers {
 
     private YamlMappers() {
     }
 
     /** A YAML mapper with explicit read constraints, for every parse path. */
-    static ObjectMapper constrained() {
+    public static ObjectMapper constrained() {
         YAMLFactory factory = new YAMLFactory();
+        // The bounds come from JsonLimits, one source with the JSON factory and the local
+        // factories in the modules below yaml, so they cannot drift apart.
         factory.setStreamReadConstraints(StreamReadConstraints.builder()
-                .maxNestingDepth(MAX_NESTING_DEPTH)
-                // Explicit rather than implicit: pin the length bounds to Jackson's documented
-                // defaults so a dependency change cannot silently remove them.
-                .maxStringLength(20_000_000)
-                .maxNameLength(65_536)
+                .maxNestingDepth(io.tesseraql.core.json.JsonLimits.MAX_NESTING_DEPTH)
+                .maxStringLength(io.tesseraql.core.json.JsonLimits.MAX_STRING_LENGTH)
+                .maxNameLength(io.tesseraql.core.json.JsonLimits.MAX_NAME_LENGTH)
                 .build());
         // A repeated key is an error, not a last-one-wins merge. Every authored map is a
         // namespace an author names things in — sources, steps, inputs, validation rules — and

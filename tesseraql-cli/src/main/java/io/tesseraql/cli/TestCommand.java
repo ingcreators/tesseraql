@@ -142,7 +142,7 @@ final class TestCommand implements Callable<Integer> {
      * object on stdout. Files and lines are emitted sorted, so the document is deterministic.
      */
     private static void printJson(AppTestRunner.RunResult result) throws Exception {
-        ObjectMapper mapper = new ObjectMapper();
+        ObjectMapper mapper = io.tesseraql.yaml.JsonMappers.constrained();
         ObjectNode document = mapper.createObjectNode();
         document.put("passed", result.report().passed());
         document.put("failed", result.report().failed());
