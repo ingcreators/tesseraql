@@ -106,20 +106,33 @@ public final class McpHttpHandler {
         return authenticator != null;
     }
 
+    /** TQL-MCP-4263: the transport bearer was missing or refused (HTTP 401). */
+    private static final io.tesseraql.core.error.TqlErrorCode UNAUTHORIZED = new io.tesseraql.core.error.TqlErrorCode(
+            io.tesseraql.core.error.TqlDomain.MCP, 4263);
+    /** TQL-MCP-4264: the MCP endpoint takes POST and DELETE only (HTTP 405). */
+    private static final io.tesseraql.core.error.TqlErrorCode METHOD_NOT_ALLOWED = new io.tesseraql.core.error.TqlErrorCode(
+            io.tesseraql.core.error.TqlDomain.MCP, 4264);
+
     public Response handle(Request request) {
         if (authenticator != null) {
             try {
                 authenticator.authenticate(request.authorization());
             } catch (RuntimeException ex) {
-                return json(401, "{\"error\":\"unauthorized\"}", Map.of("WWW-Authenticate",
-                        challenge));
+                // The framework envelope, coded: this endpoint shipped the flat
+                // {"error":"…"} shape the federation endpoints retired — a string no
+                // operator could search for (docs/duplication-consolidation.md, campaign 3).
+                return json(401, io.tesseraql.core.error.ErrorEnvelope.json(UNAUTHORIZED,
+                        "The MCP transport requires a valid bearer token"),
+                        Map.of("WWW-Authenticate", challenge));
             }
         }
         return switch (request.method().toUpperCase(java.util.Locale.ROOT)) {
             case "POST" -> post(request);
             case "DELETE" -> delete(request);
-            default -> json(405, "{\"error\":\"method_not_allowed\"}", Map.of("Allow",
-                    "POST, DELETE"));
+            default -> json(405, io.tesseraql.core.error.ErrorEnvelope.json(METHOD_NOT_ALLOWED,
+                    "The MCP endpoint takes POST and DELETE"),
+                    Map.of("Allow",
+                            "POST, DELETE"));
         };
     }
 

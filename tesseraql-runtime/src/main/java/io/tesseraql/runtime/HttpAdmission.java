@@ -101,7 +101,7 @@ final class HttpAdmission {
                 .putHeader("Content-Type", "application/json; charset=utf-8")
                 // The code, not a message built from runtime state — the same envelope discipline
                 // the SSE refusal path follows.
-                .end("{\"error\":{\"code\":\"" + AT_CAPACITY
-                        + "\",\"message\":\"The runtime is at capacity\"}}");
+                .end(io.tesseraql.core.error.ErrorEnvelope.json(AT_CAPACITY,
+                        "The runtime is at capacity"));
     }
 }

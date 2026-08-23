@@ -437,7 +437,8 @@ final class StackRelay {
             // not having.
             String appName = appAddressedBy(rawPath);
             if (appName == null) {
-                respond(request, 404, MultiAppHost.UNKNOWN_APP.toString());
+                respond(request, 404, MultiAppHost.UNKNOWN_APP.toString(),
+                        "No application is hosted under this name");
                 return;
             }
 
@@ -448,14 +449,16 @@ final class StackRelay {
             String tenant = request.getHeader(TENANT_HEADER);
             InstalledApp app = entryOf.apply(appName);
             if (tenant != null && app != null && !app.isEntitled(tenant)) {
-                respond(request, 403, NOT_ENTITLED);
+                respond(request, 403, NOT_ENTITLED,
+                        "The request's tenant is not entitled to this application");
                 return;
             }
 
             try {
                 portOf.applyAsInt(appName);
             } catch (RuntimeException unknown) {
-                respond(request, 404, MultiAppHost.UNKNOWN_APP.toString());
+                respond(request, 404, MultiAppHost.UNKNOWN_APP.toString(),
+                        "No application is hosted under this name");
                 return;
             }
             // The URI is forwarded verbatim — the app serves the address it is
@@ -471,7 +474,8 @@ final class StackRelay {
                     name -> new java.util.concurrent.Semaphore(maxConcurrentPerMember));
             if (!permits.tryAcquire()) {
                 request.response().putHeader("Retry-After", "1");
-                respond(request, 503, MEMBER_AT_CAPACITY);
+                respond(request, 503, MEMBER_AT_CAPACITY,
+                        "The member is at its forwarding capacity; retry later");
                 return;
             }
             held.set(permits);
@@ -480,7 +484,8 @@ final class StackRelay {
                     .handle(request);
         } catch (RuntimeException ex) {
             LOG.warn("Gateway error: {}", ex.getMessage());
-            respond(request, 502, GATEWAY_ERROR);
+            respond(request, 502, GATEWAY_ERROR,
+                    "The gateway could not forward the request to the application");
         }
     }
 
@@ -722,13 +727,17 @@ final class StackRelay {
         return path.isEmpty() ? "/" : path;
     }
 
-    private static void respond(HttpServerRequest request, int status, String code) {
+    private static void respond(HttpServerRequest request, int status, String code,
+            String message) {
         HttpServerResponse response = request.response();
         if (response.ended()) {
             return;
         }
+        // The full envelope: this copy had drifted to a message-less {"error":{"code":…}},
+        // the one sibling whose answer a client could not read like the others'
+        // (docs/duplication-consolidation.md, campaign 3).
         response.setStatusCode(status)
                 .putHeader("Content-Type", "application/json; charset=utf-8")
-                .end("{\"error\":{\"code\":\"" + code + "\"}}");
+                .end(io.tesseraql.core.error.ErrorEnvelope.json(code, message));
     }
 }

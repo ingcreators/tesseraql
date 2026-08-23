@@ -27,35 +27,4 @@ public final class FederationErrors {
 
     private FederationErrors() {
     }
-
-    /**
-     * The framework's error envelope as JSON.
-     *
-     * <p>Built by hand rather than through a mapper because these two builders answer before any
-     * route context exists, and the message is a fixed phrase — never an exception's text, which
-     * is what the previous concatenation leaked.
-     */
-    public static String body(TqlErrorCode code, String message) {
-        return "{\"error\":{\"code\":\"" + code + "\",\"message\":\"" + escape(message) + "\"}}";
-    }
-
-    /** Only fixed phrases reach this, but a phrase is still text: keep the JSON valid. */
-    private static String escape(String message) {
-        StringBuilder escaped = new StringBuilder(message.length() + 8);
-        for (int i = 0; i < message.length(); i++) {
-            char c = message.charAt(i);
-            switch (c) {
-                case '"' -> escaped.append("\\\"");
-                case '\\' -> escaped.append("\\\\");
-                default -> {
-                    if (c < 0x20) {
-                        escaped.append(String.format("\\u%04x", (int) c));
-                    } else {
-                        escaped.append(c);
-                    }
-                }
-            }
-        }
-        return escaped.toString();
-    }
 }

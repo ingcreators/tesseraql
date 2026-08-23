@@ -61,7 +61,8 @@ final class RouteEdge {
     private static final int CHUNK_BYTES = 64 * 1024;
 
     /** TQL-ROUTE-5000, the code {@code ErrorResponseRenderer} uses for a failure it cannot map. */
-    private static final String UNRENDERED_FAILURE = "{\"error\":{\"code\":\"TQL-ROUTE-5000\",\"message\":\"Internal error\"}}";
+    private static final String UNRENDERED_FAILURE = io.tesseraql.core.error.ErrorEnvelope
+            .json("TQL-ROUTE-5000", "Internal error");
 
     private final RuntimeContext runtimeContext;
     private final Map<String, Route> mounted = new ConcurrentHashMap<>();

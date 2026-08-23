@@ -489,9 +489,9 @@ public final class RouteReloader {
                         exchange.response().status(500);
                         exchange.response().header(Headers.CONTENT_TYPE,
                                 "application/json; charset=utf-8");
-                        exchange.setBody("{\"error\":{\"code\":\"" + COMPILE_FAILED
-                                + "\",\"message\":\"Route failed to compile; see the server log"
-                                + " for the cause\"}}");
+                        exchange.setBody(io.tesseraql.core.error.ErrorEnvelope.json(
+                                COMPILE_FAILED,
+                                "Route failed to compile; see the server log for the cause"));
                     });
         } catch (Exception stubFailure) {
             LOG.error("Could not install the 500 stub for {}; the endpoint answers 404 until the"
