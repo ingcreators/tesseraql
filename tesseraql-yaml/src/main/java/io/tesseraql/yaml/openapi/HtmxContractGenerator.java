@@ -30,7 +30,7 @@ public final class HtmxContractGenerator {
     public Map<String, Object> generate(AppManifest manifest) {
         Map<String, Object> doc = new LinkedHashMap<>();
         doc.put("contract", "tesseraql-htmx/v1");
-        doc.put("app", manifest.config().getString("tesseraql.app.name").orElse("tesseraql-app"));
+        doc.put("app", io.tesseraql.yaml.app.ApplicationName.of(manifest.config()));
 
         List<Map<String, Object>> pages = new ArrayList<>();
         List<Map<String, Object>> fragments = new ArrayList<>();

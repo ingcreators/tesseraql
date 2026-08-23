@@ -118,7 +118,10 @@ public final class RouteCompiler {
         this.i18n = io.tesseraql.yaml.i18n.I18nSettings.from(config, manifest.appHome());
         this.mountRest = mountRest;
         if (this.appName == null) {
-            this.appName = config.getString("tesseraql.app.name").orElse("app");
+            // Required, not defaulted: the name is an identity (job ownership, ops-view
+            // grants, the audit trail's app column), and a shared fallback is the bug
+            // ApplicationName's javadoc records (docs/duplication-consolidation.md, camp. 4).
+            this.appName = io.tesseraql.yaml.app.ApplicationName.of(config);
         }
         // Per-route response.onError steering (HX-Retarget/HX-Reswap), resolved at error
         // time from the failing route id; the error renderer is one shared exception handler.

@@ -50,7 +50,9 @@ class OpenApiGeneratorTest {
                               file: detail.sql
                         """, "detail"));
         AppManifest manifest = new AppManifest(home,
-                new io.tesseraql.yaml.config.AppConfig(java.util.Map.of(), name -> null),
+                new io.tesseraql.yaml.config.AppConfig(java.util.Map.of("tesseraql",
+                        java.util.Map.of("app", java.util.Map.of("name", "test-app"))),
+                        name -> null),
                 java.util.List.of(route), java.util.List.of(), java.util.List.of(),
                 java.util.List.of(), java.util.List.of(), java.util.List.of(),
                 java.util.List.of(), java.util.List.of(), java.util.List.of(),
@@ -96,9 +98,11 @@ class OpenApiGeneratorTest {
                               file: list.sql
                         """, "list"));
         java.util.Map<String, Object> config = basePath == null
-                ? java.util.Map.of()
-                : java.util.Map.of("tesseraql",
-                        java.util.Map.of("http", java.util.Map.of("basePath", basePath)));
+                ? java.util.Map.of("tesseraql",
+                        java.util.Map.of("app", java.util.Map.of("name", "test-app")))
+                : java.util.Map.of("tesseraql", java.util.Map.of(
+                        "app", java.util.Map.of("name", "test-app"),
+                        "http", java.util.Map.of("basePath", basePath)));
         return new AppManifest(home,
                 new io.tesseraql.yaml.config.AppConfig(config, name -> null),
                 java.util.List.of(route), java.util.List.of(), java.util.List.of(),
@@ -130,7 +134,8 @@ class OpenApiGeneratorTest {
                         """, "list"));
         var manifest = new AppManifest(home,
                 new io.tesseraql.yaml.config.AppConfig(java.util.Map.of("tesseraql",
-                        java.util.Map.of("app", java.util.Map.of("version", "2.3.1"))),
+                        java.util.Map.of("app", java.util.Map.of(
+                                "name", "test-app", "version", "2.3.1"))),
                         name -> null),
                 java.util.List.of(route), java.util.List.of(), java.util.List.of(),
                 java.util.List.of(), java.util.List.of(), java.util.List.of(),
@@ -223,7 +228,9 @@ class OpenApiGeneratorTest {
                               mode: update
                         """, "command"));
         AppManifest manifest = new AppManifest(home,
-                new io.tesseraql.yaml.config.AppConfig(java.util.Map.of(), name -> null),
+                new io.tesseraql.yaml.config.AppConfig(java.util.Map.of("tesseraql",
+                        java.util.Map.of("app", java.util.Map.of("name", "test-app"))),
+                        name -> null),
                 java.util.List.of(importRoute, exportRoute, commandRoute), java.util.List.of(),
                 java.util.List.of(), java.util.List.of(), java.util.List.of(), java.util.List.of(),
                 java.util.List.of(), java.util.List.of(), java.util.List.of(), java.util.List.of(),

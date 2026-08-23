@@ -92,9 +92,12 @@ record RuntimePools(Map<String, HikariDataSource> dataSources, HikariDataSource 
             String otlpEndpoint = manifest.config().getString("tesseraql.otel.otlp.endpoint")
                     .orElse(null);
             if (otlpEndpoint != null && !otlpEndpoint.isBlank()) {
+                // The service name is the app's identity unless overridden — a shared
+                // fallback would merge every unnamed application in traces, the exact bug
+                // the name accessor exists to prevent.
                 String serviceName = manifest.config().getString("tesseraql.otel.serviceName")
-                        .or(() -> manifest.config().getString("tesseraql.app.name"))
-                        .orElse("tesseraql");
+                        .orElseGet(() -> io.tesseraql.yaml.app.ApplicationName
+                                .of(manifest.config()));
                 io.opentelemetry.sdk.OpenTelemetrySdk sdk = io.tesseraql.observability.OpenTelemetrySupport
                         .otlp(otlpEndpoint, serviceName);
                 otelSdk = sdk;

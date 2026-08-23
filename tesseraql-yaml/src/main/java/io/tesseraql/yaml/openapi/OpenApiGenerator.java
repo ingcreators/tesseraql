@@ -50,7 +50,7 @@ public final class OpenApiGenerator {
 
         Map<String, Object> info = new LinkedHashMap<>();
         info.put("title",
-                manifest.config().getString("tesseraql.app.name").orElse("tesseraql-app"));
+                io.tesseraql.yaml.app.ApplicationName.of(manifest.config()));
         info.put("version", manifest.config().getString("tesseraql.app.version").orElse("1.0.0"));
         doc.put("info", info);
 

@@ -135,7 +135,7 @@ public final class StudioService {
      * renders is built from the matching entries' source paths, so filtering prunes the tree.
      */
     public Explorer explorer(String query) {
-        String appName = manifest.config().getString("tesseraql.app.name").orElse("app");
+        String appName = io.tesseraql.yaml.app.ApplicationName.of(manifest.config());
         String q = query == null ? "" : query.trim().toLowerCase(java.util.Locale.ROOT);
         List<RouteSummary> routes = manifest.routes().stream()
                 .map(this::routeSummary)

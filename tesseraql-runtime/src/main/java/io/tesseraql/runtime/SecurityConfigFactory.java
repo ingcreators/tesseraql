@@ -55,11 +55,7 @@ public final class SecurityConfigFactory {
      * is not judged here — the name rule owns that refusal.
      */
     private static void requireOwnPolicyCodes(AppConfig config, Map<String, Policy> policies) {
-        String appName = config.getString("tesseraql.app.name").map(String::trim)
-                .filter(name -> !name.isEmpty())
-                .filter(name -> io.tesseraql.yaml.app.ApplicationName
-                        .segmentViolation(name) == null)
-                .orElse(null);
+        String appName = io.tesseraql.yaml.app.ApplicationName.ifValid(config).orElse(null);
         if (appName == null) {
             return;
         }
@@ -284,11 +280,7 @@ public final class SecurityConfigFactory {
 
     /** The declared-role fence's boot backstop (docs/application-roles.md slice 3). */
     private static void requireValidDeclaredRoles(AppConfig config) {
-        String appName = config.getString("tesseraql.app.name").map(String::trim)
-                .filter(name -> !name.isEmpty())
-                .filter(name -> io.tesseraql.yaml.app.ApplicationName
-                        .segmentViolation(name) == null)
-                .orElse(null);
+        String appName = io.tesseraql.yaml.app.ApplicationName.ifValid(config).orElse(null);
         io.tesseraql.yaml.app.DeclaredRoles.require(appName,
                 config.navigate("tesseraql.security.roles"));
     }

@@ -91,7 +91,7 @@ public final class DocService {
 
     /** The application name shown in the portal chrome. */
     public String appName() {
-        return manifest.config().getString("tesseraql.app.name").orElse("app");
+        return io.tesseraql.yaml.app.ApplicationName.of(manifest.config());
     }
 
     /** Whether the deterministic spec.json artifact was packaged with the app (vs. a live run). */
