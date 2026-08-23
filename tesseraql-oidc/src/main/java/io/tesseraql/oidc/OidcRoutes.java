@@ -355,15 +355,6 @@ final class OidcRoutes {
     }
 
     private static String cookieValue(String cookieHeader, String name) {
-        if (cookieHeader == null) {
-            return null;
-        }
-        for (String cookie : cookieHeader.split(";")) {
-            String trimmed = cookie.trim();
-            if (trimmed.startsWith(name + "=")) {
-                return trimmed.substring(name.length() + 1);
-            }
-        }
-        return null;
+        return io.tesseraql.security.session.Cookies.value(cookieHeader, name);
     }
 }

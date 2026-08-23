@@ -17,8 +17,10 @@ class TemplateHighlighterTest {
                 .contains("<span class=\"hc-code__tok\" data-tok=\"meta\">th:text</span>")
                 // a plain HTML attribute is an `attribute` token; a directive stays `meta`
                 .contains("<span class=\"hc-code__tok\" data-tok=\"attribute\">class</span>")
-                .contains(
-                        "<span class=\"hc-code__tok\" data-tok=\"string\">\"${user.name}\"</span>")
+                // string values render with escaped quotes since the escaper gained the
+                // shared four-character contract (docs/duplication-consolidation.md, camp. 4)
+                .contains("<span class=\"hc-code__tok\" data-tok=\"string\">"
+                        + "&quot;${user.name}&quot;</span>")
                 // text between tags stays plain and HTML-escaped
                 .contains("&gt;hi&lt;");
     }

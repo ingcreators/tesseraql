@@ -68,6 +68,18 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **One escaper, and the quote is always escaped** (`Escapes`,
+  docs/duplication-consolidation.md campaign 4). Ten private `escape()` copies existed;
+  two dropped the double quote — unsafe the moment output lands inside a quoted
+  attribute, and one of them was already hand-writing `&quot;` entities to work around its
+  own escaper. Core `Escapes` carries the two grammars (HTML; XML split into text and
+  attribute, the discipline the SAML writers already followed) and every generated-markup
+  writer delegates. The ejected-view and syntax-highlight escapers now escape quotes; the
+  deliberately different grammars (Prometheus exposition, Markdown tables, the JSON
+  envelope) stay local. The session store's cookie parser is public
+  (`Cookies.value`), replacing three byte-identical copies — one of which named the
+  package-private visibility as its reason to exist, and which had drifted on whether a
+  value is trimmed.
 - **Every JSON parse declares its bounds** (`JsonMappers`,
   docs/duplication-consolidation.md campaign 4). Seventy-seven bare
   `new ObjectMapper()` constructions — several parsing untrusted request bodies (the

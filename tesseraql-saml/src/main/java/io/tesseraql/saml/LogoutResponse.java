@@ -36,10 +36,10 @@ public record LogoutResponse(String issuer, String destination, String inRespons
     }
 
     private static String escape(String value) {
-        return escapeText(value).replace("\"", "&quot;");
+        return io.tesseraql.core.text.Escapes.xmlAttribute(value);
     }
 
     private static String escapeText(String value) {
-        return value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+        return io.tesseraql.core.text.Escapes.xmlText(value);
     }
 }

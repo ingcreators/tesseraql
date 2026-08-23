@@ -386,18 +386,12 @@ final class ShellChrome {
                 .contains(value) ? value : null;
     }
 
-    /** A minimal request-cookie read (the session store's parser is package-private). */
+    /** The session store's cookie read, plus this surface's value trim. */
     private static String cookieValue(String cookieHeader, String name) {
-        if (cookieHeader == null) {
-            return null;
-        }
-        for (String part : cookieHeader.split(";")) {
-            int eq = part.indexOf('=');
-            if (eq > 0 && part.substring(0, eq).trim().equals(name)) {
-                return part.substring(eq + 1).trim();
-            }
-        }
-        return null;
+        // This copy alone trimmed the value; the theme cookie's readers relied on it, so the
+        // trim stays here while the parse is the session store's (now public).
+        String value = io.tesseraql.security.session.Cookies.value(cookieHeader, name);
+        return value == null ? null : value.trim();
     }
 
     /** The avatar fallback: the first letters of up to two words (one glyph for CJK names). */

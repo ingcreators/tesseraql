@@ -37,10 +37,10 @@ public record AuthnRequest(String issuer, String acsUrl, String destination) {
     }
 
     private static String escapeAttr(String value) {
-        return escapeText(value).replace("\"", "&quot;");
+        return io.tesseraql.core.text.Escapes.xmlAttribute(value);
     }
 
     private static String escapeText(String value) {
-        return value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+        return io.tesseraql.core.text.Escapes.xmlText(value);
     }
 }

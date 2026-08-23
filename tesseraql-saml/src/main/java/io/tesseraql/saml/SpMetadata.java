@@ -40,7 +40,6 @@ public record SpMetadata(String entityId, String acsUrl, String nameIdFormat) {
     }
 
     private static String escape(String value) {
-        return value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-                .replace("\"", "&quot;");
+        return io.tesseraql.core.text.Escapes.xmlAttribute(value);
     }
 }
