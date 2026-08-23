@@ -8,6 +8,26 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **A bundled SCIM Group contract set for the managed identity store**
+  (docs/contract-sql-execution.md structural decision 6, slice 6 — access governance's
+  slice 4b, the one the whole campaign existed to unblock). An identity provider can manage
+  the managed groups over `/scim/v2/Groups` with no SQL written at all: set
+  `tesseraql.scim.groups.enabled` and configure none of the per-operation keys, and nine
+  bundled statements against `tql_groups`/`tql_user_groups` apply — dialect-suffixed only
+  where pagination forces it, proven against all four dialect containers, and guarded so no
+  `returning` can creep back in. `id` maps to `group_id` (minted `grp-<uuid>` — a supplied
+  column has nothing for a database to generate), `displayName` to `group_name` **and**
+  `group_code` (the code assignment rules join on follows the name an administrator
+  recognises, so a rename at the provisioning client renames the code — recorded, not
+  discovered), `externalId` to the new `tql_groups.external_id` column, present in all four
+  dialect schemas and pinned by the parity guard. Declaring **all** operation keys means the
+  deployment's own schema (`count` stays optional); declaring only some is a boot refusal
+  naming the missing keys — two schemas mixed one statement at a time looks like a bug in the
+  framework rather than in the configuration. Provisioned members are `tql_user_groups` rows
+  with `source = 'scim'`, riding the same windows and sign-in resolution as any other
+  membership. A store created before this release gains `external_id` when the operator
+  re-applies the managed schema (pre-1.0: recorded, no migration steps).
+
 - **Published docs cannot link above the site root.** A `](../…)` link in a published page
   renders on the docs site as a 404 — the site serves `docs/` alone — while working on
   GitHub, so the break was invisible to authors. `PublishedLinkReachabilityTest` now fails

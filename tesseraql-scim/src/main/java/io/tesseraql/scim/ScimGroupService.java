@@ -21,6 +21,8 @@ public final class ScimGroupService {
 
     private final ScimGroupContract contract;
     private ContractStatement statements;
+    /** Mints an id before the insert when set (the bundled managed set); null otherwise. */
+    private java.util.function.Supplier<String> idSupplier;
 
     public ScimGroupService(DataSource dataSource, ScimGroupContract contract) {
         this.statements = ContractStatement.on(dataSource);
@@ -60,6 +62,16 @@ public final class ScimGroupService {
     }
 
     /**
+     * Mints the group id before the insert (docs/contract-sql-execution.md structural
+     * decision 6): the bundled managed set targets a supplied {@code group_id}, so the id is
+     * known before the statement runs — the other half of the declared-key decision.
+     */
+    public ScimGroupService idSupplier(java.util.function.Supplier<String> idSupplier) {
+        this.idSupplier = idSupplier;
+        return this;
+    }
+
+    /**
      * Creates a group (and any members supplied), returning the persisted resource. The create is
      * a plain write (docs/contract-sql-execution.md structural decision 2): the assigned id comes
      * from the contract's declared key when it declares one, and from the id the caller supplied
@@ -72,12 +84,17 @@ public final class ScimGroupService {
     public ScimGroup create(ScimGroup group) {
         try {
             return statements.transact("scim.groups.create", connection -> {
+                Map<String, Object> params = ScimGroupMapper.toParams(group);
+                String minted = null;
+                if (idSupplier != null && (group.id() == null || group.id().isBlank())) {
+                    minted = idSupplier.get();
+                    params.put("id", minted);
+                }
                 ContractStatement.WriteResult written = statements.update(connection,
-                        "scim.groups.create", contract.createSql(),
-                        ScimGroupMapper.toParams(group), contract.keys());
-                String id = written.keys().isEmpty()
-                        ? group.id()
-                        : string(written.keys().values().iterator().next());
+                        "scim.groups.create", contract.createSql(), params, contract.keys());
+                String id = !written.keys().isEmpty()
+                        ? string(written.keys().values().iterator().next())
+                        : minted != null ? minted : group.id();
                 // Deduplicated in Java: inside a transaction a unique violation aborts the
                 // whole transaction on PostgreSQL, so the tolerance the old per-connection adds
                 // relied on cannot apply — and a fresh group cannot collide with itself.
@@ -118,8 +135,12 @@ public final class ScimGroupService {
     /** Lists a page of groups (with members); {@code startIndex} is 1-based per SCIM. */
     public ScimListResponse<ScimGroup> list(int startIndex, int count) {
         try {
+            // The offset arrives precomputed beside the SCIM-native 1-based startIndex,
+            // because MySQL refuses an expression in its OFFSET clause; a contract binds
+            // whichever it references.
             List<Map<String, Object>> rows = queryAll("list", contract.listSql(),
-                    Map.of("startIndex", startIndex, "count", count));
+                    Map.of("startIndex", startIndex, "count", count,
+                            "offset", Math.max(0, startIndex - 1)));
             List<ScimGroup> groups = rows.stream()
                     .map(row -> ScimGroupMapper.fromRow(row, members(string(row.get("id")))))
                     .toList();

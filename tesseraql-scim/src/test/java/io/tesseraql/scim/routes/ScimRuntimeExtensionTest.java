@@ -29,6 +29,38 @@ class ScimRuntimeExtensionTest {
     }
 
     @Test
+    void noDeclaredGroupOperationMeansTheBundledSet() {
+        assertThat(ScimRuntimeExtension.useBundledGroupSet(new AppConfig(Map.of()))).isTrue();
+    }
+
+    @Test
+    void allDeclaredGroupOperationsMeanTheDeploymentsOwnSchema() {
+        Map<String, Object> ops = new java.util.LinkedHashMap<>();
+        for (String op : java.util.List.of("create", "findById", "list", "replace", "delete",
+                "listMembers", "addMember", "removeMember")) {
+            ops.put(op, "scim/" + op + ".sql");
+        }
+        AppConfig config = new AppConfig(Map.of("tesseraql",
+                Map.of("scim", Map.of("groups", ops))));
+
+        assertThat(ScimRuntimeExtension.useBundledGroupSet(config)).isFalse();
+        assertThat(ScimRuntimeExtension.missingGroupOps(config)).isEmpty();
+    }
+
+    @Test
+    void aPartialGroupConfigurationIsRefusedAtBootNamingTheMissingKeys() {
+        AppConfig config = new AppConfig(Map.of("tesseraql", Map.of("scim", Map.of("groups",
+                Map.of("create", "scim/create.sql", "findById", "scim/find.sql")))));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                () -> ScimRuntimeExtension.useBundledGroupSet(config))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("partially configured")
+                .hasMessageContaining("tesseraql.scim.groups.list")
+                .hasMessageContaining("tesseraql.scim.groups.removeMember");
+    }
+
+    @Test
     void declaredKeysReadAsAListOrACommaString() {
         assertThat(ScimRuntimeExtension.readKeys(java.util.List.of("id"))).containsExactly("id");
         assertThat(ScimRuntimeExtension.readKeys("id, tenant_id"))

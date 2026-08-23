@@ -76,6 +76,11 @@ class OraclePortabilityIntegrationTest {
     }
 
     @Test
+    void bundledScimGroupSetRoundTripsOnThisDialect() throws Exception {
+        DialectScimGroupChecks.bundledGroupSetRoundTrip(dataSource(), "oracle");
+    }
+
+    @Test
     void outboxCommandClaimsAndDispatchesOnThisDialect() throws Exception {
         DialectRuntimeChecks.outboxRoundTrip(runtime);
     }

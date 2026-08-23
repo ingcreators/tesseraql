@@ -17,7 +17,8 @@ create table tql_groups (
   group_id   varchar2(64) primary key,
   group_code varchar2(200) not null unique,
   group_name varchar2(200) not null,
-  tenant_id  varchar2(64)
+  tenant_id  varchar2(64),
+  external_id varchar2(64)
 );
 
 create table tql_roles (

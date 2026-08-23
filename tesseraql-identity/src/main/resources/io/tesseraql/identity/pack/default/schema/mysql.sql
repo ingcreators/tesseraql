@@ -17,7 +17,8 @@ create table if not exists tql_groups (
   group_id   varchar(64) primary key,
   group_code varchar(200) not null unique,
   group_name varchar(200) not null,
-  tenant_id  varchar(64)
+  tenant_id  varchar(64),
+  external_id varchar(64)
 );
 
 create table if not exists tql_roles (

@@ -79,6 +79,11 @@ class SqlServerPortabilityIntegrationTest {
     }
 
     @Test
+    void bundledScimGroupSetRoundTripsOnThisDialect() throws Exception {
+        DialectScimGroupChecks.bundledGroupSetRoundTrip(dataSource(), "sqlserver");
+    }
+
+    @Test
     void outboxCommandClaimsAndDispatchesOnThisDialect() throws Exception {
         DialectRuntimeChecks.outboxRoundTrip(runtime);
     }

@@ -85,6 +85,11 @@ class MySqlPortabilityIntegrationTest {
     }
 
     @Test
+    void bundledScimGroupSetRoundTripsOnThisDialect() throws Exception {
+        DialectScimGroupChecks.bundledGroupSetRoundTrip(mysqlDataSource(), "mysql");
+    }
+
+    @Test
     void japaneseIdentifiersRoundTripOnThisDialect() throws Exception {
         DialectRuntimeChecks.japaneseIdentifiersRoundTrip(mysqlDataSource(), "mysql",
                 "varchar(%d)");
