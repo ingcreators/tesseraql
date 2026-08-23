@@ -371,6 +371,33 @@ class MultiAppGatewayDifferentialTest {
         return captureOver(base, call, HttpClient.Version.HTTP_1_1);
     }
 
+    /**
+     * The state of every thread — virtual ones included — the moment a send times out, printed
+     * before the failure. A timeout here has meant a wedged server stream (HttpBodyLimit's
+     * over-limit drain), and its rarest shape never reproduced outside CI: sixty seconds of
+     * silence on an open connection, with the #1028 fix in place, once. A wedge is persistent
+     * by nature, so a dump taken even at the timeout still shows what stopped; jcmd rather than
+     * {@code Thread.getAllStackTraces()} because the server's routes run on virtual threads,
+     * which the latter omits. Best-effort: diagnostics must not fail the failure.
+     */
+    private static void dumpEveryThread(Call call) {
+        System.err.println("[gateway-differential] send timed out on " + call.method + " "
+                + call.path + " len=" + (call.body == null ? 0 : call.body.length())
+                + " — dumping all threads (including virtual)");
+        try {
+            Path dump = Files.createTempFile("gateway-differential-stall", ".txt");
+            Files.delete(dump);
+            new ProcessBuilder("jcmd", String.valueOf(ProcessHandle.current().pid()),
+                    "Thread.dump_to_file", "-format=plain", dump.toString())
+                    .inheritIO().start().waitFor();
+            System.err.write(Files.readAllBytes(dump));
+            System.err.flush();
+            Files.deleteIfExists(dump);
+        } catch (Exception dumpFailed) {
+            System.err.println("[gateway-differential] thread dump failed: " + dumpFailed);
+        }
+    }
+
     private static Captured captureOver(String base, Call call, HttpClient.Version version)
             throws Exception {
         HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(base + call.path))
@@ -390,8 +417,13 @@ class MultiAppGatewayDifferentialTest {
         HttpRequest built = builder.build();
         try (HttpClient client = HttpClient.newBuilder().version(version)
                 .connectTimeout(java.time.Duration.ofSeconds(10)).build()) {
-            HttpResponse<InputStream> response = client.send(built,
-                    HttpResponse.BodyHandlers.ofInputStream());
+            HttpResponse<InputStream> response;
+            try {
+                response = client.send(built, HttpResponse.BodyHandlers.ofInputStream());
+            } catch (java.net.http.HttpTimeoutException stuck) {
+                dumpEveryThread(call);
+                throw stuck;
+            }
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             long length = 0;
             StringBuilder head = new StringBuilder();

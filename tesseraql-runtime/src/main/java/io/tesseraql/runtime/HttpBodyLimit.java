@@ -6,6 +6,8 @@ import io.tesseraql.pipeline.RuntimeContext;
 import io.vertx.core.http.HttpServerRequest;
 import io.vertx.ext.web.RoutingContext;
 import java.util.concurrent.atomic.AtomicLong;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * The typed refusal behind {@code tesseraql.http.maxBodyBytes}, and the stream discipline that
@@ -22,12 +24,25 @@ import java.util.concurrent.atomic.AtomicLong;
  * <p>So the refusal <em>drains</em>: the remaining body is read and discarded, which unblocks
  * the client's write, lets the 413 arrive, and leaves the connection reusable. The drain is
  * bounded — a stream still going after another full limit's worth is past what politeness buys,
- * and the connection closes.
+ * and the connection closes. And the drain is <em>watched</em>: one that stops making progress
+ * has wedged the client just as surely as never draining at all, so after an interval of zero
+ * progress the counters are logged and the connection closes ({@link #DRAIN_STALL_MILLIS}).
  */
 final class HttpBodyLimit {
 
+    private static final Logger LOG = LoggerFactory.getLogger(HttpBodyLimit.class);
+
     /** TQL-SEC-4150: the request body exceeds {@code tesseraql.http.maxBodyBytes} (HTTP 413). */
     private static final TqlErrorCode BODY_TOO_LARGE = new TqlErrorCode(TqlDomain.SEC, 4150);
+
+    /**
+     * How long the drain may sit with zero progress before the connection closes. A healthy
+     * drain moves in milliseconds; an upload trickling at even one byte per interval keeps its
+     * connection. Only a stream making no progress at all — the wedge, whatever its cause —
+     * gets cut, and well inside any client's or CI's own timeout so the failure is attributed
+     * here, not to the caller's clock.
+     */
+    private static final long DRAIN_STALL_MILLIS = 5_000;
 
     private HttpBodyLimit() {
     }
@@ -63,10 +78,34 @@ final class HttpBodyLimit {
                     request.connection().close();
                 }
             });
-            request.endHandler(ended -> {
+            // The drain itself is watched. CI produced a third shape of this flake with the
+            // declared-remainder bound already in place: the client timed out after sixty
+            // seconds of silence on a connection the server kept open — which means the drain
+            // stopped consuming and nothing noticed, because an early response is invisible to
+            // a JDK HTTP/1.1 client until its upload completes (verified against a raw socket:
+            // a flushed 413 on an unread stream surfaces as the client's own timeout, nothing
+            // else). The stall's cause is not established, so the watchdog does not pretend to
+            // prevent it: zero progress across a full interval logs the counters this
+            // diagnosis needed and closes the connection — politeness has already failed on a
+            // wedged stream, and a prompt close is the one answer the client can still see.
+            AtomicLong lastProgress = new AtomicLong(-1);
+            long watchdog = ctx.vertx().setPeriodic(DRAIN_STALL_MILLIS, timer -> {
+                if (request.isEnded()) {
+                    ctx.vertx().cancelTimer(timer);
+                    return;
+                }
+                long seen = drained.get();
+                if (seen == lastProgress.getAndSet(seen)) {
+                    ctx.vertx().cancelTimer(timer);
+                    LOG.warn("Over-limit drain stalled: {} of {} remaining declared byte(s)"
+                            + " drained, no progress for {} ms; closing the connection"
+                            + " (413 already sent, bound {})",
+                            seen, declaredRemaining, DRAIN_STALL_MILLIS, bound);
+                    request.connection().close();
+                }
             });
-            request.exceptionHandler(broken -> {
-            });
+            request.endHandler(ended -> ctx.vertx().cancelTimer(watchdog));
+            request.exceptionHandler(broken -> ctx.vertx().cancelTimer(watchdog));
             request.resume();
         }
         if (ctx.response().ended()) {
