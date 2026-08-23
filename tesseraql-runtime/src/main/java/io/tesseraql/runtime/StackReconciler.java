@@ -352,5 +352,21 @@ final class StackReconciler implements AutoCloseable {
         // sweep alone has neither.
         closeQuietly(watcher);
         passes.shutdownNow();
+        // And wait for the pass actually finishing: close() used to return while a pass was
+        // still applying and writing its status file, so the caller's next act — a host
+        // releasing the install root, a test deleting its temp directory — raced that write.
+        // Bounded: a pass is file reads, a diff, and the host operations it drives; one that
+        // is still going after this long is reported, not waited on forever.
+        try {
+            if (!passes.awaitTermination(10, TimeUnit.SECONDS)) {
+                LOG.warn("A reconcile pass on {} was still running 10s after close", installRoot);
+            }
+            Thread watching = watchThread;
+            if (watching != null) {
+                watching.join(TimeUnit.SECONDS.toMillis(5));
+            }
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+        }
     }
 }

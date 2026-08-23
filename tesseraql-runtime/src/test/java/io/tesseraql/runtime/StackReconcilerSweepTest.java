@@ -29,7 +29,7 @@ import org.junit.jupiter.api.io.TempDir;
 class StackReconcilerSweepTest {
 
     /** A host whose stable slot is a map, so convergence is observable without a runtime. */
-    private static final class FakeHost implements StackReconciler.HostOperations {
+    private static class FakeHost implements StackReconciler.HostOperations {
 
         // Written by the reconciler's sweep thread, read by the test thread: without the
         // concurrent types there is no happens-before, and the test once failed asserting a
@@ -66,8 +66,12 @@ class StackReconcilerSweepTest {
 
         @Override
         public void replace(InstalledApp entry) {
-            stable.put(entry.name(), entry);
+            // The operation log first, the map last: the map update is what the test's
+            // convergence poll observes, so it must be the publication — this once ran the
+            // other way round, and the poll could see the new version while the operations
+            // list was still one instruction short of the entry the assertion wanted.
             operations.add("replace " + entry.name() + " " + entry.version());
+            stable.put(entry.name(), entry);
         }
 
         @Override
@@ -119,6 +123,50 @@ class StackReconcilerSweepTest {
             assertThat(host.stable.get("shop").version()).isEqualTo("2.0.0");
             assertThat(host.operations).contains("replace shop 2.0.0");
         }
+    }
+
+    /**
+     * {@code close()} returns only after the pass in flight finished — it used to return while
+     * a pass was still applying and writing its status file, so a test's temp-directory cleanup
+     * (and a host releasing the install root) raced that write. The slow host's spin is
+     * deliberately uninterruptible, like the file write it stands in for; on the unfixed
+     * close the finished-marker is deterministically absent right after close returns.
+     */
+    @Test
+    void closeAwaitsThePassInFlight(@TempDir Path installRoot)
+            throws IOException, InterruptedException {
+        FakeHost host = new FakeHost() {
+            @Override
+            public void replace(InstalledApp entry) {
+                super.replace(entry);
+                long end = System.nanoTime() + Duration.ofMillis(300).toNanos();
+                while (System.nanoTime() < end) {
+                    Thread.onSpinWait();
+                }
+                operations.add("pass finished " + entry.version());
+            }
+        };
+        host.stable.put("shop", entry("1.0.0"));
+        AppCatalog catalog = new AppCatalog(installRoot);
+        catalog.register(entry("1.0.0"));
+
+        StackReconciler sweeping = new StackReconciler(installRoot, host,
+                Duration.ofMillis(200));
+        catalog.replace(entry("2.0.0"));
+        for (int attempt = 0; attempt < 100; attempt++) {
+            if (host.operations.contains("replace shop 2.0.0")) {
+                break;
+            }
+            Thread.sleep(50);
+        }
+        assertThat(host.operations).contains("replace shop 2.0.0");
+
+        // close() lands mid-spin; it must not return until the pass is done.
+        sweeping.close();
+
+        assertThat(host.operations)
+                .as("close returned before the pass in flight had finished")
+                .contains("pass finished 2.0.0");
     }
 
     /** An idle sweep is a read and a diff: it must not act, and must not keep acting. */
