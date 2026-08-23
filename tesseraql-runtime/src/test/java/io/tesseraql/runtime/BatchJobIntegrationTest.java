@@ -344,6 +344,23 @@ class BatchJobIntegrationTest {
     }
 
     @Test
+    void chunkStepBatchesTheWriterWhenDeclared() throws Exception {
+        JobExecution execution = runtime.runJob("user.chunkBatched",
+                Map.of("businessDate", "2026-08-01"));
+
+        assertThat(execution.status()).isEqualTo(JobStatus.COMPLETED);
+        StepExecution step = runtime.jobRepository().findSteps(execution.id()).get(0);
+        assertThat(step.affectedRows()).isEqualTo(12);
+        assertThat(step.skippedRows()).isEqualTo(0);
+        // Every row landed: two full flushes of five and a final partial of two, each
+        // executed as one JDBC batch before its commit.
+        assertThat(countOf("chunk_results_f")).isEqualTo(12);
+        // The run completed, so the checkpoint is cleared like any other chunk's.
+        assertThat(runtime.jobRepository().findCheckpoint("user.chunkBatched", "load",
+                java.time.LocalDate.parse("2026-08-01"))).isEmpty();
+    }
+
+    @Test
     void chunkStepEnrichesEachWindowBeforeTheWriterSeesIt() throws Exception {
         // The writer binds row.label, which the reader's query never selected — it arrives
         // because the enrichment folded the master into the window first.
@@ -1062,6 +1079,24 @@ class BatchJobIntegrationTest {
                       onError: skip
                       skipLimit: 2
                 """);
+        Files.writeString(target.resolve("batch/chunk/batched.yml"), """
+                version: tesseraql/v1
+                id: user.chunkBatched
+                kind: job
+                recipe: batch-pipeline
+                pipeline:
+                  - id: load
+                    chunk:
+                      reader:
+                        sql:
+                          file: reader-f.sql
+                      writer:
+                        sql:
+                          file: writer-f.sql
+                      key: item_key
+                      commitEvery: 5
+                      batch: true
+                """);
         Files.writeString(target.resolve("batch/chunk/restart.yml"), """
                 version: tesseraql/v1
                 id: user.chunkRestart
@@ -1120,7 +1155,7 @@ class BatchJobIntegrationTest {
                 insert into chunk_results_d (item_key, label)
                 values (/* row.item_key */ 'x01', /* row.label */ 'x')
                 """);
-        for (String set : List.of("a", "b")) {
+        for (String set : List.of("a", "b", "f")) {
             Files.writeString(target.resolve("batch/chunk/reader-" + set + ".sql"), """
                     select item_key, payload
                     from chunk_items_%s
@@ -1222,7 +1257,7 @@ class BatchJobIntegrationTest {
         Files.writeString(target.resolve("batch/overlap/noop.sql"),
                 "update users set name = name where name = '___none___'\n");
         StringBuilder chunkFixtures = new StringBuilder();
-        for (String set : List.of("a", "b")) {
+        for (String set : List.of("a", "b", "f")) {
             chunkFixtures.append("create table chunk_items_").append(set)
                     .append(" (item_key varchar(32) primary key, payload varchar(32) not null);\n")
                     .append("create table chunk_results_").append(set)
@@ -1235,6 +1270,12 @@ class BatchJobIntegrationTest {
         for (int i = 1; i <= 15; i++) {
             chunkFixtures.append("insert into chunk_items_b values ('b%02d', '%s');%n"
                     .formatted(i, i == 8 ? "oops" : "1"));
+        }
+        // The batched writer (docs/sql-execution-shapes.md structural decision 6): twelve
+        // clean rows against commitEvery 5, so the batch flushes twice full and once partial.
+        for (int i = 1; i <= 12; i++) {
+            chunkFixtures.append("insert into chunk_items_f values ('f%02d', '1');%n"
+                    .formatted(i));
         }
         // The enriched chunk (docs/lookups.md, slice 14): the reader's rows carry a code, the
         // name behind it lives in a master, and the writer binds a column the reader never

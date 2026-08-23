@@ -6,7 +6,6 @@ import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.expr.EvaluationContext;
 import io.tesseraql.core.spool.TempStore;
-import io.tesseraql.core.sql.BoundParameter;
 import io.tesseraql.core.sql.BoundSql;
 import io.tesseraql.core.sql.SqlRenderer;
 import io.tesseraql.yaml.manifest.JobFile;
@@ -15,7 +14,6 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -450,13 +448,6 @@ final class StepContext {
                     .quoteReplacement(value == null ? "" : String.valueOf(value)));
         }
         return matcher.appendTail(out).toString();
-    }
-
-    static void bind(PreparedStatement statement, BoundSql bound) throws SQLException {
-        for (int i = 0; i < bound.parameters().size(); i++) {
-            BoundParameter parameter = bound.parameters().get(i);
-            statement.setObject(i + 1, parameter.value());
-        }
     }
 
     static String read(Path path) {

@@ -8,6 +8,24 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **A chunk writer can execute in JDBC batches: `chunk.batch: true`**
+  (docs/sql-execution-shapes.md structural decisions 5 and 6). The writer then queues each
+  row and executes one `executeBatch` per `commitEvery` slice, before the commit that
+  carries the checkpoint — one round trip per committed slice instead of one per row. The
+  trade is declared: a batch cannot attribute a member failure to one row on every driver,
+  so `batch: true` requires the default `onError: fail` (with `onError: skip` the build is
+  refused), and a failure fails the chunk, which reruns from its last checkpoint — the
+  restart contract is unchanged. Rows whose 2-way SQL renders differently still execute in
+  row order: the pending batch flushes whenever the statement shape changes. Underneath,
+  the primitive gained `SqlStatement.Rows` — a reusable writer handle (one prepared
+  statement per rendered-SQL text, cached; `execute` a row now or `add`/`flush` a batch;
+  one span per flush; a close with queued rows refuses, and `discard()` is the abort path's
+  explicit answer) — and the whole chunk step now runs through the statement layer: the
+  reader streams through the primitive's forward-only prepare at the commit cadence's fetch
+  size, the per-row writer keeps its savepoint-and-skip machinery on the handle's cached
+  statements, and `ChunkStepRunner` leaves the `SqlExecutorLedgerTest` ledger — the
+  ledger's declared-SQL residue is now zero.
+
 - **A bundled SCIM Group contract set for the managed identity store**
   (docs/contract-sql-execution.md structural decision 6, slice 6 — access governance's
   slice 4b, the one the whole campaign existed to unblock). An identity provider can manage

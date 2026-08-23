@@ -8,7 +8,6 @@ import io.tesseraql.yaml.enrich.KeyedReference;
 import io.tesseraql.yaml.model.PipelineStep;
 import java.nio.file.Path;
 import java.sql.Connection;
-import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Savepoint;
 import java.util.LinkedHashMap;
@@ -167,35 +166,27 @@ final class ChunkStepRunner {
      * when an operator asked for one, else {@code null} for the completed counts above.
      */
     private Map<String, Object> drain(Connection reader, ChunkWriter sink) throws SQLException {
-        try (PreparedStatement select = spooled
-                ? null
-                : reader.prepareStatement(boundReader.sql())) {
-            prepareSelect(select);
-            try (ChunkRows rows = openRows(select)) {
+        if (spooled) {
+            try (ChunkRows rows = ChunkRows.of(context.tempStore(), spoolRef(),
+                    context.mapper())) {
                 pump(rows, sink);
             }
             return sink.finish();
         }
-    }
-
-    /** The reader statement's bounds and binds; a spooled reader has no statement to prepare. */
-    private void prepareSelect(PreparedStatement select) throws SQLException {
-        if (select == null) {
-            return;
-        }
-        int timeoutSeconds = context.timeoutSecondsFor(chunk.reader());
-        if (timeoutSeconds > 0) {
-            select.setQueryTimeout(timeoutSeconds);
-        }
-        select.setFetchSize(Math.max(100, Math.min(chunk.effectiveCommitEvery(), 1000)));
-        StepContext.bind(select, boundReader);
-    }
-
-    /** The reader's rows: an earlier step's spool, or this step's own cursor. */
-    private ChunkRows openRows(PreparedStatement select) throws SQLException {
-        return spooled
-                ? ChunkRows.of(context.tempStore(), spoolRef(), context.mapper())
-                : ChunkRows.of(select.executeQuery(), dialect);
+        // The statement layer under the chunk's own phase span (docs/sql-execution-shapes.md
+        // structural decision 3): the chunk spans per phase, so the primitive is handed no
+        // tracer here — the bound, the classification and the streaming forward-only prepare
+        // at the commit cadence's fetch size still apply.
+        io.tesseraql.core.sql.SqlStatement readerStatements = io.tesseraql.core.sql.SqlStatement
+                .onCallerConnections()
+                .timeoutSeconds(context.timeoutSecondsFor(chunk.reader()))
+                .fetchSize(Math.max(100, Math.min(chunk.effectiveCommitEvery(), 1000)));
+        return readerStatements.read(reader, readerId, boundReader, (resultSet, span) -> {
+            try (ChunkRows rows = ChunkRows.of(resultSet, dialect)) {
+                pump(rows, sink);
+            }
+            return sink.finish();
+        });
     }
 
     /**
@@ -260,8 +251,9 @@ final class ChunkStepRunner {
     }
 
     /**
-     * The writing half of a chunk: one connection, a statement cache keyed by rendered SQL, and
-     * the commit cadence that carries the checkpoint.
+     * The writing half of a chunk: one connection, the primitive's reusable writer handle (one
+     * prepared statement per rendered-SQL variant, cached — docs/sql-execution-shapes.md
+     * structural decision 5), and the commit cadence that carries the checkpoint.
      *
      * <p>Every counter the step publishes lives here because every one of them is a fact about
      * what the writer did — processed rows, skipped rows, and the stop that a commit is allowed
@@ -270,7 +262,7 @@ final class ChunkStepRunner {
     private final class ChunkWriter {
 
         private final Connection connection;
-        private final Map<String, PreparedStatement> statements = new LinkedHashMap<>();
+        private final io.tesseraql.core.sql.SqlStatement.Rows rows;
         private String lastKey;
         private int sinceCommit;
         private int processed;
@@ -279,6 +271,11 @@ final class ChunkStepRunner {
 
         ChunkWriter(Connection connection) {
             this.connection = connection;
+            // The phase policy again: the chunk's span is the span, so no tracer rides the
+            // handle — its per-flush spans are for surfaces that trace per statement.
+            this.rows = io.tesseraql.core.sql.SqlStatement.onCallerConnections()
+                    .timeoutSeconds(context.timeoutSecondsFor(chunk.writer()))
+                    .rows(connection, writerPath.toString());
         }
 
         /** Writes one enriched window, row by row, committing whenever the cadence says so. */
@@ -295,17 +292,26 @@ final class ChunkStepRunner {
             }
         }
 
-        /** One row through the writer, behind a savepoint so its failure keeps the chunk. */
+        /**
+         * One row through the writer — behind a savepoint so its failure keeps the chunk, or
+         * queued into the handle's JDBC batch when the chunk declares {@code batch: true}
+         * (docs/sql-execution-shapes.md structural decision 6): one round trip per committed
+         * slice, a member failure failing the chunk at flush, which reruns from its last
+         * checkpoint.
+         */
         private void write(Object keyValue) throws SQLException {
             BoundSql boundWriter = SqlRenderer.render(writerTemplate,
                     context.resolveParams(chunk.writer()),
                     io.tesseraql.core.sql.ScopeResolver.UNSUPPORTED, jobContext,
                     io.tesseraql.core.sql.FilePathResolver.UNSUPPORTED);
-            PreparedStatement statement = statementFor(boundWriter);
+            if (chunk.batches()) {
+                rows.add(boundWriter);
+                processed++;
+                return;
+            }
             Savepoint beforeRow = connection.setSavepoint();
             try {
-                StepContext.bind(statement, boundWriter);
-                statement.executeUpdate();
+                rows.execute(boundWriter);
                 processed++;
             } catch (SQLException rowFailure) {
                 recordSkip(beforeRow, keyValue, rowFailure);
@@ -337,21 +343,6 @@ final class ChunkStepRunner {
             }
         }
 
-        /** The rendered writer's statement, prepared once and reused for the same SQL. */
-        private PreparedStatement statementFor(BoundSql boundWriter) throws SQLException {
-            PreparedStatement cached = statements.get(boundWriter.sql());
-            if (cached != null) {
-                return cached;
-            }
-            PreparedStatement statement = connection.prepareStatement(boundWriter.sql());
-            int timeoutSeconds = context.timeoutSecondsFor(chunk.writer());
-            if (timeoutSeconds > 0) {
-                statement.setQueryTimeout(timeoutSeconds);
-            }
-            statements.put(boundWriter.sql(), statement);
-            return statement;
-        }
-
         /**
          * Commits the chunk when {@code commitEvery} rows have been handled, checkpoints the
          * last handled key, and polls the cooperative stop; true when this commit is where the
@@ -364,6 +355,7 @@ final class ChunkStepRunner {
             if (sinceCommit < chunk.effectiveCommitEvery()) {
                 return false;
             }
+            rows.flush();
             connection.commit();
             context.repository().saveCheckpoint(jobId, step.id(), businessDate, lastKey);
             sinceCommit = 0;
@@ -380,6 +372,7 @@ final class ChunkStepRunner {
             if (stopped) {
                 connection.rollback(); // nothing pending — the stop happened on a commit
             } else {
+                rows.flush();
                 connection.commit();
                 context.repository().clearCheckpoint(jobId, step.id(), businessDate);
             }
@@ -393,14 +386,17 @@ final class ChunkStepRunner {
             return result;
         }
 
-        /** Closing the pooled connection reclaims the cached statements regardless. */
+        /**
+         * Discards whatever the abort path left queued — the transaction those rows belonged
+         * to is rolling back, so dropping them is the rollback, not a silent loss (the happy
+         * paths flushed before their commits) — then closes the handle's statements.
+         */
         void close() {
-            for (PreparedStatement statement : statements.values()) {
-                try {
-                    statement.close();
-                } catch (SQLException ignored) {
-                    // closing the pooled connection reclaims them regardless
-                }
+            try {
+                rows.discard();
+                rows.close();
+            } catch (SQLException | RuntimeException ignored) {
+                // closing the pooled connection reclaims the statements regardless
             }
         }
     }

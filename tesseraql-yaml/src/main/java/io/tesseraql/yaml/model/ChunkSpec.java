@@ -23,15 +23,27 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
  * @param enrich    keyed references folded into each window of reader rows before the writer
  *                  sees them (docs/lookups.md), so a writer may bind a column the reader's
  *                  query never selected
+ * @param batch     {@code true} executes the writer in JDBC batches of {@code commitEvery} rows
+ *                  (docs/sql-execution-shapes.md structural decision 6) — one round trip per
+ *                  committed slice instead of one per row; requires the default
+ *                  {@code onError: fail}, because a batch cannot attribute a member failure to
+ *                  one row on every driver
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record ChunkSpec(Binding reader, Binding writer, String key, Integer commitEvery,
-        String onError, Integer skipLimit, java.util.Map<String, EnrichSpec> enrich) {
+        String onError, Integer skipLimit, java.util.Map<String, EnrichSpec> enrich,
+        Boolean batch) {
 
     /** The shape before a chunk could enrich between its reader and its writer. */
     public ChunkSpec(Binding reader, Binding writer, String key, Integer commitEvery,
             String onError, Integer skipLimit) {
-        this(reader, writer, key, commitEvery, onError, skipLimit, java.util.Map.of());
+        this(reader, writer, key, commitEvery, onError, skipLimit, java.util.Map.of(), null);
+    }
+
+    /** The shape before the writer could batch (docs/sql-execution-shapes.md). */
+    public ChunkSpec(Binding reader, Binding writer, String key, Integer commitEvery,
+            String onError, Integer skipLimit, java.util.Map<String, EnrichSpec> enrich) {
+        this(reader, writer, key, commitEvery, onError, skipLimit, enrich, null);
     }
 
     public ChunkSpec {
@@ -48,6 +60,11 @@ public record ChunkSpec(Binding reader, Binding writer, String key, Integer comm
     /** Rows per writer transaction. */
     public int effectiveCommitEvery() {
         return commitEvery == null ? 500 : commitEvery;
+    }
+
+    /** Whether the writer executes in JDBC batches (docs/sql-execution-shapes.md decision 6). */
+    public boolean batches() {
+        return Boolean.TRUE.equals(batch);
     }
 
     /**
