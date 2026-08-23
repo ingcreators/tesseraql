@@ -594,8 +594,24 @@ public final class TransactionalCommandProcessor implements Step {
         params.put(AUDIT, context.get(AUDIT));
         BoundSql bound = SqlRenderer.render(workflow.assignNodes(), params,
                 scopeResolver(exchange), context);
-        Map<String, Object> result = executeQuery(connection, bound, "Workflow assign",
-                null, defaultBounds, dialect);
+        io.tesseraql.core.telemetry.Span assignSpan = tracer(exchange)
+                .start("tesseraql.sql.execute", exchange.getProperty(
+                        TesseraqlProperties.TRACE_CONTEXT,
+                        io.tesseraql.core.telemetry.SpanContext.class))
+                .attribute("surface", "command")
+                .attribute("sqlId", "workflow.assign")
+                .attribute("mode", "query");
+        Map<String, Object> result;
+        try {
+            result = executeQuery(connection, bound, "Workflow assign",
+                    null, defaultBounds, dialect);
+            assignSpan.attribute("rowCount", result.get("rowCount"));
+        } catch (SQLException | RuntimeException ex) {
+            assignSpan.recordError(ex);
+            throw ex;
+        } finally {
+            assignSpan.end();
+        }
         // The opened task's deadline (roadmap Phase 28 slice 3): the to state's `within`, if any.
         Instant dueAt = workflow.dueWithinMillis() == null
                 ? null
@@ -681,16 +697,43 @@ public final class TransactionalCommandProcessor implements Step {
 
         long startNanos = System.nanoTime();
         long startedAt = System.currentTimeMillis();
-        Map<String, Object> result = "query".equals(step.mode())
-                ? executeQuery(connection, bound, "Step '" + step.name() + "'",
-                        step.sourcePath(), step.bounds(), dialect)
-                : executeUpdate(connection, bound, step);
+        // The write path was the one SQL path with no span (docs/contract-sql-execution.md
+        // structural decision 5): route reads, job steps and chunks each open one, and the
+        // statements that change data opened nothing.
+        io.tesseraql.core.telemetry.Span span = tracer(exchange)
+                .start("tesseraql.sql.execute", exchange.getProperty(
+                        TesseraqlProperties.TRACE_CONTEXT,
+                        io.tesseraql.core.telemetry.SpanContext.class))
+                .attribute("surface", "command")
+                .attribute("sqlId", step.sourcePath() == null ? step.name() : step.sourcePath())
+                .attribute("mode", step.mode());
+        Map<String, Object> result;
+        try {
+            result = "query".equals(step.mode())
+                    ? executeQuery(connection, bound, "Step '" + step.name() + "'",
+                            step.sourcePath(), step.bounds(), dialect)
+                    : executeUpdate(connection, bound, step);
+            span.attribute("query".equals(step.mode()) ? "rowCount" : "affectedRows",
+                    result.get("query".equals(step.mode()) ? "rowCount" : "affectedRows"));
+        } catch (SQLException | RuntimeException ex) {
+            span.recordError(ex);
+            throw ex;
+        } finally {
+            span.end();
+        }
         recordExecution(exchange, step, result, startNanos, startedAt);
 
         if (step.expect() != null) {
             checkExpectation(step, (Integer) result.get("affectedRows"));
         }
         return result;
+    }
+
+    /** This runtime's tracer, bound beside the pools; a hand-built context is a no-op. */
+    private static io.tesseraql.core.telemetry.Tracer tracer(Exchange exchange) {
+        io.tesseraql.core.telemetry.Tracer bound = exchange.beans().lookup(
+                TesseraqlProperties.TRACER_BEAN, io.tesseraql.core.telemetry.Tracer.class);
+        return bound != null ? bound : io.tesseraql.core.telemetry.NoopTracer.INSTANCE;
     }
 
     private Map<String, Object> executeUpdate(Connection connection, BoundSql bound, Step step)

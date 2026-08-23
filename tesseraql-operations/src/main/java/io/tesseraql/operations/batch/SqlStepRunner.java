@@ -55,6 +55,7 @@ final class SqlStepRunner {
 
         io.tesseraql.core.telemetry.Span span = context.tracer()
                 .start("tesseraql.sql.execute", context.parentSpan())
+                .attribute("surface", "job")
                 .attribute("sqlId", sqlPath.toString())
                 .attribute("mode", mode)
                 .attribute("stepId", step.id());

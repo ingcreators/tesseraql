@@ -79,7 +79,10 @@ class BatchOtelTraceIntegrationTest {
 
         SpanData job = span("tesseraql.job").orElseThrow();
         SpanData step = span("tesseraql.job.step").orElseThrow();
-        SpanData sql = span("tesseraql.sql.execute").orElseThrow();
+        // By surface: boot-time contract statements export the same span name as roots
+        // (docs/contract-sql-execution.md structural decision 5) — the step's own statement is
+        // the one whose surface says so.
+        SpanData sql = sqlSpan("job").orElseThrow();
 
         assertThat(job.getParentSpanContext().isValid()).isFalse();
         assertThat(step.getParentSpanContext().getSpanId()).isEqualTo(job.getSpanId());
@@ -90,6 +93,14 @@ class BatchOtelTraceIntegrationTest {
     private static Optional<SpanData> span(String name) {
         return EXPORTER.getFinishedSpanItems().stream()
                 .filter(span -> span.getName().equals(name)).findFirst();
+    }
+
+    private static Optional<SpanData> sqlSpan(String surface) {
+        return EXPORTER.getFinishedSpanItems().stream()
+                .filter(span -> span.getName().equals("tesseraql.sql.execute"))
+                .filter(span -> surface.equals(span.getAttributes().get(
+                        io.opentelemetry.api.common.AttributeKey.stringKey("surface"))))
+                .findFirst();
     }
 
     private static void seedDatabase() throws Exception {

@@ -828,7 +828,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
             // statement held a pooled connection for as long as the driver allowed.
             fileTransfers
                     .sqlTimeoutSeconds(manifest.config().getString("tesseraql.sql.timeoutSeconds")
-                            .map(Integer::parseInt).orElse(30));
+                            .map(Integer::parseInt).orElse(30))
+                    .tracer(effectiveTracer);
             fileTransfers.ensureSchema();
             context.bind(TesseraqlProperties.FILE_TRANSFER_BEAN, fileTransfers);
             // Transfer retention (docs/file-transfers.md): opt-in, because nothing expires by
@@ -1538,6 +1539,12 @@ public final class TesseraqlRuntime implements AutoCloseable {
             io.tesseraql.identity.DeclaredRoleReconciler.reconcile(identity, realm, appName,
                     io.tesseraql.yaml.app.DeclaredRoles.require(appName,
                             manifest.config().navigate("tesseraql.security.roles")));
+            // The tracer arrives AFTER the boot-time reconcile, deliberately: a fresh boot's
+            // ring would otherwise hold nothing but boot statements, whose cold-start timings
+            // dominate the slow/error rates and put /health at WARN before the first request
+            // (docs/contract-sql-execution.md structural decision 5 — the span exists to answer
+            // "why is sign-in slow", and boot wiring is not a sign-in).
+            identity.tracer(effectiveTracer);
             // TOTP enrollments (roadmap Phase 50 slice 3): available wherever password
             // login is - the account page enrolls, the login route enforces.
             io.tesseraql.operations.credential.JdbcTotpStore totpStore = new io.tesseraql.operations.credential.JdbcTotpStore(

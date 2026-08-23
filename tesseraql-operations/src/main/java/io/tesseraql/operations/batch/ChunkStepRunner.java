@@ -109,6 +109,7 @@ final class ChunkStepRunner {
     private Map<String, Object> execute() {
         io.tesseraql.core.telemetry.Span span = context.tracer()
                 .start("tesseraql.sql.execute", context.parentSpan())
+                .attribute("surface", "chunk")
                 .attribute("sqlId", readerId)
                 .attribute("mode", "chunk")
                 .attribute("stepId", step.id());

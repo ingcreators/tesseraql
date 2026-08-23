@@ -76,6 +76,7 @@ public final class JdbcFileTransferService implements FileTransferService {
 
     private volatile String dialect;
     private int sqlTimeoutSeconds;
+    private io.tesseraql.core.telemetry.Tracer tracer = io.tesseraql.core.telemetry.NoopTracer.INSTANCE;
 
     public JdbcFileTransferService(JobRepository jobs, TempStore tempStore, DataSource dataSource,
             FileCodecs codecs) {
@@ -106,6 +107,24 @@ public final class JdbcFileTransferService implements FileTransferService {
     public JdbcFileTransferService sqlTimeoutSeconds(int seconds) {
         this.sqlTimeoutSeconds = Math.max(0, seconds);
         return this;
+    }
+
+    /**
+     * The tracer each transfer phase spans through (docs/contract-sql-execution.md structural
+     * decision 5): one {@code tesseraql.sql.execute} span per import, export, or inline
+     * extraction — a span per row would be noise, and the phase is the unit an operator asks
+     * about. Absent a tracer, spans are a no-op.
+     */
+    public JdbcFileTransferService tracer(io.tesseraql.core.telemetry.Tracer tracer) {
+        this.tracer = tracer == null ? io.tesseraql.core.telemetry.NoopTracer.INSTANCE : tracer;
+        return this;
+    }
+
+    private io.tesseraql.core.telemetry.Span span(String mode, Object sqlId) {
+        return tracer.start("tesseraql.sql.execute")
+                .attribute("surface", "transfer")
+                .attribute("mode", mode)
+                .attribute("sqlId", String.valueOf(sqlId));
     }
 
     /** The datasource's dialect id, read once: asking costs a pooled connection. */
@@ -419,6 +438,7 @@ public final class JdbcFileTransferService implements FileTransferService {
         List<SqlNode> rowSql = parse(request.rowSqlFile());
         List<RowError> errors = new ArrayList<>();
         long[] applied = {0};
+        io.tesseraql.core.telemetry.Span span = span("import", request.rowSqlFile());
         try (Connection connection = dataSource.getConnection();
                 java.io.InputStream content = tempStore.openInput(upload)) {
             boolean autoCommit = connection.getAutoCommit();
@@ -464,16 +484,21 @@ public final class JdbcFileTransferService implements FileTransferService {
             } finally {
                 connection.setAutoCommit(autoCommit);
             }
+            span.attribute("affectedRows", applied[0]);
         } catch (Exception ex) {
+            span.recordError(ex);
             LOG.warn("File import {} failed: {}", transferId, ex.getMessage());
             recordRows(transferId, 0, errors);
             jobs.failExecution(transferId, ex.getMessage());
+        } finally {
+            span.end();
         }
     }
 
     private void runExport(String transferId, ExportRequest request, FileCodec codec,
             String filename) {
         List<SqlNode> query = parse(request.querySqlFile());
+        io.tesseraql.core.telemetry.Span span = span("export", request.querySqlFile());
         try (Connection connection = dataSource.getConnection()) {
             boolean autoCommit = connection.getAutoCommit();
             connection.setAutoCommit(false);
@@ -508,6 +533,7 @@ public final class JdbcFileTransferService implements FileTransferService {
                 connection.commit();
                 recordSpool(transferId, writer.toRef(), rows);
                 jobs.completeExecution(transferId);
+                span.attribute("rowCount", rows);
             } catch (Exception ex) {
                 connection.rollback();
                 throw ex;
@@ -518,8 +544,11 @@ public final class JdbcFileTransferService implements FileTransferService {
                 spools.forEach(SpooledRows::close);
             }
         } catch (Exception ex) {
+            span.recordError(ex);
             LOG.warn("File export {} failed: {}", transferId, ex.getMessage());
             jobs.failExecution(transferId, ex.getMessage());
+        } finally {
+            span.end();
         }
     }
 

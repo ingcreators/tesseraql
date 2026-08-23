@@ -47,6 +47,15 @@ public final class ScimUserService {
     }
 
     /**
+     * The tracer every contract statement spans through (docs/contract-sql-execution.md
+     * structural decision 5): a slow provisioning call stops being an unexplained gap.
+     */
+    public ScimUserService tracer(io.tesseraql.core.telemetry.Tracer tracer) {
+        this.statements = statements.tracer(tracer);
+        return this;
+    }
+
+    /**
      * Creates a user, returning the persisted resource (with its assigned id). The create is a
      * plain write (docs/contract-sql-execution.md structural decision 2): the assigned id comes
      * from the contract's declared key when it declares one, and from the id the caller supplied

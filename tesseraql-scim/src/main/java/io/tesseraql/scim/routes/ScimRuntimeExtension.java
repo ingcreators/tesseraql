@@ -44,9 +44,11 @@ public final class ScimRuntimeExtension implements RuntimeExtension {
     public void install(ExtensionContext context) throws Exception {
         AppManifest manifest = context.manifest();
         if (flag(manifest.config(), "tesseraql.scim.enabled")) {
+            io.tesseraql.core.telemetry.Tracer tracer = context.bean(
+                    TesseraqlProperties.TRACER_BEAN, io.tesseraql.core.telemetry.Tracer.class);
             new ScimRoutes(
-                    buildUserService(manifest, context.dataSource()),
-                    buildGroupService(manifest, context.dataSource()),
+                    buildUserService(manifest, context.dataSource(), tracer),
+                    buildGroupService(manifest, context.dataSource(), tracer),
                     buildAttributeCapture(context)).install(context.runtime());
         }
         if (flag(manifest.config(), "tesseraql.scim.outbound.enabled")) {
@@ -91,8 +93,8 @@ public final class ScimRuntimeExtension implements RuntimeExtension {
     }
 
     /** Builds the SCIM user service from the configured contract SQL files (design ch. 10.15). */
-    private static ScimUserService buildUserService(
-            AppManifest manifest, javax.sql.DataSource dataSource) {
+    private static ScimUserService buildUserService(AppManifest manifest,
+            javax.sql.DataSource dataSource, io.tesseraql.core.telemetry.Tracer tracer) {
         ScimContract contract = new ScimContract(
                 readSql(manifest, "tesseraql.scim.users.create"),
                 readSql(manifest, "tesseraql.scim.users.findById"),
@@ -104,15 +106,16 @@ public final class ScimRuntimeExtension implements RuntimeExtension {
                 readKeys(manifest.config().navigate("tesseraql.scim.users.keys")));
         return new ScimUserService(dataSource, contract)
                 .dialect(dialect(manifest.config()))
-                .sqlTimeoutSeconds(sqlTimeoutSeconds(manifest.config()));
+                .sqlTimeoutSeconds(sqlTimeoutSeconds(manifest.config()))
+                .tracer(tracer);
     }
 
     /**
      * Builds the SCIM group service from the configured contract SQL files, or {@code null} when
      * group provisioning is disabled, leaving the {@code /Groups} endpoints unmounted.
      */
-    private static ScimGroupService buildGroupService(
-            AppManifest manifest, javax.sql.DataSource dataSource) {
+    private static ScimGroupService buildGroupService(AppManifest manifest,
+            javax.sql.DataSource dataSource, io.tesseraql.core.telemetry.Tracer tracer) {
         if (!flag(manifest.config(), "tesseraql.scim.groups.enabled")) {
             return null;
         }
@@ -129,7 +132,8 @@ public final class ScimRuntimeExtension implements RuntimeExtension {
                 readKeys(manifest.config().navigate("tesseraql.scim.groups.keys")));
         return new ScimGroupService(dataSource, contract)
                 .dialect(dialect(manifest.config()))
-                .sqlTimeoutSeconds(sqlTimeoutSeconds(manifest.config()));
+                .sqlTimeoutSeconds(sqlTimeoutSeconds(manifest.config()))
+                .tracer(tracer);
     }
 
     /**
