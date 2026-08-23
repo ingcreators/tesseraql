@@ -1,16 +1,8 @@
 package io.tesseraql.scim;
 
 import io.tesseraql.core.dialect.SqlErrors;
-import io.tesseraql.core.sql.BoundParameter;
-import io.tesseraql.core.sql.BoundSql;
-import io.tesseraql.core.sql.SqlRenderer;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.ResultSetMetaData;
+import io.tesseraql.core.sql.ContractStatement;
 import java.sql.SQLException;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -23,18 +15,32 @@ import javax.sql.DataSource;
  */
 public final class ScimUserService {
 
-    private final DataSource dataSource;
     private final ScimContract contract;
+    private ContractStatement statements;
 
     public ScimUserService(DataSource dataSource, ScimContract contract) {
-        this.dataSource = dataSource;
+        this.statements = ContractStatement.on(dataSource);
         this.contract = contract;
+    }
+
+    /**
+     * The bound every SCIM contract statement runs under, in seconds; {@code 0} leaves it unset
+     * (docs/contract-sql-execution.md structural decision 3).
+     *
+     * <p>There was none: a provisioning call's statement ran for as long as the driver allowed,
+     * holding a pooled connection, where the same statement on a route has been bounded by
+     * {@code tesseraql.sql.timeoutSeconds} all along.
+     */
+    public ScimUserService sqlTimeoutSeconds(int seconds) {
+        this.statements = statements.timeoutSeconds(seconds);
+        return this;
     }
 
     /** Creates a user, returning the persisted resource (with its assigned id). */
     public ScimUser create(ScimUser user) {
         try {
-            Map<String, Object> row = queryOne(contract.createSql(), ScimUserMapper.toParams(user));
+            Map<String, Object> row = queryOne("create", contract.createSql(),
+                    ScimUserMapper.toParams(user));
             return row == null ? user : ScimUserMapper.fromRow(row);
         } catch (SQLException ex) {
             if (SqlErrors.isUniqueViolation(ex)) {
@@ -48,7 +54,8 @@ public final class ScimUserService {
     /** Looks up a user by service-provider id. */
     public Optional<ScimUser> findById(String id) {
         try {
-            Map<String, Object> row = queryOne(contract.findByIdSql(), Map.of("id", id));
+            Map<String, Object> row = queryOne("findById", contract.findByIdSql(),
+                    Map.of("id", id));
             return row == null ? Optional.empty() : Optional.of(ScimUserMapper.fromRow(row));
         } catch (SQLException ex) {
             throw new ScimException(500, null, "SCIM lookup failed: " + ex.getMessage());
@@ -60,7 +67,7 @@ public final class ScimUserService {
         try {
             Map<String, Object> params = ScimUserMapper.toParams(user);
             params.put("id", id);
-            Map<String, Object> row = queryOne(contract.replaceSql(), params);
+            Map<String, Object> row = queryOne("replace", contract.replaceSql(), params);
             if (row == null) {
                 throw new ScimException(404, null, "User not found: " + id);
             }
@@ -84,7 +91,7 @@ public final class ScimUserService {
     /** Deletes a user by id; throws 404 when it does not exist. */
     public void delete(String id) {
         try {
-            if (queryOne(contract.deleteSql(), Map.of("id", id)) == null) {
+            if (queryOne("delete", contract.deleteSql(), Map.of("id", id)) == null) {
                 throw new ScimException(404, null, "User not found: " + id);
             }
         } catch (SQLException ex) {
@@ -95,7 +102,7 @@ public final class ScimUserService {
     /** Lists a page of users; {@code startIndex} is 1-based per SCIM. */
     public ScimListResponse<ScimUser> list(int startIndex, int count) {
         try {
-            List<Map<String, Object>> rows = queryAll(contract.listSql(),
+            List<Map<String, Object>> rows = queryAll("list", contract.listSql(),
                     Map.of("startIndex", startIndex, "count", count));
             List<ScimUser> users = rows.stream().map(ScimUserMapper::fromRow).toList();
             return ScimListResponse.of(users, total(users.size()), startIndex);
@@ -109,7 +116,7 @@ public final class ScimUserService {
         if (contract.countSql() == null || contract.countSql().isBlank()) {
             return fallback;
         }
-        Map<String, Object> row = queryOne(contract.countSql(), Map.of());
+        Map<String, Object> row = queryOne("count", contract.countSql(), Map.of());
         return ScimCount.toInt(row, fallback);
     }
 
@@ -127,7 +134,7 @@ public final class ScimUserService {
                     "Unsupported filter attribute: " + parsed.attribute());
         }
         try {
-            Map<String, Object> row = queryOne(contract.findByUserNameSql(),
+            Map<String, Object> row = queryOne("findByUserName", contract.findByUserNameSql(),
                     Map.of("userName", parsed.value()));
             List<ScimUser> users = row == null ? List.of() : List.of(ScimUserMapper.fromRow(row));
             return ScimListResponse.of(users, users.size(), startIndex);
@@ -136,38 +143,20 @@ public final class ScimUserService {
         }
     }
 
-    private Map<String, Object> queryOne(String sql, Map<String, Object> params)
+    /**
+     * One SCIM contract statement, named as its configuration key names it.
+     *
+     * <p>Labels come back exactly as the driver reports them: SCIM's attribute names are camelCase,
+     * so a contract has to quote its aliases on every dialect for the mapper to find them, and a
+     * quoted alias is not what Oracle's label folding is for.
+     */
+    private Map<String, Object> queryOne(String name, String sql, Map<String, Object> params)
             throws SQLException {
-        List<Map<String, Object>> rows = queryAll(sql, params);
-        return rows.isEmpty() ? null : rows.get(0);
+        return statements.queryOne("scim.users." + name, sql, params);
     }
 
-    private List<Map<String, Object>> queryAll(String sql, Map<String, Object> params)
+    private List<Map<String, Object>> queryAll(String name, String sql, Map<String, Object> params)
             throws SQLException {
-        BoundSql bound = SqlRenderer.render(sql, params);
-        try (Connection connection = dataSource.getConnection();
-                PreparedStatement statement = connection.prepareStatement(bound.sql())) {
-            List<BoundParameter> parameters = bound.parameters();
-            for (int i = 0; i < parameters.size(); i++) {
-                statement.setObject(i + 1, parameters.get(i).value());
-            }
-            try (ResultSet resultSet = statement.executeQuery()) {
-                return readRows(resultSet);
-            }
-        }
-    }
-
-    private static List<Map<String, Object>> readRows(ResultSet resultSet) throws SQLException {
-        ResultSetMetaData metaData = resultSet.getMetaData();
-        int columns = metaData.getColumnCount();
-        List<Map<String, Object>> rows = new ArrayList<>();
-        while (resultSet.next()) {
-            Map<String, Object> row = new LinkedHashMap<>();
-            for (int col = 1; col <= columns; col++) {
-                row.put(metaData.getColumnLabel(col), resultSet.getObject(col));
-            }
-            rows.add(row);
-        }
-        return rows;
+        return statements.query("scim.users." + name, sql, params);
     }
 }

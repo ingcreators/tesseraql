@@ -3,14 +3,8 @@ package io.tesseraql.identity;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
-import io.tesseraql.core.sql.BoundParameter;
-import io.tesseraql.core.sql.BoundSql;
-import io.tesseraql.core.sql.SqlRenderer;
+import io.tesseraql.core.sql.ContractStatement;
 import io.tesseraql.security.Principal;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -38,6 +32,7 @@ public final class IdentityService {
 
     private final Function<String, DataSource> datasources;
     private final String dialect;
+    private int sqlTimeoutSeconds = ContractStatement.DEFAULT_TIMEOUT_SECONDS;
 
     public IdentityService(Function<String, DataSource> datasources) {
         this(datasources, null);
@@ -49,25 +44,25 @@ public final class IdentityService {
         this.dialect = dialect;
     }
 
+    /**
+     * The bound every contract statement runs under, in seconds; {@code 0} leaves it unset
+     * (docs/contract-sql-execution.md structural decision 3).
+     *
+     * <p>There was none: a sign-in's identity contract ran for as long as the driver allowed,
+     * holding a pooled connection, where the same statement on a route has been bounded by
+     * {@code tesseraql.sql.timeoutSeconds} all along.
+     */
+    public IdentityService sqlTimeoutSeconds(int seconds) {
+        this.sqlTimeoutSeconds = Math.max(0, seconds);
+        return this;
+    }
+
     /** Executes a contract and returns the rows with their contract-defined aliases. */
     public List<Map<String, Object>> execute(RealmConfig realm, String contract,
             Map<String, Object> params) {
         String sql = new ContractResolver(realm, dialect).resolve(contract);
-        BoundSql bound = SqlRenderer.render(sql, params);
-        DataSource dataSource = datasources.apply(realm.datasource());
-        if (dataSource == null) {
-            throw new TqlException(NO_DATASOURCE,
-                    "No datasource '" + realm.datasource() + "' for realm " + realm.id());
-        }
-        try (Connection connection = dataSource.getConnection();
-                PreparedStatement statement = connection.prepareStatement(bound.sql())) {
-            for (int i = 0; i < bound.parameters().size(); i++) {
-                BoundParameter parameter = bound.parameters().get(i);
-                statement.setObject(i + 1, parameter.value());
-            }
-            try (ResultSet resultSet = statement.executeQuery()) {
-                return readRows(resultSet);
-            }
+        try {
+            return statements(realm).query(contract, sql, params);
         } catch (SQLException ex) {
             throw TqlException.builder(EXEC_ERROR)
                     .message("Contract '" + contract + "' failed: " + ex.getMessage())
@@ -94,24 +89,25 @@ public final class IdentityService {
                     "Realm '" + realm.id() + "' does not allow write contract '" + contract + "'");
         }
         String sql = new ContractResolver(realm, dialect).resolve(contract);
-        BoundSql bound = SqlRenderer.render(sql, params);
-        DataSource dataSource = datasources.apply(realm.datasource());
-        if (dataSource == null) {
-            throw new TqlException(NO_DATASOURCE,
-                    "No datasource '" + realm.datasource() + "' for realm " + realm.id());
-        }
-        try (Connection connection = dataSource.getConnection();
-                PreparedStatement statement = connection.prepareStatement(bound.sql())) {
-            for (int i = 0; i < bound.parameters().size(); i++) {
-                statement.setObject(i + 1, bound.parameters().get(i).value());
-            }
-            return statement.executeUpdate();
+        try {
+            return statements(realm).update(contract, sql, params);
         } catch (SQLException ex) {
             throw TqlException.builder(EXEC_ERROR)
                     .message("Write contract '" + contract + "' failed: " + ex.getMessage())
                     .cause(ex)
                     .build();
         }
+    }
+
+    /** The contract executor for a realm's datasource, reading labels under the app's dialect. */
+    private ContractStatement statements(RealmConfig realm) {
+        DataSource dataSource = datasources.apply(realm.datasource());
+        if (dataSource == null) {
+            throw new TqlException(NO_DATASOURCE,
+                    "No datasource '" + realm.datasource() + "' for realm " + realm.id());
+        }
+        return ContractStatement.on(dataSource).dialect(dialect)
+                .timeoutSeconds(sqlTimeoutSeconds);
     }
 
     /** Resolves the full principal (user, roles, permissions, groups) for a login id. */
@@ -241,21 +237,6 @@ public final class IdentityService {
             }
         }
         return values;
-    }
-
-    private List<Map<String, Object>> readRows(ResultSet resultSet) throws SQLException {
-        ResultSetMetaData metaData = resultSet.getMetaData();
-        int columnCount = metaData.getColumnCount();
-        List<Map<String, Object>> rows = new ArrayList<>();
-        while (resultSet.next()) {
-            Map<String, Object> row = new LinkedHashMap<>();
-            for (int col = 1; col <= columnCount; col++) {
-                row.put(io.tesseraql.core.dialect.Labels.normalize(
-                        dialect, metaData.getColumnLabel(col)), resultSet.getObject(col));
-            }
-            rows.add(row);
-        }
-        return rows;
     }
 
     private static String asString(Object value) {
