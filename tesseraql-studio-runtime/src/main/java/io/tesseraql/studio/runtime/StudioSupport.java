@@ -117,30 +117,19 @@ final class StudioSupport {
         String sessionCsrf = str(params, "csrf");
         model.put("url", url);
         try {
-            java.net.http.HttpRequest.Builder request = java.net.http.HttpRequest
-                    .newBuilder(java.net.URI.create(url))
-                    .timeout(java.time.Duration.ofSeconds(15))
-                    .method(method, hasBody
-                            ? java.net.http.HttpRequest.BodyPublishers.ofString(body)
-                            : java.net.http.HttpRequest.BodyPublishers.noBody());
+            io.tesseraql.runtime.LoopbackCall call = io.tesseraql.runtime.LoopbackCall
+                    .to(method, url, java.time.Duration.ofSeconds(15))
+                    .header("Authorization", bearer == null ? null : "Bearer " + bearer);
             if (hasBody) {
-                request.header("Content-Type",
-                        contentType == null ? "application/json" : contentType);
+                call.body(body, contentType == null ? "application/json" : contentType);
             }
-            if (bearer != null) {
-                request.header("Authorization", "Bearer " + bearer);
-            }
-            if (useSession && cookie != null) {
-                request.header("Cookie", cookie);
-                if (sessionCsrf != null) {
-                    request.header("X-CSRF-Token", sessionCsrf);
-                }
+            if (useSession) {
+                call.cookie(cookie).csrf(cookie == null ? null : sessionCsrf);
             }
             long startedNs = System.nanoTime();
-            java.net.http.HttpResponse<String> response = java.net.http.HttpClient.newHttpClient()
-                    .send(request.build(), java.net.http.HttpResponse.BodyHandlers.ofString());
+            io.tesseraql.runtime.LoopbackCall.Response response = call.send();
             model.put("ok", true);
-            model.put("status", response.statusCode());
+            model.put("status", response.status());
             model.put("durationMs", (System.nanoTime() - startedNs) / 1_000_000);
             java.util.List<Map<String, Object>> headers = new java.util.ArrayList<>();
             response.headers().map().forEach((name, values) -> {
@@ -151,10 +140,7 @@ final class StudioSupport {
             });
             model.put("headers", headers);
             model.put("body", prettyBody(response.body()));
-        } catch (java.io.IOException | InterruptedException ex) {
-            if (ex instanceof InterruptedException) {
-                Thread.currentThread().interrupt();
-            }
+        } catch (io.tesseraql.runtime.LoopbackCall.Unreachable ex) {
             model.put("error", "Request failed: " + ex.getMessage());
         }
         return model;

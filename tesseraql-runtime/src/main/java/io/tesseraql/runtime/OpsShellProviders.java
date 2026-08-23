@@ -125,7 +125,6 @@ final class OpsShellProviders {
             Map<String, String> basePaths = new LinkedHashMap<>();
             members.forEach(member -> basePaths.put(member.name(), member.basePath()));
             List<String> names = List.copyOf(basePaths.keySet());
-            java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
             com.fasterxml.jackson.databind.ObjectMapper json = new com.fasterxml.jackson.databind.ObjectMapper();
             return new Targets() {
                 @Override
@@ -170,37 +169,23 @@ final class OpsShellProviders {
                             url += "?" + query;
                         }
                     }
-                    java.net.http.HttpRequest.Builder request = java.net.http.HttpRequest
-                            .newBuilder(java.net.URI.create(url))
-                            .timeout(timeout);
-                    if (cookie != null) {
-                        request.header("Cookie", cookie);
-                    }
+                    LoopbackCall call = LoopbackCall.to(op.method, url, timeout).cookie(cookie);
                     if ("POST".equals(op.method)) {
-                        if (csrf != null) {
-                            request.header("X-CSRF-Token", csrf);
-                        }
-                        request.header("Content-Type", "application/x-www-form-urlencoded");
-                        request.method("POST", java.net.http.HttpRequest.BodyPublishers
-                                .ofString(formBody(op, params)));
+                        call.csrf(csrf).form(formBody(op, params));
                     }
-                    java.net.http.HttpResponse<String> response;
+                    LoopbackCall.Response response;
                     try {
-                        response = client.send(request.build(),
-                                java.net.http.HttpResponse.BodyHandlers.ofString());
-                    } catch (java.io.IOException ex) {
+                        response = call.send();
+                    } catch (LoopbackCall.Unreachable ex) {
                         throw unreachable(member, ex.getMessage());
-                    } catch (InterruptedException ex) {
-                        Thread.currentThread().interrupt();
-                        throw unreachable(member, "interrupted");
                     }
-                    if (response.statusCode() == 404) {
+                    if (response.status() == 404) {
                         // The member said no — out of the caller's scope or genuinely
                         // unknown, which read the same on purpose (TQL-BATCH-4040).
                         throw OpsActions.notFound("Application '" + member + "'");
                     }
-                    if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                        throw unreachable(member, "HTTP " + response.statusCode());
+                    if (response.status() < 200 || response.status() >= 300) {
+                        throw unreachable(member, "HTTP " + response.status());
                     }
                     try {
                         return json.readValue(response.body(),

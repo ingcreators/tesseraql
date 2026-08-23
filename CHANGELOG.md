@@ -19,6 +19,16 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **The intra-stack hop is one primitive** (`LoopbackCall`,
+  docs/duplication-consolidation.md campaign 1): the ops shell's delegated calls and
+  transfer-file download proxy, the Studio shell's workshop and copilot-send hops, the API
+  console's try-it request, and the replace-time readiness probe all ride one shared
+  client with a mandatory per-call timeout, the forwarded credential headers (`Cookie`,
+  `X-CSRF-Token`) named in one place, and one transport-failure signal each surface maps to
+  its own refusal. Deliberately not the outbound gateway: loopback is not egress, and
+  localhost stays out of the allow-list. The API console built a new `HttpClient` per
+  request — a selector thread and a connection pool released only at GC, the leak the
+  transfer proxy had already fixed one surface over — and that dies with the copies.
 - **SCIM outbound provisioning leaves through the outbound gateway**
   (docs/duplication-consolidation.md, campaign 1). **The SCIM provider's host must now be in
   `tesseraql.http.outbound.allowedHosts`**, and every provisioning call runs under the

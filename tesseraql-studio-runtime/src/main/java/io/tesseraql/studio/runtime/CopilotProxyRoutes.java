@@ -10,10 +10,6 @@ import io.tesseraql.pipeline.HttpMounts;
 import io.tesseraql.pipeline.RuntimeContext;
 import io.tesseraql.pipeline.auth.AuthStep;
 import io.tesseraql.runtime.HostContext;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.time.Duration;
 
 /**
@@ -29,7 +25,6 @@ final class CopilotProxyRoutes {
     private static final AuthStep CSRF = new AuthStep("csrf");
 
     private final HostContext.MemberOrigins origins;
-    private final HttpClient client = HttpClient.newHttpClient();
 
     CopilotProxyRoutes(HostContext.MemberOrigins origins) {
         this.origins = origins;
@@ -57,29 +52,19 @@ final class CopilotProxyRoutes {
             throw WorkshopTargets.notFound(member);
         }
         String body = exchange.getBody(String.class);
-        HttpRequest.Builder request = HttpRequest.newBuilder(URI.create(
-                "http://localhost:" + port + "/" + member + "/_tesseraql/studio/" + member
-                        + "/ui/copilot/send"))
-                .timeout(Duration.ofSeconds(60))
-                .POST(HttpRequest.BodyPublishers.ofString(body == null ? "" : body));
-        copyHeader(exchange, request, "Cookie");
-        copyHeader(exchange, request, "X-CSRF-Token");
-        copyHeader(exchange, request, "Content-Type");
-        copyHeader(exchange, request, "HX-Request");
-        HttpResponse<String> response = client.send(request.build(),
-                HttpResponse.BodyHandlers.ofString());
-        exchange.response().status(response.statusCode());
-        response.headers().firstValue("Content-Type")
+        io.tesseraql.runtime.LoopbackCall.Response response = io.tesseraql.runtime.LoopbackCall
+                .to("POST", "http://localhost:" + port + "/" + member + "/_tesseraql/studio/"
+                        + member + "/ui/copilot/send", Duration.ofSeconds(60))
+                .body(body == null ? "" : body, exchange.request().header("Content-Type"))
+                .cookie(exchange.request().header("Cookie"))
+                .csrf(exchange.request().header("X-CSRF-Token"))
+                .header("HX-Request", exchange.request().header("HX-Request"))
+                .send();
+        exchange.response().status(response.status());
+        response.header("Content-Type")
                 .ifPresent(value -> exchange.response().header(Headers.CONTENT_TYPE, value));
-        response.headers().firstValue("Location")
+        response.header("Location")
                 .ifPresent(value -> exchange.response().header("Location", value));
         exchange.setBody(response.body());
-    }
-
-    private static void copyHeader(Exchange exchange, HttpRequest.Builder request, String name) {
-        String value = exchange.request().header(name);
-        if (value != null) {
-            request.header(name, value);
-        }
     }
 }
