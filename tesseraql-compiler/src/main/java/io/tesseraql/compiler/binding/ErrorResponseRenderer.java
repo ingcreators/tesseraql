@@ -414,6 +414,11 @@ public final class ErrorResponseRenderer implements Step {
                 // the problem, so it is a refusal and not a challenge.
                 case 4031, 4032, 4148, 4149 -> 403;
                 case 4014 -> 409; // an inbound webhook replay (roadmap Phase 26)
+                // 4120: invitations are not configured on this deployment — the surface is
+                // absent, not broken (the ACCOUNT-4805 precedent). Found by the status
+                // ledger's audit: an administrator clicking invite read Internal Server Error.
+                case 4120 -> 404;
+                case 4150 -> 413; // the request body exceeds tesseraql.http.maxBodyBytes
                 // The SEC domain is the whole security namespace, not an auth-failure one:
                 // everything else is a server-side fault — config errors (4000, 4001, 4085-4089,
                 // 4120, 4132, 4135), egress refusals (4141), federation failures
@@ -434,11 +439,18 @@ public final class ErrorResponseRenderer implements Step {
                 // rejected (Phase 43 Track J); 4237: a decision-rows grid save that cannot
                 // reach the decision compile (wrong target / malformed grid)
                 // 4241: a menu edit naming an index the menu does not have
-                case 4002, 4224, 4230, 4231, 4233, 4234, 4237, 4241 -> 400;
+                // 4003/4222: a caller-crafted path or template escaping the app home;
+                // 4225-4229, 4238/4239, 4243: overlay/calendar/job-policy/migration edits
+                // that cannot mean anything; 4240: an unknown wizard name. All the caller's
+                // input — the status ledger's audit found them reading Internal Server Error.
+                case 4002, 4003, 4222, 4224, 4225, 4226, 4227, 4228, 4229, 4230, 4231, 4233,
+                        4234, 4237, 4238, 4239, 4240, 4241, 4243 ->
+                    400;
                 case 4030, 4031 -> 403; // the library's read-only refusals (McpDevTools instances)
                 // 4043: unknown workshop member — or out of the caller's tql.studio.edit
                 // scope, which reads identically (docs/studio-shell.md structural decision 2)
-                case 4040, 4043 -> 404;
+                // 4042: a doc name the portal does not hold
+                case 4040, 4042, 4043 -> 404;
                 // 5030: a member's runtime did not answer the studio shell's delegated call
                 case 5030 -> 503;
                 case 4090 -> 409; // a draft applied over a concurrently changed source (backlog D5)
@@ -458,8 +470,19 @@ public final class ErrorResponseRenderer implements Step {
             // Authoring/build-range decision codes (4700..4719) surface over HTTP only from
             // Studio's validate-before-persist (the decision-rows grid), where they reject the
             // author's cells — an unprocessable edit, not a server fault. The runtime-range
-            // codes (4720+: multi-hit, miss, lookup failure) keep the 500 default.
-            case DECISION -> code.number() >= 4700 && code.number() <= 4719 ? 422 : 500;
+            // codes (4720+: multi-hit, miss, lookup failure) keep the 500 default; 4730 is a
+            // malformed scaffold request, the caller's.
+            case DECISION -> switch (code.number()) {
+                case 4730 -> 400;
+                default -> code.number() >= 4700 && code.number() <= 4719 ? 422 : 500;
+            };
+            // The MCP transport's own refusals; the JSON-RPC and lint codes never ride this
+            // renderer.
+            case MCP -> switch (code.number()) {
+                case 4263 -> 401;
+                case 4264 -> 405;
+                default -> 500;
+            };
             case LD -> switch (code.number()) {
                 case 2820 -> 400; // file-import without an uploaded body
                 case 2822 -> 404; // unknown transfer id
@@ -546,6 +569,7 @@ public final class ErrorResponseRenderer implements Step {
             case 401 -> "Unauthorized";
             case 403 -> "Forbidden";
             case 404 -> "Not Found";
+            case 405 -> "Method Not Allowed";
             case 409 -> "Conflict";
             case 413 -> "Payload Too Large";
             case 415 -> "Unsupported Media Type";
