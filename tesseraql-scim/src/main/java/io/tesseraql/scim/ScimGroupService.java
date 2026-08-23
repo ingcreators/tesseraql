@@ -2,10 +2,13 @@ package io.tesseraql.scim;
 
 import io.tesseraql.core.dialect.SqlErrors;
 import io.tesseraql.core.sql.ContractStatement;
+import java.sql.Connection;
 import java.sql.SQLException;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import javax.sql.DataSource;
 
 /**
@@ -52,19 +55,35 @@ public final class ScimGroupService {
      * a plain write (docs/contract-sql-execution.md structural decision 2): the assigned id comes
      * from the contract's declared key when it declares one, and from the id the caller supplied
      * when it does not.
+     *
+     * <p>The row and its membership land in one transaction (structural decision 4): a failure
+     * part-way used to leave a group holding some of the members the client sent while the client
+     * was told the create failed — the one outcome nothing downstream expects.
      */
     public ScimGroup create(ScimGroup group) {
         try {
-            ContractStatement.WriteResult written = statements.update("scim.groups.create",
-                    contract.createSql(), ScimGroupMapper.toParams(group), contract.keys());
-            String id = written.keys().isEmpty()
-                    ? group.id()
-                    : string(written.keys().values().iterator().next());
-            for (ScimGroup.Member member : group.members()) {
-                addMember(id, member.value());
-            }
-            return findById(id).orElseThrow(
-                    () -> new ScimException(500, null, "Group vanished after create: " + id));
+            return statements.transact("scim.groups.create", connection -> {
+                ContractStatement.WriteResult written = statements.update(connection,
+                        "scim.groups.create", contract.createSql(),
+                        ScimGroupMapper.toParams(group), contract.keys());
+                String id = written.keys().isEmpty()
+                        ? group.id()
+                        : string(written.keys().values().iterator().next());
+                // Deduplicated in Java: inside a transaction a unique violation aborts the
+                // whole transaction on PostgreSQL, so the tolerance the old per-connection adds
+                // relied on cannot apply — and a fresh group cannot collide with itself.
+                Set<String> values = new LinkedHashSet<>();
+                group.members().forEach(member -> values.add(member.value()));
+                for (String value : values) {
+                    addMember(connection, id, value);
+                }
+                Map<String, Object> row = statements.queryOne(connection, "scim.groups.findById",
+                        contract.findByIdSql(), Map.of("id", id));
+                if (row == null) {
+                    throw new ScimException(500, null, "Group vanished after create: " + id);
+                }
+                return ScimGroupMapper.fromRow(row, members(connection, id));
+            });
         } catch (SQLException ex) {
             if (SqlErrors.isUniqueViolation(ex)) {
                 throw new ScimException(409, "uniqueness",
@@ -116,16 +135,23 @@ public final class ScimGroupService {
      */
     public ScimGroup replace(String id, ScimGroup group) {
         try {
-            Map<String, Object> params = ScimGroupMapper.toParams(group);
-            params.put("id", id);
-            // Zero affected rows is the 404 — what the returned row was standing in for when
-            // the contract had to be `update … returning`.
-            if (statements.update("scim.groups.replace", contract.replaceSql(), params) == 0) {
-                throw new ScimException(404, null, "Group not found: " + id);
-            }
-            reconcileMembers(id, group.members());
-            return findById(id)
-                    .orElseThrow(() -> new ScimException(404, null, "Group not found: " + id));
+            return statements.transact("scim.groups.replace", connection -> {
+                Map<String, Object> params = ScimGroupMapper.toParams(group);
+                params.put("id", id);
+                // Zero affected rows is the 404 — what the returned row was standing in for
+                // when the contract had to be `update … returning`.
+                if (statements.update(connection, "scim.groups.replace", contract.replaceSql(),
+                        params) == 0) {
+                    throw new ScimException(404, null, "Group not found: " + id);
+                }
+                reconcileMembers(connection, id, group.members());
+                Map<String, Object> row = statements.queryOne(connection, "scim.groups.findById",
+                        contract.findByIdSql(), Map.of("id", id));
+                if (row == null) {
+                    throw new ScimException(404, null, "Group not found: " + id);
+                }
+                return ScimGroupMapper.fromRow(row, members(connection, id));
+            });
         } catch (SQLException ex) {
             if (SqlErrors.isUniqueViolation(ex)) {
                 throw new ScimException(409, "uniqueness",
@@ -136,15 +162,22 @@ public final class ScimGroupService {
     }
 
     /** Drives the membership to exactly {@code desired}: adds the missing, removes the surplus. */
-    private void reconcileMembers(String id, List<ScimGroup.Member> desired) {
-        java.util.Set<String> target = new java.util.LinkedHashSet<>();
+    private void reconcileMembers(Connection connection, String id, List<ScimGroup.Member> desired)
+            throws SQLException {
+        Set<String> target = new LinkedHashSet<>();
         desired.forEach(member -> target.add(member.value()));
-        java.util.Set<String> current = new java.util.LinkedHashSet<>();
-        members(id).forEach(member -> current.add(member.value()));
-        target.stream().filter(value -> !current.contains(value))
-                .forEach(value -> addMember(id, value));
-        current.stream().filter(value -> !target.contains(value))
-                .forEach(value -> removeMember(id, value));
+        Set<String> current = new LinkedHashSet<>();
+        members(connection, id).forEach(member -> current.add(member.value()));
+        for (String value : target) {
+            if (!current.contains(value)) {
+                addMember(connection, id, value);
+            }
+        }
+        for (String value : current) {
+            if (!target.contains(value)) {
+                removeMember(connection, id, value);
+            }
+        }
     }
 
     /** Deletes a group by id; throws 404 when it does not exist. */
@@ -171,25 +204,22 @@ public final class ScimGroupService {
         return replace(id, ScimGroupPatch.apply(current, patch));
     }
 
-    private void addMember(String groupId, String memberId) {
-        run("addMember", contract.addMemberSql(), groupId, memberId, "add member");
+    private void addMember(Connection connection, String groupId, String memberId)
+            throws SQLException {
+        statements.update(connection, "scim.groups.addMember", contract.addMemberSql(),
+                Map.of("groupId", groupId, "memberId", memberId));
     }
 
-    private void removeMember(String groupId, String memberId) {
-        run("removeMember", contract.removeMemberSql(), groupId, memberId, "remove member");
+    private void removeMember(Connection connection, String groupId, String memberId)
+            throws SQLException {
+        statements.update(connection, "scim.groups.removeMember", contract.removeMemberSql(),
+                Map.of("groupId", groupId, "memberId", memberId));
     }
 
-    private void run(String name, String sql, String groupId, String memberId, String what) {
-        try {
-            statements.update("scim.groups." + name, sql,
-                    Map.of("groupId", groupId, "memberId", memberId));
-        } catch (SQLException ex) {
-            if (SqlErrors.isUniqueViolation(ex)) {
-                return; // membership already present — keep PATCH idempotent
-            }
-            throw new ScimException(500, null,
-                    "SCIM group " + what + " failed: " + ex.getMessage());
-        }
+    private List<ScimGroup.Member> members(Connection connection, String groupId)
+            throws SQLException {
+        return statements.query(connection, "scim.groups.listMembers", contract.listMembersSql(),
+                Map.of("groupId", groupId)).stream().map(ScimGroupMapper::memberFromRow).toList();
     }
 
     private List<ScimGroup.Member> members(String groupId) {

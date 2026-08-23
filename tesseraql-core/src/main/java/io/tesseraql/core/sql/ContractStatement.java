@@ -101,14 +101,22 @@ public final class ContractStatement {
     /** Executes a read contract and returns its rows, keyed by the contract's own aliases. */
     public List<Map<String, Object>> query(String contract, String sql,
             Map<String, Object> params) throws ContractSqlException {
-        BoundSql bound = SqlRenderer.render(sql, params);
-        try (Connection connection = dataSource.getConnection();
-                PreparedStatement statement = prepare(connection, bound, List.of())) {
-            try (ResultSet resultSet = statement.executeQuery()) {
-                return readRows(resultSet);
-            }
+        try (Connection connection = dataSource.getConnection()) {
+            return query(connection, contract, sql, params);
         } catch (SQLException ex) {
-            throw failed(contract, ex);
+            throw classified(contract, ex);
+        }
+    }
+
+    /** As {@link #query(String, String, Map)}, on the caller's own connection. */
+    public List<Map<String, Object>> query(Connection connection, String contract, String sql,
+            Map<String, Object> params) throws ContractSqlException {
+        BoundSql bound = SqlRenderer.render(sql, params);
+        try (PreparedStatement statement = prepare(connection, bound, List.of());
+                ResultSet resultSet = statement.executeQuery()) {
+            return readRows(resultSet);
+        } catch (SQLException ex) {
+            throw classified(contract, ex);
         }
     }
 
@@ -119,10 +127,23 @@ public final class ContractStatement {
         return rows.isEmpty() ? null : rows.get(0);
     }
 
+    /** As {@link #queryOne(String, String, Map)}, on the caller's own connection. */
+    public Map<String, Object> queryOne(Connection connection, String contract, String sql,
+            Map<String, Object> params) throws ContractSqlException {
+        List<Map<String, Object>> rows = query(connection, contract, sql, params);
+        return rows.isEmpty() ? null : rows.get(0);
+    }
+
     /** Executes a write contract and returns the number of rows it affected. */
     public int update(String contract, String sql, Map<String, Object> params)
             throws ContractSqlException {
         return update(contract, sql, params, List.of()).affectedRows();
+    }
+
+    /** As {@link #update(String, String, Map)}, on the caller's own connection. */
+    public int update(Connection connection, String contract, String sql,
+            Map<String, Object> params) throws ContractSqlException {
+        return update(connection, contract, sql, params, List.of()).affectedRows();
     }
 
     /**
@@ -134,16 +155,63 @@ public final class ContractStatement {
      */
     public WriteResult update(String contract, String sql, Map<String, Object> params,
             List<String> keys) throws ContractSqlException {
+        try (Connection connection = dataSource.getConnection()) {
+            return update(connection, contract, sql, params, keys);
+        } catch (SQLException ex) {
+            throw classified(contract, ex);
+        }
+    }
+
+    /** As {@link #update(String, String, Map, List)}, on the caller's own connection. */
+    public WriteResult update(Connection connection, String contract, String sql,
+            Map<String, Object> params, List<String> keys) throws ContractSqlException {
         BoundSql bound = SqlRenderer.render(sql, params);
-        try (Connection connection = dataSource.getConnection();
-                PreparedStatement statement = prepare(connection, bound, keys)) {
+        try (PreparedStatement statement = prepare(connection, bound, keys)) {
             int affected = statement.executeUpdate();
             Map<String, Object> generated = keys.isEmpty()
                     ? Map.of()
                     : readGeneratedKeys(statement, keys);
             return new WriteResult(affected, generated);
         } catch (SQLException ex) {
-            throw failed(contract, ex);
+            throw classified(contract, ex);
+        }
+    }
+
+    /** A contract write that must do several things at once, run inside {@link #transact}. */
+    public interface TransactionalBody<T> {
+        T run(Connection connection) throws SQLException;
+    }
+
+    /**
+     * Runs {@code body} on one connection in one transaction (docs/contract-sql-execution.md
+     * structural decision 4) — the shape the command processor uses for a command's steps: open,
+     * run, commit; roll back on any failure, so the statements land together or not at all.
+     *
+     * <p>{@code contract} names the transaction for a failure that happens outside any single
+     * statement — taking the connection, committing; a statement's own failure keeps the name
+     * that statement was given.
+     */
+    public <T> T transact(String contract, TransactionalBody<T> body)
+            throws ContractSqlException {
+        try (Connection connection = dataSource.getConnection()) {
+            boolean previous = connection.getAutoCommit();
+            connection.setAutoCommit(false);
+            try {
+                T result = body.run(connection);
+                connection.commit();
+                return result;
+            } catch (SQLException | RuntimeException ex) {
+                try {
+                    connection.rollback();
+                } catch (SQLException rollback) {
+                    ex.addSuppressed(rollback);
+                }
+                throw ex;
+            } finally {
+                connection.setAutoCommit(previous);
+            }
+        } catch (SQLException ex) {
+            throw classified(contract, ex);
         }
     }
 
@@ -234,7 +302,9 @@ public final class ContractStatement {
     }
 
     /** A driver's answer, named by the contract that asked and classified for the caller. */
-    private static ContractSqlException failed(String contract, SQLException ex) {
-        return new ContractSqlException(contract, ex);
+    private static ContractSqlException classified(String contract, SQLException ex) {
+        return ex instanceof ContractSqlException already
+                ? already
+                : new ContractSqlException(contract, ex);
     }
 }

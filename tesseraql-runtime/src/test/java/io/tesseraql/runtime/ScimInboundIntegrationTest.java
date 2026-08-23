@@ -284,6 +284,21 @@ class ScimInboundIntegrationTest {
     }
 
     @Test
+    void aFailedMemberAddLeavesNoGroupBehind() throws Exception {
+        // The second member value overflows member_id varchar(200), so the add fails after the
+        // group row and the first member were written — in one transaction, nothing survives
+        // (docs/contract-sql-execution.md structural decision 4).
+        HttpResponse<String> created = send("POST", "/scim/v2/Groups", """
+                {"displayName":"atomic","members":[{"value":"ok"},{"value":"%s"}]}
+                """.formatted("x".repeat(250)));
+        assertThat(created.statusCode()).isEqualTo(500);
+
+        JsonNode list = MAPPER.readTree(send("GET", "/scim/v2/Groups", null).body());
+        list.get("Resources").forEach(
+                group -> assertThat(group.get("displayName").asText()).isNotEqualTo("atomic"));
+    }
+
+    @Test
     void patchReplacesGroupDisplayName() throws Exception {
         String id = MAPPER.readTree(send("POST", "/scim/v2/Groups",
                 "{\"displayName\":\"before\",\"members\":[{\"value\":\"5\"}]}").body())
