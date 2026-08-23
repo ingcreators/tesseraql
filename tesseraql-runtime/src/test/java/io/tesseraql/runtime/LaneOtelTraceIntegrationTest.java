@@ -83,13 +83,16 @@ class LaneOtelTraceIntegrationTest {
         assertThat(response.statusCode()).isEqualTo(200);
 
         long deadline = System.nanoTime() + Duration.ofSeconds(5).toNanos();
-        while ((span("tesseraql.route").isEmpty() || span("tesseraql.sql.execute").isEmpty())
+        while ((span("tesseraql.route").isEmpty() || sqlSpan("route").isEmpty())
                 && System.nanoTime() < deadline) {
             Thread.sleep(50);
         }
 
         SpanData route = span("tesseraql.route").orElseThrow();
-        SpanData sql = span("tesseraql.sql.execute").orElseThrow();
+        // By surface: boot-time contract statements export the same span name as roots
+        // (docs/contract-sql-execution.md structural decision 5) — the route's own statement is
+        // the one whose surface says so.
+        SpanData sql = sqlSpan("route").orElseThrow();
         assertThat(route.getParentSpanContext().isValid()).isFalse();
         assertThat(sql.getParentSpanContext().getSpanId()).isEqualTo(route.getSpanId());
         assertThat(sql.getTraceId()).isEqualTo(route.getTraceId());
@@ -98,6 +101,14 @@ class LaneOtelTraceIntegrationTest {
     private static Optional<SpanData> span(String name) {
         return EXPORTER.getFinishedSpanItems().stream()
                 .filter(span -> span.getName().equals(name)).findFirst();
+    }
+
+    private static Optional<SpanData> sqlSpan(String surface) {
+        return EXPORTER.getFinishedSpanItems().stream()
+                .filter(span -> span.getName().equals("tesseraql.sql.execute"))
+                .filter(span -> surface.equals(span.getAttributes().get(
+                        io.opentelemetry.api.common.AttributeKey.stringKey("surface"))))
+                .findFirst();
     }
 
     private static Path prepareAppHome() throws IOException {

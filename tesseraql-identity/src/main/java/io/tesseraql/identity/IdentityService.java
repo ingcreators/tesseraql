@@ -33,6 +33,7 @@ public final class IdentityService {
     private final Function<String, DataSource> datasources;
     private final String dialect;
     private int sqlTimeoutSeconds = ContractStatement.DEFAULT_TIMEOUT_SECONDS;
+    private io.tesseraql.core.telemetry.Tracer tracer;
 
     public IdentityService(Function<String, DataSource> datasources) {
         this(datasources, null);
@@ -54,6 +55,15 @@ public final class IdentityService {
      */
     public IdentityService sqlTimeoutSeconds(int seconds) {
         this.sqlTimeoutSeconds = Math.max(0, seconds);
+        return this;
+    }
+
+    /**
+     * The tracer every contract statement spans through (docs/contract-sql-execution.md
+     * structural decision 5): a slow sign-in stops being an unexplained gap in its trace.
+     */
+    public IdentityService tracer(io.tesseraql.core.telemetry.Tracer tracer) {
+        this.tracer = tracer;
         return this;
     }
 
@@ -107,7 +117,7 @@ public final class IdentityService {
                     "No datasource '" + realm.datasource() + "' for realm " + realm.id());
         }
         return ContractStatement.on(dataSource).dialect(dialect)
-                .timeoutSeconds(sqlTimeoutSeconds);
+                .timeoutSeconds(sqlTimeoutSeconds).tracer(tracer);
     }
 
     /** Resolves the full principal (user, roles, permissions, groups) for a login id. */

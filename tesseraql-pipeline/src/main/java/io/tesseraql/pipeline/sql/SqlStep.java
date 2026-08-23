@@ -129,6 +129,7 @@ public class SqlStep implements Step {
                 TesseraqlProperties.TRACE_CONTEXT, io.tesseraql.core.telemetry.SpanContext.class);
         io.tesseraql.core.telemetry.Span span = tracer(exchange)
                 .start("tesseraql.sql.execute", parent)
+                .attribute("surface", "route")
                 .attribute("sqlId", sqlPath)
                 .attribute("mode", mode);
         try {

@@ -290,6 +290,13 @@ workflow guards, stamps and escalation SQL, validation rules, decision lookups, 
 lookups, and file-transfer SQL — because there is no argument for any of them being allowed
 to run longer than a page.
 
+**SQL statement spans.** Every executed statement opens one `tesseraql.sql.execute` span
+carrying a `surface` attribute (`route` | `command` | `job` | `chunk` | `contract` |
+`transfer`), the statement's `sqlId` (a path for application SQL, the contract key for
+contract SQL), and its row or affected count. One span name answers "all SQL time in this
+trace"; the `surface` attribute answers "why is sign-in slow" without a second name to
+enumerate.
+
 **Connection pools.** Each `tesseraql.datasources.<name>` block tunes its HikariCP pool:
 `maximumPoolSize`, `minimumIdle`, `connectionTimeoutMillis`, `idleTimeoutMillis`,
 `maxLifetimeMillis`, `keepaliveTimeMillis`, and `leakDetectionThresholdMillis`. Unset keys

@@ -156,6 +156,21 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **Every executed statement opens one span, and the surface is an attribute**
+  (docs/contract-sql-execution.md structural decision 5, slice 5). Route reads, job steps and
+  chunks each opened `tesseraql.sql.execute`; the transactional command processor — the
+  statements that change data — opened nothing, and neither did contracts or transfers, so a
+  slow write, a slow sign-in and a slow provisioning call each showed up in a trace as an
+  unexplained gap. Every statement `ContractStatement` runs, every command step and workflow
+  assign, and every transfer phase (one span per import/export/inline extraction — a span per
+  row would be noise) now opens the same `tesseraql.sql.execute`, and the caller's identity
+  rides as attributes: `surface` (`route` | `command` | `job` | `chunk` | `contract` |
+  `transfer`) and the statement's own `sqlId` — a path for application SQL, the contract key
+  for contract SQL. The three existing span sites gain `surface` in the same change, so the
+  trace vocabulary deploys whole. This supersedes the originally planned second span name
+  `tesseraql.sql.contract`: one name answers "all SQL time in this trace", the attribute
+  answers "why is sign-in slow", and a dashboard never enumerates names.
+
 - **A SCIM group and its membership land together or not at all**
   (docs/contract-sql-execution.md structural decision 4, slice 4). A group create ran the
   insert, then one statement per member, then a re-read — each on its own pooled connection

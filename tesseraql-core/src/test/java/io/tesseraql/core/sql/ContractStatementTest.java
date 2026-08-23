@@ -213,6 +213,40 @@ class ContractStatementTest {
         assertThat(database.calls).doesNotContain("commit");
     }
 
+    @Test
+    void everyStatementOpensTheSharedSpanWithTheContractSurface() throws ContractSqlException {
+        io.tesseraql.core.telemetry.RecordingTracer tracer = new io.tesseraql.core.telemetry.RecordingTracer();
+        FakeDatabase database = new FakeDatabase(List.of("name"), List.of("Anne"));
+
+        ContractStatement.on(database.dataSource()).tracer(tracer)
+                .query("scim.users.list", SELECT, Map.of("id", "u1"));
+
+        assertThat(tracer.spans()).hasSize(1);
+        io.tesseraql.core.telemetry.RecordingTracer.RecordedSpan span = tracer.spans().get(0);
+        assertThat(span.name()).isEqualTo("tesseraql.sql.execute");
+        assertThat(span.attributes())
+                .containsEntry("surface", "contract")
+                .containsEntry("sqlId", "scim.users.list")
+                .containsEntry("rowCount", 1);
+        assertThat(span.error()).isFalse();
+    }
+
+    @Test
+    void aFailedStatementRecordsItsErrorOnTheSpan() {
+        io.tesseraql.core.telemetry.RecordingTracer tracer = new io.tesseraql.core.telemetry.RecordingTracer();
+        FakeDatabase database = new FakeDatabase(List.of(), List.of());
+        database.failure = new SQLException("duplicate key value", "23505");
+
+        assertThatThrownBy(() -> ContractStatement.on(database.dataSource()).tracer(tracer)
+                .update("scim.users.create", SELECT, Map.of("id", "u1")))
+                .isInstanceOf(ContractSqlException.class);
+
+        assertThat(tracer.spans()).hasSize(1);
+        assertThat(tracer.spans().get(0).error()).isTrue();
+        assertThat(tracer.spans().get(0).attributes())
+                .containsEntry("sqlId", "scim.users.create");
+    }
+
     /** A JDBC stack that records what was asked of it and answers one row (or the failure set). */
     private static final class FakeDatabase implements InvocationHandler {
 
