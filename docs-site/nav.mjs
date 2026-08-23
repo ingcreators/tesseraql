@@ -273,4 +273,6 @@ export const EXCLUDED = [
   'vertx-native.md',
   // Splitting the 2,344-line TesseraqlRuntime.start into named pieces, 2026-08-22.
   'boot-phases.md',
+  // The SQL survey run over everything else: HTTP seam, confined paths, error envelope, 2026-08-23.
+  'duplication-consolidation.md',
 ];
