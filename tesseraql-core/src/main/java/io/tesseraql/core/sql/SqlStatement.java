@@ -57,10 +57,12 @@ public final class SqlStatement {
     private final String surface;
     private final io.tesseraql.core.telemetry.SpanContext spanParent;
     private final int fetchSize;
+    private final Map<String, Object> attributes;
 
     private SqlStatement(DataSource dataSource, String dialect, int timeoutSeconds,
             boolean rawLabels, Tracer tracer, String surface,
-            io.tesseraql.core.telemetry.SpanContext spanParent, int fetchSize) {
+            io.tesseraql.core.telemetry.SpanContext spanParent, int fetchSize,
+            Map<String, Object> attributes) {
         this.dataSource = dataSource;
         this.dialect = dialect;
         this.timeoutSeconds = Math.max(0, timeoutSeconds);
@@ -69,12 +71,13 @@ public final class SqlStatement {
         this.surface = surface == null ? "contract" : surface;
         this.spanParent = spanParent;
         this.fetchSize = Math.max(0, fetchSize);
+        this.attributes = attributes == null ? Map.of() : attributes;
     }
 
     /** Statements against {@code dataSource}, bounded by {@link #DEFAULT_TIMEOUT_SECONDS}. */
     public static SqlStatement on(DataSource dataSource) {
         return new SqlStatement(dataSource, null, DEFAULT_TIMEOUT_SECONDS, false,
-                NoopTracer.INSTANCE, "contract", null, 0);
+                NoopTracer.INSTANCE, "contract", null, 0, Map.of());
     }
 
     /**
@@ -84,7 +87,7 @@ public final class SqlStatement {
      */
     public static SqlStatement onCallerConnections() {
         return new SqlStatement(null, null, DEFAULT_TIMEOUT_SECONDS, false,
-                NoopTracer.INSTANCE, "contract", null, 0);
+                NoopTracer.INSTANCE, "contract", null, 0, Map.of());
     }
 
     /** The data source, where this executor owns its connections; refuses where it does not. */
@@ -106,13 +109,13 @@ public final class SqlStatement {
      */
     public SqlStatement dialect(String dialect) {
         return new SqlStatement(dataSource, dialect, timeoutSeconds, rawLabels, tracer, surface,
-                spanParent, fetchSize);
+                spanParent, fetchSize, attributes);
     }
 
     /** The same executor bounded by {@code seconds}; an explicit {@code 0} removes the bound. */
     public SqlStatement timeoutSeconds(int seconds) {
         return new SqlStatement(dataSource, dialect, seconds, rawLabels, tracer, surface,
-                spanParent, fetchSize);
+                spanParent, fetchSize, attributes);
     }
 
     /** The declared bound, for callers that thread it onward (e.g. into decision lookups). */
@@ -129,13 +132,13 @@ public final class SqlStatement {
      */
     public SqlStatement surface(String surface) {
         return new SqlStatement(dataSource, dialect, timeoutSeconds, rawLabels, tracer, surface,
-                spanParent, fetchSize);
+                spanParent, fetchSize, attributes);
     }
 
     /** The same executor parenting its spans on {@code parent} (null roots a new trace). */
     public SqlStatement spanParent(io.tesseraql.core.telemetry.SpanContext parent) {
         return new SqlStatement(dataSource, dialect, timeoutSeconds, rawLabels, tracer, surface,
-                parent, fetchSize);
+                parent, fetchSize, attributes);
     }
 
     /**
@@ -146,7 +149,7 @@ public final class SqlStatement {
      */
     public SqlStatement tracer(Tracer tracer) {
         return new SqlStatement(dataSource, dialect, timeoutSeconds, rawLabels, tracer, surface,
-                spanParent, fetchSize);
+                spanParent, fetchSize, attributes);
     }
 
     /**
@@ -158,7 +161,7 @@ public final class SqlStatement {
      */
     public SqlStatement rawLabels() {
         return new SqlStatement(dataSource, dialect, timeoutSeconds, true, tracer, surface,
-                spanParent, fetchSize);
+                spanParent, fetchSize, attributes);
     }
 
     /**
@@ -170,7 +173,20 @@ public final class SqlStatement {
      */
     public SqlStatement fetchSize(int rows) {
         return new SqlStatement(dataSource, dialect, timeoutSeconds, rawLabels, tracer, surface,
-                spanParent, rows);
+                spanParent, rows, attributes);
+    }
+
+    /**
+     * The same executor stamping {@code key} on every span it opens, beside {@code surface} and
+     * the statement's own name (docs/sql-execution-shapes.md structural decision 2) — the seam
+     * for a caller whose spans carry identity the primitive cannot know, like a job step's
+     * {@code stepId}.
+     */
+    public SqlStatement attribute(String key, Object value) {
+        Map<String, Object> stamped = new LinkedHashMap<>(attributes);
+        stamped.put(key, value);
+        return new SqlStatement(dataSource, dialect, timeoutSeconds, rawLabels, tracer, surface,
+                spanParent, fetchSize, Map.copyOf(stamped));
     }
 
     /**
@@ -594,10 +610,12 @@ public final class SqlStatement {
 
     /** One statement's span: the shared name, the declared surface, the statement's own name. */
     private Span started(String sqlId, String mode) {
-        return tracer.start("tesseraql.sql.execute", spanParent)
+        Span span = tracer.start("tesseraql.sql.execute", spanParent)
                 .attribute("surface", surface)
                 .attribute("sqlId", sqlId)
                 .attribute("mode", mode);
+        attributes.forEach(span::attribute);
+        return span;
     }
 
     /** A driver's answer, named by the contract that asked and classified for the caller. */

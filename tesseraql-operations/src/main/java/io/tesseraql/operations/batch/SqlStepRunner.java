@@ -8,8 +8,6 @@ import io.tesseraql.core.sql.BoundSql;
 import io.tesseraql.core.sql.SqlRenderer;
 import io.tesseraql.yaml.model.PipelineStep;
 import java.nio.file.Path;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
@@ -53,66 +51,50 @@ final class SqlStepRunner {
                 filePathResolver);
         String mode = step.sql().effectiveMode();
 
-        io.tesseraql.core.telemetry.Span span = context.tracer()
-                .start("tesseraql.sql.execute", context.parentSpan())
-                .attribute("surface", "job")
-                .attribute("sqlId", sqlPath.toString())
-                .attribute("mode", mode)
-                .attribute("stepId", step.id());
+        // The statement layer (docs/sql-execution-shapes.md slice 1): prepare, bind, bound,
+        // execute-and-count, classify and the span are the primitive's; this runner keeps what
+        // is the step's — its result envelope, the caps, the spool drain, and the TQL-BATCH-5002
+        // wrapper. The step's identity rides the span as a declared attribute. The result set
+        // of a mode: update is deliberately not read: a step that wants rows asks with
+        // mode: query.
+        io.tesseraql.core.sql.SqlStatement statements = io.tesseraql.core.sql.SqlStatement
+                .on(dataSource)
+                .dialect(dialect)
+                .timeoutSeconds(context.timeoutSecondsFor(step.sql()))
+                .surface("job")
+                .attribute("stepId", step.id())
+                .tracer(context.tracer())
+                .spanParent(context.parentSpan());
         long startNanos = System.nanoTime();
         long startedAt = System.currentTimeMillis();
-        try (Connection connection = dataSource.getConnection();
-                PreparedStatement statement = connection.prepareStatement(bound.sql())) {
-            int timeoutSeconds = context.timeoutSecondsFor(step.sql());
-            if (timeoutSeconds > 0) {
-                statement.setQueryTimeout(timeoutSeconds);
-            }
-            StepContext.bind(statement, bound);
+        try {
             Map<String, Object> result = switch (mode) {
-                case "query-spool" -> spool(context, statement, dialect);
-                case "query" -> query(context, statement, dialect);
-                default -> Map.of("affectedRows", update(statement));
+                case "query-spool" -> statements.read(sqlPath.toString(), bound,
+                        (resultSet, span) -> spool(context, resultSet, dialect, span));
+                case "query" -> statements.read(sqlPath.toString(), bound,
+                        (resultSet, span) -> query(context, resultSet, dialect, span));
+                default -> Map.of("affectedRows",
+                        statements.update(sqlPath.toString(), bound));
             };
             long durationMs = (System.nanoTime() - startNanos) / 1_000_000L;
             long rows = ((Number) result.getOrDefault("affectedRows",
                     result.getOrDefault("rowCount", 0))).longValue();
-            span.attribute("affectedRows", rows);
             context.slowSqlLog().record(new io.tesseraql.core.diag.SqlExecution(
                     sqlPath.toString(), mode, durationMs, rows, startedAt));
             return result;
         } catch (SQLException ex) {
             // The wrapper keeps its code and gains the portable classification (structural
             // decision 8, docs/contract-sql-execution.md): a foreign-key violation from bad
-            // input and a dropped table stopped reporting identically.
-            TqlException failure = TqlException.builder(StepContext.STEP_ERROR)
+            // input and a dropped table stopped reporting identically. The statement's own
+            // span already recorded the classified failure.
+            throw TqlException.builder(StepContext.STEP_ERROR)
                     .message("Step '" + step.id() + "' failed ("
                             + io.tesseraql.core.dialect.SqlErrors.classify(ex) + "): "
                             + ex.getMessage())
                     .source(sqlPath.toString())
                     .cause(ex)
                     .build();
-            span.recordError(failure);
-            throw failure;
-        } finally {
-            span.end();
         }
-    }
-
-    /**
-     * Runs a {@code mode: update} step and reports the rows it affected.
-     *
-     * <p>Not {@code executeUpdate}: some statements do work and answer with rows rather than a
-     * count, and that call is specified to refuse them — a maintenance procedure, a DuckLake
-     * rewrite, anything with {@code RETURNING} in a dialect that reports it as a result. The
-     * step's job is to run the statement; {@code getUpdateCount} answers -1 when the driver had
-     * a result set instead of a count, which is the honest answer to "how many rows changed".
-     *
-     * <p>The result set is deliberately not read. A step that wants rows asks with
-     * {@code mode: query}.
-     */
-    private static int update(PreparedStatement statement) throws SQLException {
-        statement.execute();
-        return statement.getUpdateCount();
     }
 
     /**
@@ -126,8 +108,8 @@ final class SqlStepRunner {
      * protection; the bound keeps that protection while the rows become usable, and an extract
      * too large to hold is what {@code query-spool} is for.
      */
-    private static Map<String, Object> query(StepContext context, PreparedStatement statement,
-            String dialect) throws SQLException {
+    private static Map<String, Object> query(StepContext context, ResultSet rs, String dialect,
+            io.tesseraql.core.telemetry.Span span) throws SQLException {
         PipelineStep step = context.step();
         int cap = step.sql().materialize() != null && step.sql().materialize().maxRows() != null
                 ? step.sql().materialize().maxRows()
@@ -137,31 +119,32 @@ final class SqlStepRunner {
                         ? step.sql().materialize().onOverflow()
                         : context.onOverflow();
         List<Map<String, Object>> rows = new java.util.ArrayList<>();
-        try (ResultSet rs = statement.executeQuery()) {
-            ResultSetMetaData metaData = rs.getMetaData();
-            int columns = metaData.getColumnCount();
-            while (rs.next()) {
-                if (cap >= 0 && rows.size() >= cap) {
-                    if (!"warn".equals(overflow)) {
-                        throw TqlException.builder(MATERIALIZATION_OVERFLOW)
-                                .message("Step '" + step.id() + "': query returned more than "
-                                        + cap + " rows; raise materialize.maxRows, or use"
-                                        + " mode: query-spool for an extract too large to hold")
-                                .build();
-                    }
-                    LOG.warn("Job step {} query exceeded {} rows; truncating", step.id(), cap);
-                    break;
+        ResultSetMetaData metaData = rs.getMetaData();
+        int columns = metaData.getColumnCount();
+        while (rs.next()) {
+            if (cap >= 0 && rows.size() >= cap) {
+                if (!"warn".equals(overflow)) {
+                    throw TqlException.builder(MATERIALIZATION_OVERFLOW)
+                            .message("Step '" + step.id() + "': query returned more than "
+                                    + cap + " rows; raise materialize.maxRows, or use"
+                                    + " mode: query-spool for an extract too large to hold")
+                            .build();
                 }
-                Map<String, Object> row = new LinkedHashMap<>();
-                for (int col = 1; col <= columns; col++) {
-                    // The one label answer every JDBC path asks (ResultRows): the same
-                    // `select … as total` publishes `total` on Oracle and PostgreSQL alike.
-                    row.put(io.tesseraql.core.dialect.ResultRows.label(dialect,
-                            metaData.getColumnLabel(col)), rs.getObject(col));
-                }
-                rows.add(row);
+                LOG.warn("Job step {} query exceeded {} rows; truncating", step.id(), cap);
+                break;
             }
+            Map<String, Object> row = new LinkedHashMap<>();
+            for (int col = 1; col <= columns; col++) {
+                // The one label answer every JDBC path asks (ResultRows): the same
+                // `select … as total` publishes `total` on Oracle and PostgreSQL alike.
+                // Values stay typed — a later step binds them, and an ISO string is not a
+                // timestamp (docs/sql-execution-shapes.md structural decision 1).
+                row.put(io.tesseraql.core.dialect.ResultRows.label(dialect,
+                        metaData.getColumnLabel(col)), rs.getObject(col));
+            }
+            rows.add(row);
         }
+        span.attribute("rowCount", rows.size());
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("rows", rows);
         result.put("rowCount", rows.size());
@@ -180,61 +163,60 @@ final class SqlStepRunner {
      * bind or {@code chunk.key} names on every dialect. HTTP-sourced rows keep JSONL
      * ({@link HttpStepRunner}): that data was JSON, so JSON is faithful there.
      */
-    private static Map<String, Object> spool(StepContext context, PreparedStatement statement,
-            String dialect) throws SQLException {
-        try (ResultSet rs = statement.executeQuery()) {
-            ResultSetMetaData metaData = rs.getMetaData();
-            int columns = metaData.getColumnCount();
-            SpoolRef ref;
-            try {
-                ref = io.tesseraql.core.files.SpooledRows
-                        .drain(context.tempStore(), new java.util.Iterator<Map<String, Object>>() {
+    private static Map<String, Object> spool(StepContext context, ResultSet rs, String dialect,
+            io.tesseraql.core.telemetry.Span span) throws SQLException {
+        ResultSetMetaData metaData = rs.getMetaData();
+        int columns = metaData.getColumnCount();
+        SpoolRef ref;
+        try {
+            ref = io.tesseraql.core.files.SpooledRows
+                    .drain(context.tempStore(), new java.util.Iterator<Map<String, Object>>() {
 
-                            private Boolean advanced;
+                        private Boolean advanced;
 
-                            @Override
-                            public boolean hasNext() {
-                                if (advanced == null) {
-                                    try {
-                                        advanced = rs.next();
-                                    } catch (SQLException ex) {
-                                        throw new UncheckedSqlException(ex);
-                                    }
-                                }
-                                return advanced;
-                            }
-
-                            @Override
-                            public Map<String, Object> next() {
-                                if (!hasNext()) {
-                                    throw new java.util.NoSuchElementException();
-                                }
-                                advanced = null;
+                        @Override
+                        public boolean hasNext() {
+                            if (advanced == null) {
                                 try {
-                                    Map<String, Object> row = new LinkedHashMap<>();
-                                    for (int col = 1; col <= columns; col++) {
-                                        row.put(io.tesseraql.core.dialect.ResultRows.label(
-                                                dialect, metaData.getColumnLabel(col)),
-                                                rs.getObject(col));
-                                    }
-                                    return row;
+                                    advanced = rs.next();
                                 } catch (SQLException ex) {
                                     throw new UncheckedSqlException(ex);
                                 }
                             }
-                        })
-                        .ref();
-            } catch (UncheckedSqlException ex) {
-                throw ex.cause;
-            }
-            Map<String, Object> result = new LinkedHashMap<>();
-            // A spool has a count and a reference, and no `rows` — the point of spooling is that
-            // the rows were never held. `rows` means a list on every other surface (decision 10),
-            // so publishing the count under that name was the envelope contradicting itself.
-            result.put("rowCount", (int) ref.rows());
-            result.put("spool", ref);
-            return result;
+                            return advanced;
+                        }
+
+                        @Override
+                        public Map<String, Object> next() {
+                            if (!hasNext()) {
+                                throw new java.util.NoSuchElementException();
+                            }
+                            advanced = null;
+                            try {
+                                Map<String, Object> row = new LinkedHashMap<>();
+                                for (int col = 1; col <= columns; col++) {
+                                    row.put(io.tesseraql.core.dialect.ResultRows.label(
+                                            dialect, metaData.getColumnLabel(col)),
+                                            rs.getObject(col));
+                                }
+                                return row;
+                            } catch (SQLException ex) {
+                                throw new UncheckedSqlException(ex);
+                            }
+                        }
+                    })
+                    .ref();
+        } catch (UncheckedSqlException ex) {
+            throw ex.cause;
         }
+        span.attribute("rowCount", (int) ref.rows());
+        Map<String, Object> result = new LinkedHashMap<>();
+        // A spool has a count and a reference, and no `rows` — the point of spooling is that
+        // the rows were never held. `rows` means a list on every other surface (decision 10),
+        // so publishing the count under that name was the envelope contradicting itself.
+        result.put("rowCount", (int) ref.rows());
+        result.put("spool", ref);
+        return result;
     }
 
     /** Carries a {@link SQLException} across the drain's iterator boundary, unwrapped above. */

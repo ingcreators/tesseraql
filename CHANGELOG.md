@@ -176,6 +176,21 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **The job `sql:` step runs through the statement primitive**
+  (docs/sql-execution-shapes.md slice 1). `SqlStepRunner` adopts `SqlStatement` for its one
+  statement per step — prepare, bind, bound, execute-and-count, classification and the span
+  are the primitive's, while the step keeps its result envelope, its caps and refusal
+  messages, the spool drain, and the TQL-BATCH-5002 wrapper; row **values stay typed** (a
+  later step binds them — an ISO string is not a `timestamp`), which is why the step's own
+  loops ride the reader seam instead of `cappedRows`. The primitive gains an
+  `attribute(key, value)` wither so a caller can declare span attributes it alone knows —
+  the step's `stepId` now rides every span that way. Recorded span deltas: a read span's
+  count attribute is `rowCount` (it said `affectedRows` for reads), the `mode` attribute
+  says what JDBC did (`query`, where a spool step stamped `query-spool` — the slow-SQL log
+  keeps recording `query-spool`), and the span records the classified failure where it used
+  to record the outer TQL-BATCH-5002 wrapper. `SqlStepRunner` leaves the
+  `SqlExecutorLedgerTest` ledger.
+
 - **The route pipeline's statements all run through the primitive — the contract SQL
   campaign's recorded residual is resolved** (docs/contract-sql-execution.md "The residual,
   resolved"). `SqlStep` — the executor behind every route query, update, pagination count and
