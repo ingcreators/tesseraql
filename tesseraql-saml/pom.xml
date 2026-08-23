@@ -30,6 +30,14 @@
       <artifactId>tesseraql-compiler</artifactId>
       <version>${project.version}</version>
     </dependency>
+    <!-- The real outbound gateway, so the metadata-source tests exercise the actual egress
+         policy (allow-list denial, status handling) rather than a fake's idea of it. -->
+    <dependency>
+      <groupId>io.tesseraql</groupId>
+      <artifactId>tesseraql-operations</artifactId>
+      <version>${project.version}</version>
+      <scope>test</scope>
+    </dependency>
     <!-- Link-or-provision of local users from SAML assertions (design ch. 10.14 userLink). -->
     <dependency>
       <groupId>io.tesseraql</groupId>

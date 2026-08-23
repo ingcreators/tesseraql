@@ -41,9 +41,19 @@ public final class JwtAuthenticator {
     private final JwtConfig config;
     private final SignatureVerifier verifier;
 
-    /** Builds the verifier from {@code config}; the production path used by the runtime and CLI. */
+    /** Builds the verifier from {@code config}; static-key and HS256 configurations only. */
     public JwtAuthenticator(JwtConfig config) {
-        this(config, verifierFor(config));
+        this(config, verifierFor(config, null));
+    }
+
+    /**
+     * Builds the verifier from {@code config}, fetching a configured {@code jwksUri} through
+     * {@code jwksFetcher} — the production path: the runtime supplies a fetcher that leaves
+     * through its outbound gateway (docs/duplication-consolidation.md, campaign 1), so this
+     * module carries no HTTP client of its own.
+     */
+    public JwtAuthenticator(JwtConfig config, JwksFetcher jwksFetcher) {
+        this(config, verifierFor(config, jwksFetcher));
     }
 
     /** Uses a supplied verifier, so tests can inject a fake JWKS key source without a network. */
@@ -52,16 +62,16 @@ public final class JwtAuthenticator {
         this.verifier = verifier;
     }
 
-    private static SignatureVerifier verifierFor(JwtConfig config) {
+    private static SignatureVerifier verifierFor(JwtConfig config, JwksFetcher jwksFetcher) {
         return switch (config.algorithm()) {
             case "HS256" -> new HmacSignatureVerifier(config.secret());
-            case "RS256" -> new RsaSignatureVerifier(rsaKeySource(config));
+            case "RS256" -> new RsaSignatureVerifier(rsaKeySource(config, jwksFetcher));
             default -> throw new TqlException(PolicyEngine.UNAUTHORIZED,
                     "Unsupported JWT algorithm: " + config.algorithm());
         };
     }
 
-    private static KeySource rsaKeySource(JwtConfig config) {
+    private static KeySource rsaKeySource(JwtConfig config, JwksFetcher jwksFetcher) {
         boolean hasStatic = config.publicKey() != null && !config.publicKey().isBlank();
         boolean hasJwks = config.jwksUri() != null && !config.jwksUri().isBlank();
         if (hasStatic && hasJwks) {
@@ -73,8 +83,14 @@ public final class JwtAuthenticator {
             return new StaticKeySource(Jwks.parsePublicKey(config.publicKey()));
         }
         if (hasJwks) {
+            if (jwksFetcher == null) {
+                throw new TqlException(PolicyEngine.UNAUTHORIZED,
+                        "RS256 JWT config declares jwksUri, but this authenticator was built"
+                                + " without a JWKS fetcher; the runtime supplies one over its"
+                                + " outbound gateway");
+            }
             io.tesseraql.security.SecurityConfig.JwksConfig jwks = config.jwks();
-            return new JwksKeySource(new HttpJwksFetcher(jwks.requestTimeout()),
+            return new JwksKeySource(jwksFetcher,
                     java.net.URI.create(config.jwksUri()), jwks.cacheTtl(), jwks.refreshFloor());
         }
         throw new TqlException(PolicyEngine.UNAUTHORIZED,

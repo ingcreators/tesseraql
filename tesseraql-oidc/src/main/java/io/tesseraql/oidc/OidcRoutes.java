@@ -48,18 +48,22 @@ final class OidcRoutes {
     private static final String NEXT_COOKIE = "tql_oidc_next";
 
     OidcRoutes(OidcConfig config, OidcDiscovery discovery, OidcStateStore stateStore,
-            OidcHttp http, SessionStore sessions, OidcUserLinker linker,
+            OidcHttp http, io.tesseraql.security.jwt.JwksFetcher jwksFetcher,
+            SessionStore sessions, OidcUserLinker linker,
             io.tesseraql.security.throttle.CredentialThrottle throttle) {
         this.config = config;
         this.discovery = discovery;
         this.stateStore = stateStore;
         this.http = http;
+        this.jwksFetcher = jwksFetcher;
         this.sessions = sessions;
         this.linker = linker;
         this.throttle = throttle;
     }
 
     private final io.tesseraql.security.throttle.CredentialThrottle throttle;
+    /** Fetches the provider's key set through the outbound gateway, like every outbound call. */
+    private final io.tesseraql.security.jwt.JwksFetcher jwksFetcher;
 
     /**
      * Address-keyed insurance against callback garbage (docs/credential-throttle.md):
@@ -277,7 +281,9 @@ final class OidcRoutes {
 
     private OidcTokenValidator validator(OidcMetadata metadata) {
         return validatorRef.updateAndGet(
-                existing -> existing != null ? existing : new OidcTokenValidator(metadata, config));
+                existing -> existing != null
+                        ? existing
+                        : new OidcTokenValidator(metadata, config, jwksFetcher));
     }
 
     /**

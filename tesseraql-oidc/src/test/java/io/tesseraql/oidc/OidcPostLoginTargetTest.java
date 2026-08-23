@@ -20,7 +20,7 @@ class OidcPostLoginTargetTest {
         return new OidcRoutes(
                 new OidcConfig(null, "client", null, null, null, "/home", null, null, false,
                         false, null),
-                null, null, null, null, null, null);
+                null, null, null, null, null, null, null);
     }
 
     private static Exchange withCookie(String cookieHeader) {

@@ -31,6 +31,14 @@ public final class HttpOutbound {
     public static final TqlErrorCode INVALID_CONFIG = new TqlErrorCode(TqlDomain.YAML, 1109);
     /** TQL-BATCH-5308: an {@code http-call} step references an unconfigured credential. */
     public static final TqlErrorCode UNKNOWN_CREDENTIAL = new TqlErrorCode(TqlDomain.BATCH, 5308);
+    /**
+     * TQL-BATCH-5305: an outbound call targets a host outside the egress allow-list. Declared
+     * here beside the policy it enforces so a gateway caller can tell the policy's refusal — a
+     * configuration to fix — from a transport failure it may want to tolerate (the SAML
+     * metadata cache is the precedent: an unreachable IdP serves the cached copy, a denied
+     * host must not).
+     */
+    public static final TqlErrorCode HOST_DENIED = new TqlErrorCode(TqlDomain.BATCH, 5305);
 
     /** The supported credential types. */
     public static final String BEARER = "bearer";

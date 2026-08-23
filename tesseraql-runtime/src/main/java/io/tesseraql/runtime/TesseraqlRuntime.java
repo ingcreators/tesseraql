@@ -501,6 +501,16 @@ public final class TesseraqlRuntime implements AutoCloseable {
         try {
 
             SecurityConfig security = SecurityConfigFactory.build(manifest.config());
+            // The outbound egress policy (roadmap Phase 26): deny-by-default allow-list, named
+            // credentials, timeouts. One instance gates every framework-issued outbound call —
+            // httpCall steps, the Studio copilot endpoint, and (docs/duplication-consolidation.md
+            // campaign 1) the extensions' own calls: OIDC, JWKS, SAML metadata. Built here,
+            // before the authenticators, because the JWKS fetcher rides it.
+            final io.tesseraql.yaml.http.HttpOutbound httpOutbound = io.tesseraql.yaml.http.HttpOutbound
+                    .load(manifest.config());
+            io.tesseraql.operations.http.HttpCallClient httpCallClient = new io.tesseraql.operations.http.HttpCallClient(
+                    httpOutbound, manifest.config(), tracer, effectiveMeter);
+            context.bind(TesseraqlProperties.OUTBOUND_GATEWAY_BEAN, httpCallClient);
             context.bind(TesseraqlProperties.POLICY_ENGINE_BEAN,
                     new PolicyEngine(security));
             // Context conditions, both layers (docs/access-governance.md structural decision 8).
@@ -537,7 +547,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
             if (security.jwt() != null) {
                 context.bind(
                         TesseraqlProperties.JWT_AUTHENTICATOR_BEAN,
-                        new JwtAuthenticator(security.jwt()));
+                        new JwtAuthenticator(security.jwt(),
+                                jwksFetcher(httpCallClient, security.jwt())));
             }
             if (security.apiKeys() != null) {
                 context.bind(
@@ -937,16 +948,6 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     }
                 }
             }
-            // The outbound egress policy (roadmap Phase 26): deny-by-default allow-list, named
-            // credentials, timeouts. One instance gates every framework-issued outbound call —
-            // httpCall steps here and the Studio copilot endpoint below.
-            final io.tesseraql.yaml.http.HttpOutbound httpOutbound = io.tesseraql.yaml.http.HttpOutbound
-                    .load(manifest.config());
-            // One outbound HTTP client gates every framework-issued call: httpCall job steps
-            // and query routes' http: sources (docs/connectors.md) share the allow-list, the
-            // named credentials, the timeouts, and the per-host circuit breaker.
-            io.tesseraql.operations.http.HttpCallClient httpCallClient = new io.tesseraql.operations.http.HttpCallClient(
-                    httpOutbound, manifest.config(), tracer, effectiveMeter);
             // push: pipeline steps deliver a produced transfer to a partner drop — local, or
             // SFTP/FTPS under the push policy block's deny-by-default allow-list
             // (docs/analytics-experience.md).
@@ -1007,16 +1008,9 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 rateLeases.ensureSchema();
                 context.bind(TesseraqlProperties.RATE_BUDGET_BEAN, rateLeases);
             }
-            // An enrichment's http: reference calls through the same gateway, so it counts toward
-            // binding it — otherwise the reference fails at request time with no route-level http:
-            // anywhere in the app (docs/lookups.md).
-            if (routeShaped(manifest).anyMatch(definition -> definition.sources().values().stream()
-                    .anyMatch(binding -> binding.isHttp()
-                            || binding.enrich().values().stream()
-                                    .anyMatch(enrich -> enrich.http() != null)))) {
-                context.bind(TesseraqlProperties.OUTBOUND_GATEWAY_BEAN,
-                        outboundGateway(httpCallClient));
-            }
+            // The gateway bean is bound unconditionally beside its construction above — an
+            // extension's own outbound calls (OIDC, SAML metadata) need it whether or not any
+            // route declares an http: source (docs/duplication-consolidation.md, campaign 1).
             // Notification channels and operations alerts (roadmap Phase 20).
             io.tesseraql.yaml.notify.NotificationChannels notificationChannels = io.tesseraql.yaml.notify.NotificationChannels
                     .load(manifest.config());
@@ -1318,7 +1312,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     io.tesseraql.security.SecurityConfig.JwtConfig gate = withAudience(
                             security.jwt(), mcpResource);
                     io.tesseraql.security.jwt.JwtAuthenticator mcpJwt = new io.tesseraql.security.jwt.JwtAuthenticator(
-                            gate);
+                            gate, jwksFetcher(httpCallClient, gate));
                     mcpGate = mcpJwt::authenticate;
                     if (origin != null) {
                         mcpChallenge = "Bearer resource_metadata=\"" + origin
@@ -1753,7 +1747,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             ? null
                             : new NotificationSink(notificationChannels, appHome,
                                     inboxStore, fileTransfers,
-                                    outboundGateway(httpCallClient));
+                                    httpCallClient);
             // The channel-publish sink relays publish: EVENT events onto messaging channels
             // (roadmap Phase 27), composed alongside the notification sink on the same outbox.
             io.tesseraql.core.outbox.OutboxEventSink channelSink = messagingChannels.isEmpty()
@@ -1903,30 +1897,27 @@ public final class TesseraqlRuntime implements AutoCloseable {
         return false;
     }
 
+    /**
+     * The production JWKS fetcher — a {@code jwksUri} is fetched through the outbound gateway
+     * like every other framework-issued call — or null when the config declares no JWKS source
+     * (docs/duplication-consolidation.md, campaign 1).
+     */
+    private static io.tesseraql.security.jwt.JwksFetcher jwksFetcher(
+            io.tesseraql.yaml.http.OutboundGateway gateway,
+            io.tesseraql.security.SecurityConfig.JwtConfig jwt) {
+        if (jwt.jwksUri() == null || jwt.jwksUri().isBlank()) {
+            return null;
+        }
+        return new io.tesseraql.compiler.binding.GatewayJwksFetcher(gateway,
+                jwt.jwks().requestTimeout());
+    }
+
     /** Whether the app declares attachment documents in {@code managed} mode (roadmap Phase 30). */
     private static boolean attachmentsNeedManagedStore(
             io.tesseraql.yaml.manifest.AppManifest manifest) {
         return !manifest.attachments().isEmpty()
                 && io.tesseraql.yaml.attachment.AttachmentSettings.from(manifest.config())
                         .managed();
-    }
-
-    /** The one gateway, over the job pipeline's client (docs/lookups.md, decision 15). */
-    private static io.tesseraql.yaml.http.OutboundGateway outboundGateway(
-            io.tesseraql.operations.http.HttpCallClient client) {
-        return new io.tesseraql.yaml.http.OutboundGateway() {
-            @Override
-            public java.util.Map<String, Object> call(io.tesseraql.yaml.model.HttpCallSpec spec,
-                    java.util.Map<String, Object> context) {
-                return client.call(spec, context, null);
-            }
-
-            @Override
-            public java.util.Map<String, Object> call(io.tesseraql.yaml.model.HttpCallSpec spec,
-                    byte[] body, java.util.Map<String, String> headers) {
-                return client.call(spec, body, headers);
-            }
-        };
     }
 
     /**

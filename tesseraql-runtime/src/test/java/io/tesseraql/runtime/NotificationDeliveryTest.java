@@ -343,23 +343,10 @@ class NotificationDeliveryTest {
         AppConfig outbound = new AppConfig(Map.of("tesseraql", Map.of("http", Map.of("outbound",
                 Map.of("allowedHosts", java.util.List.of("localhost", "127.0.0.1"))))),
                 name -> null);
-        io.tesseraql.operations.http.HttpCallClient client = new io.tesseraql.operations.http.HttpCallClient(
+        return new io.tesseraql.operations.http.HttpCallClient(
                 io.tesseraql.yaml.http.HttpOutbound.load(outbound), outbound,
                 io.tesseraql.core.telemetry.NoopTracer.INSTANCE,
                 io.tesseraql.core.telemetry.NoopMeter.INSTANCE);
-        return new io.tesseraql.yaml.http.OutboundGateway() {
-            @Override
-            public Map<String, Object> call(io.tesseraql.yaml.model.HttpCallSpec spec,
-                    Map<String, Object> context) {
-                return client.call(spec, context, null);
-            }
-
-            @Override
-            public Map<String, Object> call(io.tesseraql.yaml.model.HttpCallSpec spec,
-                    byte[] body, Map<String, String> headers) {
-                return client.call(spec, body, headers);
-            }
-        };
     }
 
 }

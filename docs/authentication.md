@@ -269,7 +269,10 @@ tesseraql:
         requestTimeout: 5s   # JWKS connect/request timeout (default 5s)
 ```
 
-The JWKS endpoint must be `https` (loopback `http` is allowed for local development). The fetched
+The JWKS endpoint must be `https` (loopback `http` is allowed for local development), and its
+host must be in `tesseraql.http.outbound.allowedHosts`: the fetch leaves through the same
+outbound gateway as every other framework-issued call, under the deny-by-default egress
+allow-list, the configured timeouts, and the per-host circuit breaker. The fetched
 key set is cached for `cacheTtl`. A token whose `kid` is not in the cache — typically a key the IdP
 rotated in — triggers **at most one** refetch per `refreshFloor`, so a flood of tokens carrying
 random `kid`s cannot become a flood of JWKS requests; an unknown `kid` that survives a permitted
@@ -405,7 +408,10 @@ flow with PKCE**, then issues a TesseraQL browser session — the same session t
 password login produce. It travels with the runtime and is inert until enabled: set
 `tesseraql.oidc.enabled: true` and there is no jar to add. The provider's endpoints are
 **discovered** at runtime, and the ID token is
-validated with the same RS256/JWKS verifier as bearer JWT.
+validated with the same RS256/JWKS verifier as bearer JWT. The provider's host must be in
+`tesseraql.http.outbound.allowedHosts`: discovery and the token exchange leave through the
+same outbound gateway as every other framework-issued call, under the deny-by-default
+egress allow-list.
 
 ```yaml
 tesseraql:
