@@ -76,6 +76,25 @@ public final class SqlStatement {
     }
 
     /**
+     * Statements that run only on caller-supplied connections — the shape of an executor that
+     * rides someone else's transaction (a command's, a suite runner's) and never opens its own.
+     * Only the connection-taking forms work; a form that would open a connection refuses.
+     */
+    public static SqlStatement onCallerConnections() {
+        return new SqlStatement(null, null, DEFAULT_TIMEOUT_SECONDS, false,
+                NoopTracer.INSTANCE, "contract", null);
+    }
+
+    /** The data source, where this executor owns its connections; refuses where it does not. */
+    private DataSource ownConnections() {
+        if (dataSource == null) {
+            throw new IllegalStateException("This SqlStatement runs only on caller-supplied"
+                    + " connections (onCallerConnections()) - use the connection-taking forms");
+        }
+        return dataSource;
+    }
+
+    /**
      * The same executor under {@code dialect}'s rules: result labels normalize the way every other
      * executor's do, and a declared generated-key column reaches the JDBC call the dialect's
      * driver honours (docs/contract-sql-execution.md structural decision 2).
@@ -150,7 +169,7 @@ public final class SqlStatement {
     /** Executes a read contract and returns its rows, keyed by the contract's own aliases. */
     public List<Map<String, Object>> query(String contract, String sql,
             Map<String, Object> params) throws SqlStatementException {
-        try (Connection connection = dataSource.getConnection()) {
+        try (Connection connection = ownConnections().getConnection()) {
             return query(connection, contract, sql, params);
         } catch (SQLException ex) {
             throw classified(contract, ex);
@@ -211,7 +230,7 @@ public final class SqlStatement {
      */
     public WriteResult update(String contract, String sql, Map<String, Object> params,
             List<String> keys) throws SqlStatementException {
-        try (Connection connection = dataSource.getConnection()) {
+        try (Connection connection = ownConnections().getConnection()) {
             return update(connection, contract, sql, params, keys);
         } catch (SQLException ex) {
             throw classified(contract, ex);
@@ -221,26 +240,7 @@ public final class SqlStatement {
     /** As {@link #update(String, String, Map, List)}, on the caller's own connection. */
     public WriteResult update(Connection connection, String contract, String sql,
             Map<String, Object> params, List<String> keys) throws SqlStatementException {
-        BoundSql bound = SqlRenderer.render(sql, params);
-        Span span = started(contract, "update");
-        try (PreparedStatement statement = prepare(connection, bound, keys)) {
-            // execute + getUpdateCount rather than executeUpdate: a statement can do work and
-            // hand back a result rather than a count, and a driver may refuse executeUpdate for
-            // it — DuckDB does, for DuckLake's maintenance calls. -1 is the honest "no count".
-            statement.execute();
-            int affected = statement.getUpdateCount();
-            Map<String, Object> generated = keys.isEmpty()
-                    ? Map.of()
-                    : readGeneratedKeys(statement, keys);
-            span.attribute("affectedRows", affected);
-            return new WriteResult(affected, generated);
-        } catch (SQLException ex) {
-            SqlStatementException named = classified(contract, ex);
-            span.recordError(named);
-            throw named;
-        } finally {
-            span.end();
-        }
+        return update(connection, contract, SqlRenderer.render(sql, params), keys);
     }
 
     /** A contract write that must do several things at once, run inside {@link #transact}. */
@@ -259,7 +259,7 @@ public final class SqlStatement {
      */
     public <T> T transact(String contract, TransactionalBody<T> body)
             throws SqlStatementException {
-        try (Connection connection = dataSource.getConnection()) {
+        try (Connection connection = ownConnections().getConnection()) {
             boolean previous = connection.getAutoCommit();
             connection.setAutoCommit(false);
             try {
@@ -374,20 +374,102 @@ public final class SqlStatement {
     }
 
     /**
+     * A caller-owned read that can also stamp what only it knows — its row count, a truncation —
+     * onto the statement's span; the span's name, identity and lifecycle stay this class's.
+     */
+    public interface SpannedReader<T> {
+        T read(ResultSet resultSet, Span span) throws SQLException;
+    }
+
+    /**
+     * The caller's answer to the first row past a capped read's cap
+     * ({@link #cappedRows(String, int, RowOverflow)}): return to truncate the read — the caller
+     * has already said so, e.g. with a warn log — or throw its refusal.
+     */
+    public interface RowOverflow {
+        void onRowPastCap() throws SQLException;
+    }
+
+    /**
+     * A capped, materializing read: rows shaped the way every route and command read shapes them
+     * — labels normalized under {@code dialect}, JDBC temporals as ISO-8601 strings
+     * ({@link io.tesseraql.core.dialect.ResultRows}) — up to {@code maxRows} rows ({@code -1} is
+     * uncapped), the row past the cap answered by {@code onOverflow}. Stamps the row count on the
+     * statement's span.
+     */
+    public static SpannedReader<List<Map<String, Object>>> cappedRows(String dialect, int maxRows,
+            RowOverflow onOverflow) {
+        return (resultSet, span) -> {
+            ResultSetMetaData metaData = resultSet.getMetaData();
+            int columns = metaData.getColumnCount();
+            List<Map<String, Object>> rows = new ArrayList<>();
+            while (resultSet.next()) {
+                if (maxRows >= 0 && rows.size() >= maxRows) {
+                    onOverflow.onRowPastCap();
+                    break;
+                }
+                Map<String, Object> row = new LinkedHashMap<>();
+                for (int col = 1; col <= columns; col++) {
+                    row.put(io.tesseraql.core.dialect.ResultRows.label(dialect,
+                            metaData.getColumnLabel(col)),
+                            io.tesseraql.core.dialect.ResultRows.value(
+                                    resultSet.getObject(col)));
+                }
+                rows.add(row);
+            }
+            span.attribute("rowCount", rows.size());
+            return rows;
+        };
+    }
+
+    /**
      * Executes a caller-rendered statement and hands its {@link ResultSet} to {@code reader} —
      * the seam for executors whose reads stream or cap rather than materialize
      * (docs/contract-sql-execution.md slice 7).
      */
     public <T> T read(Connection connection, String sqlId, BoundSql bound,
             ResultSetReader<T> reader) throws SqlStatementException {
+        return read(connection, sqlId, bound, (resultSet, span) -> reader.read(resultSet));
+    }
+
+    /** As {@link #read(Connection, String, BoundSql, ResultSetReader)}, with the span in reach. */
+    public <T> T read(Connection connection, String sqlId, BoundSql bound,
+            SpannedReader<T> reader) throws SqlStatementException {
         Span span = started(sqlId, "query");
         try (PreparedStatement statement = prepare(connection, bound, List.of());
                 ResultSet resultSet = statement.executeQuery()) {
-            return reader.read(resultSet);
+            return reader.read(resultSet, span);
         } catch (SQLException ex) {
             SqlStatementException named = classified(sqlId, ex);
             span.recordError(named);
             throw named;
+        } catch (RuntimeException ex) {
+            // A caller-owned read refusing mid-read (a row cap, a shape check) is this
+            // statement's failure too; without this the span ends clean under a refusal.
+            span.recordError(ex);
+            throw ex;
+        } finally {
+            span.end();
+        }
+    }
+
+    /**
+     * Executes a framework-built read — plain SQL with positional values, no 2-way render —
+     * under the same bound, classification and span as everything else.
+     */
+    public <T> T read(Connection connection, String sqlId, String sql, List<Object> values,
+            SpannedReader<T> reader) throws SqlStatementException {
+        Span span = started(sqlId, "query");
+        try (PreparedStatement statement = prepareValues(connection, sql, values);
+                ResultSet resultSet = statement.executeQuery()) {
+            return reader.read(resultSet, span);
+        } catch (SQLException ex) {
+            SqlStatementException named = classified(sqlId, ex);
+            span.recordError(named);
+            throw named;
+        } catch (RuntimeException ex) {
+            span.recordError(ex);
+            throw ex;
         } finally {
             span.end();
         }
@@ -396,12 +478,27 @@ public final class SqlStatement {
     /** Executes a caller-rendered write and returns the rows it affected. */
     public int update(Connection connection, String sqlId, BoundSql bound)
             throws SqlStatementException {
+        return update(connection, sqlId, bound, List.of()).affectedRows();
+    }
+
+    /**
+     * Executes a caller-rendered write that declares the columns its store assigns
+     * (docs/contract-sql-execution.md structural decision 2).
+     */
+    public WriteResult update(Connection connection, String sqlId, BoundSql bound,
+            List<String> keys) throws SqlStatementException {
         Span span = started(sqlId, "update");
-        try (PreparedStatement statement = prepare(connection, bound, List.of())) {
+        try (PreparedStatement statement = prepare(connection, bound, keys)) {
+            // execute + getUpdateCount rather than executeUpdate: a statement can do work and
+            // hand back a result rather than a count, and a driver may refuse executeUpdate for
+            // it — DuckDB does, for DuckLake's maintenance calls. -1 is the honest "no count".
             statement.execute();
             int affected = statement.getUpdateCount();
+            Map<String, Object> generated = keys.isEmpty()
+                    ? Map.of()
+                    : readGeneratedKeys(statement, keys);
             span.attribute("affectedRows", affected);
-            return affected;
+            return new WriteResult(affected, generated);
         } catch (SQLException ex) {
             SqlStatementException named = classified(sqlId, ex);
             span.recordError(named);
@@ -418,13 +515,7 @@ public final class SqlStatement {
     public int update(Connection connection, String sqlId, String sql, List<Object> values)
             throws SqlStatementException {
         Span span = started(sqlId, "update");
-        try (PreparedStatement statement = connection.prepareStatement(sql)) {
-            if (timeoutSeconds > 0) {
-                statement.setQueryTimeout(timeoutSeconds);
-            }
-            for (int i = 0; i < values.size(); i++) {
-                statement.setObject(i + 1, values.get(i));
-            }
+        try (PreparedStatement statement = prepareValues(connection, sql, values)) {
             statement.execute();
             int affected = statement.getUpdateCount();
             span.attribute("affectedRows", affected);
@@ -435,6 +526,29 @@ public final class SqlStatement {
             throw named;
         } finally {
             span.end();
+        }
+    }
+
+    /** Prepares a plain statement, binds its positional values, and applies the bound. */
+    private PreparedStatement prepareValues(Connection connection, String sql, List<Object> values)
+            throws SQLException {
+        PreparedStatement statement = connection.prepareStatement(sql);
+        try {
+            if (timeoutSeconds > 0) {
+                statement.setQueryTimeout(timeoutSeconds);
+            }
+            for (int i = 0; i < values.size(); i++) {
+                statement.setObject(i + 1, values.get(i));
+            }
+            return statement;
+        } catch (SQLException | RuntimeException ex) {
+            // As in prepare(): a failure to bind must not leak the statement.
+            try {
+                statement.close();
+            } catch (SQLException closing) {
+                ex.addSuppressed(closing);
+            }
+            throw ex;
         }
     }
 

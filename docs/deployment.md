@@ -292,8 +292,8 @@ to run longer than a page.
 
 **SQL statement spans.** Every executed statement opens one `tesseraql.sql.execute` span
 carrying a `surface` attribute (`route` | `command` | `job` | `chunk` | `contract` |
-`transfer`), the statement's `sqlId` (a path for application SQL, the contract key for
-contract SQL), and its row or affected count. One span name answers "all SQL time in this
+`transfer` | `workflow` | `validation` | `decision`), the statement's `sqlId` (a path for
+application SQL, the contract key for contract SQL), and its row or affected count. One span name answers "all SQL time in this
 trace"; the `surface` attribute answers "why is sign-in slow" without a second name to
 enumerate.
 

@@ -40,8 +40,12 @@ final class DecisionCases {
             io.tesseraql.core.decision.DecisionTables.TableSource source = io.tesseraql.yaml.decision.DecisionSets
                     .compileSource(name, decision, vendor);
             try (Connection connection = context.dataSource().getConnection()) {
-                return List.of(source.evaluate(connection, test.params(),
-                        effectiveAt(test.decide().effectiveAt()), 0));
+                // An explicit timeoutSeconds(0): the suite runner has no configured bound
+                // (docs/contract-sql-execution.md slice 2).
+                return List.of(source.evaluate(
+                        io.tesseraql.core.sql.SqlStatement.onCallerConnections()
+                                .timeoutSeconds(0),
+                        connection, test.params(), effectiveAt(test.decide().effectiveAt())));
             } catch (java.sql.SQLException ex) {
                 throw new IllegalStateException("Decision lookup failed: " + ex.getMessage(), ex);
             }

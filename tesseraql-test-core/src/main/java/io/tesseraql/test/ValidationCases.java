@@ -44,12 +44,13 @@ final class ValidationCases {
         try (Connection connection = context.dataSource().getConnection()) {
             // The case's principal: (when declared) seeds the scope context and the ambient
             // principal.* paths, so a scoped rule renders exactly as it would on a request.
-            // An explicit 0: the suite runner has no configured bound, and a visible opt-out is
-            // the contract that replaced the unbounded-default overloads
+            // An explicit timeoutSeconds(0): the suite runner has no configured bound, and a
+            // visible opt-out is the contract that replaced the unbounded-default overloads
             // (docs/contract-sql-execution.md slice 2).
             return new ValidationRules(rules).evaluate(
                     SuiteContext.withPrincipal(test.params(), test.principal()), connection,
-                    context.scopeResolver(), 0,
+                    context.scopeResolver(),
+                    io.tesseraql.core.sql.SqlStatement.onCallerConnections().timeoutSeconds(0),
                     (rule, bound) -> recordRuleCoverage(rule, bound));
         } catch (java.sql.SQLException ex) {
             throw new IllegalStateException("Validation SQL failed: " + ex.getMessage(), ex);

@@ -1,6 +1,5 @@
 package io.tesseraql.compiler.binding;
 
-import io.tesseraql.core.dialect.Dialect;
 import io.tesseraql.core.dialect.SqlErrorKind;
 import io.tesseraql.core.dialect.SqlErrors;
 import io.tesseraql.core.error.TqlDomain;
@@ -30,10 +29,7 @@ import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Statement;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -122,7 +118,6 @@ public final class TransactionalCommandProcessor implements Step {
     private final ErrorsSpec errors;
     private final String appName;
     private final String dialect;
-    private final boolean generatedKeyColumns;
     private final WorkflowBinding workflow;
 
     /**
@@ -189,9 +184,6 @@ public final class TransactionalCommandProcessor implements Step {
         this.appName = appName;
         this.errors = declared.errors() == null ? new ErrorsSpec(null) : declared.errors();
         this.dialect = dialect;
-        this.generatedKeyColumns = Dialect.fromId(dialect)
-                .map(d -> d.capabilities().generatedKeyColumns())
-                .orElse(true);
         // A plain command needs a statement; a workflow transition may be state-only (the framework
         // advances the state and appends history with no author command of its own).
         if (declared.steps().isEmpty() && workflow == null) {
@@ -373,6 +365,19 @@ public final class TransactionalCommandProcessor implements Step {
             throw new TqlException(NO_STORE, "Outbox store is not configured");
         }
 
+        // The statement layer, per exchange (docs/contract-sql-execution.md structural
+        // decision 1): every statement in this transaction — steps, validation rules, decision
+        // lookups, the workflow pipeline — runs bounded, classified and spanned through the one
+        // primitive. Cheap immutable; the tracer is looked up per request.
+        io.tesseraql.core.sql.SqlStatement statements = io.tesseraql.core.sql.SqlStatement
+                .onCallerConnections()
+                .dialect(dialect)
+                .timeoutSeconds(defaultBounds == null ? 0 : defaultBounds.timeoutSeconds())
+                .surface("command")
+                .tracer(tracer(exchange))
+                .spanParent(exchange.getProperty(TesseraqlProperties.TRACE_CONTEXT,
+                        io.tesseraql.core.telemetry.SpanContext.class));
+
         try (Connection connection = dataSource.getConnection()) {
             boolean previousAutoCommit = connection.getAutoCommit();
             connection.setAutoCommit(false);
@@ -383,8 +388,7 @@ public final class TransactionalCommandProcessor implements Step {
                 // document.*), still before the guard consumes decision.*.
                 if (workflow == null && !decisions.isEmpty()) {
                     context.put(io.tesseraql.core.sql.AmbientBinds.DECISION,
-                            decisions.evaluate(context, connection,
-                                    defaultBounds == null ? 0 : defaultBounds.timeoutSeconds()));
+                            decisions.evaluate(context, connection, statements));
                 }
                 // A workflow transition (roadmap Phase 28) checks legality and the guard inside the
                 // transaction, before validation — the pipeline itself is the executor's
@@ -392,13 +396,12 @@ public final class TransactionalCommandProcessor implements Step {
                 // resolver, and the caller's identity.
                 io.tesseraql.yaml.workflow.TransitionExecutor.Session wf = workflow == null
                         ? null
-                        : beginWorkflow(exchange, connection, context);
+                        : beginWorkflow(exchange, connection, context, statements);
                 // Validation runs first, inside the transaction (roadmap Phase 19): expression
                 // rules against the bound context, SQL rules on the command's connection. A
                 // violation rejects the request before a single step writes.
                 List<Map<String, Object>> violations = validation.evaluate(context, connection,
-                        scopeResolver(exchange),
-                        defaultBounds == null ? 0 : defaultBounds.timeoutSeconds(), null);
+                        scopeResolver(exchange), statements, null);
                 if (!violations.isEmpty()) {
                     throw TqlException.builder(VALIDATION_FAILED)
                             .message("Route '" + routeId + "': validation rejected the input with "
@@ -425,7 +428,7 @@ public final class TransactionalCommandProcessor implements Step {
                     }
                     Map<String, Object> result = step.isSequence()
                             ? allocateSequence(exchange, connection, step)
-                            : executeSql(exchange, connection, step, context, audit);
+                            : executeSql(exchange, connection, statements, step, context, audit);
                     stepResults.put(step.name(), result);
                 }
                 // The documented row-authority contract (docs/approval-workflow.md "guards and
@@ -455,7 +458,8 @@ public final class TransactionalCommandProcessor implements Step {
                             wf.fromState(), workflow.transition().to(),
                             (String) audit.get("user"),
                             ((java.sql.Timestamp) audit.get("now")).toInstant(), null));
-                    applyTasks(exchange, connection, wf, context, (String) audit.get("user"));
+                    applyTasks(exchange, connection, statements, wf, context,
+                            (String) audit.get("user"));
                 }
                 if (outboxEvents != null) {
                     String eventId = store.insert(connection, outboxEvents.build(context));
@@ -528,8 +532,8 @@ public final class TransactionalCommandProcessor implements Step {
      * scope resolver, and the caller's identity; the executor owns the pipeline itself.
      */
     private io.tesseraql.yaml.workflow.TransitionExecutor.Session beginWorkflow(
-            Exchange exchange, Connection connection, Map<String, Object> context)
-            throws SQLException {
+            Exchange exchange, Connection connection, Map<String, Object> context,
+            io.tesseraql.core.sql.SqlStatement statements) throws SQLException {
         WorkflowStore store = workflow.transition().managed()
                 ? lookupWorkflowStore(exchange)
                 : workflow.appStore();
@@ -543,7 +547,7 @@ public final class TransactionalCommandProcessor implements Step {
                         lookupTaskStore(exchange), scopeResolver(exchange),
                         principal == null ? null : principal.subject(),
                         principal == null ? List.of() : principal.groups(),
-                        defaultBounds == null ? 0 : defaultBounds.timeoutSeconds(), null),
+                        statements, null),
                 docId, context);
     }
 
@@ -569,8 +573,8 @@ public final class TransactionalCommandProcessor implements Step {
      * state's tasks from the transition's {@code assign} contract (roadmap Phase 28 slice 2). Runs
      * inside the transaction, after the command, so the inbox change commits with the transition.
      */
-    @SuppressWarnings("unchecked")
     private void applyTasks(Exchange exchange, Connection connection,
+            io.tesseraql.core.sql.SqlStatement statements,
             io.tesseraql.yaml.workflow.TransitionExecutor.Session wf,
             Map<String, Object> context, String actor) throws SQLException {
         if (wf.taskStore() == null) {
@@ -594,29 +598,15 @@ public final class TransactionalCommandProcessor implements Step {
         params.put(AUDIT, context.get(AUDIT));
         BoundSql bound = SqlRenderer.render(workflow.assignNodes(), params,
                 scopeResolver(exchange), context);
-        io.tesseraql.core.telemetry.Span assignSpan = tracer(exchange)
-                .start("tesseraql.sql.execute", exchange.getProperty(
-                        TesseraqlProperties.TRACE_CONTEXT,
-                        io.tesseraql.core.telemetry.SpanContext.class))
-                .attribute("surface", "command")
-                .attribute("sqlId", "workflow.assign")
-                .attribute("mode", "query");
-        Map<String, Object> result;
-        try {
-            result = executeQuery(connection, bound, "Workflow assign",
-                    null, defaultBounds, dialect);
-            assignSpan.attribute("rowCount", result.get("rowCount"));
-        } catch (SQLException | RuntimeException ex) {
-            assignSpan.recordError(ex);
-            throw ex;
-        } finally {
-            assignSpan.end();
-        }
+        List<Map<String, Object>> rows = statements.read(connection, "workflow.assign", bound,
+                io.tesseraql.core.sql.SqlStatement.cappedRows(dialect,
+                        defaultBounds == null ? -1 : defaultBounds.maxRows(),
+                        overflow("Workflow assign", null, defaultBounds)));
         // The opened task's deadline (roadmap Phase 28 slice 3): the to state's `within`, if any.
         Instant dueAt = workflow.dueWithinMillis() == null
                 ? null
                 : Instant.now().plusMillis(workflow.dueWithinMillis());
-        for (Map<String, Object> row : (List<Map<String, Object>>) result.get("rows")) {
+        for (Map<String, Object> row : rows) {
             String assignee = row.get("assignee") == null
                     ? null
                     : String.valueOf(row.get("assignee"));
@@ -678,7 +668,8 @@ public final class TransactionalCommandProcessor implements Step {
         return result;
     }
 
-    private Map<String, Object> executeSql(Exchange exchange, Connection connection, Step step,
+    private Map<String, Object> executeSql(Exchange exchange, Connection connection,
+            io.tesseraql.core.sql.SqlStatement statements, Step step,
             Map<String, Object> context, Map<String, Object> audit) throws SQLException {
         // Params resolve against the live context, so a later step binds earlier results
         // (steps.header.keys.id) the same way it binds request fields.
@@ -697,29 +688,28 @@ public final class TransactionalCommandProcessor implements Step {
 
         long startNanos = System.nanoTime();
         long startedAt = System.currentTimeMillis();
-        // The write path was the one SQL path with no span (docs/contract-sql-execution.md
-        // structural decision 5): route reads, job steps and chunks each open one, and the
-        // statements that change data opened nothing.
-        io.tesseraql.core.telemetry.Span span = tracer(exchange)
-                .start("tesseraql.sql.execute", exchange.getProperty(
-                        TesseraqlProperties.TRACE_CONTEXT,
-                        io.tesseraql.core.telemetry.SpanContext.class))
-                .attribute("surface", "command")
-                .attribute("sqlId", step.sourcePath() == null ? step.name() : step.sourcePath())
-                .attribute("mode", step.mode());
-        Map<String, Object> result;
-        try {
-            result = "query".equals(step.mode())
-                    ? executeQuery(connection, bound, "Step '" + step.name() + "'",
-                            step.sourcePath(), step.bounds(), dialect)
-                    : executeUpdate(connection, bound, step);
-            span.attribute("query".equals(step.mode()) ? "rowCount" : "affectedRows",
-                    result.get("query".equals(step.mode()) ? "rowCount" : "affectedRows"));
-        } catch (SQLException | RuntimeException ex) {
-            span.recordError(ex);
-            throw ex;
-        } finally {
-            span.end();
+        // The statement itself — prepare, bind, bound, execute, read, classify, span — is the
+        // primitive's; this method keeps what is the command's: params, scoping, expectations,
+        // the per-step bound override, and the steps.<name> result shape.
+        io.tesseraql.core.sql.SqlStatement stepStatements = statements
+                .timeoutSeconds(step.bounds().timeoutSeconds());
+        String sqlId = step.sourcePath() == null ? step.name() : step.sourcePath();
+        Map<String, Object> result = new LinkedHashMap<>();
+        if ("query".equals(step.mode())) {
+            List<Map<String, Object>> rows = stepStatements.read(connection, sqlId, bound,
+                    io.tesseraql.core.sql.SqlStatement.cappedRows(dialect,
+                            step.bounds().maxRows(),
+                            overflow("Step '" + step.name() + "'", step.sourcePath(),
+                                    step.bounds())));
+            result.put("rows", rows);
+            result.put("rowCount", rows.size());
+        } else {
+            io.tesseraql.core.sql.SqlStatement.WriteResult written = stepStatements
+                    .update(connection, sqlId, bound, step.keys());
+            result.put("affectedRows", written.affectedRows());
+            if (!step.keys().isEmpty()) {
+                result.put("keys", written.keys());
+            }
         }
         recordExecution(exchange, step, result, startNanos, startedAt);
 
@@ -729,132 +719,33 @@ public final class TransactionalCommandProcessor implements Step {
         return result;
     }
 
+    /**
+     * The caller's half of a capped read: {@code onOverflow: warn} truncates with a log,
+     * anything else refuses with the same code the route-level SQL path raises.
+     */
+    private static io.tesseraql.core.sql.SqlStatement.RowOverflow overflow(String label,
+            String sourcePath, ExecutionBounds bounds) {
+        return () -> {
+            if (bounds != null && "warn".equals(bounds.onOverflow())) {
+                LOG.log(System.Logger.Level.WARNING, "{0} result truncated at maxRows={1}",
+                        label, bounds.maxRows());
+                return;
+            }
+            throw TqlException.builder(MATERIALIZATION_OVERFLOW)
+                    .message(label + " result exceeds maxRows="
+                            + (bounds == null ? -1 : bounds.maxRows())
+                            + " (narrow the statement, or raise"
+                            + " materialize.maxRows)")
+                    .source(sourcePath)
+                    .build();
+        };
+    }
+
     /** This runtime's tracer, bound beside the pools; a hand-built context is a no-op. */
     private static io.tesseraql.core.telemetry.Tracer tracer(Exchange exchange) {
         io.tesseraql.core.telemetry.Tracer bound = exchange.beans().lookup(
                 TesseraqlProperties.TRACER_BEAN, io.tesseraql.core.telemetry.Tracer.class);
         return bound != null ? bound : io.tesseraql.core.telemetry.NoopTracer.INSTANCE;
-    }
-
-    private Map<String, Object> executeUpdate(Connection connection, BoundSql bound, Step step)
-            throws SQLException {
-        try (PreparedStatement statement = prepare(connection, bound.sql(), step.keys())) {
-            applyTimeout(statement, step.bounds());
-            bind(statement, bound);
-            // execute, not executeUpdate: a statement can do work and hand back a result rather
-            // than a count, and a driver may refuse executeUpdate for it — DuckDB does, for
-            // DuckLake's maintenance calls. getUpdateCount answers -1 when there was a result
-            // set instead of a count, which is the honest answer to "how many rows changed".
-            statement.execute();
-            int affected = statement.getUpdateCount();
-            Map<String, Object> result = new LinkedHashMap<>();
-            result.put("affectedRows", affected);
-            if (!step.keys().isEmpty()) {
-                result.put("keys", readGeneratedKeys(statement, step.keys()));
-            }
-            return result;
-        }
-    }
-
-    private PreparedStatement prepare(Connection connection, String sql, List<String> keys)
-            throws SQLException {
-        if (keys.isEmpty()) {
-            return connection.prepareStatement(sql);
-        }
-        // Per dialect capability: PostgreSQL/Oracle honor requested key columns; MySQL and
-        // SQL Server only hand back the auto-increment/identity value.
-        return generatedKeyColumns
-                ? connection.prepareStatement(sql, keys.toArray(String[]::new))
-                : connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
-    }
-
-    /** Reads the first generated-key row, mapping declared names by label, then by position. */
-    private static Map<String, Object> readGeneratedKeys(PreparedStatement statement,
-            List<String> keys) throws SQLException {
-        Map<String, Object> values = new LinkedHashMap<>();
-        try (ResultSet resultSet = statement.getGeneratedKeys()) {
-            if (!resultSet.next()) {
-                return values;
-            }
-            java.sql.ResultSetMetaData metaData = resultSet.getMetaData();
-            Map<String, Integer> byLabel = new LinkedHashMap<>();
-            for (int col = 1; col <= metaData.getColumnCount(); col++) {
-                byLabel.put(metaData.getColumnLabel(col).toLowerCase(Locale.ROOT), col);
-            }
-            for (int i = 0; i < keys.size(); i++) {
-                String key = keys.get(i);
-                Integer column = byLabel.get(key.toLowerCase(Locale.ROOT));
-                if (column == null && i < metaData.getColumnCount()) {
-                    column = i + 1;
-                }
-                if (column != null) {
-                    // The lookup stays case-insensitive: it matches a *declared* key, not a
-                    // label a binding will read, so dialect normalization does not apply here.
-                    values.put(key,
-                            io.tesseraql.core.dialect.ResultRows.value(
-                                    resultSet.getObject(column)));
-                }
-            }
-        }
-        return values;
-    }
-
-    private static Map<String, Object> executeQuery(Connection connection, BoundSql bound,
-            String label, String sourcePath, ExecutionBounds bounds, String dialect)
-            throws SQLException {
-        try (PreparedStatement statement = connection.prepareStatement(bound.sql())) {
-            applyTimeout(statement, bounds);
-            bind(statement, bound);
-            try (ResultSet resultSet = statement.executeQuery()) {
-                java.sql.ResultSetMetaData metaData = resultSet.getMetaData();
-                List<Map<String, Object>> rows = new ArrayList<>();
-                int maxRows = bounds == null ? -1 : bounds.maxRows();
-                boolean warn = bounds != null && "warn".equals(bounds.onOverflow());
-                while (resultSet.next()) {
-                    if (maxRows >= 0 && rows.size() >= maxRows) {
-                        if (warn) {
-                            LOG.log(System.Logger.Level.WARNING,
-                                    "{0} result truncated at maxRows={1}",
-                                    label, maxRows);
-                            break;
-                        }
-                        throw TqlException.builder(MATERIALIZATION_OVERFLOW)
-                                .message(label + " result exceeds maxRows=" + maxRows
-                                        + " (narrow the statement, or raise"
-                                        + " materialize.maxRows)")
-                                .source(sourcePath)
-                                .build();
-                    }
-                    Map<String, Object> row = new LinkedHashMap<>();
-                    for (int col = 1; col <= metaData.getColumnCount(); col++) {
-                        row.put(io.tesseraql.core.dialect.ResultRows.label(dialect,
-                                metaData.getColumnLabel(col)),
-                                io.tesseraql.core.dialect.ResultRows.value(
-                                        resultSet.getObject(col)));
-                    }
-                    rows.add(row);
-                }
-                Map<String, Object> result = new LinkedHashMap<>();
-                result.put("rows", rows);
-                result.put("rowCount", rows.size());
-                return result;
-            }
-        }
-    }
-
-    /** Bounds one statement, so a runaway query cannot pin this transaction's connection. */
-    private static void applyTimeout(PreparedStatement statement, ExecutionBounds bounds)
-            throws SQLException {
-        int seconds = bounds == null ? 0 : bounds.timeoutSeconds();
-        if (seconds > 0) {
-            statement.setQueryTimeout(seconds);
-        }
-    }
-
-    private static void bind(PreparedStatement statement, BoundSql bound) throws SQLException {
-        for (int i = 0; i < bound.parameters().size(); i++) {
-            statement.setObject(i + 1, bound.parameters().get(i).value());
-        }
     }
 
     /** Turns a row-count mismatch into a conflict (or error) instead of a silent lost update. */
