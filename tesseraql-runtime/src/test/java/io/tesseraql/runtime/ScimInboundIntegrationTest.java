@@ -429,6 +429,7 @@ class ScimInboundIntegrationTest {
                         nickName: nickname
                     users:
                       create: scim/create-user.sql
+                      keys: [id]
                       findById: scim/find-user.sql
                       list: scim/list-users.sql
                       replace: scim/replace-user.sql
@@ -438,6 +439,7 @@ class ScimInboundIntegrationTest {
                     groups:
                       enabled: true
                       create: scim/create-group.sql
+                      keys: [id]
                       findById: scim/find-group.sql
                       list: scim/list-groups.sql
                       replace: scim/replace-group.sql
@@ -461,9 +463,6 @@ class ScimInboundIntegrationTest {
                         insert into scim_users (user_name, given_name, family_name, email, active, external_id)
                         values (/* userName */ 'u', /* givenName */ 'g', /* familyName */ 'f',
                                 /* email */ 'e', /* active */ true, /* externalId */ 'x')
-                        returning id, user_name as "userName", given_name as "givenName",
-                                  family_name as "familyName", email as "email", active as "active",
-                                  external_id as "externalId"
                         """);
         Files.writeString(scim.resolve("find-user.sql"), """
                 select id, user_name as "userName", given_name as "givenName",
@@ -484,12 +483,9 @@ class ScimInboundIntegrationTest {
                                family_name = /* familyName */ 'f', email = /* email */ 'e',
                                active = /* active */ true, external_id = /* externalId */ 'x'
                         where id::text = /* id */ '0'
-                        returning id, user_name as "userName", given_name as "givenName",
-                                  family_name as "familyName", email as "email", active as "active",
-                                  external_id as "externalId"
                         """);
         Files.writeString(scim.resolve("delete-user.sql"),
-                "delete from scim_users where id::text = /* id */ '0' returning id\n");
+                "delete from scim_users where id::text = /* id */ '0'\n");
         Files.writeString(scim.resolve("find-user-by-name.sql"), """
                 select id, user_name as "userName", given_name as "givenName",
                        family_name as "familyName", email as "email", active as "active",
@@ -501,7 +497,6 @@ class ScimInboundIntegrationTest {
         Files.writeString(scim.resolve("create-group.sql"), """
                 insert into scim_groups (display_name, external_id)
                 values (/* displayName */ 'g', /* externalId */ 'x')
-                returning id, display_name as "displayName", external_id as "externalId"
                 """);
         Files.writeString(scim.resolve("find-group.sql"), """
                 select id, display_name as "displayName", external_id as "externalId"
@@ -516,10 +511,9 @@ class ScimInboundIntegrationTest {
                 update scim_groups set display_name = /* displayName */ 'g',
                        external_id = /* externalId */ 'x'
                 where id::text = /* id */ '0'
-                returning id, display_name as "displayName", external_id as "externalId"
                 """);
         Files.writeString(scim.resolve("delete-group.sql"),
-                "delete from scim_groups where id::text = /* id */ '0' returning id\n");
+                "delete from scim_groups where id::text = /* id */ '0'\n");
         Files.writeString(scim.resolve("list-members.sql"), """
                 select member_id as "value" from scim_group_members
                 where group_id = cast(/* groupId */ '0' as int) order by member_id

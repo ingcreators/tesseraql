@@ -37,12 +37,29 @@ public final class ScimGroupService {
         return this;
     }
 
-    /** Creates a group (and any members supplied), returning the persisted resource. */
+    /**
+     * The dialect whose driver capabilities steer the generated-key JDBC call
+     * (docs/contract-sql-execution.md structural decision 2). Labels stay raw regardless — SCIM's
+     * aliases are quoted camelCase, and a quoted alias is not what label folding is for.
+     */
+    public ScimGroupService dialect(String dialect) {
+        this.statements = statements.dialect(dialect).rawLabels();
+        return this;
+    }
+
+    /**
+     * Creates a group (and any members supplied), returning the persisted resource. The create is
+     * a plain write (docs/contract-sql-execution.md structural decision 2): the assigned id comes
+     * from the contract's declared key when it declares one, and from the id the caller supplied
+     * when it does not.
+     */
     public ScimGroup create(ScimGroup group) {
         try {
-            Map<String, Object> row = queryOne("create", contract.createSql(),
-                    ScimGroupMapper.toParams(group));
-            String id = row == null ? group.id() : string(row.get("id"));
+            ContractStatement.WriteResult written = statements.update("scim.groups.create",
+                    contract.createSql(), ScimGroupMapper.toParams(group), contract.keys());
+            String id = written.keys().isEmpty()
+                    ? group.id()
+                    : string(written.keys().values().iterator().next());
             for (ScimGroup.Member member : group.members()) {
                 addMember(id, member.value());
             }
@@ -101,8 +118,9 @@ public final class ScimGroupService {
         try {
             Map<String, Object> params = ScimGroupMapper.toParams(group);
             params.put("id", id);
-            Map<String, Object> row = queryOne("replace", contract.replaceSql(), params);
-            if (row == null) {
+            // Zero affected rows is the 404 — what the returned row was standing in for when
+            // the contract had to be `update … returning`.
+            if (statements.update("scim.groups.replace", contract.replaceSql(), params) == 0) {
                 throw new ScimException(404, null, "Group not found: " + id);
             }
             reconcileMembers(id, group.members());
@@ -132,7 +150,8 @@ public final class ScimGroupService {
     /** Deletes a group by id; throws 404 when it does not exist. */
     public void delete(String id) {
         try {
-            if (queryOne("delete", contract.deleteSql(), Map.of("id", id)) == null) {
+            if (statements.update("scim.groups.delete", contract.deleteSql(),
+                    Map.of("id", id)) == 0) {
                 throw new ScimException(404, null, "Group not found: " + id);
             }
         } catch (SQLException ex) {

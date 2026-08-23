@@ -128,6 +128,61 @@ class ContractStatementTest {
                 .queryOne("contract", SELECT, Map.of("id", "u1"))).isNull();
     }
 
+    @Test
+    void aDeclaredKeyReachesTheDriverAsColumnNamesWhereTheDialectHonoursThem()
+            throws ContractSqlException {
+        FakeDatabase database = new FakeDatabase(List.of("id"), List.of(7));
+
+        ContractStatement.WriteResult written = ContractStatement.on(database.dataSource())
+                .dialect("postgres")
+                .update("scim.users.create", "insert into t (name) values (/*name*/'x')",
+                        Map.of("name", "Anne"), List.of("id"));
+
+        assertThat(written.affectedRows()).isEqualTo(1);
+        assertThat(written.keys()).containsEntry("id", 7);
+        // PostgreSQL honours requested key columns, so the prepare names them.
+        assertThat(database.calls)
+                .anyMatch(call -> call.startsWith("prepareStatement(") && call.endsWith(",[id])"));
+    }
+
+    @Test
+    void aDialectWithoutKeyColumnsFallsBackToTheDriversGeneratedKeys()
+            throws ContractSqlException {
+        FakeDatabase database = new FakeDatabase(List.of("GENERATED_KEY"), List.of(7));
+
+        ContractStatement.WriteResult written = ContractStatement.on(database.dataSource())
+                .dialect("mysql")
+                .update("scim.users.create", "insert into t (name) values (/*name*/'x')",
+                        Map.of("name", "Anne"), List.of("id"));
+
+        // MySQL hands back only the identity value; the declared name maps by position.
+        assertThat(written.keys()).containsEntry("id", 7);
+        assertThat(database.calls)
+                .anyMatch(call -> call.startsWith("prepareStatement(") && call.endsWith(",1)"));
+    }
+
+    @Test
+    void aWriteDeclaringNoKeysAsksTheDriverForNone() throws ContractSqlException {
+        FakeDatabase database = new FakeDatabase(List.of(), List.of());
+
+        int affected = ContractStatement.on(database.dataSource())
+                .update("contract", "delete from t where id = /*id*/'x'", Map.of("id", "u1"));
+
+        assertThat(affected).isEqualTo(1);
+        assertThat(database.calls).noneMatch(call -> call.equals("getGeneratedKeys"));
+    }
+
+    @Test
+    void rawLabelsKeepTheDriversLabelsEvenUnderADialect() throws ContractSqlException {
+        FakeDatabase upper = new FakeDatabase(List.of("USER_ID"), List.of("u1"));
+
+        // The dialect steers the generated-key branch; the declared label policy stays raw
+        // (docs/contract-sql-execution.md structural decision 7).
+        assertThat(ContractStatement.on(upper.dataSource()).dialect("oracle").rawLabels()
+                .queryOne("contract", SELECT, Map.of("id", "u1")))
+                .containsOnlyKeys("USER_ID");
+    }
+
     /** A JDBC stack that records what was asked of it and answers one row (or the failure set). */
     private static final class FakeDatabase implements InvocationHandler {
 
@@ -159,6 +214,7 @@ class ContractStatementTest {
                 case "prepareStatement" -> proxy(PreparedStatement.class);
                 case "executeQuery" -> fail(proxy(ResultSet.class));
                 case "executeUpdate" -> fail(1);
+                case "getGeneratedKeys" -> proxy(ResultSet.class);
                 case "getMetaData" -> proxy(ResultSetMetaData.class);
                 case "getColumnCount" -> labels.size();
                 case "getColumnLabel" -> labels.get((Integer) args[0] - 1);
@@ -184,7 +240,11 @@ class ContractStatementTest {
         private static String join(Object[] args) {
             StringBuilder text = new StringBuilder();
             for (Object arg : args) {
-                text.append(text.isEmpty() ? "" : ",").append(arg);
+                text.append(text.isEmpty() ? "" : ",")
+                        .append(arg instanceof Object[] array
+                                ? "[" + String.join("|", java.util.Arrays.stream(array)
+                                        .map(String::valueOf).toList()) + "]"
+                                : arg);
             }
             return text.toString();
         }

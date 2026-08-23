@@ -156,6 +156,23 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **BREAKING: a SCIM contract is plain SQL, and the store's assigned id is a declared key**
+  (docs/contract-sql-execution.md structural decision 2, slice 3). A SCIM create had to be
+  `insert … returning` so the service could learn the assigned id, and replace/delete had to
+  return a row to tell "changed" from "absent" — none of which exists in MySQL or SQL Server,
+  so provisioning documented as schema-agnostic was in practice PostgreSQL-and-Oracle only.
+  `ContractStatement` now takes declared key columns the way a command step declares
+  `sql.keys:` — named columns where the dialect's driver honours them, the driver's generated
+  keys where only the identity value comes back, the same per-dialect branch (Oracle's ROWID
+  trap included) the command processor has always had. A deployment declares
+  `tesseraql.scim.users.keys` / `tesseraql.scim.groups.keys` when the store assigns the id and
+  drops the three `returning` clauses: create is a plain insert, **zero affected rows is the
+  404** for replace and delete, and the persisted resource is re-read through the contract's
+  own `findById`. A store whose id the caller supplies declares no keys and changes nothing
+  else. Result labels stay raw for SCIM under the new declared label policy
+  (`ContractStatement.rawLabels()`), because a quoted camelCase alias is not what Oracle's
+  folding is for — the dialect now steers only the generated-key branch.
+
 - **No declared statement runs unbounded** (docs/contract-sql-execution.md slice 2). Slice 1
   bounded contract SQL; measuring the whole tree found the identical hole elsewhere. The
   workflow transition engine ran an application's guard SQL, its stamp UPDATE and its document

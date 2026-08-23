@@ -36,11 +36,35 @@ public final class ScimUserService {
         return this;
     }
 
-    /** Creates a user, returning the persisted resource (with its assigned id). */
+    /**
+     * The dialect whose driver capabilities steer the generated-key JDBC call
+     * (docs/contract-sql-execution.md structural decision 2). Labels stay raw regardless — SCIM's
+     * aliases are quoted camelCase, and a quoted alias is not what label folding is for.
+     */
+    public ScimUserService dialect(String dialect) {
+        this.statements = statements.dialect(dialect).rawLabels();
+        return this;
+    }
+
+    /**
+     * Creates a user, returning the persisted resource (with its assigned id). The create is a
+     * plain write (docs/contract-sql-execution.md structural decision 2): the assigned id comes
+     * from the contract's declared key when it declares one, and from the id the caller supplied
+     * when it does not — {@code insert … returning} is no longer required, which is what made
+     * the contract PostgreSQL-and-Oracle-only.
+     */
     public ScimUser create(ScimUser user) {
         try {
-            Map<String, Object> row = queryOne("create", contract.createSql(),
-                    ScimUserMapper.toParams(user));
+            ContractStatement.WriteResult written = statements.update("scim.users.create",
+                    contract.createSql(), ScimUserMapper.toParams(user), contract.keys());
+            String id = written.keys().isEmpty()
+                    ? user.id()
+                    : string(written.keys().values().iterator().next());
+            if (id == null) {
+                return user;
+            }
+            Map<String, Object> row = queryOne("findById", contract.findByIdSql(),
+                    Map.of("id", id));
             return row == null ? user : ScimUserMapper.fromRow(row);
         } catch (SQLException ex) {
             if (SqlErrors.isUniqueViolation(ex)) {
@@ -67,7 +91,13 @@ public final class ScimUserService {
         try {
             Map<String, Object> params = ScimUserMapper.toParams(user);
             params.put("id", id);
-            Map<String, Object> row = queryOne("replace", contract.replaceSql(), params);
+            // Zero affected rows is the 404 — what the returned row was standing in for when
+            // the contract had to be `update … returning`.
+            if (statements.update("scim.users.replace", contract.replaceSql(), params) == 0) {
+                throw new ScimException(404, null, "User not found: " + id);
+            }
+            Map<String, Object> row = queryOne("findById", contract.findByIdSql(),
+                    Map.of("id", id));
             if (row == null) {
                 throw new ScimException(404, null, "User not found: " + id);
             }
@@ -91,7 +121,8 @@ public final class ScimUserService {
     /** Deletes a user by id; throws 404 when it does not exist. */
     public void delete(String id) {
         try {
-            if (queryOne("delete", contract.deleteSql(), Map.of("id", id)) == null) {
+            if (statements.update("scim.users.delete", contract.deleteSql(),
+                    Map.of("id", id)) == 0) {
                 throw new ScimException(404, null, "User not found: " + id);
             }
         } catch (SQLException ex) {
@@ -158,5 +189,9 @@ public final class ScimUserService {
     private List<Map<String, Object>> queryAll(String name, String sql, Map<String, Object> params)
             throws SQLException {
         return statements.query("scim.users." + name, sql, params);
+    }
+
+    private static String string(Object value) {
+        return value == null ? null : String.valueOf(value);
     }
 }
