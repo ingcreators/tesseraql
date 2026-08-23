@@ -51,7 +51,7 @@ public final class OpenApiGenerator {
         Map<String, Object> info = new LinkedHashMap<>();
         info.put("title",
                 manifest.config().getString("tesseraql.app.name").orElse("tesseraql-app"));
-        info.put("version", manifest.config().getString("app.version").orElse("1.0.0"));
+        info.put("version", manifest.config().getString("tesseraql.app.version").orElse("1.0.0"));
         doc.put("info", info);
 
         // An application served under a prefix answers at <base>/users, not /users

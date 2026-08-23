@@ -22,16 +22,25 @@ public final class Durations {
 
     /** Parses a duration string such as {@code 5s} or {@code 100ms}. */
     public static Duration parse(String value) {
+        return parse(value, null);
+    }
+
+    /**
+     * Parses like {@link #parse(String)}, naming {@code subject} — the configuration key or
+     * setting being read — in the refusal, so a boot failure says which key to fix.
+     */
+    public static Duration parse(String value, String subject) {
         String trimmed = value == null ? "" : value.trim();
         if (trimmed.isEmpty()) {
-            throw new TqlException(INVALID, "Empty duration");
+            throw new TqlException(INVALID, prefix(subject) + "Empty duration");
         }
         int unitStart = 0;
         while (unitStart < trimmed.length() && Character.isDigit(trimmed.charAt(unitStart))) {
             unitStart++;
         }
         if (unitStart == 0) {
-            throw new TqlException(INVALID, "Duration must start with a number: " + value);
+            throw new TqlException(INVALID,
+                    prefix(subject) + "Duration must start with a number: " + value);
         }
         long amount = Long.parseLong(trimmed.substring(0, unitStart));
         String unit = trimmed.substring(unitStart).toLowerCase();
@@ -41,9 +50,13 @@ public final class Durations {
             case "m" -> Duration.ofMinutes(amount);
             case "h" -> Duration.ofHours(amount);
             case "d" -> Duration.ofDays(amount);
-            default ->
-                throw new TqlException(INVALID, "Unknown duration unit '" + unit + "' in " + value);
+            default -> throw new TqlException(INVALID,
+                    prefix(subject) + "Unknown duration unit '" + unit + "' in " + value);
         };
+    }
+
+    private static String prefix(String subject) {
+        return subject == null ? "" : subject + ": ";
     }
 
     /** Parses a duration to milliseconds. */

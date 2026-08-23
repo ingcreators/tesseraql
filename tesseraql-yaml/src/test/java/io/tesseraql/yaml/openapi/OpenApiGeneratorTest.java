@@ -108,6 +108,40 @@ class OpenApiGeneratorTest {
                 io.tesseraql.yaml.manifest.ManifestIndex.of(java.util.Map.of(), "test"));
     }
 
+    /**
+     * The version comes from {@code tesseraql.app.version} — the key every other reader uses.
+     * It read the unprefixed {@code app.version} for a while, so every generated document
+     * claimed 1.0.0 whatever the application declared.
+     */
+    @Test
+    void theInfoVersionIsTheDeclaredApplicationVersion() {
+        io.tesseraql.yaml.SimpleYamlParser parser = new io.tesseraql.yaml.SimpleYamlParser();
+        Path home = Path.of("/app").toAbsolutePath().normalize();
+        var route = new io.tesseraql.yaml.manifest.RouteFile("get", "/orders",
+                home.resolve("web/orders/get.yml"), parser.parseRoute("""
+                        version: tesseraql/v1
+                        id: orders.list
+                        kind: route
+                        recipe: query-json
+                        sources:
+                          main:
+                            sql:
+                              file: list.sql
+                        """, "list"));
+        var manifest = new AppManifest(home,
+                new io.tesseraql.yaml.config.AppConfig(java.util.Map.of("tesseraql",
+                        java.util.Map.of("app", java.util.Map.of("version", "2.3.1"))),
+                        name -> null),
+                java.util.List.of(route), java.util.List.of(), java.util.List.of(),
+                java.util.List.of(), java.util.List.of(), java.util.List.of(),
+                java.util.List.of(), java.util.List.of(), java.util.List.of(),
+                java.util.List.of(), java.util.List.of(), java.util.List.of(),
+                io.tesseraql.yaml.manifest.ManifestIndex.of(java.util.Map.of(), "test"));
+
+        assertThat(new OpenApiGenerator().toJson(manifest))
+                .contains("\"version\" : \"2.3.1\"");
+    }
+
     @Test
     void recipesShapeResponses() {
         String json = new OpenApiGenerator().toJson(exampleApp());

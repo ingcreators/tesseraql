@@ -22,4 +22,12 @@ class DurationsTest {
         assertThatThrownBy(() -> Durations.parse("10x")).isInstanceOf(TqlException.class);
         assertThatThrownBy(() -> Durations.parse("")).isInstanceOf(TqlException.class);
     }
+
+    /** A boot refusal must name the key to fix, not just the value that broke. */
+    @Test
+    void theSubjectNamesTheKeyInTheRefusal() {
+        assertThatThrownBy(() -> Durations.parse("PT30S", "stack.reconcile.interval"))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("stack.reconcile.interval");
+    }
 }

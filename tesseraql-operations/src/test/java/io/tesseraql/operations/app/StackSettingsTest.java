@@ -15,6 +15,35 @@ import org.junit.jupiter.api.io.TempDir;
  */
 class StackSettingsTest {
 
+    /**
+     * The interval takes the framework's short duration form — {@code 30s}, {@code 5m}, or a
+     * plain number of seconds — like every other duration key; it used to require ISO-8601,
+     * the one duration key in the tree with its own grammar. Unparseable still yields empty
+     * (the caller's default), the recorded safe direction for a safety net.
+     */
+    @Test
+    void theReconcileIntervalSpeaksTheFrameworkDurationForm(@TempDir Path dir)
+            throws IOException {
+        assertThat(withInterval(dir, "30s").reconcileInterval())
+                .contains(java.time.Duration.ofSeconds(30));
+        assertThat(withInterval(dir, "5m").reconcileInterval())
+                .contains(java.time.Duration.ofMinutes(5));
+        assertThat(withInterval(dir, "45").reconcileInterval())
+                .contains(java.time.Duration.ofSeconds(45));
+        assertThat(withInterval(dir, "0").reconcileInterval())
+                .contains(java.time.Duration.ZERO);
+        assertThat(withInterval(dir, "not-a-duration").reconcileInterval()).isEmpty();
+    }
+
+    private static StackSettings withInterval(Path dir, String interval) throws IOException {
+        Files.writeString(dir.resolve(StackSettings.FILE_NAME), """
+                stack:
+                  reconcile:
+                    interval: "%s"
+                """.formatted(interval));
+        return StackSettings.load(dir);
+    }
+
     @Test
     void theFrameworkDatasourceIsACoordinateNotAName(@TempDir Path dir) throws IOException {
         Files.writeString(dir.resolve(StackSettings.FILE_NAME), """

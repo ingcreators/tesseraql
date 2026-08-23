@@ -2,7 +2,6 @@ package io.tesseraql.yaml.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.util.List;
-import java.util.Locale;
 
 /**
  * A {@code kind: attachment} document under {@code attachments/} (roadmap Phase 30 — attachments and
@@ -59,29 +58,18 @@ public record AttachmentDefinition(String version, String id, String kind, Strin
             return (semicolon < 0 ? contentType : contentType.substring(0, semicolon)).trim();
         }
 
-        /** Parses a size like {@code 25MB} / {@code 1048576} into bytes; {@code -1} when invalid. */
+        /**
+         * Parses a size like {@code 25MB} / {@code 1048576} into bytes; {@code -1} when absent
+         * or invalid. The lint reports the {@code -1}; configuration keys that must refuse
+         * instead use {@link io.tesseraql.core.util.Sizes} directly.
+         */
         public static long parseSize(String text) {
             if (text == null || text.isBlank()) {
                 return -1;
             }
-            String value = text.trim().toUpperCase(Locale.ROOT);
-            long multiplier = 1;
-            if (value.endsWith("KB")) {
-                multiplier = 1024L;
-                value = value.substring(0, value.length() - 2);
-            } else if (value.endsWith("MB")) {
-                multiplier = 1024L * 1024L;
-                value = value.substring(0, value.length() - 2);
-            } else if (value.endsWith("GB")) {
-                multiplier = 1024L * 1024L * 1024L;
-                value = value.substring(0, value.length() - 2);
-            } else if (value.endsWith("B")) {
-                value = value.substring(0, value.length() - 1);
-            }
             try {
-                long number = Long.parseLong(value.trim());
-                return number < 0 ? -1 : number * multiplier;
-            } catch (NumberFormatException ex) {
+                return io.tesseraql.core.util.Sizes.parseBytes(text);
+            } catch (io.tesseraql.core.error.TqlException invalid) {
                 return -1;
             }
         }
