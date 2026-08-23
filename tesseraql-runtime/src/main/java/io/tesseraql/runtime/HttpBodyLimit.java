@@ -45,11 +45,21 @@ final class HttpBodyLimit {
     private static void refuse(RoutingContext ctx, long maxBodyBytes) {
         HttpServerRequest request = ctx.request();
         if (!request.isEnded()) {
-            // Discard the rest of the upload, up to one more limit's worth; the body handler
-            // stopped reading when it refused, and an unread stream is the wedge.
+            // Discard the rest of the upload; the body handler stopped reading when it
+            // refused, and an unread stream is the wedge. The bound is what the client
+            // DECLARED it still owes, not a flat limit's worth: the body handler refuses a
+            // declared over-limit length before reading any of it, so the remainder is the
+            // whole declaration — a flat bound closed the connection mid-upload, and closing
+            // with unread data is a TCP reset that can destroy the 413 already sent (the
+            // 61-second gateway stall and the broken-pipe flake were both that reset winning
+            // the race). A liar — a stream still going past its own declaration — and an
+            // undeclared (chunked) stream keep the flat bound; politeness covers what was
+            // declared, never more.
             AtomicLong drained = new AtomicLong();
+            long declaredRemaining = declaredLength(request) - request.bytesRead();
+            long bound = Math.max(Math.max(maxBodyBytes, 0), declaredRemaining);
             request.handler(remaining -> {
-                if (drained.addAndGet(remaining.length()) > Math.max(maxBodyBytes, 0)) {
+                if (drained.addAndGet(remaining.length()) > bound) {
                     request.connection().close();
                 }
             });
@@ -70,5 +80,18 @@ final class HttpBodyLimit {
                 .end(io.tesseraql.core.error.ErrorEnvelope.json(BODY_TOO_LARGE,
                         "The request body exceeds tesseraql.http.maxBodyBytes ("
                                 + maxBodyBytes + " bytes)"));
+    }
+
+    /** The request's declared {@code Content-Length}, or {@code -1} when absent or malformed. */
+    private static long declaredLength(HttpServerRequest request) {
+        String declared = request.getHeader(io.vertx.core.http.HttpHeaders.CONTENT_LENGTH);
+        if (declared == null) {
+            return -1;
+        }
+        try {
+            return Long.parseLong(declared.trim());
+        } catch (NumberFormatException malformed) {
+            return -1;
+        }
     }
 }

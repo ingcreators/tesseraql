@@ -213,6 +213,41 @@ class MultiAppGatewayDifferentialTest {
         return post("/" + APP + "/api/measure", "{\"blob\":\"" + "x".repeat(bytes) + "\"}");
     }
 
+    /**
+     * Forces the timing the stall needed: the whole declared body is written before the first
+     * response byte is read, so the drain must cover the full declaration for the 413 to
+     * survive. Vert.x 5's body handler refuses a declared over-limit length <em>before reading
+     * any of it</em>, so a flat one-limit drain bound was always exceeded here — the server
+     * closed with unread data, and that close is a TCP reset that destroys the 413 already in
+     * flight (the 61-second gateway stall and the broken-pipe flake were this race, surfacing
+     * only under CI-shaped load). Written raw, because every HTTP client reads concurrently
+     * and would sometimes win the race this test exists to remove.
+     */
+    @Test
+    void theRefusalArrivesEvenWhenTheWholeBodyWasAlreadySent() throws Exception {
+        // Big enough that no loopback kernel buffer can swallow the remainder: a bound that
+        // closes early is then guaranteed to close with data still unread, which is the reset.
+        byte[] body = ("{\"blob\":\"" + "x".repeat(32 * 1024 * 1024) + "\"}")
+                .getBytes(StandardCharsets.UTF_8);
+        try (java.net.Socket socket = new java.net.Socket("localhost",
+                URI.create(direct).getPort())) {
+            socket.setSoTimeout(30_000);
+            java.io.OutputStream out = socket.getOutputStream();
+            out.write(("POST /" + APP + "/api/measure HTTP/1.1\r\n"
+                    + "Host: localhost\r\n"
+                    + "Content-Type: application/json\r\n"
+                    + "Content-Length: " + body.length + "\r\n"
+                    + "Connection: close\r\n\r\n").getBytes(StandardCharsets.UTF_8));
+            out.write(body);
+            out.flush();
+            String answer = new String(socket.getInputStream().readAllBytes(),
+                    StandardCharsets.UTF_8);
+            assertThat(answer).contains("413")
+                    .contains("TQL-SEC-4150")
+                    .contains("tesseraql.http.maxBodyBytes");
+        }
+    }
+
     @Test
     void headAnswersIdenticallyThroughTheGateway() throws Exception {
         assertSame(head("/" + APP + "/api/items"));
