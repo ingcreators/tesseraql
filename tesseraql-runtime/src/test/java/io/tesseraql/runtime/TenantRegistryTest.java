@@ -50,7 +50,9 @@ class TenantRegistryTest {
                 new Class<?>[]{DataSource.class}, new Object() {
                     private boolean rowRead;
 
-                    @SuppressWarnings("unused")
+                    // Reached only through the ::handle method references below; no
+                    // suppression, because the one analyzer that ever flagged it (JDT)
+                    // nags about the suppression token itself under default options.
                     Object handle(Object proxy, Method method, Object[] args) {
                         return switch (method.getName()) {
                             case "getConnection" -> proxy(Connection.class);
