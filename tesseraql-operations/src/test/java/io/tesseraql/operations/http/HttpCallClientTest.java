@@ -169,6 +169,76 @@ class HttpCallClientTest {
         assertThat(lastHeaders.getFirst("Content-Type")).isEqualTo("application/scim+json");
     }
 
+    @Test
+    void exchangeCountsServerErrorsTowardTheBreaker() {
+        responseStatus = 500;
+        HttpCallClient client = client(Map.of(
+                "allowedHosts", List.of("localhost"),
+                "circuitBreaker", Map.of("failureThreshold", 2, "openDuration", "60s")));
+
+        assertThat(client.exchange(call("GET", "/x"), null, Map.of()).status()).isEqualTo(500);
+        assertThat(client.exchange(call("GET", "/x"), null, Map.of()).status()).isEqualTo(500);
+        int hitsBeforeOpen = hits.get();
+
+        // The breaker is now open: the raw form fails fast without reaching the server.
+        assertThatThrownBy(() -> client.exchange(call("GET", "/x"), null, Map.of()))
+                .hasMessageContaining("TQL-BATCH-5306");
+        assertThat(hits.get()).isEqualTo(hitsBeforeOpen);
+    }
+
+    @Test
+    void aClientErrorNeitherTripsNorResetsTheBreaker() {
+        HttpCallClient client = client(Map.of(
+                "allowedHosts", List.of("localhost"),
+                "circuitBreaker", Map.of("failureThreshold", 2, "openDuration", "60s")));
+
+        // 500, then 404, then 500: the 404 is a deterministic rejection that says nothing
+        // about the host's health, so the two server errors still open the circuit. It used
+        // to reset the counter, and a host alternating 500 and 404 never tripped this form
+        // while tripping call().
+        responseStatus = 500;
+        client.exchange(call("GET", "/x"), null, Map.of());
+        responseStatus = 404;
+        client.exchange(call("GET", "/x"), null, Map.of());
+        responseStatus = 500;
+        client.exchange(call("GET", "/x"), null, Map.of());
+
+        assertThatThrownBy(() -> client.exchange(call("GET", "/x"), null, Map.of()))
+                .hasMessageContaining("TQL-BATCH-5306");
+    }
+
+    /** The raw form classifies a transport failure and records it on its span. */
+    @Test
+    void exchangeClassifiesATransportFailureOnTheSpan() {
+        io.tesseraql.core.telemetry.RecordingTracer tracer = new io.tesseraql.core.telemetry.RecordingTracer();
+        AppConfig config = config(Map.of("allowedHosts", List.of("localhost")));
+        HttpCallClient traced = new HttpCallClient(HttpOutbound.load(config), config, tracer,
+                meter);
+        HttpCallSpec spec = call("GET", "/x");
+        server.stop(0);
+
+        assertThatThrownBy(() -> traced.exchange(spec, null, Map.of()))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("TQL-BATCH-5307");
+        assertThat(tracer.spans()).hasSize(1);
+        assertThat(tracer.spans().get(0).error()).isTrue();
+    }
+
+    /** An admission refusal is a recorded trace, not a call that never happened. */
+    @Test
+    void aRefusalLeavesASpanToo() {
+        io.tesseraql.core.telemetry.RecordingTracer tracer = new io.tesseraql.core.telemetry.RecordingTracer();
+        AppConfig config = config(Map.of("allowedHosts", List.of("api.partner.example")));
+        HttpCallClient traced = new HttpCallClient(HttpOutbound.load(config), config, tracer,
+                meter);
+
+        assertThatThrownBy(() -> traced.exchange(call("GET", "/x"), null, Map.of()))
+                .hasMessageContaining("TQL-BATCH-5305");
+
+        assertThat(tracer.spans()).hasSize(1);
+        assertThat(tracer.spans().get(0).error()).isTrue();
+    }
+
     /**
      * The regression the deleted per-module clients each carried on their own: the shared
      * client must set a {@link java.net.ProxySelector}, because without one the JDK client

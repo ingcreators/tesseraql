@@ -97,6 +97,19 @@ class OutboxDispatcherTest {
     }
 
     @Test
+    void aTerminalFailureDeadLettersOnTheFirstAttempt() {
+        RecordingStore store = new RecordingStore();
+        store.pending.add(event("e1", 0));
+
+        new OutboxDispatcher(store, e -> {
+            throw new io.tesseraql.core.outbox.TerminalDeliveryException("egress denied", null);
+        }, java.util.Set.of(), 3).dispatch(10);
+
+        assertThat(store.failed).isEmpty();
+        assertThat(store.dead).containsExactly("e1");
+    }
+
+    @Test
     void aFailureDoesNotStopTheBatch() {
         RecordingStore store = new RecordingStore();
         store.pending.add(event("bad", 0));
