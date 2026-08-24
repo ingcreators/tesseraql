@@ -523,15 +523,32 @@ class OAuthIssuerUnificationIntegrationTest {
 
         HttpResponse<String> opened = mcp(mcpResource, access);
         assertThat(opened.statusCode()).as(opened.body()).isEqualTo(200);
+
+        // The token rides through to the tool's own route security (`auth: bearer`), so the
+        // CALL must succeed, not just the transport gate — the Codex acceptance's second
+        // finding: every AS-minted MCP token passed the door and failed every tool with
+        // TQL-SEC-4143, because the member's derived audiences stopped at its address while
+        // the token names the MCP resource below it.
+        HttpResponse<String> called = mcp(mcpResource, access,
+                "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\","
+                        + "\"params\":{\"name\":\"items.tool\",\"arguments\":{}}}");
+        assertThat(called.statusCode()).as(called.body()).isEqualTo(200);
+        JsonNode result = MAPPER.readTree(called.body()).path("result");
+        assertThat(result.path("isError").asBoolean(false)).as(called.body()).isFalse();
+        assertThat(called.body()).as(called.body()).contains("data");
     }
 
     private static HttpResponse<String> mcp(String endpoint, String bearer) throws Exception {
+        return mcp(endpoint, bearer,
+                "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{}}");
+    }
+
+    private static HttpResponse<String> mcp(String endpoint, String bearer, String body)
+            throws Exception {
         HttpRequest.Builder request = HttpRequest.newBuilder(URI.create(endpoint))
                 .header("Content-Type", "application/json")
                 .header("Accept", "application/json, text/event-stream")
-                .POST(HttpRequest.BodyPublishers.ofString(
-                        "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\","
-                                + "\"params\":{}}"));
+                .POST(HttpRequest.BodyPublishers.ofString(body));
         if (bearer != null) {
             request.header("Authorization", "Bearer " + bearer);
         }
@@ -669,7 +686,7 @@ class OAuthIssuerUnificationIntegrationTest {
                 recipe: query-json
                 description: Lists the items.
                 security:
-                  auth: public
+                  auth: bearer
                 sources:
                   main:
                     sql:

@@ -468,7 +468,15 @@ validation block from the stack file — RS256, the origin as issuer, the surfac
 stack's claim names — and every hosted runtime applies it; nothing is declared per member, and
 a declared key source is refused as a second issuer (`TQL-OAUTH-3001`; the origin itself is
 required by `TQL-OAUTH-3002`). One call the design paragraph above forced into the open: a
-runtime's accepted audiences are **its own address plus the stack origin**. The origin is the
+runtime's accepted audiences are **its own address plus the stack origin, plus — refined
+2026-08-24, the Codex acceptance's second finding — its own MCP resource**
+(`address + /_tesseraql/mcp`, or the declared `tesseraql.mcp.resource`). An OAuth grant for a
+member's MCP surface names that subordinate resource (RFC 8707), and a tool call re-runs the
+route's own bearer validation with the granted token, so a member that stopped at its address
+passed every such token through the transport gate and refused it at every tool
+(`TQL-SEC-4143`). Accepting the narrower name of itself widens nothing — the MCP surface
+executes member routes with that token anyway, and the per-member boundary is untouched. The
+origin is the
 exchange's stack-wide mint — a bearer with exactly the reach the session already has, which is
 what `stack-architecture.md` Decision 27 says a stack is — while an address-scoped audience is
 the OAuth grants' per-member boundary, so a token granted for one member still refuses at the
