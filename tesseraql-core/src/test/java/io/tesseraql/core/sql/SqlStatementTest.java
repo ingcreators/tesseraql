@@ -214,6 +214,21 @@ class SqlStatementTest {
     }
 
     @Test
+    void aCommittedTransactionIsNotReReportedOverAFailedAutocommitRestore()
+            throws SqlStatementException {
+        FakeDatabase database = new FakeDatabase(List.of(), List.of());
+        database.restoreFailure = new SQLException("connection is dead");
+        SqlStatement statements = SqlStatement.on(database.dataSource());
+
+        // The commit decided the outcome; a restore that fails afterwards must not turn a
+        // durable write into a reported failure (the caller's retry would duplicate it).
+        String result = statements.transact("scim.groups.create", connection -> "committed");
+
+        assertThat(result).isEqualTo("committed");
+        assertThat(database.calls).contains("commit");
+    }
+
+    @Test
     void everyStatementOpensTheSharedSpanWithTheContractSurface() throws SqlStatementException {
         io.tesseraql.core.telemetry.RecordingTracer tracer = new io.tesseraql.core.telemetry.RecordingTracer();
         FakeDatabase database = new FakeDatabase(List.of("name"), List.of("Anne"));
@@ -559,8 +574,10 @@ class SqlStatementTest {
         private final List<String> labels;
         private final List<Object> row;
         private SQLException failure;
+        private SQLException restoreFailure;
         private boolean rowRead;
         private int batched;
+        private int autoCommitCalls;
 
         private FakeDatabase(List<String> labels, List<Object> row) {
             this.labels = labels;
@@ -587,6 +604,7 @@ class SqlStatementTest {
                 case "executeUpdate" -> fail(1);
                 case "execute" -> fail(Boolean.TRUE);
                 case "getUpdateCount" -> 1;
+                case "setAutoCommit" -> autoCommitSet();
                 case "addBatch" -> queued();
                 case "executeBatch" -> drained();
                 case "clearBatch" -> cleared();
@@ -605,6 +623,14 @@ class SqlStatementTest {
                 throw failure;
             }
             return answer;
+        }
+
+        private Object autoCommitSet() throws SQLException {
+            // The second call is transact's finally-restore; the first turned autocommit off.
+            if (++autoCommitCalls >= 2 && restoreFailure != null) {
+                throw restoreFailure;
+            }
+            return null;
         }
 
         private Object queued() {
