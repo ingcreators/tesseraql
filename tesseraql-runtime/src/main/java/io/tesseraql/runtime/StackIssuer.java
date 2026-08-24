@@ -112,28 +112,41 @@ final class StackIssuer {
         Map<String, Object> block = SystemApps.childMap(security, "jwt");
         Object declared = block.get("audience");
         block.putAll(jwt);
-        block.put("audience", audiences(declared, externalOrigin, basePath));
+        block.put("audience", audiences(declared, externalOrigin, basePath,
+                config.getString("tesseraql.mcp.resource").orElse(null)));
         return new AppConfig(root);
     }
 
     /**
      * A runtime's accepted audiences under the stack issuer: anything it declared, plus its
-     * own address, plus the stack origin — the last two always, because they are the issuer's
-     * vocabulary rather than the application's. The address is how the stack's mints name one
-     * member (the OAuth grants' per-member boundary — a token granted for one member refuses
-     * at the next); the origin is the exchange's stack-wide mint, a bearer with the reach the
-     * session already has (docs/stack-architecture.md decision 27).
+     * own address, plus the stack origin, plus its own MCP resource — the last three always,
+     * because they are the issuer's vocabulary rather than the application's. The address is
+     * how the stack's mints name one member (the OAuth grants' per-member boundary — a token
+     * granted for one member refuses at the next); the origin is the exchange's stack-wide
+     * mint, a bearer with the reach the session already has (docs/stack-architecture.md
+     * decision 27); the MCP resource is the address's `/_tesseraql/mcp` subordinate, the name
+     * an OAuth grant for the member's MCP surface carries (RFC 8707). A tool call re-runs the
+     * route's own bearer validation with that token, so the member must accept the narrower
+     * name of itself — refusing it left every AS-minted MCP token passing the transport gate
+     * and failing every tool ({@code TQL-SEC-4143}), the 2026-08-24 Codex acceptance's second
+     * finding. It widens nothing: the MCP surface executes member routes with that token
+     * anyway, and it stays one member's name — the per-member boundary is untouched.
      */
     private static List<String> audiences(Object declared, String externalOrigin,
-            String basePath) {
+            String basePath, String declaredMcpResource) {
         java.util.LinkedHashSet<String> audience = new java.util.LinkedHashSet<>();
         if (declared instanceof List<?> list) {
             list.forEach(value -> audience.add(String.valueOf(value)));
         } else if (declared != null) {
             audience.add(String.valueOf(declared));
         }
-        audience.add(externalOrigin + (basePath == null ? "" : basePath));
+        String address = externalOrigin + (basePath == null ? "" : basePath);
+        audience.add(address);
         audience.add(externalOrigin);
+        // The same derivation the MCP transport gate uses, override included.
+        audience.add(declaredMcpResource != null
+                ? declaredMcpResource
+                : address + "/_tesseraql/mcp");
         return List.copyOf(audience);
     }
 

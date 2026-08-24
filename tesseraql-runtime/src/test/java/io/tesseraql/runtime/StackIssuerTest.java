@@ -58,11 +58,12 @@ class StackIssuerTest {
     }
 
     @Test
-    void aRuntimesAudienceIsItsAddressPlusTheStackOrigin() {
+    void aRuntimesAudienceIsItsAddressPlusTheStackOriginPlusItsMcpResource() {
         AppConfig applied = StackIssuer.apply(config(Map.of()),
                 StackIssuer.jwt(ORIGIN, Map.of()), ORIGIN, "/shop", "this test");
 
-        assertThat(audience(applied)).containsExactly(ORIGIN + "/shop", ORIGIN);
+        assertThat(audience(applied)).containsExactly(ORIGIN + "/shop", ORIGIN,
+                ORIGIN + "/shop/_tesseraql/mcp");
         assertThat(applied.getString("tesseraql.security.jwt.algorithm")).contains("RS256");
     }
 
@@ -73,9 +74,22 @@ class StackIssuerTest {
         AppConfig applied = StackIssuer.apply(new AppConfig(root),
                 StackIssuer.jwt(ORIGIN, Map.of()), ORIGIN, "/shop", "this test");
 
-        // The address and the origin always join: they are how the stack's mints name this
-        // member and the whole stack, whatever the application declared for itself.
-        assertThat(audience(applied)).containsExactly("urn:shop", ORIGIN + "/shop", ORIGIN);
+        // The address, the origin, and the member's MCP resource always join: they are how the
+        // stack's mints name this member, the whole stack, and the member's MCP surface,
+        // whatever the application declared for itself.
+        assertThat(audience(applied)).containsExactly("urn:shop", ORIGIN + "/shop", ORIGIN,
+                ORIGIN + "/shop/_tesseraql/mcp");
+    }
+
+    @Test
+    void aDeclaredMcpResourceReplacesTheDerivedOneInTheAudience() {
+        AppConfig applied = StackIssuer.apply(
+                config(Map.of("mcp", Map.of("resource", "urn:shop:mcp"))),
+                StackIssuer.jwt(ORIGIN, Map.of()), ORIGIN, "/shop", "this test");
+
+        // The same derivation the MCP transport gate uses: a declared resource IS the member's
+        // MCP name, so the audience carries it instead of the address-derived default.
+        assertThat(audience(applied)).containsExactly(ORIGIN + "/shop", ORIGIN, "urn:shop:mcp");
     }
 
     @SuppressWarnings("unchecked")

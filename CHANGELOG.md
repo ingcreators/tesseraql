@@ -8,6 +8,17 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A token granted for a member's MCP surface now works at the member's tools.** Under the
+  stack issuer, a member's accepted audiences stopped at its own address, while an OAuth grant
+  for its MCP surface names the `/_tesseraql/mcp` resource below it (RFC 8707) — so every
+  AS-minted MCP token passed the transport gate and then failed every `auth: bearer` tool with
+  `TQL-SEC-4143` (the second finding of the Codex acceptance run; the integration fixture's
+  only tool was `public`, so the gap sat between the gate and the tools). The member's derived
+  audiences now include its own MCP resource — the declared `tesseraql.mcp.resource` when one
+  exists — beside its address and the stack origin. Accepting the narrower name of itself
+  widens nothing: the MCP surface executes member routes with that token anyway, and the
+  per-member boundary is untouched.
+
 - **A stack member validates stack-issued tokens without consulting its egress allow list.**
   Since JWKS fetches ride the outbound gateway, a member under the stack issuer fetched the
   derived key set from its own public origin — so any stack whose members had not allow-listed
