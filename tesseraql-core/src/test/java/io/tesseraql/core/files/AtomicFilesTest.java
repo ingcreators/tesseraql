@@ -54,6 +54,29 @@ class AtomicFilesTest {
         assertThat(listing(dir)).containsExactly("state.json");
     }
 
+    @Test
+    void theSweepPredicateRecognizesThisClasssInFlightTemps(@TempDir Path dir)
+            throws IOException {
+        Path target = dir.resolve("data.parquet");
+        java.util.List<String> midWrite = new java.util.ArrayList<>();
+        InputStream capturing = new InputStream() {
+            @Override
+            public int read() throws IOException {
+                if (midWrite.isEmpty()) {
+                    midWrite.addAll(listing(dir));
+                }
+                return -1;
+            }
+        };
+
+        AtomicFiles.replace(target, capturing);
+
+        // The names actually on disk mid-write are the ones a sweeper must skip; the coupling
+        // this pins is isTemp against tempBeside's real naming, not a hard-coded pattern.
+        assertThat(midWrite).isNotEmpty().allMatch(AtomicFiles::isTemp);
+        assertThat(AtomicFiles.isTemp(target.getFileName().toString())).isFalse();
+    }
+
     private static java.util.List<String> listing(Path dir) throws IOException {
         try (Stream<Path> files = Files.list(dir)) {
             return files.map(path -> path.getFileName().toString()).sorted().toList();

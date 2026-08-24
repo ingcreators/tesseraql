@@ -41,6 +41,15 @@ public final class AtomicFiles {
         }
     }
 
+    /**
+     * Whether {@code fileName} is one of this class's in-flight temps — for a sweeper listing a
+     * directory this class writes into: a write still in progress must neither be counted as an
+     * entry nor deleted mid-copy. Coupled to {@link #tempBeside}'s naming.
+     */
+    public static boolean isTemp(String fileName) {
+        return fileName.endsWith(".tmp");
+    }
+
     private static Path tempBeside(Path target) throws IOException {
         Path directory = target.toAbsolutePath().getParent();
         Files.createDirectories(directory);
