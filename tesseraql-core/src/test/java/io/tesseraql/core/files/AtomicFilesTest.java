@@ -15,6 +15,27 @@ import org.junit.jupiter.api.io.TempDir;
 
 class AtomicFilesTest {
 
+    /**
+     * {@code ATOMIC_MOVE} keeps the source's mode, and the temp is created {@code 0600} — a
+     * replace must not silently tighten a file another process reads (the host's reconciler
+     * reading the catalog JSON is the live case). POSIX-only by nature; on a non-POSIX store
+     * the platform default applies and there is nothing to preserve.
+     */
+    @Test
+    void aReplaceKeepsTheTargetsPermissions(@TempDir Path dir) throws IOException {
+        Path target = dir.resolve("catalog.json");
+        Files.writeString(target, "old");
+        org.junit.jupiter.api.Assumptions.assumeTrue(Files.getFileAttributeView(target,
+                java.nio.file.attribute.PosixFileAttributeView.class) != null);
+        java.util.Set<java.nio.file.attribute.PosixFilePermission> mode = java.nio.file.attribute.PosixFilePermissions
+                .fromString("rw-r--r--");
+        Files.setPosixFilePermissions(target, mode);
+
+        AtomicFiles.replace(target, "new".getBytes(StandardCharsets.UTF_8));
+
+        assertThat(Files.getPosixFilePermissions(target)).isEqualTo(mode);
+    }
+
     @Test
     void replacesBytesAndLeavesNoTemp(@TempDir Path dir) throws IOException {
         Path target = dir.resolve("state.json");

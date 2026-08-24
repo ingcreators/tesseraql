@@ -435,7 +435,9 @@ final class StudioProviders {
                 .register("studio.pages", params -> {
                     io.tesseraql.yaml.manifest.AppManifest fresh = new ManifestLoader()
                             .load(appHome);
-                    java.nio.file.Path home = appHome.toAbsolutePath().normalize();
+                    io.tesseraql.core.files.ConfinedPath confined = io.tesseraql.core.files.ConfinedPath
+                            .under(appHome);
+                    java.nio.file.Path home = confined.root();
                     java.util.List<Map<String, Object>> pages = new java.util.ArrayList<>();
                     for (io.tesseraql.yaml.manifest.RouteFile route : fresh.routes()) {
                         var response = route.definition().response();
@@ -471,7 +473,7 @@ final class StudioProviders {
                         }
                         String refPath = file != null
                                 && java.nio.file.Files.isRegularFile(file)
-                                && file.startsWith(home)
+                                && confined.contains(file)
                                         ? home.relativize(file).toString()
                                                 .replace('\\', '/')
                                         : null;

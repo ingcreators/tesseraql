@@ -45,7 +45,9 @@ final class SamlMetadataSource {
         }
         URI uri = URI.create(value);
         String host = uri.getHost();
-        boolean loopback = "localhost".equals(host) || "127.0.0.1".equals(host);
+        // URI.getHost() keeps the brackets on an IPv6 literal, so both spellings are checked.
+        boolean loopback = "localhost".equals(host) || "127.0.0.1".equals(host)
+                || "[::1]".equals(host) || "::1".equals(host);
         if (value.startsWith("http://") && !loopback) {
             throw new TqlException(INSECURE_URL, "SAML IdP metadata url '" + value
                     + "' must be https - the metadata pins the IdP signing key");
@@ -65,10 +67,11 @@ final class SamlMetadataSource {
             Files.write(cache, response.body());
             return response.body();
         } catch (IOException | TqlException ex) {
-            // The gateway's policy refusal is a configuration to fix, never something a cached
-            // copy may paper over; only an unreachable endpoint falls back to the cache.
-            if (ex instanceof TqlException refused
-                    && io.tesseraql.yaml.http.HttpOutbound.HOST_DENIED.equals(refused.code())) {
+            // The gateway's policy refusals — a denied host, an unknown credential, an invalid
+            // declaration — are configuration to fix, never something a cached copy may paper
+            // over; only a failure that heals on its own (an unreachable endpoint, an open
+            // circuit) falls back to the cache. Fail-closed: an unrecognized refusal refuses.
+            if (ex instanceof TqlException refused && !isTransient(refused.code())) {
                 throw refused;
             }
             if (Files.isRegularFile(cache)) {
@@ -84,5 +87,11 @@ final class SamlMetadataSource {
             throw new IllegalStateException("Cannot fetch SAML IdP metadata from " + value
                     + " and no cached copy exists: " + ex.getMessage(), ex);
         }
+    }
+
+    /** The gateway classifications that heal on their own — the only ones a cache may bridge. */
+    private static boolean isTransient(TqlErrorCode code) {
+        return io.tesseraql.yaml.http.HttpOutbound.CIRCUIT_OPEN.equals(code)
+                || io.tesseraql.yaml.http.HttpOutbound.CALL_FAILED.equals(code);
     }
 }

@@ -47,7 +47,9 @@ public final class RouteReloader {
      * TQL-ROUTE-3103: the route failed to compile during hot reload; a 500 stub serves the
      * compile message on its endpoint until the file is fixed.
      */
-    private static final String COMPILE_FAILED = "TQL-ROUTE-3103";
+    private static final io.tesseraql.core.error.TqlErrorCode COMPILE_FAILED = new io.tesseraql.core.error.TqlErrorCode(
+            io.tesseraql.core.error.TqlDomain.ROUTE,
+            3103);
 
     private final RuntimeContext context;
     private final Path appHome;

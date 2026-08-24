@@ -28,10 +28,11 @@ import org.junit.jupiter.api.Test;
  *
  * <ul>
  * <li>{@code ConfinedPath} — the primitive itself.</li>
- * <li>{@code AppPackager}, {@code ViewEjects}, {@code ManifestLoader} — prefix
- * <em>classification</em>, not confinement: skipping the work tree while packaging, choosing a
- * relative reference shape, pruning a walk. Nothing caller-influenced is being confined, so
- * forcing them through the primitive would dress bookkeeping as a security guard.</li>
+ * <li>{@code AppPackager}, {@code ViewEjects}, {@code ManifestLoader}, {@code LintContext} —
+ * prefix <em>classification</em>, not confinement: skipping the work tree while packaging,
+ * choosing a relative reference shape, pruning a walk, relativizing a finding's source for
+ * display. Nothing caller-influenced is being confined, so forcing them through the primitive
+ * would dress bookkeeping as a security guard.</li>
  * </ul>
  */
 class PathGuardLedgerTest {
@@ -41,6 +42,7 @@ class PathGuardLedgerTest {
     private static final Set<String> LEDGER = new TreeSet<>(List.of(
             "tesseraql-apptasks/src/main/java/io/tesseraql/apptasks/AppPackager.java",
             "tesseraql-core/src/main/java/io/tesseraql/core/files/ConfinedPath.java",
+            "tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/LintContext.java",
             "tesseraql-yaml/src/main/java/io/tesseraql/yaml/manifest/ManifestLoader.java",
             "tesseraql-yaml/src/main/java/io/tesseraql/yaml/view/ViewEjects.java"));
 
@@ -65,7 +67,7 @@ class PathGuardLedgerTest {
                     });
         }
         assertThat(found)
-                .as("main-source files where .normalize() meets .startsWith( within three"
+                .as("main-source files where .normalize() meets .startsWith( within a few"
                         + " lines — the hand-rolled confinement shape: route it through"
                         + " io.tesseraql.core.files.ConfinedPath instead, or add it here in"
                         + " review with a reason; a REMOVED entry just shrinks this list")
@@ -77,8 +79,13 @@ class PathGuardLedgerTest {
             if (!lines.get(i).contains(".normalize()")) {
                 continue;
             }
-            for (int j = i; j < Math.min(i + 4, lines.size()); j++) {
-                if (lines.get(j).contains(".startsWith(")) {
+            // Eight lines of reach: StudioProviders once hand-rolled the shape with five
+            // lines between the normalize and the startsWith, invisible to a tighter window.
+            for (int j = i; j < Math.min(i + 8, lines.size()); j++) {
+                // A quoted-literal argument is a String.startsWith (content sniffing, a
+                // prefix constant), not a path compared against a root.
+                if (lines.get(j).contains(".startsWith(")
+                        && !lines.get(j).contains(".startsWith(\"")) {
                     return true;
                 }
             }

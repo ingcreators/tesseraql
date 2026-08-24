@@ -87,6 +87,38 @@ class SamlMetadataSourceTest {
     }
 
     @Test
+    void anInvalidUrlRefusesEvenWithACachedCopy(@TempDir Path dir) throws Exception {
+        AppManifest manifest = app(dir, "idp.example.com");
+        Path cache = dir.resolve("work/saml/idp-metadata.xml");
+        Files.createDirectories(cache.getParent());
+        Files.writeString(cache, "<EntityDescriptor/>");
+
+        // "https:///metadata" parses but carries no host: an invalid declaration is
+        // configuration to fix, and the stale cache must not paper over it (only a failure
+        // that heals may serve it).
+        assertThatThrownBy(() -> SamlMetadataSource.load(manifest, gateway(manifest),
+                "https:///metadata"))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("TQL-BATCH-5309");
+    }
+
+    @Test
+    void anIpv6LoopbackUrlIsNotRefusedAsInsecure(@TempDir Path dir) throws Exception {
+        // URI.getHost() keeps the brackets, so "[::1]" must count as loopback for the
+        // https-only rule. Port 1 answers nothing: the transport failure is transient and
+        // the cached copy serves — had the URL been refused as insecure, the refusal
+        // would surface instead.
+        AppManifest manifest = app(dir, "\"[::1]\"");
+        byte[] xml = "<EntityDescriptor/>".getBytes(StandardCharsets.UTF_8);
+        Path cache = dir.resolve("work/saml/idp-metadata.xml");
+        Files.createDirectories(cache.getParent());
+        Files.write(cache, xml);
+
+        assertThat(SamlMetadataSource.load(manifest, gateway(manifest),
+                "http://[::1]:1/metadata")).isEqualTo(xml);
+    }
+
+    @Test
     void aRelativePathStaysAPlainFileRead(@TempDir Path dir) throws Exception {
         AppManifest manifest = app(dir, "idp.example.com");
         Files.writeString(dir.resolve("idp.xml"), "<EntityDescriptor/>");
