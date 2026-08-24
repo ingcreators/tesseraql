@@ -132,7 +132,15 @@ public final class ScimGroupService {
         }
     }
 
-    /** Lists a page of groups (with members); {@code startIndex} is 1-based per SCIM. */
+    /**
+     * Lists a page of groups (with members); {@code startIndex} is 1-based per SCIM.
+     *
+     * <p>Members load per group — one statement per row of the page. Known and bounded: the
+     * page size caps it, and this is an IdP-sync surface, not a request path. Batching it
+     * means a tenth contract statement (an IN-list {@code list-members-of}), which widens the
+     * all-or-nothing contract surface every custom deployment declares; do that when a real
+     * deployment's sync is measurably slow here, not before.
+     */
     public ScimListResponse<ScimGroup> list(int startIndex, int count) {
         try {
             // The offset arrives precomputed beside the SCIM-native 1-based startIndex,

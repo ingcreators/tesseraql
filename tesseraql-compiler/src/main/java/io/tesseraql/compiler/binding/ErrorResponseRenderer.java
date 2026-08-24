@@ -420,10 +420,12 @@ public final class ErrorResponseRenderer implements Step {
                 case 4150 -> 413; // the request body exceeds tesseraql.http.maxBodyBytes
                 // The SEC domain is the whole security namespace, not an auth-failure one:
                 // everything else is a server-side fault — config errors (4000, 4001, 4085-4089,
-                // 4120, 4132, 4135), egress refusals (4141), federation failures
+                // 4121, 4132, 4135), egress refusals (4141), federation failures
                 // (4140), and crypto errors (5001, 5002). A 401 here invites clients into
                 // token-refresh retries against a genuinely broken server
-                // (docs/contract-bugfixes.md track B).
+                // (docs/contract-bugfixes.md track B). 4120 used to be two codes in one —
+                // IdentityInvites' rendered 404 above AND the boot-time invite/recovery config
+                // refusals, which are 4121 now.
                 default -> 500;
             };
             // 4220: declarative validation rejected the input (roadmap Phase 19); other FIELD

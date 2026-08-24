@@ -57,8 +57,13 @@ class AppNameReadLedgerTest {
                     .filter(path -> !path.toString().contains("/."))
                     .forEach(path -> {
                         try {
-                            if (Files.readString(path)
-                                    .contains("getString(\"tesseraql.app.name\")")) {
+                            // Any config accessor, not getString alone — a navigate() or
+                            // typed read of the key is the same raw read wearing another
+                            // method. A bare mention (a scaffold key registry, a Studio
+                            // settings descriptor) is not a read and stays out.
+                            if (Files.readString(path).matches("(?s).*\\.(getString|navigate"
+                                    + "|getDouble|getBoolean)\\(\"tesseraql\\.app\\.name\"\\)"
+                                    + ".*")) {
                                 found.add(REPO.relativize(path).toString().replace('\\', '/'));
                             }
                         } catch (IOException unreadable) {

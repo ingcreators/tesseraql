@@ -45,7 +45,10 @@ class ErrorEnvelopeLedgerTest {
                     .filter(path -> !path.toString().contains("/."))
                     .forEach(path -> {
                         try {
-                            if (Files.readString(path).contains("{\\\"error\\\"")) {
+                            // The key alone, not the brace-prefixed literal: a writer
+                            // concatenating the envelope from fragments never spells
+                            // {"error" as one piece, but it must spell the key.
+                            if (Files.readString(path).contains("\\\"error\\\":")) {
                                 found.add(REPO.relativize(path).toString().replace('\\', '/'));
                             }
                         } catch (IOException unreadable) {

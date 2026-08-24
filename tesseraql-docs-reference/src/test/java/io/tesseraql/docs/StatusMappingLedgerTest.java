@@ -68,7 +68,10 @@ class StatusMappingLedgerTest {
             "TQL-SEC-4071", "TQL-SEC-4072", "TQL-SEC-4080", "TQL-SEC-4081", "TQL-SEC-4082",
             "TQL-SEC-4083", "TQL-SEC-4084", "TQL-SEC-4085", "TQL-SEC-4087", "TQL-SEC-4088",
             "TQL-SEC-4089", "TQL-SEC-4090", "TQL-SEC-4091", "TQL-SEC-4092", "TQL-SEC-4093",
-            "TQL-SEC-4100", "TQL-SEC-4110", "TQL-SEC-4130", "TQL-SEC-4131", "TQL-SEC-4132",
+            // 4121: the boot-time invite/recovery channel refusals — split out of 4120,
+            // which the renderer answers 404 for the invitation surface being absent.
+            "TQL-SEC-4100", "TQL-SEC-4110", "TQL-SEC-4121",
+            "TQL-SEC-4130", "TQL-SEC-4131", "TQL-SEC-4132",
             "TQL-SEC-4133", "TQL-SEC-4134", "TQL-SEC-4135", "TQL-SEC-4136", "TQL-SEC-4137",
             "TQL-SEC-4139", "TQL-SEC-4140", "TQL-SEC-4141", "TQL-SEC-4145", "TQL-SEC-4146",
             // Studio server-side failures: an unreadable doc or catalog, and the copilot's
