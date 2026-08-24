@@ -67,7 +67,12 @@ final class DatasetSpool {
         List<Path> entries;
         try (Stream<Path> files = Files.list(directory)) {
             entries = files.filter(Files::isRegularFile)
-                    .filter(f -> !f.getFileName().toString().startsWith(".spool"))
+                    // In-flight writes: AtomicFiles names its temps <target><random>.tmp (the
+                    // old ".spool" prefix matched nothing once localize adopted AtomicFiles),
+                    // and a half-copied temp must neither count toward the cap nor be swept
+                    // mid-copy — the concurrent localize's atomic move would then fail.
+                    .filter(f -> !io.tesseraql.core.files.AtomicFiles.isTemp(
+                            f.getFileName().toString()))
                     .sorted(Comparator.comparingLong(f -> f.toFile().lastModified()))
                     .toList();
         }
