@@ -190,6 +190,7 @@ tesseraql:
         - "*.internal.example"      # any sub-domain of internal.example
       connectTimeout: 5s            # default; per-step override via connectTimeout:
       requestTimeout: 30s           # default; per-step override via requestTimeout:
+      maxResponseBytes: 10MB        # response-body ceiling (default 10MB; -1 disables)
       circuitBreaker:
         failureThreshold: 5         # consecutive systemic failures before the host opens
         openDuration: 30s           # how long the host stays open (fails fast) before a trial
@@ -222,6 +223,16 @@ deterministic rejection, not a sign the dependency is down.
 A call is successful when its status is `2xx`, or equals `expectStatus` when one is declared;
 any other outcome fails the step (and so the job). The call is recorded as a
 `tesseraql.http.call` span in the job's trace, visible in the [operations console](ops-console.md).
+
+### Response ceiling
+
+The gateway buffers every response on heap, so `maxResponseBytes` bounds what a provider may
+answer with (default 10 MB; `-1` disables; units accepted, like every byte-size key). A
+declared `Content-Length` over the ceiling refuses before a byte of body buffers; a chunked
+stream is counted and cancelled the moment it crosses the bound. The refusal is
+`TQL-BATCH-5316` naming the key — a policy bound, not a host failure, so the breaker is
+untouched. Every gateway caller shares it: `http-call` steps, SCIM provisioning, OIDC, JWKS,
+and SAML metadata (the OIDC and JWKS callers additionally keep their own tighter caps).
 
 ## Governance
 
