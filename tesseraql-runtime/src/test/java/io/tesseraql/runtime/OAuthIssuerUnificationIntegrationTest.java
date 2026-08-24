@@ -622,7 +622,21 @@ class OAuthIssuerUnificationIntegrationTest {
         }
         UserAdminAppJobs.parkDailyMaintenanceSchedule(home);
         Path exampleConfig = home.resolve("config/tesseraql.yml");
-        Files.writeString(exampleConfig, Files.readString(exampleConfig)
+        String config = Files.readString(exampleConfig);
+        // The member's egress allow list must play no part in validating stack tokens: the
+        // derived key set is read from the shared framework database, never fetched through
+        // the outbound gateway (the 2026-08-24 Codex acceptance found the fetch silently
+        // host-denied on any member that had not allow-listed its own stack origin). The
+        // example happens to allow-list localhost — strip it so this suite proves the
+        // independence rather than riding the coincidence. Loud on drift.
+        String allowLocalhost = "        - localhost\n";
+        if (!config.contains(allowLocalhost)) {
+            throw new IllegalStateException("The example's outbound allow list moved; update"
+                    + " the strip so this suite keeps proving stack-token validation is"
+                    + " independent of the member's egress policy");
+        }
+        Files.writeString(exampleConfig, config
+                .replace(allowLocalhost, "")
                 .replace("permission: user-admin.", "permission: shop.")
                 // The member sheds its own key source — under the stack issuer a declared
                 // secret is a second issuer and refused (TQL-OAUTH-3001); its declared

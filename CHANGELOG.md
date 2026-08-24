@@ -8,6 +8,17 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A stack member validates stack-issued tokens without consulting its egress allow list.**
+  Since JWKS fetches ride the outbound gateway, a member under the stack issuer fetched the
+  derived key set from its own public origin — so any stack whose members had not allow-listed
+  their own origin in `tesseraql.http.outbound.allowedHosts` failed every bearer validation
+  closed, without a log line (the first finding of the Codex acceptance run; CI never saw it
+  because the example app happens to allow-list `localhost`). The derived key set is now read
+  straight from the shared framework database — the same rows the surface's
+  `/_tesseraql/oauth/jwks` renders — because the stack reaching itself is not egress. An
+  app-declared `jwksUri` (an external IdP) still rides the gateway and its allow list, and a
+  failed JWKS fetch now leaves a rate-limited WARN naming the source instead of nothing.
+
 - **The workflow sweep rides the one transaction bracket, a job's enrich references are
   row-capped, and the login preamble is one method.** `WorkflowSweeper` hand-rolled the
   open-run-commit-restore bracket and got the two subtle halves wrong: a failing rollback

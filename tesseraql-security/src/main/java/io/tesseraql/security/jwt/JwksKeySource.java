@@ -17,6 +17,8 @@ import java.util.function.LongSupplier;
  */
 public final class JwksKeySource implements KeySource {
 
+    private static final System.Logger LOG = System.getLogger(JwksKeySource.class.getName());
+
     private final JwksFetcher fetcher;
     private final URI uri;
     private final long cacheTtlMillis;
@@ -73,11 +75,20 @@ public final class JwksKeySource implements KeySource {
                 keys = fetcher.fetch(uri);
             } catch (RuntimeException ex) {
                 // Serve the last good key set on a transient JWKS failure; fail closed if we never
-                // fetched one. The attempt time still advances so the floor rate-limits retries.
+                // fetched one. The attempt time still advances so the floor rate-limits retries —
+                // which also rate-limits this WARN, the one loud signal a misconfigured or
+                // unreachable JWKS source leaves (the 401s it causes are deliberately quiet).
                 if (keys.isEmpty()) {
+                    LOG.log(System.Logger.Level.WARNING,
+                            "JWKS fetch from {0} failed and no key set has ever loaded -"
+                                    + " every bearer validation fails closed until it succeeds: {1}",
+                            uri, ex.getMessage());
                     lastFetchAt = now;
                     throw ex;
                 }
+                LOG.log(System.Logger.Level.WARNING,
+                        "JWKS fetch from {0} failed; serving the last good key set: {1}",
+                        uri, ex.getMessage());
             }
             lastFetchAt = now;
         }

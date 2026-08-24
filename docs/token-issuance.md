@@ -425,6 +425,15 @@ consequences, in dependency order:
   `HostContext`, not a new validator. Each member's **audience stays its own**: `aud` is the
   boundary Decision 6 of `stack-architecture.md` makes real, and unifying the signer is precisely
   what makes distinct audiences meaningful.
+
+  > **Refined 2026-08-24 (the Codex acceptance's first finding).** A member reads the derived
+  > key set straight from the shared framework database — the rows the surface's JWKS renders —
+  > never over HTTP. Once JWKS fetches rode the outbound gateway, fetching the member's own
+  > public origin put every bearer validation behind the member's egress allow list and failed
+  > it closed, silently, on any stack that had not allow-listed its own origin. The stack
+  > reaching itself is not egress (`LoopbackCall`'s posture); an app-declared `jwksUri` — an
+  > external IdP — still rides the gateway and its allow list, and a failed fetch now leaves a
+  > rate-limited WARN either way. The HTTP document remains what external clients read.
 - **A member's own explicit `security.jwt` while the stack issues is a refusal**, in `TQL-APP-4212`'s
   shape — naming the stack file as where the issuer lives. The alternative (member config silently
   outranked) is the divergence-fails-silently case Decision 16 exists to prevent; the alternative

@@ -544,7 +544,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 context.bind(
                         TesseraqlProperties.JWT_AUTHENTICATOR_BEAN,
                         new JwtAuthenticator(security.jwt(),
-                                jwksFetcher(httpCallClient, security.jwt())));
+                                jwksFetcher(httpCallClient, security.jwt(), hostContext)));
             }
             if (security.apiKeys() != null) {
                 context.bind(
@@ -1308,7 +1308,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     io.tesseraql.security.SecurityConfig.JwtConfig gate = withAudience(
                             security.jwt(), mcpResource);
                     io.tesseraql.security.jwt.JwtAuthenticator mcpJwt = new io.tesseraql.security.jwt.JwtAuthenticator(
-                            gate, jwksFetcher(httpCallClient, gate));
+                            gate, jwksFetcher(httpCallClient, gate, hostContext));
                     mcpGate = mcpJwt::authenticate;
                     if (origin != null) {
                         mcpChallenge = "Bearer resource_metadata=\"" + origin
@@ -1894,15 +1894,26 @@ public final class TesseraqlRuntime implements AutoCloseable {
     }
 
     /**
-     * The production JWKS fetcher — a {@code jwksUri} is fetched through the outbound gateway
-     * like every other framework-issued call — or null when the config declares no JWKS source
-     * (docs/duplication-consolidation.md, campaign 1).
+     * The production JWKS fetcher, or null when the config declares no JWKS source. An
+     * app-declared {@code jwksUri} is fetched through the outbound gateway like every other
+     * framework-issued call (docs/duplication-consolidation.md, campaign 1). When the stack
+     * issuer derived the block, the {@code jwksUri} names the stack's own origin — and the
+     * stack reaching itself is not egress: the keys are read from the shared framework
+     * database instead ({@link StackJwksFetcher}), so a member's
+     * {@code tesseraql.http.outbound.allowedHosts} plays no part in validating stack tokens.
+     * (Under the stack issuer an app-declared key source is refused at boot, so the two cases
+     * never overlap.)
      */
     private static io.tesseraql.security.jwt.JwksFetcher jwksFetcher(
             io.tesseraql.yaml.http.OutboundGateway gateway,
-            io.tesseraql.security.SecurityConfig.JwtConfig jwt) {
+            io.tesseraql.security.SecurityConfig.JwtConfig jwt,
+            HostContext hostContext) {
         if (jwt.jwksUri() == null || jwt.jwksUri().isBlank()) {
             return null;
+        }
+        if (hostContext != null && hostContext.stackIssuerJwt() != null
+                && hostContext.frameworkDataSource() != null) {
+            return new StackJwksFetcher(hostContext.frameworkDataSource());
         }
         return new io.tesseraql.compiler.binding.GatewayJwksFetcher(gateway,
                 jwt.jwks().requestTimeout());
