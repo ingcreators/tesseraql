@@ -392,6 +392,24 @@ class SqlStatementTest {
     }
 
     @Test
+    void theMysqlRowStreamingSignalReachesTheDriverUnclamped() throws Exception {
+        FakeDatabase database = new FakeDatabase(List.of("name"), List.of("Anne"));
+        BoundSql bound = SqlRenderer.render(SELECT, Map.of("id", "u1"));
+
+        SqlStatement.on(database.dataSource())
+                .fetchSize(io.tesseraql.core.dialect.StreamingProfiles.forDialect("mysql")
+                        .fetchSize())
+                .read("web/api/export.sql", bound, (resultSet, span) -> resultSet.next());
+
+        // MySQL/MariaDB stream row-by-row only on setFetchSize(Integer.MIN_VALUE); anything
+        // else buffers the whole result in the driver.
+        assertThat(database.calls)
+                .anyMatch(call -> call.startsWith("prepareStatement(")
+                        && call.endsWith(",1003,1007)"))
+                .contains("setFetchSize(" + Integer.MIN_VALUE + ")");
+    }
+
+    @Test
     void aDefaultReadKeepsTheDriversPlainPrepare() throws Exception {
         FakeDatabase database = new FakeDatabase(List.of("name"), List.of("Anne"));
         BoundSql bound = SqlRenderer.render(SELECT, Map.of("id", "u1"));

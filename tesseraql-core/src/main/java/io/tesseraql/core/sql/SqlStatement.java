@@ -70,7 +70,9 @@ public final class SqlStatement {
         this.tracer = tracer == null ? NoopTracer.INSTANCE : tracer;
         this.surface = surface == null ? "contract" : surface;
         this.spanParent = spanParent;
-        this.fetchSize = Math.max(0, fetchSize);
+        // Integer.MIN_VALUE is MySQL/MariaDB's row-streaming signal (StreamingProfiles), not a
+        // negative to clamp; folding it to 0 silently buffers a whole export in the driver.
+        this.fetchSize = fetchSize == Integer.MIN_VALUE ? fetchSize : Math.max(0, fetchSize);
         this.attributes = attributes == null ? Map.of() : attributes;
     }
 
@@ -169,7 +171,8 @@ public final class SqlStatement {
      * a time — the streaming shape a spooling export needs so the driver cursors through the
      * result instead of buffering it whole (docs/contract-sql-execution.md slice 7; the caller
      * picks the size from its dialect's streaming profile). {@code 0} keeps the driver's default
-     * prepare. Reads only; the generated-key prepare of a write is unaffected.
+     * prepare; {@link Integer#MIN_VALUE} passes through as MySQL/MariaDB's row-streaming signal.
+     * Reads only; the generated-key prepare of a write is unaffected.
      */
     public SqlStatement fetchSize(int rows) {
         return new SqlStatement(dataSource, dialect, timeoutSeconds, rawLabels, tracer, surface,
@@ -322,7 +325,7 @@ public final class SqlStatement {
                         ? connection.prepareStatement(bound.sql(), keys.toArray(String[]::new))
                         : connection.prepareStatement(bound.sql(),
                                 Statement.RETURN_GENERATED_KEYS)
-                : fetchSize > 0
+                : fetchSize != 0
                         ? connection.prepareStatement(bound.sql(), ResultSet.TYPE_FORWARD_ONLY,
                                 ResultSet.CONCUR_READ_ONLY)
                         : connection.prepareStatement(bound.sql());
@@ -330,7 +333,7 @@ public final class SqlStatement {
             if (timeoutSeconds > 0) {
                 statement.setQueryTimeout(timeoutSeconds);
             }
-            if (fetchSize > 0 && keys.isEmpty()) {
+            if (fetchSize != 0 && keys.isEmpty()) {
                 statement.setFetchSize(fetchSize);
             }
             List<BoundParameter> parameters = bound.parameters();
