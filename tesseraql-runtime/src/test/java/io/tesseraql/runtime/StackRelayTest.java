@@ -70,9 +70,12 @@ class StackRelayTest {
     private static volatile Map<String, String> lastRequestHeaders = Map.of();
     /** The protocol the origin saw on the second hop, so a case can prove both hops moved. */
     private static volatile String lastOriginVersion = "";
-    /** Counts down when the origin's refuse-upload connection is closed — the relayed reset. */
+    /** Counts down when the origin's refuse-upload request stream terminates — the reset. */
     private static volatile java.util.concurrent.CountDownLatch originLegReleased = new java.util.concurrent.CountDownLatch(
             1);
+    /** Resumes the refuse-upload origin's reading, on its own context, once a test wants it. */
+    private static volatile Runnable resumeRefusedUpload = () -> {
+    };
 
     @BeforeAll
     static void start() throws Exception {
@@ -374,9 +377,13 @@ class StackRelayTest {
                     .as("the origin's early answer is delivered, not timed out").isEqualTo(413);
             assertThat(refused.body()).contains("refused");
 
+            // The reset has already been sent (the answer above was relayed before it); a
+            // reading origin is what observes it — the real member's own drain always reads.
+            resumeRefusedUpload.run();
             assertThat(originLegReleased.await(10, TimeUnit.SECONDS))
-                    .as("the origin request is reset once the answer is relayed, so the"
-                            + " member's own drain sees a closed stream rather than silence")
+                    .as("the origin request is reset once the answer is relayed, so a"
+                            + " member's own drain sees a terminated stream rather than"
+                            + " silence")
                     .isTrue();
 
             // Drained, not closed: the same caller's next request rides the same front
@@ -618,12 +625,22 @@ class StackRelayTest {
             response.setChunked(true);
             writeChunks(response, 96 * 1024 * 1024 / (64 * 1024));
         } else if (path.endsWith("/refuse-upload")) {
-            // The early-refusal shape: answer at the headers and never read a byte of the
-            // body — what a member's body limit does when the declared length is over it.
-            // The pause keeps the refusal early however the event loop schedules the body.
+            // The early-refusal shape: answer at the headers and read nothing while the
+            // caller uploads — the pause is what makes the wedge deterministic without the
+            // fix (the pipe parks on this origin's full write queue). The stream's own
+            // terminal events count the release latch down, but only once the test resumes
+            // reading: a FIN queued behind unread kernel-buffered body is invisible to a
+            // stream nobody reads, which is a property of sockets, not of the relay — the
+            // real member is always reading (its own drain), so it sees the reset at once.
             request.pause();
             java.util.concurrent.CountDownLatch released = originLegReleased;
+            request.handler(dropped -> {
+            });
+            request.endHandler(done -> released.countDown());
+            request.exceptionHandler(broken -> released.countDown());
             request.connection().closeHandler(closed -> released.countDown());
+            io.vertx.core.Context origin = vertx.getOrCreateContext();
+            resumeRefusedUpload = () -> origin.runOnContext(resumed -> request.resume());
             response.setStatusCode(413)
                     .putHeader("Content-Type", "application/json; charset=utf-8")
                     .end("{\"refused\":true}");
