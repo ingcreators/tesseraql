@@ -423,6 +423,12 @@ public final class TransactionalCommandProcessor implements Step {
                 .spanParent(exchange.getProperty(TesseraqlProperties.TRACE_CONTEXT,
                         io.tesseraql.core.telemetry.SpanContext.class));
 
+        // The same open-run-commit-restore bracket as SqlStatement.transact, kept by hand on
+        // purpose: the command pipeline maps every failure through asTqlException for the
+        // response contract, and threads the connection through workflow sessions, decisions,
+        // and outbox inserts — riding transact would put a second exception vocabulary
+        // (SqlStatementException) between those and the renderer for no behavioral gain. The
+        // discipline is identical: suppressed rollback, log-don't-throw autocommit restore.
         try (Connection connection = dataSource.getConnection()) {
             boolean previousAutoCommit = connection.getAutoCommit();
             connection.setAutoCommit(false);

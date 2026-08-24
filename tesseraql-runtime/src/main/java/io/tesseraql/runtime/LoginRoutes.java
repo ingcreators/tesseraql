@@ -239,22 +239,12 @@ final class LoginRoutes {
      * this request is an ordinary sign-out: cookie cleared, back to the login page.
      */
     private void logoutDevice(Exchange exchange) throws Exception {
-        String cookie = exchange.request().header("Cookie");
-        String sessionId = sessions.sessionIdFromCookie(cookie);
-        SessionStore.Session session = sessionId == null ? null : sessions.session(sessionId);
-        if (session == null) {
-            throw new TqlException(PolicyEngine.UNAUTHORIZED, "No session");
-        }
-        Map<String, Object> body = parseBody(exchange);
-        String token = exchange.request().header("X-CSRF-Token");
-        if (token == null) {
-            Object field = body.get("_csrf");
-            token = field == null ? null : String.valueOf(field);
-        }
-        new io.tesseraql.security.session.CsrfValidator(sessions).validate(cookie, token);
-        Object handle = body.get("handle");
+        AuthenticatedPost post = requireSessionAndCsrf(exchange);
+        String sessionId = post.sessionId();
+        Object handle = post.body().get("handle");
         if (handle != null && !String.valueOf(handle).isBlank()) {
-            sessions.invalidateByHandle(session.principal().subject(), String.valueOf(handle));
+            sessions.invalidateByHandle(post.session().principal().subject(),
+                    String.valueOf(handle));
         }
         if (sessions.session(sessionId) == null) {
             // The revoked device was this one: an ordinary sign-out.
@@ -268,19 +258,8 @@ final class LoginRoutes {
 
     /** Invalidates the caller's other sessions, keeping the one that made this request. */
     private void logoutOthers(Exchange exchange) throws Exception {
-        String cookie = exchange.request().header("Cookie");
-        String sessionId = sessions.sessionIdFromCookie(cookie);
-        SessionStore.Session session = sessionId == null ? null : sessions.session(sessionId);
-        if (session == null) {
-            throw new TqlException(PolicyEngine.UNAUTHORIZED, "No session");
-        }
-        String token = exchange.request().header("X-CSRF-Token");
-        if (token == null) {
-            Object field = parseBody(exchange).get("_csrf");
-            token = field == null ? null : String.valueOf(field);
-        }
-        new io.tesseraql.security.session.CsrfValidator(sessions).validate(cookie, token);
-        sessions.invalidateOthersFor(session.principal().subject(), sessionId);
+        AuthenticatedPost post = requireSessionAndCsrf(exchange);
+        sessions.invalidateOthersFor(post.session().principal().subject(), post.sessionId());
         redirect(exchange, 303, "/_tesseraql/account?saved=signed-out-others");
     }
 
@@ -296,19 +275,9 @@ final class LoginRoutes {
      * person's other sessions see the elevation at their next sign-in.
      */
     private void elevate(Exchange exchange) throws Exception {
-        String cookie = exchange.request().header("Cookie");
-        String sessionId = sessions.sessionIdFromCookie(cookie);
-        SessionStore.Session session = sessionId == null ? null : sessions.session(sessionId);
-        if (session == null) {
-            throw new TqlException(PolicyEngine.UNAUTHORIZED, "No session");
-        }
-        Map<String, Object> body = parseBody(exchange);
-        String token = exchange.request().header("X-CSRF-Token");
-        if (token == null) {
-            Object field = body.get("_csrf");
-            token = field == null ? null : String.valueOf(field);
-        }
-        new io.tesseraql.security.session.CsrfValidator(sessions).validate(cookie, token);
+        AuthenticatedPost post = requireSessionAndCsrf(exchange);
+        SessionStore.Session session = post.session();
+        Map<String, Object> body = post.body();
         if (identity == null) {
             throw new TqlException(io.tesseraql.identity.Elevation.REFUSED,
                     "This deployment has no identity realm to elevate against");
@@ -324,8 +293,35 @@ final class LoginRoutes {
             io.tesseraql.identity.Elevation.elevate(identity, realm, subject, role,
                     str(body.get("minutes")), str(body.get("reason")));
         }
-        refreshPrincipal(sessionId, session);
+        refreshPrincipal(post.sessionId(), session);
         redirect(exchange, 303, "/_tesseraql/account?saved=elevated");
+    }
+
+    /**
+     * The caller a session-mutating POST acts for: the live session proven by the cookie, and
+     * the CSRF token — the {@code X-CSRF-Token} header, else the {@code _csrf} form field —
+     * validated against it. This preamble existed as three drifting copies (the review's one
+     * real CPD hit); the parsed body rides along because two of the three read it anyway.
+     */
+    private record AuthenticatedPost(String sessionId, SessionStore.Session session,
+            Map<String, Object> body) {
+    }
+
+    private AuthenticatedPost requireSessionAndCsrf(Exchange exchange) throws Exception {
+        String cookie = exchange.request().header("Cookie");
+        String sessionId = sessions.sessionIdFromCookie(cookie);
+        SessionStore.Session session = sessionId == null ? null : sessions.session(sessionId);
+        if (session == null) {
+            throw new TqlException(PolicyEngine.UNAUTHORIZED, "No session");
+        }
+        Map<String, Object> body = parseBody(exchange);
+        String token = exchange.request().header("X-CSRF-Token");
+        if (token == null) {
+            Object field = body.get("_csrf");
+            token = field == null ? null : String.valueOf(field);
+        }
+        new io.tesseraql.security.session.CsrfValidator(sessions).validate(cookie, token);
+        return new AuthenticatedPost(sessionId, session, body);
     }
 
     /** Re-reads the session owner's principal so the change is live on the next request. */

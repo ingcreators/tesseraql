@@ -104,12 +104,16 @@ final class WorkflowSweeper {
         return this;
     }
 
-    /** Applies each overdue task's breach handling; returns the number escalated. */
+    /**
+     * Applies each overdue task's breach handling; returns the number escalated. The
+     * open-run-commit-restore bracket is {@link io.tesseraql.core.sql.SqlStatement#transact},
+     * not a hand-rolled copy: the copy this replaced neither suppressed a failing rollback
+     * into the failure that mattered nor kept a failing autocommit restore from masking a
+     * committed sweep as an error.
+     */
     int sweep() {
-        try (Connection connection = dataSource.getConnection()) {
-            boolean previousAutoCommit = connection.getAutoCommit();
-            connection.setAutoCommit(false);
-            try {
+        try {
+            return statements.transact("workflow.sweep", connection -> {
                 int escalated = 0;
                 for (WorkflowTaskStore.Overdue task : taskStore.overdue(connection, Instant.now(),
                         BATCH)) {
@@ -124,15 +128,9 @@ final class WorkflowSweeper {
                         escalated++;
                     }
                 }
-                connection.commit();
                 return escalated;
-            } catch (RuntimeException | SQLException ex) {
-                connection.rollback();
-                throw ex instanceof TqlException tql ? tql : error(ex);
-            } finally {
-                connection.setAutoCommit(previousAutoCommit);
-            }
-        } catch (SQLException ex) {
+            });
+        } catch (io.tesseraql.core.sql.SqlStatementException ex) {
             throw error(ex);
         }
     }
