@@ -19,6 +19,41 @@ All notable changes to TesseraQL are documented here. The format follows
   them to fit, the direction the type exists to prevent; the relay's and reloader's code
   constants are `TqlErrorCode` now.
 
+- **A path the filesystem cannot express refuses like a traversal instead of a 500.**
+  `ConfinedPath.resolve()` let the raw `InvalidPathException` escape, so a NUL byte in a
+  Studio draft path or an asset request surfaced as an internal error instead of the
+  caller's own refusal; it now answers the same empty result an escaping `..` does. The
+  javadoc states what was only implicit: the confinement is lexical — symlinks are
+  deliberately not resolved. Studio's page listing adopted `ConfinedPath` in place of the
+  one hand-rolled guard that had escaped the path-guard ledger's four-line grep window;
+  the window is eight lines now, the `String.startsWith` false positive it would catch is
+  excluded, and the one new prefix-classification site it surfaced (`LintContext`) is
+  ledgered with its reason.
+
+- **SAML IdP metadata's cache bridges only failures that heal, and IPv6 loopback counts
+  as loopback.** The boot-time metadata fetch refused to serve its cached copy over a
+  denied host but served it over every other gateway refusal alike — an invalid metadata
+  URL booted the app on possibly-ancient cached metadata that pins the IdP signing key.
+  The classification is now fail-closed: only a transport failure or an open circuit —
+  the failures that heal on their own — fall back to the cache; every policy refusal
+  refuses the boot. The gateway's classification codes (`TQL-BATCH-5306`, `5307`,
+  `5309`) moved beside the policy in `HttpOutbound`, where `TQL-BATCH-5305` already
+  lived, so callers can classify. And `http://[::1]` now counts as loopback for the
+  https-only rules: `URI.getHost()` keeps the brackets on an IPv6 literal, so the bare
+  `::1` comparison in the SAML, JWKS, and OIDC checks never matched a real URL.
+
+- **The outbound gateway's two forms account a host's health identically, and a refusal
+  is a recorded trace.** The raw `exchange()` form counted any response below 500 —
+  a 404 included — as breaker success, so a host alternating 500 and 404 could never
+  trip the circuit through SCIM or OIDC while tripping it through an `http-call` step;
+  a 4xx now counts as neither, the deterministic-rejection stance `call()` has always
+  taken. The `tesseraql.http.call` span now opens before admission, so a denied host or
+  an open circuit leaves a span carrying the refusal instead of no trace at all, and the
+  gateway-form javadoc no longer claims a parenting ("the current trace root") that never
+  existed — with no caller-supplied parent the span starts a trace of its own. The
+  per-host breaker's deliberate sharing across every gateway surface is now documented on
+  the client.
+
 - **A configuration refusal dead-letters an outbox event at once instead of burning the
   retry budget.** A SCIM provisioning event whose provider host is outside the egress
   allow-list used to retry to the `maxAttempts` ceiling — ten identical refusals of a
