@@ -1,7 +1,6 @@
 package io.tesseraql.operations.http;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.expr.EvaluationContext;
@@ -50,14 +49,13 @@ import java.util.function.LongSupplier;
  */
 public final class HttpCallClient implements io.tesseraql.yaml.http.OutboundGateway {
 
-    /** TQL-BATCH-5305, declared beside the policy so gateway callers can tell it apart. */
+    // The gateway's classification codes are declared beside the policy (HttpOutbound), so a
+    // gateway caller can tell a configuration refusal from a transient failure; these are the
+    // local aliases.
     private static final TqlErrorCode HOST_DENIED = HttpOutbound.HOST_DENIED;
-    /** TQL-BATCH-5306: the per-host circuit breaker is open. */
-    private static final TqlErrorCode CIRCUIT_OPEN = new TqlErrorCode(TqlDomain.BATCH, 5306);
-    /** TQL-BATCH-5307: the outbound call failed (transport error, timeout, or rejected status). */
-    private static final TqlErrorCode CALL_FAILED = new TqlErrorCode(TqlDomain.BATCH, 5307);
-    /** TQL-BATCH-5309: the http-call declaration is invalid (no absolute http/https url). */
-    private static final TqlErrorCode INVALID_CALL = new TqlErrorCode(TqlDomain.BATCH, 5309);
+    private static final TqlErrorCode CIRCUIT_OPEN = HttpOutbound.CIRCUIT_OPEN;
+    private static final TqlErrorCode CALL_FAILED = HttpOutbound.CALL_FAILED;
+    private static final TqlErrorCode INVALID_CALL = HttpOutbound.INVALID_CALL;
 
     private final HttpOutbound outbound;
     private final AppConfig config;
