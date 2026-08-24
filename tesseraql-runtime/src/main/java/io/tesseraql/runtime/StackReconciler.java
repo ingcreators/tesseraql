@@ -14,7 +14,6 @@ import java.nio.file.WatchService;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -95,12 +94,7 @@ final class StackReconciler implements AutoCloseable {
     private final Path installRoot;
     private final HostOperations host;
     private final AppUpgrader upgrader = new AppUpgrader();
-    private final ScheduledExecutorService passes = Executors
-            .newSingleThreadScheduledExecutor(runnable -> {
-                Thread thread = new Thread(runnable, "tesseraql-stack-reconciler");
-                thread.setDaemon(true);
-                return thread;
-            });
+    private final ScheduledExecutorService passes = passExecutor();
     private final AtomicBoolean passPending = new AtomicBoolean();
     /** Membership edits are logged once, not per pass — the answer never changes while running. */
     private final Set<String> reportedMembershipEdits = ConcurrentHashMap.newKeySet();
@@ -161,6 +155,24 @@ final class StackReconciler implements AutoCloseable {
         // One pass at start: boot already reconciled, and this closes the window between boot's
         // read and the watch registration — idempotence makes it a no-op when nothing landed.
         requestPass();
+    }
+
+    /**
+     * The pass thread, shaped for the close below: {@code shutdown()} must drop a queued
+     * debounce or sweep rather than run it (the default policy runs delayed one-shots after
+     * shutdown), and close never interrupts — an interrupt mid-pass rode into the status
+     * write's {@code FileChannel} as {@code ClosedByInterruptException} and silently dropped
+     * the applied/refused record of exactly the deploy the close waits for.
+     */
+    private static ScheduledExecutorService passExecutor() {
+        java.util.concurrent.ScheduledThreadPoolExecutor executor = new java.util.concurrent.ScheduledThreadPoolExecutor(
+                1, runnable -> {
+                    Thread thread = new Thread(runnable, "tesseraql-stack-reconciler");
+                    thread.setDaemon(true);
+                    return thread;
+                });
+        executor.setExecuteExistingDelayedTasksAfterShutdownPolicy(false);
+        return executor;
     }
 
     private static void closeQuietly(WatchService service) {
@@ -351,12 +363,17 @@ final class StackReconciler implements AutoCloseable {
         // Closing the watch service is what stops the watch thread; a reconciler running on the
         // sweep alone has neither.
         closeQuietly(watcher);
-        passes.shutdownNow();
+        // shutdown(), not shutdownNow(): the whole point of waiting is the in-flight pass's
+        // status write, and shutdownNow's interrupt made that write throw
+        // ClosedByInterruptException — the record this close protects, dropped by the close
+        // itself. The executor's policy (passExecutor) drops queued work instead of running it.
+        passes.shutdown();
         // And wait for the pass actually finishing: close() used to return while a pass was
         // still applying and writing its status file, so the caller's next act — a host
         // releasing the install root, a test deleting its temp directory — raced that write.
         // Bounded: a pass is file reads, a diff, and the host operations it drives; one that
-        // is still going after this long is reported, not waited on forever.
+        // is still going after this long is reported, not waited on forever — but the caller
+        // may then race it, so the WARN says which pass to look for.
         try {
             if (!passes.awaitTermination(10, TimeUnit.SECONDS)) {
                 LOG.warn("A reconcile pass on {} was still running 10s after close", installRoot);
