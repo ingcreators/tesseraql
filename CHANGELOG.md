@@ -8,6 +8,16 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **An atomic replace is durable before it is visible, and keeps the target's
+  permissions.** `AtomicFiles` renamed its temp into place without forcing the bytes to
+  storage first, so a crash straight after a replace could surface the new name over
+  empty contents — the classic rename-before-data loss, and the app catalog another
+  process reads was the live exposure. The temp's contents are now fsynced before the
+  move. And because `ATOMIC_MOVE` keeps the source's mode, every replaced file used to
+  end up `0600` (the temp's creation default) whatever it was before; a replace now
+  carries the existing target's POSIX permissions over, while a first write keeps the
+  restrictive default — safe for a new file.
+
 - **A control character in a failure message no longer invalidates the JUnit report, and
   error-envelope codes are typed everywhere.** XML 1.0 cannot carry the C0 controls (save
   tab, LF, CR) even as character references, yet the shared XML escapers passed them
