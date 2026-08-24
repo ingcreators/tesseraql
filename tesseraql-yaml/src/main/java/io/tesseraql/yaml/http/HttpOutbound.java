@@ -48,6 +48,12 @@ public final class HttpOutbound {
     public static final TqlErrorCode CALL_FAILED = new TqlErrorCode(TqlDomain.BATCH, 5307);
     /** TQL-BATCH-5309: the call declaration is invalid (no absolute http/https url). */
     public static final TqlErrorCode INVALID_CALL = new TqlErrorCode(TqlDomain.BATCH, 5309);
+    /**
+     * TQL-BATCH-5316: the response exceeded {@code tesseraql.http.outbound.maxResponseBytes}.
+     * A policy bound, not a host failure: the breaker is untouched, and the refusal names the
+     * key to raise.
+     */
+    public static final TqlErrorCode RESPONSE_TOO_LARGE = new TqlErrorCode(TqlDomain.BATCH, 5316);
 
     /** The supported credential types. */
     public static final String BEARER = "bearer";
@@ -58,6 +64,7 @@ public final class HttpOutbound {
     private static final Duration DEFAULT_REQUEST_TIMEOUT = Duration.ofSeconds(30);
     private static final int DEFAULT_CIRCUIT_BREAKER_THRESHOLD = 5;
     private static final Duration DEFAULT_CIRCUIT_BREAKER_OPEN = Duration.ofSeconds(30);
+    private static final long DEFAULT_MAX_RESPONSE_BYTES = 10L * 1024 * 1024;
 
     private final AppConfig config;
     private final boolean present;
@@ -67,10 +74,12 @@ public final class HttpOutbound {
     private final Duration requestTimeout;
     private final int circuitBreakerThreshold;
     private final Duration circuitBreakerOpenDuration;
+    private final long maxResponseBytes;
 
     private HttpOutbound(AppConfig config, boolean present, List<String> allowedHosts,
             Map<String, Credential> credentials, Duration connectTimeout, Duration requestTimeout,
-            int circuitBreakerThreshold, Duration circuitBreakerOpenDuration) {
+            int circuitBreakerThreshold, Duration circuitBreakerOpenDuration,
+            long maxResponseBytes) {
         this.config = config;
         this.present = present;
         this.allowedHosts = List.copyOf(allowedHosts);
@@ -81,6 +90,7 @@ public final class HttpOutbound {
         this.requestTimeout = requestTimeout;
         this.circuitBreakerThreshold = circuitBreakerThreshold;
         this.circuitBreakerOpenDuration = circuitBreakerOpenDuration;
+        this.maxResponseBytes = maxResponseBytes;
     }
 
     /** Loads the outbound policy, failing fast on an unsupported credential {@code type}. */
@@ -103,10 +113,11 @@ public final class HttpOutbound {
         Duration openDuration = config
                 .getString("tesseraql.http.outbound.circuitBreaker.openDuration")
                 .map(Durations::parse).orElse(DEFAULT_CIRCUIT_BREAKER_OPEN);
+        long maxResponseBytes = maxResponseBytes(config);
 
         Map<String, Credential> credentials = new LinkedHashMap<>();
         HttpOutbound loaded = new HttpOutbound(config, present, allowedHosts, credentials,
-                connectTimeout, requestTimeout, threshold, openDuration);
+                connectTimeout, requestTimeout, threshold, openDuration, maxResponseBytes);
         if (config.navigate("tesseraql.http.outbound.credentials") instanceof Map<?, ?> declared) {
             declared.forEach((name, settings) -> {
                 if (!(settings instanceof Map<?, ?> raw)) {
@@ -126,6 +137,32 @@ public final class HttpOutbound {
             });
         }
         return loaded;
+    }
+
+    /**
+     * The response-body ceiling: {@code tesseraql.http.outbound.maxResponseBytes}, default
+     * 10 MB, {@code -1} the visible opt-out, units accepted ({@code 25MB}) like every other
+     * byte-size key — the outbound mirror of {@code tesseraql.http.maxBodyBytes}. The gateway
+     * buffers every response on heap, so what a provider may answer with is a bound the
+     * framework must state, not whatever the remote end decides to send.
+     */
+    private static long maxResponseBytes(AppConfig config) {
+        Optional<String> declared = config
+                .getString("tesseraql.http.outbound.maxResponseBytes");
+        if (declared.isEmpty()) {
+            return DEFAULT_MAX_RESPONSE_BYTES;
+        }
+        String text = declared.get().trim();
+        if ("-1".equals(text)) {
+            return -1;
+        }
+        return io.tesseraql.core.util.Sizes.parsePositiveBytes(text,
+                "tesseraql.http.outbound.maxResponseBytes");
+    }
+
+    /** The response-body ceiling in bytes; {@code -1} disables the bound. */
+    public long maxResponseBytes() {
+        return maxResponseBytes;
     }
 
     /** Whether any {@code tesseraql.http.outbound} block is declared at all. */

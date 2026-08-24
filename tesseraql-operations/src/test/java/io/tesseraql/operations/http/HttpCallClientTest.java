@@ -239,6 +239,74 @@ class HttpCallClientTest {
         assertThat(tracer.spans().get(0).error()).isTrue();
     }
 
+    /** A declared Content-Length over the ceiling refuses before a byte of body buffers. */
+    @Test
+    void refusesAResponseOverTheCeiling() {
+        responseBody = "x".repeat(64);
+        HttpCallClient client = client(Map.of(
+                "allowedHosts", List.of("localhost"),
+                "maxResponseBytes", "16"));
+
+        assertThatThrownBy(() -> client.exchange(call("GET", "/big"), null, Map.of()))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("TQL-BATCH-5316")
+                .hasMessageContaining("maxResponseBytes");
+        // The same bound guards the step form: same policy, same refusal.
+        assertThatThrownBy(() -> client.call(call("GET", "/big"), Map.of(), null))
+                .hasMessageContaining("TQL-BATCH-5316");
+    }
+
+    /** A chunked (undeclared-length) body is counted and cancelled past the ceiling. */
+    @Test
+    void aChunkedResponseIsCancelledPastTheCeiling() {
+        server.createContext("/chunked", exchange -> {
+            exchange.sendResponseHeaders(200, 0);
+            try (OutputStream os = exchange.getResponseBody()) {
+                byte[] chunk = new byte[1024];
+                for (int i = 0; i < 64; i++) {
+                    os.write(chunk);
+                }
+            } catch (IOException cancelledMidStream) {
+                // The client cancelling the stream mid-body is the behavior under test.
+            }
+        });
+        HttpCallClient client = client(Map.of(
+                "allowedHosts", List.of("localhost"),
+                "maxResponseBytes", "4KB"));
+
+        assertThatThrownBy(() -> client.exchange(call("GET", "/chunked"), null, Map.of()))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("TQL-BATCH-5316");
+    }
+
+    /** The ceiling is policy, not host health: the breaker must not budge, either way. */
+    @Test
+    void aCeilingRefusalLeavesTheBreakerAlone() {
+        responseBody = "x".repeat(64);
+        HttpCallClient client = client(Map.of(
+                "allowedHosts", List.of("localhost"),
+                "maxResponseBytes", "16",
+                "circuitBreaker", Map.of("failureThreshold", 1)));
+
+        assertThatThrownBy(() -> client.exchange(call("GET", "/big"), null, Map.of()))
+                .hasMessageContaining("TQL-BATCH-5316");
+
+        // Still closed: a small answer goes straight through.
+        responseBody = "ok";
+        assertThat(client.exchange(call("GET", "/small"), null, Map.of()).status())
+                .isEqualTo(200);
+    }
+
+    @Test
+    void minusOneDisablesTheResponseCeiling() {
+        responseBody = "x".repeat(64);
+        HttpCallClient client = client(Map.of(
+                "allowedHosts", List.of("localhost"),
+                "maxResponseBytes", "-1"));
+
+        assertThat(client.exchange(call("GET", "/big"), null, Map.of()).body()).hasSize(64);
+    }
+
     /**
      * The regression the deleted per-module clients each carried on their own: the shared
      * client must set a {@link java.net.ProxySelector}, because without one the JDK client
