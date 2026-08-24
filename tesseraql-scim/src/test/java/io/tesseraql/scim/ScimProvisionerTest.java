@@ -89,6 +89,33 @@ class ScimProvisionerTest {
                 .satisfies(ex -> assertThat(((ScimException) ex).status()).isEqualTo(500));
     }
 
+    @Test
+    void aDeniedHostIsTerminalNotRetryable() {
+        // The gateway's allow-list admits localhost only; a provider host outside it is a
+        // configuration refusal, so the client classifies it terminal — the outbox
+        // dead-letters at once instead of retrying an identical refusal to the ceiling.
+        ScimTarget denied = new ScimTarget("http://scim.blocked.example/scim/v2", "token");
+        ScimProvisioner refused = new ScimProvisioner(new ScimOutboundClient(denied, gateway()),
+                new ScimResourceMapping.InMemory());
+
+        assertThatThrownBy(() -> refused.provision("local-4",
+                new ScimUser(null, null, null, "err", null, List.of(), Boolean.TRUE)))
+                .isInstanceOf(io.tesseraql.core.outbox.TerminalDeliveryException.class)
+                .hasMessageContaining("scim.blocked.example");
+    }
+
+    @Test
+    void aTransportFailureStaysRetryable() {
+        // A closed port is an outage that may heal: still a 502 ScimException, so the
+        // outbox keeps its at-least-once retries.
+        server.stop(0);
+
+        assertThatThrownBy(() -> provisioner.provision("local-5",
+                new ScimUser(null, null, null, "err", null, List.of(), Boolean.TRUE)))
+                .isInstanceOf(ScimException.class)
+                .satisfies(ex -> assertThat(((ScimException) ex).status()).isEqualTo(502));
+    }
+
     private void handle(HttpExchange exchange) throws java.io.IOException {
         authHeaders.add(exchange.getRequestHeaders().getFirst("Authorization"));
         String method = exchange.getRequestMethod();
