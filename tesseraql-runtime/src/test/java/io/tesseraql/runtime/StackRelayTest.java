@@ -70,6 +70,12 @@ class StackRelayTest {
     private static volatile Map<String, String> lastRequestHeaders = Map.of();
     /** The protocol the origin saw on the second hop, so a case can prove both hops moved. */
     private static volatile String lastOriginVersion = "";
+    /** Counts down when the origin's refuse-upload request stream terminates — the reset. */
+    private static volatile java.util.concurrent.CountDownLatch originLegReleased = new java.util.concurrent.CountDownLatch(
+            1);
+    /** Resumes the refuse-upload origin's reading, on its own context, once a test wants it. */
+    private static volatile Runnable resumeRefusedUpload = () -> {
+    };
 
     @BeforeAll
     static void start() throws Exception {
@@ -341,6 +347,57 @@ class StackRelayTest {
     }
 
     /**
+     * An origin that answers before reading the upload neither wedges the caller nor loses the
+     * answer — the early-response race, closed rather than tolerated.
+     *
+     * <p>A member refuses an over-limit request at the headers, while the caller is still
+     * writing the body. Left to the proxy's pipe alone, the forward parks on the origin
+     * request's write queue the moment the origin stops reading, the front request is paused
+     * with it, and an HTTP/1.1 caller — blocked in its own write — cannot see the relayed
+     * refusal until something times out: the silence measured three ways on CI
+     * ({@code MultiAppGatewayDifferentialTest}'s watchdog counters, run 32686046591). The relay
+     * now drains the rest of the upload at the front door the moment an early answer arrives,
+     * so this completes in milliseconds; without the drain it hangs to the request timeout. The
+     * upload is bigger than every buffer on both hops, so the pipe alone can never absorb it.
+     */
+    @Test
+    void anEarlyAnswerMidUploadArrivesAndTheDoorDrainsTheRest() throws Exception {
+        originLegReleased = new java.util.concurrent.CountDownLatch(1);
+        byte[] upload = new byte[32 * 1024 * 1024];
+
+        try (java.net.http.HttpClient http = java.net.http.HttpClient.newBuilder()
+                .version(Version.HTTP_1_1).build()) {
+            HttpResponse<String> refused = http.send(HttpRequest
+                    .newBuilder(URI.create(base + "/refuse-upload"))
+                    .timeout(java.time.Duration.ofSeconds(30))
+                    .POST(HttpRequest.BodyPublishers.ofByteArray(upload))
+                    .build(), HttpResponse.BodyHandlers.ofString());
+
+            assertThat(refused.statusCode())
+                    .as("the origin's early answer is delivered, not timed out").isEqualTo(413);
+            assertThat(refused.body()).contains("refused");
+
+            // The reset has already been sent (the answer above was relayed before it); a
+            // reading origin is what observes it — the real member's own drain always reads.
+            resumeRefusedUpload.run();
+            assertThat(originLegReleased.await(10, TimeUnit.SECONDS))
+                    .as("the origin request is reset once the answer is relayed, so a"
+                            + " member's own drain sees a terminated stream rather than"
+                            + " silence")
+                    .isTrue();
+
+            // Drained, not closed: the same caller's next request rides the same front
+            // connection, which is what pins the discipline over a connection-killing fix.
+            HttpResponse<String> after = http.send(HttpRequest
+                    .newBuilder(URI.create(base + "/hello"))
+                    .timeout(java.time.Duration.ofSeconds(30)).build(),
+                    HttpResponse.BodyHandlers.ofString());
+            assertThat(after.statusCode())
+                    .as("the front connection survives the refusal").isEqualTo(200);
+        }
+    }
+
+    /**
      * With HTTP/2 served and forwarded, the relay stays transparent.
      *
      * <p>The setting moves both hops on purpose, and this is why: an earlier build accepted h2c at
@@ -567,6 +624,26 @@ class StackRelayTest {
         } else if (path.endsWith("/download")) {
             response.setChunked(true);
             writeChunks(response, 96 * 1024 * 1024 / (64 * 1024));
+        } else if (path.endsWith("/refuse-upload")) {
+            // The early-refusal shape: answer at the headers and read nothing while the
+            // caller uploads — the pause is what makes the wedge deterministic without the
+            // fix (the pipe parks on this origin's full write queue). The stream's own
+            // terminal events count the release latch down, but only once the test resumes
+            // reading: a FIN queued behind unread kernel-buffered body is invisible to a
+            // stream nobody reads, which is a property of sockets, not of the relay — the
+            // real member is always reading (its own drain), so it sees the reset at once.
+            request.pause();
+            java.util.concurrent.CountDownLatch released = originLegReleased;
+            request.handler(dropped -> {
+            });
+            request.endHandler(done -> released.countDown());
+            request.exceptionHandler(broken -> released.countDown());
+            request.connection().closeHandler(closed -> released.countDown());
+            io.vertx.core.Context origin = vertx.getOrCreateContext();
+            resumeRefusedUpload = () -> origin.runOnContext(resumed -> request.resume());
+            response.setStatusCode(413)
+                    .putHeader("Content-Type", "application/json; charset=utf-8")
+                    .end("{\"refused\":true}");
         } else if (path.endsWith("/cookie")) {
             response.putHeader("Set-Cookie", "tesseraql_sid=abc; Path=/; HttpOnly; SameSite=Lax")
                     .end("ok");
