@@ -160,6 +160,34 @@ class ViewEjectorTest {
         assertThat(file.content()).contains("th:text=\"#{tql.view.submit}\"");
     }
 
+    /**
+     * An apostrophe ends the single-quoted OGNL literal the selected-option expression splices
+     * values into; {@code Escapes.html} never touches it, so an option like {@code O'Brien}
+     * broke the ejected template at parse time — and, read as injection, let a view spec splice
+     * into the expression. The title rides the same grammar in the shell call.
+     */
+    @Test
+    void anApostropheStaysInsideItsExpressionLiteral(@TempDir Path dir) throws Exception {
+        ViewSpec spec = parse(dir, """
+                version: tesseraql/v1
+                kind: view
+                recipe: form
+                id: people.new
+                title: Bob's people
+                action: /people/create
+                """);
+        List<ViewFields.FieldDef> fields = List.of(
+                new ViewFields.FieldDef("owner", "k", "Owner", "select", false, null, null,
+                        null, List.of("O'Brien"), null, null, null, null));
+
+        ScaffoldedFile file = ViewEjector.eject(dir, dir, "page.view.yml", spec, fields,
+                "web/people/new/page.html");
+
+        assertThat(file.content()).contains("== 'O\\'Brien'");
+        assertThat(file.content()).contains("<option value=\"O'Brien\"");
+        assertThat(file.content()).contains("shell('Bob\\'s people'");
+    }
+
     @Test
     void ejectsADashboardWithAllPanelKinds(@TempDir Path dir) throws Exception {
         ViewSpec spec = parse(dir, """
