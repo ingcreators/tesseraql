@@ -335,9 +335,10 @@ public final class TesseraqlRuntime implements AutoCloseable {
     }
 
     /**
-     * The request-body ceiling in bytes: {@code tesseraql.http.maxBodyBytes}, default 10 MB,
-     * {@code -1} the visible opt-out. It covers buffered bodies and streamed uploads alike, so a
-     * deployment taking large file imports raises it (docs/file-transfers.md).
+     * The request-body ceiling: {@code tesseraql.http.maxBodyBytes}, default 10 MB, {@code -1}
+     * the visible opt-out, units accepted ({@code 25MB}) like every other byte-size key. It
+     * covers buffered bodies and streamed uploads alike, so a deployment taking large file
+     * imports raises it (docs/file-transfers.md).
      *
      * <p>Declared here because the transport upgrade to Vert.x 5 changed the underlying
      * default from unlimited to 10 MB silently; a bound this consequential is the framework's to
@@ -349,20 +350,15 @@ public final class TesseraqlRuntime implements AutoCloseable {
             return 10L * 1024 * 1024;
         }
         String text = declared.get().trim();
-        long value;
-        try {
-            value = Long.parseLong(text);
-        } catch (NumberFormatException notANumber) {
-            throw new io.tesseraql.core.error.TqlException(BAD_THREAD_COUNT,
-                    "tesseraql.http.maxBodyBytes must be a byte count, or -1 for unbounded,"
-                            + " got '" + text + "'");
+        if ("-1".equals(text)) {
+            return -1;
         }
-        if (value < 1 && value != -1) {
-            throw new io.tesseraql.core.error.TqlException(BAD_THREAD_COUNT,
-                    "tesseraql.http.maxBodyBytes must be a positive byte count, or -1 for"
-                            + " unbounded, got " + value);
-        }
-        return value;
+        // Sizes, like every other byte-size key (docs/duplication-consolidation.md slice 2):
+        // `25MB` works here the way it works for an attachment cap, and the refusal carries
+        // the size code rather than the thread-count one this read used to borrow.
+        // BREAKING: a malformed value now refuses with TQL-YAML-1302 instead of TQL-YAML-1112.
+        return io.tesseraql.core.util.Sizes.parsePositiveBytes(text,
+                "tesseraql.http.maxBodyBytes");
     }
 
     /**
