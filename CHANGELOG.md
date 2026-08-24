@@ -8,6 +8,16 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **An atomic replace is durable before it is visible, and keeps the target's
+  permissions.** `AtomicFiles` renamed its temp into place without forcing the bytes to
+  storage first, so a crash straight after a replace could surface the new name over
+  empty contents — the classic rename-before-data loss, and the app catalog another
+  process reads was the live exposure. The temp's contents are now fsynced before the
+  move. And because `ATOMIC_MOVE` keeps the source's mode, every replaced file used to
+  end up `0600` (the temp's creation default) whatever it was before; a replace now
+  carries the existing target's POSIX permissions over, while a first write keeps the
+  restrictive default — safe for a new file.
+
 - **A configuration refusal dead-letters an outbox event at once instead of burning the
   retry budget.** A SCIM provisioning event whose provider host is outside the egress
   allow-list used to retry to the `maxAttempts` ceiling — ten identical refusals of a
