@@ -62,6 +62,9 @@ class HttpClientLedgerTest {
             files.filter(path -> path.toString().endsWith(".java"))
                     .filter(path -> path.toString().contains("/src/main/java/"))
                     .filter(path -> !path.toString().contains("/target/"))
+                    // Hidden directories are never main sources, and a .claude/ worktree on
+                    // disk carries stale copies of exactly the files this ledger greps.
+                    .filter(path -> !path.toString().contains("/."))
                     .forEach(path -> {
                         try {
                             String source = Files.readString(path);
