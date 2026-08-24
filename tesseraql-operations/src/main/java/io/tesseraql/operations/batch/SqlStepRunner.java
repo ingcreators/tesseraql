@@ -69,8 +69,8 @@ final class SqlStepRunner {
         long startedAt = System.currentTimeMillis();
         try {
             Map<String, Object> result = switch (mode) {
-                case "query-spool" -> statements.read(sqlPath.toString(), bound,
-                        (resultSet, span) -> spool(context, resultSet, dialect, span));
+                case "query-spool" -> spoolStreaming(context, statements, sqlPath, bound,
+                        dialect);
                 case "query" -> statements.read(sqlPath.toString(), bound,
                         (resultSet, span) -> query(context, resultSet, dialect, span));
                 default -> Map.of("affectedRows",
@@ -150,6 +150,26 @@ final class SqlStepRunner {
         result.put("rowCount", rows.size());
         result.put("first", rows.isEmpty() ? null : rows.get(0));
         return result;
+    }
+
+    /**
+     * A {@code query-spool} extraction streams. The dialect's profile picks the fetch size and
+     * {@code transact} supplies the autocommit-off bracket PostgreSQL's cursor mode demands —
+     * the own-connection read ran with autocommit on and no fetch size, so the driver buffered
+     * the whole result before the first row reached the spool, defeating the mode's purpose
+     * ("the rows were never held"). A read-only transaction's commit is a no-op on the
+     * dialects that need no bracket.
+     */
+    private static Map<String, Object> spoolStreaming(StepContext context,
+            io.tesseraql.core.sql.SqlStatement statements, Path sqlPath, BoundSql bound,
+            String dialect) throws SQLException {
+        io.tesseraql.core.dialect.StreamingProfile profile = io.tesseraql.core.dialect.StreamingProfiles
+                .forDialect(dialect);
+        io.tesseraql.core.sql.SqlStatement streaming = statements
+                .fetchSize(profile.fetchSize());
+        return streaming.transact(sqlPath.toString(),
+                connection -> streaming.read(connection, sqlPath.toString(), bound,
+                        (resultSet, span) -> spool(context, resultSet, dialect, span)));
     }
 
     /**
