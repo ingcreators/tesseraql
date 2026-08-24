@@ -66,7 +66,6 @@ final class WorkflowSweeper {
     private final WorkflowStore workflowStore;
     private final OutboxStore outboxStore;
     private final String appName;
-    private final DataSource dataSource;
     /** Absence resolution for reassign fallbacks (roadmap Phase 52); nullable. */
     private final io.tesseraql.core.workflow.DelegationStore delegations;
     private io.tesseraql.core.sql.SqlStatement statements;
@@ -79,7 +78,6 @@ final class WorkflowSweeper {
         this.workflowStore = workflowStore;
         this.outboxStore = outboxStore;
         this.appName = appName;
-        this.dataSource = dataSource;
         this.delegations = delegations;
         this.statements = io.tesseraql.core.sql.SqlStatement.on(dataSource)
                 .surface("workflow");
