@@ -523,6 +523,10 @@ final class StackRelay {
             proxy.addInterceptor(new StripUnlessFromATrustedEdge(
                     () -> stripOf.apply(appName), trustedProxies));
         }
+        // Last on the request leg — after GET and HEAD have been given their definite zero
+        // length, so only requests genuinely carrying a body are valved — which also makes it
+        // the first to see the origin's answer on the response leg, before it is relayed.
+        proxy.addInterceptor(new EarlyResponseDrain());
         return proxy;
     }
 

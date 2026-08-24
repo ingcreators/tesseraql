@@ -8,6 +8,22 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **The gateway drains an upload itself the moment the origin answers early, so the
+  refusal always reaches the caller.** The silence shape of the
+  `MultiAppGatewayDifferentialTest` flake finally named its hop (run 32686046591, the first
+  occurrence with the drain watchdog's counters in place): the member's 413 write completed,
+  yet the member's drain and the transport's byte count froze at the same number — the
+  *gateway* had stopped forwarding the body. The proxy's pipe parks the front request on the
+  origin request's write queue, and when the origin's early response completes mid-upload
+  the wake it waits for can be lost; an HTTP/1.1 caller blocked in its own write cannot see
+  the relayed refusal, so the whole failure is silence until the caller's clock runs out.
+  The relay no longer races: a final response arriving while the front request is still
+  streaming ends the forward — the rest of the upload is discarded at the front door under
+  the same zero-progress watchdog the member-side drain carries, the caller's write
+  unblocks deterministically, and the origin request is reset once the answer is relayed so
+  the member's own drain sees a closed stream rather than one that went quiet. The
+  regression test refuses a 32 MB upload at the headers and pins that the refusal arrives,
+  the origin leg is released, and the front connection stays reusable.
 - **A stalled over-limit drain closes its connection instead of wedging the client.** CI
   produced a third shape of the `MultiAppGatewayDifferentialTest` flake with the
   declared-remainder drain fix already in place: sixty seconds of silence on an open
