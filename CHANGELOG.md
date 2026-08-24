@@ -8,6 +8,17 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A path the filesystem cannot express refuses like a traversal instead of a 500.**
+  `ConfinedPath.resolve()` let the raw `InvalidPathException` escape, so a NUL byte in a
+  Studio draft path or an asset request surfaced as an internal error instead of the
+  caller's own refusal; it now answers the same empty result an escaping `..` does. The
+  javadoc states what was only implicit: the confinement is lexical — symlinks are
+  deliberately not resolved. Studio's page listing adopted `ConfinedPath` in place of the
+  one hand-rolled guard that had escaped the path-guard ledger's four-line grep window;
+  the window is eight lines now, the `String.startsWith` false positive it would catch is
+  excluded, and the one new prefix-classification site it surfaced (`LintContext`) is
+  ledgered with its reason.
+
 - **SAML IdP metadata's cache bridges only failures that heal, and IPv6 loopback counts
   as loopback.** The boot-time metadata fetch refused to serve its cached copy over a
   denied host but served it over every other gateway refusal alike — an invalid metadata
