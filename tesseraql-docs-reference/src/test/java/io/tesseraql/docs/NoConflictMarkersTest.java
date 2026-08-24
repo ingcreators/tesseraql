@@ -39,8 +39,10 @@ class NoConflictMarkersTest {
         try (Stream<Path> files = Files.walk(REPO)) {
             for (Path file : files.filter(Files::isRegularFile).toList()) {
                 String path = file.toString().replace('\\', '/');
+                // .claude/ holds worktrees: another branch's in-progress files are not this
+                // checkout's to clear. .github/ stays scanned — its workflows are tracked here.
                 if (path.contains("/target/") || path.contains("/node_modules/")
-                        || path.contains("/.git/")
+                        || path.contains("/.git/") || path.contains("/.claude/")
                         || path.endsWith("NoConflictMarkersTest.java")) {
                     continue;
                 }
