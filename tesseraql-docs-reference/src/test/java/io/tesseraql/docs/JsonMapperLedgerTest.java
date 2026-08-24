@@ -65,7 +65,13 @@ class JsonMapperLedgerTest {
                     .filter(path -> !path.toString().contains("/."))
                     .forEach(path -> {
                         try {
-                            if (Files.readString(path).contains("new ObjectMapper(")) {
+                            // Every Jackson construction shape, not the literal one copy the
+                            // campaign happened to sweep: the builder forms and the format
+                            // siblings mint the same unconstrained mapper.
+                            if (Files.readString(path).matches("(?s).*(new ObjectMapper\\("
+                                    + "|JsonMapper\\.builder\\(|new YAMLMapper\\("
+                                    + "|YAMLMapper\\.builder\\(|new XmlMapper\\("
+                                    + "|XmlMapper\\.builder\\().*")) {
                                 found.add(REPO.relativize(path).toString().replace('\\', '/'));
                             }
                         } catch (IOException unreadable) {

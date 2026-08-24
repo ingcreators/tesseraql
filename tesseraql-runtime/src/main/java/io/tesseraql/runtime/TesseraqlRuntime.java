@@ -1080,7 +1080,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                         inboxForEvents, topics));
             }
             // Invitations (roadmap Phase 50 slice 2): configured when both the accept-link base
-            // and a mail channel are named; anything half-set fails the boot (SEC 4120). The
+            // and a mail channel are named; anything half-set fails the boot (SEC 4121). The
             // one-time token store is shared with password recovery and built when either flow
             // is on - the iam-admin invite provider below and the identity block both use it.
             final String inviteUrl = manifest.config()
@@ -1092,14 +1092,14 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 if (inviteUrl == null || inviteChannel == null) {
                     throw new io.tesseraql.core.error.TqlException(
                             new io.tesseraql.core.error.TqlErrorCode(
-                                    io.tesseraql.core.error.TqlDomain.SEC, 4120),
+                                    io.tesseraql.core.error.TqlDomain.SEC, 4121),
                             "tesseraql.identity.invite needs BOTH channel: and url:");
                 }
                 if (!io.tesseraql.yaml.notify.NotificationChannels.MAIL.equals(
                         notificationChannels.require(inviteChannel).type())) {
                     throw new io.tesseraql.core.error.TqlException(
                             new io.tesseraql.core.error.TqlErrorCode(
-                                    io.tesseraql.core.error.TqlDomain.SEC, 4120),
+                                    io.tesseraql.core.error.TqlDomain.SEC, 4121),
                             "Invite channel '" + inviteChannel + "' must be type mail");
                 }
                 inviteEnabled = true;
@@ -1674,20 +1674,20 @@ public final class TesseraqlRuntime implements AutoCloseable {
                         .getString("tesseraql.identity.recovery.channel")
                         .orElseThrow(() -> new io.tesseraql.core.error.TqlException(
                                 new io.tesseraql.core.error.TqlErrorCode(
-                                        io.tesseraql.core.error.TqlDomain.SEC, 4120),
+                                        io.tesseraql.core.error.TqlDomain.SEC, 4121),
                                 "tesseraql.identity.recovery.enabled needs a channel:"));
                 if (!io.tesseraql.yaml.notify.NotificationChannels.MAIL.equals(
                         notificationChannels.require(recoveryChannel).type())) {
                     throw new io.tesseraql.core.error.TqlException(
                             new io.tesseraql.core.error.TqlErrorCode(
-                                    io.tesseraql.core.error.TqlDomain.SEC, 4120),
+                                    io.tesseraql.core.error.TqlDomain.SEC, 4121),
                             "Recovery channel '" + recoveryChannel + "' must be type mail");
                 }
                 recoveryUrl = manifest.config()
                         .getString("tesseraql.identity.recovery.url")
                         .orElseThrow(() -> new io.tesseraql.core.error.TqlException(
                                 new io.tesseraql.core.error.TqlErrorCode(
-                                        io.tesseraql.core.error.TqlDomain.SEC, 4120),
+                                        io.tesseraql.core.error.TqlDomain.SEC, 4121),
                                 "tesseraql.identity.recovery.enabled needs a url:"));
             }
             if (recoveryEnabled || inviteEnabled) {

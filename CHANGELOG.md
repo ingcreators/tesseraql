@@ -196,6 +196,18 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **A message catalog with a duplicate key refuses the load.** It used to load last-wins:
+  two `messages/en.yml` entries under one key silently dropped the first, so a translation
+  overwritten by a later duplicate vanished with no diagnostic. The duplicate now refuses
+  with the key named. (This shipped with the JSON-limits consolidation and was not
+  recorded at the time; noting it here.)
+
+- **The boot-time invite/recovery configuration refusals are `TQL-SEC-4121`.** They shared
+  `TQL-SEC-4120` with the invitation surface's rendered "not configured on this
+  deployment", which answers 404 — two meanings in one number. The five boot refusals
+  (invite/recovery `channel:`/`url:` half-set or not a mail channel) now carry their own
+  code; `4120` stays the invitation surface's 404.
+
 - **Outbound responses are bounded: `tesseraql.http.outbound.maxResponseBytes`, default
   10 MB.** The gateway buffers every response on heap with no ceiling — a misbehaving or
   hostile provider could answer SCIM provisioning, a JWKS fetch, SAML metadata, or an
