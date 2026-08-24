@@ -263,6 +263,7 @@ class NotificationIntegrationTest {
         try (Stream<Path> files = Files.walk(source)) {
             files.forEach(path -> copy(source, target, path));
         }
+        UserAdminAppJobs.parkDailyMaintenanceSchedule(target);
         // Point the channels at this test's SMTP server and webhook receiver (the placeholders
         // resolve top-level config keys after environment variables).
         Files.writeString(target.resolve("config/application.yml"), """
@@ -296,25 +297,6 @@ class NotificationIntegrationTest {
                       maxAttempts: 2
                 """;
         Files.writeString(config, yaml);
-
-        // The copied app's daily job must not keep its schedule under this runtime: a run
-        // crossing 02:00:00 UTC otherwise really fires it — a third NOTIFICATION event where
-        // the provisioning case counts two (observed 2026-08-24). This class runs the job
-        // explicitly; what the schedule would prove, it proves nowhere. Loud on drift, because
-        // a strip that silently stopped matching would re-arm the flake.
-        Path maintenance = target.resolve("batch/user/daily-maintenance/job.yml");
-        String job = Files.readString(maintenance);
-        String schedule = """
-                trigger:
-                  schedule:
-                    cron: "0 0 2 * * ?"
-
-                """;
-        if (!job.contains(schedule)) {
-            throw new IllegalStateException("The example's daily-maintenance schedule moved;"
-                    + " update the strip in prepareAppHome so the job cannot fire mid-test");
-        }
-        Files.writeString(maintenance, job.replace(schedule, ""));
 
         // The provision route additionally exposes the audit notification's event id, so the
         // dead-letter test can follow that exact event through the operations API.

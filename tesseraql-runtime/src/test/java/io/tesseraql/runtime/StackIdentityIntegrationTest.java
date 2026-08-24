@@ -391,6 +391,7 @@ class StackIdentityIntegrationTest {
         try (Stream<Path> files = Files.walk(source)) {
             files.forEach(path -> copy(source, appHome, path));
         }
+        UserAdminAppJobs.parkDailyMaintenanceSchedule(appHome);
         // Renamed, so its permission codes carry the new name too (TQL-YAML-1406).
         Path config = appHome.resolve("config/tesseraql.yml");
         Files.writeString(config, Files.readString(config)

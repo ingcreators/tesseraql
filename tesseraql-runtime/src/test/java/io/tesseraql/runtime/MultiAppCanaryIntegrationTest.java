@@ -212,6 +212,7 @@ class MultiAppCanaryIntegrationTest {
         try (Stream<Path> files = Files.walk(source)) {
             files.forEach(path -> copy(source, home, path));
         }
+        UserAdminAppJobs.parkDailyMaintenanceSchedule(home);
         // The overlay renames the copied example to `shop`, so its permission codes must carry
         // that name too (TQL-YAML-1406): a code is `<app>.<what>`.
         Path exampleConfig = home.resolve("config/tesseraql.yml");

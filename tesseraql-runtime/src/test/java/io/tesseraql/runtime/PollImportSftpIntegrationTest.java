@@ -135,6 +135,7 @@ class PollImportSftpIntegrationTest {
         try (Stream<Path> files = Files.walk(source)) {
             files.forEach(path -> copy(source, target, path));
         }
+        UserAdminAppJobs.parkDailyMaintenanceSchedule(target);
         // db config plus the poll connector policy (allow-list + credential) the job draws on; the
         // example app declares no connectors block, so this deep-merges cleanly.
         Files.writeString(target.resolve("config/application.yml"), """

@@ -469,6 +469,7 @@ class StackDeployIntegrationTest {
         try (Stream<Path> files = Files.walk(source)) {
             files.forEach(path -> copy(source, home, path));
         }
+        UserAdminAppJobs.parkDailyMaintenanceSchedule(home);
         // Renamed, so its permission codes carry the new name too (TQL-YAML-1406).
         Path exampleConfig = home.resolve("config/tesseraql.yml");
         Files.writeString(exampleConfig, Files.readString(exampleConfig)
