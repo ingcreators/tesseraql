@@ -620,6 +620,7 @@ class OAuthIssuerUnificationIntegrationTest {
         try (Stream<Path> files = Files.walk(source)) {
             files.forEach(path -> copy(source, home, path));
         }
+        UserAdminAppJobs.parkDailyMaintenanceSchedule(home);
         Path exampleConfig = home.resolve("config/tesseraql.yml");
         Files.writeString(exampleConfig, Files.readString(exampleConfig)
                 .replace("permission: user-admin.", "permission: shop.")

@@ -155,6 +155,7 @@ class MySqlPortabilityIntegrationTest {
         try (Stream<Path> files = Files.walk(source)) {
             files.forEach(path -> copy(source, target, path));
         }
+        UserAdminAppJobs.parkDailyMaintenanceSchedule(target);
         // The example's db/migration is Postgres DDL; this dialect test builds its own MySQL schema
         // in seedDatabase(), so disable the app migration for this mount.
         Files.writeString(target.resolve("config/application.yml"), """

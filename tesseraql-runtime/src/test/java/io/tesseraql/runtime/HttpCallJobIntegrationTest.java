@@ -127,6 +127,7 @@ class HttpCallJobIntegrationTest {
         try (Stream<Path> files = Files.walk(source)) {
             files.forEach(path -> copy(source, target, path));
         }
+        UserAdminAppJobs.parkDailyMaintenanceSchedule(target);
         // The fixture renames the copied example, so its permission codes must carry the new
         // name too (TQL-YAML-1406): a code is `<app>.<what>`.
         Path exampleConfig = target.resolve("config/tesseraql.yml");

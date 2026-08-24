@@ -929,6 +929,7 @@ class BatchJobIntegrationTest {
         try (Stream<Path> files = Files.walk(source)) {
             files.forEach(path -> copy(source, target, path));
         }
+        UserAdminAppJobs.parkDailyMaintenanceSchedule(target);
         // A mode: update step whose statement answers with rows instead of a count.
         Files.createDirectories(target.resolve("batch/returning"));
         Files.writeString(target.resolve("batch/returning/job.yml"), """

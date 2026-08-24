@@ -131,6 +131,7 @@ class SignInNetworkIntegrationTest {
         try (Stream<Path> files = Files.walk(source)) {
             files.forEach(path -> copy(source, target, path));
         }
+        UserAdminAppJobs.parkDailyMaintenanceSchedule(target);
         Files.writeString(target.resolve("config/application.yml"), """
                 server:
                   port: 0

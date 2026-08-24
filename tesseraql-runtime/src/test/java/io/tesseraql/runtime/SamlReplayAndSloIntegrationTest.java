@@ -222,6 +222,7 @@ class SamlReplayAndSloIntegrationTest {
         try (Stream<Path> files = Files.walk(source)) {
             files.forEach(path -> copy(source, target, path));
         }
+        UserAdminAppJobs.parkDailyMaintenanceSchedule(target);
         Path saml = target.resolve("saml");
         Files.createDirectories(saml);
         Files.writeString(saml.resolve("idp.pem"),
