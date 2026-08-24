@@ -1,5 +1,6 @@
 package io.tesseraql.core.files;
 
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.Optional;
 
@@ -16,6 +17,11 @@ import java.util.Optional;
  * a template resolver refuses with its own render error, a zip extractor with its package code, a
  * lint reports a finding, an asset route answers 404 — so escape comes back as an empty
  * {@link Optional}, never as one flattened exception.
+ *
+ * <p>The comparison is <em>lexical</em>: {@code ..} segments fold before it, and symlinks are
+ * deliberately not resolved — the guard confines what the path says, not what the filesystem
+ * aliases it to. A root whose descendants may carry hostile symlinks needs an out-of-band
+ * answer (ownership, mount options), not this class.
  */
 public final class ConfinedPath {
 
@@ -38,10 +44,16 @@ public final class ConfinedPath {
     /**
      * Resolves {@code candidate} against the root; empty when the result escapes it. A relative
      * candidate resolves under the root; an absolute one is checked as it stands. {@code ..}
-     * segments are folded before the comparison, so {@code a/../../etc/passwd} escapes.
+     * segments are folded before the comparison, so {@code a/../../etc/passwd} escapes. A
+     * candidate the filesystem cannot even express (a NUL byte, an illegal character) refuses
+     * the same way an escape does — the caller's own domain refusal, never a raw parse error.
      */
     public Optional<Path> resolve(String candidate) {
-        return confine(root.resolve(candidate));
+        try {
+            return confine(root.resolve(candidate));
+        } catch (InvalidPathException invalid) {
+            return Optional.empty();
+        }
     }
 
     /**

@@ -1,7 +1,6 @@
 package io.tesseraql.operations.http;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.expr.EvaluationContext;
@@ -47,17 +46,21 @@ import java.util.function.LongSupplier;
  * fast (rather than hammering a struggling dependency) until a half-open trial succeeds. A {@code 4xx}
  * or an {@code expectStatus} mismatch fails the step but does not trip the breaker: it is a
  * deterministic rejection, not a sign the dependency is down.
+ *
+ * <p>The breaker is keyed by host alone and shared by every surface behind the one gateway bean —
+ * a job's {@code http-call} step, SCIM provisioning, OIDC, JWKS, SAML metadata. Repeated failures
+ * toward a host fail every caller of that host fast, deliberately: the host is down for all of
+ * them alike, and hammering it from a second surface would not make it healthier.
  */
 public final class HttpCallClient implements io.tesseraql.yaml.http.OutboundGateway {
 
-    /** TQL-BATCH-5305, declared beside the policy so gateway callers can tell it apart. */
+    // The gateway's classification codes are declared beside the policy (HttpOutbound), so a
+    // gateway caller can tell a configuration refusal from a transient failure; these are the
+    // local aliases.
     private static final TqlErrorCode HOST_DENIED = HttpOutbound.HOST_DENIED;
-    /** TQL-BATCH-5306: the per-host circuit breaker is open. */
-    private static final TqlErrorCode CIRCUIT_OPEN = new TqlErrorCode(TqlDomain.BATCH, 5306);
-    /** TQL-BATCH-5307: the outbound call failed (transport error, timeout, or rejected status). */
-    private static final TqlErrorCode CALL_FAILED = new TqlErrorCode(TqlDomain.BATCH, 5307);
-    /** TQL-BATCH-5309: the http-call declaration is invalid (no absolute http/https url). */
-    private static final TqlErrorCode INVALID_CALL = new TqlErrorCode(TqlDomain.BATCH, 5309);
+    private static final TqlErrorCode CIRCUIT_OPEN = HttpOutbound.CIRCUIT_OPEN;
+    private static final TqlErrorCode CALL_FAILED = HttpOutbound.CALL_FAILED;
+    private static final TqlErrorCode INVALID_CALL = HttpOutbound.INVALID_CALL;
 
     private final HttpOutbound outbound;
     private final AppConfig config;
@@ -87,7 +90,11 @@ public final class HttpCallClient implements io.tesseraql.yaml.http.OutboundGate
         return call(spec, context, parent, null, Map.of());
     }
 
-    /** The {@code OutboundGateway} form: the same call, parented to the current trace root. */
+    /**
+     * The {@code OutboundGateway} form: the same call. With no caller-supplied parent and no
+     * ambient current span to draw on, the span starts a trace of its own — a caller holding a
+     * live span uses the parented overload instead.
+     */
     @Override
     public Map<String, Object> call(HttpCallSpec spec, Map<String, Object> context) {
         return call(spec, context, null);
@@ -112,44 +119,51 @@ public final class HttpCallClient implements io.tesseraql.yaml.http.OutboundGate
      * response returns as it arrived, whatever its status. A {@code 5xx} still counts against
      * the breaker and a transport failure is still classified {@code TQL-BATCH-5307}; what a
      * status <em>means</em> stays with the caller, because SCIM reads meaning out of a 404
-     * and a token endpoint's error body is an answer, not a fault.
+     * and a token endpoint's error body is an answer, not a fault. For the breaker, a
+     * {@code 4xx} counts as neither success nor failure — the deterministic-rejection stance
+     * {@code call()} has always taken — so both forms account a host's health identically.
      */
     @Override
     public io.tesseraql.yaml.http.OutboundGateway.RawResponse exchange(HttpCallSpec spec,
             byte[] body, Map<String, String> headers) {
-        URI uri = admit(spec, Map.of());
-        String host = uri.getHost();
-        Breaker breaker = admittedBreaker(host);
+        // The span opens before admission, so a refusal — denied host, open circuit — is a
+        // recorded trace and not a call that never happened.
         Span span = tracer.start("tesseraql.http.call", null)
-                .attribute("method", spec.effectiveMethod())
-                .attribute("host", host);
+                .attribute("method", spec.effectiveMethod());
         try {
-            HttpResponse<byte[]> response = send(spec, uri, Map.of(), body,
-                    headers == null ? Map.of() : headers);
-            int status = response.statusCode();
-            span.attribute("status", status);
-            if (status >= 500) {
+            URI uri = admit(spec, Map.of());
+            String host = uri.getHost();
+            span.attribute("host", host);
+            Breaker breaker = admittedBreaker(host);
+            try {
+                HttpResponse<byte[]> response = send(spec, uri, Map.of(), body,
+                        headers == null ? Map.of() : headers);
+                int status = response.statusCode();
+                span.attribute("status", status);
+                // 5xx is systemic; 2xx/3xx proves the host healthy; a 4xx says neither. It
+                // used to reset the counter here, so a host alternating 500 and 404 could
+                // never trip the breaker through this form while tripping it through call().
+                if (status >= 500) {
+                    breaker.recordFailure(clock.getAsLong(), outbound.circuitBreakerThreshold(),
+                            openDuration());
+                } else if (status < 400) {
+                    breaker.recordSuccess();
+                }
+                return new io.tesseraql.yaml.http.OutboundGateway.RawResponse(status,
+                        response.body(), response.headers().map());
+            } catch (IOException | InterruptedException ex) {
+                if (ex instanceof InterruptedException) {
+                    Thread.currentThread().interrupt();
+                }
                 breaker.recordFailure(clock.getAsLong(), outbound.circuitBreakerThreshold(),
                         openDuration());
-            } else {
-                breaker.recordSuccess();
+                throw new TqlException(CALL_FAILED, "http-call to '" + host
+                        + "' failed: " + ex.getMessage(), ex);
             }
-            return new io.tesseraql.yaml.http.OutboundGateway.RawResponse(status,
-                    response.body(), response.headers().map());
-        } catch (IOException | InterruptedException ex) {
-            if (ex instanceof InterruptedException) {
-                Thread.currentThread().interrupt();
-            }
-            breaker.recordFailure(clock.getAsLong(), outbound.circuitBreakerThreshold(),
-                    openDuration());
-            TqlException failure = new TqlException(CALL_FAILED, "http-call to '" + host
-                    + "' failed: " + ex.getMessage(), ex);
-            span.recordError(failure);
-            throw failure;
         } catch (RuntimeException | Error ex) {
-            // An unchecked failure must not end the span clean — the Completion defect class
-            // (docs/vertx-native.md): a span that never records its exception has an
-            // unreachable error branch. Not a remote failure, so the breaker stays untouched.
+            // Every failure leaves on the span — an admission refusal, the wrapped transport
+            // failure, or a plain bug. A span that never records its exception has an
+            // unreachable error branch (the Completion defect class, docs/vertx-native.md).
             span.recordError(ex);
             throw ex;
         } finally {
@@ -159,47 +173,48 @@ public final class HttpCallClient implements io.tesseraql.yaml.http.OutboundGate
 
     private Map<String, Object> call(HttpCallSpec spec, Map<String, Object> context,
             SpanContext parent, byte[] rawBody, Map<String, String> extraHeaders) {
-        URI uri = admit(spec, context);
-        String host = uri.getHost();
-        Breaker breaker = admittedBreaker(host);
-
+        // The span opens before admission, so a refusal — denied host, open circuit — is a
+        // recorded trace and not a call that never happened.
         Span span = tracer.start("tesseraql.http.call", parent)
-                .attribute("method", spec.effectiveMethod())
-                .attribute("host", host);
+                .attribute("method", spec.effectiveMethod());
         try {
-            HttpResponse<byte[]> response = send(spec, uri, context, rawBody, extraHeaders);
-            int status = response.statusCode();
-            span.attribute("status", status);
-            boolean success = spec.expectStatus() != null
-                    ? status == spec.expectStatus()
-                    : status / 100 == 2;
-            if (!success) {
-                // 5xx is systemic (trip the breaker); 4xx / expectStatus mismatch is a
-                // deterministic rejection (fail the step, leave the breaker closed).
-                if (status >= 500) {
-                    breaker.recordFailure(clock.getAsLong(), outbound.circuitBreakerThreshold(),
-                            openDuration());
+            URI uri = admit(spec, context);
+            String host = uri.getHost();
+            span.attribute("host", host);
+            Breaker breaker = admittedBreaker(host);
+            try {
+                HttpResponse<byte[]> response = send(spec, uri, context, rawBody, extraHeaders);
+                int status = response.statusCode();
+                span.attribute("status", status);
+                boolean success = spec.expectStatus() != null
+                        ? status == spec.expectStatus()
+                        : status / 100 == 2;
+                if (!success) {
+                    // 5xx is systemic (trip the breaker); 4xx / expectStatus mismatch is a
+                    // deterministic rejection (fail the step, leave the breaker closed).
+                    if (status >= 500) {
+                        breaker.recordFailure(clock.getAsLong(),
+                                outbound.circuitBreakerThreshold(), openDuration());
+                    }
+                    throw new TqlException(CALL_FAILED, "http-call to '" + host
+                            + "' returned HTTP " + status);
                 }
+                breaker.recordSuccess();
+                return result(status, response);
+            } catch (IOException | InterruptedException ex) {
+                if (ex instanceof InterruptedException) {
+                    Thread.currentThread().interrupt();
+                }
+                breaker.recordFailure(clock.getAsLong(), outbound.circuitBreakerThreshold(),
+                        openDuration());
                 throw new TqlException(CALL_FAILED, "http-call to '" + host
-                        + "' returned HTTP " + status);
+                        + "' failed: " + ex.getMessage(), ex);
             }
-            breaker.recordSuccess();
-            return result(status, response);
-        } catch (IOException | InterruptedException ex) {
-            if (ex instanceof InterruptedException) {
-                Thread.currentThread().interrupt();
-            }
-            breaker.recordFailure(clock.getAsLong(), outbound.circuitBreakerThreshold(),
-                    openDuration());
-            TqlException failure = new TqlException(CALL_FAILED, "http-call to '" + host
-                    + "' failed: " + ex.getMessage(), ex);
-            span.recordError(failure);
-            throw failure;
         } catch (RuntimeException | Error ex) {
-            // Every failure leaves on the span — the status refusal above, an unknown
-            // credential, a body that will not serialize, or a plain bug. A span that never
-            // records its exception has an unreachable error branch (the Completion defect
-            // class, docs/vertx-native.md).
+            // Every failure leaves on the span — an admission refusal, the status refusal, an
+            // unknown credential, the wrapped transport failure, or a plain bug. A span that
+            // never records its exception has an unreachable error branch (the Completion
+            // defect class, docs/vertx-native.md).
             span.recordError(ex);
             throw ex;
         } finally {

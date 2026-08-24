@@ -33,6 +33,16 @@ class ConfinedPathTest {
         assertThat(root.resolve("../../../etc/passwd")).isEmpty();
     }
 
+    @Test
+    void anInexpressiblePathRefusesLikeAnEscape(@TempDir Path dir) {
+        ConfinedPath root = ConfinedPath.under(dir);
+
+        // A NUL byte cannot be expressed as a filesystem path: the raw InvalidPathException
+        // used to escape resolve() and surface as a 500 at the caller; it refuses like an
+        // escape now, so the caller's own domain refusal answers.
+        assertThat(root.resolve("a\0b.txt")).isEmpty();
+    }
+
     /** A {@code ..}-carrying root is folded before it becomes the boundary. */
     @Test
     void aDotDotRootIsFoldedBeforeItConfines(@TempDir Path dir) {

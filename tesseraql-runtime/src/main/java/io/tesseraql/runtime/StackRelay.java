@@ -167,17 +167,20 @@ final class StackRelay {
     private static final String TENANT_HEADER = "X-Tenant-Id";
 
     /** TQL-APP-4030: the request's tenant is not on the app's entitlement list (HTTP 403). */
-    private static final String NOT_ENTITLED = "TQL-APP-4030";
+    private static final io.tesseraql.core.error.TqlErrorCode NOT_ENTITLED = new io.tesseraql.core.error.TqlErrorCode(
+            io.tesseraql.core.error.TqlDomain.APP, 4030);
 
     /** TQL-APP-5020: the gateway failed to forward the request to the app's runtime (HTTP 502). */
-    private static final String GATEWAY_ERROR = "TQL-APP-5020";
+    private static final io.tesseraql.core.error.TqlErrorCode GATEWAY_ERROR = new io.tesseraql.core.error.TqlErrorCode(
+            io.tesseraql.core.error.TqlDomain.APP, 5020);
 
     /**
      * TQL-RATE-4294: the front door already has this member's share of forwards in flight
      * (HTTP 503). The member's own {@code tesseraql.http.maxInFlight} is a different bound at a
      * different place; this one keeps a slow member from consuming the front door for everyone.
      */
-    private static final String MEMBER_AT_CAPACITY = "TQL-RATE-4294";
+    private static final io.tesseraql.core.error.TqlErrorCode MEMBER_AT_CAPACITY = new io.tesseraql.core.error.TqlErrorCode(
+            io.tesseraql.core.error.TqlDomain.RATE, 4294);
 
     /** The surface's key in the per-app proxy lookups; {@code #} is outside every legal name. */
     private static final String SURFACE = "#portal";
@@ -437,7 +440,7 @@ final class StackRelay {
             // not having.
             String appName = appAddressedBy(rawPath);
             if (appName == null) {
-                respond(request, 404, MultiAppHost.UNKNOWN_APP.toString(),
+                respond(request, 404, MultiAppHost.UNKNOWN_APP,
                         "No application is hosted under this name");
                 return;
             }
@@ -457,7 +460,7 @@ final class StackRelay {
             try {
                 portOf.applyAsInt(appName);
             } catch (RuntimeException unknown) {
-                respond(request, 404, MultiAppHost.UNKNOWN_APP.toString(),
+                respond(request, 404, MultiAppHost.UNKNOWN_APP,
                         "No application is hosted under this name");
                 return;
             }
@@ -731,8 +734,8 @@ final class StackRelay {
         return path.isEmpty() ? "/" : path;
     }
 
-    private static void respond(HttpServerRequest request, int status, String code,
-            String message) {
+    private static void respond(HttpServerRequest request, int status,
+            io.tesseraql.core.error.TqlErrorCode code, String message) {
         HttpServerResponse response = request.response();
         if (response.ended()) {
             return;
