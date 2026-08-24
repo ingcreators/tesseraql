@@ -549,10 +549,24 @@ public final class TransactionalCommandProcessor implements Step {
                 }
                 connection.commit();
             } catch (RuntimeException | SQLException ex) {
-                connection.rollback();
+                try {
+                    connection.rollback();
+                } catch (SQLException rollback) {
+                    // A rollback that also fails must not replace the failure that matters.
+                    ex.addSuppressed(rollback);
+                }
                 throw asTqlException(ex);
             } finally {
-                connection.setAutoCommit(previousAutoCommit);
+                try {
+                    connection.setAutoCommit(previousAutoCommit);
+                } catch (SQLException restore) {
+                    // The command's outcome is already decided; failing the exchange over the
+                    // reset would report an outcome that did not happen — a committed command
+                    // re-reported as a failure invites the retry that duplicates it.
+                    LOG.log(System.Logger.Level.WARNING,
+                            "Could not restore autocommit after a command transaction: {0}",
+                            restore.getMessage());
+                }
             }
         }
         exchange.setBody(Map.copyOf(stepResults));

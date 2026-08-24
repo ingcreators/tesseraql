@@ -247,6 +247,33 @@ class FileTransferIntegrationTest {
         assertThat(file.body()).doesNotContain("sync-fest");
     }
 
+    /**
+     * A failed extraction releases its spool. The writer opens before the statement runs, and a
+     * failure in prepare or execute never reaches the reader that closes it — so the stream and
+     * a never-referenced spool file leaked per failing request, and the failure path committed
+     * the extraction transaction it was abandoning.
+     */
+    @Test
+    void aFailedSynchronousExportLeavesNoSpoolBehind() throws Exception {
+        java.util.Set<String> before = spoolEntries();
+
+        HttpResponse<String> failed = get("/api/events/download-broken");
+
+        assertThat(failed.statusCode()).isEqualTo(500);
+        assertThat(spoolEntries()).isEqualTo(before);
+    }
+
+    private static java.util.Set<String> spoolEntries() throws IOException {
+        Path spool = appHome.resolve("work/tmp/tesseraql");
+        if (!Files.isDirectory(spool)) {
+            return java.util.Set.of();
+        }
+        try (java.util.stream.Stream<Path> files = Files.list(spool)) {
+            return files.map(file -> file.getFileName().toString())
+                    .collect(java.util.stream.Collectors.toSet());
+        }
+    }
+
     @Test
     void unknownTransferIs404AndRunningExportFileIs409() throws Exception {
         assertThat(get("/api/orders/export/no-such-transfer").statusCode()).isEqualTo(404);
@@ -530,6 +557,27 @@ class FileTransferIntegrationTest {
         // statement does.
         Files.writeString(downloadRoute.resolve("select-events.postgres.sql"),
                 "select 'postgres-variant' as name, held_on, fee from events order by held_on\n;\n");
+
+        // A synchronous export whose extraction fails at execute, for the spool-release test.
+        Path brokenRoute = home.resolve("web/api/events/download-broken");
+        Files.createDirectories(brokenRoute);
+        Files.writeString(brokenRoute.resolve("get.yml"), """
+                version: tesseraql/v1
+                id: events.downloadBroken
+                kind: route
+                recipe: query-export
+                sources:
+                  main:
+                    sql:
+                      file: select-missing.sql
+                export:
+                  format: csv
+                  filename: broken.csv
+                  columns:
+                    - name
+                """);
+        Files.writeString(brokenRoute.resolve("select-missing.sql"),
+                "select name from missing_table\n;\n");
     }
 
     private static void writeImportRoute(Path home, String dir, String id, String onError)

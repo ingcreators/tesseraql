@@ -284,41 +284,82 @@ public class SqlStep implements Step {
             try {
                 SpoolKind kind = "csv".equals(codec.format()) ? SpoolKind.CSV : SpoolKind.BINARY;
                 SpoolWriter writer = tempStore.createWriter(kind);
-                ref = statements.fetchSize(profile.fetchSize()).read(connection, sqlPath, bound,
-                        (resultSet, span) -> {
-                            // The writer closes before the statement; toRef() is only valid
-                            // after close, so it answers outside this try. The reader's
-                            // contract is SQLException, so an I/O failure travels unchecked
-                            // and the outer catch unwraps it to the code it always mapped to.
-                            try (writer) {
-                                io.tesseraql.core.files.ExportRowCap cap = io.tesseraql.core.files.ExportWrite
-                                        .effectiveCap(codec, spec, exchange.getProperty(
-                                                TesseraqlProperties.EXPORT_ROW_CAP,
-                                                io.tesseraql.core.files.ExportRowCap.class));
-                                Map<String, Object> values = composedValues(exchange, connection,
-                                        statements, tempStore, cap, spools);
-                                io.tesseraql.core.files.ResultSetRows extraction = new io.tesseraql.core.files.ResultSetRows(
-                                        resultSet, dialect, cap, EXECUTION_ERROR);
-                                io.tesseraql.core.files.ExportWrite.write(codec, spec, tempStore,
-                                        extraction,
-                                        exchange.getProperty(TesseraqlProperties.EXPORT_ENRICHER,
-                                                io.tesseraql.core.files.RowEnricher.class),
-                                        exchange.getProperty(
-                                                TesseraqlProperties.EXPORT_ENRICH_WINDOW, 0,
-                                                Integer.class),
-                                        values, filename,
-                                        new io.tesseraql.core.spool.SpoolOutput(writer));
-                                writer.incrementRows(extraction.count());
-                                span.attribute("rowCount", extraction.count());
-                            } catch (java.io.IOException ex) {
-                                throw new java.io.UncheckedIOException(ex);
-                            }
-                            return writer.toRef();
-                        });
-            } finally {
+                try {
+                    ref = statements.fetchSize(profile.fetchSize()).read(connection, sqlPath,
+                            bound, (resultSet, span) -> {
+                                // The writer closes before the statement; toRef() is only valid
+                                // after close, so it answers outside this try. The reader's
+                                // contract is SQLException, so an I/O failure travels unchecked
+                                // and the outer catch unwraps it to the code it always mapped to.
+                                try (writer) {
+                                    io.tesseraql.core.files.ExportRowCap cap = io.tesseraql.core.files.ExportWrite
+                                            .effectiveCap(codec, spec, exchange.getProperty(
+                                                    TesseraqlProperties.EXPORT_ROW_CAP,
+                                                    io.tesseraql.core.files.ExportRowCap.class));
+                                    Map<String, Object> values = composedValues(exchange,
+                                            connection,
+                                            statements, tempStore, cap, spools);
+                                    io.tesseraql.core.files.ResultSetRows extraction = new io.tesseraql.core.files.ResultSetRows(
+                                            resultSet, dialect, cap, EXECUTION_ERROR);
+                                    io.tesseraql.core.files.ExportWrite.write(codec, spec,
+                                            tempStore,
+                                            extraction,
+                                            exchange.getProperty(
+                                                    TesseraqlProperties.EXPORT_ENRICHER,
+                                                    io.tesseraql.core.files.RowEnricher.class),
+                                            exchange.getProperty(
+                                                    TesseraqlProperties.EXPORT_ENRICH_WINDOW, 0,
+                                                    Integer.class),
+                                            values, filename,
+                                            new io.tesseraql.core.spool.SpoolOutput(writer));
+                                    writer.incrementRows(extraction.count());
+                                    span.attribute("rowCount", extraction.count());
+                                } catch (java.io.IOException ex) {
+                                    throw new java.io.UncheckedIOException(ex);
+                                }
+                                return writer.toRef();
+                            });
+                } catch (Exception failed) {
+                    // The reader lambda closes the writer, but a failure in prepare or execute
+                    // never reaches the lambda: the open stream and the never-referenced spool
+                    // file are still this method's to release.
+                    try {
+                        writer.close();
+                    } catch (java.io.IOException closing) {
+                        failed.addSuppressed(closing);
+                    }
+                    try {
+                        tempStore.delete(writer.toRef());
+                    } catch (RuntimeException deleting) {
+                        failed.addSuppressed(deleting);
+                    }
+                    throw failed;
+                }
                 if (profile.autoCommitOff()) {
                     connection.commit();
-                    connection.setAutoCommit(previousAutoCommit);
+                }
+            } catch (Exception failed) {
+                // A failed extraction must not commit, and a cleanup that also fails must not
+                // replace the failure that matters.
+                if (profile.autoCommitOff()) {
+                    try {
+                        connection.rollback();
+                    } catch (java.sql.SQLException rollback) {
+                        failed.addSuppressed(rollback);
+                    }
+                }
+                throw failed;
+            } finally {
+                if (profile.autoCommitOff()) {
+                    try {
+                        connection.setAutoCommit(previousAutoCommit);
+                    } catch (java.sql.SQLException restore) {
+                        // The extraction's outcome is already decided; a connection that cannot
+                        // reset is the pool's to retire, not a reason to re-report the export.
+                        LOG.log(System.Logger.Level.WARNING,
+                                "Could not restore autocommit after export {0}: {1}", sqlPath,
+                                restore.getMessage());
+                    }
                 }
             }
         } catch (TqlException ex) {
