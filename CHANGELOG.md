@@ -141,6 +141,15 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **Outbound responses are bounded: `tesseraql.http.outbound.maxResponseBytes`, default
+  10 MB.** The gateway buffers every response on heap with no ceiling — a misbehaving or
+  hostile provider could answer SCIM provisioning, a JWKS fetch, SAML metadata, or an
+  `http-call` step with an arbitrarily large body and fill the heap. The outbound mirror
+  of `tesseraql.http.maxBodyBytes` now bounds it: a declared `Content-Length` over the
+  ceiling refuses before a byte buffers, a chunked stream is cancelled the moment it
+  crosses the bound, and the refusal (`TQL-BATCH-5316`) names the key. `-1` disables;
+  units accepted. A deployment legitimately exchanging larger bodies raises the key.
+
 - **Three small copies became one each** (docs/duplication-consolidation.md, campaign 4's
   follow-ons). `AtomicFiles.replace` is the write-then-atomically-replace five sites carried
   by copy — the CLI update cache alone had drifted to a plain move, so a crash mid-replace

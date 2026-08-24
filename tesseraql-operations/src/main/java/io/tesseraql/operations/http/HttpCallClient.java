@@ -63,6 +63,8 @@ public final class HttpCallClient implements io.tesseraql.yaml.http.OutboundGate
     private static final TqlErrorCode CALL_FAILED = new TqlErrorCode(TqlDomain.BATCH, 5307);
     /** TQL-BATCH-5309: the http-call declaration is invalid (no absolute http/https url). */
     private static final TqlErrorCode INVALID_CALL = new TqlErrorCode(TqlDomain.BATCH, 5309);
+    /** TQL-BATCH-5316, declared beside the policy whose bound it enforces. */
+    private static final TqlErrorCode RESPONSE_TOO_LARGE = HttpOutbound.RESPONSE_TOO_LARGE;
 
     private final HttpOutbound outbound;
     private final AppConfig config;
@@ -283,8 +285,158 @@ public final class HttpCallClient implements io.tesseraql.yaml.http.OutboundGate
         Duration connectTimeout = spec.connectTimeout() != null
                 ? io.tesseraql.core.util.Durations.parse(spec.connectTimeout())
                 : outbound.connectTimeout();
-        return client(connectTimeout).send(request.build(),
-                HttpResponse.BodyHandlers.ofByteArray());
+        try {
+            return client(connectTimeout).send(request.build(),
+                    new BoundedBody(outbound.maxResponseBytes()));
+        } catch (IOException ex) {
+            BoundedBody.TooLarge tooLarge = BoundedBody.tooLargeIn(ex);
+            if (tooLarge == null) {
+                throw ex;
+            }
+            // A policy bound, not a transport failure: it must not classify TQL-BATCH-5307
+            // or count against the breaker — the host answered, just too fully.
+            throw new TqlException(RESPONSE_TOO_LARGE, "http-call response from '"
+                    + uri.getHost() + "' exceeded tesseraql.http.outbound.maxResponseBytes ("
+                    + tooLarge.maxBytes() + " bytes); raise it, or have the provider answer"
+                    + " smaller");
+        }
+    }
+
+    /**
+     * {@code ofByteArray} under the response ceiling ({@code -1} passes through unbounded): a
+     * declared {@code Content-Length} over the bound refuses before a byte is buffered, and a
+     * chunked or lying stream is counted and cancelled the moment it crosses the bound — the
+     * refusal must not require the allocation it exists to prevent.
+     */
+    private static final class BoundedBody
+            implements
+                HttpResponse.BodyHandler<byte[]> {
+
+        /** The refusal that cancels the stream; surfaces as the send's {@code IOException} cause. */
+        static final class TooLarge extends IOException {
+
+            private static final long serialVersionUID = 1L;
+
+            private final long maxBytes;
+
+            TooLarge(long maxBytes) {
+                super("response exceeded " + maxBytes + " bytes");
+                this.maxBytes = maxBytes;
+            }
+
+            long maxBytes() {
+                return maxBytes;
+            }
+        }
+
+        private final long maxBytes;
+
+        BoundedBody(long maxBytes) {
+            this.maxBytes = maxBytes;
+        }
+
+        /** The {@link TooLarge} in {@code ex}'s cause chain, or null. */
+        static TooLarge tooLargeIn(Throwable ex) {
+            for (Throwable cause = ex; cause != null; cause = cause.getCause()) {
+                if (cause instanceof TooLarge tooLarge) {
+                    return tooLarge;
+                }
+            }
+            return null;
+        }
+
+        @Override
+        public HttpResponse.BodySubscriber<byte[]> apply(HttpResponse.ResponseInfo info) {
+            if (maxBytes < 0) {
+                return HttpResponse.BodySubscribers.ofByteArray();
+            }
+            long declared = info.headers().firstValueAsLong("content-length").orElse(-1);
+            if (declared > maxBytes) {
+                return refusing();
+            }
+            return counting();
+        }
+
+        /** Refuses on the declared length alone; the connection is cancelled unread. */
+        private HttpResponse.BodySubscriber<byte[]> refusing() {
+            return new HttpResponse.BodySubscriber<>() {
+                @Override
+                public java.util.concurrent.CompletionStage<byte[]> getBody() {
+                    return java.util.concurrent.CompletableFuture
+                            .failedFuture(new TooLarge(maxBytes));
+                }
+
+                @Override
+                public void onSubscribe(java.util.concurrent.Flow.Subscription subscription) {
+                    subscription.cancel();
+                }
+
+                @Override
+                public void onNext(List<java.nio.ByteBuffer> item) {
+                }
+
+                @Override
+                public void onError(Throwable throwable) {
+                }
+
+                @Override
+                public void onComplete() {
+                }
+            };
+        }
+
+        /** Counts an undeclared (chunked, or lying) body and cancels past the bound. */
+        private HttpResponse.BodySubscriber<byte[]> counting() {
+            HttpResponse.BodySubscriber<byte[]> delegate = HttpResponse.BodySubscribers
+                    .ofByteArray();
+            return new HttpResponse.BodySubscriber<>() {
+                private java.util.concurrent.Flow.Subscription subscription;
+                private long received;
+                private boolean refused;
+
+                @Override
+                public java.util.concurrent.CompletionStage<byte[]> getBody() {
+                    return delegate.getBody();
+                }
+
+                @Override
+                public void onSubscribe(java.util.concurrent.Flow.Subscription s) {
+                    this.subscription = s;
+                    delegate.onSubscribe(s);
+                }
+
+                @Override
+                public void onNext(List<java.nio.ByteBuffer> item) {
+                    if (refused) {
+                        return;
+                    }
+                    for (java.nio.ByteBuffer buffer : item) {
+                        received += buffer.remaining();
+                    }
+                    if (received > maxBytes) {
+                        refused = true;
+                        subscription.cancel();
+                        delegate.onError(new TooLarge(maxBytes));
+                        return;
+                    }
+                    delegate.onNext(item);
+                }
+
+                @Override
+                public void onError(Throwable throwable) {
+                    if (!refused) {
+                        delegate.onError(throwable);
+                    }
+                }
+
+                @Override
+                public void onComplete() {
+                    if (!refused) {
+                        delegate.onComplete();
+                    }
+                }
+            };
+        }
     }
 
     private HttpRequest.BodyPublisher bodyPublisher(HttpCallSpec spec, Map<String, Object> context,
