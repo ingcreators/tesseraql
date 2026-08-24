@@ -3,13 +3,14 @@ package io.tesseraql.runtime;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
+import io.tesseraql.core.sql.SqlRenderer;
+import io.tesseraql.core.sql.SqlStatement;
+import io.tesseraql.core.sql.SqlStatementException;
 import io.tesseraql.yaml.config.AppConfig;
-import java.sql.Connection;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Statement;
+import io.tesseraql.yaml.config.SqlDefaults;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import javax.sql.DataSource;
 
 /**
@@ -34,7 +35,7 @@ final class TenantRegistry {
         }
         String sql = config.getString("tenancy.registry.sql").orElse(null);
         if (sql != null && !sql.isBlank()) {
-            return query(mainDataSource, sql);
+            return query(config, mainDataSource, sql);
         }
         if (!pools.isEmpty()) {
             return List.copyOf(pools.tenantIds());
@@ -42,18 +43,28 @@ final class TenantRegistry {
         return List.of();
     }
 
-    private static List<String> query(DataSource dataSource, String sql) {
-        List<String> ids = new ArrayList<>();
-        try (Connection connection = dataSource.getConnection();
-                Statement statement = connection.createStatement();
-                ResultSet rs = statement.executeQuery(sql)) {
-            while (rs.next()) {
-                ids.add(rs.getString(1));
-            }
-        } catch (SQLException ex) {
+    /**
+     * User-declared SQL, so it runs through the statement primitive like every other declared
+     * statement: bounded by {@code tesseraql.sql.timeoutSeconds}, classified, spanned. It ran
+     * on a raw {@code createStatement} — unbounded and invisible — which is exactly the defect
+     * class docs/contract-sql-execution.md closed. The refusal keeps its own code.
+     */
+    private static List<String> query(AppConfig config, DataSource dataSource, String sql) {
+        try {
+            return SqlStatement.on(dataSource)
+                    .timeoutSeconds(SqlDefaults.timeoutSeconds(config))
+                    .surface("job")
+                    .read("tenancy.registry.sql", SqlRenderer.render(sql, Map.of()),
+                            (rs, span) -> {
+                                List<String> ids = new ArrayList<>();
+                                while (rs.next()) {
+                                    ids.add(rs.getString(1));
+                                }
+                                return ids;
+                            });
+        } catch (SqlStatementException ex) {
             throw new TqlException(REGISTRY_ERROR,
                     "Tenant registry query failed: " + ex.getMessage());
         }
-        return ids;
     }
 }

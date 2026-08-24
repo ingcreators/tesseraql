@@ -27,13 +27,27 @@ import org.junit.jupiter.api.Test;
  * their SQL is compiled into the jar and reviewed with it. The remaining declared-SQL executors
  * are recorded in the design document with the reason each keeps its own statement code (a
  * streaming or capped read, a positional bind plan, compile-time construction).
+ *
+ * <p>The scan covers every JDBC statement construction — {@code prepareStatement},
+ * {@code createStatement}, {@code prepareCall} — not just prepares: the one executor of
+ * user-declared SQL that bypassed the primitive after the campaign (the tenant registry) did it
+ * on a bare {@code createStatement}, which the original grep never saw. The
+ * {@code createStatement} entries are fixed framework SQL of shapes a prepare cannot carry or
+ * does not fit: DDL and migration scripts ({@code SqlScripts}, {@code IdentityBootstrap}),
+ * {@code LISTEN}/{@code NOTIFY} loops ({@code PgNotifyListener}, {@code TopicNotifyBridge}),
+ * plan inspection ({@code SqlServerPlanInspector}), and the CLI's local conveniences.
  */
 class SqlExecutorLedgerTest {
 
     private static final Path REPO = Path.of("..");
 
     private static final Set<String> LEDGER = new TreeSet<>(List.of(
+            "tesseraql-apptasks/src/main/java/io/tesseraql/apptasks/IdentityBootstrap.java",
+            "tesseraql-cli/src/main/java/io/tesseraql/cli/DuckDbCommand.java",
+            "tesseraql-cli/src/main/java/io/tesseraql/cli/FirstAdminHint.java",
             "tesseraql-core/src/main/java/io/tesseraql/core/sql/SqlStatement.java",
+            "tesseraql-core/src/main/java/io/tesseraql/core/util/SqlScripts.java",
+            "tesseraql-coverage-core/src/main/java/io/tesseraql/coverage/plan/SqlServerPlanInspector.java",
             "tesseraql-coverage-core/src/main/java/io/tesseraql/coverage/plan/MysqlPlanInspector.java",
             "tesseraql-coverage-core/src/main/java/io/tesseraql/coverage/plan/OraclePlanInspector.java",
             "tesseraql-coverage-core/src/main/java/io/tesseraql/coverage/plan/PostgresPlanInspector.java",
@@ -64,6 +78,8 @@ class SqlExecutorLedgerTest {
             "tesseraql-operations/src/main/java/io/tesseraql/operations/workflow/JdbcWorkflowStore.java",
             "tesseraql-operations/src/main/java/io/tesseraql/operations/workflow/JdbcWorkflowTaskStore.java",
             "tesseraql-runtime/src/main/java/io/tesseraql/runtime/CrossNodeTopicBus.java",
+            "tesseraql-runtime/src/main/java/io/tesseraql/runtime/PgNotifyListener.java",
+            "tesseraql-runtime/src/main/java/io/tesseraql/runtime/TopicNotifyBridge.java",
             "tesseraql-saml/src/main/java/io/tesseraql/saml/routes/SamlReplayGuard.java",
             "tesseraql-scim/src/main/java/io/tesseraql/scim/JdbcScimResourceMapping.java",
             "tesseraql-security/src/main/java/io/tesseraql/security/session/JdbcSessionStore.java",
@@ -75,7 +91,7 @@ class SqlExecutorLedgerTest {
             "tesseraql-yaml/src/main/java/io/tesseraql/yaml/workflow/ColumnWorkflowStore.java"));
 
     @Test
-    void everyPrepareStatementSiteIsOnTheLedger() throws IOException {
+    void everyStatementConstructionSiteIsOnTheLedger() throws IOException {
         Set<String> found = new TreeSet<>();
         try (Stream<Path> files = Files.walk(REPO)) {
             files.filter(path -> path.toString().endsWith(".java"))
@@ -86,7 +102,10 @@ class SqlExecutorLedgerTest {
                     .filter(path -> !path.toString().contains("/."))
                     .forEach(path -> {
                         try {
-                            if (Files.readString(path).contains("prepareStatement(")) {
+                            String source = Files.readString(path);
+                            if (source.contains("prepareStatement(")
+                                    || source.contains("createStatement(")
+                                    || source.contains("prepareCall(")) {
                                 found.add(REPO.relativize(path).toString().replace('\\', '/'));
                             }
                         } catch (IOException unreadable) {
@@ -95,10 +114,11 @@ class SqlExecutorLedgerTest {
                     });
         }
         assertThat(found)
-                .as("main-source files calling prepareStatement — a NEW entry means a new"
-                        + " hand-rolled executor: route it through io.tesseraql.core.sql"
-                        + ".SqlStatement instead, or add it here in review with a reason;"
-                        + " a REMOVED entry just shrinks this list")
+                .as("main-source files constructing a JDBC statement (prepareStatement,"
+                        + " createStatement, prepareCall) — a NEW entry means a new hand-rolled"
+                        + " executor: route it through io.tesseraql.core.sql.SqlStatement"
+                        + " instead, or add it here in review with a reason; a REMOVED entry"
+                        + " just shrinks this list")
                 .containsExactlyInAnyOrderElementsOf(LEDGER);
     }
 }

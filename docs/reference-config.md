@@ -425,7 +425,7 @@ Keys are declared in `config/application.yml` and `config/tesseraql.yml`, overri
 
 | Key | Read by | Documented in |
 | --- | --- | --- |
-| `tesseraql.sql.timeoutSeconds` | [SqlDefaults.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/config/SqlDefaults.java) | [deployment](deployment.md) |
+| `tesseraql.sql.timeoutSeconds` | [SqlDefaults.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/config/SqlDefaults.java) | [deployment](deployment.md), [multi-tenancy](multi-tenancy.md) |
 
 ## tesseraql.studio
 
