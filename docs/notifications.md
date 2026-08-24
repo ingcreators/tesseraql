@@ -300,6 +300,9 @@ tesseraql:
 
 An event's lifecycle is `PENDING → SENDING → SENT`, with `FAILED` (retried on the next
 poll) and `DEAD` (attempts exhausted; never retried automatically) on the failure path.
+A sink may classify a failure as one no retry can fix — a SCIM provider host outside the
+egress allow-list, for example. Such an event dead-letters on the first attempt instead of
+burning the ceiling on identical refusals; fix the configuration, then redeliver it.
 Dead letters raise the `TQL-OPS-9006` operational alert — which itself notifies through the
 alerts channel — and stay visible until an operator acts:
 

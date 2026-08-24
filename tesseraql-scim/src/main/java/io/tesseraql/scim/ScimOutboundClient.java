@@ -2,6 +2,8 @@ package io.tesseraql.scim;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.error.TqlException;
+import io.tesseraql.core.outbox.TerminalDeliveryException;
+import io.tesseraql.yaml.http.HttpOutbound;
 import io.tesseraql.yaml.http.OutboundGateway;
 import io.tesseraql.yaml.model.HttpCallSpec;
 import java.io.IOException;
@@ -20,9 +22,10 @@ import java.util.Map;
  * timeout at all</em> — a hung provider hung the provisioning thread indefinitely, the exact
  * defect class the gateway exists to close. Each call carries the target's bearer token and the
  * SCIM media type; non-success responses become {@link ScimException}s carrying the remote
- * status, and a gateway refusal (denied host, open circuit, transport failure) becomes a 502
- * carrying the gateway's classified message, so the outbox retries and the operator reads the
- * fix.
+ * status. A gateway refusal splits by what retrying can do about it: an open circuit or a
+ * transport failure heals, so it becomes a 502 that keeps the outbox retrying, while a denied
+ * host is configuration no retry can fix, so it becomes a {@link TerminalDeliveryException}
+ * that dead-letters the event at once — the operator fixes the allow-list and redelivers.
  */
 public final class ScimOutboundClient {
 
@@ -136,8 +139,14 @@ public final class ScimOutboundClient {
                     new HttpCallSpec(method, url, Map.of(), null, null, null, null, null, null),
                     body == null ? null : body.getBytes(StandardCharsets.UTF_8), headers);
         } catch (TqlException refused) {
-            // Denied host, open circuit, or a transport failure: already classified by the
-            // gateway. 502 keeps the outbox retrying; the message carries the fix.
+            if (HttpOutbound.HOST_DENIED.equals(refused.code())) {
+                // An egress allow-list refusal is configuration to fix; every retry would be
+                // the identical refusal, so dead-letter now instead of burning the budget.
+                throw new TerminalDeliveryException(
+                        "SCIM provider egress denied: " + refused.getMessage(), refused);
+            }
+            // An open circuit or a transport failure heals: 502 keeps the outbox retrying;
+            // the message carries the fix.
             throw new ScimException(502, null,
                     "SCIM provider unreachable: " + refused.getMessage());
         }

@@ -20,6 +20,16 @@ All notable changes to TesseraQL are documented here. The format follows
   per-host breaker's deliberate sharing across every gateway surface is now documented on
   the client.
 
+- **A configuration refusal dead-letters an outbox event at once instead of burning the
+  retry budget.** A SCIM provisioning event whose provider host is outside the egress
+  allow-list used to retry to the `maxAttempts` ceiling — ten identical refusals of a
+  failure only an operator can fix — before dead-lettering. The outbound client now
+  classifies the gateway's denied-host refusal as terminal
+  (`TerminalDeliveryException`), and the dispatcher dead-letters such an event on the
+  first attempt; it stays visible on the outbox screen, and redelivery after the
+  allow-list fix works as before. An open circuit or a transport failure still retries —
+  those heal on their own.
+
 - **The gateway drains an upload itself the moment the origin answers early, so the
   refusal always reaches the caller.** The silence shape of the
   `MultiAppGatewayDifferentialTest` flake finally named its hop (run 32686046591, the first
