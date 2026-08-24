@@ -39,6 +39,15 @@ public final class HttpOutbound {
      * host must not).
      */
     public static final TqlErrorCode HOST_DENIED = new TqlErrorCode(TqlDomain.BATCH, 5305);
+    /**
+     * TQL-BATCH-5306: the per-host circuit breaker is open. Transient — it heals after the
+     * cooldown, so a caller holding a cached copy may serve it.
+     */
+    public static final TqlErrorCode CIRCUIT_OPEN = new TqlErrorCode(TqlDomain.BATCH, 5306);
+    /** TQL-BATCH-5307: the outbound call failed (transport error, timeout, or rejected status). */
+    public static final TqlErrorCode CALL_FAILED = new TqlErrorCode(TqlDomain.BATCH, 5307);
+    /** TQL-BATCH-5309: the call declaration is invalid (no absolute http/https url). */
+    public static final TqlErrorCode INVALID_CALL = new TqlErrorCode(TqlDomain.BATCH, 5309);
 
     /** The supported credential types. */
     public static final String BEARER = "bearer";

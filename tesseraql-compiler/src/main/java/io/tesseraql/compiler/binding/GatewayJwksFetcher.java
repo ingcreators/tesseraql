@@ -74,6 +74,9 @@ public final class GatewayJwksFetcher implements JwksFetcher {
 
     private static boolean isLoopback(URI uri) {
         String host = uri.getHost();
-        return "localhost".equals(host) || "127.0.0.1".equals(host) || "::1".equals(host);
+        // URI.getHost() keeps the brackets on an IPv6 literal, so the bare spelling alone
+        // would never match a real URL.
+        return "localhost".equals(host) || "127.0.0.1".equals(host)
+                || "[::1]".equals(host) || "::1".equals(host);
     }
 }

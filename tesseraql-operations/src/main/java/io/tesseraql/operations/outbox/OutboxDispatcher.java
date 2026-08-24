@@ -3,6 +3,7 @@ package io.tesseraql.operations.outbox;
 import io.tesseraql.core.outbox.OutboxEvent;
 import io.tesseraql.core.outbox.OutboxEventSink;
 import io.tesseraql.core.outbox.OutboxStore;
+import io.tesseraql.core.outbox.TerminalDeliveryException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -14,7 +15,10 @@ import org.slf4j.LoggerFactory;
  *
  * <p>A failed event retries on later polls until its attempts reach {@code maxAttempts}; then it
  * is dead-lettered (roadmap Phase 20) — it stops retrying and stays visible to operators in the
- * operations console until redelivered or swept.
+ * operations console until redelivered or swept. A {@link TerminalDeliveryException} skips the
+ * retries: the sink has classified the failure as one no retry can fix (an egress allow-list
+ * refusal, for example), so the event dead-letters on the spot instead of burning the attempt
+ * budget on identical refusals.
  */
 public final class OutboxDispatcher {
 
@@ -59,6 +63,10 @@ public final class OutboxDispatcher {
                 sink.send(event);
                 store.markSent(event.id());
                 sent++;
+            } catch (TerminalDeliveryException terminal) {
+                LOG.warn("Outbox delivery for {} refused as non-retryable; dead-lettering: {}",
+                        event.id(), terminal.getMessage());
+                store.markDead(event.id(), terminal.getMessage());
             } catch (Exception ex) {
                 // event.attempts() counts completed attempts; this failure is one more.
                 if (event.attempts() + 1 >= maxAttempts) {
