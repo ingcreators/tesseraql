@@ -188,21 +188,21 @@ class MultiAppGatewayDifferentialTest {
         try (HttpClient reused = HttpClient.newBuilder()
                 .version(HttpClient.Version.HTTP_1_1)
                 .connectTimeout(java.time.Duration.ofSeconds(10)).build()) {
-            HttpResponse<String> refused = reused.send(HttpRequest
+            HttpResponse<String> refused = sendOrDump(reused, HttpRequest
                     .newBuilder(URI.create(direct + "/" + APP + "/api/measure"))
                     .timeout(java.time.Duration.ofSeconds(60))
                     .header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers
                             .ofString(measure(12 * 1024 * 1024).body()))
-                    .build(), HttpResponse.BodyHandlers.ofString());
+                    .build(), "direct 12MB over-limit POST");
             assertThat(refused.statusCode()).isEqualTo(413);
             assertThat(refused.body()).contains("TQL-SEC-4150")
                     .contains("tesseraql.http.maxBodyBytes");
 
-            HttpResponse<String> after = reused.send(HttpRequest
+            HttpResponse<String> after = sendOrDump(reused, HttpRequest
                     .newBuilder(URI.create(direct + "/" + APP + "/api/items"))
                     .timeout(java.time.Duration.ofSeconds(60)).build(),
-                    HttpResponse.BodyHandlers.ofString());
+                    "reused-connection GET after the refusal");
             assertThat(after.statusCode())
                     .as("the connection survives the refusal, drained clean")
                     .isEqualTo(200);
@@ -211,6 +211,17 @@ class MultiAppGatewayDifferentialTest {
 
     private static Call measure(int bytes) {
         return post("/" + APP + "/api/measure", "{\"blob\":\"" + "x".repeat(bytes) + "\"}");
+    }
+
+    /** The over-limit legs outside {@code captureOver} get the same dump-on-failure. */
+    private static HttpResponse<String> sendOrDump(HttpClient client, HttpRequest request,
+            String what) throws Exception {
+        try {
+            return client.send(request, HttpResponse.BodyHandlers.ofString());
+        } catch (java.io.IOException stuck) {
+            dumpEveryThread(what, stuck);
+            throw stuck;
+        }
     }
 
     /**
@@ -240,8 +251,15 @@ class MultiAppGatewayDifferentialTest {
                     + "Connection: close\r\n\r\n").getBytes(StandardCharsets.UTF_8));
             out.write(body);
             out.flush();
-            String answer = new String(socket.getInputStream().readAllBytes(),
-                    StandardCharsets.UTF_8);
+            String answer;
+            try {
+                answer = new String(socket.getInputStream().readAllBytes(),
+                        StandardCharsets.UTF_8);
+            } catch (java.io.IOException stuck) {
+                // A SoTimeout here is the raw-socket shape of the silence; dump before failing.
+                dumpEveryThread("raw-socket over-limit POST", stuck);
+                throw stuck;
+            }
             assertThat(answer).contains("413")
                     .contains("TQL-SEC-4150")
                     .contains("tesseraql.http.maxBodyBytes");
@@ -380,16 +398,21 @@ class MultiAppGatewayDifferentialTest {
      * {@code Thread.getAllStackTraces()} because the server's routes run on virtual threads,
      * which the latter omits. Best-effort: diagnostics must not fail the failure.
      */
-    private static void dumpEveryThread(Call call) {
-        System.err.println("[gateway-differential] send timed out on " + call.method + " "
-                + call.path + " len=" + (call.body == null ? 0 : call.body.length())
-                + " — dumping all threads (including virtual)");
+    private static void dumpEveryThread(String what, Throwable why) {
+        System.err.println("[gateway-differential] " + what + " failed (" + why
+                + ") — dumping all threads (including virtual)");
         try {
             Path dump = Files.createTempFile("gateway-differential-stall", ".txt");
             Files.delete(dump);
-            new ProcessBuilder("jcmd", String.valueOf(ProcessHandle.current().pid()),
+            Process jcmd = new ProcessBuilder("jcmd",
+                    String.valueOf(ProcessHandle.current().pid()),
                     "Thread.dump_to_file", "-format=plain", dump.toString())
-                    .inheritIO().start().waitFor();
+                    .inheritIO().start();
+            // Bounded: jcmd attaching to a sick JVM can hang, and that would turn a visible
+            // failure into a suite-timeout hang with no dump at all.
+            if (!jcmd.waitFor(30, java.util.concurrent.TimeUnit.SECONDS)) {
+                jcmd.destroyForcibly();
+            }
             System.err.write(Files.readAllBytes(dump));
             System.err.flush();
             Files.deleteIfExists(dump);
@@ -420,14 +443,31 @@ class MultiAppGatewayDifferentialTest {
             HttpResponse<InputStream> response;
             try {
                 response = client.send(built, HttpResponse.BodyHandlers.ofInputStream());
-            } catch (java.net.http.HttpTimeoutException stuck) {
-                dumpEveryThread(call);
+            } catch (java.io.IOException stuck) {
+                // HttpTimeoutException is the wedge's classic shape, but a watchdog-closed
+                // drain surfaces as a connection reset — an IOException — and that occurrence
+                // needs the dump just as much (the wedge is server-side either way).
+                dumpEveryThread(call.method + " " + call.path + " len="
+                        + (call.body == null ? 0 : call.body.length()), stuck);
                 throw stuck;
             }
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             long length = 0;
             StringBuilder head = new StringBuilder();
             byte[] buffer = new byte[64 * 1024];
+            // The request timeout covers only up to the response headers; a stall mid-body
+            // would otherwise be the original five-minute blind hang again. The dump fires
+            // while the read stays blocked, which is exactly when it is informative.
+            java.util.Timer bodyWatch = new java.util.Timer("gateway-differential-body-watch",
+                    true);
+            bodyWatch.schedule(new java.util.TimerTask() {
+                @Override
+                public void run() {
+                    dumpEveryThread("body read of " + call.method + " " + call.path,
+                            new java.util.concurrent.TimeoutException(
+                                    "no end of body after 120s"));
+                }
+            }, 120_000);
             try (InputStream body = response.body()) {
                 int read;
                 while ((read = body.read(buffer)) != -1) {
@@ -437,6 +477,8 @@ class MultiAppGatewayDifferentialTest {
                     }
                     length += read;
                 }
+            } finally {
+                bodyWatch.cancel();
             }
             Map<String, List<String>> headers = new TreeMap<>();
             response.headers().map().forEach(

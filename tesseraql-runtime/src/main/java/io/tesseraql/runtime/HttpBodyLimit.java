@@ -53,12 +53,23 @@ final class HttpBodyLimit {
      * started.
      */
     static void install(RuntimeContext runtimeContext, long maxBodyBytes) {
+        if (maxBodyBytes < 0) {
+            // -1 opts the framework limit out: the body handler then never fires a 413, and
+            // an installed handler would only hijack an app's own fail(413) with an envelope
+            // claiming a bound that does not exist.
+            return;
+        }
         HttpEdgeBeans.router(runtimeContext).errorHandler(413,
                 ctx -> refuse(ctx, maxBodyBytes));
     }
 
     private static void refuse(RoutingContext ctx, long maxBodyBytes) {
         HttpServerRequest request = ctx.request();
+        // Whether the 413's write completed. The still-open silence shape has a flush-deferral
+        // hypothesis — the refusal queued but never flushed — and the one cheap probe for it
+        // is this bit, reported by the watchdog and by the write's own failure log.
+        java.util.concurrent.atomic.AtomicReference<String> refusalWrite = new java.util.concurrent.atomic.AtomicReference<>(
+                "in flight");
         if (!request.isEnded()) {
             // Discard the rest of the upload; the body handler stopped reading when it
             // refused, and an unread stream is the wedge. The bound is what the client
@@ -73,11 +84,6 @@ final class HttpBodyLimit {
             AtomicLong drained = new AtomicLong();
             long declaredRemaining = declaredLength(request) - request.bytesRead();
             long bound = Math.max(Math.max(maxBodyBytes, 0), declaredRemaining);
-            request.handler(remaining -> {
-                if (drained.addAndGet(remaining.length()) > bound) {
-                    request.connection().close();
-                }
-            });
             // The drain itself is watched. CI produced a third shape of this flake with the
             // declared-remainder bound already in place: the client timed out after sixty
             // seconds of silence on a connection the server kept open — which means the drain
@@ -88,7 +94,10 @@ final class HttpBodyLimit {
             // prevent it: zero progress across a full interval logs the counters this
             // diagnosis needed and closes the connection — politeness has already failed on a
             // wedged stream, and a prompt close is the one answer the client can still see.
-            AtomicLong lastProgress = new AtomicLong(-1);
+            // Zero bytes across the first interval is already the wedge — a live drain moves
+            // in milliseconds — so progress starts counted from the drain's own start rather
+            // than from a sentinel that granted every wedge one free interval.
+            AtomicLong lastProgress = new AtomicLong(0);
             long watchdog = ctx.vertx().setPeriodic(DRAIN_STALL_MILLIS, timer -> {
                 if (request.isEnded()) {
                     ctx.vertx().cancelTimer(timer);
@@ -97,15 +106,35 @@ final class HttpBodyLimit {
                 long seen = drained.get();
                 if (seen == lastProgress.getAndSet(seen)) {
                     ctx.vertx().cancelTimer(timer);
+                    // bytesRead beside drained separates a delivery wedge (the transport
+                    // stopped handing bytes over: both frozen) from a receive wedge (bytes
+                    // arrive, the handler never runs: bytesRead moves alone); the 413-write
+                    // state is the flush-deferral probe.
                     LOG.warn("Over-limit drain stalled: {} of {} remaining declared byte(s)"
-                            + " drained, no progress for {} ms; closing the connection"
-                            + " (413 already sent, bound {})",
-                            seen, declaredRemaining, DRAIN_STALL_MILLIS, bound);
+                            + " drained, {} read by the transport, no progress across a {} ms"
+                            + " interval; 413 write {}; closing the connection (bound {})",
+                            seen, declaredRemaining, request.bytesRead(), DRAIN_STALL_MILLIS,
+                            refusalWrite.get(), bound);
+                    request.connection().close();
+                }
+            });
+            request.handler(remaining -> {
+                if (drained.addAndGet(remaining.length()) > bound) {
+                    // The close is the bound's answer to a liar; the watchdog stands down so
+                    // the same cut is not also reported as a stall.
+                    ctx.vertx().cancelTimer(watchdog);
                     request.connection().close();
                 }
             });
             request.endHandler(ended -> ctx.vertx().cancelTimer(watchdog));
             request.exceptionHandler(broken -> ctx.vertx().cancelTimer(watchdog));
+            // A client that reads its 413 and aborts the upload with a clean FIN closes the
+            // connection without the request's end or exception handler ever firing (Vert.x 5
+            // notifies only the response in progress on close, and the decoder treats a
+            // premature end of a fixed-length body as a silent reset) — without this hook the
+            // next tick read every routine abort as a stall and double-closed a dead
+            // connection, drowning the one WARN the real wedge needs to stay visible.
+            request.connection().closeHandler(closed -> ctx.vertx().cancelTimer(watchdog));
             request.resume();
         }
         if (ctx.response().ended()) {
@@ -118,7 +147,16 @@ final class HttpBodyLimit {
                 // discipline the admission gate's refusal follows.
                 .end(io.tesseraql.core.error.ErrorEnvelope.json(BODY_TOO_LARGE,
                         "The request body exceeds tesseraql.http.maxBodyBytes ("
-                                + maxBodyBytes + " bytes)"));
+                                + maxBodyBytes + " bytes)"))
+                .onComplete(written -> {
+                    refusalWrite.set(written.succeeded()
+                            ? "completed"
+                            : "failed: " + written.cause());
+                    if (written.failed()) {
+                        LOG.warn("The over-limit 413's write failed: {}",
+                                String.valueOf(written.cause()));
+                    }
+                });
     }
 
     /** The request's declared {@code Content-Length}, or {@code -1} when absent or malformed. */
