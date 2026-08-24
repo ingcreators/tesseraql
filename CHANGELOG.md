@@ -8,6 +8,18 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **The outbound gateway's two forms account a host's health identically, and a refusal
+  is a recorded trace.** The raw `exchange()` form counted any response below 500 —
+  a 404 included — as breaker success, so a host alternating 500 and 404 could never
+  trip the circuit through SCIM or OIDC while tripping it through an `http-call` step;
+  a 4xx now counts as neither, the deterministic-rejection stance `call()` has always
+  taken. The `tesseraql.http.call` span now opens before admission, so a denied host or
+  an open circuit leaves a span carrying the refusal instead of no trace at all, and the
+  gateway-form javadoc no longer claims a parenting ("the current trace root") that never
+  existed — with no caller-supplied parent the span starts a trace of its own. The
+  per-host breaker's deliberate sharing across every gateway surface is now documented on
+  the client.
+
 - **A configuration refusal dead-letters an outbox event at once instead of burning the
   retry budget.** A SCIM provisioning event whose provider host is outside the egress
   allow-list used to retry to the `maxAttempts` ceiling — ten identical refusals of a
