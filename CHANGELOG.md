@@ -8,6 +8,17 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **The workflow sweep rides the one transaction bracket, a job's enrich references are
+  row-capped, and the login preamble is one method.** `WorkflowSweeper` hand-rolled the
+  open-run-commit-restore bracket and got the two subtle halves wrong: a failing rollback
+  replaced the failure that mattered, and a failing autocommit restore in `finally` could
+  mask a committed sweep as an error — it runs on `SqlStatement.transact` now, which does
+  both right (the command processor's own copy stays, deliberately, for its exception
+  vocabulary; the reason is now written on it). A job step's `enrich:` reference queries
+  materialized uncapped (`maxRows -1`) where the same reference on a route refuses at the
+  app's row cap — they now cap at the job's default. And the session+CSRF preamble that
+  existed as three drifting copies in `LoginRoutes` is one method.
+
 - **An atomic replace is durable before it is visible, and keeps the target's
   permissions.** `AtomicFiles` renamed its temp into place without forcing the bytes to
   storage first, so a crash straight after a replace could surface the new name over
