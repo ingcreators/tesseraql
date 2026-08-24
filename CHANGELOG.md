@@ -8,6 +8,17 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A control character in a failure message no longer invalidates the JUnit report, and
+  error-envelope codes are typed everywhere.** XML 1.0 cannot carry the C0 controls (save
+  tab, LF, CR) even as character references, yet the shared XML escapers passed them
+  through — one exception message holding a stray byte turned the whole
+  `junit/TEST-tesseraql.xml` invalid for CI consumers; they become U+FFFD now. The HTML
+  escaper is its own implementation instead of an alias of the XML attribute one — the two
+  grammars agree on four characters today, not by contract. `ErrorEnvelope`'s stringly
+  `json(String, String)` overload is gone: its callers held typed codes and stringified
+  them to fit, the direction the type exists to prevent; the relay's and reloader's code
+  constants are `TqlErrorCode` now.
+
 - **A path the filesystem cannot express refuses like a traversal instead of a 500.**
   `ConfinedPath.resolve()` let the raw `InvalidPathException` escape, so a NUL byte in a
   Studio draft path or an asset request surfaced as an internal error instead of the
