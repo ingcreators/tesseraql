@@ -122,6 +122,27 @@ the state. (Why guards do not use the policy
 matcher and scopes do: the matcher answers role/permission/claim membership; the guard answers a data
 predicate — the same split data-scoping.md draws between `when:` arms and the expression language.)
 
+### Diagnosing a zero-row `3204`
+
+`TQL-WORKFLOW-3204` never means a stale state. Legality is checked in the same transaction
+(`TQL-WORKFLOW-3201`), and a concurrent transition fails the conditional state advance with its
+own `3201` before the command runs. By the time the zero-row contract fires, exactly two causes
+remain: the `/*%scope … */` in the command's `WHERE` matched no rows — the caller holds no row
+authority — or a data predicate the command itself demands is absent.
+
+The response deliberately does not say which. Distinguishing them would tell an unauthorized
+caller that the row exists — the same reason a scope's deny-by-default returns an empty result
+rather than naming what was withheld. Diagnose server-side instead: the request path names the
+document key and the transition, and the route audit (`tesseraql.audit.routes.enabled`) records
+both with the acting caller — so check the caller's scope membership first, the command's
+`WHERE` against the row second. The workflow history records nothing here: a refused transition
+rolls back whole.
+
+Authors retire the second cause at the source. A set condition the command's `WHERE` would
+otherwise enforce belongs in a `guard:` file, which refuses as a `422` carrying the declared
+`error.details.code` before the state advances. An app that names its data states this way
+leaves `3204` meaning one thing — authority.
+
 ### Decision stamps
 
 A transition may declare **stamps** ([workflow expressiveness](workflow-expressiveness.md)):
