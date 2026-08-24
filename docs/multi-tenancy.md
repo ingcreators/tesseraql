@@ -140,6 +140,7 @@ schema — needs a directory of tenant ids. It is resolved in precedence order:
 
 1. a static `tenancy.tenants` list in config,
 2. a `tenancy.registry.sql` query run against the `main` datasource (first column of each row),
+   bounded by `tesseraql.sql.timeoutSeconds` like every other declared statement,
 3. the keys of `tenancy.datasources`.
 
 Shared-schema deployments have no pools to enumerate, so they use the list or the registry query:
