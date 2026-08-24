@@ -418,7 +418,8 @@ public final class ViewEjector {
                     for (String option : field.options()) {
                         html.append("          <option value=\"").append(escape(option))
                                 .append("\" th:selected=\"${").append(prefill(field))
-                                .append(" == '").append(escape(option)).append("'}\">")
+                                .append(" == '").append(expressionLiteral(option))
+                                .append("'}\">")
                                 .append(escape(option)).append("</option>\n");
                     }
                 }
@@ -451,7 +452,7 @@ public final class ViewEjector {
         StringBuilder html = new StringBuilder();
         html.append("<html xmlns:th=\"http://www.thymeleaf.org\"\n"
                 + "      th:replace=\"~{tql/shell :: shell('")
-                .append(title.replace("'", "\\'"))
+                .append(expressionLiteral(title))
                 .append("', ~{}, ~{}, ~{:: #page-content})}\">\n"
                         + "<div id=\"page-content\" class=\"hc-stack\">\n");
         return html;
@@ -611,6 +612,17 @@ public final class ViewEjector {
         // The quote is escaped now too: this copy dropped it, which is unsafe the moment a
         // label lands inside a quoted attribute (docs/duplication-consolidation.md, camp. 4).
         return io.tesseraql.core.text.Escapes.html(text);
+    }
+
+    /**
+     * A value spliced into a single-quoted OGNL string literal inside a double-quoted
+     * attribute: the literal's own escapes first (the backslash, then the quote that would end
+     * it), the attribute grammar over the result. {@link #escape} alone never touches the
+     * apostrophe — which ends the OGNL literal, so {@code O'Brien} broke the ejected template
+     * and let a view spec splice into the expression.
+     */
+    private static String expressionLiteral(String text) {
+        return escape(text.replace("\\", "\\\\").replace("'", "\\'"));
     }
 
     private static void require(boolean condition, String message) {
