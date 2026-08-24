@@ -325,11 +325,15 @@ final class StepContext {
             Map<String, io.tesseraql.yaml.model.EnrichSpec> declared, String dialect,
             int timeoutSeconds) {
         List<io.tesseraql.yaml.enrich.KeyedReference> references = new java.util.ArrayList<>();
+        // The job's default row cap bounds the reference materialization, as the route's
+        // bounds do on a route — a reference query in a job used to run uncapped (-1) and
+        // could fill the heap where the same reference on a route refuses at maxRows.
+        io.tesseraql.yaml.enrich.KeyedReference.Bounds bounds = new io.tesseraql.yaml.enrich.KeyedReference.Bounds(
+                timeoutSeconds, maxRows());
         declared.forEach((name, spec) -> {
             if (spec.sql() == null) {
                 references.add(new io.tesseraql.yaml.enrich.KeyedReference(name, spec,
-                        List.of(), null, null, dialect,
-                        new io.tesseraql.yaml.enrich.KeyedReference.Bounds(timeoutSeconds, -1),
+                        List.of(), null, null, dialect, bounds,
                         io.tesseraql.yaml.http.HttpRows::of));
                 return;
             }
@@ -338,8 +342,7 @@ final class StepContext {
             references.add(new io.tesseraql.yaml.enrich.KeyedReference(name, spec,
                     io.tesseraql.core.sql.Sql2WayParser.parse(read(file), functions()),
                     file.toString(),
-                    spec.sql().datasource(), dialect,
-                    new io.tesseraql.yaml.enrich.KeyedReference.Bounds(timeoutSeconds, -1),
+                    spec.sql().datasource(), dialect, bounds,
                     io.tesseraql.yaml.http.HttpRows::of));
         });
         return references;

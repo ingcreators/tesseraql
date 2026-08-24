@@ -20,18 +20,14 @@ public final class ErrorEnvelope {
     private ErrorEnvelope() {
     }
 
-    /** The envelope for a typed code. */
-    public static String json(TqlErrorCode code, String message) {
-        return json(code.toString(), message);
-    }
-
     /**
-     * The envelope for a code held in a {@code String} constant — the lint families' idiom
-     * (docs/lint-restructure.md decision 4), which the relay's constants share.
+     * The envelope for a typed code. There is deliberately no {@code String} overload: the one
+     * caller that held its codes as strings (the relay) hand-stringified typed codes to fit it,
+     * which is the direction the type exists to prevent.
      */
-    public static String json(String code, String message) {
-        return "{\"error\":{\"code\":\"" + escape(code) + "\",\"message\":\"" + escape(message)
-                + "\"}}";
+    public static String json(TqlErrorCode code, String message) {
+        return "{\"error\":{\"code\":\"" + escape(code.toString()) + "\",\"message\":\""
+                + escape(message) + "\"}}";
     }
 
     /** Only fixed phrases reach this, but a phrase is still text: keep the JSON valid. */

@@ -30,6 +30,15 @@ class ReportersTest {
         assertThat(xml).contains("a&lt;b&amp;c").contains("x&gt;&quot;y&quot;");
     }
 
+    /** An exception message carrying a control character must not invalidate the report. */
+    @Test
+    void junitXmlSurvivesControlCharactersInAFailureMessage() {
+        TestReport report = new TestReport(List.of(TestResult.fail("t", "raw\u0000null\u0007")));
+        String xml = JUnitXmlReporter.toXml(report, "s");
+        assertThat(xml).doesNotContain("\u0000").doesNotContain("\u0007");
+        assertThat(xml).contains("raw\uFFFDnull\uFFFD");
+    }
+
     @Test
     void jsonContainsCountsAndCases() {
         String json = JsonReporter.toJson(report());
