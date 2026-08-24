@@ -16,7 +16,8 @@ class ErrorEnvelopeTest {
     /** The strings that break naive concatenation stay valid JSON here. */
     @Test
     void escapesQuotesBackslashesAndControlCharacters() {
-        assertThat(ErrorEnvelope.json("TQL-APP-4030", "a \"quoted\" \\ phrase\nnext"))
+        assertThat(ErrorEnvelope.json(new TqlErrorCode(TqlDomain.APP, 4030),
+                "a \"quoted\" \\ phrase\nnext"))
                 .isEqualTo("{\"error\":{\"code\":\"TQL-APP-4030\","
                         + "\"message\":\"a \\\"quoted\\\" \\\\ phrase\\u000anext\"}}");
     }

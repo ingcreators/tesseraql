@@ -24,4 +24,25 @@ class EscapesTest {
     void escapingIsNotAppliedTwiceToItsOwnEntities() {
         assertThat(Escapes.html("&lt;")).isEqualTo("&amp;lt;");
     }
+
+    /**
+     * The single quote stays: no framework writer emits single-quoted attributes, and the one
+     * OGNL-literal writer escapes for its own grammar first (docs pin, not a contract).
+     */
+    @Test
+    void htmlLeavesTheSingleQuoteAlone() {
+        assertThat(Escapes.html("it's")).isEqualTo("it's");
+        assertThat(Escapes.xmlAttribute("it's")).isEqualTo("it's");
+    }
+
+    /**
+     * XML 1.0 cannot carry the C0 controls (save tab, LF, CR) even as character references —
+     * an exception message holding one used to turn the whole JUnit report invalid.
+     */
+    @Test
+    void xmlIllegalControlCharactersBecomeTheReplacementCharacter() {
+        assertThat(Escapes.xmlText("a\u0000b\u001fc")).isEqualTo("a\uFFFDb\uFFFDc");
+        assertThat(Escapes.xmlAttribute("a\u0000\"b")).isEqualTo("a\uFFFD&quot;b");
+        assertThat(Escapes.xmlText("tab\tnl\ncr\r")).isEqualTo("tab\tnl\ncr\r");
+    }
 }
