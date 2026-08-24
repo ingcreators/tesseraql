@@ -115,7 +115,7 @@ that decide how much work the runtime does at once.
 | `tesseraql.http.workerThreads` | 10 | Concurrent route executions |
 | `tesseraql.http.eventLoopThreads` | `2 x cores` | Connection I/O; blocking work never runs here |
 | `tesseraql.http.maxInFlight` | `workerThreads x 4` | Requests held at once before refusing |
-| `tesseraql.http.maxBodyBytes` | 10 MB | Largest request body, uploads included; `-1` removes the bound |
+| `tesseraql.http.maxBodyBytes` | 10 MB | Largest request body, uploads included; takes units (`25MB`); `-1` removes the bound |
 
 **Beyond `maxInFlight` the runtime answers 503 with `Retry-After`**, immediately, rather than
 adding the request to a queue with no bound. Four times the worker count leaves room for the

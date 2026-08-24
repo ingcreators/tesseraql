@@ -28,6 +28,25 @@ class SizesTest {
         assertThatThrownBy(() -> Sizes.parseBytes(null)).isInstanceOf(TqlException.class);
     }
 
+    /** A product past Long.MAX_VALUE is a typo, not a huge-positive (or negative) bound. */
+    @Test
+    void rejectsAProductThatOverflows() {
+        assertThatThrownBy(() -> Sizes.parseBytes("9999999999999999GB"))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("does not fit");
+    }
+
+    /** The positive form refuses zero — for bounds where 0 would refuse everything. */
+    @Test
+    void thePositiveFormRefusesZero() {
+        assertThat(Sizes.parsePositiveBytes("25MB", "tesseraql.http.maxBodyBytes"))
+                .isEqualTo(25L * 1024 * 1024);
+        assertThatThrownBy(() -> Sizes.parsePositiveBytes("0", "tesseraql.http.maxBodyBytes"))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("positive")
+                .hasMessageContaining("tesseraql.http.maxBodyBytes");
+    }
+
     /** A boot refusal must name the key to fix, not just the value that broke. */
     @Test
     void theSubjectNamesTheKeyInTheRefusal() {

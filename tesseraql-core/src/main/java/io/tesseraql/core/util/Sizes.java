@@ -60,7 +60,27 @@ public final class Sizes {
             throw new TqlException(INVALID,
                     prefix(subject) + "Size must not be negative: " + value);
         }
-        return number * multiplier;
+        try {
+            return Math.multiplyExact(number, multiplier);
+        } catch (ArithmeticException overflow) {
+            // A wrapped product would sail past the negative check above and become a garbage
+            // bound; a size no long can hold is a typo, not a configuration.
+            throw new TqlException(INVALID,
+                    prefix(subject) + "Size does not fit in a byte count: " + value);
+        }
+    }
+
+    /**
+     * Parses like {@link #parseBytes(String, String)} and additionally refuses zero — for a
+     * bound where zero would refuse everything it governs rather than mean "unset".
+     */
+    public static long parsePositiveBytes(String value, String subject) {
+        long bytes = parseBytes(value, subject);
+        if (bytes == 0) {
+            throw new TqlException(INVALID,
+                    prefix(subject) + "Size must be positive: " + value);
+        }
+        return bytes;
     }
 
     private static String prefix(String subject) {
