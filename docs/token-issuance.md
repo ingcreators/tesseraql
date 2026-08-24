@@ -156,7 +156,8 @@ account stops refreshing, and a revoked acting role ends the connection's capaci
 blocks read) and the origin as `iss` — the mint-side half of the derived validation, caught by
 the end-to-end test when it was missing. The lifetime placeholders stay
 `tesseraql.security.oauth.accessTokenTtl`/`refreshTokenTtl` in the configuration reference;
-the operator cookbook page rides the metadata slice, where the surface becomes discoverable.*
+the operator cookbook page rides the metadata slice, where the surface becomes discoverable —
+delivered 2026-08-24 as [oauth.md](oauth.md), after the Codex acceptance and its two fixes.*
 
 The tables ride the **`security` migration component**, beside sessions — which the hoist has the
 host migrate once for the whole stack, before any runtime starts. The store implementation reads

@@ -87,6 +87,7 @@ export const SECTIONS = [
     items: [
       'authentication',
       'saml',
+      'oauth',
       'data-scoping',
       'multi-tenancy',
       'credential-lifecycle',
