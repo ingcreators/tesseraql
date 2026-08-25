@@ -6,6 +6,25 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ## Unreleased
 
+### Added
+
+- **Line items get an input contract.** A header-plus-lines document is the most common shape a
+  business form submits, and the input contract stopped at the array boundary: `items:` accepted
+  only `type:`/`enum:` for scalar elements, so an array of objects could declare nothing at all.
+  The deny-by-default posture `input:` holds — unknown fields rejected, types coerced, bounds
+  enforced, violations reported against a field — silently did not apply inside the one place a
+  form carries most of its data. `items:` now takes `fields:`, a map of the same `inputField` the
+  top level takes: elements bind, coerce and validate exactly as top-level fields do, a violation
+  addresses itself by index (`lines[2].qty`) on the existing field-error contract, `domain:`,
+  `codes:`, `enum:`, `pattern:` and `requiredWhen:` work per element (an element's condition sees
+  `item.*` and `item_index`), and an undeclared or non-writable element field follows the route's
+  `inputPolicy`. The contract rides into the generated OpenAPI and into an MCP tool's
+  `inputSchema` as an object with its properties and required list. One level deep: an array
+  inside `items.fields:`, an `items:` declaring both `type:` and `fields:`, and a `policy:` on an
+  element field are lint errors (`TQL-YAML-1027`). The procurement gallery's
+  `POST /api/requisitions` declares its `lines:` contract instead of binding elements nothing
+  validated. Closes gap 1 of [process-control-gaps.md](docs/process-control-gaps.md).
+
 ### Fixed
 
 - **A token granted for a member's MCP surface now works at the member's tools.** Under the

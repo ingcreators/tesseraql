@@ -22,6 +22,10 @@ input:
     required: true
   lines:
     type: array
+    items:
+      fields:                       # the line's own input contract
+        productId: { type: integer, required: true }
+        quantity:  { type: integer, required: true, min: 1 }
 
 steps:
   - id: orderNo
@@ -117,6 +121,11 @@ values
 /*%end*/
 ```
 
+Each `line.*` bind is the element value the input contract produced, typed: declare the
+element's fields under `items.fields:` and the array validates like every other input, with
+violations addressing themselves as `lines[2].quantity`
+([declarative validation](declarative-validation.md#line-items-the-contract-inside-an-object-array)).
+
 ### Embedded variables (dynamic identifiers)
 
 A bind renders a `?` placeholder, which is only valid where a *value* goes — never an
@@ -143,9 +152,9 @@ datagrid.
 
 The whole header+lines shape ships runnable in the procurement gallery app
 (`examples/procurement-app`, `POST /api/requisitions`): a generated-key header step, a
-`%for` detail insert bound to the request's `lines` array, and a `validate:` rule
-(`params.lines.size > 0`) refusing an empty order — suite-covered, so the pattern in
-this page is proven, not illustrative.
+`%for` detail insert bound to the request's `lines` array, an `items.fields:` contract on
+each line, and a `validate:` rule (`params.lines.size > 0`) refusing an empty order —
+suite-covered, so the pattern in this page is proven, not illustrative.
 
 ## Audit binds
 

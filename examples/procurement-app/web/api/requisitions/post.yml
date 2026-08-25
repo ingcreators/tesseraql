@@ -29,10 +29,27 @@ input:
     required: false
     min: 0
   # The header+lines shape (docs/transactional-writes.md): the request carries the
-  # line items, one transaction writes header and lines together.
+  # line items, one transaction writes header and lines together. items.fields:
+  # is the line's own input contract — every element binds, coerces and validates
+  # like a top-level field, and a violation addresses itself as lines[2].qty.
   lines:
     type: array
     required: true
+    items:
+      fields:
+        itemId:
+          type: string
+          required: true
+          maxLength: 40
+          pattern: "[A-Z]{2}-[0-9]{3}"
+        qty:
+          type: integer
+          required: true
+          min: 1
+          max: 9999
+        desiredDate:
+          type: date
+          required: false
 
 security:
   policy: req.write

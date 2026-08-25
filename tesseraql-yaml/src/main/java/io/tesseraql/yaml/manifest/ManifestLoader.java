@@ -556,11 +556,10 @@ public final class ManifestLoader {
     private static RouteDefinition withFieldDomains(io.tesseraql.yaml.domain.FieldDomains domains,
             Path source, RouteDefinition def) {
         Map<String, io.tesseraql.yaml.model.InputField> input = def.input();
-        if (input.values().stream().anyMatch(field -> field.domain() != null)) {
+        if (input.values().stream().anyMatch(field -> referencesDomain(field))) {
             Map<String, io.tesseraql.yaml.model.InputField> merged = new java.util.LinkedHashMap<>();
-            input.forEach((name, field) -> merged.put(name, field.domain() == null
-                    ? field
-                    : field.mergedWith(domains.require(field.domain(), source.toString()))));
+            input.forEach((name, field) -> merged.put(name,
+                    resolveDomains(domains, source, field)));
             input = merged;
         }
         io.tesseraql.yaml.model.ErrorsSpec errors = def.errors();
@@ -573,6 +572,35 @@ public final class ManifestLoader {
             errors = new io.tesseraql.yaml.model.ErrorsSpec(catalog);
         }
         return def.withInputAndErrors(input, errors);
+    }
+
+    /** Whether this field, or one of an object array's element fields, names a domain. */
+    private static boolean referencesDomain(io.tesseraql.yaml.model.InputField field) {
+        return field.domain() != null || (field.items() != null
+                && field.items().fields().values().stream()
+                        .anyMatch(element -> element.domain() != null));
+    }
+
+    /**
+     * This field with every {@code domain:} it reaches resolved — its own, and those an object
+     * array's {@code items.fields:} declare. A line's SKU is the same business field as a
+     * header's, so it earns the same one-place definition (docs/field-domains.md).
+     */
+    private static io.tesseraql.yaml.model.InputField resolveDomains(
+            io.tesseraql.yaml.domain.FieldDomains domains, Path source,
+            io.tesseraql.yaml.model.InputField field) {
+        io.tesseraql.yaml.model.InputField resolved = field.domain() == null
+                ? field
+                : field.mergedWith(domains.require(field.domain(), source.toString()));
+        io.tesseraql.yaml.model.InputField.InputItems items = resolved.items();
+        if (items == null || !items.hasFields()) {
+            return resolved;
+        }
+        Map<String, io.tesseraql.yaml.model.InputField> elements = new java.util.LinkedHashMap<>();
+        items.fields().forEach((name, element) -> elements.put(name, element.domain() == null
+                ? element
+                : element.mergedWith(domains.require(element.domain(), source.toString()))));
+        return resolved.withItems(items.withFields(elements));
     }
 
     private static RouteDefinition withRuleSets(

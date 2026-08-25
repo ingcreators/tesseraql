@@ -50,6 +50,49 @@ input:
   `minimum`/`maximum`, `format: email|uuid|uri`, enums) — the contract and the
   enforcement are one declaration.
 
+## Line items: the contract inside an object array
+
+A header-plus-lines document — the order and its lines, the journal entry and its postings —
+is the most common shape a business form submits, and the deny-by-default posture `input:`
+holds at the top level applies inside it. An array of objects declares its element contract
+under `items.fields:`, a map of the same fields the top level takes:
+
+```yaml
+input:
+  lines:
+    type: array
+    required: true
+    items:
+      fields:
+        itemId:      { type: string, required: true, pattern: "[A-Z]{2}-[0-9]{3}" }
+        qty:         { type: integer, required: true, min: 1, max: 9999 }
+        desiredDate: { type: date, required: false }
+        note:        { type: string, requiredWhen: "item.qty > 100" }
+```
+
+- Elements bind, coerce and validate exactly as top-level fields do, so `params.lines` carries
+  typed values — a `%for` detail insert binds `line.qty` as an integer and `line.desiredDate`
+  as a date, not as whatever text arrived.
+- A violation addresses itself by index: the field error names `lines[2].qty`, riding the
+  same `TQL-FIELD-2001` shape and the same `data-field` attribute the htmx fragment already
+  distributes, so a grid form can mark the offending cell without a second error contract.
+- `domain:`, `codes:`, `enum:`, `pattern:` and `requiredWhen:` work per element unchanged. An
+  element's `requiredWhen:` sees its own element as `item.*` and its position as `item_index` —
+  a line's requiredness is a property of that line, not of the request around it.
+- An undeclared element field follows the route's `inputPolicy.unknownFields`, and a
+  non-writable one follows its `readOnlyFieldBehavior`: the mass-assignment guard, one level
+  down, at the same two codes.
+- **One level deep.** A line is flat: an array inside `items.fields:` is refused by lint
+  (`TQL-YAML-1027`), as is an `items:` block declaring both `type:` (scalar elements) and
+  `fields:` (object elements), and a `policy:` on an element field — per-row write
+  authorization is not a thing this declaration can enforce, so gate the whole array instead.
+- The element contract rides into the generated OpenAPI and into an MCP tool's `inputSchema`
+  as an object with its properties and required list, so a caller — or a model — sees the line
+  it has to send.
+
+A size check is still a `validate:` rule (`params.lines.size > 0`): `items.fields:` describes
+one line, not how many of them an operation needs.
+
 ## Field domains
 
 The same business field crosses many operations, and restating "an SKU is an uppercase code of at
@@ -486,6 +529,8 @@ Lint reports statically what would otherwise fail at route build time:
 | `TQL-FIELD-4220` | 422 | declarative validation rejected the input |
 | `TQL-FIELD-2003` | — | invalid validation rule declaration (build/lint time) |
 | `TQL-YAML-1003` | — | lint: `validate:` on a non-command recipe |
+| `TQL-YAML-1027` | — | lint: invalid `items.fields:` element contract |
+| `TQL-FIELD-2002` | 400 | an element's undeclared or non-writable field |
 
 ## Next
 

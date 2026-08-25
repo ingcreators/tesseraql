@@ -43,6 +43,8 @@ public final class RequestBinder implements Step {
     private final ObjectMapper mapper = io.tesseraql.yaml.JsonMappers.constrained();
     /** Pre-compiled {@code requiredWhen} conditions (roadmap Phase 40) — bad syntax fails the build. */
     private final Map<String, io.tesseraql.core.expr.Expr> requiredWhen = new LinkedHashMap<>();
+    /** What binding an object array's elements needs: this route's input policy and functions. */
+    private final InputBinder.ElementRules elements;
 
     public RequestBinder(RouteDefinition route) {
         this(route, null, null,
@@ -64,11 +66,23 @@ public final class RequestBinder implements Step {
         this.pathParams = declaredPathParams(urlPath);
 
         this.appHome = appHome;
+        this.elements = new InputBinder.ElementRules(route.effectiveInputPolicy(), functions);
         route.input().forEach((name, field) -> {
             if (field.requiredWhen() != null && !field.requiredWhen().isBlank()) {
                 requiredWhen.put(name,
                         io.tesseraql.core.expr.ExpressionParser.parse(field.requiredWhen(),
                                 functions));
+            }
+            // An element's requiredWhen is evaluated per element against its own item.* scope,
+            // so it is not held here — but it is parsed here, so bad syntax fails the build
+            // like every other declared condition rather than the first request that hits it.
+            if (field.items() != null) {
+                field.items().fields().values().forEach(element -> {
+                    if (element.requiredWhen() != null && !element.requiredWhen().isBlank()) {
+                        io.tesseraql.core.expr.ExpressionParser.parse(element.requiredWhen(),
+                                functions);
+                    }
+                });
             }
         });
     }
@@ -103,7 +117,8 @@ public final class RequestBinder implements Step {
                 java.util.Locale.forLanguageTag(localeTag),
                 exchange.beans().lookup(
                         TesseraqlProperties.CATALOG_STORE_BEAN,
-                        io.tesseraql.core.catalog.CatalogStore.class));
+                        io.tesseraql.core.catalog.CatalogStore.class),
+                elements);
 
         // A path parameter declared under input: publishes its coerced, validated value in the
         // path.* namespace too (roadmap Phase 40 typed path params); undeclared ones stay raw.

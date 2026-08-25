@@ -114,14 +114,44 @@ public record InputField(
                 description != null ? description : d.description());
     }
 
-    /** Element type for array inputs. */
+    /** This field with a resolved element contract in place of its own. */
+    public InputField withItems(InputItems replacement) {
+        return new InputField(type, required, defaultValue, min, max, maxLength, enumValues,
+                writable, classification, mask, format, replacement, pattern, minLength,
+                requiredWhen, domain, widget, codes, policy, description);
+    }
+
+    /**
+     * The element contract for array inputs: a scalar element's {@code type}/{@code enum}, or —
+     * for the header-plus-lines shape a business form submits — a {@code fields:} map declaring
+     * the element's own fields (docs/declarative-validation.md, "Line items").
+     *
+     * <p>{@code fields:} is one level deep. A line is flat, and depth is where this would start
+     * reimplementing JSON Schema, so an array inside an element is refused by lint
+     * ({@code TQL-YAML-1027}).
+     */
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record InputItems(String type, @JsonProperty("enum") List<String> enumValues) {
+    public record InputItems(String type, @JsonProperty("enum") List<String> enumValues,
+            java.util.Map<String, InputField> fields) {
 
         public InputItems {
             // Absent means "no element enum", not null: every reader would otherwise repeat the
             // same null check, and the first one to forget it gets an NPE at request time.
             enumValues = enumValues == null ? List.of() : List.copyOf(enumValues);
+            // Declaration order is the form's order; Map.copyOf would scramble it.
+            fields = fields == null || fields.isEmpty()
+                    ? java.util.Map.of()
+                    : java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(fields));
+        }
+
+        /** Whether the elements are objects with their own declared field contract. */
+        public boolean hasFields() {
+            return !fields.isEmpty();
+        }
+
+        /** This element contract with the given field declarations replacing its own. */
+        public InputItems withFields(java.util.Map<String, InputField> replacement) {
+            return new InputItems(type, enumValues, replacement);
         }
     }
 }

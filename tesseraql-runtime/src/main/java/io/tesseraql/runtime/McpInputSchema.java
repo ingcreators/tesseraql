@@ -46,12 +46,7 @@ final class McpInputSchema {
             // the constraint produces a valid call, and the alternative is a rejection it has no
             // way to diagnose.
             if ("array".equals(field.type()) && field.items() != null) {
-                ObjectNode items = property.putObject("items");
-                items.put("type", jsonType(field.items().type()));
-                if (!field.items().enumValues().isEmpty()) {
-                    ArrayNode elementValues = items.putArray("enum");
-                    field.items().enumValues().forEach(elementValues::add);
-                }
+                describeElements(property.putObject("items"), field.items());
             }
             if (field.min() != null) {
                 property.put("minimum", field.min());
@@ -70,6 +65,56 @@ final class McpInputSchema {
             schema.set("required", required);
         }
         return schema;
+    }
+
+    /**
+     * The element shape an object array declares ({@code items.fields:}): a model that is told
+     * only "array" sends lines the binder refuses field by field, and it has no way to diagnose
+     * a rejection against a schema that never mentioned the fields.
+     */
+    private static void describeElements(ObjectNode items, InputField.InputItems declared) {
+        if (!declared.hasFields()) {
+            items.put("type", jsonType(declared.type()));
+            if (!declared.enumValues().isEmpty()) {
+                ArrayNode elementValues = items.putArray("enum");
+                declared.enumValues().forEach(elementValues::add);
+            }
+            return;
+        }
+        items.put("type", "object");
+        ObjectNode properties = items.putObject("properties");
+        ArrayNode required = MAPPER.createArrayNode();
+        declared.fields().forEach((name, field) -> {
+            ObjectNode property = properties.putObject(name);
+            property.put("type", jsonType(field.type()));
+            if (field.description() != null && !field.description().isBlank()) {
+                property.put("description", field.description());
+            }
+            if ("date".equals(field.type())) {
+                property.put("format", "date");
+            } else if ("datetime".equals(field.type())) {
+                property.put("format", "date-time");
+            }
+            if (field.enumValues() != null && !field.enumValues().isEmpty()) {
+                ArrayNode values = property.putArray("enum");
+                field.enumValues().forEach(values::add);
+            }
+            if (field.min() != null) {
+                property.put("minimum", field.min());
+            }
+            if (field.max() != null) {
+                property.put("maximum", field.max());
+            }
+            if (field.maxLength() != null) {
+                property.put("maxLength", field.maxLength());
+            }
+            if (field.required()) {
+                required.add(name);
+            }
+        });
+        if (!required.isEmpty()) {
+            items.set("required", required);
+        }
     }
 
     private static String jsonType(String inputType) {

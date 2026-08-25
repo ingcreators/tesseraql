@@ -877,16 +877,17 @@ One column of a file transfer, in either form: the bare name, or an object addin
 | `widget` | enum: `text` \| `textarea` \| `number` \| `date` \| `datetime-local` \| `checkbox` \| `select` \| `hidden` | Presentation hint (docs/declarative-views.md): the form widget this field renders as, declared once on a domain; a per-view fields: override wins. Never part of the HTTP contract. |
 | `codes` | string | The code catalog this field's values come from (docs/lookups.md): the binder accepts only that catalog's active codes, and the violation is the enum field error. Declared on a domain, so the value set has one home instead of an enum that drifts from the master. |
 | `policy` | string | Write authorization (docs/declarative-views.md): a security policy the principal must satisfy to supply this field; a failing principal's value follows the route's readOnly behavior, and the derived form omits the field. Operational — never accepted inside a domain. |
-| `items` | [object](#inputfielditems) | Element constraints for `type: array`. |
+| `items` | [object](#inputfielditems) | Element constraints for `type: array`: `type:`/`enum:` for scalar elements, `fields:` for object elements. |
 
 #### inputField.items
 
-Element constraints for `type: array`.
+Element constraints for `type: array`: `type:`/`enum:` for scalar elements, `fields:` for object elements.
 
 | Property | Type | Description |
 | --- | --- | --- |
-| `type` | string | The element type. |
+| `type` | string | The element type, for an array of scalars. Mutually exclusive with fields: (TQL-YAML-1027). |
 | `enum` | array of string | The accepted element values; anything else is refused. |
+| `fields` | map of [inputField](#inputfield) | The element's own fields, for an array of objects — the header-plus-lines shape a business form submits. Elements bind, coerce and validate exactly as top-level fields do, and a violation addresses itself by index (`lines[2].qty`). One level deep: an array inside an element is refused (TQL-YAML-1027). Documented in declarative-validation.md. |
 
 ### fieldPolicy
 
