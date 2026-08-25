@@ -543,6 +543,19 @@ public final class RouteCompiler {
             if (onlyRouteIds != null && !onlyRouteIds.contains(routeId)) {
                 continue;
             }
+            // The bulk endpoint mounts first, deliberately: the edge matches in declaration
+            // order and {key} happily matches the literal _bulk, so mounting the single
+            // document's route first would leave the bulk URL answering as a document called
+            // "_bulk". The two are declared together, so the ordering lives here rather than
+            // becoming a rule the whole compiler has to remember.
+            if (transition.isBulk()) {
+                buildWorkflowBulk(context, def, basePath, transition.id(),
+                        transition.security() != null ? transition.security() : def.security(),
+                        commandProcessor(
+                                transitionRouteFile(workflowFile, def, transition, basePath),
+                                transitionBinding(workflowFile, def, transition, managed,
+                                        appStore)));
+            }
             buildTransactionalCommand(context,
                     transitionRouteFile(workflowFile, def, transition, basePath),
                     null, transitionBinding(workflowFile, def, transition, managed, appStore));
@@ -579,27 +592,88 @@ public final class RouteCompiler {
             }
             RouteDefinition definition = RouteDefinition.synthesizedCommand(routeId, security,
                     null, java.util.Map.of(), dispatchResponse());
+            String dialect = datasourceDialect(DEFAULT_DATASOURCE);
+            io.tesseraql.compiler.binding.WorkflowDispatchProcessor selector = new io.tesseraql.compiler.binding.WorkflowDispatchProcessor(
+                    def.id(), dispatch.id(), members,
+                    io.tesseraql.yaml.decision.DecisionSets.compileUses(
+                            dispatch.decide(), dialect, functions),
+                    def.document().table(), def.document().key(), dialect,
+                    DEFAULT_DATASOURCE, commandBounds() == null
+                            ? 0
+                            : commandBounds().timeoutSeconds());
+            // Before the {key} route, for the reason the transition loop states.
+            if (dispatch.isBulk()) {
+                buildWorkflowBulk(context, def, basePath, dispatch.id(), security, selector);
+            }
             String served = routeId;
             if (mountRest) {
                 mount(context, "POST", urlPath, served);
             }
-            String dialect = datasourceDialect(DEFAULT_DATASOURCE);
             PipelineBuilder route = pipelines.pipeline(routeId);
             applyCommonGovernance(route, routeId, "POST", urlPath, definition);
             route.process(new RequestBinder(definition, urlPath, compiledAppHome,
                     functions))
                     .process(new io.tesseraql.compiler.binding.CatalogBinder())
-                    .process(new io.tesseraql.compiler.binding.WorkflowDispatchProcessor(
-                            def.id(), dispatch.id(), members,
-                            io.tesseraql.yaml.decision.DecisionSets.compileUses(
-                                    dispatch.decide(), dialect, functions),
-                            def.document().table(), def.document().key(), dialect,
-                            DEFAULT_DATASOURCE, commandBounds() == null
-                                    ? 0
-                                    : commandBounds().timeoutSeconds()))
+                    .process(selector)
                     .process(responseRenderer(definition));
         }
         buildWorkflowDelegate(context, def, basePath, onlyRouteIds);
+    }
+
+    /**
+     * The bulk endpoint of a transition or a dispatch (docs/approval-workflow.md, "Bulk
+     * transitions"): {@code POST {basePath}/_bulk/<id>} accepting {@code keys: []} and running
+     * the very pipeline the single-document endpoint runs, once per key, each in its own
+     * transaction. It carries the same {@code security:} the single endpoint carries — a bulk
+     * action is the same action, so it cannot be a way around the audience that guards it.
+     */
+    private void buildWorkflowBulk(RuntimeContext context,
+            io.tesseraql.yaml.model.WorkflowDefinition def, String basePath, String actionId,
+            io.tesseraql.yaml.model.SecuritySpec security,
+            io.tesseraql.pipeline.Step member) {
+        String routeId = def.id() + "." + actionId + ".bulk";
+        String urlPath = basePath + "/_bulk/" + actionId;
+        RouteDefinition definition = RouteDefinition
+                .synthesizedCommand(routeId, security, null, java.util.Map.of(), bulkResponse())
+                .withInputAndErrors(java.util.Map.of("keys", BULK_KEYS), null);
+        if (mountRest) {
+            mount(context, "POST", urlPath, routeId);
+        }
+        PipelineBuilder route = pipelines.pipeline(routeId);
+        applyCommonGovernance(route, routeId, "POST", urlPath, definition);
+        route.process(new RequestBinder(definition, urlPath, compiledAppHome, functions))
+                .process(new io.tesseraql.compiler.binding.CatalogBinder())
+                .process(new io.tesseraql.compiler.binding.WorkflowBulkProcessor(def.id(),
+                        actionId, member, bulkMaxKeys()))
+                .process(responseRenderer(definition));
+    }
+
+    /** The bulk request's one declared input: the document keys, refused when absent. */
+    private static final io.tesseraql.yaml.model.InputField BULK_KEYS = new io.tesseraql.yaml.model.InputField(
+            "array", true, null, null, null, null, null, null, null, null, null, null, null, null,
+            null, null, null, null, null,
+            "The document keys this action applies to, each run in its own transaction.");
+
+    /**
+     * The per-key outcome report. The response is a {@code 200} carrying it whatever the keys
+     * did: a refused key is an outcome of the request, not a failure of it — the caller asked
+     * for twenty answers and gets twenty.
+     */
+    private static io.tesseraql.yaml.model.ResponseSpec bulkResponse() {
+        return new io.tesseraql.yaml.model.ResponseSpec(
+                new io.tesseraql.yaml.model.ResponseSpec.JsonResponse(200,
+                        new java.util.LinkedHashMap<>(java.util.Map.of(
+                                "requested", "bulk.requested",
+                                "succeeded", "bulk.succeeded",
+                                "failed", "bulk.failed",
+                                "outcomes", "bulk.outcomes")),
+                        null, null),
+                null, null, null, null, null, null, null);
+    }
+
+    /** The bulk key ceiling: an operational bound, so it lives where operational bounds live. */
+    private int bulkMaxKeys() {
+        return (int) config.getDouble("tesseraql.workflow.bulk.maxKeys").orElse(100);
     }
 
     /** The synthesized route file a transition compiles to (roadmap Phase 28). */

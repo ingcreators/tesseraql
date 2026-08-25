@@ -8,6 +8,23 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **A transition can be taken over many documents at once.** A workflow transition was one
+  document per call, so a task inbox approving twenty requisitions was twenty requests and
+  whatever partial-failure reporting the client improvised was the contract. A transition or a
+  `dispatch:` now declares `bulk: true`, which synthesizes
+  `POST {basePath}/_bulk/<id>` accepting `keys: []`. Each key runs the member's own command
+  processor — the very pipeline its single-document endpoint runs, so security, `decide:`, state
+  legality, guard, task authority, advance, `stamp:`, the scoped command and history are all
+  still there — in its own transaction, and the response is a `200` carrying a per-key outcome
+  report in the import idiom (`{requested, succeeded, failed, outcomes: [{key, status, code?,
+  guard?}]}`). A refused key does not disturb the others; an all-or-nothing bulk approve is not
+  offered, because a hundred-document rollback on the ninety-seventh guard is not what an inbox
+  user means. `emit:` fires once per key. A typed `TQL-*` refusal becomes that key's outcome
+  while an unclassified failure fails the request. `keys:` is bounded by
+  `tesseraql.workflow.bulk.maxKeys` (default 100), over which the request is refused whole
+  (`TQL-WORKFLOW-3116`). The procurement gallery's `submit_decision` dispatch declares it.
+  Closes gap 2 of [process-control-gaps.md](docs/process-control-gaps.md).
+
 - **Outbound `http:` bindings can declare a retry policy.** `retry:`/`backoff:` appeared nowhere
   on the shipped surface: retry existed in exactly one place, the outbox dispatcher's
   `maxAttempts`, so a synchronous `http:` binding — the rate lookup a command needs before it

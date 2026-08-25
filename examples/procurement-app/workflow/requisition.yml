@@ -69,6 +69,10 @@ transitions:
 # The one-action dispatch (docs/workflow-expressiveness.md): the approver's UI calls
 # POST /api/requisitions/{key}/submit_decision and the engine fires whichever member
 # the stamped approval_route admits — no client-side lane knowledge.
+# bulk: the approver's inbox settles a page of requisitions in one call, and each key
+# still picks its own lane through the very same pipeline (docs/approval-workflow.md,
+# "Bulk transitions"): one transaction per key, a per-key outcome report back.
 dispatch:
   - id: submit_decision
     oneOf: [approve, advance]
+    bulk: true

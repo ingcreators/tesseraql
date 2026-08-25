@@ -227,6 +227,57 @@ fall-through), no dispatch/transition id collision, and no decide-alias collisio
 member without a guard that is not last makes its followers unreachable
 (`TQL-WORKFLOW-3113`, warning).
 
+### Bulk transitions: one action, many documents
+
+A transition is one document per call, so a task inbox approving twenty requisitions made
+twenty requests and whatever partial-failure reporting the client improvised became the
+contract. A transition — or a dispatch — opts in:
+
+```yaml
+dispatch:
+  - id: submit_decision
+    oneOf: [approve, advance]
+    bulk: true            # also serves POST {basePath}/_bulk/submit_decision
+```
+
+```http
+POST /api/requisitions/_bulk/submit_decision
+{ "keys": ["REQ-1001", "REQ-1002", "REQ-1003"] }
+```
+
+```json
+{
+  "requested": 3, "succeeded": 2, "failed": 1,
+  "outcomes": [
+    { "key": "REQ-1001", "status": 200 },
+    { "key": "REQ-1002", "status": 200 },
+    { "key": "REQ-1003", "status": 409, "code": "TQL-WORKFLOW-3201" }
+  ]
+}
+```
+
+- **Nothing is bypassed.** Each key runs the member's own command processor — the very
+  pipeline its single-document endpoint runs: security, `decide:`, state legality, guard, task
+  authority, advance, `stamp:`, the scoped command, history, `notify:`. The bulk endpoint is a
+  second door onto one pipeline, not a second pipeline.
+- **Each key is its own transaction**, and the response is a `200` carrying the per-key outcome
+  report in the import idiom ([file transfers](file-transfers.md) reports rejected rows by
+  number). A refused or conflicted key does not disturb the others. An all-or-nothing bulk
+  approve is deliberately not offered: a hundred-document rollback on the ninety-seventh guard
+  is not what an inbox user means by "approve these".
+- **The same `security:`.** The bulk route carries the transition's own spec — a dispatch's
+  members already share one (`TQL-WORKFLOW-3112`) — because a bulk action is the same action and
+  must not become a way around the audience that guards it.
+- `emit:` and the outbox fire **once per key**, in that key's transaction. Each key is its own
+  business event; coalescing them would invent an aggregate event type no declaration describes.
+- **A typed refusal is an outcome; anything else fails the request.** A `TQL-*` refusal is
+  something the framework understands and can report against its key. An unclassified failure
+  means it does not, and carrying on through the remaining keys would be guessing.
+- `keys:` is bounded by `tesseraql.workflow.bulk.maxKeys` (default 100). Over the ceiling the
+  whole request is refused before a single key runs (`TQL-WORKFLOW-3116`): a client past the cap
+  should page, and half-applying its request would leave it guessing which half.
+- `idempotency:` applies to the bulk route as to any command.
+
 ### Assignee resolution is the dual of a scope
 
 A **scope** maps `principal → predicate over rows`. **Assignee resolution** maps `document → set of
@@ -551,6 +602,7 @@ match the lint family rather than borrowing `TQL-SQL-*`:
 | A transition whose guard is falsy | `TQL-WORKFLOW-3202` | `422` |
 | A transition attempted by a caller holding none of the document's open tasks | `TQL-WORKFLOW-3203` | `403` |
 | A transition whose scoped write matches no authorized row | as a scoped write | `409` / `403` |
+| A bulk request naming more keys than `tesseraql.workflow.bulk.maxKeys` allows | `TQL-WORKFLOW-3116` | `400` |
 
 A workflow can never silently no-op a transition.
 

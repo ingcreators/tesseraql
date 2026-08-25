@@ -523,7 +523,7 @@ public final class ManifestLoader {
             resolved.add(new io.tesseraql.yaml.model.TransitionSpec(transition.id(),
                     transition.from(), transition.to(), transition.guard(),
                     transition.command(), transition.assign(),
-                    transition.security(), merged, transition.stamp()));
+                    transition.security(), merged, transition.stamp(), transition.bulk()));
         }
         // A dispatch consumes shared decisions the way its members do
         // (docs/transition-engine.md track B): the same resolution, the same errors.
@@ -533,7 +533,7 @@ public final class ManifestLoader {
             dispatch.decide().forEach((alias, use) -> merged.put(alias,
                     decisions.resolveForWorkflow(alias, use, source.toString(), functions)));
             dispatches.add(new io.tesseraql.yaml.model.DispatchSpec(dispatch.id(), merged,
-                    dispatch.oneOf()));
+                    dispatch.oneOf(), dispatch.bulk()));
         }
         return new io.tesseraql.yaml.model.WorkflowDefinition(def.version(), def.id(),
                 def.kind(), def.mode(), def.document(), def.basePath(), def.security(),

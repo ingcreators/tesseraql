@@ -171,6 +171,57 @@ class WorkflowTransitionIntegrationTest {
         assertThat(instanceState("routed_request", "PR-10")).isEqualTo("routed");
     }
 
+    /**
+     * The bulk endpoint (docs/approval-workflow.md, "Bulk transitions"): one action over many
+     * documents, run as many actions — each key through the very pipeline its own endpoint
+     * runs, in its own transaction, and a refused key does not disturb the others.
+     */
+    @Test
+    void aBulkDispatchRunsEveryKeyAndReportsEachOutcome() throws Exception {
+        // PR-13 settles on its own first, so the bulk call below meets a document already in
+        // the terminal state — a refusal with a real code beside two that succeed.
+        assertThat(post("/funded-requests/PR-13/settle", "requester-1").statusCode())
+                .isEqualTo(200);
+
+        HttpResponse<String> bulk = post("/funded-requests/_bulk/settle", "requester-1",
+                "{\"keys\": [\"PR-11\", \"PR-12\", \"PR-13\"]}");
+
+        assertThat(bulk.statusCode()).isEqualTo(200);
+        JsonNode report = MAPPER.readTree(bulk.body());
+        assertThat(report.path("requested").asInt()).isEqualTo(3);
+        assertThat(report.path("succeeded").asInt()).isEqualTo(2);
+        assertThat(report.path("failed").asInt()).isEqualTo(1);
+
+        JsonNode outcomes = report.path("outcomes");
+        assertThat(outcomes).hasSize(3);
+        assertThat(outcomes.get(0).path("key").asText()).isEqualTo("PR-11");
+        assertThat(outcomes.get(0).path("status").asInt()).isEqualTo(200);
+        assertThat(outcomes.get(1).path("key").asText()).isEqualTo("PR-12");
+        assertThat(outcomes.get(1).path("status").asInt()).isEqualTo(200);
+        // PR-13 is already cleared, so no member of the dispatch holds — the key carries the
+        // dispatch's own refusal, exactly as its single-document endpoint would have answered.
+        assertThat(outcomes.get(2).path("key").asText()).isEqualTo("PR-13");
+        assertThat(outcomes.get(2).path("status").asInt()).isEqualTo(422);
+        assertThat(outcomes.get(2).path("code").asText()).isEqualTo("TQL-WORKFLOW-3202");
+
+        // Nothing was bypassed: each key advanced through its own member's pipeline, and each
+        // one picked its own lane — PR-11 is funded (clear), PR-12 is a zero (writeoff).
+        assertThat(instanceState("funded_request", "PR-11")).isEqualTo("cleared");
+        assertThat(instanceState("funded_request", "PR-12")).isEqualTo("cleared");
+    }
+
+    /** A client past the ceiling should page; half-applying its request would be worse. */
+    @Test
+    void aBulkRequestOverTheKeyCeilingIsRefusedWhole() throws Exception {
+        HttpResponse<String> refused = post("/funded-requests/_bulk/settle", "requester-1",
+                "{\"keys\": [\"PR-14\", \"PR-14\", \"PR-14\", \"PR-14\"]}");
+
+        assertThat(refused.statusCode()).isEqualTo(400);
+        assertThat(refused.body()).contains("TQL-WORKFLOW-3116");
+        // Refused before a single key ran: PR-14 never left its initial state.
+        assertThat(instanceState("funded_request", "PR-14")).isNull();
+    }
+
     @Test
     void illegalTransitionFromWrongStateIsConflict() throws Exception {
         assertThat(post("/purchase-requests/PR-3/approve", "approver-1").statusCode())
@@ -279,6 +330,17 @@ class WorkflowTransitionIntegrationTest {
                 HttpResponse.BodyHandlers.ofString());
     }
 
+    /** The same, carrying a JSON body — the bulk endpoint's {@code keys:} arrive in one. */
+    private static HttpResponse<String> post(String path, String sub, String body)
+            throws Exception {
+        return HttpClient.newHttpClient().send(
+                HttpRequest.newBuilder(URI.create("http://localhost:" + runtime.port() + path))
+                        .header("Authorization", "Bearer " + token(sub))
+                        .header("Content-Type", "application/json")
+                        .POST(HttpRequest.BodyPublishers.ofString(body)).build(),
+                HttpResponse.BodyHandlers.ofString());
+    }
+
     private static String instanceState(String docType, String docId) throws Exception {
         return queryString("select current_state from tql_workflow_instance "
                 + "where doc_type = ? and doc_id = ?", docType, docId);
@@ -358,7 +420,8 @@ class WorkflowTransitionIntegrationTest {
                     + "('PR-1','Laptop',1000), ('PR-2','Pen',0), ('PR-3','Desk',500), "
                     + "('PR-4','Chair',700), ('PR-5','Lamp',300), ('PR-6','Phone',900), "
                     + "('PR-7','Mouse',150), ('PR-8','Cable',80), ('PR-9','Clip',0), "
-                    + "('PR-10','Server',1200)");
+                    + "('PR-10','Server',1200), ('PR-11','Rack',500), ('PR-12','Tape',0), "
+                    + "('PR-13','Stand',500), ('PR-14','Riser',500)");
             // App-mode: state lives in the status column, initialized to the initial state.
             statement.execute("create table expenses (id varchar(64) primary key, "
                     + "amount numeric(12,2) not null, status varchar(32) not null, "
@@ -388,6 +451,8 @@ class WorkflowTransitionIntegrationTest {
                     name: workflow-transition
                   workflow:
                     mode: managed
+                    bulk:
+                      maxKeys: 3
                     sweep:
                       interval: 1h
                   datasources:
@@ -471,6 +536,7 @@ class WorkflowTransitionIntegrationTest {
                 dispatch:
                   - id: settle
                     oneOf: [clear, writeoff]
+                    bulk: true
                 """);
         Files.writeString(workflowDir.resolve("funded.sql"),
                 "select 1 from purchase_requests where id = /* key */ 'x' and amount > 0\n");
