@@ -90,6 +90,8 @@ public final class AppScaffolder {
                         absoluteResource("/schema/tesseraql-domains-v1.schema.json")),
                 new ScaffoldedFile(".vscode/tesseraql-rules-v1.schema.json",
                         absoluteResource("/schema/tesseraql-rules-v1.schema.json")),
+                new ScaffoldedFile(".vscode/tesseraql-fragments-v1.schema.json",
+                        absoluteResource("/schema/tesseraql-fragments-v1.schema.json")),
                 new ScaffoldedFile(".vscode/tesseraql-decisions-v1.schema.json",
                         absoluteResource("/schema/tesseraql-decisions-v1.schema.json")),
                 new ScaffoldedFile(".vscode/tesseraql-calendars-v1.schema.json",
@@ -139,6 +141,9 @@ public final class AppScaffolder {
                 ],
                 ".vscode/tesseraql-rules-v1.schema.json": [
                   "rules/**/*.yml"
+                ],
+                ".vscode/tesseraql-fragments-v1.schema.json": [
+                  "fragments/**/*.yml"
                 ],
                 ".vscode/tesseraql-decisions-v1.schema.json": [
                   "decisions/**/*.yml"

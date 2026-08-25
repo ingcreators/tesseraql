@@ -118,8 +118,11 @@ public final class ManifestLoader {
                 .load(home, parser, functions);
         io.tesseraql.yaml.decision.DecisionSets decisions = io.tesseraql.yaml.decision.DecisionSets
                 .load(home, parser);
+        io.tesseraql.yaml.fragments.StepFragments fragments = io.tesseraql.yaml.fragments.StepFragments
+                .load(home, parser);
         List<RouteFile> routes = applySharedDefinitions(domains, ruleSets, decisions,
-                applySecurityDefaults(config, loadRoutes(home, brokenSink)), functions);
+                fragments, applySecurityDefaults(config, loadRoutes(home, brokenSink)),
+                functions);
         List<JobFile> jobs = loadJobs(home);
         List<ToolFile> tools = new ArrayList<>();
         List<ResourceFile> resources = new ArrayList<>();
@@ -150,11 +153,11 @@ public final class ManifestLoader {
                             mcpDefaults.resolve(prompt.definition().security()))));
         }
         tools.replaceAll(tool -> new ToolFile(tool.source(),
-                resolveSharedDefinitions(domains, ruleSets, decisions, tool.source(),
+                resolveSharedDefinitions(domains, ruleSets, decisions, fragments, tool.source(),
                         tool.definition(), functions),
                 tool.description(), tool.uiResource()));
         List<RouteFile> consumers = applySharedDefinitions(domains, ruleSets, decisions,
-                loadConsumers(home), functions);
+                fragments, loadConsumers(home), functions);
         List<ScopeFile> scopes = loadScopes(home);
         List<WorkflowFile> workflows = new ArrayList<>(loadWorkflows(home));
         workflows.replaceAll(workflow -> new WorkflowFile(workflow.source(),
@@ -471,7 +474,8 @@ public final class ManifestLoader {
     private static List<RouteFile> applySharedDefinitions(
             io.tesseraql.yaml.domain.FieldDomains domains,
             io.tesseraql.yaml.rules.ValidationRuleSets ruleSets,
-            io.tesseraql.yaml.decision.DecisionSets decisions, List<RouteFile> files,
+            io.tesseraql.yaml.decision.DecisionSets decisions,
+            io.tesseraql.yaml.fragments.StepFragments fragments, List<RouteFile> files,
             ExpressionFunctions functions) {
         // No wholesale skip when the shared-definition trees are empty: a `domain:` or
         // `use:` reference in an app that declares none must fail the load, not silently
@@ -480,8 +484,8 @@ public final class ManifestLoader {
         List<RouteFile> resolved = new ArrayList<>(files.size());
         for (RouteFile file : files) {
             resolved.add(new RouteFile(file.httpMethod(), file.urlPath(), file.source(),
-                    resolveSharedDefinitions(domains, ruleSets, decisions, file.source(),
-                            file.definition(), functions)));
+                    resolveSharedDefinitions(domains, ruleSets, decisions, fragments,
+                            file.source(), file.definition(), functions)));
         }
         return resolved;
     }
@@ -496,10 +500,15 @@ public final class ManifestLoader {
     private static RouteDefinition resolveSharedDefinitions(
             io.tesseraql.yaml.domain.FieldDomains domains,
             io.tesseraql.yaml.rules.ValidationRuleSets ruleSets,
-            io.tesseraql.yaml.decision.DecisionSets decisions, Path source,
+            io.tesseraql.yaml.decision.DecisionSets decisions,
+            io.tesseraql.yaml.fragments.StepFragments fragments, Path source,
             RouteDefinition def, ExpressionFunctions functions) {
+        // Fragments expand first: what they produce is ordinary steps, and every layer after
+        // this one is entitled to see a document with no references left in it.
         return withDecisions(decisions, source,
-                withRuleSets(ruleSets, source, withFieldDomains(domains, source, def)),
+                withRuleSets(ruleSets, source,
+                        withFieldDomains(domains, source,
+                                def.withSteps(fragments.expand(def.steps(), source)))),
                 functions);
     }
 
