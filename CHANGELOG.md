@@ -8,6 +8,22 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **A repeated step sequence can be declared once.** Domains, rules, decisions, scope fragments,
+  calendars and messages are all shared documents referenced by name — a step sequence was not, so
+  the audit note and the counter refresh that a dozen commands repeat were copied into each
+  `steps:` block, and the copies drift. `fragments/*.yml` declares a named sequence with a typed
+  `binds:` contract, and a command references it through the `use:` arm of an ordinary step.
+  Expansion happens at **manifest load**: the fragment's steps become real steps of the
+  referencing document — ids prefixed with the reference's own id, `binds.<name>` params replaced
+  by the reference's wiring, SQL files re-pathed from where they sit beside the fragment — so the
+  transaction, coverage, spans and lints see ordinary steps and nothing downstream can tell. The
+  contract is checked both ways (a missing bind and an undeclared one both fail the load), an
+  expansion colliding with a declared step id fails rather than shadowing it, and a fragment
+  cannot `use:` another: one hop, never a chain, so a reader of the expansion sees the whole of
+  it. There is still no `include:`/`extends:` in the document model — a route a reviewer reads
+  must be whole. Closes gap 6 of [process-control-gaps.md](docs/process-control-gaps.md),
+  completing the six.
+
 - **The approval join is a declaration instead of a hand-kept invariant.** "Both accounting and
   purchasing must approve before issue" was already expressible — a self-loop transition per
   approver stamping its column, and an advance guarded on every stamp — and it worked. What it

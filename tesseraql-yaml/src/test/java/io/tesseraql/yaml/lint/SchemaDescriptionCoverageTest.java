@@ -32,6 +32,7 @@ class SchemaDescriptionCoverageTest {
                 "/schema/tesseraql-document-v1.schema.json",
                 "/schema/tesseraql-domains-v1.schema.json",
                 "/schema/tesseraql-rules-v1.schema.json",
+                "/schema/tesseraql-fragments-v1.schema.json",
                 "/schema/tesseraql-decisions-v1.schema.json",
                 "/schema/tesseraql-catalogs-v1.schema.json")) {
             JsonNode schema = new ObjectMapper().readTree(getClass().getResourceAsStream(resource));

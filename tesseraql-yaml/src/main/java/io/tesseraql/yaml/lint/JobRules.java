@@ -56,6 +56,7 @@ final class JobRules implements LintRule {
     void lintJob(Path appHome, AppConfig config, io.tesseraql.yaml.manifest.JobFile job,
             io.tesseraql.yaml.calendar.Calendars calendars, List<LintFinding> findings) {
         String source = appHome.relativize(job.source()).toString().replace('\\', '/');
+        lintNoFragmentUse(appHome, job, findings);
         UnknownKeyRules.lintUnknownKeys(context, appHome, job.source(), JobDefinition.class,
                 Set.of(), findings);
         if (job.definition().trigger() != null && job.definition().trigger().poll() != null) {
@@ -299,6 +300,30 @@ final class JobRules implements LintRule {
                 job.source().getParent().resolve(rowStep.file()))) {
             findings.add(new LintFinding(LintCodes.MISSING_SQL_FILE, ERROR, source,
                     "Referenced SQL file is missing: " + rowStep.file()));
+        }
+    }
+
+    /**
+     * Shared step fragments are command-side in this slice (docs/transactional-writes.md,
+     * "Shared step fragments"). {@code PipelineStep} models no {@code use:}, so one written here
+     * would be dropped at parse and the step would silently do nothing — the shape this codebase
+     * removes rather than documents. Refused with the reason, not warned about as an unknown key.
+     */
+    private void lintNoFragmentUse(java.nio.file.Path appHome,
+            io.tesseraql.yaml.manifest.JobFile job, List<LintFinding> findings) {
+        Object pipeline = context.tree(job.source()).get("pipeline");
+        if (!(pipeline instanceof List<?> steps)) {
+            return;
+        }
+        String source = LintSupport.relative(appHome, job.source());
+        for (Object step : steps) {
+            if (step instanceof java.util.Map<?, ?> map && map.containsKey("use")) {
+                findings.add(new LintFinding(LintCodes.INVALID_FRAGMENT_USE,
+                        io.tesseraql.yaml.lint.LintFinding.Severity.ERROR, source,
+                        "pipeline step '" + map.get("id") + "' declares use: — shared fragments"
+                                + " expand into a command's steps:, and a job pipeline is not"
+                                + " one, so this would be dropped at parse"));
+            }
         }
     }
 }

@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tesseraql.io/schema/tesseraql-fragments-v1.schema.json",
+  "title": "TesseraQL step fragments v1",
+  "description": "Schema for TesseraQL shared step fragment documents (fragments/*.yml): named step sequences a command references from its 'steps:' block through the 'use:' arm, expanded at manifest load. Documented in transactional-writes.md.",
+  "type": "object",
+  "required": [
+    "version"
+  ],
+  "properties": {
+    "version": {
+      "type": "string",
+      "const": "tesseraql/v1",
+      "description": "The DSL version. Always tesseraql/v1."
+    },
+    "fragments": {
+      "type": "object",
+      "description": "Named step sequences. Each declares what the sequence is; the id it expands under and the params: wiring stay at the reference.",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "binds": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string",
+              "enum": [
+                "string",
+                "integer",
+                "number",
+                "boolean",
+                "date"
+              ]
+            },
+            "description": "The typed bind contract a reference's params: must satisfy exactly - a missing bind and an undeclared one both fail the load (TQL-YAML-1061). A step inside the fragment reads one as binds.<name>."
+          },
+          "steps": {
+            "type": "array",
+            "description": "The sequence, in authored order, in the ordinary step vocabulary. SQL files are resolved relative to this document, and the expansion re-paths them for the referencing one.",
+            "items": {
+              "$ref": "tesseraql-defs-v1.schema.json#/$defs/binding"
+            }
+          }
+        },
+        "required": [
+          "steps"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

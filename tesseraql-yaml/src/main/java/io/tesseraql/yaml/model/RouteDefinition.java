@@ -158,6 +158,21 @@ public record RouteDefinition(
     }
 
     /**
+     * A copy carrying the document's steps with every shared fragment expanded in place
+     * (docs/transactional-writes.md, "Shared step fragments") — how the manifest loader turns a
+     * {@code use:} reference into ordinary steps before anything downstream sees the document.
+     */
+    public RouteDefinition withSteps(Map<String, Binding> effective) {
+        if (effective == steps) {
+            return this;
+        }
+        return new RouteDefinition(version, id, kind, recipe, input, inputPolicy, security,
+                idempotency, admission, outbox, effective, sources, validate, decide,
+                notifications, errors, fileImport, fileExport, webhook, publish, consume,
+                response, pagination, datasource, cache, emit, invalidates);
+    }
+
+    /**
      * A copy carrying resolved {@code validate:} rules — how the manifest loader stamps shared
      * rule-set references (docs/validation-rule-sets.md) into the route.
      */
