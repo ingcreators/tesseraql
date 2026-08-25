@@ -484,7 +484,7 @@
           "properties": {
             "type": {
               "type": "string",
-              "description": "The element type."
+              "description": "The element type, for an array of scalars. Mutually exclusive with fields: (TQL-YAML-1027)."
             },
             "enum": {
               "type": "array",
@@ -492,10 +492,17 @@
                 "type": "string"
               },
               "description": "The accepted element values; anything else is refused."
+            },
+            "fields": {
+              "type": "object",
+              "additionalProperties": {
+                "$ref": "#/$defs/inputField"
+              },
+              "description": "The element's own fields, for an array of objects — the header-plus-lines shape a business form submits. Elements bind, coerce and validate exactly as top-level fields do, and a violation addresses itself by index (`lines[2].qty`). One level deep: an array inside an element is refused (TQL-YAML-1027). Documented in declarative-validation.md."
             }
           },
           "additionalProperties": true,
-          "description": "Element constraints for `type: array`."
+          "description": "Element constraints for `type: array`: `type:`/`enum:` for scalar elements, `fields:` for object elements."
         }
       },
       "additionalProperties": true

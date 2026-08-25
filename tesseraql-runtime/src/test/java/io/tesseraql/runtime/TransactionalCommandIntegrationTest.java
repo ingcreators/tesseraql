@@ -154,6 +154,44 @@ class TransactionalCommandIntegrationTest {
         assertThat(MAPPER.readTree(response.body()).path("orderNo").asLong()).isEqualTo(2);
     }
 
+    /**
+     * The line-item input contract (docs/declarative-validation.md, "Line items"): the
+     * deny-by-default posture {@code input:} holds at the top level reaches inside the array,
+     * and the violation says which line and which field — over HTTP, through the real binder.
+     */
+    @Test
+    @Order(41)
+    void aLineViolatingItsContractIsRejectedByIndexAndField() throws Exception {
+        long ordersBefore = count("orders", "1=1");
+        HttpResponse<String> response = post("/api/orders", """
+                {"customerId": 1, "lines": [
+                  {"productId": 10, "quantity": 1},
+                  {"productId": 11, "quantity": 0}
+                ]}""", Map.of());
+
+        assertThat(response.statusCode()).isEqualTo(400);
+        JsonNode error = MAPPER.readTree(response.body()).path("error");
+        assertThat(error.path("code").asText()).isEqualTo("TQL-FIELD-2001");
+        JsonNode field = error.path("details").path("fields").get(0);
+        assertThat(field.path("field").asText()).isEqualTo("lines[1].quantity");
+        assertThat(field.path("code").asText()).isEqualTo("min");
+        assertThat(count("orders", "1=1")).isEqualTo(ordersBefore);
+    }
+
+    /** An element field nothing declared is the mass-assignment guard, one level down. */
+    @Test
+    @Order(42)
+    void anUndeclaredLineFieldIsRefused() throws Exception {
+        HttpResponse<String> response = post("/api/orders", """
+                {"customerId": 1, "lines": [
+                  {"productId": 10, "quantity": 1, "unitPrice": "9.99"}
+                ]}""", Map.of());
+
+        assertThat(response.statusCode()).isEqualTo(400);
+        assertThat(MAPPER.readTree(response.body()).path("error").path("code").asText())
+                .isEqualTo("TQL-FIELD-2002");
+    }
+
     @Test
     @Order(5)
     void concurrentEditYieldsConflictWithUsableHint() throws Exception {
@@ -344,6 +382,16 @@ class TransactionalCommandIntegrationTest {
                     required: true
                   lines:
                     type: array
+                    items:
+                      fields:
+                        productId:
+                          type: integer
+                          required: true
+                        quantity:
+                          type: integer
+                          required: true
+                          min: 1
+                          max: 100
                 idempotency:
                   required: false
                 security:
@@ -371,7 +419,7 @@ class TransactionalCommandIntegrationTest {
                       file: insert-lines.sql
                       params:
                         orderId: steps.header.keys.id
-                        lines: body.lines
+                        lines: params.lines
                   - id: placed
                     sql:
                       file: select-placed.sql

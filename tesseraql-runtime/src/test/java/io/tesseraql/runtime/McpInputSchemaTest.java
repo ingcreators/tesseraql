@@ -35,11 +35,37 @@ class McpInputSchemaTest {
     @Test
     void theElementTypeAndEnumTravelWithIt() {
         ObjectNode schema = McpInputSchema.fromInputs(Map.of("codes",
-                array(new InputField.InputItems("string", List.of("A", "B")))));
+                array(new InputField.InputItems("string", List.of("A", "B"), null))));
 
         ObjectNode items = (ObjectNode) schema.path("properties").path("codes").path("items");
         assertThat(items.path("type").asText()).isEqualTo("string");
         assertThat(items.path("enum").toString()).isEqualTo("[\"A\",\"B\"]");
+    }
+
+    /**
+     * A model told only "array" sends lines the binder refuses field by field, and it has no way
+     * to diagnose a rejection against a schema that never mentioned the fields.
+     */
+    @Test
+    void anObjectElementTravelsAsItsFieldContract() {
+        java.util.Map<String, InputField> fields = new java.util.LinkedHashMap<>();
+        fields.put("itemId", new InputField("string", true, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null, null, null, null, null));
+        fields.put("qty", new InputField("integer", true, null, java.math.BigDecimal.ONE, null,
+                null, null, null, null, null, null, null, null, null, null, null, null, null,
+                null, null));
+        fields.put("desiredDate", new InputField("date", false, null, null, null, null, null,
+                null, null, null, null, null, null, null, null, null, null, null, null, null));
+
+        ObjectNode schema = McpInputSchema.fromInputs(Map.of("lines",
+                array(new InputField.InputItems(null, null, fields))));
+
+        ObjectNode items = (ObjectNode) schema.path("properties").path("lines").path("items");
+        assertThat(items.path("type").asText()).isEqualTo("object");
+        assertThat(items.path("required").toString()).isEqualTo("[\"itemId\",\"qty\"]");
+        assertThat(items.path("properties").path("qty").path("minimum").asInt()).isEqualTo(1);
+        assertThat(items.path("properties").path("desiredDate").path("format").asText())
+                .isEqualTo("date");
     }
 
     /**

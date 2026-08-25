@@ -35,6 +35,8 @@ final class InputRules implements LintRule {
 
     private static final String INVALID_REQUIRED_WHEN = "TQL-YAML-1014";
 
+    private static final String INVALID_ELEMENT_CONTRACT = "TQL-YAML-1027";
+
     /** The run's memoized IO and cross-rule state, set at the top of {@link #lint}. */
     private LintContext context;
 
@@ -120,33 +122,88 @@ final class InputRules implements LintRule {
             }
         }
         route.definition().input().forEach((name, field) -> {
-            if (field.pattern() != null) {
-                try {
-                    java.util.regex.Pattern.compile(field.pattern());
-                } catch (java.util.regex.PatternSyntaxException ex) {
-                    findings.add(new LintFinding(INVALID_INPUT_PATTERN, ERROR, source,
-                            "input " + name + ": pattern does not compile: " + ex.getMessage(),
-                            context.lineOf(route.source(), name + ":"), null));
-                }
+            lintField(source, route, name, field, findings);
+            lintElementContract(source, route, name, field, findings);
+        });
+    }
+
+    /**
+     * The constraint vocabulary of one declared field, wherever it sits: a route's own
+     * {@code input:} entry, or a field of an object array's element ({@code items.fields:}),
+     * whose declarations are the same {@code inputField} and earn the same checks.
+     */
+    private void lintField(String source, RouteFile route, String name,
+            io.tesseraql.yaml.model.InputField field, List<LintFinding> findings) {
+        if (field.pattern() != null) {
+            try {
+                java.util.regex.Pattern.compile(field.pattern());
+            } catch (java.util.regex.PatternSyntaxException ex) {
+                findings.add(new LintFinding(INVALID_INPUT_PATTERN, ERROR, source,
+                        "input " + name + ": pattern does not compile: " + ex.getMessage(),
+                        context.lineOf(route.source(), name + ":"), null));
             }
-            if ((field.type() == null || "string".equals(field.type())) && field.format() != null
-                    && !io.tesseraql.yaml.model.InputField.STRING_FORMATS
-                            .contains(field.format())) {
-                findings.add(new LintFinding(UNKNOWN_INPUT_FORMAT, ERROR, source,
-                        "input " + name + ": unknown string format " + field.format()
-                                + " (known: "
-                                + io.tesseraql.yaml.model.InputField.STRING_FORMATS + ")"));
+        }
+        if ((field.type() == null || "string".equals(field.type())) && field.format() != null
+                && !io.tesseraql.yaml.model.InputField.STRING_FORMATS
+                        .contains(field.format())) {
+            findings.add(new LintFinding(UNKNOWN_INPUT_FORMAT, ERROR, source,
+                    "input " + name + ": unknown string format " + field.format()
+                            + " (known: "
+                            + io.tesseraql.yaml.model.InputField.STRING_FORMATS + ")"));
+        }
+        if (field.requiredWhen() != null && !field.requiredWhen().isBlank()) {
+            try {
+                io.tesseraql.core.expr.ExpressionParser.parse(field.requiredWhen(),
+                        context.functions());
+            } catch (RuntimeException ex) {
+                findings.add(new LintFinding(INVALID_REQUIRED_WHEN, ERROR, source,
+                        "input " + name + ": requiredWhen does not parse: "
+                                + ex.getMessage()));
             }
-            if (field.requiredWhen() != null && !field.requiredWhen().isBlank()) {
-                try {
-                    io.tesseraql.core.expr.ExpressionParser.parse(field.requiredWhen(),
-                            context.functions());
-                } catch (RuntimeException ex) {
-                    findings.add(new LintFinding(INVALID_REQUIRED_WHEN, ERROR, source,
-                            "input " + name + ": requiredWhen does not parse: "
-                                    + ex.getMessage()));
-                }
+        }
+    }
+
+    /**
+     * The shape of an object array's element contract ({@code TQL-YAML-1027}). A line is flat
+     * and belongs to an array: {@code fields:} is one level deep, it is not a second spelling of
+     * the scalar {@code type:}, and it says nothing about who may write a row — the checks the
+     * declaration cannot enforce silently are refused instead (docs/declarative-validation.md,
+     * "Line items").
+     */
+    private void lintElementContract(String source, RouteFile route, String name,
+            io.tesseraql.yaml.model.InputField field, List<LintFinding> findings) {
+        io.tesseraql.yaml.model.InputField.InputItems items = field.items();
+        if (items == null || !items.hasFields()) {
+            return;
+        }
+        Integer line = context.lineOf(route.source(), name + ":");
+        if (!"array".equals(field.type())) {
+            findings.add(new LintFinding(INVALID_ELEMENT_CONTRACT, ERROR, source,
+                    "input " + name + ": items.fields: declares the elements of an array —"
+                            + " set type: array",
+                    line, null));
+        }
+        if (items.type() != null) {
+            findings.add(new LintFinding(INVALID_ELEMENT_CONTRACT, ERROR, source,
+                    "input " + name + ": items: declares both type: (scalar elements) and"
+                            + " fields: (object elements) — keep one",
+                    line, null));
+        }
+        items.fields().forEach((elementName, element) -> {
+            String at = name + ".items.fields." + elementName;
+            if ("array".equals(element.type()) || element.items() != null) {
+                findings.add(new LintFinding(INVALID_ELEMENT_CONTRACT, ERROR, source,
+                        "input " + at + ": a line is flat — an array inside items.fields: is"
+                                + " not declarable",
+                        line, null));
             }
+            if (element.policy() != null) {
+                findings.add(new LintFinding(INVALID_ELEMENT_CONTRACT, ERROR, source,
+                        "input " + at + ": policy: authorizes a form field, and a line is not"
+                                + " one — gate the whole array instead",
+                        line, null));
+            }
+            lintField(source, route, at, element, findings);
         });
     }
 

@@ -44,6 +44,108 @@ class AppLinterInputTest {
         assertThat(codes(new AppLinter().lint(dir))).contains("TQL-YAML-1011");
     }
 
+    /**
+     * The element contract's shape ({@code TQL-YAML-1027}): a line is flat, {@code fields:} is
+     * not a second spelling of the scalar {@code type:}, and it says nothing about who may write
+     * a row.
+     */
+    @Test
+    void aNestedArrayInsideAnElementIsAnError(@TempDir Path dir) throws Exception {
+        writeRoute(dir, "get", """
+                input:
+                  lines:
+                    type: array
+                    items:
+                      fields:
+                        tags:
+                          type: array
+                """);
+        assertThat(codes(new AppLinter().lint(dir))).contains("TQL-YAML-1027");
+    }
+
+    @Test
+    void anElementContractOnANonArrayInputIsAnError(@TempDir Path dir) throws Exception {
+        writeRoute(dir, "get", """
+                input:
+                  line:
+                    type: string
+                    items:
+                      fields:
+                        qty:
+                          type: integer
+                """);
+        assertThat(codes(new AppLinter().lint(dir))).contains("TQL-YAML-1027");
+    }
+
+    @Test
+    void scalarAndObjectElementsAreNotDeclaredTogether(@TempDir Path dir) throws Exception {
+        writeRoute(dir, "get", """
+                input:
+                  lines:
+                    type: array
+                    items:
+                      type: string
+                      fields:
+                        qty:
+                          type: integer
+                """);
+        assertThat(codes(new AppLinter().lint(dir))).contains("TQL-YAML-1027");
+    }
+
+    @Test
+    void aWritePolicyOnAnElementFieldIsAnError(@TempDir Path dir) throws Exception {
+        writeRoute(dir, "get", """
+                input:
+                  lines:
+                    type: array
+                    items:
+                      fields:
+                        qty:
+                          type: integer
+                          policy: line.write
+                """);
+        assertThat(codes(new AppLinter().lint(dir))).contains("TQL-YAML-1027");
+    }
+
+    /** An element field earns the same constraint checks a top-level field does. */
+    @Test
+    void anElementFieldsPatternAndConditionAreChecked(@TempDir Path dir) throws Exception {
+        writeRoute(dir, "get", """
+                input:
+                  lines:
+                    type: array
+                    items:
+                      fields:
+                        itemId:
+                          type: string
+                          pattern: "[unclosed"
+                        note:
+                          type: string
+                          requiredWhen: "item.qty >"
+                """);
+        assertThat(codes(new AppLinter().lint(dir)))
+                .contains("TQL-YAML-1012", "TQL-YAML-1014");
+    }
+
+    /** A well-formed element contract is clean — the guard must not fire on the shape it blesses. */
+    @Test
+    void aWellFormedElementContractLintsClean(@TempDir Path dir) throws Exception {
+        writeRoute(dir, "get", """
+                input:
+                  lines:
+                    type: array
+                    items:
+                      fields:
+                        itemId:
+                          type: string
+                          required: true
+                        qty:
+                          type: integer
+                          min: 1
+                """);
+        assertThat(codes(new AppLinter().lint(dir))).doesNotContain("TQL-YAML-1027");
+    }
+
     @Test
     void aBrokenPatternIsAnError(@TempDir Path dir) throws Exception {
         writeRoute(dir, "get", """

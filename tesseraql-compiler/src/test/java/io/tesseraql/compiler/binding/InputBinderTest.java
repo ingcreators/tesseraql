@@ -51,7 +51,7 @@ class InputBinderTest {
     @Test
     void elementsAreCoercedToTheDeclaredItemType() {
         Map<String, Object> bound = InputBinder.bind(
-                Map.of("ids", arrayOf(new InputField.InputItems("integer", null))),
+                Map.of("ids", arrayOf(new InputField.InputItems("integer", null, null))),
                 value(null), name -> List.of("1", "2"), Locale.ENGLISH);
 
         List<Object> ids = new java.util.ArrayList<>((List<?>) bound.get("ids"));
@@ -61,7 +61,7 @@ class InputBinderTest {
     @Test
     void anElementOutsideTheItemEnumIsRejected() {
         Map<String, InputField> inputs = Map.of("codes",
-                arrayOf(new InputField.InputItems("string", List.of("A", "B"))));
+                arrayOf(new InputField.InputItems("string", List.of("A", "B"), null)));
 
         assertThatThrownBy(() -> InputBinder.bind(inputs, value(null),
                 name -> List.of("A", "Z"), Locale.ENGLISH))

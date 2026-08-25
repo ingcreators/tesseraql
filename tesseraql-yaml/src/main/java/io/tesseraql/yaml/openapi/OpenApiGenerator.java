@@ -405,14 +405,39 @@ public final class OpenApiGenerator {
         // the one a caller actually has to satisfy — the direction of error that costs a caller
         // a rejected request they had no way to anticipate.
         if ("array".equals(schema.get("type")) && field.items() != null) {
-            Map<String, Object> items = new LinkedHashMap<>();
-            items.put("type", jsonType(field.items().type()));
-            if (!field.items().enumValues().isEmpty()) {
-                items.put("enum", field.items().enumValues());
-            }
-            schema.put("items", items);
+            schema.put("items", elementSchema(field.items()));
         }
         return schema;
+    }
+
+    /**
+     * An array element's schema: the scalar {@code type:}/{@code enum:}, or the object contract
+     * {@code items.fields:} declares — the line the caller has to send, property by property,
+     * with the same constraints the binder enforces on it.
+     */
+    private static Map<String, Object> elementSchema(InputField.InputItems items) {
+        Map<String, Object> element = new LinkedHashMap<>();
+        if (!items.hasFields()) {
+            element.put("type", jsonType(items.type()));
+            if (!items.enumValues().isEmpty()) {
+                element.put("enum", items.enumValues());
+            }
+            return element;
+        }
+        element.put("type", "object");
+        Map<String, Object> properties = new LinkedHashMap<>();
+        java.util.List<String> required = new java.util.ArrayList<>();
+        items.fields().forEach((name, declared) -> {
+            properties.put(name, fieldSchema(declared));
+            if (declared.required()) {
+                required.add(name);
+            }
+        });
+        element.put("properties", properties);
+        if (!required.isEmpty()) {
+            element.put("required", required);
+        }
+        return element;
     }
 
     /** A declared element type as JSON Schema names it; unknown or absent means any. */

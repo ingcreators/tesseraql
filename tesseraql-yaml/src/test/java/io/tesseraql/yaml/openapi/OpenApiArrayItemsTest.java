@@ -25,12 +25,43 @@ class OpenApiArrayItemsTest {
     @Test
     void theElementTypeAndEnumAreDescribed() {
         Map<String, Object> schema = OpenApiGenerator.fieldSchema(
-                array(new InputField.InputItems("integer", List.of("1", "2"))));
+                array(new InputField.InputItems("integer", List.of("1", "2"), null)));
 
         assertThat(schema).containsEntry("type", "array");
         @SuppressWarnings("unchecked")
         Map<String, Object> items = (Map<String, Object>) schema.get("items");
         assertThat(items).containsEntry("type", "integer").containsEntry("enum", List.of("1", "2"));
+    }
+
+    /**
+     * An object array publishes the line a caller has to send: the properties, their
+     * constraints, and which of them are required (docs/declarative-validation.md, "Line items").
+     */
+    @Test
+    void anObjectElementPublishesItsFieldContract() {
+        java.util.Map<String, InputField> fields = new java.util.LinkedHashMap<>();
+        fields.put("itemId", new InputField("string", true, null, null, null, 40, null, null,
+                null, null, null, null, null, null, null, null, null, null, null, null));
+        fields.put("qty", new InputField("integer", true, null, java.math.BigDecimal.ONE, null,
+                null, null, null, null, null, null, null, null, null, null, null, null, null,
+                null, null));
+        fields.put("note", new InputField("string", false, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null, null, null, null, null));
+
+        Map<String, Object> schema = OpenApiGenerator.fieldSchema(
+                array(new InputField.InputItems(null, null, fields)));
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> items = (Map<String, Object>) schema.get("items");
+        assertThat(items).containsEntry("type", "object")
+                .containsEntry("required", List.of("itemId", "qty"));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> properties = (Map<String, Object>) items.get("properties");
+        assertThat(properties).containsOnlyKeys("itemId", "qty", "note");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> qty = (Map<String, Object>) properties.get("qty");
+        assertThat(qty).containsEntry("type", "integer")
+                .containsEntry("minimum", java.math.BigDecimal.ONE);
     }
 
     @Test
