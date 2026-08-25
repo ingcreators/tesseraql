@@ -49,8 +49,12 @@ public final class PublishEvents {
             throw new TqlException(INVALID_PUBLISH,
                     "publish: of '" + source + "' needs a topic:");
         }
+        if (spec.schedule().isAmbiguous()) {
+            throw new TqlException(INVALID_PUBLISH, "publish: of '" + source
+                    + "' declares both delay: and deliverAt: — two answers to one question");
+        }
         return new CompiledPublish(source, spec.channel(), spec.topic(), spec.key(),
-                spec.payload());
+                spec.payload(), spec.schedule());
     }
 
     /**
@@ -58,7 +62,14 @@ public final class PublishEvents {
      * against the live execution context.
      */
     public record CompiledPublish(String source, String channel, String topic, String key,
-            Map<String, String> payload) {
+            Map<String, String> payload, io.tesseraql.yaml.model.ScheduleSpec schedule) {
+
+        /** The pre-scheduling shape, for positional callers. */
+        public CompiledPublish(String source, String channel, String topic, String key,
+                Map<String, String> payload) {
+            this(source, channel, topic, key, payload,
+                    new io.tesseraql.yaml.model.ScheduleSpec(null, null));
+        }
 
         /** Resolves the declared payload expressions against the execution context. */
         public Map<String, Object> resolvePayload(Map<String, Object> context) {
@@ -83,13 +94,19 @@ public final class PublishEvents {
         /** Builds the insertable outbox event carrying the publish envelope. */
         public OutboxEvent build(Map<String, Object> context, String appName) {
             return event(channel, topic, resolveKey(context), source, resolvePayload(context),
-                    appName);
+                    appName, schedule.resolve(context, java.time.Instant.now()));
         }
     }
 
     /** Builds an insertable channel-publish event directly. */
     public static OutboxEvent event(String channel, String topic, String key, String source,
             Map<String, Object> payload, String appName) {
+        return event(channel, topic, key, source, payload, appName, null);
+    }
+
+    /** The scheduled form: the envelope is the same, the row's timing is not. */
+    public static OutboxEvent event(String channel, String topic, String key, String source,
+            Map<String, Object> payload, String appName, java.time.Instant notBefore) {
         Map<String, Object> envelope = new LinkedHashMap<>();
         envelope.put("channel", channel);
         envelope.put("topic", topic);
@@ -98,7 +115,7 @@ public final class PublishEvents {
         envelope.put("payload", payload == null ? Map.of() : payload);
         try {
             return OutboxEvent.toInsert(AGGREGATE_TYPE, topic, EVENT_TYPE,
-                    MAPPER.writeValueAsString(envelope), appName);
+                    MAPPER.writeValueAsString(envelope), appName, notBefore, null);
         } catch (JsonProcessingException ex) {
             throw new TqlException(ENCODE_ERROR,
                     "Failed to encode published event '" + source + "': " + ex.getMessage());

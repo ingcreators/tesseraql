@@ -18,7 +18,18 @@ import java.util.Map;
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record OutboxSpec(String eventType, String aggregateType, String aggregateId,
-        Map<String, String> payload) {
+        Map<String, String> payload, String delay, String deliverAt) {
+
+    /** This event's declared schedule, empty when it is deliverable at once. */
+    public ScheduleSpec schedule() {
+        return new ScheduleSpec(delay, deliverAt);
+    }
+
+    /** The shorthand every pre-scheduling positional caller used. */
+    public OutboxSpec(String eventType, String aggregateType, String aggregateId,
+            Map<String, String> payload) {
+        this(eventType, aggregateType, aggregateId, payload, null, null);
+    }
 
     public OutboxSpec {
         payload = payload == null ? Map.of() : Map.copyOf(payload);

@@ -25,15 +25,43 @@ import java.util.Map;
  *                  are read from the transfer store at delivery time)
  * @param payload   map of payload key to source expression, resolved against the execution
  *                  context; the payload rides the outbox event and feeds the channel's template
+ * @param delay     hold the entry back this long after the commit, e.g. {@code 72h}
+ * @param deliverAt hold the entry back until this bindable instant; exclusive with
+ *                  {@code delay:}
+ * @param cancelKey the withdrawal key this entry is written under, so a later command can
+ *                  withdraw it while it is still undelivered
+ * @param cancel    a bindable path whose value names entries to withdraw — the withdrawing
+ *                  form of the block, declared instead of {@code channel:}, never beside it
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record NotifySpec(String channel, String when, String recipient, String attach,
-        Map<String, String> payload) {
+        Map<String, String> payload, String delay, String deliverAt, String cancelKey,
+        String cancel) {
 
     public NotifySpec {
         payload = payload == null
                 ? Map.of()
                 : java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(payload));
+    }
+
+    /** This entry's declared schedule, empty when it is deliverable at once. */
+    public ScheduleSpec schedule() {
+        return new ScheduleSpec(delay, deliverAt);
+    }
+
+    /**
+     * Whether this entry withdraws rather than sends. An order cancelled on day two must not
+     * remind on day three, and the withdrawal is a declaration of the command that cancels it
+     * (docs/notifications.md, "Scheduled delivery").
+     */
+    public boolean withdraws() {
+        return cancel != null && !cancel.isBlank();
+    }
+
+    /** The shorthand every pre-scheduling positional caller used. */
+    public NotifySpec(String channel, String when, String recipient, String attach,
+            Map<String, String> payload) {
+        this(channel, when, recipient, attach, payload, null, null, null, null);
     }
 
     /** Recipient-less form (the shape before roadmap Phase 48) for positional callers. */

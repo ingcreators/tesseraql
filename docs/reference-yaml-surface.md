@@ -104,6 +104,8 @@ Transactional outbox event recorded with the command and delivered at-least-once
 | `aggregateType` | string | The kind of thing the event is about, e.g. `User`. |
 | `aggregateId` | string | A bindable path resolving to the id of the thing the event is about, e.g. `body.name`. |
 | `payload` | map of string | Each payload key to the bindable path supplying its value. A dotted key builds a nested object (`name.givenName`) and a `[]` key builds an array — of scalars (`members[]`), or, zipped by index, of objects (`members[].value`). |
+| `delay` | string | Hold this entry back this long after the commit, e.g. `72h`. Exclusive with deliverAt: (TQL-BATCH-5317). Documented in notifications.md. |
+| `deliverAt` | string | Hold this entry back until the instant this bindable path resolves to. Exclusive with delay: (TQL-BATCH-5317). Documented in notifications.md. |
 
 ### steps
 
@@ -313,6 +315,8 @@ The domain event this command publishes on a messaging channel after commit, on 
 | `topic` | string | The topic the event is published under. |
 | `key` | string | Ordering key for the event, as a bindable path; messages sharing a key keep their relative order. |
 | `payload` | map of string | The event body: each property name to the bindable path supplying its value. |
+| `delay` | string | Hold this entry back this long after the commit, e.g. `72h`. Exclusive with deliverAt: (TQL-BATCH-5317). Documented in notifications.md. |
+| `deliverAt` | string | Hold this entry back until the instant this bindable path resolves to. Exclusive with delay: (TQL-BATCH-5317). Documented in notifications.md. |
 
 ### consume
 
@@ -834,6 +838,10 @@ One notification enqueued on the transactional outbox, so it is sent if and only
 | `recipient` | string | A bindable path resolving to the address this notification goes to, overriding the channel's configured recipients. |
 | `attach` | string | A bindable path resolving to a transfer id — typically an export step's `steps.<id>.transferId` — whose file rides along. Mail channels only (TQL-FIELD-2004). |
 | `payload` | map of string | Each payload key to the bindable path supplying its value; the template or transport reads them by name. |
+| `delay` | string | Hold this entry back this long after the commit, e.g. `72h`. Exclusive with deliverAt: (TQL-BATCH-5317). Documented in notifications.md. |
+| `deliverAt` | string | Hold this entry back until the instant this bindable path resolves to. Exclusive with delay: (TQL-BATCH-5317). Documented in notifications.md. |
+| `cancelKey` | string | A bindable path whose value this entry is filed under, so a later command can withdraw it while it is still undelivered. Documented in notifications.md. |
+| `cancel` | string | A bindable path naming the cancelKey to withdraw: this block withdraws undelivered entries instead of writing one, in the withdrawing command's own transaction. Declared instead of channel:, never beside it. |
 
 ### push
 

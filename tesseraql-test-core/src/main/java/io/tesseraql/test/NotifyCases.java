@@ -96,7 +96,7 @@ final class NotifyCases {
                 .require(notification.channel());
         io.tesseraql.core.outbox.OutboxEvent event = new io.tesseraql.core.outbox.OutboxEvent(
                 "test-" + java.util.UUID.randomUUID(), "notify", notification.id(), "notify",
-                null, "PENDING", 0, null, java.time.Instant.now(), null, "test");
+                null, "PENDING", 0, null, java.time.Instant.now(), null, "test", null, null);
         io.tesseraql.yaml.notify.NotifyEvents.Envelope envelope = new io.tesseraql.yaml.notify.NotifyEvents.Envelope(
                 notification.channel(), notification.source(), payload);
         if (io.tesseraql.yaml.notify.NotificationChannels.WEBHOOK.equals(channel.type())) {

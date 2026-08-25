@@ -183,6 +183,14 @@
             "type": "string"
           },
           "description": "Each payload key to the bindable path supplying its value. A dotted key builds a nested object (`name.givenName`) and a `[]` key builds an array — of scalars (`members[]`), or, zipped by index, of objects (`members[].value`)."
+        },
+        "delay": {
+          "type": "string",
+          "description": "Hold this entry back this long after the commit, e.g. `72h`. Exclusive with deliverAt: (TQL-BATCH-5317). Documented in notifications.md."
+        },
+        "deliverAt": {
+          "type": "string",
+          "description": "Hold this entry back until the instant this bindable path resolves to. Exclusive with delay: (TQL-BATCH-5317). Documented in notifications.md."
         }
       },
       "additionalProperties": false,
@@ -367,6 +375,14 @@
             "type": "string"
           },
           "description": "The event body: each property name to the bindable path supplying its value."
+        },
+        "delay": {
+          "type": "string",
+          "description": "Hold this entry back this long after the commit, e.g. `72h`. Exclusive with deliverAt: (TQL-BATCH-5317). Documented in notifications.md."
+        },
+        "deliverAt": {
+          "type": "string",
+          "description": "Hold this entry back until the instant this bindable path resolves to. Exclusive with delay: (TQL-BATCH-5317). Documented in notifications.md."
         }
       },
       "additionalProperties": true,

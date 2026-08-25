@@ -36,6 +36,25 @@ public interface OutboxStore {
         return claimPending(limit);
     }
 
+    /**
+     * Withdraws the undelivered events an app wrote under {@code cancelKey}, on the caller's
+     * (transactional) connection, and answers how many were withdrawn.
+     *
+     * <p>An order cancelled on day two must not remind on day three. The withdrawal runs inside
+     * the later command's transaction — where the authority to cancel has already been
+     * established by the command itself — and touches only the outbox's own rows; the
+     * alternative, re-evaluating a predicate at delivery time, would have the dispatcher reading
+     * application tables with no principal, tenant or scope to read them under
+     * (docs/notifications.md, "Scheduled delivery"). An event already sent is left alone: it has
+     * happened, and a cancellation cannot un-happen it.
+     *
+     * <p>The default withdraws nothing, so an in-memory double keeps compiling; JDBC stores
+     * override it.
+     */
+    default int withdraw(Connection connection, String appName, String cancelKey) {
+        return 0;
+    }
+
     void markSent(String eventId);
 
     void markFailed(String eventId, String error);

@@ -48,6 +48,78 @@ class OutboxClaimIntegrationTest {
         }
     }
 
+    /**
+     * A scheduled entry waits for its instant (docs/notifications.md, "Scheduled delivery"):
+     * the dispatcher already polls, so holding a row back is a filter on the claim, not a
+     * second mover.
+     */
+    @Test
+    void aScheduledEntryIsNotClaimedBeforeItsTime() throws Exception {
+        Instant future = Instant.now().plusSeconds(3600);
+        Instant past = Instant.now().minusSeconds(60);
+        try (Connection connection = connect()) {
+            store.insert(connection, scheduled("REMINDER", "later", future, null));
+            store.insert(connection, scheduled("REMINDER", "due", past, null));
+            store.insert(connection, event("REMINDER", "now"));
+        }
+
+        List<OutboxEvent> claimed = store.claimPending(10);
+
+        assertThat(claimed).extracting(OutboxEvent::aggregateId)
+                .containsExactlyInAnyOrder("due", "now");
+    }
+
+    /**
+     * The withdrawal (docs/notifications.md, "Cancelling a scheduled entry"): undelivered
+     * entries filed under a key are cancelled in the caller's transaction, and cancelled is
+     * terminal — the dispatcher never claims them again.
+     */
+    @Test
+    void aWithdrawnEntryIsNeverClaimedAgain() throws Exception {
+        Instant future = Instant.now().plusSeconds(3600);
+        try (Connection connection = connect()) {
+            store.insert(connection, scheduled("REMINDER", "o-1", future, "order-1"));
+            store.insert(connection, scheduled("REMINDER", "o-2", null, "order-2"));
+            store.insert(connection, scheduled("REMINDER", "o-1-again", null, "order-1"));
+        }
+
+        try (Connection connection = connect()) {
+            assertThat(store.withdraw(connection, "app", "order-1")).isEqualTo(2);
+        }
+
+        // order-2 remains deliverable; both order-1 entries are gone from the claim, the
+        // scheduled one and the immediate one alike.
+        assertThat(store.claimPending(10)).extracting(OutboxEvent::aggregateId)
+                .containsExactly("o-2");
+    }
+
+    /** A withdrawal that names nothing withdraws nothing, and says so. */
+    @Test
+    void aWithdrawalOfAnUnknownKeyWithdrawsNothing() throws Exception {
+        try (Connection connection = connect()) {
+            store.insert(connection, scheduled("REMINDER", "o-3", null, "order-3"));
+            assertThat(store.withdraw(connection, "app", "order-missing")).isZero();
+            assertThat(store.withdraw(connection, "app", null)).isZero();
+        }
+        assertThat(store.claimPending(10)).extracting(OutboxEvent::aggregateId)
+                .containsExactly("o-3");
+    }
+
+    /** A rolled-back cancellation withdraws nothing: it rides the command's transaction. */
+    @Test
+    void aRolledBackWithdrawalLeavesTheEntryDeliverable() throws Exception {
+        try (Connection connection = connect()) {
+            store.insert(connection, scheduled("REMINDER", "o-4", null, "order-4"));
+        }
+        try (Connection connection = connect()) {
+            connection.setAutoCommit(false);
+            assertThat(store.withdraw(connection, "app", "order-4")).isEqualTo(1);
+            connection.rollback();
+        }
+        assertThat(store.claimPending(10)).extracting(OutboxEvent::aggregateId)
+                .containsExactly("o-4");
+    }
+
     @Test
     void concurrentClaimsNeverOverlap() throws Exception {
         try (Connection connection = connect()) {
@@ -117,9 +189,16 @@ class OutboxClaimIntegrationTest {
         return event(type, aggregateId, "user-admin");
     }
 
+    /** An event with a not-before instant, a withdrawal key, or both. */
+    private static OutboxEvent scheduled(String type, String aggregateId, Instant notBefore,
+            String cancelKey) {
+        return OutboxEvent.toInsert("user", aggregateId, type, "{}", "app", notBefore,
+                cancelKey);
+    }
+
     private static OutboxEvent event(String type, String aggregateId, String appName) {
         return new OutboxEvent(null, "user", aggregateId, type, "{}", "PENDING", 0, null,
-                Instant.now(), null, appName);
+                Instant.now(), null, appName, null, null);
     }
 
     private static Connection connect() throws Exception {

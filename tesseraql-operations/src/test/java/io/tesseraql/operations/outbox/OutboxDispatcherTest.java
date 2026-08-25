@@ -52,7 +52,7 @@ class OutboxDispatcherTest {
 
     private static OutboxEvent event(String id, int attempts) {
         return new OutboxEvent(id, "Notification", "r.n", "NOTIFICATION", "{}", "PENDING",
-                attempts, null, Instant.now(), null, "app");
+                attempts, null, Instant.now(), null, "app", null, null);
     }
 
     @Test

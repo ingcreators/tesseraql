@@ -25,7 +25,18 @@ import java.util.Map;
  *                the payload rides the channel and is delivered to subscribers as the message body
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
-public record PublishSpec(String channel, String topic, String key, Map<String, String> payload) {
+public record PublishSpec(String channel, String topic, String key, Map<String, String> payload,
+        String delay, String deliverAt) {
+
+    /** This event's declared schedule, empty when it is publishable at once. */
+    public ScheduleSpec schedule() {
+        return new ScheduleSpec(delay, deliverAt);
+    }
+
+    /** The shorthand every pre-scheduling positional caller used. */
+    public PublishSpec(String channel, String topic, String key, Map<String, String> payload) {
+        this(channel, topic, key, payload, null, null);
+    }
 
     public PublishSpec {
         payload = payload == null

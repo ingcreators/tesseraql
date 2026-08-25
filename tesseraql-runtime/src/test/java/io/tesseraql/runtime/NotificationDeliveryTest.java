@@ -109,7 +109,7 @@ class NotificationDeliveryTest {
                 null, null, attachTransferId, payload, "user-admin");
         return new OutboxEvent("evt-1", toInsert.aggregateType(), toInsert.aggregateId(),
                 toInsert.eventType(), toInsert.payloadJson(), "PENDING", 0, null, Instant.now(),
-                null, toInsert.appName());
+                null, toInsert.appName(), null, null);
     }
 
     /**
@@ -335,7 +335,7 @@ class NotificationDeliveryTest {
 
         // Must not throw: a USER_PROVISIONED event is some other sink's business.
         sink.send(new OutboxEvent("evt-2", "User", "sato", "USER_PROVISIONED", "{}",
-                "PENDING", 0, null, Instant.now(), null, "user-admin"));
+                "PENDING", 0, null, Instant.now(), null, "user-admin", null, null));
     }
 
     /** The outbound gateway a delivery leaves through; localhost is the test's own receiver. */

@@ -8,6 +8,23 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **The outbox learns about later.** Everything on it — `notify:`, `publish:`, `outbox:` — was
+  delivered as soon after commit as the dispatcher got to it, and the only future-time construct
+  on the whole surface was a workflow's `deadlines:`, which serves workflow documents alone. So
+  "remind the customer three days after the order ships" was a cron job scanning an app table the
+  command had to remember to populate. An entry now declares `delay:` (relative to the commit) or
+  `deliverAt:` (a bindable instant); the row carries `not_before` and the dispatcher, which
+  already polls, skips rows whose time has not come — no new mover, no new store. Declaring both
+  forms fails the build (`TQL-BATCH-5317`), and a `delay:` is measured from one instant per
+  command so entries sharing a delay come due together. **Cancellation** ships as the declared
+  cancel key: an entry filed under `cancelKey:` is withdrawn by a later command declaring
+  `cancel:` instead of `channel:`, in that command's own transaction — where the authority to
+  cancel is already established — touching only the outbox's own rows. The alternative, a
+  delivery-time predicate, would have the dispatcher reading application tables with no
+  principal, tenant or scope. Withdrawn entries become `CANCELLED`, terminal like `SENT`; only
+  `PENDING` and `FAILED` are withdrawn, because `SENDING` may already be on the wire. Closes
+  gap 4 of [process-control-gaps.md](docs/process-control-gaps.md).
+
 - **A transition can be taken over many documents at once.** A workflow transition was one
   document per call, so a task inbox approving twenty requisitions was twenty requests and
   whatever partial-failure reporting the client improvised was the contract. A transition or a

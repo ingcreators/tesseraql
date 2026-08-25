@@ -529,8 +529,23 @@ public final class TransactionalCommandProcessor implements Step {
                             ? p.tenantId()
                             : null;
                     Map<String, Object> enqueued = new LinkedHashMap<>();
+                    // One clock for the whole block, so two entries declaring the same delay:
+                    // come due together rather than a few microseconds apart.
+                    java.time.Instant now = java.time.Instant.now();
                     for (var notification : notifications) {
                         if (!notification.fires(context)) {
+                            continue;
+                        }
+                        if (notification.withdraws()) {
+                            // The withdrawal rides this command's transaction, where the
+                            // authority to cancel has already been established by the command
+                            // itself (docs/notifications.md, "Scheduled delivery"). A rolled
+                            // back cancellation withdraws nothing.
+                            String key = notification.resolveCancel(context);
+                            int withdrawn = key == null
+                                    ? 0
+                                    : store.withdraw(connection, appName, key);
+                            enqueued.put(notification.id(), Map.of("withdrawn", withdrawn));
                             continue;
                         }
                         if (io.tesseraql.yaml.notify.NotifyOptOut.optedOut(notification,
@@ -542,7 +557,7 @@ public final class TransactionalCommandProcessor implements Step {
                         // addressed channel types (inbox) know who to deliver to.
                         String eventId = store.insert(connection,
                                 notification.build(context, appName,
-                                        notification.resolveRecipient(context), tenantId));
+                                        notification.resolveRecipient(context), tenantId, now));
                         enqueued.put(notification.id(), Map.of("eventId", eventId));
                     }
                     context.put("notify", enqueued);
