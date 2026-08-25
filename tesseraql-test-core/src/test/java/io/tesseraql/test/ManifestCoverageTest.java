@@ -574,7 +574,7 @@ class ManifestCoverageTest {
                                                                 "POST",
                                                                 "https://api.partner.example/v1/orders",
                                                                 Map.of(), Map.of(), "partner",
-                                                                null, 201, null, null),
+                                                                null, 201, null, null, null),
                                                         null, null, null, null)))),
                         false, null));
     }

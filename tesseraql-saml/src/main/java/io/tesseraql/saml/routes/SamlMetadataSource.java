@@ -57,7 +57,7 @@ final class SamlMetadataSource {
             String timeout = FETCH_TIMEOUT.toMillis() + "ms";
             OutboundGateway.RawResponse response = gateway.exchange(
                     new HttpCallSpec("GET", value, Map.of(), null, null, null, null,
-                            timeout, timeout),
+                            timeout, timeout, null),
                     null, Map.of());
             if (response.status() != 200) {
                 throw new IOException("IdP metadata endpoint answered HTTP "

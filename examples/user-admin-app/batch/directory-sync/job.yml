@@ -20,6 +20,12 @@ pipeline:
       query:
         unit: params.unit                 # bound from the job param, allow-listed host only
       credential: directory            # X-API-Key from the SecretResolver SPI, never inline
+      # A partner directory has weather. Connect failures, timeouts and 5xx are repeated;
+      # a 4xx is a deterministic rejection and is not (docs/connectors.md, "Retry").
+      retry:
+        attempts: 3
+        backoff: 200ms
+        multiplier: 2
   - id: record
     sql:
       file: record-headcount.sql

@@ -194,6 +194,10 @@ tesseraql:
       circuitBreaker:
         failureThreshold: 5         # consecutive systemic failures before the host opens
         openDuration: 30s           # how long the host stays open (fails fast) before a trial
+      retry:                        # the numbers a binding's retry: may leave out
+        attempts: 3                 # total attempts including the first (1 to 10)
+        backoff: 200ms              # the wait before the second attempt
+        multiplier: 2               # the factor that wait grows by
       credentials:
         partner:
           type: bearer              # Authorization: Bearer <token>
@@ -223,6 +227,47 @@ deterministic rejection, not a sign the dependency is down.
 A call is successful when its status is `2xx`, or equals `expectStatus` when one is declared;
 any other outcome fails the step (and so the job). The call is recorded as a
 `tesseraql.http.call` span in the job's trace, visible in the [operations console](ops-console.md).
+
+### Retry
+
+Transient faults are the normal weather of external APIs. A binding opts in with `retry:`, and
+the numbers it leaves out come from `tesseraql.http.outbound.retry`:
+
+```yaml
+sources:
+  rates:
+    http:
+      url: https://rates.example.com/v1/latest
+      credential: rates
+      readOnly: true
+      retry: { attempts: 3, backoff: 200ms, multiplier: 2 }
+      onError: empty
+```
+
+- **Retried**: connect failures, timeouts, `5xx`. **Never retried**: a `4xx`, or a declared
+  `expectStatus` — deterministic rejections, the same line the circuit breaker draws. Repeating
+  them only spends the dependency's capacity.
+- Retry is **opt-in per binding**. The configuration block supplies numbers, not a switch: a
+  binding that declares no `retry:` still makes one attempt, because turning retry on for every
+  outbound call would silently change the load every existing declaration puts on its
+  dependency.
+- Every attempt **counts against the per-host circuit breaker**, and the call's
+  `tesseraql.http.call` span carries `attempts`. A retried call meters honestly rather than
+  looking like one lucky request; retries are counted as `tesseraql.http.retries` per host.
+- The sequence **stops the moment the host's circuit opens**. The failures being retried are
+  exactly the ones that trip the breaker, and continuing past it is what the breaker exists to
+  prevent.
+- The sequence lives inside a budget of `attempts × requestTimeout`, which the backoff waits
+  spend too, so **a retry that cannot fit another whole request is not started** — a call never
+  runs far past what its own timeout led the caller to expect.
+- An invalid policy is a lint error (`TQL-YAML-1058`): fewer than one or more than ten attempts,
+  an unparseable `backoff`, or a `multiplier` below 1.
+
+Retry is safe to declare wherever `http:` is legal. On a command route the `http:` arm must
+already assert `readOnly: true` — the write can roll back and the request cannot — so every call
+eligible to run inside a command is by declaration safe to repeat. SQL statements get nothing
+here: the transaction owns them, and the job-level answer stays `job rerun`
+([jobs](jobs.md)).
 
 ### Response ceiling
 

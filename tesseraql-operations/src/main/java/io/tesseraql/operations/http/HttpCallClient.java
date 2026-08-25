@@ -47,6 +47,14 @@ import java.util.function.LongSupplier;
  * or an {@code expectStatus} mismatch fails the step but does not trip the breaker: it is a
  * deterministic rejection, not a sign the dependency is down.
  *
+ * <p>A binding that declares {@code retry:} repeats exactly those systemic failures, with a
+ * growing backoff, while the policy still has an attempt and the remaining budget can hold
+ * another whole request timeout. Every repeated attempt counts against the breaker, and if that
+ * opens the host's circuit — this call's failures, or another caller's — the sequence ends at
+ * once as {@code TQL-BATCH-5306}: continuing past an open circuit is the hammering the breaker
+ * exists to stop. The span carries how many attempts were made, so a retried call meters
+ * honestly rather than looking like one lucky request.
+ *
  * <p>The breaker is keyed by host alone and shared by every surface behind the one gateway bean —
  * a job's {@code http-call} step, SCIM provisioning, OIDC, JWKS, SAML metadata. Repeated failures
  * toward a host fail every caller of that host fast, deliberately: the host is down for all of
@@ -137,8 +145,8 @@ public final class HttpCallClient implements io.tesseraql.yaml.http.OutboundGate
             span.attribute("host", host);
             Breaker breaker = admittedBreaker(host);
             try {
-                HttpResponse<byte[]> response = send(spec, uri, Map.of(), body,
-                        headers == null ? Map.of() : headers);
+                HttpResponse<byte[]> response = sendWithRetry(spec, uri, host, breaker, span,
+                        Map.of(), body, headers == null ? Map.of() : headers);
                 int status = response.statusCode();
                 span.attribute("status", status);
                 // 5xx is systemic; 2xx/3xx proves the host healthy; a 4xx says neither. It
@@ -184,7 +192,8 @@ public final class HttpCallClient implements io.tesseraql.yaml.http.OutboundGate
             span.attribute("host", host);
             Breaker breaker = admittedBreaker(host);
             try {
-                HttpResponse<byte[]> response = send(spec, uri, context, rawBody, extraHeaders);
+                HttpResponse<byte[]> response = sendWithRetry(spec, uri, host, breaker, span,
+                        context, rawBody, extraHeaders);
                 int status = response.statusCode();
                 span.attribute("status", status);
                 boolean success = spec.expectStatus() != null
@@ -261,13 +270,123 @@ public final class HttpCallClient implements io.tesseraql.yaml.http.OutboundGate
         return breaker;
     }
 
+    /**
+     * The send, repeated while the failure is systemic and the policy still has an attempt for
+     * it (docs/connectors.md, "Retry"). Opt-in: a spec with no {@code retry:} resolves to one
+     * attempt and this is the bare send.
+     *
+     * <p>Retried: a transport failure, a timeout, a {@code 5xx}. Never retried: a {@code 4xx} or
+     * a declared {@code expectStatus} — deterministic rejections, the same line the circuit
+     * breaker already draws — nor a response over the policy's size ceiling, which is a bound
+     * the provider will hit again. An interrupt is not the dependency's fault and ends the call
+     * at once.
+     *
+     * <p>Two bounds beyond {@code attempts}. Each repeated attempt counts against the host's
+     * breaker before the next one goes out, and an open circuit ends the sequence there and then
+     * — the failure that is counted is the one the caller then sees, so the accounting stays one
+     * count per request that actually left. And the whole sequence lives inside a budget of
+     * {@code attempts × requestTimeout}, which the backoff waits spend too, so a retry that
+     * cannot fit another full request is not started rather than running long past what the
+     * binding's own timeout led its caller to expect.
+     */
+    private HttpResponse<byte[]> sendWithRetry(HttpCallSpec spec, URI uri, String host,
+            Breaker breaker, Span span, Map<String, Object> context, byte[] rawBody,
+            Map<String, String> extraHeaders) throws IOException, InterruptedException {
+        Retry retry = retryFor(spec);
+        if (retry.attempts() == 1) {
+            return send(spec, uri, context, rawBody, extraHeaders);
+        }
+        long perAttempt = requestTimeout(spec).toMillis();
+        long deadline = clock.getAsLong() + perAttempt * retry.attempts();
+        long wait = retry.backoffMillis();
+        for (int attempt = 1;; attempt++) {
+            IOException failure = null;
+            HttpResponse<byte[]> response = null;
+            try {
+                response = send(spec, uri, context, rawBody, extraHeaders);
+                if (!isSystemic(spec, response.statusCode())) {
+                    span.attribute("attempts", attempt);
+                    return response;
+                }
+            } catch (IOException ex) {
+                failure = ex;
+            }
+            if (attempt >= retry.attempts() || !fits(deadline, wait, perAttempt)) {
+                // Out of attempts, or the budget cannot hold another: this outcome is the
+                // call's, and the caller classifies and counts it as it would an unretried one.
+                span.attribute("attempts", attempt);
+                if (failure != null) {
+                    throw failure;
+                }
+                return response;
+            }
+            // This attempt is being repeated, so it counts against the host now.
+            breaker.recordFailure(clock.getAsLong(), outbound.circuitBreakerThreshold(),
+                    openDuration());
+            if (breaker.isOpen(clock.getAsLong())) {
+                span.attribute("attempts", attempt);
+                throw new TqlException(CIRCUIT_OPEN, "http-call circuit for host '" + host
+                        + "' opened while retrying after repeated failures");
+            }
+            meter.counter("tesseraql.http.retries").increment(Map.of("host", host));
+            Thread.sleep(wait);
+            wait = (long) Math.min(wait * retry.multiplier(), perAttempt * (long) retry.attempts());
+        }
+    }
+
+    /**
+     * Whether this status is the systemic failure a retry is for. A {@code 5xx} is, unless the
+     * binding declared it as its success — an {@code expectStatus} names the answer the caller
+     * wants, and repeating the answer it asked for would be absurd.
+     */
+    private static boolean isSystemic(HttpCallSpec spec, int status) {
+        return status >= 500
+                && (spec.expectStatus() == null || spec.expectStatus() != status);
+    }
+
+    /** Whether the backoff and one more whole request still fit inside the sequence's budget. */
+    private boolean fits(long deadline, long wait, long perAttempt) {
+        return clock.getAsLong() + wait + perAttempt <= deadline;
+    }
+
+    /** One call's resolved retry policy; a binding that declared none resolves to one attempt. */
+    private record Retry(int attempts, long backoffMillis, double multiplier) {
+    }
+
+    /**
+     * The binding's {@code retry:} over the {@code tesseraql.http.outbound.retry} numbers.
+     * Absent means one attempt: retry changes the load a declaration puts on its dependency, so
+     * it is asked for, never configured onto callers who did not.
+     */
+    private Retry retryFor(HttpCallSpec spec) {
+        io.tesseraql.yaml.model.RetrySpec declared = spec.retry();
+        if (declared == null) {
+            return new Retry(1, 0, 1);
+        }
+        int attempts = declared.attempts() != null
+                ? declared.attempts()
+                : outbound.retryAttempts();
+        attempts = Math.max(1, Math.min(io.tesseraql.yaml.model.RetrySpec.MAX_ATTEMPTS, attempts));
+        long backoff = declared.backoff() != null && !declared.backoff().isBlank()
+                ? io.tesseraql.core.util.Durations.toMillis(declared.backoff())
+                : outbound.retryBackoff().toMillis();
+        double multiplier = declared.multiplier() != null
+                ? declared.multiplier()
+                : outbound.retryMultiplier();
+        return new Retry(attempts, Math.max(0, backoff), Math.max(1, multiplier));
+    }
+
+    /** This call's request timeout: the binding's override, else the configured default. */
+    private Duration requestTimeout(HttpCallSpec spec) {
+        return spec.requestTimeout() != null
+                ? io.tesseraql.core.util.Durations.parse(spec.requestTimeout())
+                : outbound.requestTimeout();
+    }
+
     private HttpResponse<byte[]> send(HttpCallSpec spec, URI uri, Map<String, Object> context,
             byte[] rawBody, Map<String, String> extraHeaders)
             throws IOException, InterruptedException {
-        Duration requestTimeout = spec.requestTimeout() != null
-                ? io.tesseraql.core.util.Durations.parse(spec.requestTimeout())
-                : outbound.requestTimeout();
-        HttpRequest.Builder request = HttpRequest.newBuilder(uri).timeout(requestTimeout);
+        HttpRequest.Builder request = HttpRequest.newBuilder(uri).timeout(requestTimeout(spec));
         // Static headers may carry ${...} config or secret placeholders, resolved on send.
         spec.headers().forEach((name, value) -> request.header(name, config.resolve(value)));
         applyCredential(spec, request);

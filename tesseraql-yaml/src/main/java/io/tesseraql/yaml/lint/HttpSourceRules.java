@@ -27,6 +27,8 @@ final class HttpSourceRules {
 
     private static final String HTTP_SOURCE_UNDECLARED_CREDENTIAL = "TQL-SEC-4072";
 
+    private static final String INVALID_RETRY = "TQL-YAML-1058";
+
     private HttpSourceRules() {
     }
 
@@ -135,6 +137,7 @@ final class HttpSourceRules {
                 findings.add(new LintFinding(HTTP_SOURCE_URL_NOT_ABSOLUTE, ERROR, source,
                         "http: '" + id + "' needs an absolute http or https url:"));
             }
+            lintRetry(id, spec, source, findings);
             lintHttpCredential(config, id, spec, source, findings);
             return;
         }
@@ -147,7 +150,42 @@ final class HttpSourceRules {
                     + "' targets host '" + host + "' which is not in"
                     + " tesseraql.http.outbound.allowedHosts (deny by default)"));
         }
+        lintRetry(id, spec, source, findings);
         lintHttpCredential(config, id, spec, source, findings);
+    }
+
+    /**
+     * A declared {@code retry:} must be a policy that can run ({@code TQL-YAML-1058}): at least
+     * one attempt and no more than {@link io.tesseraql.yaml.model.RetrySpec#MAX_ATTEMPTS} — past
+     * a handful a call is holding a thread against a dependency that is down, which is the
+     * circuit breaker's job — a parseable backoff, and a multiplier of at least 1, since a
+     * shrinking backoff turns a retry into the hammering it exists to avoid.
+     */
+    static void lintRetry(String id, io.tesseraql.yaml.model.HttpCallSpec spec, String source,
+            List<LintFinding> findings) {
+        io.tesseraql.yaml.model.RetrySpec retry = spec.retry();
+        if (retry == null) {
+            return;
+        }
+        int max = io.tesseraql.yaml.model.RetrySpec.MAX_ATTEMPTS;
+        if (retry.attempts() != null && (retry.attempts() < 1 || retry.attempts() > max)) {
+            findings.add(new LintFinding(INVALID_RETRY, ERROR, source, "http: '" + id
+                    + "' declares retry.attempts " + retry.attempts() + " (1 to " + max + ")"));
+        }
+        if (retry.backoff() != null && !retry.backoff().isBlank()) {
+            try {
+                io.tesseraql.core.util.Durations.parse(retry.backoff());
+            } catch (RuntimeException ex) {
+                findings.add(new LintFinding(INVALID_RETRY, ERROR, source, "http: '" + id
+                        + "' declares retry.backoff '" + retry.backoff()
+                        + "' which is not a duration (e.g. 200ms, 2s)"));
+            }
+        }
+        if (retry.multiplier() != null && retry.multiplier() < 1) {
+            findings.add(new LintFinding(INVALID_RETRY, ERROR, source, "http: '" + id
+                    + "' declares retry.multiplier " + retry.multiplier()
+                    + " — a backoff that shrinks is the hammering retry exists to avoid"));
+        }
     }
 
     static void lintHttpCredential(AppConfig config, String id,

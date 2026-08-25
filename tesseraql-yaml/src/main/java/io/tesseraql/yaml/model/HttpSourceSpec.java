@@ -13,8 +13,8 @@ import java.util.Map;
  * <p>The call itself is an {@link HttpCallSpec} — the same declaration a job's
  * job step and an enrichment's {@code http:} reference carry, so
  * {@code method}, {@code url}, {@code headers}, {@code query}, {@code body},
- * {@code credential}, {@code expectStatus} and the timeouts mean one thing everywhere
- * (docs/lookups.md, decision 15). A source adds only what the read side needs: which part of
+ * {@code credential}, {@code expectStatus}, {@code retry} and the timeouts mean one
+ * thing everywhere (docs/lookups.md, decision 15). A source adds only what the read side needs: which part of
  * the response becomes rows, and what happens when the call fails.
  *
  * <p>A source is <em>not</em> restricted to GET. That restriction stood for "a read route
@@ -58,12 +58,14 @@ public record HttpSourceSpec(HttpCallSpec call, String select, String onError,
             @JsonProperty("expectStatus") Integer expectStatus,
             @JsonProperty("connectTimeout") String connectTimeout,
             @JsonProperty("requestTimeout") String requestTimeout,
+            @JsonProperty("retry") RetrySpec retry,
             @JsonProperty("select") String select,
             @JsonProperty("onError") String onError,
             @JsonProperty("readOnly") Boolean readOnly,
             @JsonProperty("mode") String mode) {
         return new HttpSourceSpec(new HttpCallSpec(method, url, headers, query, credential, body,
-                expectStatus, connectTimeout, requestTimeout), select, onError, readOnly, mode);
+                expectStatus, connectTimeout, requestTimeout, retry), select, onError, readOnly,
+                mode);
     }
 
     /**

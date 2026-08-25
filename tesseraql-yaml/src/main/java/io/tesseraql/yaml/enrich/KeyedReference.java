@@ -371,7 +371,8 @@ public final class KeyedReference {
                 ? declared
                 : new HttpCallSpec(declared.method(), url, declared.headers(), declared.query(),
                         declared.credential(), declared.body(), declared.expectStatus(),
-                        declared.connectTimeout(), declared.requestTimeout());
+                        declared.connectTimeout(), declared.requestTimeout(),
+                        declared.retry());
         return shaper.apply(gateway.call(resolved, context).get("body"),
                 spec.http().select());
     }

@@ -34,12 +34,22 @@ class HttpCallClientTest {
     private volatile int responseStatus = 200;
     private volatile String responseBody = "{\"ok\":true}";
     private volatile String responseContentType = "application/json";
+    /**
+     * A transient dependency: the next {@code transientFailures} requests answer
+     * {@code transientStatus}, and the ones after that answer normally — the shape a retry
+     * exists to ride out.
+     */
+    private final AtomicInteger transientFailures = new AtomicInteger();
+    private volatile int transientStatus = 503;
 
     @BeforeEach
     void start() throws IOException {
         server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
         server.createContext("/", exchange -> {
             hits.incrementAndGet();
+            int status = transientFailures.getAndUpdate(n -> n > 0 ? n - 1 : 0) > 0
+                    ? transientStatus
+                    : responseStatus;
             lastMethod = exchange.getRequestMethod();
             lastQuery = exchange.getRequestURI().getQuery();
             lastHeaders = exchange.getRequestHeaders();
@@ -50,7 +60,7 @@ class HttpCallClientTest {
             if (responseContentType != null) {
                 exchange.getResponseHeaders().add("Content-Type", responseContentType);
             }
-            exchange.sendResponseHeaders(responseStatus, body.length == 0 ? -1 : body.length);
+            exchange.sendResponseHeaders(status, body.length == 0 ? -1 : body.length);
             try (OutputStream os = exchange.getResponseBody()) {
                 os.write(body);
             }
@@ -78,7 +88,127 @@ class HttpCallClientTest {
 
     private HttpCallSpec call(String method, String path) {
         return new HttpCallSpec(method, "http://localhost:" + port + path,
-                Map.of(), Map.of(), null, null, null, null, null);
+                Map.of(), Map.of(), null, null, null, null, null, null);
+    }
+
+    /** The same call asking for a retry policy, with no wait so the test does not sleep. */
+    private HttpCallSpec retrying(String path, Integer attempts) {
+        return new HttpCallSpec("GET", "http://localhost:" + port + path,
+                Map.of(), Map.of(), null, null, null, null, null,
+                new io.tesseraql.yaml.model.RetrySpec(attempts, "0ms", 1.0));
+    }
+
+    /** A binding that asked for retry rides out a transient 5xx (docs/connectors.md, "Retry"). */
+    @Test
+    void aDeclaredRetryRepeatsATransient5xxUntilItSucceeds() {
+        HttpCallClient client = client(Map.of("allowedHosts", List.of("localhost")));
+        transientFailures.set(2);
+
+        Map<String, Object> result = client.call(retrying("/rates", 3), Map.of(), null);
+
+        assertThat(result).containsEntry("status", 200);
+        assertThat(hits.get()).isEqualTo(3);
+        assertThat(meter.counterSnapshot().get("tesseraql.http.retries"))
+                .anySatisfy(sample -> {
+                    assertThat(sample.attributes()).containsEntry("host", "localhost");
+                    assertThat(sample.value()).isEqualTo(2);
+                });
+    }
+
+    /** Without a declared policy nothing is repeated — retry is asked for, never configured on. */
+    @Test
+    void withoutADeclaredPolicyOneAttemptIsMade() {
+        HttpCallClient client = client(Map.of(
+                "allowedHosts", List.of("localhost"),
+                "retry", Map.of("attempts", 5, "backoff", "0ms")));
+        transientFailures.set(2);
+
+        assertThatThrownBy(() -> client.call(call("GET", "/rates"), Map.of(), null))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("TQL-BATCH-5307");
+        assertThat(hits.get()).isEqualTo(1);
+    }
+
+    /** The numbers a binding leaves out come from configuration; the opt-in stays the binding's. */
+    @Test
+    void theConfiguredNumbersFillInWhatTheBindingLeavesOut() {
+        HttpCallClient client = client(Map.of(
+                "allowedHosts", List.of("localhost"),
+                "retry", Map.of("attempts", 4, "backoff", "0ms", "multiplier", 1)));
+        transientFailures.set(3);
+
+        HttpCallSpec spec = new HttpCallSpec("GET", "http://localhost:" + port + "/rates",
+                Map.of(), Map.of(), null, null, null, null, null,
+                new io.tesseraql.yaml.model.RetrySpec(null, null, null));
+
+        assertThat(client.call(spec, Map.of(), null)).containsEntry("status", 200);
+        assertThat(hits.get()).isEqualTo(4);
+    }
+
+    /** A 4xx is a deterministic rejection: repeating it only spends the dependency's capacity. */
+    @Test
+    void aDeterministicRejectionIsNotRetried() {
+        HttpCallClient client = client(Map.of("allowedHosts", List.of("localhost")));
+        responseStatus = 422;
+
+        assertThatThrownBy(() -> client.call(retrying("/rates", 3), Map.of(), null))
+                .isInstanceOf(TqlException.class);
+        assertThat(hits.get()).isEqualTo(1);
+    }
+
+    /** Exhausting the attempts leaves the ordinary refusal, and every attempt was made. */
+    @Test
+    void anExhaustedRetryFailsLikeAnUnretriedCall() {
+        HttpCallClient client = client(Map.of("allowedHosts", List.of("localhost")));
+        responseStatus = 500;
+
+        assertThatThrownBy(() -> client.call(retrying("/rates", 3), Map.of(), null))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("TQL-BATCH-5307");
+        assertThat(hits.get()).isEqualTo(3);
+    }
+
+    /**
+     * The sequence stops the moment the host's circuit opens: the failures being retried are
+     * exactly the ones that trip it, and continuing past that is what the breaker prevents.
+     */
+    @Test
+    void anOpeningCircuitEndsTheRetrySequence() {
+        HttpCallClient client = client(Map.of(
+                "allowedHosts", List.of("localhost"),
+                "circuitBreaker", Map.of("failureThreshold", 2, "openDuration", "60s")));
+        responseStatus = 500;
+
+        assertThatThrownBy(() -> client.call(retrying("/rates", 8), Map.of(), null))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("TQL-BATCH-5306");
+        // Two repeated attempts reached the threshold; no third request went out.
+        assertThat(hits.get()).isEqualTo(2);
+    }
+
+    /** The raw form retries on the same policy, and returns the response it ended on. */
+    @Test
+    void exchangeRetriesOnTheSamePolicy() {
+        HttpCallClient client = client(Map.of("allowedHosts", List.of("localhost")));
+        transientFailures.set(1);
+        transientStatus = 502;
+
+        assertThat(client.exchange(retrying("/scim/Users", 2), null, Map.of()).status())
+                .isEqualTo(200);
+        assertThat(hits.get()).isEqualTo(2);
+    }
+
+    /** A declared expectStatus names the wanted answer; repeating it would be absurd. */
+    @Test
+    void aDeclaredExpectStatusIsNeverTheFailureThatIsRetried() {
+        HttpCallClient client = client(Map.of("allowedHosts", List.of("localhost")));
+        responseStatus = 503;
+        HttpCallSpec spec = new HttpCallSpec("GET", "http://localhost:" + port + "/rates",
+                Map.of(), Map.of(), null, null, 503, null, null,
+                new io.tesseraql.yaml.model.RetrySpec(3, "0ms", 1.0));
+
+        assertThat(client.call(spec, Map.of(), null)).containsEntry("status", 503);
+        assertThat(hits.get()).isEqualTo(1);
     }
 
     @Test
@@ -91,7 +221,7 @@ class HttpCallClientTest {
                 "steps", Map.of("prev", Map.of("id", 7)));
         HttpCallSpec spec = new HttpCallSpec("POST", "http://localhost:" + port + "/orders",
                 Map.of("X-Source", "tesseraql"), Map.of("date", "params.date"), "partner",
-                "steps.prev", 200, null, null);
+                "steps.prev", 200, null, null, null);
 
         Map<String, Object> result = client.call(spec, context, null);
 
@@ -351,7 +481,7 @@ class HttpCallClientTest {
         HttpCallClient traced = new HttpCallClient(HttpOutbound.load(config), config, tracer,
                 meter);
         HttpCallSpec withCredential = new HttpCallSpec("GET", "http://localhost:" + port + "/x",
-                Map.of(), Map.of(), "missing-credential", null, null, null, null);
+                Map.of(), Map.of(), "missing-credential", null, null, null, null, null);
 
         assertThatThrownBy(() -> traced.call(withCredential, Map.of(), null))
                 .isInstanceOf(TqlException.class)
@@ -387,7 +517,7 @@ class HttpCallClientTest {
                 "allowedHosts", List.of("localhost"),
                 "circuitBreaker", Map.of("failureThreshold", 1)));
         HttpCallSpec spec = new HttpCallSpec("GET", "http://localhost:" + port + "/x",
-                Map.of(), Map.of(), null, null, 201, null, null);
+                Map.of(), Map.of(), null, null, 201, null, null, null);
 
         // A 200 where 201 was required fails the step (deterministic) but is not systemic...
         assertThatThrownBy(() -> client.call(spec, Map.of(), null))
