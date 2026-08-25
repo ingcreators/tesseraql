@@ -183,9 +183,19 @@ public final class JdbcOutboxStore implements OutboxStore {
 
     /**
      * Withdraws every undelivered event this app wrote under the key, on the caller's
-     * transactional connection. {@code SENT} and {@code DEAD} are left alone — one has happened
-     * and the other has stopped — and {@code SENDING} is left alone too, because a dispatcher
-     * is holding it and the delivery may already be on the wire.
+     * transactional connection. {@code SENT} and {@code DEAD} are left alone: one has happened
+     * and cannot be un-happened, the other has stopped.
+     *
+     * <p>{@code SENDING} <em>is</em> withdrawn, and that is the whole point of the fix this
+     * method carries. Leaving it alone stopped nothing: a dispatcher holding the row would fail
+     * its delivery, {@code markFailed} would write {@code FAILED} straight over the
+     * cancellation, and the next poll would deliver a reminder for an order that was cancelled
+     * days earlier. At-least-once is about duplicates; that was a withdrawn business message
+     * going out.
+     *
+     * <p>What withdrawal cannot undo is a request already on the wire. If that one delivery
+     * succeeds, {@link #markSent} records {@code SENT} over the cancellation, because it did
+     * send and the log must say so. What is prevented is every attempt after it.
      */
     @Override
     public int withdraw(Connection connection, String appName, String cancelKey) {
@@ -195,7 +205,7 @@ public final class JdbcOutboxStore implements OutboxStore {
         try (PreparedStatement ps = connection.prepareStatement(
                 "update tql_outbox_event set status = 'CANCELLED' "
                         + "where app_name = ? and cancel_key = ? "
-                        + "and status in ('PENDING', 'FAILED')")) {
+                        + "and status in ('PENDING', 'FAILED', 'SENDING')")) {
             ps.setString(1, appName);
             ps.setString(2, cancelKey);
             return ps.executeUpdate();
@@ -215,8 +225,11 @@ public final class JdbcOutboxStore implements OutboxStore {
 
     @Override
     public void markFailed(String eventId, String error) {
+        // Never over a withdrawal: the row may have been cancelled while this delivery was in
+        // flight, and writing FAILED here would put it back in the claim and deliver a message
+        // the application withdrew.
         update("update tql_outbox_event set status = 'FAILED', attempts = attempts + 1, "
-                + "last_error = ? where event_id = ?", ps -> {
+                + "last_error = ? where event_id = ? and status <> 'CANCELLED'", ps -> {
                     ps.setString(1, error);
                     ps.setString(2, eventId);
                 });
@@ -229,8 +242,11 @@ public final class JdbcOutboxStore implements OutboxStore {
      */
     @Override
     public void markDead(String eventId, String error) {
+        // As markFailed: DEAD is terminal too, so the cancellation would still hold, but the
+        // operator would read "delivery attempts exhausted" where the truth is "the application
+        // withdrew it". A status is what an operator acts on; it has to be the real reason.
         update("update tql_outbox_event set status = 'DEAD', attempts = attempts + 1, "
-                + "last_error = ? where event_id = ?", ps -> {
+                + "last_error = ? where event_id = ? and status <> 'CANCELLED'", ps -> {
                     ps.setString(1, error);
                     ps.setString(2, eventId);
                 });

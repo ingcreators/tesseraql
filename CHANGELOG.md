@@ -6,6 +6,19 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ## Unreleased
 
+### Fixed
+
+- **Withdrawing a scheduled notification now stops the deliveries after the one in flight.**
+  `withdraw` left a `SENDING` row alone on the reasoning that a dispatcher was holding it and the
+  request might already be on the wire. That stopped nothing: the held delivery would fail,
+  `markFailed` wrote `FAILED` straight over the cancellation, and the next poll delivered a
+  reminder for an order cancelled days earlier. At-least-once is about duplicates; this was a
+  withdrawn business message going out. A `SENDING` row is now withdrawn like any other, and
+  neither `markFailed` nor `markDead` writes over a `CANCELLED` status — so the one request
+  already sent may still complete (and records `SENT`, because it did), while every attempt after
+  it is prevented, and an operator reading the status sees the real reason rather than "attempts
+  exhausted".
+
 ### Added
 
 - **A repeated step sequence can be declared once.** Domains, rules, decisions, scope fragments,

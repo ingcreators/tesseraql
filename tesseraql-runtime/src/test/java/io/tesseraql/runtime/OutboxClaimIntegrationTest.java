@@ -105,6 +105,82 @@ class OutboxClaimIntegrationTest {
                 .containsExactly("o-3");
     }
 
+    /**
+     * The in-flight race, closed: withdrawing while a dispatcher holds the row must stop every
+     * attempt after the one already on the wire.
+     *
+     * <p>Leaving {@code SENDING} alone stopped nothing. The held delivery would fail,
+     * {@code markFailed} would write {@code FAILED} straight over the cancellation, and the next
+     * poll would deliver a reminder for an order cancelled days before — a withdrawn business
+     * message going out, which at-least-once has nothing to say about.
+     */
+    @Test
+    void withdrawingAnInFlightEntryStopsItsRetries() throws Exception {
+        try (Connection connection = connect()) {
+            store.insert(connection, scheduled("REMINDER", "o-5", null, "order-5"));
+        }
+        // A dispatcher claims it: the row is now SENDING and held.
+        List<OutboxEvent> claimed = store.claimPending(10);
+        assertThat(claimed).extracting(OutboxEvent::aggregateId).containsExactly("o-5");
+        String eventId = claimed.get(0).id();
+
+        try (Connection connection = connect()) {
+            assertThat(store.withdraw(connection, "app", "order-5")).isEqualTo(1);
+        }
+
+        // The held delivery fails, as it was always free to do.
+        store.markFailed(eventId, "connection reset");
+
+        // The failure must not have resurrected the row.
+        assertThat(status(eventId)).isEqualTo("CANCELLED");
+        assertThat(store.claimPending(10)).isEmpty();
+    }
+
+    /** Exhausted attempts must not relabel a withdrawal as a delivery failure either. */
+    @Test
+    void deadLetteringDoesNotRelabelAWithdrawnEntry() throws Exception {
+        try (Connection connection = connect()) {
+            store.insert(connection, scheduled("REMINDER", "o-6", null, "order-6"));
+        }
+        String eventId = store.claimPending(10).get(0).id();
+        try (Connection connection = connect()) {
+            store.withdraw(connection, "app", "order-6");
+        }
+
+        store.markDead(eventId, "attempts exhausted");
+
+        // An operator acts on the status, so it has to say the real reason.
+        assertThat(status(eventId)).isEqualTo("CANCELLED");
+    }
+
+    /** A delivery that already succeeded is recorded as sent: it did send. */
+    @Test
+    void aWithdrawalDoesNotDenyADeliveryThatAlreadyHappened() throws Exception {
+        try (Connection connection = connect()) {
+            store.insert(connection, scheduled("REMINDER", "o-7", null, "order-7"));
+        }
+        String eventId = store.claimPending(10).get(0).id();
+        try (Connection connection = connect()) {
+            store.withdraw(connection, "app", "order-7");
+        }
+
+        store.markSent(eventId);
+
+        assertThat(status(eventId)).isEqualTo("SENT");
+    }
+
+    /** One row's status, read straight from the table. */
+    private static String status(String eventId) throws Exception {
+        try (Connection connection = connect();
+                java.sql.PreparedStatement ps = connection.prepareStatement(
+                        "select status from tql_outbox_event where event_id = ?")) {
+            ps.setString(1, eventId);
+            try (java.sql.ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getString(1) : null;
+            }
+        }
+    }
+
     /** A rolled-back cancellation withdraws nothing: it rides the command's transaction. */
     @Test
     void aRolledBackWithdrawalLeavesTheEntryDeliverable() throws Exception {
