@@ -128,7 +128,15 @@ public final class TransitionExecutor {
             boolean managed, String dialect, Path workflowDir, ExpressionFunctions functions) {
         Expr guard = null;
         List<SqlNode> guardNodes = null;
-        if (transition.guard() != null && transition.guard().expression() != null) {
+        io.tesseraql.yaml.model.JoinSpec join = transition.joinOrNull();
+        if (join != null) {
+            if (transition.guard() != null) {
+                throw new IllegalStateException("Workflow '" + def.id() + "' transition '"
+                        + transition.id() + "': join: is the guard — declaring both leaves two"
+                        + " answers to whether this transition is legal");
+            }
+            guard = ExpressionParser.parse(join.guardExpression(), functions);
+        } else if (transition.guard() != null && transition.guard().expression() != null) {
             guard = ExpressionParser.parse(transition.guard().expression(), functions);
         } else if (transition.guard() != null && transition.guard().file() != null) {
             Path guardFile = workflowDir.resolve(transition.guard().file());

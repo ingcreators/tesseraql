@@ -160,6 +160,55 @@ The stamped value is visible to everything later in the same transaction reading
 `document.<column>`, and later transitions guard on it. Columns must be plain identifiers
 and a `decision.*` value must name a declared `decide:` alias (`TQL-WORKFLOW-3111`).
 
+### The approval join: several stamps, one advance
+
+"Both accounting and purchasing must approve before issue" is an AND-join, and the surface
+deliberately has no fork/join. The pattern is expressible without one — a self-loop transition
+per approver, each stamping its column, and an advance guarded on every stamp — and it works.
+What it cannot do is tell you anything: the invariant is maintained by hand and invisible to the
+lints.
+
+`join:` declares the set instead:
+
+```yaml
+transitions:
+  - id: acct_ok                       # each approver stamps, staying in review
+    from: review
+    to: review
+    stamp: { acct_approved: principal.subject }
+    command: { file: stamp.sql }
+  - id: purch_ok
+    from: review
+    to: review
+    stamp: { purch_approved: principal.subject }
+    command: { file: stamp.sql }
+  - id: issue
+    from: review
+    to: issued
+    join: { stamps: [acct_approved, purch_approved] }   # replaces the hand-written guard
+    command: { file: issue.sql }
+```
+
+- `join:` **synthesizes the all-stamped guard** — `document.acct_approved != null &&
+  document.purch_approved != null` — so the guard cannot drift from the set. An approver added
+  to `stamps:` and forgotten in a hand-written guard is exactly the bug this removes. Declaring
+  `join:` and `guard:` together is an error (`TQL-WORKFLOW-3117`): two answers to whether the
+  transition is legal.
+- Because the set is declared, lint can prove three things it previously could not:
+  - every listed stamp is actually set by some transition out of the join state, or the join can
+    never complete (`TQL-WORKFLOW-3118`);
+  - a transition returning a document *to* the join state clears the whole set, or the join
+    advances on approvals given before the rework (`TQL-WORKFLOW-3118`). The first entry from
+    the initial state is exempt — a fresh document has never been stamped;
+  - a self-loop on the join state stamping a column the join does not count looks like an
+    approval and gates nothing (`TQL-WORKFLOW-3119`, a warning).
+- **Auto-advance when the last stamp lands is deliberately not offered.** Firing a transition
+  from inside another transition *is* new control flow. The last approver advances through a
+  `dispatch:` pair, as today.
+
+Priority is low and the capability is unchanged: what the declaration buys is the lint coverage,
+not new expressiveness.
+
 ### One-action dispatch
 
 When one *action* fans into several guarded transitions — the approver's single button,
@@ -603,6 +652,9 @@ match the lint family rather than borrowing `TQL-SQL-*`:
 | A transition attempted by a caller holding none of the document's open tasks | `TQL-WORKFLOW-3203` | `403` |
 | A transition whose scoped write matches no authorized row | as a scoped write | `409` / `403` |
 | A bulk request naming more keys than `tesseraql.workflow.bulk.maxKeys` allows | `TQL-WORKFLOW-3116` | `400` |
+| An invalid `join:` declaration (with a guard, or a bad column) | `TQL-WORKFLOW-3117` | build |
+| A join that can never complete, or one a rework re-enters uncleared | `TQL-WORKFLOW-3118` | build |
+| A stamp on the join state the join does not count | `TQL-WORKFLOW-3119` | warning |
 
 A workflow can never silently no-op a transition.
 
