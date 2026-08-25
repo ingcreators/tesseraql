@@ -288,6 +288,74 @@ A receiver authenticates by recomputing the HMAC over the received timestamp hea
 raw body, comparing in constant time, and rejecting stale timestamps to bound replay. Any
 non-2xx answer (or transport failure) counts as a failed attempt and is retried.
 
+## Scheduled delivery
+
+Everything on the outbox — `notify:`, `publish:`, `outbox:` — is delivered as soon after commit
+as the dispatcher gets to it. "Remind the customer three days after the order ships" used to be
+a cron job scanning an app table the command had to remember to populate. An entry can now name
+the instant before which it must not be delivered, in two forms:
+
+```yaml
+notify:
+  shipped-reminder:
+    channel: customer-mail
+    delay: 72h                       # relative to the commit
+    cancelKey: steps.header.keys.id  # what a later command can withdraw it by
+    payload: { order: steps.header.keys.id }
+  pickup-window:
+    channel: customer-mail
+    deliverAt: params.pickupStart    # a bindable path resolving to an instant
+    payload: { order: steps.header.keys.id }
+```
+
+- The entry is written in the command's transaction as before; the row carries `not_before`, and
+  the dispatcher — which already polls — skips rows whose time has not come. No new mover, no
+  new store.
+- `delay:` and `deliverAt:` are two answers to one question: declaring both fails the build
+  (`TQL-BATCH-5317`). A `deliverAt:` path that resolves to nothing means "no schedule", the way
+  an absent optional input does; one that resolves to something that is not an instant is
+  refused rather than guessed at.
+- A `delay:` is measured from **one instant per command**, so two entries declaring `72h` come
+  due together rather than microseconds apart.
+- At-least-once semantics are unchanged: a not-before row that comes due delivers through the
+  same retry and dead-letter path.
+- `emit:` takes no schedule — it is a list of topic names, a liveness hint about *now*, so there
+  is nowhere to write one.
+
+### Cancelling a scheduled entry
+
+An order cancelled on day two must not remind on day three. An entry filed under a `cancelKey:`
+can be withdrawn by a later command, which declares the withdrawing form of the block —
+`cancel:` instead of `channel:`:
+
+```yaml
+# the command that cancels the order
+notify:
+  shipped-reminder:
+    cancel: params.orderId      # withdraws undelivered entries filed under this key
+```
+
+- The withdrawal runs **in the withdrawing command's own transaction**, where the authority to
+  cancel has already been established by the command itself, and it touches only the outbox's
+  own rows. A rolled-back cancellation withdraws nothing. The alternative — a delivery-time
+  predicate re-evaluated against the document — would have the dispatcher reading application
+  tables with no principal, tenant or scope to read them under, which is an authority story the
+  outbox does not have and should not acquire for this.
+- Withdrawn entries become `CANCELLED`, which is terminal like `SENT`: they are never claimed
+  again, and they stay visible to operators rather than vanishing.
+- Only `PENDING` and `FAILED` entries are withdrawn. `SENT` has happened and cannot be
+  un-happened; `DEAD` has stopped; and `SENDING` means a dispatcher is holding the row, so the
+  delivery may already be on the wire.
+- A block declaring both `cancel:` and `channel:`, or `cancel:` with a schedule, fails the build
+  (`TQL-FIELD-2004`): an entry either sends or withdraws, and later is what a withdrawal undoes.
+- `steps.*` context is available, so the withdrawing command can name a key it just read.
+- The withdrawal reports as `notify.<id>.withdrawn` — how many entries it withdrew — the way a
+  send reports `notify.<id>.eventId`.
+
+`cancelKey:`/`cancel:` are declared on `notify:` in this first slice. `delay:`/`deliverAt:`
+apply to `publish:` and `outbox:` too, because they are the same outbox row; a withdrawal for
+those surfaces waits for a case that asks for it.
+
 ## Delivery, retries, dead letters
 
 ```yaml
@@ -299,7 +367,8 @@ tesseraql:
 ```
 
 An event's lifecycle is `PENDING → SENDING → SENT`, with `FAILED` (retried on the next
-poll) and `DEAD` (attempts exhausted; never retried automatically) on the failure path.
+poll), `DEAD` (attempts exhausted; never retried automatically) and `CANCELLED` (withdrawn
+before delivery, see above) on the failure path.
 A sink may classify a failure as one no retry can fix — a SCIM provider host outside the
 egress allow-list, for example. Such an event dead-letters on the first attempt instead of
 burning the ceiling on identical refusals; fix the configuration, then redeliver it.
@@ -392,6 +461,7 @@ the build like any other kind.
 | `TQL-BATCH-5304` | delivery/lint: mail channel misdeclared or template missing/outside the app home |
 | `TQL-TPL-2002` | lint: mail template references an unknown `tql/email` fragment |
 | `TQL-TPL-2003` | lint: mail body/subject `${...}` root outside the mail model (warning) |
+| `TQL-BATCH-5317` | a scheduled entry declares both `delay:` and `deliverAt:`, or an unusable instant |
 | `TQL-OPS-9006` | alert: outbox events are dead-lettered |
 
 ## Next

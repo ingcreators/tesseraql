@@ -197,11 +197,12 @@ class OpsViewsTest {
         io.tesseraql.core.outbox.OutboxEvent dead = new io.tesseraql.core.outbox.OutboxEvent(
                 "evt-1", "Notification", "users.register.confirmation", "NOTIFICATION", "{}",
                 "DEAD", 10, "Webhook channel 'hooks' answered HTTP 500",
-                java.time.Instant.parse("2026-06-10T00:00:00Z"), null, "demo-app");
+                java.time.Instant.parse("2026-06-10T00:00:00Z"), null, "demo-app", null,
+                null);
         io.tesseraql.core.outbox.OutboxEvent sent = new io.tesseraql.core.outbox.OutboxEvent(
                 "evt-2", "User", "sato", "USER_PROVISIONED", "{}", "SENT", 1, null,
                 java.time.Instant.parse("2026-06-10T00:00:01Z"),
-                java.time.Instant.parse("2026-06-10T00:00:02Z"), "demo-app");
+                java.time.Instant.parse("2026-06-10T00:00:02Z"), "demo-app", null, null);
 
         Map<String, Object> model = OpsViews.outbox(List.of(dead, sent));
 

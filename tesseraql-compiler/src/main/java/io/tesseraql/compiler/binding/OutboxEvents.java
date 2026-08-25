@@ -50,7 +50,8 @@ final class OutboxEvents {
         arrays.forEach((arrayPath, fields) -> putNested(payload, arrayPath, buildArray(fields)));
         try {
             return OutboxEvent.toInsert(outbox.aggregateType(), aggregateId, outbox.eventType(),
-                    mapper.writeValueAsString(payload), appName);
+                    mapper.writeValueAsString(payload), appName,
+                    outbox.schedule().resolve(context, java.time.Instant.now()), null);
         } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
             throw new TqlException(SERIALIZE_ERROR, "Failed to serialize outbox payload");
         }

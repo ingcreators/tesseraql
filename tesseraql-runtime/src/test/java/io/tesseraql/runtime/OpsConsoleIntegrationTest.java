@@ -467,7 +467,7 @@ class OpsConsoleIntegrationTest {
     private static io.tesseraql.core.outbox.OutboxEvent outboxEvent() {
         return new io.tesseraql.core.outbox.OutboxEvent(null, "user", "sato",
                 "USER_PROVISIONED", "{}", "PENDING", 0, null, java.time.Instant.now(), null,
-                "user-admin");
+                "user-admin", null, null);
     }
 
     private static String seedDeadEvent() {

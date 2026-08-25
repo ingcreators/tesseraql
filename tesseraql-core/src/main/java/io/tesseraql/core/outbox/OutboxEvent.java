@@ -20,6 +20,11 @@ import java.time.Instant;
  * @param sentAt        successful delivery time, once SENT
  * @param appName       the app that emitted the event (required), so dispatchers and operators
  *                      can scope a shared outbox table per app
+ * @param notBefore     the instant before which the dispatcher must not deliver this event, or
+ *                      null for "as soon as the dispatcher gets to it" (docs/notifications.md,
+ *                      "Scheduled delivery")
+ * @param cancelKey     the withdrawal key a later command may name to cancel this event while
+ *                      it is still undelivered, or null when it can never be withdrawn
  */
 public record OutboxEvent(
         String id,
@@ -32,7 +37,14 @@ public record OutboxEvent(
         String lastError,
         Instant createdAt,
         Instant sentAt,
-        String appName) {
+        String appName,
+        Instant notBefore,
+        String cancelKey) {
+
+    /** Whether this event is due at the given instant — an unscheduled event always is. */
+    public boolean isDue(Instant now) {
+        return notBefore == null || !notBefore.isAfter(now);
+    }
 
     /**
      * Builds an event to insert, tagged with the emitting app (id/status/attempts/createdAt are
@@ -41,8 +53,20 @@ public record OutboxEvent(
      */
     public static OutboxEvent toInsert(String aggregateType, String aggregateId,
             String eventType, String payloadJson, String appName) {
+        return toInsert(aggregateType, aggregateId, eventType, payloadJson, appName, null, null);
+    }
+
+    /**
+     * The same, scheduled: {@code notBefore} holds the event back until its time comes, and
+     * {@code cancelKey} is the name a later command can withdraw it by while it is still
+     * undelivered. Both are properties of the row, so they are written in the business
+     * transaction like everything else about it.
+     */
+    public static OutboxEvent toInsert(String aggregateType, String aggregateId,
+            String eventType, String payloadJson, String appName, Instant notBefore,
+            String cancelKey) {
         java.util.Objects.requireNonNull(appName, "appName");
         return new OutboxEvent(null, aggregateType, aggregateId, eventType, payloadJson,
-                null, 0, null, null, null, appName);
+                null, 0, null, null, null, appName, notBefore, cancelKey);
     }
 }

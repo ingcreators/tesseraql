@@ -38,6 +38,11 @@ public final class JdbcOutboxStore implements OutboxStore {
         try {
             io.tesseraql.core.util.SqlScripts.applyForVendor(dataSource, JdbcOutboxStore.class,
                     "/tesseraql/db/migration/operations/V1__framework_operations.sql");
+            // The scheduling columns this store writes on every insert must exist even where
+            // only the bootstrap runs (no Flyway); the column adds stay idempotent through the
+            // bootstrap's tolerated duplicate-column errors, as V3..V8 do for the batch tables.
+            io.tesseraql.core.util.SqlScripts.applyForVendor(dataSource, JdbcOutboxStore.class,
+                    "/tesseraql/db/migration/operations/V9__outbox_scheduled_delivery.sql");
         } catch (SQLException ex) {
             throw error("Failed to create outbox schema", ex);
         }
@@ -49,8 +54,8 @@ public final class JdbcOutboxStore implements OutboxStore {
         try (PreparedStatement ps = connection.prepareStatement("""
                 insert into tql_outbox_event
                   (event_id, aggregate_type, aggregate_id, event_type, payload_json, status,
-                   attempts, created_at, app_name)
-                values (?, ?, ?, ?, ?, 'PENDING', 0, ?, ?)""")) {
+                   attempts, created_at, app_name, not_before, cancel_key)
+                values (?, ?, ?, ?, ?, 'PENDING', 0, ?, ?, ?, ?)""")) {
             ps.setString(1, id);
             ps.setString(2, event.aggregateType());
             ps.setString(3, event.aggregateId());
@@ -58,6 +63,10 @@ public final class JdbcOutboxStore implements OutboxStore {
             ps.setString(5, event.payloadJson());
             ps.setTimestamp(6, Timestamp.from(Instant.now()));
             ps.setString(7, event.appName());
+            ps.setTimestamp(8, event.notBefore() == null
+                    ? null
+                    : Timestamp.from(event.notBefore()));
+            ps.setString(9, event.cancelKey());
             ps.executeUpdate();
         } catch (SQLException ex) {
             throw error("Failed to insert outbox event", ex);
@@ -124,6 +133,9 @@ public final class JdbcOutboxStore implements OutboxStore {
         params.put("abandonedBefore", Timestamp.from(
                 Instant.now().minus(java.time.Duration.ofMinutes(5))));
         params.put("apps", apps == null || apps.isEmpty() ? null : List.copyOf(apps));
+        // The scheduling clock is the database's caller, not the row's: a claim asks what is
+        // due now, and a poll that arrives early simply leaves the row for the next one.
+        params.put("now", Timestamp.from(Instant.now()));
         params.put("limit", limit);
         io.tesseraql.core.sql.BoundSql bound = io.tesseraql.core.sql.SqlResources.render(
                 JdbcOutboxStore.class, "/tesseraql/sql/operations/outbox-claim-pending.sql",
@@ -167,6 +179,29 @@ public final class JdbcOutboxStore implements OutboxStore {
             throw error("Failed to claim pending outbox events", ex);
         }
         return events;
+    }
+
+    /**
+     * Withdraws every undelivered event this app wrote under the key, on the caller's
+     * transactional connection. {@code SENT} and {@code DEAD} are left alone — one has happened
+     * and the other has stopped — and {@code SENDING} is left alone too, because a dispatcher
+     * is holding it and the delivery may already be on the wire.
+     */
+    @Override
+    public int withdraw(Connection connection, String appName, String cancelKey) {
+        if (cancelKey == null || cancelKey.isBlank()) {
+            return 0;
+        }
+        try (PreparedStatement ps = connection.prepareStatement(
+                "update tql_outbox_event set status = 'CANCELLED' "
+                        + "where app_name = ? and cancel_key = ? "
+                        + "and status in ('PENDING', 'FAILED')")) {
+            ps.setString(1, appName);
+            ps.setString(2, cancelKey);
+            return ps.executeUpdate();
+        } catch (SQLException ex) {
+            throw error("Failed to withdraw outbox events for '" + cancelKey + "'", ex);
+        }
     }
 
     @Override
@@ -281,6 +316,7 @@ public final class JdbcOutboxStore implements OutboxStore {
 
     private static OutboxEvent read(ResultSet rs) throws SQLException {
         Timestamp sentAt = rs.getTimestamp("sent_at");
+        Timestamp notBefore = rs.getTimestamp("not_before");
         return new OutboxEvent(
                 rs.getString("event_id"),
                 rs.getString("aggregate_type"),
@@ -292,7 +328,9 @@ public final class JdbcOutboxStore implements OutboxStore {
                 rs.getString("last_error"),
                 rs.getTimestamp("created_at").toInstant(),
                 sentAt == null ? null : sentAt.toInstant(),
-                rs.getString("app_name"));
+                rs.getString("app_name"),
+                notBefore == null ? null : notBefore.toInstant(),
+                rs.getString("cancel_key"));
     }
 
     @FunctionalInterface

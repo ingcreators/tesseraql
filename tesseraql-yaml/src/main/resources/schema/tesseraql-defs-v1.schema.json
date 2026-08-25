@@ -243,6 +243,22 @@
             "type": "string"
           },
           "description": "Each payload key to the bindable path supplying its value; the template or transport reads them by name."
+        },
+        "delay": {
+          "type": "string",
+          "description": "Hold this entry back this long after the commit, e.g. `72h`. Exclusive with deliverAt: (TQL-BATCH-5317). Documented in notifications.md."
+        },
+        "deliverAt": {
+          "type": "string",
+          "description": "Hold this entry back until the instant this bindable path resolves to. Exclusive with delay: (TQL-BATCH-5317). Documented in notifications.md."
+        },
+        "cancelKey": {
+          "type": "string",
+          "description": "A bindable path whose value this entry is filed under, so a later command can withdraw it while it is still undelivered. Documented in notifications.md."
+        },
+        "cancel": {
+          "type": "string",
+          "description": "A bindable path naming the cancelKey to withdraw: this block withdraws undelivered entries instead of writing one, in the withdrawing command's own transaction. Declared instead of channel:, never beside it."
         }
       },
       "additionalProperties": false,

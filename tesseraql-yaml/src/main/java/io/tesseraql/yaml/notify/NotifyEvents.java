@@ -61,9 +61,24 @@ public final class NotifyEvents {
      */
     public static CompiledNotify compile(String source, String id, NotifySpec spec,
             ExpressionFunctions functions) {
-        if (spec.channel() == null || spec.channel().isBlank()) {
+        if (spec.withdraws()) {
+            if (spec.channel() != null && !spec.channel().isBlank()) {
+                throw new TqlException(INVALID_NOTIFY, "Notification '" + id + "' of '" + source
+                        + "' declares both cancel: and channel: — an entry either sends or"
+                        + " withdraws, and a block that did both would name one thing twice");
+            }
+            if (!spec.schedule().isEmpty()) {
+                throw new TqlException(INVALID_NOTIFY, "Notification '" + id + "' of '" + source
+                        + "' declares cancel: with a schedule — a withdrawal happens in this"
+                        + " command's transaction, and later is what it is undoing");
+            }
+        } else if (spec.channel() == null || spec.channel().isBlank()) {
             throw new TqlException(INVALID_NOTIFY,
                     "Notification '" + id + "' of '" + source + "' needs a channel:");
+        }
+        if (spec.schedule().isAmbiguous()) {
+            throw new TqlException(INVALID_NOTIFY, "Notification '" + id + "' of '" + source
+                    + "' declares both delay: and deliverAt: — two answers to one question");
         }
         Expr when = spec.when() == null || spec.when().isBlank()
                 ? null
@@ -75,7 +90,7 @@ public final class NotifyEvents {
                 ? null
                 : spec.attach();
         return new CompiledNotify(source + "." + id, id, spec.channel(), when, recipient,
-                attach, spec.payload());
+                attach, spec.payload(), spec.schedule(), spec.cancelKey(), spec.cancel());
     }
 
     /**
@@ -85,12 +100,45 @@ public final class NotifyEvents {
      * (docs/analytics-experience.md) — resolved at enqueue like a payload value.
      */
     public record CompiledNotify(String source, String id, String channel, Expr when,
-            Expr recipient, String attach, Map<String, String> payload) {
+            Expr recipient, String attach, Map<String, String> payload,
+            io.tesseraql.yaml.model.ScheduleSpec schedule, String cancelKey, String cancel) {
+
+        /** The pre-scheduling shape, for positional callers. */
+        public CompiledNotify(String source, String id, String channel, Expr when,
+                Expr recipient, String attach, Map<String, String> payload) {
+            this(source, id, channel, when, recipient, attach, payload,
+                    new io.tesseraql.yaml.model.ScheduleSpec(null, null), null, null);
+        }
 
         /** The pre-attachment shape, for positional callers. */
         public CompiledNotify(String source, String id, String channel, Expr when,
                 Expr recipient, Map<String, String> payload) {
             this(source, id, channel, when, recipient, null, payload);
+        }
+
+        /** Whether this entry withdraws undelivered entries rather than writing one. */
+        public boolean withdraws() {
+            return cancel != null && !cancel.isBlank();
+        }
+
+        /** The key this entry withdraws by, resolved against the command's context. */
+        public String resolveCancel(Map<String, Object> context) {
+            return path(context, cancel);
+        }
+
+        /** The key this entry is written under, so a later command can withdraw it. */
+        public String resolveCancelKey(Map<String, Object> context) {
+            return path(context, cancelKey);
+        }
+
+        private static String path(Map<String, Object> context, String expr) {
+            if (expr == null || expr.isBlank()) {
+                return null;
+            }
+            Object value = new EvaluationContext(context == null ? Map.of() : context)
+                    .resolve(Arrays.asList(expr.split("\\.")));
+            String resolved = value == null ? null : String.valueOf(value);
+            return resolved == null || resolved.isBlank() ? null : resolved;
         }
 
         /** Whether the guard (if any) lets this notification fire for the given context. */
@@ -156,8 +204,19 @@ public final class NotifyEvents {
          */
         public OutboxEvent build(Map<String, Object> context, String appName,
                 String recipient, String tenantId) {
+            return build(context, appName, recipient, tenantId, java.time.Instant.now());
+        }
+
+        /**
+         * The same, against a caller-supplied clock so a {@code delay:} is measured from one
+         * instant for the whole command rather than from whenever each entry happens to be
+         * built (docs/notifications.md, "Scheduled delivery").
+         */
+        public OutboxEvent build(Map<String, Object> context, String appName,
+                String recipient, String tenantId, java.time.Instant now) {
             return event(channel, source, recipient, tenantId, resolveAttach(context),
-                    resolvePayload(context), appName);
+                    resolvePayload(context), appName, schedule.resolve(context, now),
+                    resolveCancelKey(context));
         }
     }
 
@@ -180,6 +239,14 @@ public final class NotifyEvents {
     public static OutboxEvent event(String channel, String source, String recipient,
             String tenantId, String attachTransferId, Map<String, Object> payload,
             String appName) {
+        return event(channel, source, recipient, tenantId, attachTransferId, payload, appName,
+                null, null);
+    }
+
+    /** The scheduled form: the envelope is the same, the row's timing is not. */
+    public static OutboxEvent event(String channel, String source, String recipient,
+            String tenantId, String attachTransferId, Map<String, Object> payload,
+            String appName, java.time.Instant notBefore, String cancelKey) {
         Map<String, Object> envelope = new LinkedHashMap<>();
         envelope.put("channel", channel);
         envelope.put("source", source);
@@ -195,7 +262,7 @@ public final class NotifyEvents {
         envelope.put("payload", payload == null ? Map.of() : payload);
         try {
             return OutboxEvent.toInsert(AGGREGATE_TYPE, source, EVENT_TYPE,
-                    MAPPER.writeValueAsString(envelope), appName);
+                    MAPPER.writeValueAsString(envelope), appName, notBefore, cancelKey);
         } catch (JsonProcessingException ex) {
             throw new TqlException(ENCODE_ERROR,
                     "Failed to encode notification '" + source + "': " + ex.getMessage());
