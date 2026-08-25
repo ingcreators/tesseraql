@@ -8,6 +8,23 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **The approval join is a declaration instead of a hand-kept invariant.** "Both accounting and
+  purchasing must approve before issue" was already expressible — a self-loop transition per
+  approver stamping its column, and an advance guarded on every stamp — and it worked. What it
+  could not do was tell anything: nothing checked that every stamp column had a stamping
+  transition, that the rework transition cleared all of them, or that the advance guard named the
+  full set, and each is a silent logic bug when missed. A transition now declares
+  `join: { stamps: [...] }`, which **synthesizes** the all-stamped guard so it cannot drift from
+  the set, and lets lint prove the three invariants: a stamp nothing sets means a join that can
+  never complete, and a transition returning a document to the join state without clearing the
+  set means a join that advances on approvals given before the rework (both
+  `TQL-WORKFLOW-3118`); a self-loop stamping a column the join does not count gates nothing
+  (`TQL-WORKFLOW-3119`, a warning). `join:` beside `guard:` is `TQL-WORKFLOW-3117`. Auto-advance
+  when the last stamp lands is deliberately not offered — firing a transition from inside another
+  transition is new control flow, and the last approver still advances through a `dispatch:`
+  pair. No new capability; the lint coverage is the point. Closes gap 5 of
+  [process-control-gaps.md](docs/process-control-gaps.md).
+
 - **The outbox learns about later.** Everything on it — `notify:`, `publish:`, `outbox:` — was
   delivered as soon after commit as the dispatcher got to it, and the only future-time construct
   on the whole surface was a workflow's `deadlines:`, which serves workflow documents alone. So

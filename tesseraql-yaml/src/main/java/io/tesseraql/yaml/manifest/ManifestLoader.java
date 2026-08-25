@@ -523,7 +523,8 @@ public final class ManifestLoader {
             resolved.add(new io.tesseraql.yaml.model.TransitionSpec(transition.id(),
                     transition.from(), transition.to(), transition.guard(),
                     transition.command(), transition.assign(),
-                    transition.security(), merged, transition.stamp(), transition.bulk()));
+                    transition.security(), merged, transition.stamp(), transition.bulk(),
+                    transition.join()));
         }
         // A dispatch consumes shared decisions the way its members do
         // (docs/transition-engine.md track B): the same resolution, the same errors.

@@ -53,6 +53,12 @@ final class WorkflowRules implements LintRule {
 
     private static final String INVALID_STAMP = "TQL-WORKFLOW-3111";
 
+    private static final String INVALID_JOIN = "TQL-WORKFLOW-3117";
+
+    private static final String UNSAFE_JOIN = "TQL-WORKFLOW-3118";
+
+    private static final String STAMP_OUTSIDE_JOIN = "TQL-WORKFLOW-3119";
+
     private static final String INVALID_GUARD_DECLARATION = "TQL-WORKFLOW-3108";
 
     private static final String GUARD_FILE_WRITES = "TQL-WORKFLOW-3109";
@@ -212,6 +218,9 @@ final class WorkflowRules implements LintRule {
         WorkflowDefinition def = workflow.definition();
         String id = def.id();
         Path dir = workflow.source().getParent();
+
+        // The approval join's invariants, which the hand-guarded version could not state.
+        lintJoins(def, source, findings);
 
         Set<String> states = new LinkedHashSet<>();
         int initialMarked = 0;
@@ -384,6 +393,105 @@ final class WorkflowRules implements LintRule {
         }
 
         lintWorkflowMode(def, config, source, findings);
+    }
+
+    /**
+     * The approval join's three invariants (docs/approval-workflow.md, "The approval join").
+     *
+     * <p>The pattern worked before this declaration existed; what it could not do was tell
+     * anything. These are the checks the hand-written version made impossible: that the join can
+     * complete at all, that a document re-entering the join state does not advance on stale
+     * approvals, and that an approver's stamp is one the join actually counts.
+     */
+    private void lintJoins(io.tesseraql.yaml.model.WorkflowDefinition def, String source,
+            List<LintFinding> findings) {
+        for (io.tesseraql.yaml.model.TransitionSpec transition : def.transitions()) {
+            io.tesseraql.yaml.model.JoinSpec join = transition.joinOrNull();
+            if (join == null) {
+                continue;
+            }
+            String where = "transition '" + transition.id() + "'";
+            if (transition.guard() != null) {
+                findings.add(new LintFinding(INVALID_JOIN, ERROR, source, where
+                        + ": join: is the guard — declaring both leaves two answers to whether"
+                        + " this transition is legal"));
+            }
+            for (String column : join.stamps()) {
+                if (!io.tesseraql.core.sql.SqlIdentifiers.isIdentifier(column)) {
+                    findings.add(new LintFinding(INVALID_JOIN, ERROR, source, where
+                            + ": join stamp '" + column + "' is not a plain identifier"));
+                }
+            }
+            lintJoinIsReachable(def, transition, join, where, source, findings);
+            lintJoinIsCleared(def, transition, join, where, source, findings);
+            lintStampsOutsideJoin(def, transition, join, source, findings);
+        }
+    }
+
+    /** Every listed stamp needs a transition that sets it, or the join can never complete. */
+    private void lintJoinIsReachable(io.tesseraql.yaml.model.WorkflowDefinition def,
+            io.tesseraql.yaml.model.TransitionSpec join, io.tesseraql.yaml.model.JoinSpec spec,
+            String where, String source, List<LintFinding> findings) {
+        for (String column : spec.stamps()) {
+            boolean stamped = def.transitions().stream()
+                    .anyMatch(other -> java.util.Objects.equals(other.from(), join.from())
+                            && other.stamp().containsKey(column)
+                            && other.stamp().get(column) != null);
+            if (!stamped) {
+                findings.add(new LintFinding(UNSAFE_JOIN, ERROR, source, where
+                        + ": join stamp '" + column + "' is set by no transition out of '"
+                        + join.from() + "' — the join can never complete"));
+            }
+        }
+    }
+
+    /**
+     * A document put back into the join's state must arrive with the set cleared, or the join
+     * advances on approvals given before the rework. The first entry is exempt: a document
+     * leaving the initial state has never been stamped.
+     */
+    private void lintJoinIsCleared(io.tesseraql.yaml.model.WorkflowDefinition def,
+            io.tesseraql.yaml.model.TransitionSpec join, io.tesseraql.yaml.model.JoinSpec spec,
+            String where, String source, List<LintFinding> findings) {
+        for (io.tesseraql.yaml.model.TransitionSpec other : def.transitions()) {
+            if (!java.util.Objects.equals(other.to(), join.from())
+                    || java.util.Objects.equals(other.from(), def.initial())
+                    || java.util.Objects.equals(other.from(), join.from())) {
+                continue;
+            }
+            List<String> stale = spec.stamps().stream()
+                    .filter(column -> !(other.stamp().containsKey(column)
+                            && other.stamp().get(column) == null))
+                    .toList();
+            if (!stale.isEmpty()) {
+                findings.add(new LintFinding(UNSAFE_JOIN, ERROR, source, "transition '"
+                        + other.id() + "' returns a document to '" + join.from()
+                        + "' without clearing " + stale + " — " + where
+                        + " would advance on approvals given before it"));
+            }
+        }
+    }
+
+    /** A stamp the join does not count looks like an approval and gates nothing. */
+    private void lintStampsOutsideJoin(io.tesseraql.yaml.model.WorkflowDefinition def,
+            io.tesseraql.yaml.model.TransitionSpec join, io.tesseraql.yaml.model.JoinSpec spec,
+            String source, List<LintFinding> findings) {
+        for (io.tesseraql.yaml.model.TransitionSpec other : def.transitions()) {
+            boolean selfLoop = java.util.Objects.equals(other.from(), join.from())
+                    && java.util.Objects.equals(other.to(), join.from());
+            if (!selfLoop) {
+                continue;
+            }
+            other.stamp().forEach((column, value) -> {
+                if (value != null && !spec.stamps().contains(column)) {
+                    findings.add(new LintFinding(STAMP_OUTSIDE_JOIN, WARNING, source,
+                            "transition '" + other.id() + "' stamps '" + column
+                                    + "' on the join state of '" + join.id()
+                                    + "' but the join does not count it — the approval gates"
+                                    + " nothing"));
+                }
+            });
+        }
     }
 
     /**

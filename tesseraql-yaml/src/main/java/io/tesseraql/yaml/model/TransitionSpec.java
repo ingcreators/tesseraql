@@ -33,6 +33,9 @@ import java.util.Map;
  * @param bulk     whether this transition also serves {@code POST {basePath}/_bulk/<id>}, which
  *                 runs the whole member pipeline once per key, each key in its own transaction
  *                 (docs/approval-workflow.md, "Bulk transitions")
+ * @param join     the stamps that must all be set for this transition to be legal — the
+ *                 approval join, which synthesizes the all-stamped guard and declares the set
+ *                 so lint can prove it (docs/approval-workflow.md, "The approval join")
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record TransitionSpec(String id, String from, String to, GuardSpec guard,
@@ -49,11 +52,19 @@ public record TransitionSpec(String id, String from, String to, GuardSpec guard,
         // The task inbox lists twenty requisitions and approving them was twenty requests
         // (docs/process-control-gaps.md gap 2). Opting in synthesizes a second endpoint over the
         // very same pipeline — nothing about a transition may be bypassed by taking many at once.
-        Boolean bulk) {
+        Boolean bulk,
+        // The AND-join, declared rather than hand-guarded (docs/process-control-gaps.md gap 5):
+        // what it buys is the lint coverage and the inbox visibility, not new capability.
+        JoinSpec join) {
 
     /** Whether this transition also serves the {@code _bulk} endpoint. Defaults to false. */
     public boolean isBulk() {
         return Boolean.TRUE.equals(bulk);
+    }
+
+    /** The declared join, or null when this transition is not one. */
+    public JoinSpec joinOrNull() {
+        return join == null || join.isEmpty() ? null : join;
     }
 
     /** The command's file, and the binds it needs. */

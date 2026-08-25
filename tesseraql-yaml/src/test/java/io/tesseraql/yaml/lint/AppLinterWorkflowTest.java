@@ -47,6 +47,77 @@ class AppLinterWorkflowTest {
                 .toList();
     }
 
+    /**
+     * A well-formed approval join: two approvers stamp in place, the advance declares the set,
+     * and the rework that returns a document to review clears it.
+     */
+    private static final String JOINED = """
+            version: tesseraql/v1
+            id: purchase_request
+            kind: workflow
+            mode: managed
+            document:
+              type: purchase_request
+              table: purchase_requests
+              key: id
+            initial: draft
+            states:
+              - { id: draft, type: initial }
+              - { id: review }
+              - { id: issued, type: terminal }
+              - { id: rejected }
+            transitions:
+              - { id: submit, from: draft, to: review, command: { file: submit.sql } }
+              - { id: acct_ok, from: review, to: review, stamp: { acct_approved: principal.subject }, command: { file: approve.sql } }
+              - { id: purch_ok, from: review, to: review, stamp: { purch_approved: principal.subject }, command: { file: approve.sql } }
+              - { id: issue, from: review, to: issued, join: { stamps: [acct_approved, purch_approved] }, command: { file: approve.sql } }
+              - { id: reject, from: review, to: rejected, command: { file: approve.sql } }
+              - { id: rework, from: rejected, to: review, stamp: { acct_approved: null, purch_approved: null }, command: { file: approve.sql } }
+            """;
+
+    /** The guard is synthesized from the set, so a well-formed join lints clean. */
+    @Test
+    void aWellFormedJoinProducesNoWorkflowFindings(@TempDir Path dir) throws Exception {
+        writeWorkflow(dir, JOINED);
+        assertThat(codes(new AppLinter().lint(dir))).isEmpty();
+    }
+
+    /** A stamp nothing sets is a join that can never complete. */
+    @Test
+    void aJoinStampNoTransitionSetsIsAnError(@TempDir Path dir) throws Exception {
+        writeWorkflow(dir, JOINED.replace("[acct_approved, purch_approved]",
+                "[acct_approved, purch_approved, legal_approved]"));
+        assertThat(codes(new AppLinter().lint(dir))).contains("TQL-WORKFLOW-3118");
+    }
+
+    /** A rework that leaves a stamp behind advances the join on an approval given before it. */
+    @Test
+    void aReworkThatDoesNotClearTheSetIsAnError(@TempDir Path dir) throws Exception {
+        writeWorkflow(dir, JOINED.replace(
+                "stamp: { acct_approved: null, purch_approved: null }",
+                "stamp: { acct_approved: null }"));
+        assertThat(codes(new AppLinter().lint(dir))).contains("TQL-WORKFLOW-3118");
+    }
+
+    /** join: and guard: are two answers to whether the transition is legal. */
+    @Test
+    void aJoinBesideAGuardIsAnError(@TempDir Path dir) throws Exception {
+        writeWorkflow(dir, JOINED.replace(
+                "join: { stamps: [acct_approved, purch_approved] }",
+                "join: { stamps: [acct_approved, purch_approved] }, guard: \"document.amount > 0\""));
+        assertThat(codes(new AppLinter().lint(dir))).contains("TQL-WORKFLOW-3117");
+    }
+
+    /** A stamp the join does not count looks like an approval and gates nothing. */
+    @Test
+    void aStampOutsideTheJoinIsAWarning(@TempDir Path dir) throws Exception {
+        writeWorkflow(dir, JOINED.replace(
+                "- { id: reject, from: review, to: rejected, command: { file: approve.sql } }",
+                "- { id: reject, from: review, to: rejected, command: { file: approve.sql } }\n"
+                        + "  - { id: legal_ok, from: review, to: review, stamp: { legal_approved: principal.subject }, command: { file: approve.sql } }"));
+        assertThat(codes(new AppLinter().lint(dir))).contains("TQL-WORKFLOW-3119");
+    }
+
     @Test
     void escalateTransitionFromWrongStateIsAnError(@TempDir Path dir) throws Exception {
         // submit starts from draft, not the deadline's 'submitted' state, so it can never advance.
