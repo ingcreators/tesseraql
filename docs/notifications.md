@@ -291,9 +291,43 @@ non-2xx answer (or transport failure) counts as a failed attempt and is retried.
 ## Scheduled delivery
 
 Everything on the outbox — `notify:`, `publish:`, `outbox:` — is delivered as soon after commit
-as the dispatcher gets to it. "Remind the customer three days after the order ships" used to be
-a cron job scanning an app table the command had to remember to populate. An entry can now name
-the instant before which it must not be delivered, in two forms:
+as the dispatcher gets to it. An entry can instead name the instant before which it must not be
+delivered.
+
+### Choose this or a batch job, deliberately
+
+Most recurring business reminders belong in a [batch job](jobs.md), not here. A job that queries
+the current truth is the more common shape, and usually the better one:
+
+```sql
+-- batch/shipping-reminder/pick.sql — run daily by a cron trigger
+select * from orders
+where shipped_at = current_date - 3
+  and reminder_sent_at is null
+  and status <> 'cancelled'
+```
+
+That query decides *at run time* who gets a reminder. A cancelled order simply stops matching,
+so **no cancellation mechanism is needed at all**; changing the window from three days to two
+takes effect immediately, including for orders already shipped; the run has an execution record
+you can inspect and re-run for a date; and a hundred thousand reminders are one pass rather than
+a hundred thousand rows waiting in a table.
+
+Scheduled delivery makes the opposite trade: it **freezes the decision at commit time**. That is
+worth having when the decision genuinely cannot be re-derived later, which is a narrower set than
+it first appears:
+
+| Use a batch job | Use `delay:`/`deliverAt:` |
+| --- | --- |
+| The audience is a query over business columns ("shipped three days ago") | The instant is per-record and irregular (`deliverAt: params.pickupStart`) |
+| Cancellation is implied by the data ("not cancelled") | The payload is only reconstructible at commit |
+| The cadence is daily or coarser | The delay is minutes, not days |
+| Volume is high | Volume is low and event-shaped |
+
+If a reminder can be expressed as "everything matching this predicate today", write the job. The
+rest of this section is for the cases that cannot.
+
+### The two declared forms
 
 ```yaml
 notify:
@@ -343,14 +377,21 @@ notify:
   outbox does not have and should not acquire for this.
 - Withdrawn entries become `CANCELLED`, which is terminal like `SENT`: they are never claimed
   again, and they stay visible to operators rather than vanishing.
-- Only `PENDING` and `FAILED` entries are withdrawn. `SENT` has happened and cannot be
-  un-happened; `DEAD` has stopped; and `SENDING` means a dispatcher is holding the row, so the
-  delivery may already be on the wire.
+- `PENDING`, `FAILED` and `SENDING` entries are all withdrawn. `SENT` has happened and cannot be
+  un-happened, and `DEAD` has stopped. A `SENDING` row is one a dispatcher is holding: withdrawing
+  it cannot recall a request already on the wire, but it stops **every attempt after it** — a
+  delivery failure will not write `FAILED` over the cancellation and put the entry back in the
+  claim. If the in-flight delivery does succeed, the row records `SENT`, because it did send.
 - A block declaring both `cancel:` and `channel:`, or `cancel:` with a schedule, fails the build
   (`TQL-FIELD-2004`): an entry either sends or withdraws, and later is what a withdrawal undoes.
 - `steps.*` context is available, so the withdrawing command can name a key it just read.
 - The withdrawal reports as `notify.<id>.withdrawn` — how many entries it withdrew — the way a
   send reports `notify.<id>.eventId`.
+
+A withdrawal matches on the application and the key alone, not on the notification's name: two
+entries filed under the same `cancelKey:` are withdrawn together. For "cancel the order, cancel
+everything scheduled for it" — the case this exists for — that is the wanted behaviour; if you
+need to withdraw one of several independently, file them under different keys.
 
 `cancelKey:`/`cancel:` are declared on `notify:` in this first slice. `delay:`/`deliverAt:`
 apply to `publish:` and `outbox:` too, because they are the same outbox row; a withdrawal for

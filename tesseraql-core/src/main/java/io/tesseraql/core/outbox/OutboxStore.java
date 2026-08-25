@@ -46,7 +46,9 @@ public interface OutboxStore {
      * alternative, re-evaluating a predicate at delivery time, would have the dispatcher reading
      * application tables with no principal, tenant or scope to read them under
      * (docs/notifications.md, "Scheduled delivery"). An event already sent is left alone: it has
-     * happened, and a cancellation cannot un-happen it.
+     * happened, and a cancellation cannot un-happen it. An event a dispatcher is holding is
+     * withdrawn like any other — that one delivery may still complete, but none after it. An event a dispatcher is holding is
+     * withdrawn like any other — that one delivery may still complete, but none after it.
      *
      * <p>The default withdraws nothing, so an in-memory double keeps compiling; JDBC stores
      * override it.
