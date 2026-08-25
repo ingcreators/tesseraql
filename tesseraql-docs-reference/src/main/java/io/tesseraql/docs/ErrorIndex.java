@@ -550,7 +550,7 @@ final class ErrorIndex {
             "access-governance.md", "http-threading.md", "contract-sql-execution.md",
             "sql-execution-shapes.md",
             "http-edge.md", "camel-removal.md", "vertx-native.md", "boot-phases.md",
-            "duplication-consolidation.md");
+            "duplication-consolidation.md", "process-control-gaps.md");
 
     /** Whether {@code name} is an internal planning document; shared with the config index. */
     static boolean isInternalDoc(String name) {
