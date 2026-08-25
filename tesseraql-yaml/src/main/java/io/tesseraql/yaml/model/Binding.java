@@ -71,10 +71,7 @@ import java.util.Map;
 public record Binding(String file, String contract, String mode, Map<String, String> params,
         String service, HttpSourceSpec http, Materialize materialize, String sequence,
         java.util.List<String> keys, Expect expect, Integer timeoutSeconds, String datasource,
-        String spool, String when, Map<String, EnrichSpec> enrich, Map<String, String> out,
-        // The shared-fragment arm (docs/transactional-writes.md): this step is a named sequence,
-        // expanded into ordinary steps at manifest load, so nothing downstream knows it was one.
-        FragmentUse use) {
+        String spool, String when, Map<String, EnrichSpec> enrich, Map<String, String> out) {
 
     public Binding {
         params = params == null ? Map.of() : Map.copyOf(params);
@@ -87,22 +84,13 @@ public record Binding(String file, String contract, String mode, Map<String, Str
                 : java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(out));
     }
 
-    /** The shape before a step could be a shared fragment. */
-    public Binding(String file, String contract, String mode, Map<String, String> params,
-            String service, HttpSourceSpec http, Materialize materialize, String sequence,
-            java.util.List<String> keys, Expect expect, Integer timeoutSeconds, String datasource,
-            String spool, String when, Map<String, EnrichSpec> enrich, Map<String, String> out) {
-        this(file, contract, mode, params, service, http, materialize, sequence, keys, expect,
-                timeoutSeconds, datasource, spool, when, enrich, out, null);
-    }
-
     /** The shape before a call step could declare OUT parameters. */
     public Binding(String file, String contract, String mode, Map<String, String> params,
             String service, HttpSourceSpec http, Materialize materialize, String sequence,
             java.util.List<String> keys, Expect expect, Integer timeoutSeconds, String datasource,
             String spool, String when, Map<String, EnrichSpec> enrich) {
         this(file, contract, mode, params, service, http, materialize, sequence, keys, expect,
-                timeoutSeconds, datasource, spool, when, enrich, null, null);
+                timeoutSeconds, datasource, spool, when, enrich, null);
     }
 
     /** The shape before an enrichment could nest under the source it transforms. */
@@ -131,8 +119,7 @@ public record Binding(String file, String contract, String mode, Map<String, Str
             @com.fasterxml.jackson.annotation.JsonProperty("sequence") String sequence,
             @com.fasterxml.jackson.annotation.JsonProperty("spool") String spool,
             @com.fasterxml.jackson.annotation.JsonProperty("when") String when,
-            @com.fasterxml.jackson.annotation.JsonProperty("enrich") Map<String, EnrichSpec> enrich,
-            @com.fasterxml.jackson.annotation.JsonProperty("use") FragmentUse use) {
+            @com.fasterxml.jackson.annotation.JsonProperty("enrich") Map<String, EnrichSpec> enrich) {
         NamedCall call = contract != null ? contract : service;
         return new Binding(
                 sql == null ? null : sql.file(),
@@ -150,13 +137,7 @@ public record Binding(String file, String contract, String mode, Map<String, Str
                 spool,
                 when,
                 enrich,
-                sql == null ? null : sql.out(),
-                use);
-    }
-
-    /** Whether this step is a reference to a shared fragment rather than a mechanism of its own. */
-    public boolean usesFragment() {
-        return use != null && use.fragment() != null && !use.fragment().isBlank();
+                sql == null ? null : sql.out());
     }
 
     /**

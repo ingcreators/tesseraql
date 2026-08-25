@@ -1,6 +1,13 @@
 # Process-control gaps — six candidates for the business-application surface
 
-> **Status: gap analysis; nothing here is committed.** Recorded 2026-08-25 from a
+> **Status: five of the six shipped 2026-08-25; gap 6 was built and withdrawn.** Gaps 1-5
+> are the live surface — see the *Outcome* note under each. Gap 6 (`fragments/`) was
+> implemented and then reverted the same day, because it shipped ahead of the trigger this
+> analysis set for it and no application has yet exhibited the drift it answers; the work is
+> in the history if that changes. The sketches below are kept as written, so what was
+> proposed can still be compared with what was built.
+>
+> Originally recorded 2026-08-25 from a
 > survey of the shipped YAML schemas (`tesseraql-yaml/src/main/resources/schema/`),
 > the generated [surface reference](reference-yaml-surface.md), and the recorded
 > design decisions. The question asked: across the whole YAML surface, what does a
@@ -100,6 +107,9 @@ separate, later view-layer slice — the contract comes first.
 cross-field rules (`item.qty <= item.maxQty`), or whether the element-level
 `requiredWhen`/bounds carry far enough for a first slice.
 
+**Outcome (#1062).** Shipped as sketched. `validate.each:` was left out — the element-level
+declarations carried the first slice. Lint `TQL-YAML-1027` holds the one-level rule.
+
 ## Gap 2 (P1) — bulk actions: one transition, many documents
 
 A workflow transition is one document per call: the synthesized route is
@@ -140,6 +150,17 @@ transitions:
 bound seems right), and whether a bulk `emit:` coalesces to one topic event or
 one per key.
 
+**Outcome (#1064).** Shipped as sketched. The cap is `tesseraql.workflow.bulk.maxKeys`
+(config, default 100) rather than a declared key, which keeps the declaration the literal
+`bulk: true`; over it the request is refused whole (`TQL-WORKFLOW-3116`). `emit:` fires once
+per key — each key is its own transaction and its own business event.
+
+One line of the sketch above did not hold: **`idempotency:` does not apply to the bulk route**,
+because a transition route is compiler-synthesized and a `workflow/` document has nowhere to
+declare the block — which is equally true of the single-document route the sketch compares it
+to. A replay is instead made safe by the state guard, each key reporting `TQL-WORKFLOW-3201`
+rather than advancing twice.
+
 ## Gap 3 (P2) — declarative retry for outbound `http:`
 
 `retry:`/`backoff:` appear nowhere in the shipped schemas. Retry exists in
@@ -178,6 +199,11 @@ sources:
 - SQL statements get nothing: the transaction owns them, and the job-level
   answer remains `job rerun` ([jobs](jobs.md) — "there is no automatic retry"
   stays true at the job granularity; this is per-call, inside a step).
+
+**Outcome (#1063).** Shipped as sketched, opt-in per binding: the config block supplies the
+numbers, not a switch, because turning retry on for every call would change the load every
+existing declaration puts on its dependency. An opening circuit ends the sequence; the budget
+is `attempts × requestTimeout`, which the backoff waits also spend.
 
 ## Gap 4 (P2) — scheduled delivery: the outbox learns about later
 
@@ -219,6 +245,22 @@ document. The first is more mechanism; the second re-reads app tables from the
 dispatcher and needs its own authority story. This is the design's hard
 question and deserves its own decision before a slice ships.
 
+**Outcome (#1065, corrected by #1068).** Shipped with the **declared cancel key**: the
+delivery-time predicate would have the dispatcher reading application tables with no
+principal, tenant or scope to read them under. The withdrawal rides the later command's
+transaction, where the authority to cancel is already established.
+
+**And a correction to this gap's framing.** The paragraph above calls the batch job "a cron
+job scanning an app table the command must remember to populate". For this gap's own headline
+example that is not so: a job picking up "shipped three days ago" reads `orders.shipped_at`, a
+column the command writes as part of the business record. There is no forgotten table. More
+importantly, a query over current truth needs **no cancellation mechanism at all** — a
+cancelled order simply stops matching — which is exactly the machinery the outbox route then
+had to grow, and get wrong once. Scheduled delivery earns its keep for a per-record irregular
+instant, a payload reconstructible only at commit, or a sub-daily delay; the recurring business
+reminder belongs in a [batch job](jobs.md), and [notifications](notifications.md) now says so
+before it describes the mechanism.
+
 ## Gap 5 (P3) — the approval join: several stamps, one advance
 
 "Both accounting and purchasing must approve before issue" is an AND-join, and
@@ -255,6 +297,13 @@ transitions:
 
 Priority is P3 because the pattern already works; what the declaration buys is
 the lint coverage and the inbox visibility, not new capability.
+
+**Outcome (#1066).** Shipped as sketched, with the three lints sharpened to be sound: a stamp
+set by no transition **out of the join state** (a join that can never complete); any transition
+whose **`to`** is the join state failing to clear the set, **exempting one leaving the initial
+state**; and — narrowed from "no out-of-set stamps", which taken literally would flag a
+legitimate side-stamp like `approval_route` — a **self-loop on the join state** stamping a
+column the join does not count. Inbox rendering of join progress was not built.
 
 ## Gap 6 (P3) — shared step fragments
 
@@ -299,6 +348,20 @@ steps:
 - Command-side first (`steps:`); `pipeline:` reuse can follow if jobs turn out
   to repeat sequences the same way.
 
+**Outcome: built 2026-08-25 (#1067), reverted the same day.** It shipped ahead of the trigger
+this section sets — "once a real app exhibits the drift the design predicts" — and no gallery
+application exhibits it, so the feature had no user and its ergonomics went unproven. The
+implementation is in the history if that changes; two findings from it are worth keeping:
+
+- **Step ids cannot be dotted.** The open question below asks namespaced (`audit.note`) or
+  flattened. It is not a preference: the context resolver splits a path on `.`, so
+  `steps.audit.note.affectedRows` looks for a step named `audit` containing one named `note`
+  and never finds it. A dotted id is unaddressable; flattened plus a collision check is the
+  only working answer.
+- **The reference should carry `id:` and nest its wiring.** The sketch's step-level
+  `use:`/`as:`/`params:` would make `steps:` the one place `params:` sits outside an arm, and
+  would force the steps deserializer to special-case a missing `id:`.
+
 ## Addenda — recorded, not designed
 
 Three smaller absences surfaced by the same survey, noted here so they are not
@@ -330,7 +393,7 @@ and keeps every slice independently shippable:
    decided.
 5. **Gap 5** — `join:` sugar plus its three lints.
 6. **Gap 6** — `fragments/` expansion, once a real app exhibits the drift the
-   design predicts.
+   design predicts. *(Built and withdrawn 2026-08-25; the trigger still stands.)*
 
 ## Open questions
 

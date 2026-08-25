@@ -94,8 +94,6 @@ class ErrorCodeUniquenessTest {
             Map.entry("FIELD-4621", "a catalog's source declaration is contradictory or"
                     + " incomplete"),
             Map.entry("SEC-4132", "an invalid security.defaults declaration"),
-            Map.entry("YAML-1062", "a shared step fragment used where it cannot expand — a"
-                    + " chain, a collided expansion, or a job pipeline"),
             Map.entry("SEC-4135", "an invalid responseHeaders defaults declaration"),
             Map.entry("SQL-2101", "an expression that does not parse"),
             Map.entry("SQL-2111", "a file placeholder that cannot resolve where it is written"),

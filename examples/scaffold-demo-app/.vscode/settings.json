@@ -28,9 +28,6 @@
     ".vscode/tesseraql-rules-v1.schema.json": [
       "rules/**/*.yml"
     ],
-    ".vscode/tesseraql-fragments-v1.schema.json": [
-      "fragments/**/*.yml"
-    ],
     ".vscode/tesseraql-decisions-v1.schema.json": [
       "decisions/**/*.yml"
     ],

@@ -812,24 +812,6 @@
           "additionalProperties": true,
           "description": "The http arm: an outbound call whose response becomes this binding's rows, in the vocabulary every outbound call shares. Rides the outbound gateway — allow-listed hosts, named credentials, timeouts, and a per-host circuit breaker."
         },
-        "use": {
-          "type": "object",
-          "properties": {
-            "fragment": {
-              "type": "string",
-              "description": "The declared fragment's name (TQL-YAML-1060 when nothing declares it)."
-            },
-            "params": {
-              "type": "object",
-              "additionalProperties": {
-                "type": "string"
-              },
-              "description": "Each of the fragment's declared binds to the bindable path or literal supplying it. The contract is checked both ways (TQL-YAML-1061)."
-            }
-          },
-          "additionalProperties": false,
-          "description": "The shared-fragment arm: this step is a named sequence from fragments/, expanded here at manifest load under this step's own id as a prefix. One hop only - a fragment cannot use another (TQL-YAML-1062). Documented in transactional-writes.md."
-        },
         "sequence": {
           "type": "string",
           "description": "Allocate the next value of a managed document-number sequence instead of running a statement; it binds as `steps.<id>.value`. It has no body beyond its name, which is why it sits beside the arms rather than being one. Documented in transactional-writes.md."

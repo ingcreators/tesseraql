@@ -325,7 +325,11 @@ POST /api/requisitions/_bulk/submit_decision
 - `keys:` is bounded by `tesseraql.workflow.bulk.maxKeys` (default 100). Over the ceiling the
   whole request is refused before a single key runs (`TQL-WORKFLOW-3116`): a client past the cap
   should page, and half-applying its request would leave it guessing which half.
-- `idempotency:` applies to the bulk route as to any command.
+- There is no `idempotency:` block here, and there is none on a single transition either: a
+  transition route is compiler-synthesized and a `workflow/` document has nowhere to declare one.
+  What makes a replayed bulk call safe is the state guard — the second call finds each document
+  already advanced and reports `TQL-WORKFLOW-3201` for it, rather than advancing it twice — so
+  the effect is idempotent even though the declaration is absent.
 
 ### Assignee resolution is the dual of a scope
 

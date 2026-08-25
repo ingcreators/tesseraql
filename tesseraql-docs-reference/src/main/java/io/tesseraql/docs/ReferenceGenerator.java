@@ -54,8 +54,6 @@ public final class ReferenceGenerator {
                                 schemas.resolve("tesseraql-domains-v1.schema.json")),
                         new SchemaReference.DocumentKind("rules",
                                 schemas.resolve("tesseraql-rules-v1.schema.json")),
-                        new SchemaReference.DocumentKind("fragments",
-                                schemas.resolve("tesseraql-fragments-v1.schema.json")),
                         new SchemaReference.DocumentKind("decisions",
                                 schemas.resolve("tesseraql-decisions-v1.schema.json"))));
     }
