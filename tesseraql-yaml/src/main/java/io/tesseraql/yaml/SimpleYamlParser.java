@@ -194,35 +194,6 @@ public final class SimpleYamlParser {
             io.tesseraql.core.error.TqlDomain.FIELD, 4604);
 
     /**
-     * Parses one {@code fragments/*.yml} document (docs/transactional-writes.md, "Shared step
-     * fragments"): named step sequences with their bind contracts.
-     */
-    public io.tesseraql.yaml.model.FragmentsDocument parseFragments(Path file) {
-        io.tesseraql.yaml.model.FragmentsDocument document;
-        try {
-            document = mapper.readValue(readFile(file),
-                    io.tesseraql.yaml.model.FragmentsDocument.class);
-        } catch (IOException | RuntimeException ex) {
-            throw schemaError("fragments", file.toString(), ex);
-        }
-        if (document == null) {
-            throw new TqlException(RULESET_MALFORMED, "Empty fragments document: " + file);
-        }
-        if (!EXPECTED_VERSION.equals(document.version())) {
-            throw new TqlException(RULESET_MALFORMED, "Fragments document " + file
-                    + " must declare version: " + EXPECTED_VERSION);
-        }
-        document.fragments().forEach((name, fragment) -> {
-            if (fragment.steps().isEmpty()) {
-                throw new TqlException(RULESET_MALFORMED, "Fragment '" + name + "' in " + file
-                        + " declares no steps — a fragment is a sequence, and an empty one is a"
-                        + " reference that does nothing");
-            }
-        });
-        return document;
-    }
-
-    /**
      * Parses one {@code rules/*.yml} document (docs/validation-rule-sets.md), rejecting an
      * entry that declares both or neither of {@code rule:}/{@code file:} — a shared rule is
      * exactly one of an expression or a SQL file.

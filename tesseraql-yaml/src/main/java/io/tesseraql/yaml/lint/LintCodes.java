@@ -35,10 +35,6 @@ final class LintCodes {
     // A job's trigger declaration: the poll source, or two trigger kinds declared together.
     static final String INVALID_JOB_TRIGGER = "TQL-YAML-1054";
 
-    // The shared-fragment shape: a chain, a collided expansion, or a use: where fragments do
-    // not expand. Raised by StepFragments at load and by JobRules at lint.
-    static final String INVALID_FRAGMENT_USE = "TQL-YAML-1062";
-
     static final String UNDECLARED_CONFIG_REFERENCE = "TQL-YAML-1102";
 
     private LintCodes() {

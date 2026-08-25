@@ -115,7 +115,6 @@ Transactional outbox event recorded with the command and delivered at-least-once
 | `contract` | [object](#stepscontract) | The contract arm: a statement the identity schema owns, called by name. It reads or writes like any other statement, so it carries the same `mode`, `params` and `expect`. |
 | `service` | [object](#stepsservice) | The service arm: a runtime provider answering rows from process state. It takes only its arguments — there is no statement to run, so no mode and no row-count expectation. |
 | `http` | [object](#stepshttp) | The http arm: an outbound call whose response becomes this binding's rows, in the vocabulary every outbound call shares. Rides the outbound gateway — allow-listed hosts, named credentials, timeouts, and a per-host circuit breaker. |
-| `use` | [object](#stepsuse) | The shared-fragment arm: this step is a named sequence from fragments/, expanded here at manifest load under this step's own id as a prefix. One hop only - a fragment cannot use another (TQL-YAML-1062). Documented in transactional-writes.md. |
 | `sequence` | string | Allocate the next value of a managed document-number sequence instead of running a statement; it binds as `steps.<id>.value`. It has no body beyond its name, which is why it sits beside the arms rather than being one. Documented in transactional-writes.md. |
 | `spool` | string | A context path resolving to an earlier step's spool reference (`steps.<id>.spool`), read as this binding's rows. A chunk reader declares it instead of `sql:` to load what another step extracted — from another connector, or from an API — because a spool is a spool whoever filled it. Documented in jobs.md. |
 | `when` | string | Guard expression on a step: a falsy guard skips it, recording `steps.<id>.skipped` instead of a result. A guard is about whether the step runs at all, not a question for the mechanism, so it sits beside the arm. The declared branch point for decision.* outputs (docs decision-tables). |
@@ -215,15 +214,6 @@ Opt-in retry for transient faults: connect failures, timeouts and 5xx are repeat
 | `attempts` | integer ≥ 1 ≤ 10 | Total attempts including the first (TQL-YAML-1058 outside 1..10). |
 | `backoff` | string | The wait before the second attempt, e.g. 200ms. |
 | `multiplier` | number ≥ 1 | The factor the wait grows by before each further attempt. |
-
-#### steps.use
-
-The shared-fragment arm: this step is a named sequence from fragments/, expanded here at manifest load under this step's own id as a prefix. One hop only - a fragment cannot use another (TQL-YAML-1062). Documented in transactional-writes.md.
-
-| Property | Type | Description |
-| --- | --- | --- |
-| `fragment` | string | The declared fragment's name (TQL-YAML-1060 when nothing declares it). |
-| `params` | map of string | Each of the fragment's declared binds to the bindable path or literal supplying it. The contract is checked both ways (TQL-YAML-1061). |
 
 ### validate
 
@@ -526,7 +516,6 @@ Fire the job when files arrive: a local directory, SFTP, or FTPS source feeding 
 | `contract` | [object](#pipelinecontract) | The contract arm: a statement the identity schema owns, called by name. It reads or writes like any other statement, so it carries the same `mode`, `params` and `expect`. |
 | `service` | [object](#pipelineservice) | The service arm: a runtime provider answering rows from process state. It takes only its arguments — there is no statement to run, so no mode and no row-count expectation. |
 | `http` | [object](#pipelinehttp) | The http arm: an outbound call whose response becomes this binding's rows, in the vocabulary every outbound call shares. Rides the outbound gateway — allow-listed hosts, named credentials, timeouts, and a per-host circuit breaker. |
-| `use` | [object](#pipelineuse) | The shared-fragment arm: this step is a named sequence from fragments/, expanded here at manifest load under this step's own id as a prefix. One hop only - a fragment cannot use another (TQL-YAML-1062). Documented in transactional-writes.md. |
 | `sequence` | string | Allocate the next value of a managed document-number sequence instead of running a statement; it binds as `steps.<id>.value`. It has no body beyond its name, which is why it sits beside the arms rather than being one. Documented in transactional-writes.md. |
 | `spool` | string | A context path resolving to an earlier step's spool reference (`steps.<id>.spool`), read as this binding's rows. A chunk reader declares it instead of `sql:` to load what another step extracted — from another connector, or from an API — because a spool is a spool whoever filled it. Documented in jobs.md. |
 | `when` | string | Guard expression on a step: a falsy guard skips it, recording `steps.<id>.skipped` instead of a result. A guard is about whether the step runs at all, not a question for the mechanism, so it sits beside the arm. The declared branch point for decision.* outputs (docs decision-tables). |
@@ -630,15 +619,6 @@ Opt-in retry for transient faults: connect failures, timeouts and 5xx are repeat
 | `attempts` | integer ≥ 1 ≤ 10 | Total attempts including the first (TQL-YAML-1058 outside 1..10). |
 | `backoff` | string | The wait before the second attempt, e.g. 200ms. |
 | `multiplier` | number ≥ 1 | The factor the wait grows by before each further attempt. |
-
-#### pipeline.use
-
-The shared-fragment arm: this step is a named sequence from fragments/, expanded here at manifest load under this step's own id as a prefix. One hop only - a fragment cannot use another (TQL-YAML-1062). Documented in transactional-writes.md.
-
-| Property | Type | Description |
-| --- | --- | --- |
-| `fragment` | string | The declared fragment's name (TQL-YAML-1060 when nothing declares it). |
-| `params` | map of string | Each of the fragment's declared binds to the bindable path or literal supplying it. The contract is checked both ways (TQL-YAML-1061). |
 
 #### pipeline.export
 
@@ -754,22 +734,6 @@ Schema for TesseraQL shared validation rule documents (rules/*.yml): named rules
 | `binds` | map of string | The typed bind contract a reference's params: must satisfy exactly - bind name to declared type, checked against the referencing route's input types at load. Ambient binds (principal.*, audit.*) are supplied by the framework and never listed here. |
 | `code` | string | Default stable rule code, overridable at the reference. |
 | `message` | string | Default message key, overridable at the reference. |
-
-### fragments
-
-Schema for TesseraQL shared step fragment documents (fragments/*.yml): named step sequences a command references from its 'steps:' block through the 'use:' arm, expanded at manifest load. Documented in transactional-writes.md.
-
-| Property | Type | Description |
-| --- | --- | --- |
-| `version` \* | const `tesseraql/v1` | The DSL version. Always tesseraql/v1. |
-| `fragments` | map of [object](#fragmentsfragments) | Named step sequences. Each declares what the sequence is; the id it expands under and the params: wiring stay at the reference. |
-
-#### fragments.fragments
-
-| Property | Type | Description |
-| --- | --- | --- |
-| `binds` | map of string | The typed bind contract a reference's params: must satisfy exactly - a missing bind and an undeclared one both fail the load (TQL-YAML-1061). A step inside the fragment reads one as binds.<name>. |
-| `steps` \* | array of [binding](#binding) | The sequence, in authored order, in the ordinary step vocabulary. SQL files are resolved relative to this document, and the expansion re-paths them for the referencing one. |
 
 ### decisions
 
@@ -982,7 +946,6 @@ One acquisition or one statement. Exactly one mechanism arm names the means — 
 | `contract` | [object](#bindingcontract) | The contract arm: a statement the identity schema owns, called by name. It reads or writes like any other statement, so it carries the same `mode`, `params` and `expect`. |
 | `service` | [object](#bindingservice) | The service arm: a runtime provider answering rows from process state. It takes only its arguments — there is no statement to run, so no mode and no row-count expectation. |
 | `http` | [object](#bindinghttp) | The http arm: an outbound call whose response becomes this binding's rows, in the vocabulary every outbound call shares. Rides the outbound gateway — allow-listed hosts, named credentials, timeouts, and a per-host circuit breaker. |
-| `use` | [object](#bindinguse) | The shared-fragment arm: this step is a named sequence from fragments/, expanded here at manifest load under this step's own id as a prefix. One hop only - a fragment cannot use another (TQL-YAML-1062). Documented in transactional-writes.md. |
 | `sequence` | string | Allocate the next value of a managed document-number sequence instead of running a statement; it binds as `steps.<id>.value`. It has no body beyond its name, which is why it sits beside the arms rather than being one. Documented in transactional-writes.md. |
 | `spool` | string | A context path resolving to an earlier step's spool reference (`steps.<id>.spool`), read as this binding's rows. A chunk reader declares it instead of `sql:` to load what another step extracted — from another connector, or from an API — because a spool is a spool whoever filled it. Documented in jobs.md. |
 | `when` | string | Guard expression on a step: a falsy guard skips it, recording `steps.<id>.skipped` instead of a result. A guard is about whether the step runs at all, not a question for the mechanism, so it sits beside the arm. The declared branch point for decision.* outputs (docs decision-tables). |
@@ -1081,12 +1044,3 @@ Opt-in retry for transient faults: connect failures, timeouts and 5xx are repeat
 | `attempts` | integer ≥ 1 ≤ 10 | Total attempts including the first (TQL-YAML-1058 outside 1..10). |
 | `backoff` | string | The wait before the second attempt, e.g. 200ms. |
 | `multiplier` | number ≥ 1 | The factor the wait grows by before each further attempt. |
-
-#### binding.use
-
-The shared-fragment arm: this step is a named sequence from fragments/, expanded here at manifest load under this step's own id as a prefix. One hop only - a fragment cannot use another (TQL-YAML-1062). Documented in transactional-writes.md.
-
-| Property | Type | Description |
-| --- | --- | --- |
-| `fragment` | string | The declared fragment's name (TQL-YAML-1060 when nothing declares it). |
-| `params` | map of string | Each of the fragment's declared binds to the bindable path or literal supplying it. The contract is checked both ways (TQL-YAML-1061). |

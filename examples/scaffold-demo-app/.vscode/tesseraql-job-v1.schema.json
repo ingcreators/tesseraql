@@ -169,11 +169,6 @@
             "required": [
               "id"
             ],
-            "not": {
-              "required": [
-                "use"
-              ]
-            },
             "additionalProperties": true
           }
         ]
