@@ -107,6 +107,33 @@ separate, later view-layer slice — the contract comes first.
 cross-field rules (`item.qty <= item.maxQty`), or whether the element-level
 `requiredWhen`/bounds carry far enough for a first slice.
 
+**Narrowed 2026-08-25, without building it.** Two things are settled.
+
+*What is actually missing* is only the per-row **cross-field validity** rule. An element's
+`requiredWhen:` already sees its own row as `item.*`, so a condition across a line's fields is
+expressible — but it can only decide requiredness, not correctness. The route-level `validate:`
+cannot reach a row either: the expression language's built-ins are all scalar and none of them
+walks a collection, deliberately. What does work today is a validation SQL rule, which returns
+one row per violation and may name `lines[2].qty` as its `field` — so this is a gap in how
+concisely the rule is *declared*, not in whether it can be *expressed*.
+
+*The scope should be `item.*` and `item_index` only* — not `params.*` or `document.*`. Widening
+it would let an author write a check over shared mutable state in a place that holds no lock.
+The case that shows it is a split delivery: "shipped quantity ≤ remaining" compares against
+`ordered − already shipped`, and the already-shipped total is not in the row. A form that
+carried it as a field would let two concurrent shipments both pass. Keeping the scope to the
+submitted row means only "true or false by looking at this row alone" is sayable — internal
+consistency (`startDate <= endDate`, discounted ≤ list, tax-exempt implies zero tax) — and a
+remaining-quantity check is pushed to where the transaction can hold it. The gallery's
+established shape for exactly that is a validation SQL rule running inside the command's
+transaction (`inventory-app`'s `validate-stock.sql`), not a request-only comparison.
+
+Per-line checks *against database state* — "which of these twenty shipment lines exceeds its
+remaining quantity", reported per line — are a different gap from this one, and are not
+answered by `each:`. Still open if this is ever built: whether `field: qty` auto-resolves to
+`lines[<i>].qty`, and whether the rule short-circuits or reports every offending row (a grid
+form wants every row).
+
 **Outcome (#1062).** Shipped as sketched. `validate.each:` was left out — the element-level
 declarations carried the first slice. Lint `TQL-YAML-1027` holds the one-level rule.
 
