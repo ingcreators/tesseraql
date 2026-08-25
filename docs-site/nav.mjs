@@ -276,4 +276,6 @@ export const EXCLUDED = [
   'boot-phases.md',
   // The SQL survey run over everything else: HTTP seam, confined paths, error envelope, 2026-08-23.
   'duplication-consolidation.md',
+  // Process-control gap analysis: six candidates for the business-app surface, 2026-08-25.
+  'process-control-gaps.md',
 ];
