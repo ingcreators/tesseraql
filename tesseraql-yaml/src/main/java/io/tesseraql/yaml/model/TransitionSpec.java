@@ -30,6 +30,9 @@ import java.util.Map;
  * @param command  the 2-way SQL command (relative to the workflow document), or {@code null}
  * @param assign   the assignee-resolution contract (slice 2), or {@code null}
  * @param security an optional per-transition security override of the workflow default
+ * @param bulk     whether this transition also serves {@code POST {basePath}/_bulk/<id>}, which
+ *                 runs the whole member pipeline once per key, each key in its own transaction
+ *                 (docs/approval-workflow.md, "Bulk transitions")
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record TransitionSpec(String id, String from, String to, GuardSpec guard,
@@ -42,7 +45,16 @@ public record TransitionSpec(String id, String from, String to, GuardSpec guard,
         // engine persists in the transition's transaction, before the author command —
         // values are decision.*/document.*/principal.* paths, literals, or null (a rework
         // transition's declared clearing). Nulls are legal values, so no Map.copyOf.
-        Map<String, Object> stamp) {
+        Map<String, Object> stamp,
+        // The task inbox lists twenty requisitions and approving them was twenty requests
+        // (docs/process-control-gaps.md gap 2). Opting in synthesizes a second endpoint over the
+        // very same pipeline — nothing about a transition may be bypassed by taking many at once.
+        Boolean bulk) {
+
+    /** Whether this transition also serves the {@code _bulk} endpoint. Defaults to false. */
+    public boolean isBulk() {
+        return Boolean.TRUE.equals(bulk);
+    }
 
     /** The command's file, and the binds it needs. */
     public String commandFile() {

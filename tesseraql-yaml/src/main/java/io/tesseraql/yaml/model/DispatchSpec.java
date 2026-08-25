@@ -20,9 +20,18 @@ import java.util.Map;
  *               the results as {@code decision.*} (docs/transition-engine.md track B); a
  *               member alias colliding with a dispatch alias is a lint error
  * @param oneOf  the member transition ids, tried in order
+ * @param bulk   whether this dispatch also serves {@code POST {basePath}/_bulk/<id>}, selecting
+ *               among its members per key exactly as the single endpoint does
+ *               (docs/approval-workflow.md, "Bulk transitions")
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
-public record DispatchSpec(String id, Map<String, DecisionUse> decide, List<String> oneOf) {
+public record DispatchSpec(String id, Map<String, DecisionUse> decide, List<String> oneOf,
+        Boolean bulk) {
+
+    /** Whether this dispatch also serves the {@code _bulk} endpoint. Defaults to false. */
+    public boolean isBulk() {
+        return Boolean.TRUE.equals(bulk);
+    }
 
     public DispatchSpec {
         decide = decide == null

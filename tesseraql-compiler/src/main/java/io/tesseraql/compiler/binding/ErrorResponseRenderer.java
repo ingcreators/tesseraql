@@ -554,6 +554,9 @@ public final class ErrorResponseRenderer implements Step {
             // Approval workflow (roadmap Phase 28): an illegal/concurrent transition is a conflict,
             // a falsy guard an unprocessable entity, an unassigned caller a forbidden.
             case WORKFLOW -> switch (code.number()) {
+                // The bulk key ceiling: the client asked for more than the endpoint accepts,
+                // which is its request to fix by paging, not a fault of the server's.
+                case 3116 -> 400;
                 case 3201 -> 409;
                 case 3202 -> 422;
                 case 3203 -> 403;
