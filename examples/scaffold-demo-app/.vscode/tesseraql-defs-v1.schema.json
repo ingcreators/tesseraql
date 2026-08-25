@@ -746,6 +746,28 @@
               "type": "string",
               "description": "Request timeout for this call (e.g. 10s), overriding tesseraql.http.outbound.requestTimeout."
             },
+            "retry": {
+              "type": "object",
+              "properties": {
+                "attempts": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 10,
+                  "description": "Total attempts including the first (TQL-YAML-1058 outside 1..10)."
+                },
+                "backoff": {
+                  "type": "string",
+                  "description": "The wait before the second attempt, e.g. 200ms."
+                },
+                "multiplier": {
+                  "type": "number",
+                  "minimum": 1,
+                  "description": "The factor the wait grows by before each further attempt."
+                }
+              },
+              "additionalProperties": true,
+              "description": "Opt-in retry for transient faults: connect failures, timeouts and 5xx are repeated; a 4xx and an expectStatus mismatch never are. Unstated numbers come from tesseraql.http.outbound.retry. Every repeated attempt counts against the circuit breaker, the sequence ends the moment the host's circuit opens, and it lives inside a budget of attempts x requestTimeout. Documented in connectors.md."
+            },
             "select": {
               "type": "string",
               "description": "A dotted path into the response JSON naming the part that becomes rows. Default: the whole body."

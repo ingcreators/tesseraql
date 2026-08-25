@@ -57,6 +57,82 @@ class AppLinterHttpSourceTest {
                 """.formatted(recipe, extra));
     }
 
+    /** The same app with a retry: policy on the http source, for the TQL-YAML-1058 checks. */
+    private static void writeRetryingApp(Path dir, String retry) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), """
+                tesseraql:
+                  app:
+                    name: t
+                  http:
+                    outbound:
+                      allowedHosts:
+                        - fx.example.com
+                """);
+        Files.createDirectories(dir.resolve("web/orders"));
+        Files.writeString(dir.resolve("web/orders/orders.sql"), "select 1 as id\n");
+        Files.writeString(dir.resolve("web/orders/get.yml"), """
+                version: tesseraql/v1
+                id: orders.list
+                kind: route
+                recipe: query-json
+                sources:
+                  main:
+                    sql:
+                      file: orders.sql
+                  rates:
+                    http:
+                      url: https://fx.example.com/v1/rates
+                      retry: %s
+                response:
+                  json:
+                    status: 200
+                    body:
+                      rows: main.rows
+                      fx: rates.body
+                """.formatted(retry));
+    }
+
+    private static boolean hasRetryError(List<LintFinding> findings) {
+        return findings.stream().anyMatch(finding -> finding.isError()
+                && "TQL-YAML-1058".equals(finding.code()));
+    }
+
+    @Test
+    void aWellFormedRetryPolicyLintsClean(@TempDir Path dir) throws Exception {
+        writeRetryingApp(dir, "{ attempts: 3, backoff: 200ms, multiplier: 2 }");
+        assertThat(new AppLinter().lint(dir)).noneMatch(LintFinding::isError);
+    }
+
+    /**
+     * Past a handful of attempts a call is holding a thread against a dependency that is down,
+     * which is the circuit breaker's job, not retry's.
+     */
+    @Test
+    void tooManyAttemptsIsAnError(@TempDir Path dir) throws Exception {
+        writeRetryingApp(dir, "{ attempts: 50 }");
+        assertThat(hasRetryError(new AppLinter().lint(dir))).isTrue();
+    }
+
+    @Test
+    void aRetryWithNoAttemptIsAnError(@TempDir Path dir) throws Exception {
+        writeRetryingApp(dir, "{ attempts: 0 }");
+        assertThat(hasRetryError(new AppLinter().lint(dir))).isTrue();
+    }
+
+    @Test
+    void anUnparseableBackoffIsAnError(@TempDir Path dir) throws Exception {
+        writeRetryingApp(dir, "{ attempts: 3, backoff: soon }");
+        assertThat(hasRetryError(new AppLinter().lint(dir))).isTrue();
+    }
+
+    /** A backoff that shrinks is the hammering retry exists to avoid. */
+    @Test
+    void aShrinkingBackoffIsAnError(@TempDir Path dir) throws Exception {
+        writeRetryingApp(dir, "{ attempts: 3, multiplier: 0.5 }");
+        assertThat(hasRetryError(new AppLinter().lint(dir))).isTrue();
+    }
+
     @Test
     void anAllowListedSourceOnAQueryRouteLintsClean(@TempDir Path dir) throws Exception {
         writeApp(dir, "query-json", "fx.example.com", "");

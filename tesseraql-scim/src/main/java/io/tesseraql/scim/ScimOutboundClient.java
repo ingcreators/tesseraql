@@ -136,7 +136,8 @@ public final class ScimOutboundClient {
         }
         try {
             return gateway.exchange(
-                    new HttpCallSpec(method, url, Map.of(), null, null, null, null, null, null),
+                    new HttpCallSpec(method, url, Map.of(), null, null, null, null, null, null,
+                            null),
                     body == null ? null : body.getBytes(StandardCharsets.UTF_8), headers);
         } catch (TqlException refused) {
             if (HttpOutbound.HOST_DENIED.equals(refused.code())) {

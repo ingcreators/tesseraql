@@ -8,6 +8,23 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Outbound `http:` bindings can declare a retry policy.** `retry:`/`backoff:` appeared nowhere
+  on the shipped surface: retry existed in exactly one place, the outbox dispatcher's
+  `maxAttempts`, so a synchronous `http:` binding — the rate lookup a command needs before it
+  writes, the enrichment a page renders from — answered the normal weather of an external API
+  with a binary `onError: fail | empty`: a user-visible failure, or a silently empty panel. The
+  `http:` arm now takes `retry: { attempts, backoff, multiplier }`, with the numbers a binding
+  leaves out coming from `tesseraql.http.outbound.retry`. Connect failures, timeouts and `5xx`
+  are repeated; a `4xx` and a declared `expectStatus` never are — the same line the circuit
+  breaker draws. Retry stays **opt-in per binding**: the configuration supplies numbers, not a
+  switch, because turning it on for every call would change the load every existing declaration
+  puts on its dependency. Every attempt counts against the per-host circuit breaker, the span
+  carries `attempts` and retries meter as `tesseraql.http.retries`, the sequence stops the moment
+  the host's circuit opens, and it lives inside a budget of `attempts × requestTimeout` that the
+  backoff waits spend too — a retry that cannot fit another whole request is not started. An
+  invalid policy is `TQL-YAML-1058`. Closes gap 3 of
+  [process-control-gaps.md](docs/process-control-gaps.md).
+
 - **Line items get an input contract.** A header-plus-lines document is the most common shape a
   business form submits, and the input contract stopped at the array boundary: `items:` accepted
   only `type:`/`enum:` for scalar elements, so an array of objects could declare nothing at all.

@@ -71,7 +71,7 @@ public final class WebhookNotifier {
         HttpCallSpec call = new HttpCallSpec("POST", url, Map.of(), Map.of(),
                 channel.setting("credential").orElse(null), null, null,
                 channel.setting("connectTimeout").orElse(null),
-                channel.setting("requestTimeout").orElse(null));
+                channel.setting("requestTimeout").orElse(null), null);
 
         Map<String, Object> result;
         try {

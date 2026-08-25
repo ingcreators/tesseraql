@@ -197,10 +197,21 @@ The http arm: an outbound call whose response becomes this binding's rows, in th
 | `expectStatus` | integer | The exact status that counts as success; the default is any 2xx. A mismatch fails the call without tripping the circuit breaker — it is a deterministic rejection, not a sign the dependency is down. |
 | `connectTimeout` | string | Connect timeout for this call (e.g. 2s), overriding tesseraql.http.outbound.connectTimeout. |
 | `requestTimeout` | string | Request timeout for this call (e.g. 10s), overriding tesseraql.http.outbound.requestTimeout. |
+| `retry` | [object](#stepshttpretry) | Opt-in retry for transient faults: connect failures, timeouts and 5xx are repeated; a 4xx and an expectStatus mismatch never are. Unstated numbers come from tesseraql.http.outbound.retry. Every repeated attempt counts against the circuit breaker, the sequence ends the moment the host's circuit opens, and it lives inside a budget of attempts x requestTimeout. Documented in connectors.md. |
 | `select` | string | A dotted path into the response JSON naming the part that becomes rows. Default: the whole body. |
 | `onError` | string | `fail` (default) fails the request or step; `empty` degrades to zero rows and an `error` entry, and the page still renders. The degradation is logged and metered — it is not silent. |
 | `readOnly` | boolean | The author's assertion that the call has no side effect, required on a command route: the write can roll back and the request cannot. |
 | `mode` | string | How the acquired rows are delivered: `query` (default — held and published as rows) or `query-spool` (streamed to a spool a later chunk: step loads, so an API result can be written to the database without holding it). A call reads, so the SQL write modes are not modes it has. |
+
+##### steps.http.retry
+
+Opt-in retry for transient faults: connect failures, timeouts and 5xx are repeated; a 4xx and an expectStatus mismatch never are. Unstated numbers come from tesseraql.http.outbound.retry. Every repeated attempt counts against the circuit breaker, the sequence ends the moment the host's circuit opens, and it lives inside a budget of attempts x requestTimeout. Documented in connectors.md.
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `attempts` | integer ≥ 1 ≤ 10 | Total attempts including the first (TQL-YAML-1058 outside 1..10). |
+| `backoff` | string | The wait before the second attempt, e.g. 200ms. |
+| `multiplier` | number ≥ 1 | The factor the wait grows by before each further attempt. |
 
 ### validate
 
@@ -589,10 +600,21 @@ The http arm: an outbound call whose response becomes this binding's rows, in th
 | `expectStatus` | integer | The exact status that counts as success; the default is any 2xx. A mismatch fails the call without tripping the circuit breaker — it is a deterministic rejection, not a sign the dependency is down. |
 | `connectTimeout` | string | Connect timeout for this call (e.g. 2s), overriding tesseraql.http.outbound.connectTimeout. |
 | `requestTimeout` | string | Request timeout for this call (e.g. 10s), overriding tesseraql.http.outbound.requestTimeout. |
+| `retry` | [object](#pipelinehttpretry) | Opt-in retry for transient faults: connect failures, timeouts and 5xx are repeated; a 4xx and an expectStatus mismatch never are. Unstated numbers come from tesseraql.http.outbound.retry. Every repeated attempt counts against the circuit breaker, the sequence ends the moment the host's circuit opens, and it lives inside a budget of attempts x requestTimeout. Documented in connectors.md. |
 | `select` | string | A dotted path into the response JSON naming the part that becomes rows. Default: the whole body. |
 | `onError` | string | `fail` (default) fails the request or step; `empty` degrades to zero rows and an `error` entry, and the page still renders. The degradation is logged and metered — it is not silent. |
 | `readOnly` | boolean | The author's assertion that the call has no side effect, required on a command route: the write can roll back and the request cannot. |
 | `mode` | string | How the acquired rows are delivered: `query` (default — held and published as rows) or `query-spool` (streamed to a spool a later chunk: step loads, so an API result can be written to the database without holding it). A call reads, so the SQL write modes are not modes it has. |
+
+##### pipeline.http.retry
+
+Opt-in retry for transient faults: connect failures, timeouts and 5xx are repeated; a 4xx and an expectStatus mismatch never are. Unstated numbers come from tesseraql.http.outbound.retry. Every repeated attempt counts against the circuit breaker, the sequence ends the moment the host's circuit opens, and it lives inside a budget of attempts x requestTimeout. Documented in connectors.md.
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `attempts` | integer ≥ 1 ≤ 10 | Total attempts including the first (TQL-YAML-1058 outside 1..10). |
+| `backoff` | string | The wait before the second attempt, e.g. 200ms. |
+| `multiplier` | number ≥ 1 | The factor the wait grows by before each further attempt. |
 
 #### pipeline.export
 
@@ -999,7 +1021,18 @@ The http arm: an outbound call whose response becomes this binding's rows, in th
 | `expectStatus` | integer | The exact status that counts as success; the default is any 2xx. A mismatch fails the call without tripping the circuit breaker — it is a deterministic rejection, not a sign the dependency is down. |
 | `connectTimeout` | string | Connect timeout for this call (e.g. 2s), overriding tesseraql.http.outbound.connectTimeout. |
 | `requestTimeout` | string | Request timeout for this call (e.g. 10s), overriding tesseraql.http.outbound.requestTimeout. |
+| `retry` | [object](#bindinghttpretry) | Opt-in retry for transient faults: connect failures, timeouts and 5xx are repeated; a 4xx and an expectStatus mismatch never are. Unstated numbers come from tesseraql.http.outbound.retry. Every repeated attempt counts against the circuit breaker, the sequence ends the moment the host's circuit opens, and it lives inside a budget of attempts x requestTimeout. Documented in connectors.md. |
 | `select` | string | A dotted path into the response JSON naming the part that becomes rows. Default: the whole body. |
 | `onError` | string | `fail` (default) fails the request or step; `empty` degrades to zero rows and an `error` entry, and the page still renders. The degradation is logged and metered — it is not silent. |
 | `readOnly` | boolean | The author's assertion that the call has no side effect, required on a command route: the write can roll back and the request cannot. |
 | `mode` | string | How the acquired rows are delivered: `query` (default — held and published as rows) or `query-spool` (streamed to a spool a later chunk: step loads, so an API result can be written to the database without holding it). A call reads, so the SQL write modes are not modes it has. |
+
+##### binding.http.retry
+
+Opt-in retry for transient faults: connect failures, timeouts and 5xx are repeated; a 4xx and an expectStatus mismatch never are. Unstated numbers come from tesseraql.http.outbound.retry. Every repeated attempt counts against the circuit breaker, the sequence ends the moment the host's circuit opens, and it lives inside a budget of attempts x requestTimeout. Documented in connectors.md.
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `attempts` | integer ≥ 1 ≤ 10 | Total attempts including the first (TQL-YAML-1058 outside 1..10). |
+| `backoff` | string | The wait before the second attempt, e.g. 200ms. |
+| `multiplier` | number ≥ 1 | The factor the wait grows by before each further attempt. |

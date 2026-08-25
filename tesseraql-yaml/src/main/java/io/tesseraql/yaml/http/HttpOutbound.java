@@ -65,6 +65,9 @@ public final class HttpOutbound {
     private static final int DEFAULT_CIRCUIT_BREAKER_THRESHOLD = 5;
     private static final Duration DEFAULT_CIRCUIT_BREAKER_OPEN = Duration.ofSeconds(30);
     private static final long DEFAULT_MAX_RESPONSE_BYTES = 10L * 1024 * 1024;
+    private static final int DEFAULT_RETRY_ATTEMPTS = 3;
+    private static final Duration DEFAULT_RETRY_BACKOFF = Duration.ofMillis(200);
+    private static final double DEFAULT_RETRY_MULTIPLIER = 2;
 
     private final AppConfig config;
     private final boolean present;
@@ -75,11 +78,15 @@ public final class HttpOutbound {
     private final int circuitBreakerThreshold;
     private final Duration circuitBreakerOpenDuration;
     private final long maxResponseBytes;
+    private final int retryAttempts;
+    private final Duration retryBackoff;
+    private final double retryMultiplier;
 
     private HttpOutbound(AppConfig config, boolean present, List<String> allowedHosts,
             Map<String, Credential> credentials, Duration connectTimeout, Duration requestTimeout,
             int circuitBreakerThreshold, Duration circuitBreakerOpenDuration,
-            long maxResponseBytes) {
+            long maxResponseBytes, int retryAttempts, Duration retryBackoff,
+            double retryMultiplier) {
         this.config = config;
         this.present = present;
         this.allowedHosts = List.copyOf(allowedHosts);
@@ -91,6 +98,9 @@ public final class HttpOutbound {
         this.circuitBreakerThreshold = circuitBreakerThreshold;
         this.circuitBreakerOpenDuration = circuitBreakerOpenDuration;
         this.maxResponseBytes = maxResponseBytes;
+        this.retryAttempts = retryAttempts;
+        this.retryBackoff = retryBackoff;
+        this.retryMultiplier = retryMultiplier;
     }
 
     /** Loads the outbound policy, failing fast on an unsupported credential {@code type}. */
@@ -114,10 +124,21 @@ public final class HttpOutbound {
                 .getString("tesseraql.http.outbound.circuitBreaker.openDuration")
                 .map(Durations::parse).orElse(DEFAULT_CIRCUIT_BREAKER_OPEN);
         long maxResponseBytes = maxResponseBytes(config);
+        // The numbers a binding's retry: may leave out. They are defaults, not a switch: a
+        // binding that declares no retry: still gets one attempt, because turning retry on for
+        // every outbound call by configuration would silently change the load every existing
+        // declaration puts on its dependency.
+        int retryAttempts = (int) config.getDouble("tesseraql.http.outbound.retry.attempts")
+                .orElse(DEFAULT_RETRY_ATTEMPTS);
+        Duration retryBackoff = config.getString("tesseraql.http.outbound.retry.backoff")
+                .map(Durations::parse).orElse(DEFAULT_RETRY_BACKOFF);
+        double retryMultiplier = config.getDouble("tesseraql.http.outbound.retry.multiplier")
+                .orElse(DEFAULT_RETRY_MULTIPLIER);
 
         Map<String, Credential> credentials = new LinkedHashMap<>();
         HttpOutbound loaded = new HttpOutbound(config, present, allowedHosts, credentials,
-                connectTimeout, requestTimeout, threshold, openDuration, maxResponseBytes);
+                connectTimeout, requestTimeout, threshold, openDuration, maxResponseBytes,
+                retryAttempts, retryBackoff, retryMultiplier);
         if (config.navigate("tesseraql.http.outbound.credentials") instanceof Map<?, ?> declared) {
             declared.forEach((name, settings) -> {
                 if (!(settings instanceof Map<?, ?> raw)) {
@@ -163,6 +184,21 @@ public final class HttpOutbound {
     /** The response-body ceiling in bytes; {@code -1} disables the bound. */
     public long maxResponseBytes() {
         return maxResponseBytes;
+    }
+
+    /** Default total attempts for a binding whose {@code retry:} does not say. */
+    public int retryAttempts() {
+        return retryAttempts;
+    }
+
+    /** Default wait before a second attempt, for a binding whose {@code retry:} does not say. */
+    public Duration retryBackoff() {
+        return retryBackoff;
+    }
+
+    /** Default backoff growth factor, for a binding whose {@code retry:} does not say. */
+    public double retryMultiplier() {
+        return retryMultiplier;
     }
 
     /** Whether any {@code tesseraql.http.outbound} block is declared at all. */

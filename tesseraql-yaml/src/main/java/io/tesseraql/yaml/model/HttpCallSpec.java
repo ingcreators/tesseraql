@@ -34,6 +34,7 @@ import java.util.Map;
  * @param expectStatus   a specific success status to require; unset, any 2xx is success
  * @param connectTimeout per-step connect-timeout override (e.g. {@code 5s}), else the config default
  * @param requestTimeout per-step request-timeout override (e.g. {@code 30s}), else the config default
+ * @param retry          the opt-in retry policy for transient faults, or null for one attempt
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record HttpCallSpec(
@@ -45,7 +46,8 @@ public record HttpCallSpec(
         String body,
         @JsonProperty("expectStatus") Integer expectStatus,
         String connectTimeout,
-        String requestTimeout) {
+        String requestTimeout,
+        RetrySpec retry) {
 
     public HttpCallSpec {
         headers = headers == null ? Map.of() : Map.copyOf(headers);

@@ -50,7 +50,7 @@ public final class GatewayJwksFetcher implements JwksFetcher {
             response = gateway.exchange(
                     new HttpCallSpec("GET", jwksUri.toString(),
                             Map.of("Accept", "application/json"), null, null, null, null,
-                            requestTimeout, requestTimeout),
+                            requestTimeout, requestTimeout, null),
                     null, Map.of());
         } catch (TqlException refused) {
             // The gateway's refusal (denied host, open circuit, transport failure) is already

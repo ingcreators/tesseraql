@@ -71,7 +71,7 @@ public final class OidcHttp {
         try {
             return gateway.exchange(
                     new HttpCallSpec(method, uri.toString(), Map.of(), null, null, null, null,
-                            requestTimeout, requestTimeout),
+                            requestTimeout, requestTimeout, null),
                     body, headers);
         } catch (TqlException refused) {
             // The gateway's refusal (denied host, open circuit, transport failure) is already
