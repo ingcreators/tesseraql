@@ -307,11 +307,13 @@ where shipped_at = current_date - 3
   and status <> 'cancelled'
 ```
 
-That query decides *at run time* who gets a reminder. A cancelled order simply stops matching,
-so **no cancellation mechanism is needed at all**; changing the window from three days to two
-takes effect immediately, including for orders already shipped; the run has an execution record
-you can inspect and re-run for a date; and a hundred thousand reminders are one pass rather than
-a hundred thousand rows waiting in a table.
+That query decides *at run time* who gets a reminder, and everything follows from that:
+
+- A cancelled order simply stops matching, so **no cancellation mechanism is needed at all**.
+- Changing the window from three days to two takes effect immediately, for orders already
+  shipped as much as for the next one.
+- The run has an execution record you can inspect, and re-run for a given date.
+- A hundred thousand reminders are one pass, not a hundred thousand rows waiting in a table.
 
 Scheduled delivery makes the opposite trade: it **freezes the decision at commit time**. That is
 worth having when the decision genuinely cannot be re-derived later, which is a narrower set than
