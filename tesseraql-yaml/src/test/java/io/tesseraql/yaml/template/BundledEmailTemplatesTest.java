@@ -79,7 +79,9 @@ class BundledEmailTemplatesTest {
         assertThat(html).contains("<title>Notice</title>");
         assertThat(html).containsOnlyOnce("Hello Suzuki.");
         assertThat(html).contains("href=\"https://example.com/t/1\"");
-        assertThat(html).contains("background-color:#2563eb");
+        // The button surface is the accent ramp's action step baked to sRGB hex (mail
+        // clients cannot parse oklch()); the literal moves whenever the ramp does.
+        assertThat(html).contains("background-color:#2c60e9");
         assertThat(html).doesNotContain("th:replace");
     }
 
