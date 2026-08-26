@@ -6,6 +6,21 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ## Unreleased
 
+### Changed
+
+- **Hypermedia Components 0.2.1** (from 0.1.15) — the kit's OKLCH color release and its
+  business-app follow-up. It is a drop-in here. The kit's one breaking change is the
+  accent-axis rename (`data-color` values `indigo` / `emerald` / `rose` / `amber` became
+  `teal` / `lime` / `orange` / `fuchsia`), and TesseraQL sets no accent axis. Every class,
+  custom property, and behavior export the framework consumes survives unchanged; the six
+  new behaviors and nine new recipes are additive. The visible change is that the kit's
+  chromatic ramps are regenerated on a shared lightness ladder, so every surface reading
+  `--hc-color-*` re-themes itself — no framework CSS moves with it. The bundled
+  `tql/email/*` fragments are rebaked by the bump itself, since the build unpacks them
+  from the WebJar. That regen also picks up the kit's fix for `oklch()` leaking into the
+  email render target: mail clients cannot parse it, so every baked color is sRGB hex
+  again. The published fragment contract is unchanged.
+
 ### Fixed
 
 - **Withdrawing a scheduled notification now stops the deliveries after the one in flight.**
