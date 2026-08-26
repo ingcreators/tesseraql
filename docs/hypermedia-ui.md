@@ -344,8 +344,14 @@ their own `--hc-button-primary-bg`, `--hc-checkbox-checked-bg`, and so on, each 
 concrete value per theme. Overriding only the semantic variables therefore recolors nothing
 visible, which is why the builder generates the whole block rather than a handful of lines.
 
-Two limits are worth knowing before you commit to a custom accent. The value must be an
-ordinary axis name — lower-case letters, digits, and dashes — and the stylesheet must live
+One surface does not follow a custom theme yet: bare links in prose. The kit does not own
+bare `<a>` colors, so the framework hand-picks one per theme, and a `:visited` rule cannot
+read a token — browsers drop `var()` there to avoid leaking history. Filed upstream as
+[#569](https://github.com/ingcreators/hypermedia-components/issues/569); links in components
+(nav, breadcrumb, table of contents) are unaffected and re-theme normally.
+
+Two further limits are worth knowing before you commit to a custom accent. The value must be
+an ordinary axis name — lower-case letters, digits, and dashes — and the stylesheet must live
 under the app's own `assets/`; anything else is ignored rather than served. And a custom
 accent does not reach mail: the bundled `tql/email/*` fragments are baked at the default
 accent with the slate neutral. To theme mail as well, eject the fragments against your

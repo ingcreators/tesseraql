@@ -519,6 +519,46 @@ declarative markup the behavior already reads), plus an explicit `data-hc-static
 JS is genuinely required, and a `staticSafe` manifest flag so editor canvases can badge
 approximate previews honestly.
 
+## Brief 12 — document-level link tokens + bare-anchor base rules
+
+*Filed: [ingcreators/hypermedia-components#569](https://github.com/ingcreators/hypermedia-components/issues/569) (found 2026-08-26, hc 0.2.1 adoption + theme switching — docs/hypermedia-ui.md).*
+
+> **Status: filed. TesseraQL carries the stand-in.** `tesseraql.css` hand-picks a link color
+> per theme — the only place the framework hard-codes a color at all, and the only surface
+> that does not follow a theme built with the kit's theme builder. It stays until the token
+> pair ships, because a consumer cannot express it any other way (see below).
+
+### Problem
+
+`hc.base.css` takes over the document's color — `body` gets `--hc-color-bg` and
+`--hc-color-text` — but stops short of bare `<a>`. Anchors outside a component fall to the UA
+defaults: `-webkit-link` blue and `:visited` purple. Both are theme-blind. Neither follows
+`data-theme`, `data-color`, or `data-neutral`, so the visited purple is near-illegible on a
+dark surface and the blue diverges from any non-default accent.
+
+Consumers hand-pick literals in response, and it has to be literals. `:visited` rules cannot
+resolve custom properties — engines drop `var()` there deliberately, since resolving it would
+leak history through the cascade. So the one part of the theme a consumer cannot delegate to
+the kit is also the one part it cannot express with tokens.
+
+0.2.0 made this worse. Regularizing the chromatic ramps on a shared lightness ladder moved
+every step, so every hand-picked literal in every consumer silently drifted off the ladder.
+Nothing warns, because nothing knows the literal was meant to be a ramp step.
+
+### Proposed
+
+A document-level token pair (`--hc-color-link`, `--hc-color-link-hover`,
+`--hc-color-link-visited`), generated per theme like every other token. The existing
+`*-link-fg` tokens are not this: `--hc-toc-link-fg` and its siblings are neutral-ramp values
+for nav affordances, where a prose link wants the accent family.
+
+Plus the bare-anchor rules themselves in `@layer hc.base`, with the `:visited` declaration
+emitted as the resolved literal per theme block. That second half is the reason this belongs
+upstream rather than in an app: the `:visited` restriction bites at runtime, when custom
+properties resolve, while the token build runs at build time and already bakes concrete values
+per theme. The build can therefore bake a theme-following visited color that no consumer can
+write by hand.
+
 ## Notes
 
 - Two adjacent gaps were found to be **already shipped** in hc 0.1.5 and have been adopted, not
