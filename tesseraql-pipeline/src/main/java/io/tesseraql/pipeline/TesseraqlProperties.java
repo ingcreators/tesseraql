@@ -198,6 +198,18 @@ public final class TesseraqlProperties {
     public static final String UI_NEUTRAL_BEAN = "tesseraqlUiNeutral";
     /** Registry bean name for the app's control density (docs/hypermedia-ui.md), if non-default. */
     public static final String UI_DENSITY_BEAN = "tesseraqlUiDensity";
+    /**
+     * Registry bean name for the app's accent axis — the kit's {@code data-color} value
+     * (docs/hypermedia-ui.md), if non-default. A built-in axis links its token sheet; a name the
+     * kit does not ship is a theme-builder accent whose block rides in {@link #UI_STYLESHEET_BEAN}.
+     */
+    public static final String UI_COLOR_BEAN = "tesseraqlUiColor";
+    /**
+     * Registry bean name for the app's own token stylesheet (docs/hypermedia-ui.md "Custom
+     * themes"), if any: a path under the app's assets, linked after the kit's token sheets so a
+     * theme-builder export overrides them in the same {@code @layer hc.tokens}.
+     */
+    public static final String UI_STYLESHEET_BEAN = "tesseraqlUiStylesheet";
     /** Registry bean name for the in-app inbox store (roadmap Phase 49), if any inbox channel. */
     public static final String INBOX_STORE_BEAN = "tesseraqlInboxStore";
 

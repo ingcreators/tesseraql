@@ -19,10 +19,14 @@
      touch-first app loosens with one config line without touching markup.
      data-neutral: the app's neutral ramp (`_neutral`, tesseraql.ui.neutral — slate unless
      overridden; the kit default renders no attribute). The variant ramps ship as separate
-     token sheets, hence the conditional link below. -->
+     token sheets, hence the conditional link below.
+     data-color: the app's accent axis (`_color`, tesseraql.ui.color — the kit's own accent
+     unless overridden, which renders no attribute). A name the kit ships an axis for links
+     that sheet too; any other name is a theme builder's accent, and the block that defines it
+     comes from the app's own stylesheet (tesseraql.ui.stylesheet). -->
 <html xmlns:th="http://www.thymeleaf.org" th:fragment="shell-impl(title, nav, header, content, collapsible, density)"
       lang="en" th:lang="${#locale.toLanguageTag()}" data-theme="dark"
-      th:attr="data-theme=${_theme != null ? _theme : 'dark'}, data-density=${density != null ? density : _density}, data-neutral=${_neutral}">
+      th:attr="data-theme=${_theme != null ? _theme : 'dark'}, data-density=${density != null ? density : _density}, data-neutral=${_neutral}, data-color=${_color}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -40,6 +44,14 @@
      ramp, so a non-default neutral links its token sheet on top. -->
 <link rel="stylesheet" th:if="${_neutral}"
       th:href="@{|/assets/vendor/hypermedia-components__core/dist/hc.tokens.neutral-${_neutral}.css|}">
+<!-- The accent axis, same shape as the neutral ramp above: a built-in axis links the token
+     sheet the kit ships for it, and any other name is a theme builder's accent, whose
+     generated block rides in the app stylesheet below instead. -->
+<link rel="stylesheet" th:if="${_colorSheet}"
+      th:href="@{|/assets/vendor/hypermedia-components__core/dist/hc.tokens.color-${_colorSheet}.css|}">
+<!-- The app's own token stylesheet (a theme builder export, docs/hypermedia-ui.md
+     "Custom themes"): last of the token layer, so its block wins inside @layer hc.tokens. -->
+<link rel="stylesheet" th:if="${_stylesheet}" th:href="@{|/assets/${_stylesheet}|}">
 <link rel="stylesheet" th:href="@{/assets/_tesseraql/tesseraql.css}">
 <script th:src="@{/assets/vendor/htmx.org/dist/htmx.min.js}" defer></script>
 <!-- htmx's sse extension (bundled in the htmx WebJar): the EventSource behind the live
