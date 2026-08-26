@@ -6,6 +6,29 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ## Unreleased
 
+### Added
+
+- **An app switches to a theme built with the kit's theme builder, in two config keys.** The
+  framework already re-themed itself for free — every surface it renders reads the kit's
+  `--hc-*` tokens — but there was nowhere to say which theme. `tesseraql.ui.theme`,
+  `.neutral` and `.density` covered light/dark, the gray ramp, and control sizing; the accent
+  had no key at all, and an app had no way to load a stylesheet of its own. So the one axis a
+  business most wants to set, its brand color, was the one axis it could not. Now
+  `tesseraql.ui.color` sets the kit's `data-color` — the four built-in axes link the token
+  sheet the kit ships for each, and any other name is a theme builder's accent — and
+  `tesseraql.ui.stylesheet` links a generated stylesheet out of the app's `assets/`,
+  **after** the kit's own token sheets. That order is the whole mechanism: both declare their
+  variables inside `@layer hc.tokens`, so the last one loaded wins. The builder's
+  "Theme CSS block" export pairs with `color`; its "Full token CSS" export needs `stylesheet`
+  alone. Deliberately no color arithmetic on our side — a theme is about fifty component
+  variables baked per axis, not seven semantic ones, so the framework links what the builder
+  generated instead of deriving anything. Refusals are shapes rather than enums, since a
+  custom axis name cannot be enumerated: the axis must be an ordinary name (lower-case
+  letters, digits, dashes) and the stylesheet must resolve under the app's own assets.
+  Documented in [hypermedia-ui.md](docs/hypermedia-ui.md) under "Custom themes", with the
+  caveat that a custom accent does not reach mail — the bundled `tql/email/*` fragments stay
+  baked at the default accent, and theming those is still the eject-and-shadow path.
+
 ### Changed
 
 - **Hypermedia Components 0.2.1** (from 0.1.15) — the kit's OKLCH color release and its

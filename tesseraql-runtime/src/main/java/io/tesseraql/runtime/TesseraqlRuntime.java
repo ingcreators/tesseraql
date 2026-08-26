@@ -48,6 +48,12 @@ public final class TesseraqlRuntime implements AutoCloseable {
 
     /** The declared drain bound, in milliseconds; Long.MAX_VALUE when forceOnTimeout is off. */
     static final String SHUTDOWN_TIMEOUT_BEAN = "tesseraqlShutdownTimeoutMillis";
+    /** The shape of a {@code data-color} axis name — the kit's own, or a theme builder's. */
+    private static final java.util.regex.Pattern AXIS_NAME = java.util.regex.Pattern
+            .compile("[a-z][a-z0-9-]{0,31}");
+    /** An app-asset stylesheet path: relative, no traversal, and a stylesheet. */
+    private static final java.util.regex.Pattern ASSET_STYLESHEET = java.util.regex.Pattern
+            .compile("[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*\\.css");
 
     private final RuntimeContext runtimeContext;
     private final Map<String, HikariDataSource> dataSources;
@@ -769,6 +775,24 @@ public final class TesseraqlRuntime implements AutoCloseable {
             if (uiDensity != null
                     && java.util.Set.of("comfortable", "compact", "dense").contains(uiDensity)) {
                 context.bind(TesseraqlProperties.UI_DENSITY_BEAN, uiDensity);
+            }
+            // The app's accent axis (docs/hypermedia-ui.md "UI defaults"): a built-in axis name,
+            // or the name of a theme-builder accent whose generated block the app ships in its
+            // own stylesheet below. Only the built-in names reach a URL (the kit's token sheet);
+            // a custom name is an attribute value and nothing more, so the axis-name shape is
+            // what is checked here rather than an enum.
+            String uiColor = manifest.config().getString("tesseraql.ui.color").orElse(null);
+            if (uiColor != null && AXIS_NAME.matcher(uiColor).matches()) {
+                context.bind(TesseraqlProperties.UI_COLOR_BEAN, uiColor);
+            }
+            // The app's own token stylesheet (docs/hypermedia-ui.md "Custom themes"): a theme
+            // builder export served out of the app's assets, so the value is an asset path and
+            // never an absolute or off-origin URL — a theme is the app's own file.
+            String uiStylesheet = manifest.config().getString("tesseraql.ui.stylesheet")
+                    .orElse(null);
+            if (uiStylesheet != null && ASSET_STYLESHEET.matcher(uiStylesheet).matches()
+                    && !uiStylesheet.contains("..")) {
+                context.bind(TesseraqlProperties.UI_STYLESHEET_BEAN, uiStylesheet);
             }
             // Whether the password form (and so self-service password change) is on: the same
             // flag the bundled login page reads (roadmap Phase 48 slice 4).

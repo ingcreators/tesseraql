@@ -274,18 +274,26 @@ and onto pre-login pages (the cookie re-sync in [account.md](account.md)). **Nev
 and the two would fight after the next sign-in. Signed-out pages have no CSRF meta tag, so
 a toggle there flips the current page only.
 
-## UI defaults: neutral ramp and density
+## UI defaults: accent, neutral ramp and density
 
-Every page rendered through the framework shell (`tql/shell`) carries two app-wide visual
-defaults, both operator-overridable in `config/tesseraql.yml`:
+Every page rendered through the framework shell (`tql/shell`) carries three app-wide visual
+defaults, all operator-overridable in `config/tesseraql.yml`:
 
 ```yaml
 tesseraql:
   ui:
-    neutral: slate       # neutral | slate | zinc | stone   (default: slate)
-    density: compact     # comfortable | compact | dense    (default: compact)
+    color: default       # default | teal | lime | orange | fuchsia  (default: default)
+    neutral: slate       # neutral | slate | zinc | stone            (default: slate)
+    density: compact     # comfortable | compact | dense             (default: compact)
 ```
 
+- **`color`** picks the kit's accent axis — the primary action color, the focus ring, the
+  checked checkbox, the current pagination item. The five built-in axes sit 72° apart around
+  the hue wheel, so no two read as shades of each other and none collides with the error,
+  warning, or success colors. The default is the kit's own blue, which renders no attribute
+  and links no extra stylesheet; the other four link their token sheet
+  (`hc.tokens.color-<axis>.css`) on top of `hc.min.css`. A name that is not one of the five is
+  a **custom theme** — see below.
 - **`neutral`** picks the kit's neutral color ramp — the grays behind pages, cards, borders,
   and muted text, in both themes. The default is **slate** (a cool, blue-leaning neutral):
   it sits in the same hue family as the brand navy and the kit's blue action/link colors, the
@@ -298,9 +306,51 @@ tesseraql:
   touch-target guideline. The framework consoles (Studio, Operations, IAM Admin) always pin
   `compact`; they are keyboard-and-mouse work surfaces by design.
 
-Values outside the kit's enums are ignored (the theme's rule). Both apply on the next
+Values outside the kit's enums are ignored (the theme's rule). All three apply on the next
 restart; nothing is stored per user — these are the app's defaults, and the per-user choice
 surface remains the theme toggle above.
+
+## Custom themes
+
+The framework hard-codes no color. Every surface it renders reads the kit's `--hc-*` tokens,
+so a theme built with the kit's
+[theme builder](https://ingcreators.com/hypermedia-components/tokens/theme-builder/) drops in
+whole. Point one config key at the generated stylesheet:
+
+```yaml
+tesseraql:
+  ui:
+    color: brand              # the axis name you gave the theme, if it is an accent theme
+    stylesheet: theme/brand.css   # under the app's assets/ directory
+```
+
+`stylesheet` is a path relative to the app's `assets/` directory — `assets/theme/brand.css`
+in the example — and it is linked **after** the kit's own token sheets. That order is what
+makes it work: both the kit's sheets and a generated one declare their variables inside
+`@layer hc.tokens`, so the last one loaded wins.
+
+Which of the builder's exports you use decides whether you also set `color`:
+
+- The **Theme CSS block** export defines one named accent as a `[data-color="<name>"]` block.
+  Set `color` to that name. The framework emits the attribute and links your stylesheet, and
+  links no vendor sheet — the kit ships no axis by that name, and your block is what defines
+  it.
+- The **Full token CSS** export customises the default look instead, including the neutral
+  ramp, the control radius, and the typography. It needs no `color` at all: drop the file in
+  and set `stylesheet` alone.
+
+A theme is a set of about fifty component variables, not seven semantic ones. Components read
+their own `--hc-button-primary-bg`, `--hc-checkbox-checked-bg`, and so on, each baked to a
+concrete value per theme. Overriding only the semantic variables therefore recolors nothing
+visible, which is why the builder generates the whole block rather than a handful of lines.
+
+Two limits are worth knowing before you commit to a custom accent. The value must be an
+ordinary axis name — lower-case letters, digits, and dashes — and the stylesheet must live
+under the app's own `assets/`; anything else is ignored rather than served. And a custom
+accent does not reach mail: the bundled `tql/email/*` fragments are baked at the default
+accent with the slate neutral. To theme mail as well, eject the fragments against your
+theme's token file and check them in under the app's `templates/tql/email/`, which shadows
+the bundled library — see [HTML mail](notifications.md#html-mail).
 
 ## Charts
 

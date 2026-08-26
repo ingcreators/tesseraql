@@ -343,6 +343,25 @@ final class ShellChrome {
         if (!"comfortable".equals(density)) {
             model.put("_density", density);
         }
+        // The accent axis, and whether the kit ships its token sheet. `default` is the kit's own
+        // accent (it rides in hc.min.css), so it renders no attribute and links nothing; the four
+        // built-in axes link their sheet; any other name is a theme-builder accent whose block
+        // the app's own stylesheet below carries, so the attribute goes out with no vendor link.
+        String color = validAxisName(exchange.beans().lookup(
+                TesseraqlProperties.UI_COLOR_BEAN, String.class));
+        if (color != null && !"default".equals(color)) {
+            model.put("_color", color);
+            if (COLOR_SHEETS.contains(color)) {
+                model.put("_colorSheet", color);
+            }
+        }
+        // The app's own token stylesheet, linked last of the token layer so a theme-builder
+        // export wins inside `@layer hc.tokens` (docs/hypermedia-ui.md "Custom themes").
+        String stylesheet = validStylesheet(exchange.beans().lookup(
+                TesseraqlProperties.UI_STYLESHEET_BEAN, String.class));
+        if (stylesheet != null) {
+            model.put("_stylesheet", stylesheet);
+        }
         if (storedTheme != null && !storedTheme.equals(cookieTheme)) {
             // The same Path as the session cookie: the preference belongs to whoever is signed
             // in, and follows the sign-in across the stack or stays with the one application
@@ -385,6 +404,31 @@ final class ShellChrome {
         return value != null && java.util.Set.of("comfortable", "compact", "dense")
                 .contains(value) ? value : null;
     }
+
+    /**
+     * The accent axis name, re-checked before it reaches an attribute. The runtime binds only
+     * validated values; this is the same gate on the rendering side, because a name that is not
+     * an axis name is a name the theme cannot have come from.
+     */
+    private static String validAxisName(String value) {
+        return value != null && AXIS_NAME.matcher(value).matches() ? value : null;
+    }
+
+    /** The app-asset stylesheet path, re-checked before it reaches a URL. */
+    private static String validStylesheet(String value) {
+        return value != null && ASSET_STYLESHEET.matcher(value).matches()
+                && !value.contains("..") ? value : null;
+    }
+
+    /** The kit's accent axes that ship their own token sheet (default rides in hc.min.css). */
+    private static final java.util.Set<String> COLOR_SHEETS = java.util.Set.of("teal", "lime",
+            "orange", "fuchsia");
+    /** The shape of a {@code data-color} axis name — the kit's own, or a theme builder's. */
+    private static final java.util.regex.Pattern AXIS_NAME = java.util.regex.Pattern
+            .compile("[a-z][a-z0-9-]{0,31}");
+    /** An app-asset stylesheet path: relative, no traversal, and a stylesheet. */
+    private static final java.util.regex.Pattern ASSET_STYLESHEET = java.util.regex.Pattern
+            .compile("[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*\\.css");
 
     /** The session store's cookie read, plus this surface's value trim. */
     private static String cookieValue(String cookieHeader, String name) {

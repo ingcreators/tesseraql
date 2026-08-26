@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org" lang="en" th:lang="${#locale.toLanguageTag()}"
       data-theme="dark"
-      th:attr="data-theme=${_theme != null ? _theme : 'dark'}, data-density=${_density}, data-neutral=${_neutral}">
+      th:attr="data-theme=${_theme != null ? _theme : 'dark'}, data-density=${_density}, data-neutral=${_neutral}, data-color=${_color}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -9,6 +9,14 @@
 <link rel="stylesheet" th:href="@{/assets/vendor/hypermedia-components__core/dist/hc.min.css}">
 <link rel="stylesheet" th:if="${_neutral}"
       th:href="@{|/assets/vendor/hypermedia-components__core/dist/hc.tokens.neutral-${_neutral}.css|}">
+<!-- The accent axis, same shape as the neutral ramp above: a built-in axis links the token
+     sheet the kit ships for it, and any other name is a theme builder's accent, whose
+     generated block rides in the app stylesheet below instead. -->
+<link rel="stylesheet" th:if="${_colorSheet}"
+      th:href="@{|/assets/vendor/hypermedia-components__core/dist/hc.tokens.color-${_colorSheet}.css|}">
+<!-- The app's own token stylesheet (a theme builder export, docs/hypermedia-ui.md
+     "Custom themes"): last of the token layer, so its block wins inside @layer hc.tokens. -->
+<link rel="stylesheet" th:if="${_stylesheet}" th:href="@{|/assets/${_stylesheet}|}">
 <link rel="stylesheet" th:href="@{/assets/_tesseraql/tesseraql.css}">
 </head>
 <body>
