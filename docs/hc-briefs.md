@@ -577,7 +577,17 @@ write by hand.
 - Two adjacent gaps were found to be **already shipped** in hc 0.1.5 and have been adopted, not
   briefed: `hc-spinner` and `hc-breadcrumb` (Track I1). They were CSS-only components, easy to miss
   by searching the behaviors bundle alone.
-- `hc-datagrid` ships sorting, but as a **server-driven** event (`hc:datagridsort`) — wiring it to
-  htmx needs `hx-vals='js:…'`, which the CSP forbids. A future brief could ask for a CSP-clean
-  sort→request binding (e.g. the behavior writing the sort key/direction into a named hidden input
-  or `hx-get` URL the kit updates), which would let strict-CSP apps adopt sortable grids.
+- `hc-datagrid`'s event-driven sorting **needed no brief in the end** — hc 0.3.0 closed the gap on
+  its own, in the first of the two shapes this note had sketched. A header click now writes the
+  committed sort set into `input[data-hc-datagrid-sort]` *before* dispatching `hc:datagridsort`, so
+  an event-triggered htmx request serializes the fresh value through ordinary form encoding and
+  `hx-vals='js:…'` is not needed. The input is looked up within the grid's enclosing form, which
+  also puts the sort inside the filter form, where an Apply and a saved view both pick it up. The
+  new `datagrid-sort` recipe is CSP-clean throughout: `installSortList` joins its ordered keys into
+  one `sort=` param on the `formdata` event, and its no-JS path carries the order in per-key
+  `dir-<col>` controls read in arrival order.
+- Nothing to adopt urgently from that. TesseraQL's list views already render a server-driven sort
+  link per header cell (`tql/view/table.html`), which the 0.3.0 contract blesses as the zero-JS
+  fast path — the local workaround turned out to be the shape upstream canonized. What became newly
+  available is the sort **panel** for multi-key, reorderable, off-screen-column sorting; whether the
+  declarative view surface should grow one is a design question, not a gap.
