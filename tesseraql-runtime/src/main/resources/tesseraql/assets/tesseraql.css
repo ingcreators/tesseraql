@@ -14,18 +14,13 @@
    stays for SRs, the bullets go. */
 .tql-plain-list{list-style:none;padding:0;margin:0}
 
-/* Bare links (docs/studio-ux-refresh.md slice 1): the kit deliberately styles no anchors
-   (hc.base.css is minimal normalization only), so without an app rule body links render in
-   the UA defaults — near-illegible visited-purple on dark surfaces. One link color per
-   theme, visited included: a system console is a tool, not a browsing history. Component
-   anchors (hc-button, hc-item, hc-menu__item, …) keep their own colors — class selectors
-   outrank these element rules. */
-:root, [data-theme="light"]{--tql-link:#1d4ed8}
-[data-theme="dark"]{--tql-link:#93c5fd}
-a{color:var(--tql-link)}
-/* :visited ignores custom properties in every engine — literal colors only. */
-a:visited{color:#1d4ed8}
-[data-theme="dark"] a:visited{color:#93c5fd}
+/* Bare links are the kit's since hc 0.3.0 (hc#569): `@layer hc.base` colors `a` and `a:hover`
+   from --hc-color-link/-hover, and bakes a resolved literal per theme for `a:visited` — which
+   the build can do and an app cannot, because `:visited` declarations never resolve var().
+   The app rule that used to stand in here is gone: it was unlayered, so it outranked the
+   kit's and would have pinned every link to a hard-coded pair that follows neither
+   `tesseraql.ui.color` nor a theme-builder stylesheet (docs/hypermedia-ui.md). Underlining
+   is not a color, so the hover weight stays. */
 a:hover{text-decoration-thickness:2px}
 
 /* Scrollbars follow the theme instead of the legacy UA chrome (slice 1). */

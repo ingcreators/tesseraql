@@ -31,6 +31,29 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **Hypermedia Components 0.3.0** (from 0.2.1) — the kit now owns bare links, so the
+  framework stops hand-picking one. `hc.base.css` already took over the document's
+  background and text but stopped short of `<a>`, which left every anchor outside a
+  component on the UA's `-webkit-link` blue and `:visited` purple — two colors that follow
+  neither `data-theme` nor `data-color`. TesseraQL stood in with a pair of literals in
+  `tesseraql.css`, the last color the framework painted onto a themed surface from a literal
+  and the only one that would not follow `tesseraql.ui.color` or a theme-builder stylesheet. The kit
+  ships `--hc-color-link`, `--hc-color-link-hover` and `--hc-color-link-visited` per theme
+  now, with the bare-anchor rules in `@layer hc.base`, so the stand-in is deleted. The
+  `:visited` half is why this had to happen upstream rather than here: browsers refuse to
+  resolve `var()` in a visited-dependent declaration, because resolving it would leak the
+  history bit back through the cascade, so the color has to be a literal — and only the
+  token build, which runs before any of that, can bake one per theme. Adopting the kit's
+  rules also adopts its policy of a **distinct visited step**, replacing the local rule that
+  unified visited with unvisited; unifying was only ever expressible as the literals that
+  just went away. The bump is otherwise additive — no class, custom property, behavior
+  export, or recipe the framework consumes was removed, and the email fragment contract is
+  unchanged apart from its version string. The bundled `tql/email/*` fragments are rebaked
+  by the bump, which picks up the kit's fix for the dark flavor leaving links and tables on
+  their light colors (2.77:1 and 1.21:1 against the dark container, now 5.85:1 and 13.34:1).
+  Filed as [hc#569](https://github.com/ingcreators/hypermedia-components/issues/569),
+  recorded as Brief 12 in [hc-briefs.md](docs/hc-briefs.md).
+
 - **Hypermedia Components 0.2.1** (from 0.1.15) — the kit's OKLCH color release and its
   business-app follow-up. It is a drop-in here. The kit's one breaking change is the
   accent-axis rename (`data-color` values `indigo` / `emerald` / `rose` / `amber` became
