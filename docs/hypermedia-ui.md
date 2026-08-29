@@ -344,11 +344,11 @@ their own `--hc-button-primary-bg`, `--hc-checkbox-checked-bg`, and so on, each 
 concrete value per theme. Overriding only the semantic variables therefore recolors nothing
 visible, which is why the builder generates the whole block rather than a handful of lines.
 
-One surface does not follow a custom theme yet: bare links in prose. The kit does not own
-bare `<a>` colors, so the framework hand-picks one per theme, and a `:visited` rule cannot
-read a token — browsers drop `var()` there to avoid leaking history. Filed upstream as
-[#569](https://github.com/ingcreators/hypermedia-components/issues/569); links in components
-(nav, breadcrumb, table of contents) are unaffected and re-theme normally.
+Bare links in prose follow a custom theme too, since hc 0.3.0. The kit's base layer colors
+`a` and `a:hover` from `--hc-color-link` and `--hc-color-link-hover`, and bakes `a:visited` as
+a resolved literal per theme, because a `:visited` rule cannot read a token — browsers drop
+`var()` there to avoid leaking history through the cascade. The builder emits the same trio,
+so a custom accent recolors prose links as well as components.
 
 Two further limits are worth knowing before you commit to a custom accent. The value must be
 an ordinary axis name — lower-case letters, digits, and dashes — and the stylesheet must live

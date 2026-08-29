@@ -523,10 +523,23 @@ approximate previews honestly.
 
 *Filed: [ingcreators/hypermedia-components#569](https://github.com/ingcreators/hypermedia-components/issues/569) (found 2026-08-26, hc 0.2.1 adoption + theme switching — docs/hypermedia-ui.md).*
 
-> **Status: filed. TesseraQL carries the stand-in.** `tesseraql.css` hand-picks a link color
-> per theme — the only place the framework hard-codes a color at all, and the only surface
-> that does not follow a theme built with the kit's theme builder. It stays until the token
-> pair ships, because a consumer cannot express it any other way (see below).
+> **Status: shipped and adopted.** All three tokens landed in **hc 0.3.0** together with the
+> bare-anchor rules in `@layer hc.base`, the `:visited` color baked per theme off the same
+> declaration the token comes from, and a `color.<name>.dark.tokens.json` for each non-default
+> accent — links are the one accent value that differs between themes, since a link is text on
+> the page surface rather than white text on the accent. The theme builder emits the trio too.
+> TesseraQL bumped to 0.3.0 and **deleted the stand-in**: `tesseraql.css` now paints no themed
+> surface from a literal — what is left is `var()` fallbacks and the white paper of the two
+> preview iframes — and prose links follow `tesseraql.ui.color` and a builder stylesheet like
+> every other surface. Adopting the kit's default also adopts its policy of a distinct visited
+> step, which replaces the local rule that unified the two — a console is a tool, but keeping
+> that unification would have meant keeping the literals, since `:visited` is exactly what a
+> token cannot express.
+>
+> The same work fixed the **email** dark flavor, where `link` and `table` carried no `hc-em-*`
+> class and so survived the dark flip on their light colors — 2.77:1 and 1.21:1 against the
+> dark container. TesseraQL takes that fix with the bump, because the bundled `tql/email/*`
+> fragments are unpacked from the WebJar at build time.
 
 ### Problem
 
