@@ -29,6 +29,14 @@ public final class RedirectRenderer implements Step {
 
     private static final Pattern PLACEHOLDER = Pattern.compile("\\{([^}]+)}");
 
+    /**
+     * The {@code location: back} sentinel (docs/list-surface.md decision 11): the redirect
+     * target is the request's {@code _return} field — the list URL a page-frame row link sent
+     * along, fragment included — validated as an app-local path, falling back to the
+     * application root. The value is caller-supplied, so it is never interpolated.
+     */
+    static final String BACK = "back";
+
     private final RedirectResponse redirect;
 
     public RedirectRenderer(RedirectResponse redirect) {
@@ -37,6 +45,12 @@ public final class RedirectRenderer implements Step {
 
     @Override
     public void process(Exchange exchange) {
+        if (BACK.equals(redirect.location())) {
+            String declared = exchange.request().param("_return");
+            negotiate(exchange, redirect.effectiveStatus(),
+                    io.tesseraql.core.http.BasePaths.isLocal(declared) ? declared : "/");
+            return;
+        }
         @SuppressWarnings("unchecked")
         Map<String, Object> context = exchange.getProperty(TesseraqlProperties.CONTEXT, Map.of(),
                 Map.class);

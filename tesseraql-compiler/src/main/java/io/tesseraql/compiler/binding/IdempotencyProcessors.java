@@ -164,8 +164,9 @@ public final class IdempotencyProcessors {
      * The canonical form payload: a browser form's fields never reach the exchange body (the
      * edge parses them into {@code formFields()}), so hashing the body alone made every form
      * post of a route look identical. Sorted {@code name=value} lines, reserved fields
-     * excluded - {@code _csrf} varies by session and {@code _idempotency} is the key itself
-     * (docs/idempotency-key.md decision 2).
+     * excluded - {@code _csrf} varies by session, {@code _idempotency} is the key itself
+     * (docs/idempotency-key.md decision 2), and {@code _return} varies by the page the user
+     * came from without changing what the command does.
      */
     private static String formPayload(Exchange exchange) {
         var fields = exchange.request().formFields();
@@ -175,7 +176,8 @@ public final class IdempotencyProcessors {
         StringBuilder canonical = new StringBuilder();
         fields.entrySet().stream()
                 .filter(field -> !"_csrf".equals(field.getKey())
-                        && !"_idempotency".equals(field.getKey()))
+                        && !"_idempotency".equals(field.getKey())
+                        && !"_return".equals(field.getKey()))
                 .sorted(java.util.Map.Entry.comparingByKey())
                 .forEach(field -> field.getValue().forEach(
                         value -> canonical.append(field.getKey()).append('=').append(value)

@@ -520,7 +520,7 @@
             },
             "location": {
               "type": "string",
-              "description": "Where to redirect, as a literal path or a bindable path."
+              "description": "Where to redirect, as a literal path or a bindable path. The sentinel `back` follows the request's validated `_return` field - the list a page-frame row link came from - falling back to the application root."
             }
           },
           "additionalProperties": true,

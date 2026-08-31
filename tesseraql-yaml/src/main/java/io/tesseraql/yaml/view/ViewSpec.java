@@ -30,7 +30,7 @@ public record ViewSpec(String id,
         String title, String action, String source,
         String search, List<Field> fields, List<Column> columns, List<Child> children,
         List<Panel> panels, Map<String, String> slots, String template, String refreshOn,
-        String layout) {
+        String layout, List<String> key) {
 
     /** Structurally invalid view document (docs/declarative-views.md, TQL-VIEW-3301). */
     public static final TqlErrorCode INVALID_VIEW = new TqlErrorCode(TqlDomain.VIEW, 3301);
@@ -230,6 +230,7 @@ public record ViewSpec(String id,
         children = children == null ? List.of() : List.copyOf(children);
         panels = panels == null ? List.of() : List.copyOf(panels);
         slots = slots == null ? Map.of() : Map.copyOf(slots);
+        key = key == null ? List.of() : List.copyOf(key);
     }
 
     /**
@@ -272,6 +273,10 @@ public record ViewSpec(String id,
             throw invalid(name, "layout must be '" + LAYOUT_CARD + "' or '" + LAYOUT_PAGE
                     + "', got: " + layout);
         }
+        List<String> key = parseKey(name, tree.get("key"));
+        if (!key.isEmpty() && !LIST.equals(view)) {
+            throw invalid(name, "key: is a list-view key");
+        }
         String action = str(tree.get("action"));
         if (FORM.equals(view) && (action == null || action.isBlank())) {
             throw invalid(name, "a form view must declare action: (the command route it posts to)");
@@ -287,12 +292,41 @@ public record ViewSpec(String id,
                 parseFields(name, tree.get("fields")), parseColumns(name, tree.get("columns")),
                 parseChildren(name, tree.get("children")), parsePanels(name, tree.get("panels")),
                 parseSlots(name, tree.get("slots")), str(tree.get("template")),
-                str(tree.get("refreshOn")), layout);
+                str(tree.get("refreshOn")), layout, key);
     }
 
     /** The list layout in effect: the declared {@code layout:}, defaulting to the card. */
     public String effectiveLayout() {
         return layout == null || layout.isBlank() ? LAYOUT_CARD : layout;
+    }
+
+    /**
+     * The declared row key (docs/list-surface.md decision 2): one column name or an ordered
+     * list of them, normalized to a list. Empty when the list declares no key.
+     */
+    private static List<String> parseKey(String source, Object raw) {
+        if (raw == null) {
+            return List.of();
+        }
+        List<Object> entries = raw instanceof List<?> list
+                ? new ArrayList<>(list)
+                : List.of(raw);
+        if (entries.isEmpty()) {
+            throw invalid(source, "key: must name at least one column");
+        }
+        List<String> columns = new ArrayList<>(entries.size());
+        for (Object entry : entries) {
+            String column = str(entry);
+            if (entry instanceof Map || entry instanceof List || column == null
+                    || column.isBlank()) {
+                throw invalid(source, "key: entries must be column names");
+            }
+            if (columns.contains(column)) {
+                throw invalid(source, "key: names column '" + column + "' twice");
+            }
+            columns.add(column);
+        }
+        return List.copyOf(columns);
     }
 
     private static List<Panel> parsePanels(String source, Object raw) {

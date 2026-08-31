@@ -36,7 +36,7 @@ public final class RequestBinder implements Step {
      * mass-assignment guard even under {@code unknownFields: reject}.
      */
     private static final java.util.Set<String> RESERVED_FIELDS = java.util.Set.of("_csrf",
-            "_idempotency");
+            "_idempotency", "_return");
 
     private final RouteDefinition route;
     private final java.util.List<String> pathParams;

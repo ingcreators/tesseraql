@@ -109,7 +109,9 @@ public record ResponseSpec(JsonResponse json, HtmlResponse html, StreamResponse 
      * against the execution context.
      *
      * @param status   HTTP status code, defaulting to 303 (See Other)
-     * @param location the redirect target, with optional {expression} placeholders
+     * @param location the redirect target, with optional {expression} placeholders; the
+     *        sentinel {@code back} follows the request's validated {@code _return} field
+     *        (docs/list-surface.md decision 11), falling back to the application root
      */
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record RedirectResponse(Integer status, String location) {
