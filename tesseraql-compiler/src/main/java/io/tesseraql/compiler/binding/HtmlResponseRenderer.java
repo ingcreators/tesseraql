@@ -244,6 +244,12 @@ public final class HtmlResponseRenderer implements Step {
             model.put("_csrf", csrfToken);
         }
 
+        // One fresh key per rendered form instance (docs/idempotency-key.md decision 4):
+        // tql/view/form.html echoes it as a hidden field, and every submit of that instance
+        // claims the same intent. Minted per render, not per session - a page rendered twice
+        // is two instances. Routes without an idempotency: block simply ignore the field.
+        model.put("_idempotency", java.util.UUID.randomUUID().toString());
+
         // The shell chrome's reserved model variables, contributed in a fixed order
         // (ShellChrome documents each block): the sidebar menu, the account popover, the
         // theme preference reads, the inbox badge, pins (including the recently-viewed store

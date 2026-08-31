@@ -195,6 +195,45 @@ class QueryJsonIntegrationTest {
         assertThat(replay.body()).isEqualTo(first.body());
     }
 
+    @Test
+    void formPostsCarryTheKeyInTheHiddenFieldTransport() throws Exception {
+        SessionStore sessions = sessionStore();
+        String sid = sessions.create(writer(), SessionStore.ClientInfo.NONE);
+        String cookie = sessions.cookieName() + "=" + sid;
+        String csrf = sessions.csrfToken(sid);
+
+        // The key rides the _idempotency hidden field - no header - and the reserved-field
+        // exclusion keeps it out of this route's unknownFields: reject guard.
+        HttpResponse<String> first = postForm("/users/deactivate", cookie, csrf,
+                "name=suzuki&_idempotency=form-key-001");
+        assertThat(first.statusCode()).as(first.body()).isEqualTo(200);
+
+        HttpResponse<String> replay = postForm("/users/deactivate", cookie, csrf,
+                "name=suzuki&_idempotency=form-key-001");
+        assertThat(replay.statusCode()).isEqualTo(200);
+        assertThat(replay.body()).isEqualTo(first.body());
+
+        // A different form body under the same key is the stale-tab conflict - and its
+        // detection is what the form-aware hash exists for.
+        HttpResponse<String> conflict = postForm("/users/deactivate", cookie, csrf,
+                "name=tanaka&_idempotency=form-key-001");
+        assertThat(conflict.statusCode()).isEqualTo(422);
+        assertThat(MAPPER.readTree(conflict.body()).path("error").path("code").asText())
+                .isEqualTo("TQL-IDEM-4221");
+    }
+
+    private HttpResponse<String> postForm(String path, String cookie, String csrf, String body)
+            throws Exception {
+        return HttpClient.newHttpClient().send(
+                HttpRequest.newBuilder(URI.create("http://localhost:" + runtime.port() + path))
+                        .header("Content-Type", "application/x-www-form-urlencoded")
+                        .header("Cookie", cookie)
+                        .header("X-CSRF-Token", csrf)
+                        .POST(HttpRequest.BodyPublishers.ofString(body))
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+    }
+
     private HttpResponse<String> postIdem(String path, String cookie, String csrf, String key,
             String body)
             throws Exception {

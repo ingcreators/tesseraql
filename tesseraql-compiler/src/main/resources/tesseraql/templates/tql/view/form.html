@@ -25,6 +25,10 @@
         hx-swap="innerHTML"
         hx-disabled-elt="find button[type=submit]" hx-indicator="find .hc-spinner">
     <input type="hidden" name="_csrf" th:if="${_csrf != null}" th:value="${_csrf}">
+    <!-- The one-time intent key (docs/idempotency-key.md decision 4): a route that declares
+         idempotency: answers a replayed submit of this form instance with the original
+         response; routes without the block ignore the field. -->
+    <input type="hidden" name="_idempotency" th:if="${_idempotency != null}" th:value="${_idempotency}">
     <div th:id="|${v.formId}-errors|"></div>
     <div class="hc-stack">
       <th:block th:each="f : ${v.fields}">
