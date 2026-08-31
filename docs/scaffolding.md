@@ -84,8 +84,10 @@ override under `templates/tql/view/` (L2), or `tesseraql scaffold eject-view` (L
 Conventions are applied when the table opts in:
 
 - **Generated keys** — an auto-generated single primary key is captured with `keys:` and
-  drives the post/redirect/get flow (`/items/{steps.record.keys.id}`); a non-generated key
-  becomes a required form field instead. Composite keys fail fast (`TQL-APP-5203`).
+  drives the post/redirect/get flow (`/items/{steps.record.keys.id}`); non-generated key
+  columns become required form fields instead. A composite key scaffolds as nested path
+  segments (`/order_lines/{order_id}/{line_no}`), with every by-key statement and-joining
+  the columns. Only a table without any primary key fails fast (`TQL-APP-5203`).
 - **Optimistic locking** — a numeric `version` column emits the
   [transactional-writes.md](transactional-writes.md) pairing: a version predicate in the
   UPDATE/DELETE plus `expect: { rowCount: 1, onMismatch: conflict }`, so a stale edit answers
@@ -188,7 +190,7 @@ full CRUD flow over HTTP, including the stale-edit `409` (`TQL-SQL-4092`).
 | --- | --- |
 | `TQL-APP-5201` | introspection failed: unknown table or unreadable metadata |
 | `TQL-APP-5202` | a scaffolded path escapes the app home |
-| `TQL-APP-5203` | unsupported target: invalid app name, non-empty `new` target, or a table without a single-column primary key |
+| `TQL-APP-5203` | unsupported target: invalid app name, non-empty `new` target, or a table without a primary key |
 
 ## Editor feedback in scaffolded repos
 

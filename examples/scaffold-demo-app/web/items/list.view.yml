@@ -1,11 +1,14 @@
-# tesseraql-scaffold-checksum: sha256:8d8029722174b0f5e1ca1859de639d9c5ce973bc2497958cdd8f10ff9a26cd45
-# Scaffolded list view for the items table: renders through the tql/view/list
-# pattern (docs/declarative-views.md) — sortable headers, a live search box,
-# and the header slot's New button.
+# tesseraql-scaffold-checksum: sha256:f3aca98d3bb2c4c8c6e8ff85967f727b116e6b36afa3462c5a7902767d861fec
+# Scaffolded list view for the items table: renders through the tql/view/list-page
+# pattern (docs/declarative-views.md "The grid page") — sortable headers, a live
+# search box, row identity for return-to-the-list, and the header slot's New
+# button.
 version: tesseraql/v1
 id: items
 kind: view
 recipe: list
+layout: page
+key: id
 title: Items
 search: q
 columns:
