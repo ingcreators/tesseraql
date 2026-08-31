@@ -117,6 +117,14 @@ Lists also carry search and server-driven sort:
 - `search:` renders the pattern's filter box, wired to a declared route input.
 - `sortable: true` on a column renders `?sort=&dir=` header links with `aria-sort`; the
   route's enum-gated `sort`/`dir` inputs apply them in SQL.
+- A **multi-column sort** declares the input as `type: sort` with a `columns:` allowlist.
+  The wire form is one ordered param — `?sort=-ship_date,order_no`, a leading `-` for
+  descending — and the framework publishes the validated ORDER BY fragment as
+  `params.sortSql` for the authored `/*# order by {sort} */` directive to bind. Header
+  links keep working unchanged (a declared `dir` still applies to a bare single column),
+  and the grid page's toolbar reads the applied set out ("Sort (2): Ship date ↓, Order
+  ↑"). The reorderable sort-list editor is a planned follow-up; until then the URL — and a
+  named view preset — is how a multi-sort is applied.
 
 The wiring is lint-checked (`TQL-VIEW-3309/3310`): the search key must be a declared
 input of the route, and sortable columns require the route to declare the `sort` and

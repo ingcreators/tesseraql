@@ -651,7 +651,7 @@ public final class RouteCompiler {
     /** The bulk request's one declared input: the document keys, refused when absent. */
     private static final io.tesseraql.yaml.model.InputField BULK_KEYS = new io.tesseraql.yaml.model.InputField(
             "array", true, null, null, null, null, null, null, null, null, null, null, null, null,
-            null, null, null, null, null,
+            null, null, null, null, null, null,
             "The document keys this action applies to, each run in its own transaction.");
 
     /**

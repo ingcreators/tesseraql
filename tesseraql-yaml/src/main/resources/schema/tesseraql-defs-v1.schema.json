@@ -406,9 +406,10 @@
             "number",
             "boolean",
             "date",
-            "array"
+            "array",
+            "sort"
           ],
-          "description": "The declared type. A supplied value is coerced to it and refused when it does not fit."
+          "description": "The declared type. A supplied value is coerced to it and refused when it does not fit. `sort` is an ordered sort set (`-ship,order` - a leading `-` for descending) validated against `columns:`; the bound `params.<name>Sql` sibling carries the safe ORDER BY fragment."
         },
         "required": {
           "type": "boolean",
@@ -438,6 +439,12 @@
         "pattern": {
           "type": "string",
           "description": "Anchored regular expression (TQL-YAML-1012 when it does not compile)."
+        },
+        "columns": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1,
+          "description": "The sortable-column allowlist a `type: sort` input validates its keys against; required for that type and legal on no other."
         },
         "format": {
           "type": "string",

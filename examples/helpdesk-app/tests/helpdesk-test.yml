@@ -3,6 +3,8 @@ tests:
   - name: the ticket list serves the seeded queue
     sql:
       file: web/tickets/tickets.sql
+    params:
+      sort: created_at desc
     expect:
       rowCount: 3
 
@@ -11,6 +13,7 @@ tests:
       file: web/tickets/tickets.sql
     params:
       q: vpn
+      sort: created_at desc
     expect:
       rowCount: 1
       rows:
@@ -21,6 +24,7 @@ tests:
       file: web/tickets/tickets.sql
     params:
       status: no-such-status
+      sort: created_at desc
     expect:
       rowCount: 0
 
@@ -31,6 +35,7 @@ tests:
       priority: low
       q: vpn
       status: no-such-status
+      sort: created_at desc
     expect:
       rowCount: 0
 

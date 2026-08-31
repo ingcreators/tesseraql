@@ -565,6 +565,28 @@ class HtmlResponseRendererViewTest {
     }
 
     @Test
+    void anAppliedMultiSortRendersTheToolbarReadout(@TempDir Path dir) throws Exception {
+        // docs/list-surface.md decision 7: the grid page's toolbar says what the sort set is.
+        HtmlResponseRenderer renderer = renderer(dir, """
+                version: tesseraql/v1
+                kind: view
+                recipe: list
+                layout: page
+                columns:
+                  - name: ship_date
+                  - name: order_no
+                """);
+        Exchange exchange = new Exchange(Beans.NONE);
+        exchange.setProperty(TesseraqlProperties.CONTEXT, Map.of(
+                "main", Map.of("rows", List.of()),
+                "params", Map.of("sort", "-ship_date,order_no")));
+        exchange.request().uri("/orders?sort=-ship_date%2Corder_no");
+        renderer.process(exchange);
+        assertThat(exchange.getBody(String.class))
+                .contains("Sort (2): Ship date ↓, Order no ↑");
+    }
+
+    @Test
     void layoutCardStaysTheDefaultListPattern(@TempDir Path dir) throws Exception {
         HtmlResponseRenderer renderer = renderer(dir, """
                 version: tesseraql/v1

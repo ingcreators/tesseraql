@@ -10,4 +10,5 @@ where 1 = 1
 /*%if priority */
   and priority = /* priority */ 'high'
 /*%end*/
-order by created_at desc
+/*# order by {sort} */
+;

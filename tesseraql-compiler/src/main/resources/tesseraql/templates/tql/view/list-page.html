@@ -20,7 +20,8 @@
       <th:block th:insert="~{__${v.slots['header']}__}"/>
     </th:block>
   </div>
-  <div class="hc-cluster" th:if="${v.search != null or v.filterFields != null}">
+  <div class="hc-cluster"
+       th:if="${v.search != null or v.filterFields != null or v.sortSet != null}">
     <input th:if="${v.search != null}" class="hc-input" type="search"
            th:id="|${v.id}-search|"
            th:name="${v.search.param}" th:value="${v.search.value}"
@@ -30,6 +31,7 @@
     <button th:if="${v.filterFields != null}" type="button" class="hc-button"
             data-variant="ghost" th:attr="data-tql-open-dialog=|#${v.id}-filters|"
             th:text="#{tql.view.filters}">Filters</button>
+    <span class="hc-chip" th:if="${v.sortSet != null}" th:text="${v.sortSet}">Sort (2)</span>
   </div>
   <!-- Applied conditions (docs/list-surface.md decision 6): each remove control is a real
        link to the same URL minus that condition, so dropping a filter works without

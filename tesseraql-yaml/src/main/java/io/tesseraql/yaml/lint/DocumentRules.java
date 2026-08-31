@@ -140,6 +140,16 @@ final class DocumentRules {
                 continue; // not a request input (constant / principal / loop var) — trusted
             }
             InputField field = inputs.get(input);
+            // The <name>Sql sibling of a type: sort input is framework-built from the
+            // declared columns: allowlist (docs/list-surface.md decision 7) — as constrained
+            // as an enum, just computed instead of enumerated.
+            if (input.endsWith("Sql")) {
+                InputField sortInput = inputs.get(input.substring(0,
+                        input.length() - "Sql".length()));
+                if (sortInput != null && "sort".equals(sortInput.type())) {
+                    continue;
+                }
+            }
             if (field == null || field.enumValues() == null || field.enumValues().isEmpty()) {
                 findings.add(new LintFinding(EMBEDDED_VARIABLE_INTERPOLATES_INPUT, ERROR, source,
                         "Embedded variable '{" + placeholder + "}' interpolates request input '"

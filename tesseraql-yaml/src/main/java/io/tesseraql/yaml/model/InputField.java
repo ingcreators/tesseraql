@@ -33,6 +33,9 @@ public record InputField(
         String pattern,
         Integer minLength,
         String requiredWhen,
+        // The sortable-column allowlist a `type: sort` input validates its keys against
+        // (docs/list-surface.md decision 7); required for that type, legal on no other.
+        List<String> columns,
         // Reference to an app-level field domain (docs/field-domains.md); the manifest loader
         // merges the domain's keys under this field's own, so downstream consumers see the
         // fully-populated result (with this reference kept for tooling and lint).
@@ -107,6 +110,7 @@ public record InputField(
                 pattern != null ? pattern : d.pattern(),
                 minLength != null ? minLength : d.minLength(),
                 requiredWhen,
+                columns != null ? columns : d.columns(),
                 domain,
                 widget != null ? widget : d.widget(),
                 codes != null ? codes : d.codes(),
@@ -118,7 +122,7 @@ public record InputField(
     public InputField withItems(InputItems replacement) {
         return new InputField(type, required, defaultValue, min, max, maxLength, enumValues,
                 writable, classification, mask, format, replacement, pattern, minLength,
-                requiredWhen, domain, widget, codes, policy, description);
+                requiredWhen, columns, domain, widget, codes, policy, description);
     }
 
     /**
