@@ -68,15 +68,19 @@ class OidcLoginIntegrationTest {
         gen.initialize(2048);
         opKey = gen.generateKeyPair();
 
-        int opPort = freePort();
+        // The mock OP binds port 0 directly and reports the real port - no
+        // pick-then-bind race for this leg.
+        mockOp = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        int opPort = mockOp.getAddress().getPort();
         issuer = "http://127.0.0.1:" + opPort;
-        mockOp = HttpServer.create(new InetSocketAddress("127.0.0.1", opPort), 0);
         mockOp.createContext("/.well-known/openid-configuration",
                 exchange -> respond(exchange, 200, discoveryDocument()));
         mockOp.createContext("/jwks", exchange -> respond(exchange, 200, jwksDocument()));
         mockOp.createContext("/token", exchange -> respond(exchange, 200, tokenResponse()));
         mockOp.start();
 
+        // The runtime port stays pick-then-bind: prepareAppHome bakes it into the
+        // OIDC redirect URI before boot, so port 0 cannot be used here.
         int runtimePort = freePort();
         appHome = prepareAppHome(opPort, runtimePort);
         runtime = TesseraqlRuntime.start(appHome, runtimePort);

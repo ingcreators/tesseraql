@@ -47,6 +47,8 @@ class BootFailureTeardownIntegrationTest {
     @Test
     void aFailedBootLeavesNothingListening() throws Exception {
         Path appHome = prepareAppHome();
+        // A concrete port, not 0: rebinding this exact number after the failed boot
+        // IS the assertion, so the test must know it up front.
         int port = freePort();
         try {
             // The unparseable delay is the proof the boot failed late - and the refusal

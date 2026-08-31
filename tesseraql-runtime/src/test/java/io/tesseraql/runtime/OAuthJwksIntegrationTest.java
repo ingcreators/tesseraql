@@ -8,7 +8,6 @@ import io.tesseraql.oauth.SigningKeys;
 import io.tesseraql.security.jwt.Jwks;
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.net.ServerSocket;
 import java.net.URI;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -46,8 +45,10 @@ class OAuthJwksIntegrationTest {
     @BeforeAll
     static void start() throws Exception {
         appHome = prepareAppHome();
-        port = freePort();
-        runtime = TesseraqlRuntime.start(appHome, port);
+        // Port 0: the runtime binds an ephemeral port and reports it, so no
+        // pick-then-bind race with parallel suites (the freePort() TOCTOU flake).
+        runtime = TesseraqlRuntime.start(appHome, 0);
+        port = runtime.port();
         TestHttp.awaitReady(port);
     }
 
@@ -132,12 +133,6 @@ class OAuthJwksIntegrationTest {
                     // best-effort cleanup
                 }
             });
-        }
-    }
-
-    private static int freePort() throws IOException {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            return socket.getLocalPort();
         }
     }
 }

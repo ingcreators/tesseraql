@@ -7,7 +7,6 @@ import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.InetSocketAddress;
-import java.net.ServerSocket;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -67,7 +66,9 @@ class RsaJwksIntegrationTest {
         PUBLISHED.put("key-1", gen.generateKeyPair());
         rogueKey = gen.generateKeyPair();
 
-        jwksServer = HttpServer.create(new InetSocketAddress("127.0.0.1", freePort()), 0);
+        // Bind port 0 directly - the server reports the real port via getAddress(),
+        // so there is no pick-then-bind race with parallel suites.
+        jwksServer = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         jwksServer.createContext("/jwks", exchange -> {
             byte[] body = jwksDocument().getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().add("Content-Type", "application/json");
@@ -235,12 +236,6 @@ class RsaJwksIntegrationTest {
                     // best-effort cleanup
                 }
             });
-        }
-    }
-
-    private static int freePort() throws IOException {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            return socket.getLocalPort();
         }
     }
 }

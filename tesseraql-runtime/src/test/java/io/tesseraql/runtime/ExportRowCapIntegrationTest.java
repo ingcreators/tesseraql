@@ -3,7 +3,6 @@ package io.tesseraql.runtime;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.IOException;
-import java.net.ServerSocket;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -41,8 +40,10 @@ class ExportRowCapIntegrationTest {
     @BeforeAll
     static void start() throws Exception {
         appHome = prepareAppHome();
-        port = freePort();
-        runtime = TesseraqlRuntime.start(appHome, port);
+        // Port 0: the runtime binds an ephemeral port and reports it, so no
+        // pick-then-bind race with parallel suites (the freePort() TOCTOU flake).
+        runtime = TesseraqlRuntime.start(appHome, 0);
+        port = runtime.port();
     }
 
     @AfterAll
@@ -193,12 +194,6 @@ class ExportRowCapIntegrationTest {
         Files.writeString(bundle.resolve("regions.sql"),
                 "select region, name from items order by region, name\n;\n");
         return home;
-    }
-
-    private static int freePort() throws IOException {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            return socket.getLocalPort();
-        }
     }
 
     private static void deleteRecursively(Path path) throws IOException {
