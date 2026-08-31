@@ -9,8 +9,6 @@ import io.tesseraql.identity.IdentityService;
 import io.tesseraql.identity.PasswordAuthenticator;
 import io.tesseraql.identity.RealmConfig;
 import io.tesseraql.security.password.Pbkdf2PasswordEncoder;
-import java.sql.Connection;
-import java.sql.Statement;
 import java.util.Map;
 import javax.sql.DataSource;
 
@@ -25,12 +23,9 @@ final class DialectIdentityChecks {
     }
 
     static void seedAndAuthenticate(DataSource dataSource, String dialect) throws Exception {
-        try (Connection connection = dataSource.getConnection();
-                Statement statement = connection.createStatement()) {
-            for (String sql : SqlScripts.statements(DefaultIdentityPack.schema(dialect))) {
-                statement.execute(sql);
-            }
-        }
+        // Tolerated application, not raw DDL: the SCIM group check shares this database and
+        // applies the same schema first when the JUnit method order puts it ahead of this one.
+        SqlScripts.applyScript(dataSource, DefaultIdentityPack.schema(dialect));
 
         IdentityService identity = new IdentityService(name -> dataSource, dialect);
         RealmConfig realm = RealmConfig.managed("bootstrap", "main");
