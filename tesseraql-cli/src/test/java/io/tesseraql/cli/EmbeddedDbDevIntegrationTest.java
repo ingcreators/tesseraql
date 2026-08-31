@@ -60,7 +60,7 @@ class EmbeddedDbDevIntegrationTest {
                     .majorOf(EmbeddedPostgresSupport.defaultVersion());
             assertThat(serverVersion(jdbcUrl)).startsWith(configuredMajor + ".");
 
-            runtime = TesseraqlRuntime.start(app, freePort(), embedded.override());
+            runtime = TesseraqlRuntime.start(app, 0, embedded.override());
             assertThat(runtime.port()).isPositive();
 
             // It is a real postgres, so the framework's Flyway + ensureSchema bootstrap and the
@@ -84,7 +84,7 @@ class EmbeddedDbDevIntegrationTest {
         EmbeddedPostgresSupport.Handle embedded = EmbeddedPostgresSupport.start(null, false);
         TesseraqlRuntime runtime = null;
         try {
-            runtime = TesseraqlRuntime.start(app, freePort(), embedded.override());
+            runtime = TesseraqlRuntime.start(app, 0, embedded.override());
 
             // The bundled auth-ui app mounts by default and serves a public password login form.
             HttpResponse<String> response = HttpClient.newHttpClient().send(
@@ -116,7 +116,7 @@ class EmbeddedDbDevIntegrationTest {
         EmbeddedPostgresSupport.Handle embedded = EmbeddedPostgresSupport.start(null, false);
         TesseraqlRuntime runtime = null;
         try {
-            runtime = TesseraqlRuntime.start(app, freePort(), embedded.override());
+            runtime = TesseraqlRuntime.start(app, 0, embedded.override());
             String base = "http://localhost:" + runtime.port();
             HttpClient client = HttpClient.newBuilder()
                     .followRedirects(HttpClient.Redirect.NEVER).build();
@@ -163,7 +163,7 @@ class EmbeddedDbDevIntegrationTest {
         EmbeddedPostgresSupport.Handle embedded = EmbeddedPostgresSupport.start(null, false);
         TesseraqlRuntime runtime = null;
         try {
-            runtime = TesseraqlRuntime.start(app, freePort(), embedded.override());
+            runtime = TesseraqlRuntime.start(app, 0, embedded.override());
 
             // The bundled Studio app mounts via the ServiceLoader; the bare /_tesseraql/studio
             // is the workshop switcher now (docs/studio-shell.md structural decision 2) — a
@@ -411,6 +411,11 @@ class EmbeddedDbDevIntegrationTest {
         }
     }
 
+    /**
+     * Only for ports that must be KNOWN rather than bound: the fixed-port feature
+     * test and jdbc URLs that should point at nothing. Runtime boots use port 0
+     * (the runtime binds and reports), which has no pick-then-bind race.
+     */
     private static int freePort() throws IOException {
         try (ServerSocket socket = new ServerSocket(0)) {
             return socket.getLocalPort();

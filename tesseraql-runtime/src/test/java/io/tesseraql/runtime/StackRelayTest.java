@@ -690,6 +690,8 @@ class StackRelayTest {
      */
     @Test
     void aSwapRaceRetriesOnceWhenTheConnectionWasNeverEstablished() throws Exception {
+        // freePort() here wants the OPPOSITE guarantee: a port with nothing
+        // listening, so the first connect is refused.
         int retiredPort = freePort();
         java.util.concurrent.atomic.AtomicInteger resolutions = new java.util.concurrent.atomic.AtomicInteger();
         // The first resolutions answer the retired port — the early check and the first send —

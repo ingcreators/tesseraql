@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.net.ServerSocket;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -26,6 +25,7 @@ import org.apache.ftpserver.ftplet.DefaultFtplet;
 import org.apache.ftpserver.ftplet.FtpRequest;
 import org.apache.ftpserver.ftplet.FtpSession;
 import org.apache.ftpserver.ftplet.FtpletResult;
+import org.apache.ftpserver.listener.Listener;
 import org.apache.ftpserver.listener.ListenerFactory;
 import org.apache.ftpserver.ssl.SslConfigurationFactory;
 import org.apache.ftpserver.usermanager.impl.BaseUser;
@@ -223,7 +223,10 @@ class PollImportFtpsIntegrationTest {
 
         ListenerFactory listener = new ListenerFactory();
         listener.setServerAddress("localhost");
-        listener.setPort(freePort());
+        // Port 0: NioListener writes the actual bound port back after start
+        // (updatePort reads the acceptor's local address), so the created
+        // Listener - not the factory - is what reports the real port.
+        listener.setPort(0);
         // Explicit FTPS (AUTH TLS), the mode the ftps: source speaks.
         listener.setImplicitSsl(false);
         listener.setSslConfiguration(ssl.createSslConfiguration());
@@ -235,7 +238,8 @@ class PollImportFtpsIntegrationTest {
         listener.setDataConnectionConfiguration(data.createDataConnectionConfiguration());
 
         FtpServerFactory factory = new FtpServerFactory();
-        factory.addListener("default", listener.createListener());
+        Listener bound = listener.createListener();
+        factory.addListener("default", bound);
 
         BaseUser user = new BaseUser();
         user.setName("svc");
@@ -254,7 +258,7 @@ class PollImportFtpsIntegrationTest {
 
         ftpServer = factory.createServer();
         ftpServer.start();
-        ftpPort = listener.getPort();
+        ftpPort = bound.getPort();
     }
 
     private static Connection connect() throws Exception {
@@ -367,12 +371,6 @@ class PollImportFtpsIntegrationTest {
                     // best-effort cleanup
                 }
             });
-        }
-    }
-
-    private static int freePort() throws IOException {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            return socket.getLocalPort();
         }
     }
 }
