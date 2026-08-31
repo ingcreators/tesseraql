@@ -24,6 +24,7 @@ class IdempotencyProcessorsTest {
     /** Records what begin() was asked, answers what the test says. */
     private static final class FakeStore implements IdempotencyStore {
         String lastHash;
+        Map<String, String> completedHeaders;
         BeginResult answer = new Proceed();
 
         @Override
@@ -34,7 +35,8 @@ class IdempotencyProcessorsTest {
 
         @Override
         public void complete(String scope, String key, int status, String body,
-                String contentType) {
+                String contentType, Map<String, String> headers) {
+            this.completedHeaders = headers;
         }
 
         @Override
@@ -151,6 +153,32 @@ class IdempotencyProcessorsTest {
 
         assertThat(exchange.getProperty(TesseraqlProperties.IDEMPOTENCY_CLAIM, String.class))
                 .isNull();
+    }
+
+    @Test
+    void completeSnapshotsOnlyTheAllowlistedHeadersAndReplayReEmitsThem() throws Exception {
+        // The htmx signals and the PRG Location replay; security headers stay the fresh
+        // response's business (docs/idempotency-key.md decision 6).
+        FakeStore store = new FakeStore();
+        Exchange exchange = exchange(store);
+        begin(exchange);
+        exchange.setBody("{\"ok\":true}");
+        exchange.response().header("HX-Trigger", "{\"hc:toast\":{\"message\":\"Saved\"}}");
+        exchange.response().header("Location", "/orders/1");
+        exchange.response().header("X-Frame-Options", "DENY");
+        IdempotencyProcessors.complete("orders").process(exchange);
+
+        assertThat(store.completedHeaders)
+                .containsEntry("HX-Trigger", "{\"hc:toast\":{\"message\":\"Saved\"}}")
+                .containsEntry("Location", "/orders/1")
+                .doesNotContainKey("X-Frame-Options");
+
+        FakeStore replaying = new FakeStore();
+        replaying.answer = new IdempotencyStore.Replay(201, "{\"ok\":true}",
+                "application/json", Map.of("HX-Trigger", "{\"hc:toast\":{}}"));
+        Exchange replayed = exchange(replaying);
+        begin(replayed);
+        assertThat(replayed.response().header("HX-Trigger")).isEqualTo("{\"hc:toast\":{}}");
     }
 
     @Test

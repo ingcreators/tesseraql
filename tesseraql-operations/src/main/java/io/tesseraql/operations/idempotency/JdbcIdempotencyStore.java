@@ -20,6 +20,9 @@ public final class JdbcIdempotencyStore implements IdempotencyStore {
 
     /** TQL-IDEM-5001: the idempotency store could not complete an operation. */
     private static final TqlErrorCode STORE_ERROR = new TqlErrorCode(TqlDomain.IDEM, 5001);
+    private static final com.fasterxml.jackson.databind.ObjectMapper HEADERS_JSON = new com.fasterxml.jackson.databind.ObjectMapper();
+    private static final com.fasterxml.jackson.core.type.TypeReference<java.util.Map<String, String>> HEADERS_TYPE = new com.fasterxml.jackson.core.type.TypeReference<>() {
+    };
 
     private final DataSource dataSource;
 
@@ -35,6 +38,10 @@ public final class JdbcIdempotencyStore implements IdempotencyStore {
         try {
             io.tesseraql.core.util.SqlScripts.applyForVendor(dataSource, JdbcIdempotencyStore.class,
                     "/tesseraql/db/migration/operations/V1__framework_operations.sql");
+            // The vendors Flyway covers get V10 from FrameworkMigrations; this path is for the
+            // rest, and SqlScripts tolerates the duplicate-column error a rerun raises.
+            io.tesseraql.core.util.SqlScripts.applyForVendor(dataSource, JdbcIdempotencyStore.class,
+                    "/tesseraql/db/migration/operations/V10__idempotency_response_headers.sql");
         } catch (SQLException ex) {
             throw error("Failed to create idempotency schema", ex);
         }
@@ -62,27 +69,55 @@ public final class JdbcIdempotencyStore implements IdempotencyStore {
         }
         if ("COMPLETED".equals(existing.status)) {
             return new Replay(existing.responseStatus, existing.responseBody,
-                    existing.responseContentType);
+                    existing.responseContentType, readHeaders(existing.responseHeaders));
         }
         return new Conflict("Request with this idempotency key is already in progress", true);
     }
 
     @Override
-    public void complete(String scope, String key, int status, String body, String contentType) {
+    public void complete(String scope, String key, int status, String body, String contentType,
+            java.util.Map<String, String> headers) {
         try (Connection connection = dataSource.getConnection();
                 PreparedStatement ps = connection.prepareStatement("""
                         update tql_idempotency_record
                         set status = 'COMPLETED', response_status = ?, response_body = ?,
-                            response_content_type = ?
+                            response_content_type = ?, response_headers = ?
                         where scope = ? and idempotency_key = ?""")) {
             ps.setInt(1, status);
             ps.setString(2, body);
             ps.setString(3, contentType);
-            ps.setString(4, scope);
-            ps.setString(5, key);
+            ps.setString(4, writeHeaders(headers));
+            ps.setString(5, scope);
+            ps.setString(6, key);
             ps.executeUpdate();
         } catch (SQLException ex) {
             throw error("Idempotency complete failed", ex);
+        }
+    }
+
+    private static String writeHeaders(java.util.Map<String, String> headers) {
+        if (headers == null || headers.isEmpty()) {
+            return null;
+        }
+        try {
+            return HEADERS_JSON.writeValueAsString(headers);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
+            throw TqlException.builder(STORE_ERROR)
+                    .message("Failed to serialize replay headers: " + ex.getMessage()).cause(ex)
+                    .build();
+        }
+    }
+
+    private static java.util.Map<String, String> readHeaders(String json) {
+        if (json == null || json.isBlank()) {
+            return java.util.Map.of();
+        }
+        try {
+            return HEADERS_JSON.readValue(json, HEADERS_TYPE);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
+            throw TqlException.builder(STORE_ERROR)
+                    .message("Failed to read replay headers: " + ex.getMessage()).cause(ex)
+                    .build();
         }
     }
 
@@ -115,6 +150,7 @@ public final class JdbcIdempotencyStore implements IdempotencyStore {
                 existing.responseStatus = rs.getInt("response_status");
                 existing.responseBody = rs.getString("response_body");
                 existing.responseContentType = rs.getString("response_content_type");
+                existing.responseHeaders = rs.getString("response_headers");
                 existing.expiresAt = rs.getTimestamp("expires_at").toInstant();
                 return existing;
             }
@@ -153,6 +189,7 @@ public final class JdbcIdempotencyStore implements IdempotencyStore {
         int responseStatus;
         String responseBody;
         String responseContentType;
+        String responseHeaders;
         Instant expiresAt;
     }
 }
