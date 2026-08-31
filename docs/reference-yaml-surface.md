@@ -695,6 +695,7 @@ Schema for TesseraQL declarative view documents (*.view.yml): what a route rende
 | `refreshOn` | string | Refetch this view's refresh region whenever a command emits this topic (docs/realtime.md). List, detail and dashboard views only - not forms. |
 | `layout` | enum: `card` \| `page` | How a list view frames itself (docs/declarative-views.md): 'card' (the default) renders in the page flow; 'page' renders the operational grid page - fixed chrome, only the grid scrolls, in-place paging. List views only. |
 | `key` | any | The result columns that identify one row (docs/declarative-views.md): a column name, or an ordered list for a composite key. Rows gain a stable anchor and an opaque row token; every key column must be present and non-null in each row. List views only. |
+| `filters` | array of any | The grid page's declared filters (docs/declarative-views.md): route inputs rendered as condition chips and a filter dialog. Each entry is an input name, or a name/label mapping. Requires layout: page; list views only. |
 
 ## Other document kinds
 

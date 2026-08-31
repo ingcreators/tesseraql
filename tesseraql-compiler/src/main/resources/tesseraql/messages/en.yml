@@ -35,6 +35,11 @@ tql:
     next: "Next \u203a"
     search: "Search…"
     range: "{from}–{to} of {total}"
+    filters: Filters
+    apply: Apply
+    cancel: Cancel
+    clearFilters: Clear all
+    removeFilter: "Remove {label}"
     notFound: Not found.
   http:
     "400": Bad Request

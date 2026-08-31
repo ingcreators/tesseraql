@@ -89,6 +89,24 @@
         { "type": "array", "items": { "type": "string" }, "minItems": 1 }
       ],
       "description": "The result columns that identify one row (docs/declarative-views.md): a column name, or an ordered list for a composite key. Rows gain a stable anchor and an opaque row token; every key column must be present and non-null in each row. List views only."
+    },
+    "filters": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          { "type": "string" },
+          {
+            "type": "object",
+            "required": ["name"],
+            "properties": {
+              "name": { "type": "string", "description": "The declared route input this filter binds." },
+              "label": { "type": "string", "description": "The heading the condition chip and dialog field carry; a message key resolves through the catalog." }
+            },
+            "additionalProperties": false
+          }
+        ]
+      },
+      "description": "The grid page's declared filters (docs/declarative-views.md): route inputs rendered as condition chips and a filter dialog. Each entry is an input name, or a name/label mapping. Requires layout: page; list views only."
     }
   },
   "additionalProperties": false

@@ -530,6 +530,62 @@ class ViewSpecTest {
     }
 
     @Test
+    void filtersAcceptBareNamesAndLabelledMappings(@TempDir Path dir) throws Exception {
+        Path file = write(dir, "x.view.yml", """
+                version: tesseraql/v1
+                kind: view
+                recipe: list
+                layout: page
+                filters:
+                  - status
+                  - { name: priority, label: How urgent }
+                """);
+        ViewSpec spec = ViewSpec.parse(file);
+        assertThat(spec.filters()).extracting(ViewSpec.Filter::name)
+                .containsExactly("status", "priority");
+        assertThat(spec.filters().get(1).label()).isEqualTo("How urgent");
+    }
+
+    @Test
+    void filtersRequireThePageLayout(@TempDir Path dir) throws Exception {
+        Path file = write(dir, "x.view.yml", """
+                version: tesseraql/v1
+                kind: view
+                recipe: list
+                filters: [status]
+                """);
+        assertThatThrownBy(() -> ViewSpec.parse(file))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("filters: requires layout: page");
+    }
+
+    @Test
+    void rejectsADuplicateFilter(@TempDir Path dir) throws Exception {
+        Path file = write(dir, "x.view.yml", """
+                version: tesseraql/v1
+                kind: view
+                recipe: list
+                layout: page
+                filters: [status, status]
+                """);
+        assertThatThrownBy(() -> ViewSpec.parse(file))
+                .isInstanceOf(TqlException.class).hasMessageContaining("twice");
+    }
+
+    @Test
+    void rejectsFiltersOffAList(@TempDir Path dir) throws Exception {
+        Path file = write(dir, "x.view.yml", """
+                version: tesseraql/v1
+                kind: view
+                recipe: detail
+                filters: [status]
+                """);
+        assertThatThrownBy(() -> ViewSpec.parse(file))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("filters: is a list-view key");
+    }
+
+    @Test
     void rejectsLayoutOffAList(@TempDir Path dir) throws Exception {
         Path file = write(dir, "x.view.yml", """
                 version: tesseraql/v1

@@ -30,7 +30,7 @@ public record ViewSpec(String id,
         String title, String action, String source,
         String search, List<Field> fields, List<Column> columns, List<Child> children,
         List<Panel> panels, Map<String, String> slots, String template, String refreshOn,
-        String layout, List<String> key) {
+        String layout, List<String> key, List<Filter> filters) {
 
     /** Structurally invalid view document (docs/declarative-views.md, TQL-VIEW-3301). */
     public static final TqlErrorCode INVALID_VIEW = new TqlErrorCode(TqlDomain.VIEW, 3301);
@@ -106,6 +106,7 @@ public record ViewSpec(String id,
     private static final java.util.Set<String> DOCUMENT_KEYS = keysOf(ViewSpec.class,
             ENVELOPE_KEYS);
     private static final java.util.Set<String> FIELD_KEYS = keysOf(Field.class);
+    private static final java.util.Set<String> FILTER_KEYS = keysOf(Filter.class);
     private static final java.util.Set<String> COLUMN_KEYS = keysOf(Column.class);
     private static final java.util.Set<String> CHILD_KEYS = keysOf(Child.class);
     private static final java.util.Set<String> PANEL_KEYS = keysOf(Panel.class);
@@ -175,6 +176,14 @@ public record ViewSpec(String id,
         public boolean isSortable() {
             return Boolean.TRUE.equals(sortable);
         }
+    }
+
+    /**
+     * A grid-page filter (docs/list-surface.md decision 6): one declared route input rendered
+     * as a condition chip and a dialog field. A bare string entry is the shorthand for
+     * {@code name:} alone; {@code label} overrides the heading the chip and field carry.
+     */
+    public record Filter(String name, String label) {
     }
 
     /**
@@ -277,6 +286,14 @@ public record ViewSpec(String id,
         if (!key.isEmpty() && !LIST.equals(view)) {
             throw invalid(name, "key: is a list-view key");
         }
+        List<Filter> filters = parseFilters(name, tree.get("filters"));
+        if (!filters.isEmpty() && !LIST.equals(view)) {
+            throw invalid(name, "filters: is a list-view key");
+        }
+        if (!filters.isEmpty() && !LAYOUT_PAGE.equals(str(tree.get("layout")))) {
+            throw invalid(name, "filters: requires layout: page (the grid page renders the"
+                    + " condition chips and the filter dialog)");
+        }
         String action = str(tree.get("action"));
         if (FORM.equals(view) && (action == null || action.isBlank())) {
             throw invalid(name, "a form view must declare action: (the command route it posts to)");
@@ -292,7 +309,41 @@ public record ViewSpec(String id,
                 parseFields(name, tree.get("fields")), parseColumns(name, tree.get("columns")),
                 parseChildren(name, tree.get("children")), parsePanels(name, tree.get("panels")),
                 parseSlots(name, tree.get("slots")), str(tree.get("template")),
-                str(tree.get("refreshOn")), layout, key);
+                str(tree.get("refreshOn")), layout, key, filters);
+    }
+
+    /**
+     * The declared grid-page filters (docs/list-surface.md decision 6): bare strings or
+     * {@code {name, label}} mappings, order preserved, duplicates refused.
+     */
+    private static List<Filter> parseFilters(String source, Object raw) {
+        if (raw == null) {
+            return List.of();
+        }
+        if (!(raw instanceof List<?> list)) {
+            throw invalid(source, "filters: must be a list");
+        }
+        List<Filter> filters = new ArrayList<>();
+        for (Object entry : list) {
+            Filter filter;
+            if (entry instanceof Map<?, ?> map) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> mapping = (Map<String, Object>) map;
+                rejectUnknown(source, mapping, FILTER_KEYS, "a filters: entry");
+                filter = new Filter(str(mapping.get("name")), str(mapping.get("label")));
+            } else {
+                filter = new Filter(str(entry), null);
+            }
+            if (filter.name() == null || filter.name().isBlank()) {
+                throw invalid(source, "a filters: entry requires name: (a declared route"
+                        + " input)");
+            }
+            if (filters.stream().anyMatch(other -> other.name().equals(filter.name()))) {
+                throw invalid(source, "filters: names input '" + filter.name() + "' twice");
+            }
+            filters.add(filter);
+        }
+        return List.copyOf(filters);
     }
 
     /** The list layout in effect: the declared {@code layout:}, defaulting to the card. */

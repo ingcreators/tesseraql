@@ -60,12 +60,13 @@ public final class ViewBinding {
     private final Map<Integer, Embed> panelEmbeds;
     private final Map<String, io.tesseraql.yaml.model.ResponseSpec.FieldPolicy> readPolicies;
     private final Map<String, String> catalogByColumn;
+    private final List<ViewFields.FieldDef> filterFields;
 
     private ViewBinding(ViewSpec spec, String entryTemplate, List<ViewFields.FieldDef> fields,
             Map<String, String> slots, Path appHome, Map<Integer, Embed> childEmbeds,
             Map<Integer, Embed> panelEmbeds,
             Map<String, io.tesseraql.yaml.model.ResponseSpec.FieldPolicy> readPolicies,
-            Map<String, String> catalogByColumn) {
+            Map<String, String> catalogByColumn, List<ViewFields.FieldDef> filterFields) {
         this.spec = spec;
         this.entryTemplate = entryTemplate;
         this.fields = fields;
@@ -75,6 +76,7 @@ public final class ViewBinding {
         this.panelEmbeds = panelEmbeds;
         this.readPolicies = readPolicies;
         this.catalogByColumn = catalogByColumn;
+        this.filterFields = filterFields;
     }
 
     /**
@@ -126,9 +128,15 @@ public final class ViewBinding {
         String entry = spec.template() != null
                 ? TemplateResolution.resolve(home, viewDir, spec.template())
                 : "tql/view/" + pattern;
+        // The grid page's filter fields derive from the declaring route's own input: block
+        // (docs/list-surface.md decision 6) — the same declaration the request binder coerces.
+        List<ViewFields.FieldDef> filterFields = spec.filters().isEmpty()
+                ? List.of()
+                : ViewFields.deriveFilters(viewRef, spec,
+                        route == null ? null : route.input());
         return new ViewBinding(spec, entry, fields, resolveSlots(home, viewDir, spec), home,
                 Map.copyOf(childEmbeds), Map.copyOf(panelEmbeds), readSide.policies(),
-                readSide.catalogs());
+                readSide.catalogs(), filterFields);
     }
 
     /**
@@ -669,6 +677,7 @@ public final class ViewBinding {
             search.put("value", str(params.get(spec.search())));
             v.put("search", search);
         }
+        filterModel(v, catalog, locale, context, params, pagePath);
         List<Map<String, Object>> rendered = renderedColumns(catalog, locale, columns);
         // The header contract every sortable grid shares, studio tables included.
         io.tesseraql.yaml.view.SortState state = io.tesseraql.yaml.view.SortState.of(sort, dir,
@@ -798,12 +807,84 @@ public final class ViewBinding {
     }
 
     /**
-     * The query-state fragment ({@code &k=v…}) every self-referencing list URL carries: size
-     * rides along so a chosen page size survives navigation; sort/dir and the search term were
-     * always carried. Anything else the route declares still is not — the filter chips design
-     * (docs/list-surface.md decision 6) widens this deliberately.
+     * The query-state fragment ({@code &k=v…}) every self-referencing list URL carries:
+     * sort/dir, the chosen size, the search term, and every applied filter
+     * (docs/list-surface.md decision 6).
      */
     private String state(Map<String, Object> params) {
+        return chromeState(params) + filterState(params, null);
+    }
+
+    /**
+     * The grid page's filter model (docs/list-surface.md decision 6): the dialog fields with
+     * their current values, and the applied-condition chips whose remove links are real URLs
+     * minus that one condition — dropping a filter works without JavaScript.
+     */
+    private void filterModel(Map<String, Object> v, MessageCatalog catalog, Locale locale,
+            Map<String, Object> context, Map<String, Object> params, String pagePath) {
+        if (filterFields.isEmpty()) {
+            return;
+        }
+        List<Map<String, Object>> fields = new ArrayList<>();
+        List<Map<String, Object>> chips = new ArrayList<>();
+        String removePattern = message(catalog, locale, "tql.view.removeFilter",
+                "Remove {label}");
+        for (ViewFields.FieldDef def : filterFields) {
+            String value = str(params.get(def.name()));
+            String label = message(catalog, locale, def.labelKey(), def.labelFallback());
+            Map<String, Object> f = new LinkedHashMap<>();
+            f.put("name", def.name());
+            f.put("label", label);
+            f.put("widget", def.widget());
+            f.put("required", false);
+            f.put("maxLength", def.maxLength());
+            f.put("min", def.min());
+            f.put("max", def.max());
+            f.put("step", def.step());
+            f.put("value", value);
+            List<Map<String, Object>> options = List.of();
+            if ("select".equals(def.widget())) {
+                // The first, empty option is the "any" choice a filter needs and a form
+                // field does not: an empty submit simply applies no condition.
+                options = new ArrayList<>();
+                Map<String, Object> any = new LinkedHashMap<>();
+                any.put("value", "");
+                any.put("label", "");
+                options.add(any);
+                options.addAll(options(def, context));
+                f.put("options", options);
+            }
+            fields.add(f);
+            if (value.isEmpty()) {
+                continue;
+            }
+            Map<String, Object> chip = new LinkedHashMap<>();
+            chip.put("label", label);
+            chip.put("value", optionLabel(options, value));
+            chip.put("removeHref", href(pagePath,
+                    chromeState(params) + filterState(params, def.name())));
+            chip.put("removeLabel", removePattern.replace("{label}", label));
+            chips.add(chip);
+        }
+        v.put("filterFields", fields);
+        Map<String, Object> bar = new LinkedHashMap<>();
+        bar.put("chips", chips);
+        bar.put("clearHref", href(pagePath, chromeState(params)));
+        v.put("filterBar", bar);
+    }
+
+    /** The display text a chip shows: the matching option's label, else the raw value. */
+    private static String optionLabel(List<Map<String, Object>> options, String value) {
+        for (Map<String, Object> option : options) {
+            if (value.equals(option.get("value"))) {
+                return str(option.get("label"));
+            }
+        }
+        return value;
+    }
+
+    /** The non-filter state: sort/dir, size, and the search term. */
+    private String chromeState(Map<String, Object> params) {
         StringBuilder state = new StringBuilder();
         for (String key : List.of("sort", "dir", "size")) {
             String value = str(params.get(key));
@@ -818,6 +899,26 @@ public final class ViewBinding {
             }
         }
         return state.toString();
+    }
+
+    /** Every applied filter as query state, minus the one being removed (a chip's × link). */
+    private String filterState(Map<String, Object> params, String excluded) {
+        StringBuilder state = new StringBuilder();
+        for (ViewSpec.Filter filter : spec.filters()) {
+            if (filter.name().equals(excluded)) {
+                continue;
+            }
+            String value = str(params.get(filter.name()));
+            if (!value.isEmpty()) {
+                state.append('&').append(filter.name()).append('=').append(encode(value));
+            }
+        }
+        return state.toString();
+    }
+
+    /** {@code pagePath} plus a {@code &k=v…} state fragment as a navigable href. */
+    private static String href(String pagePath, String state) {
+        return state.isEmpty() ? pagePath : pagePath + "?" + state.substring(1);
     }
 
     private static String encode(String value) {

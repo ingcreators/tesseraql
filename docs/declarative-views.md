@@ -137,6 +137,25 @@ only when the contract declares them, so a minimal list is still a quiet page. T
 remains the default while the grid page soaks; apps override the pattern the same way
 (`templates/tql/view/list-page.html`).
 
+### Filters: declared params as chips and a dialog
+
+`filters:` lists declared route inputs — bare names, or `{ name, label }` mappings:
+
+```yaml
+layout: page
+filters: [status, { name: priority, label: How urgent }]
+```
+
+The grid page renders them twice. Applied conditions become chips on their own line; each
+chip's remove control is a real link to the same URL minus that condition, and "Clear all"
+keeps the search and sort. A Filters button opens a dialog of the declared inputs — enum
+and `codes:` inputs render as selects with an empty "any" choice, dates as date pickers,
+exactly as a form field would. Applying navigates like any other search: the result is a
+bookmarkable URL, and the page resets to 1. There is no operator language — a param *is* a
+condition, and the route's SQL applies it (`/*%if status */ and status = /* status */ 'x'
+/*%end*/`). Every filter must name a declared route input (`TQL-VIEW-3323`), and pager,
+sort and search navigation all carry the applied filters.
+
 ### Row identity and returning to the list: `key:` and `location: back`
 
 `key:` names the result columns that identify one row — a single column (`key: id`) or an
@@ -483,6 +502,7 @@ Lint family **`TQL-VIEW-33xx`**:
 | 3319 | `response.html.model` declares a reserved view-model name (`v`, `views`) |
 | 3321 | a column `link:` placeholder is not one plain column name — dotted or malformed placeholders render empty at runtime and eject wrong |
 | 3322 | a declared `key:` column is null, absent or blank in a result row — a row without its declared identity is a data defect |
+| 3323 | a `filters:` entry names an input the route does not declare |
 
 Coverage kind **`view`**: one item per view document, exercised when a declarative
 suite invokes any route referencing its id — an unreferenced document is declared and
