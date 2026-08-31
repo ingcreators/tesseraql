@@ -33,13 +33,64 @@ public final class PageBinder implements Step {
     public void process(Exchange exchange) {
         int size = size(exchange);
         if (PageSpec.KEYSET.equals(spec.effectiveStrategy())) {
+            List<String> by = spec.effectiveBy();
+            if (by.size() > 1) {
+                publishAfterParts(exchange, by);
+            }
             exchange.setProperty(TesseraqlProperties.PAGE,
-                    new PageRequest(1, size, 0, spec.count(), spec.by()));
+                    new PageRequest(1, size, 0, spec.count(), by));
             return;
         }
         long number = positiveLong(exchange, "page", 1);
         exchange.setProperty(TesseraqlProperties.PAGE,
                 new PageRequest(number, size, (number - 1) * (long) size, spec.count(), null));
+    }
+
+    /**
+     * Decodes a composite {@code ?after=} row token into {@code params.after.<column>} parts
+     * (docs/list-surface.md decision 5), so the authored tuple predicate binds them like any
+     * other params expression. A single-column cursor stays the author's own declared
+     * {@code after} input, exactly as before.
+     */
+    @SuppressWarnings("unchecked")
+    private static void publishAfterParts(Exchange exchange, List<String> by) {
+        String token = exchange.request().param("after");
+        if (token == null || token.isBlank()) {
+            return;
+        }
+        List<String> values;
+        try {
+            values = io.tesseraql.core.rows.RowTokens.decode(token.trim(), by);
+        } catch (IllegalArgumentException ex) {
+            throw reject("after", token);
+        }
+        Object raw = exchange.getProperty(TesseraqlProperties.CONTEXT);
+        if (!(raw instanceof Map)) {
+            return;
+        }
+        Map<String, Object> context = (Map<String, Object>) raw;
+        Map<String, Object> params = context.get("params") instanceof Map<?, ?> existing
+                ? new LinkedHashMap<>((Map<String, Object>) existing)
+                : new LinkedHashMap<>();
+        Map<String, Object> after = new LinkedHashMap<>();
+        for (int i = 0; i < by.size(); i++) {
+            after.put(by.get(i), coerce(values.get(i)));
+        }
+        params.put("after", after);
+        context.put("params", params);
+    }
+
+    /** Cursor parts travel as canonical text; numeric ones bind as numbers again. */
+    private static Object coerce(String value) {
+        try {
+            return Long.valueOf(value);
+        } catch (NumberFormatException notLong) {
+            try {
+                return new java.math.BigDecimal(value);
+            } catch (NumberFormatException notNumeric) {
+                return value;
+            }
+        }
     }
 
     private int size(Exchange exchange) {

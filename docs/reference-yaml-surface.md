@@ -436,7 +436,7 @@ Declarative pagination: the framework appends the dialect clause; authored SQL c
 | `size` | integer ≥ 1 | Page size used when the request does not ask for one. |
 | `maxSize` | integer ≥ 1 | Largest page size a request may ask for; a larger request is clamped. |
 | `count` | boolean | Also run a count query so the response carries the total row count. |
-| `by` | string | keyset cursor column |
+| `by` | any | The keyset cursor column, or an ordered list for a composite cursor: the next cursor becomes one opaque row token, decoded back into params.after.<column> parts for the authored tuple predicate. |
 
 ### cache
 

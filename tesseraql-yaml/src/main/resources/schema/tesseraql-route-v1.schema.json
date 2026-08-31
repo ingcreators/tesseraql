@@ -634,8 +634,11 @@
           "description": "Also run a count query so the response carries the total row count."
         },
         "by": {
-          "type": "string",
-          "description": "keyset cursor column"
+          "oneOf": [
+            { "type": "string" },
+            { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+          ],
+          "description": "The keyset cursor column, or an ordered list for a composite cursor: the next cursor becomes one opaque row token, decoded back into params.after.<column> parts for the authored tuple predicate."
         }
       },
       "additionalProperties": true
