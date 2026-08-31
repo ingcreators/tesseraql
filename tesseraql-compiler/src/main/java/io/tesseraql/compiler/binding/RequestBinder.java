@@ -35,7 +35,8 @@ public final class RequestBinder implements Step {
      * hidden CSRF token a no-JS form post carries (validated by the {@code csrf} step) passes the
      * mass-assignment guard even under {@code unknownFields: reject}.
      */
-    private static final java.util.Set<String> RESERVED_FIELDS = java.util.Set.of("_csrf");
+    private static final java.util.Set<String> RESERVED_FIELDS = java.util.Set.of("_csrf",
+            "_idempotency");
 
     private final RouteDefinition route;
     private final java.util.List<String> pathParams;

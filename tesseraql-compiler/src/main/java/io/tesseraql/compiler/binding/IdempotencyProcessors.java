@@ -24,6 +24,7 @@ public final class IdempotencyProcessors {
     /** Exchange property set to {@code true} when the response is a stored replay. */
     public static final String REPLAY_PROPERTY = "TqlIdemReplay";
     private static final String KEY_HEADER = "Idempotency-Key";
+    private static final String KEY_FIELD = "_idempotency";
     private static final TqlErrorCode CONFLICT = new TqlErrorCode(TqlDomain.IDEM, 4090);
     /** Same key, different request: a stale tab or a bug, not a retry (422, not 409). */
     private static final TqlErrorCode MISMATCH = new TqlErrorCode(TqlDomain.IDEM, 4221);
@@ -46,11 +47,11 @@ public final class IdempotencyProcessors {
 
         @Override
         public void process(io.tesseraql.pipeline.Exchange exchange) {
-            String key = exchange.request().header(KEY_HEADER);
-            if (key == null || key.isBlank()) {
+            String key = keyOf(exchange);
+            if (key == null) {
                 if (required) {
-                    throw new TqlException(KEY_REQUIRED,
-                            "Missing required " + KEY_HEADER + " header");
+                    throw new TqlException(KEY_REQUIRED, "Missing required " + KEY_HEADER
+                            + " header or " + KEY_FIELD + " form field");
                 }
                 return; // idempotency optional and not requested
             }
@@ -93,8 +94,8 @@ public final class IdempotencyProcessors {
             if (Boolean.TRUE.equals(exchange.getProperty(REPLAY_PROPERTY))) {
                 return;
             }
-            String key = exchange.request().header(KEY_HEADER);
-            if (key == null || key.isBlank()) {
+            String key = keyOf(exchange);
+            if (key == null) {
                 return;
             }
             int status = exchange.response().statusOr200();
@@ -103,6 +104,19 @@ public final class IdempotencyProcessors {
             store(exchange).complete(scope, key, status, body, contentType);
             exchange.setProperty(TesseraqlProperties.IDEMPOTENCY_CLAIM, null);
         }
+    }
+
+    /**
+     * The declared key: the {@code Idempotency-Key} header first, else the {@code _idempotency}
+     * hidden field a rendered form echoes - header-then-field, the same precedence the CSRF
+     * check uses (docs/idempotency-key.md decision 5). Null when neither transport carries one.
+     */
+    private static String keyOf(Exchange exchange) {
+        String key = exchange.request().header(KEY_HEADER);
+        if (key == null || key.isBlank()) {
+            key = exchange.request().param(KEY_FIELD);
+        }
+        return key == null || key.isBlank() ? null : key;
     }
 
     private static IdempotencyStore store(Exchange exchange) {

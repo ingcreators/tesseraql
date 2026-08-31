@@ -119,6 +119,9 @@ clears the alert, because an error response belongs to the contracts above.
 
 Retrying is the user's verb: the behavior never auto-retries, and the Retry button
 re-issues the request through the full htmx pipeline with the form's current input values.
+For a command route that declares `idempotency:`, the form's `_idempotency` hidden field
+rides the retry unchanged, so a retried POST that already committed replays the original
+response instead of writing twice ([transactional-writes](transactional-writes.md)).
 The alert's strings come from the kit's i18n catalog (`networkRetry.failed` /
 `networkRetry.retry`) and follow the request locale like every other kit message.
 

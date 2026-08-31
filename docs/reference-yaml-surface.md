@@ -62,7 +62,7 @@ Idempotent replay for commands. A replayed key returns the stored response; a re
 
 | Property | Type | Description |
 | --- | --- | --- |
-| `required` | boolean | Whether the Idempotency-Key header is required on this command. |
+| `required` | boolean | Whether a key is required on this command - the Idempotency-Key header, or the _idempotency hidden field a rendered form echoes. |
 | `scope` | string | The replay scope key (default: the route id). |
 | `ttl` | string | How long a stored response replays (duration string, default 24h). |
 

@@ -271,9 +271,13 @@ keys.
 
 ## Idempotent replay
 
-Commands compose with the existing idempotency machinery: declare `idempotency:` and send an
-`Idempotency-Key` header — a replay returns the stored response without re-executing any
-step, so a double-submitted order form writes once.
+Commands compose with the existing idempotency machinery: declare `idempotency:` and send a
+key — a replay returns the stored response without re-executing any step, so a
+double-submitted order form writes once. Two transports carry the key, header first: an API
+caller sends the `Idempotency-Key` header, and a browser form echoes the `_idempotency`
+hidden field the framework mints into every rendered form (one fresh key per rendered form
+instance; the field is reserved, so it never reaches input binding). The no-JS full-page
+POST follows the same branches — nothing here is JavaScript.
 
 ```yaml
 idempotency:

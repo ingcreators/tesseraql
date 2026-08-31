@@ -168,6 +168,31 @@ class IdempotencyProcessorsTest {
                         ex -> assertThat(ex.code().toString()).isEqualTo("TQL-IDEM-4090"));
     }
 
+    @Test
+    void theKeyFallsBackToTheFormFieldWhenNoHeaderArrives() throws Exception {
+        // The no-JS form transport (docs/idempotency-key.md decision 5): the rendered
+        // _idempotency hidden field carries the key when no header can.
+        FakeStore store = new FakeStore();
+        Exchange exchange = exchange(store);
+        exchange.request().header("Idempotency-Key", "");
+        exchange.request().formFields().put("_idempotency", List.of("field-key"));
+        begin(exchange);
+
+        assertThat(exchange.getProperty(TesseraqlProperties.IDEMPOTENCY_CLAIM, String.class))
+                .isEqualTo("orders\nfield-key");
+    }
+
+    @Test
+    void theHeaderWinsWhenBothTransportsCarryAKey() throws Exception {
+        FakeStore store = new FakeStore();
+        Exchange exchange = exchange(store);
+        exchange.request().formFields().put("_idempotency", List.of("field-key"));
+        begin(exchange);
+
+        assertThat(exchange.getProperty(TesseraqlProperties.IDEMPOTENCY_CLAIM, String.class))
+                .isEqualTo("orders\nk-1");
+    }
+
     private static Principal principal(String subject) {
         return new Principal(subject, subject, subject, null, List.of(), List.of(), List.of(),
                 Map.of(), List.of(), List.of());
