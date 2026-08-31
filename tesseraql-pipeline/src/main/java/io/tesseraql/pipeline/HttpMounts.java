@@ -60,8 +60,13 @@ public final class HttpMounts {
      * URL twice.
      */
     public synchronized void mount(String method, String path, String pipeline) {
-        mounts.removeIf(mount -> mount.pipeline().equals(pipeline));
-        mounts.add(new Mount(method.toUpperCase(Locale.ROOT), path, pipeline));
+        // Keyed by pipeline AND method: a snapshot page mounts GET and POST onto one
+        // pipeline (docs/list-surface.md decision 10), and each re-declaration on hot
+        // reload still replaces exactly its own entry.
+        String normalized = method.toUpperCase(Locale.ROOT);
+        mounts.removeIf(mount -> mount.pipeline().equals(pipeline)
+                && mount.method().equals(normalized));
+        mounts.add(new Mount(normalized, path, pipeline));
     }
 
     /** Every mount declared so far, in declaration order. */

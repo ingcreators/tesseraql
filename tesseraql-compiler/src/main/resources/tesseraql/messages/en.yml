@@ -45,6 +45,8 @@ tql:
     modified: Modified
     select: Select row
     selectAll: Select all rows
+    tombstone: No longer in this list.
+    asOfSearch: "(as of search)"
     notFound: Not found.
   http:
     "400": Bad Request

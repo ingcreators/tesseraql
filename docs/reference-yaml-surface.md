@@ -432,7 +432,8 @@ Declarative pagination: the framework appends the dialect clause; authored SQL c
 
 | Property | Type | Description |
 | --- | --- | --- |
-| `strategy` | enum: `offset` \| `keyset` | `offset` (the default) pages by row offset; `keyset` pages by the `by:` cursor column and stays stable while rows are inserted. |
+| `strategy` | enum: `offset` \| `keyset` \| `snapshot` | `offset` (the default) pages by row offset; `keyset` pages by the `by:` cursor column and stays stable while rows are inserted; `snapshot` freezes a work queue's membership at search time as row tokens the page carries - requires the view's key:, and the authored SQL binds the page's `keys` IN-list. |
+| `cap` | integer ≥ 1 | The snapshot membership cap (default 500): a search whose hits exceed it answers 422 rather than truncating. Only legal on strategy: snapshot. |
 | `size` | integer ≥ 1 | Page size used when the request does not ask for one. |
 | `maxSize` | integer ≥ 1 | Largest page size a request may ask for; a larger request is clamped. |
 | `count` | boolean | Also run a count query so the response carries the total row count. |

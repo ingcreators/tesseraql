@@ -89,10 +89,18 @@ final class InputRules implements LintRule {
                         "page: by: entries must be column names"));
             }
             if (!io.tesseraql.yaml.model.PageSpec.OFFSET.equals(page.effectiveStrategy())
-                    && !io.tesseraql.yaml.model.PageSpec.KEYSET.equals(page.effectiveStrategy())) {
+                    && !io.tesseraql.yaml.model.PageSpec.KEYSET.equals(page.effectiveStrategy())
+                    && !io.tesseraql.yaml.model.PageSpec.SNAPSHOT
+                            .equals(page.effectiveStrategy())) {
                 findings.add(new LintFinding(INVALID_PAGE_STRATEGY, ERROR, source,
-                        "page: unknown strategy " + page.strategy() + " (offset or keyset)",
+                        "page: unknown strategy " + page.strategy()
+                                + " (offset, keyset or snapshot)",
                         context.lineOf(route.source(), "page:"), null));
+            }
+            if (page.cap() != null && !io.tesseraql.yaml.model.PageSpec.SNAPSHOT
+                    .equals(page.effectiveStrategy())) {
+                findings.add(new LintFinding(INVALID_PAGE_STRATEGY, ERROR, source,
+                        "page: cap: is a strategy: snapshot key"));
             }
             if (page.effectiveSize() < 1
                     || (page.maxSize() != null && page.maxSize() < page.effectiveSize())) {

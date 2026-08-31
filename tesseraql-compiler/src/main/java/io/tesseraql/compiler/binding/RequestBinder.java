@@ -36,7 +36,11 @@ public final class RequestBinder implements Step {
      * mass-assignment guard even under {@code unknownFields: reject}.
      */
     private static final java.util.Set<String> RESERVED_FIELDS = java.util.Set.of("_csrf",
-            "_idempotency", "_return");
+            "_idempotency", "_return",
+            // The snapshot pager's framework-owned fields (docs/list-surface.md decision 10):
+            // the membership tokens and the page number travel in the POST body, like the
+            // framework-owned ?page=/?size= query params they mirror.
+            "keys", "page", "size");
 
     private final RouteDefinition route;
     private final java.util.List<String> pathParams;

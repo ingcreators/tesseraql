@@ -24,14 +24,36 @@ public final class PageBinder implements Step {
     private static final TqlErrorCode VALIDATION = new TqlErrorCode(TqlDomain.FIELD, 2001);
 
     private final PageSpec spec;
+    private final List<String> snapshotKey;
 
     public PageBinder(PageSpec spec) {
+        this(spec, null);
+    }
+
+    /**
+     * The snapshot variant (docs/list-surface.md decision 10): {@code snapshotKey} is the
+     * acting list view's declared {@code key:}, used to decode the posted membership tokens.
+     */
+    public PageBinder(PageSpec spec, List<String> snapshotKey) {
         this.spec = spec;
+        this.snapshotKey = snapshotKey;
     }
 
     @Override
     public void process(Exchange exchange) {
         int size = size(exchange);
+        if (PageSpec.SNAPSHOT.equals(spec.effectiveStrategy())) {
+            List<String> posted = exchange.request().formFields().get("keys");
+            if (posted == null || posted.isEmpty()) {
+                // The search: fetch the whole membership; the producer's size+1 over-fetch is
+                // the over-cap detection the view refuses on (TQL-FIELD-4222).
+                exchange.setProperty(TesseraqlProperties.PAGE,
+                        new PageRequest(1, spec.effectiveCap(), 0, false, null));
+            } else {
+                publishSnapshotSlice(exchange, posted, size);
+            }
+            return;
+        }
         if (PageSpec.KEYSET.equals(spec.effectiveStrategy())) {
             List<String> by = spec.effectiveBy();
             if (by.size() > 1) {
@@ -78,6 +100,52 @@ public final class PageBinder implements Step {
         }
         params.put("after", after);
         context.put("params", params);
+    }
+
+    /**
+     * A snapshot page fetch (docs/list-surface.md decision 10): the posted membership tokens
+     * are the snapshot, this page's slice decodes into typed {@code params.keys} for the
+     * authored IN predicate, and the {@code snapshot} context entry carries what the view
+     * re-renders — the whole membership, the page number, and the totals. Membership never
+     * changes here; only a new search changes it.
+     */
+    @SuppressWarnings("unchecked")
+    private void publishSnapshotSlice(Exchange exchange, List<String> posted, int size) {
+        // Single-column keys only for now — the composite tuple-IN binding is the recorded
+        // follow-up (docs/list-surface.md open question 3's residue).
+        if (snapshotKey == null || snapshotKey.size() != 1) {
+            return;
+        }
+        if (posted.size() > spec.effectiveCap()) {
+            throw reject("keys", posted.size() + " keys");
+        }
+        long number = positiveLong(exchange, "page", 1);
+        int from = (int) Math.min((number - 1) * size, posted.size());
+        int to = (int) Math.min(number * size, posted.size());
+        List<Object> keys = new java.util.ArrayList<>(to - from);
+        for (String token : posted.subList(from, to)) {
+            try {
+                keys.add(coerce(
+                        io.tesseraql.core.rows.RowTokens.decode(token, snapshotKey).get(0)));
+            } catch (IllegalArgumentException ex) {
+                throw reject("keys", token);
+            }
+        }
+        Object raw = exchange.getProperty(TesseraqlProperties.CONTEXT);
+        if (!(raw instanceof Map)) {
+            return;
+        }
+        Map<String, Object> context = (Map<String, Object>) raw;
+        Map<String, Object> params = context.get("params") instanceof Map<?, ?> existing
+                ? new LinkedHashMap<>((Map<String, Object>) existing)
+                : new LinkedHashMap<>();
+        params.put("keys", keys);
+        context.put("params", params);
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+        snapshot.put("keys", List.copyOf(posted));
+        snapshot.put("number", number);
+        snapshot.put("size", size);
+        context.put("snapshot", snapshot);
     }
 
     /** Cursor parts travel as canonical text; numeric ones bind as numbers again. */

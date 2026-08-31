@@ -48,6 +48,8 @@ final class ViewRules implements LintRule {
 
     private static final String UNMATCHED_BULK_ACTION = "TQL-VIEW-3325";
 
+    private static final String INVALID_SNAPSHOT_VIEW = "TQL-VIEW-3326";
+
     /** Any {@code {…}} segment of a {@code link:} template, valid or not. */
     private static final java.util.regex.Pattern LINK_PLACEHOLDER = java.util.regex.Pattern
             .compile("\\{([^}]*)}");
@@ -141,6 +143,17 @@ final class ViewRules implements LintRule {
             }
             if (io.tesseraql.yaml.view.ViewSpec.LIST.equals(spec.view())) {
                 var inputs = route.definition().input();
+                var pagination = route.definition().pagination();
+                if (pagination != null
+                        && io.tesseraql.yaml.model.PageSpec.SNAPSHOT
+                                .equals(pagination.effectiveStrategy())
+                        && (spec.key().size() != 1 || !io.tesseraql.yaml.view.ViewSpec.LAYOUT_PAGE
+                                .equals(spec.effectiveLayout()))) {
+                    findings.add(new LintFinding(INVALID_SNAPSHOT_VIEW, ERROR, source,
+                            "view " + spec.id() + ": pagination strategy snapshot requires"
+                                    + " layout: page and a single-column key: (the membership"
+                                    + " travels as row tokens)"));
+                }
                 if (spec.search() != null
                         && (inputs == null || !inputs.containsKey(spec.search()))) {
                     findings.add(new LintFinding(VIEW_INPUT_NOT_DECLARED, ERROR, source,

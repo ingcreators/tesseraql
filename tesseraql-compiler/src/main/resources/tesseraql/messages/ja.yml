@@ -41,6 +41,8 @@ tql:
     modified: 変更あり
     select: 行を選択
     selectAll: すべての行を選択
+    tombstone: この一覧から外れました。
+    asOfSearch: "（検索時点）"
     notFound: 見つかりません。
   http:
     "400": リクエストが正しくありません

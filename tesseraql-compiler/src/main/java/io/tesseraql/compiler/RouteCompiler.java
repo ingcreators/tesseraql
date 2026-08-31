@@ -654,6 +654,22 @@ public final class RouteCompiler {
     }
 
     /**
+     * The declared row key of a snapshot-paginated route's own view (docs/list-surface.md
+     * decision 10), or null for every other route.
+     */
+    private java.util.List<String> snapshotKey(RouteDefinition definition) {
+        if (definition.pagination() == null
+                || !io.tesseraql.yaml.model.PageSpec.SNAPSHOT
+                        .equals(definition.pagination().effectiveStrategy())
+                || definition.response() == null || definition.response().html() == null
+                || definition.response().html().view() == null || manifest == null) {
+            return null;
+        }
+        var view = manifest.viewById(definition.response().html().view());
+        return view == null ? null : view.spec().key();
+    }
+
+    /**
      * The acting list view's key columns when some view's {@code actions:} target this route
      * (docs/list-surface.md decision 9), or null when none does.
      */
@@ -1195,6 +1211,14 @@ public final class RouteCompiler {
 
         if (mountRest) {
             mount(context, routeFile.httpMethod(), routeFile.urlPath(), served);
+            // A snapshot-paginated page (docs/list-surface.md decision 10) also answers POST:
+            // the pager resubmits the membership tokens plus the page number to the same URL.
+            if (definition.pagination() != null
+                    && io.tesseraql.yaml.model.PageSpec.SNAPSHOT
+                            .equals(definition.pagination().effectiveStrategy())
+                    && "GET".equalsIgnoreCase(routeFile.httpMethod())) {
+                mount(context, "POST", routeFile.urlPath(), served);
+            }
         }
 
         PipelineBuilder route = pipelines.pipeline(routeId);
@@ -1213,7 +1237,8 @@ public final class RouteCompiler {
         // query executes; the producer appends the dialect clause and publishes `page`.
         if (definition.pagination() != null) {
             step = step
-                    .process(new io.tesseraql.compiler.binding.PageBinder(definition.pagination()));
+                    .process(new io.tesseraql.compiler.binding.PageBinder(
+                            definition.pagination(), snapshotKey(definition)));
         }
         // Named sources run in authored order, each result keyed under its name — `main`
         // included, which is why there is no primary step beside this loop any more: the

@@ -67,9 +67,16 @@
        to its own route (formaction), and the no-JS submit answers post/redirect/get with
        `location: back` landing on this list. Without actions the form is inert chrome. -->
   <form method="post">
-  <input type="hidden" name="_csrf" th:if="${_csrf != null && v.actions != null}"
+  <input type="hidden" name="_csrf"
+         th:if="${_csrf != null && (v.actions != null or v.snapshot != null)}"
          th:value="${_csrf}">
   <input type="hidden" name="_return" th:if="${v.returnTo != null}" th:value="${v.returnTo}">
+  <!-- The snapshot membership (docs/list-surface.md decision 10): every hit's row token,
+       frozen at search time, outside the swapped region — the pager posts it back with the
+       page number, and only a new search changes it. -->
+  <th:block th:if="${v.snapshotKeys != null}">
+    <input type="hidden" name="keys" th:each="k : ${v.snapshotKeys}" th:value="${k}">
+  </th:block>
   <!-- The selection bar: hidden until rows are checked (installDatagridActions, auto-init);
        the count child carries the translated selected-count. -->
   <div class="hc-cluster" th:if="${v.actions != null}" hidden
@@ -100,7 +107,23 @@
       <p class="tql-list-page__status" aria-live="polite"
          th:if="${v.page['range'] != null}" th:text="${v.page['range']}">1–20 of 56</p>
       <span class="hc-spacer"></span>
-      <nav class="hc-pagination" aria-label="Pagination">
+      <!-- The snapshot pager: POST buttons, because the membership travels in the body —
+           snapshot pages have no URL and want none (reload is a new search, by design). -->
+      <nav class="hc-pagination" aria-label="Pagination" th:if="${v.snapshot != null}">
+        <button type="submit" class="hc-pagination__item" name="page"
+                th:if="${v.page['hasPrev'] == true}" th:value="${v.page['number'] - 1}"
+                th:text="#{tql.view.prev}">&lsaquo; Prev</button>
+        <span th:if="${v.page['hasPrev'] != true}" class="hc-pagination__item"
+              aria-disabled="true" th:text="#{tql.view.prev}">&lsaquo; Prev</span>
+        <span class="hc-pagination__item" aria-current="page"
+              th:text="|${v.page['number']} / ${v.page['totalPages']}|">1</span>
+        <button type="submit" class="hc-pagination__item" name="page"
+                th:if="${v.page['hasNext'] == true}" th:value="${v.page['number'] + 1}"
+                th:text="#{tql.view.next}">Next &rsaquo;</button>
+        <span th:if="${v.page['hasNext'] != true}" class="hc-pagination__item"
+              aria-disabled="true" th:text="#{tql.view.next}">Next &rsaquo;</span>
+      </nav>
+      <nav class="hc-pagination" aria-label="Pagination" th:if="${v.snapshot == null}">
         <a th:if="${v.page['prevHref'] != null}" class="hc-pagination__item"
            th:href="${v.page['prevHref']}"
            th:attr="hx-get=${v.page['prevHref']},hx-target=|#${v.id}-table|,hx-select=|#${v.id}-table|"

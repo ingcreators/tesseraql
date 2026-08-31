@@ -34,14 +34,22 @@
                (docs/list-surface.md decision 2) — the id a `location: back` redirect's
                #row-… fragment refocuses. Views without a key render anonymous rows. -->
           <tr class="hc-datagrid__row" th:each="r, rStat : ${rows}"
-              th:id="${v != null && v['anchors'] != null ? v['anchors'][rStat.index] : null}">
+              th:id="${v != null && v['anchors'] != null ? v['anchors'][rStat.index] : null}"
+              th:attr="data-tombstone=${v != null && v['tombstones'] != null && v['tombstones'][rStat.index] == true} ? 'true' : null"
+              th:with="tombstone=${v != null && v['tombstones'] != null && v['tombstones'][rStat.index] == true}">
             <td class="hc-datagrid__cell"
                 th:if="${v != null && v['selectable'] == true}">
-              <input type="checkbox" class="hc-checkbox" name="ids"
+              <input type="checkbox" class="hc-checkbox" name="ids" th:unless="${tombstone}"
                      th:value="${v['tokens'][rStat.index]}"
                      th:attr="aria-label=#{tql.view.select}">
             </td>
-            <td class="hc-datagrid__cell" th:each="cell : ${r}">
+            <!-- A snapshot row that vanished since the search (docs/list-surface.md decision
+                 10): the page arithmetic and the user's count hold; only a new search drops
+                 it from the membership. -->
+            <td class="hc-datagrid__cell" th:if="${tombstone}"
+                th:attr="colspan=${#lists.isEmpty(columns) ? 1 : #lists.size(columns)}"
+                th:text="#{tql.view.tombstone}">No longer in this list.</td>
+            <td class="hc-datagrid__cell" th:each="cell : ${r}" th:unless="${tombstone}">
               <a th:if="${cell.href != null}" th:href="@{${cell.href}}"
                  th:class="${cell.button} ? 'hc-button' : null"
                  th:attr="data-size=${cell.button} ? 'sm' : null"
