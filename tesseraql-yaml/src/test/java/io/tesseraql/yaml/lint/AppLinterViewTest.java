@@ -74,6 +74,18 @@ class AppLinterViewTest {
     }
 
     @Test
+    void aFilterMustNameADeclaredRouteInput(@TempDir Path dir) throws Exception {
+        writeApp(dir, """
+                version: tesseraql/v1
+                kind: view
+                recipe: list
+                layout: page
+                filters: [ghost]
+                """);
+        assertThat(viewCodes(new AppLinter().lint(dir))).contains("TQL-VIEW-3323");
+    }
+
+    @Test
     void aDottedLinkPlaceholderIsAnError(@TempDir Path dir) throws Exception {
         // docs/list-surface.md decision 3: the runtime renders a dotted path but the ejector
         // rewrites placeholders per column — the divergence is refused at lint time.

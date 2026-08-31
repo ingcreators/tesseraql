@@ -20,13 +20,34 @@
       <th:block th:insert="~{__${v.slots['header']}__}"/>
     </th:block>
   </div>
-  <div class="hc-cluster" th:if="${v.search != null}">
-    <input class="hc-input" type="search"
+  <div class="hc-cluster" th:if="${v.search != null or v.filterFields != null}">
+    <input th:if="${v.search != null}" class="hc-input" type="search"
            th:id="|${v.id}-search|"
            th:name="${v.search.param}" th:value="${v.search.value}"
            th:placeholder="#{tql.view.search}"
            th:attr="hx-get=${v.path},hx-target=|#${v.id}-table|,hx-select=|#${v.id}-table|,hx-include=|#${v.id}-table input[type='hidden']|"
            hx-trigger="input changed delay:300ms, search" hx-swap="outerHTML">
+    <button th:if="${v.filterFields != null}" type="button" class="hc-button"
+            data-variant="ghost" th:attr="data-tql-open-dialog=|#${v.id}-filters|"
+            th:text="#{tql.view.filters}">Filters</button>
+  </div>
+  <!-- Applied conditions (docs/list-surface.md decision 6): each remove control is a real
+       link to the same URL minus that condition, so dropping a filter works without
+       JavaScript; the kit's filterbar collapses itself when nothing is applied. -->
+  <div class="hc-filterbar" th:if="${v.filterBar != null}">
+    <ul class="hc-filterbar__list">
+      <li class="hc-filterbar__item" th:each="chip : ${v.filterBar.chips}">
+        <button class="hc-filterbar__chip" type="button"
+                th:attr="data-tql-open-dialog=|#${v.id}-filters|">
+          <span class="hc-filterbar__label" th:text="${chip.label}">Status</span>
+          <span class="hc-filterbar__value" th:text="${chip.value}">open</span>
+        </button>
+        <a class="hc-filterbar__remove" th:href="${chip.removeHref}"
+           th:attr="aria-label=${chip.removeLabel}">&times;</a>
+      </li>
+    </ul>
+    <a class="hc-filterbar__clear" th:if="${not #lists.isEmpty(v.filterBar.chips)}"
+       th:href="${v.filterBar.clearHref}" th:text="#{tql.view.clearFilters}">Clear all</a>
   </div>
   <!-- With refreshOn: (docs/realtime.md) this region listens for the topic on the
        /_tesseraql/topics stream and re-GETs the page itself, selecting this same region —
@@ -35,6 +56,13 @@
        th:attr="hx-ext=${v.liveExt},sse-connect=@{${v.liveConnect}},hx-get=${v.liveGet},hx-trigger=${v.liveTrigger},hx-select=${v.liveSelect},hx-include=${v.liveInclude},hx-target=${v.liveTarget},hx-swap=${v.liveSwap}">
     <input type="hidden" name="sort" th:if="${v.sort != ''}" th:value="${v.sort}">
     <input type="hidden" name="dir" th:if="${v.dir != ''}" th:value="${v.dir}">
+    <!-- Applied filters ride the region's swaps the same way sort/dir do: the search box
+         includes every hidden input here, and the sort links include this span by id. -->
+    <span th:id="|${v.id}-table-filters|" hidden th:if="${v.filterFields != null}">
+      <th:block th:each="f : ${v.filterFields}">
+        <input type="hidden" th:if="${f.value != ''}" th:name="${f.name}" th:value="${f.value}">
+      </th:block>
+    </span>
     <div class="tql-list-page__grid">
       <th:block th:insert="~{tql/view/table :: table(|${v.id}-table|, ${v.columns}, ${v.rows})}"/>
     </div>
@@ -65,6 +93,31 @@
   <th:block th:if="${v.slots['footer'] != null}">
     <th:block th:insert="~{__${v.slots['footer']}__}"/>
   </th:block>
+  <!-- The filter dialog (docs/list-surface.md decision 6): one GET form of the declared
+       filter inputs — applying navigates like any other search, so the result is a
+       bookmarkable URL and page resets to 1. Cancel closes via the native dialog method. -->
+  <dialog class="hc-dialog" th:id="|${v.id}-filters|" th:if="${v.filterFields != null}">
+    <form method="get" th:action="${v.path}">
+      <div class="hc-dialog__header">
+        <h2 class="hc-dialog__title" th:text="#{tql.view.filters}">Filters</h2>
+      </div>
+      <div class="hc-dialog__body hc-stack">
+        <input type="hidden" name="sort" th:if="${v.sort != ''}" th:value="${v.sort}">
+        <input type="hidden" name="dir" th:if="${v.dir != ''}" th:value="${v.dir}">
+        <input type="hidden" th:if="${v.search != null and v.search.value != ''}"
+               th:name="${v.search.param}" th:value="${v.search.value}">
+        <th:block th:each="f : ${v.filterFields}">
+          <th:block th:insert="~{tql/view/field :: field(${f})}"/>
+        </th:block>
+      </div>
+      <div class="hc-dialog__footer">
+        <button type="submit" class="hc-button" data-variant="ghost" formmethod="dialog"
+                formnovalidate th:text="#{tql.view.cancel}">Cancel</button>
+        <button type="submit" class="hc-button" data-variant="primary"
+                th:text="#{tql.view.apply}">Apply</button>
+      </div>
+    </form>
+  </dialog>
 </section>
 </div>
 </html>

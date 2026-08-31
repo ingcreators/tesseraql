@@ -500,16 +500,18 @@ class ManifestCoverageTest {
                 view: items
             """;
 
+    /** A minimal list-view spec; the compact constructor fills every optional component. */
+    private static io.tesseraql.yaml.view.ViewSpec listView(String id) {
+        return new io.tesseraql.yaml.view.ViewSpec(id, "list", null, null, null, null, null,
+                null, null, null, null, null, null, null, null, null);
+    }
+
     @Test
     void viewCoverageKeysByDocumentAndCoversWhenAnyReferencingRouteIsExercised() {
         // One item per view document (docs/view-composition.md wave 1): the referenced view
         // covers through its route's SQL; the unreferenced one stays declared-only.
-        io.tesseraql.yaml.view.ViewSpec referenced = new io.tesseraql.yaml.view.ViewSpec(
-                "items", "list", null, null, null, null, null, null, null, null, null, null,
-                null, null, null);
-        io.tesseraql.yaml.view.ViewSpec orphan = new io.tesseraql.yaml.view.ViewSpec(
-                "drafts", "list", null, null, null, null, null, null, null, null, null, null,
-                null, null, null);
+        io.tesseraql.yaml.view.ViewSpec referenced = listView("items");
+        io.tesseraql.yaml.view.ViewSpec orphan = listView("drafts");
         AppManifest manifest = new AppManifest(APP_HOME, new AppConfig(Map.of(), name -> null),
                 List.of(route("web/items/get.yml", VIEW_ROUTE)),
                 List.of(), List.of(), List.of(), List.of(), List.of(),

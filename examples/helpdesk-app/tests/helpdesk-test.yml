@@ -16,6 +16,24 @@ tests:
       rows:
         - id: T-2001
 
+  - name: the status filter narrows the queue
+    sql:
+      file: web/tickets/tickets.sql
+    params:
+      status: no-such-status
+    expect:
+      rowCount: 0
+
+  - name: the priority filter narrows the queue
+    sql:
+      file: web/tickets/tickets.sql
+    params:
+      priority: low
+      q: vpn
+      status: no-such-status
+    expect:
+      rowCount: 0
+
   - name: the detail query loads one ticket
     sql:
       file: web/tickets/{id}/ticket.sql

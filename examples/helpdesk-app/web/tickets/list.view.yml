@@ -6,6 +6,7 @@ layout: page
 key: id
 title: Tickets
 search: q
+filters: [status, priority]
 columns:
   - { name: id, label: "#", link: "/tickets/{id}" }
   - { name: subject, sortable: true }

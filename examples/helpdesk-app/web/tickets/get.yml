@@ -5,6 +5,8 @@ recipe: query-html
 
 input:
   q: { type: string, required: false, maxLength: 100 }
+  status: { type: string, required: false, maxLength: 32 }
+  priority: { type: string, required: false, enum: [low, normal, high] }
   sort: { type: string, required: false }
   dir: { type: string, required: false, enum: [asc, desc] }
 
@@ -22,6 +24,8 @@ sources:
       mode: query
       params:
         q: query.q
+        status: query.status
+        priority: query.priority
 response:
   html:
     status: 200

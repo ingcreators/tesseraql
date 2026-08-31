@@ -18,7 +18,7 @@
       <select class="hc-select" th:id="|field-${f.name}|" th:name="${f.name}"
               th:required="${f.required}">
         <option th:each="o : ${f.options}" th:value="${o.value}" th:text="${o.label}"
-                th:selected="${o == f.value}">option</option>
+                th:selected="${f.value != null and o.value == f.value.toString()}">option</option>
       </select>
     </th:block>
     <th:block th:case="'textarea'">

@@ -534,6 +534,37 @@ class HtmlResponseRendererViewTest {
     }
 
     @Test
+    void declaredFiltersRenderChipsAndTheDialog(@TempDir Path dir) throws Exception {
+        // docs/list-surface.md decision 6: chips for applied conditions (remove = a real URL
+        // minus that condition), a dialog of the declared inputs, and the applied filter
+        // riding the region as a hidden input for the sort/search swaps.
+        HtmlResponseRenderer renderer = renderer(dir, """
+                version: tesseraql/v1
+                kind: view
+                recipe: list
+                layout: page
+                filters:
+                  - status
+                  - { name: quantity, label: Qty }
+                """, actionRoute());
+        Exchange exchange = new Exchange(Beans.NONE);
+        exchange.setProperty(TesseraqlProperties.CONTEXT, Map.of(
+                "main", Map.of("rows", List.of(Map.of("id", 1))),
+                "params", Map.of("status", "OPEN")));
+        exchange.request().uri("/items?status=OPEN");
+        renderer.process(exchange);
+        String html = exchange.getBody(String.class);
+        assertThat(html).contains("hc-filterbar__chip").contains(">OPEN<");
+        assertThat(html).contains("hc-filterbar__remove").contains("href=\"/items\"");
+        assertThat(html).contains("hc-dialog").contains("name=\"quantity\"").contains(">Qty<");
+        // The enum input renders a select whose first option is the empty "any" choice.
+        assertThat(html).contains("hc-select")
+                .containsSubsequence("name=\"status\"", "<option value=\"\">",
+                        "<option value=\"OPEN\"");
+        assertThat(html).contains("name=\"status\" value=\"OPEN\"");
+    }
+
+    @Test
     void layoutCardStaysTheDefaultListPattern(@TempDir Path dir) throws Exception {
         HtmlResponseRenderer renderer = renderer(dir, """
                 version: tesseraql/v1

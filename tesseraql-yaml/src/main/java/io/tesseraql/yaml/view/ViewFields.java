@@ -22,6 +22,8 @@ public final class ViewFields {
     public static final TqlErrorCode UNKNOWN_FIELD = new TqlErrorCode(TqlDomain.VIEW, 3304);
     /** TQL-VIEW-3305: unknown widget name. */
     public static final TqlErrorCode UNKNOWN_WIDGET = new TqlErrorCode(TqlDomain.VIEW, 3305);
+    /** TQL-VIEW-3323: a filters: entry names an input the route does not declare. */
+    public static final TqlErrorCode UNKNOWN_FILTER = new TqlErrorCode(TqlDomain.VIEW, 3323);
 
     private ViewFields() {
     }
@@ -61,6 +63,37 @@ public final class ViewFields {
                         + override.name() + " is not declared by the action route's input: block");
             }
             defs.add(fieldDef(spec, override.name(), input, override));
+        }
+        return List.copyOf(defs);
+    }
+
+    /**
+     * Derives the dialog fields for a grid page's {@code filters:} (docs/list-surface.md
+     * decision 6): the same widget/constraint semantics a form field gets, except nothing is
+     * required — a required <em>input</em> is not a required <em>filter</em>, and an empty
+     * dialog field simply applies no condition.
+     */
+    public static List<FieldDef> deriveFilters(String viewRef, ViewSpec spec,
+            Map<String, InputField> inputs) {
+        List<FieldDef> defs = new ArrayList<>();
+        for (ViewSpec.Filter filter : spec.filters()) {
+            InputField input = inputs == null ? null : inputs.get(filter.name());
+            if (input == null) {
+                throw new TqlException(UNKNOWN_FILTER, "View " + viewRef + ": filter "
+                        + filter.name() + " is not a declared input of the route");
+            }
+            FieldDef derived = fieldDef(spec, filter.name(), input, null);
+            defs.add(new FieldDef(derived.name(),
+                    filter.label() != null ? filter.label() : derived.labelKey(),
+                    filter.label() != null ? filter.label() : derived.labelFallback(),
+                    // A boolean filter is three-valued (any/yes/no) — a checkbox cannot say
+                    // "any", so it renders as a select like every fixed value set.
+                    "checkbox".equals(derived.widget()) ? "select" : derived.widget(),
+                    false, derived.maxLength(), derived.min(), derived.max(),
+                    "checkbox".equals(derived.widget())
+                            ? List.of("true", "false")
+                            : derived.options(),
+                    derived.codes(), null, derived.step(), null));
         }
         return List.copyOf(defs);
     }

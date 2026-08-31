@@ -31,6 +31,11 @@ tql:
     next: "\u6b21\u3078 \u203a"
     search: "検索…"
     range: "{total}件中 {from}–{to}件"
+    filters: フィルタ
+    apply: 適用
+    cancel: キャンセル
+    clearFilters: すべて解除
+    removeFilter: "{label}の条件を解除"
     notFound: 見つかりません。
   http:
     "400": リクエストが正しくありません
