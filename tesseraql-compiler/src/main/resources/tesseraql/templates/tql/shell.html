@@ -184,6 +184,12 @@
     <th:block th:replace="${_menu != null} ? ~{tql/shell :: app-menu(${_menu})} : ${nav}"/>
   </nav>
   <main class="hc-shell__main">
+    <!-- The network-retry host (hc 0.4.0, docs/hypermedia-ui.md "Response-header signals"):
+         installNetworkRetry renders a Retry alert here when an htmx request gets NO answer at
+         all (htmx:sendError / htmx:timeout) - the one error with no server response to narrate
+         with. One host per page, empty in source, outside every page's swap targets; the
+         behavior sets role="status" on the rendered alert itself. -->
+    <div data-hc-network-retry></div>
     <th:block th:replace="${content}"/>
   </main>
 </div>
