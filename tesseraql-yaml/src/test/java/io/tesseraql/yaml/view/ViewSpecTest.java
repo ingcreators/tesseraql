@@ -573,6 +573,52 @@ class ViewSpecTest {
     }
 
     @Test
+    void presetsParseWithTheirParamsInOrder(@TempDir Path dir) throws Exception {
+        Path file = write(dir, "x.view.yml", """
+                version: tesseraql/v1
+                kind: view
+                recipe: list
+                layout: page
+                presets:
+                  - name: Open
+                    params: { status: open, sort: "-created_at" }
+                """);
+        ViewSpec spec = ViewSpec.parse(file);
+        assertThat(spec.presets()).hasSize(1);
+        assertThat(spec.presets().get(0).params().keySet())
+                .containsExactly("status", "sort");
+    }
+
+    @Test
+    void aPresetRequiresParams(@TempDir Path dir) throws Exception {
+        Path file = write(dir, "x.view.yml", """
+                version: tesseraql/v1
+                kind: view
+                recipe: list
+                layout: page
+                presets:
+                  - name: Open
+                """);
+        assertThatThrownBy(() -> ViewSpec.parse(file))
+                .isInstanceOf(TqlException.class).hasMessageContaining("requires params:");
+    }
+
+    @Test
+    void presetsRequireThePageLayout(@TempDir Path dir) throws Exception {
+        Path file = write(dir, "x.view.yml", """
+                version: tesseraql/v1
+                kind: view
+                recipe: list
+                presets:
+                  - name: Open
+                    params: { status: open }
+                """);
+        assertThatThrownBy(() -> ViewSpec.parse(file))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("presets: requires layout: page");
+    }
+
+    @Test
     void rejectsFiltersOffAList(@TempDir Path dir) throws Exception {
         Path file = write(dir, "x.view.yml", """
                 version: tesseraql/v1

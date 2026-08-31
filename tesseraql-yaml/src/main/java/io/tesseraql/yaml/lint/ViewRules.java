@@ -44,6 +44,8 @@ final class ViewRules implements LintRule {
 
     private static final String UNDECLARED_FILTER_INPUT = "TQL-VIEW-3323";
 
+    private static final String UNDECLARED_PRESET_PARAM = "TQL-VIEW-3324";
+
     /** Any {@code {…}} segment of a {@code link:} template, valid or not. */
     private static final java.util.regex.Pattern LINK_PLACEHOLDER = java.util.regex.Pattern
             .compile("\\{([^}]*)}");
@@ -148,6 +150,18 @@ final class ViewRules implements LintRule {
                         findings.add(new LintFinding(UNDECLARED_FILTER_INPUT, ERROR, source,
                                 "view " + spec.id() + ": filter " + filter.name()
                                         + " is not a declared input of the route"));
+                    }
+                }
+                for (io.tesseraql.yaml.view.ViewSpec.Preset preset : spec.presets()) {
+                    for (String param : preset.params().keySet()) {
+                        boolean framework = java.util.Set.of("sort", "dir", "size")
+                                .contains(param);
+                        if (!framework && (inputs == null || !inputs.containsKey(param))) {
+                            findings.add(new LintFinding(UNDECLARED_PRESET_PARAM, ERROR,
+                                    source, "view " + spec.id() + ": preset '" + preset.name()
+                                            + "' param " + param
+                                            + " is not a declared input of the route"));
+                        }
                     }
                 }
                 boolean sortable = spec.columns().stream()

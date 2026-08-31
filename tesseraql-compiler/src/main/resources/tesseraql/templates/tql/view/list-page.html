@@ -15,6 +15,17 @@
 <section class="tql-list-page hc-stack" th:fragment="view(v)">
   <div class="hc-cluster">
     <h2 th:text="${v.title}">List</h2>
+    <!-- Named view presets (docs/list-surface.md decision 8): real links, no storage —
+         the active one is marked, re-clicking it is the reset, and "Modified" says the
+         current state goes beyond what the preset pins. -->
+    <nav class="hc-cluster" th:if="${v.presets != null}"
+         th:attr="aria-label=#{tql.view.presets}">
+      <a th:each="p : ${v.presets}" class="hc-button" data-size="sm"
+         th:href="${p.href}" th:text="${p.label}"
+         th:attr="data-variant=${p.variant},aria-current=${p.current}">Open</a>
+      <span class="hc-badge" data-variant="info" th:if="${v.presetModified}"
+            th:text="#{tql.view.modified}">Modified</span>
+    </nav>
     <span class="hc-spacer"></span>
     <th:block th:if="${v.slots['header'] != null}">
       <th:block th:insert="~{__${v.slots['header']}__}"/>
