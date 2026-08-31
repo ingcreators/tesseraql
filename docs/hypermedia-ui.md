@@ -107,6 +107,25 @@ shape is in [declarative-validation.md](declarative-validation.md); conflict hin
   app's entries) before the behaviors install — can re-resolve and interpolate it
   client-side (see [internationalization.md](internationalization.md)).
 
+## Network failures
+
+Every contract above assumes a response arrived. The one error with no server response to
+narrate with — offline, a dropped socket, a declared timeout — is owned by the kit's
+auto-installed `installNetworkRetry` behavior and the shell's `data-hc-network-retry` host
+at the top of the main region. When htmx raises `htmx:sendError` or `htmx:timeout`, the
+behavior renders a Retry alert into the host; repeat failures re-render in place, so a
+poller that lost the network never stacks banners. Any real response — success or error —
+clears the alert, because an error response belongs to the contracts above.
+
+Retrying is the user's verb: the behavior never auto-retries, and the Retry button
+re-issues the request through the full htmx pipeline with the form's current input values.
+The alert's strings come from the kit's i18n catalog (`networkRetry.failed` /
+`networkRetry.retry`) and follow the request locale like every other kit message.
+
+Timeouts are declared, not defaulted: only hard send failures fire unless a form opts in
+with `data-hx-request='{"timeout": 10000}'` or the page sets a global
+`htmx.config.timeout`.
+
 ## Response-header signals (HX-Trigger)
 
 A route's `response.html.headers` are emitted on the rendered response. A nested map value is
