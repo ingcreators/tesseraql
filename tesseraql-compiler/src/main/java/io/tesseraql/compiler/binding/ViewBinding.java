@@ -40,6 +40,8 @@ public final class ViewBinding {
     static final TqlErrorCode UNKNOWN_SOURCE = new TqlErrorCode(TqlDomain.VIEW, 3308);
     /** TQL-VIEW-3318: an embedded view embeds further — embedding depth is 1. */
     static final TqlErrorCode EMBED_DEPTH = new TqlErrorCode(TqlDomain.VIEW, 3318);
+    /** TQL-VIEW-3322: a declared list key: column is null, absent or blank in a result row. */
+    static final TqlErrorCode INVALID_ROW_KEY = new TqlErrorCode(TqlDomain.VIEW, 3322);
 
     /**
      * An embedded view (docs/view-composition.md wave 2b): the sub-binding plus the host
@@ -496,7 +498,7 @@ public final class ViewBinding {
                             : "view." + spec.id() + "." + child.source(),
                     child.title() != null ? child.title() : humanize(child.source())));
             c.put("columns", renderedColumns(catalog, locale, columns));
-            c.put("rows", cellMatrix(context, columns, childRows));
+            c.put("rows", cellMatrix(context, columns, childRows, null, null));
             children.add(c);
         }
         v.put("children", children);
@@ -616,7 +618,7 @@ public final class ViewBinding {
             Locale locale, Map<String, Object> context, List<Map<String, Object>> rows) {
         List<ViewSpec.Column> columns = columnsOf(panel.columns(), rows);
         m.put("columns", renderedColumns(catalog, locale, columns));
-        m.put("rows", cellMatrix(context, columns, rows));
+        m.put("rows", cellMatrix(context, columns, rows, null, null));
     }
 
     /**
@@ -684,7 +686,54 @@ public final class ViewBinding {
             c.put("sortHref", state.href(pagePath, column.name(), null));
         }
         v.put("columns", rendered);
-        v.put("rows", cellMatrix(context, columns, rows));
+        List<String> tokens = rowTokens(rows);
+        if (tokens != null) {
+            // The row's machine identity (docs/list-surface.md decision 2): the anchor the
+            // table pattern renders, the fragment a `location: back` redirect refocuses.
+            v.put("anchors", tokens.stream().map(token -> "row-" + token).toList());
+        }
+        v.put("rows", cellMatrix(context, columns, rows, tokens, returnBase(page, params,
+                pagePath)));
+    }
+
+    /**
+     * One opaque token per row over the declared {@code key:} (docs/list-surface.md decision
+     * 2), or null when the list declares none. A row missing a key component is a refusal
+     * (TQL-VIEW-3322), never a silent skip.
+     */
+    private List<String> rowTokens(List<Map<String, Object>> rows) {
+        if (spec.key().isEmpty()) {
+            return null;
+        }
+        List<String> tokens = new ArrayList<>(rows.size());
+        for (Map<String, Object> row : rows) {
+            try {
+                tokens.add(io.tesseraql.core.rows.RowTokens.encode(row, spec.key()));
+            } catch (IllegalArgumentException ex) {
+                throw new TqlException(INVALID_ROW_KEY, "View " + spec.id() + ": "
+                        + ex.getMessage() + " (declared key: " + spec.key() + ")");
+            }
+        }
+        return tokens;
+    }
+
+    /**
+     * The list's own current URL, canonically rebuilt from the state the pager carries — what
+     * a page-frame row link sends along as {@code _return} so a {@code location: back}
+     * redirect lands on the same conditions, sort and page (docs/list-surface.md decision 11).
+     * Null outside the page frame.
+     */
+    private String returnBase(Map<String, Object> page, Map<String, Object> params,
+            String pagePath) {
+        if (!ViewSpec.LAYOUT_PAGE.equals(spec.effectiveLayout()) || pagePath.isEmpty()) {
+            return null;
+        }
+        StringBuilder query = new StringBuilder();
+        if (page != null && page.get("number") instanceof Number n && n.longValue() > 1) {
+            query.append("&page=").append(n.longValue());
+        }
+        query.append(state(params));
+        return query.isEmpty() ? pagePath : pagePath + "?" + query.substring(1);
     }
 
     /** A panel's context source: its {@code source:} or the document's {@code main} result. */
@@ -735,10 +784,27 @@ public final class ViewBinding {
         }
         Map<String, Object> pager = new LinkedHashMap<>((Map<String, Object>) raw);
         long number = pager.get("number") instanceof Number n ? n.longValue() : 1;
+        String state = state(params);
+        Object next = pager.get("next");
+        if (Boolean.TRUE.equals(pager.get("hasNext"))) {
+            pager.put("nextHref", next != null
+                    ? pagePath + "?after=" + encode(String.valueOf(next)) + state
+                    : pagePath + "?page=" + (number + 1) + state);
+        }
+        if (next == null && number > 1) {
+            pager.put("prevHref", pagePath + "?page=" + (number - 1) + state);
+        }
+        return pager;
+    }
+
+    /**
+     * The query-state fragment ({@code &k=v…}) every self-referencing list URL carries: size
+     * rides along so a chosen page size survives navigation; sort/dir and the search term were
+     * always carried. Anything else the route declares still is not — the filter chips design
+     * (docs/list-surface.md decision 6) widens this deliberately.
+     */
+    private String state(Map<String, Object> params) {
         StringBuilder state = new StringBuilder();
-        // size rides along so a chosen page size survives navigation; sort/dir and the search
-        // term were always carried. Anything else the route declares still is not — the
-        // filter chips design (docs/list-surface.md decision 6) widens this deliberately.
         for (String key : List.of("sort", "dir", "size")) {
             String value = str(params.get(key));
             if (!value.isEmpty()) {
@@ -751,16 +817,7 @@ public final class ViewBinding {
                 state.append('&').append(spec.search()).append('=').append(encode(value));
             }
         }
-        Object next = pager.get("next");
-        if (Boolean.TRUE.equals(pager.get("hasNext"))) {
-            pager.put("nextHref", next != null
-                    ? pagePath + "?after=" + encode(String.valueOf(next)) + state
-                    : pagePath + "?page=" + (number + 1) + state);
-        }
-        if (next == null && number > 1) {
-            pager.put("prevHref", pagePath + "?page=" + (number - 1) + state);
-        }
-        return pager;
+        return state.toString();
     }
 
     private static String encode(String value) {
@@ -866,12 +923,25 @@ public final class ViewBinding {
         return rendered;
     }
 
-    /** The cell matrix: text per column per row, links resolved against the row's values. */
+    /**
+     * The cell matrix: text per column per row, links resolved against the row's values. On the
+     * page frame ({@code returnBase} non-null), an app-local link also carries the list's own
+     * URL as {@code _return} — with the acting row's fragment when a key is declared — so a
+     * {@code location: back} redirect lands back on these conditions, focused on this row
+     * (docs/list-surface.md decision 11).
+     */
     private List<List<Map<String, Object>>> cellMatrix(Map<String, Object> context,
-            List<ViewSpec.Column> columns, List<Map<String, Object>> rows) {
+            List<ViewSpec.Column> columns, List<Map<String, Object>> rows, List<String> tokens,
+            String returnBase) {
         List<List<Map<String, Object>>> cells = new ArrayList<>();
-        for (Map<String, Object> row : rows) {
+        for (int index = 0; index < rows.size(); index++) {
+            Map<String, Object> row = rows.get(index);
             EvaluationContext rowContext = new EvaluationContext(row);
+            String returnTo = returnBase == null
+                    ? null
+                    : tokens == null
+                            ? returnBase
+                            : returnBase + "#row-" + tokens.get(index);
             List<Map<String, Object>> line = new ArrayList<>();
             for (ViewSpec.Column column : columns) {
                 Map<String, Object> cell = new LinkedHashMap<>();
@@ -880,9 +950,13 @@ public final class ViewBinding {
                         ? column.text()
                         : resolved(context, column.name(), value));
                 cell.put("button", column.text() != null);
-                cell.put("href", column.link() == null
+                String href = column.link() == null
                         ? null
-                        : Interpolation.interpolateUrl(column.link(), rowContext));
+                        : Interpolation.interpolateUrl(column.link(), rowContext);
+                if (href != null && returnTo != null && href.startsWith("/")) {
+                    href += (href.indexOf('?') >= 0 ? '&' : '?') + "_return=" + encode(returnTo);
+                }
+                cell.put("href", href);
                 line.add(cell);
             }
             cells.add(line);

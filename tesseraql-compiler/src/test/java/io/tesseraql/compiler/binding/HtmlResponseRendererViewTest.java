@@ -436,6 +436,104 @@ class HtmlResponseRendererViewTest {
     }
 
     @Test
+    void aDeclaredKeyRendersRowAnchors(@TempDir Path dir) throws Exception {
+        // docs/list-surface.md decision 2: the row's machine identity — base64url("7") = Nw.
+        HtmlResponseRenderer renderer = renderer(dir, """
+                version: tesseraql/v1
+                kind: view
+                recipe: list
+                key: id
+                """);
+        String html = render(renderer, Map.of("main", Map.of("rows", List.of(
+                Map.of("id", 7, "name", "Bolt")))));
+        assertThat(html).contains("id=\"row-Nw\"");
+    }
+
+    @Test
+    void aNullKeyComponentIsARefusalNotASilentSkip(@TempDir Path dir) throws Exception {
+        HtmlResponseRenderer renderer = renderer(dir, """
+                version: tesseraql/v1
+                kind: view
+                recipe: list
+                key: id
+                """);
+        java.util.Map<String, Object> row = new java.util.HashMap<>();
+        row.put("id", null);
+        row.put("name", "Bolt");
+        assertThatThrownBy(() -> render(renderer, Map.of("main", Map.of("rows", List.of(row)))))
+                .isInstanceOf(TqlException.class).hasMessageContaining("TQL-VIEW-3322")
+                .hasMessageContaining("'id'");
+    }
+
+    @Test
+    void aPageFrameRowLinkCarriesTheReturnTarget(@TempDir Path dir) throws Exception {
+        // docs/list-surface.md decision 11: the link sends the list's own URL along, with the
+        // acting row's fragment, so `location: back` lands back here focused on the row.
+        HtmlResponseRenderer renderer = renderer(dir, """
+                version: tesseraql/v1
+                kind: view
+                recipe: list
+                layout: page
+                key: id
+                columns:
+                  - name: name
+                    link: /things/{id}/edit
+                """);
+        Exchange exchange = new Exchange(Beans.NONE);
+        exchange.setProperty(TesseraqlProperties.CONTEXT, Map.of(
+                "main", Map.of("rows", List.of(Map.of("id", 7, "name", "Bolt"))),
+                "page", Map.of("number", 2, "size", 1, "hasNext", false, "hasPrev", true)));
+        exchange.request().uri("/things?page=2");
+        renderer.process(exchange);
+        String html = exchange.getBody(String.class);
+        assertThat(html).contains("/things/7/edit?_return=%2Fthings%3Fpage%3D2%23row-Nw");
+    }
+
+    @Test
+    void aCardListLinkCarriesNoReturnTarget(@TempDir Path dir) throws Exception {
+        HtmlResponseRenderer renderer = renderer(dir, """
+                version: tesseraql/v1
+                kind: view
+                recipe: list
+                key: id
+                columns:
+                  - name: name
+                    link: /things/{id}/edit
+                """);
+        Exchange exchange = new Exchange(Beans.NONE);
+        exchange.setProperty(TesseraqlProperties.CONTEXT, Map.of(
+                "main", Map.of("rows", List.of(Map.of("id", 7, "name", "Bolt")))));
+        exchange.request().uri("/things");
+        renderer.process(exchange);
+        assertThat(exchange.getBody(String.class))
+                .contains("href=\"/things/7/edit\"").doesNotContain("_return");
+    }
+
+    @Test
+    void aFormEchoesAValidatedReturnTarget(@TempDir Path dir) throws Exception {
+        HtmlResponseRenderer renderer = renderer(dir, """
+                version: tesseraql/v1
+                kind: view
+                recipe: form
+                action: /items/create
+                """, null);
+        Exchange exchange = new Exchange(Beans.NONE);
+        exchange.setProperty(TesseraqlProperties.CONTEXT, Map.of());
+        exchange.request().queryParams().put("_return", List.of("/things?page=2#row-Nw"));
+        renderer.process(exchange);
+        assertThat(exchange.getBody(String.class))
+                .contains("name=\"_return\"")
+                .contains("value=\"/things?page=2#row-Nw\"");
+
+        // An off-site value is never reflected (docs/list-surface.md decision 11).
+        Exchange hostile = new Exchange(Beans.NONE);
+        hostile.setProperty(TesseraqlProperties.CONTEXT, Map.of());
+        hostile.request().queryParams().put("_return", List.of("https://evil.example/x"));
+        renderer.process(hostile);
+        assertThat(hostile.getBody(String.class)).doesNotContain("name=\"_return\"");
+    }
+
+    @Test
     void layoutCardStaysTheDefaultListPattern(@TempDir Path dir) throws Exception {
         HtmlResponseRenderer renderer = renderer(dir, """
                 version: tesseraql/v1

@@ -385,7 +385,7 @@ Answer with a redirect instead of a body — the usual close of a browser form p
 | Property | Type | Description |
 | --- | --- | --- |
 | `status` | integer ≥ 300 ≤ 399 | The redirect status; declare `303` after a command so the browser follows with GET. |
-| `location` \* | string | Where to redirect, as a literal path or a bindable path. |
+| `location` \* | string | Where to redirect, as a literal path or a bindable path. The sentinel `back` follows the request's validated `_return` field - the list a page-frame row link came from - falling back to the application root. |
 
 #### response.file
 
@@ -694,6 +694,7 @@ Schema for TesseraQL declarative view documents (*.view.yml): what a route rende
 | `slots` | map of string | Named regions this view exposes for a composing parent to fill. Documented in declarative-views.md. |
 | `refreshOn` | string | Refetch this view's refresh region whenever a command emits this topic (docs/realtime.md). List, detail and dashboard views only - not forms. |
 | `layout` | enum: `card` \| `page` | How a list view frames itself (docs/declarative-views.md): 'card' (the default) renders in the page flow; 'page' renders the operational grid page - fixed chrome, only the grid scrolls, in-place paging. List views only. |
+| `key` | any | The result columns that identify one row (docs/declarative-views.md): a column name, or an ordered list for a composite key. Rows gain a stable anchor and an opaque row token; every key column must be present and non-null in each row. List views only. |
 
 ## Other document kinds
 

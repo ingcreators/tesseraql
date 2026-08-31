@@ -90,6 +90,72 @@ class RedirectRendererTest {
                 .isEqualTo("https://example.test/pay");
     }
 
+    // location: back (docs/list-surface.md decision 11): the target is the request's _return
+    // field, validated app-local, never interpolated; anything else falls back to the root.
+
+    @Test
+    void backFollowsAValidatedReturnField() {
+        RedirectRenderer back = new RedirectRenderer(new RedirectResponse(null, "back"));
+        Exchange exchange = exchange(null);
+        exchange.request().formFields().put("_return",
+                java.util.List.of("/things?page=2#row-Nw"));
+
+        back.process(exchange);
+
+        assertThat(exchange.response().status()).isEqualTo(303);
+        assertThat(exchange.response().header("Location"))
+                .isEqualTo("/things?page=2#row-Nw");
+    }
+
+    @Test
+    void backCarriesTheApplicationsBasePath() {
+        RuntimeContext context = new RuntimeContext();
+        io.tesseraql.pipeline.BasePath.bind(context, "/apps/shop-a");
+        Exchange exchange = new Exchange(context.beans());
+        exchange.setProperty(TesseraqlProperties.CONTEXT, Map.of());
+        exchange.request().formFields().put("_return", java.util.List.of("/things"));
+
+        new RedirectRenderer(new RedirectResponse(null, "back")).process(exchange);
+
+        assertThat(exchange.response().header("Location")).isEqualTo("/apps/shop-a/things");
+    }
+
+    @Test
+    void backWithoutAReturnFieldFallsBackToTheRoot() {
+        RedirectRenderer back = new RedirectRenderer(new RedirectResponse(null, "back"));
+        Exchange exchange = exchange(null);
+
+        back.process(exchange);
+
+        assertThat(exchange.response().header("Location")).isEqualTo("/");
+    }
+
+    @Test
+    void backRefusesAnOffSiteReturnField() {
+        RedirectRenderer back = new RedirectRenderer(new RedirectResponse(null, "back"));
+        for (String hostile : java.util.List.of("https://evil.example/x", "//evil.example/x",
+                "/\\evil.example", "/x\r\nSet-Cookie: a=b", "relative/path")) {
+            Exchange exchange = exchange(null);
+            exchange.request().formFields().put("_return", java.util.List.of(hostile));
+
+            back.process(exchange);
+
+            assertThat(exchange.response().header("Location")).as(hostile).isEqualTo("/");
+        }
+    }
+
+    @Test
+    void backAnswersHtmxWithHxRedirect() {
+        RedirectRenderer back = new RedirectRenderer(new RedirectResponse(null, "back"));
+        Exchange exchange = exchange("true");
+        exchange.request().formFields().put("_return", java.util.List.of("/things#row-Nw"));
+
+        back.process(exchange);
+
+        assertThat(exchange.response().status()).isEqualTo(204);
+        assertThat(exchange.response().header("HX-Redirect")).isEqualTo("/things#row-Nw");
+    }
+
     private static Exchange exchange(String hxRequest) {
         Exchange exchange = new Exchange(
                 Beans.NONE);

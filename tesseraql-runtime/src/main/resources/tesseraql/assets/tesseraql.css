@@ -112,3 +112,9 @@ a:hover{text-decoration-thickness:2px}
 @media print{
   .tql-list-page__grid > .hc-datagrid{--hc-datagrid-max-height:none}
 }
+
+/* Returning to a list refocuses the acted-on row (docs/list-surface.md decision 11): the
+   #row-<token> fragment lands here. scroll-margin keeps the row clear of the sticky header;
+   the tint marks it without stealing the selection color. */
+.hc-datagrid__row:target{scroll-margin-block:3rem}
+.hc-datagrid__row:target > td{background:color-mix(in srgb, var(--hc-color-accent,#4a6da7) 12%, transparent)}

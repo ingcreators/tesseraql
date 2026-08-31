@@ -23,7 +23,11 @@
           </tr>
         </thead>
         <tbody class="hc-datagrid__body">
-          <tr class="hc-datagrid__row" th:each="r : ${rows}">
+          <!-- With a declared key: the enclosing view model carries one anchor per row
+               (docs/list-surface.md decision 2) — the id a `location: back` redirect's
+               #row-… fragment refocuses. Views without a key render anonymous rows. -->
+          <tr class="hc-datagrid__row" th:each="r, rStat : ${rows}"
+              th:id="${v != null && v['anchors'] != null ? v['anchors'][rStat.index] : null}">
             <td class="hc-datagrid__cell" th:each="cell : ${r}">
               <a th:if="${cell.href != null}" th:href="@{${cell.href}}"
                  th:class="${cell.button} ? 'hc-button' : null"

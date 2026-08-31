@@ -3,10 +3,11 @@ id: tickets
 kind: view
 recipe: list
 layout: page
+key: id
 title: Tickets
 search: q
 columns:
-  - { name: id, label: "#" }
+  - { name: id, label: "#", link: "/tickets/{id}" }
   - { name: subject, sortable: true }
   - { name: priority, sortable: true }
   - { name: requester }

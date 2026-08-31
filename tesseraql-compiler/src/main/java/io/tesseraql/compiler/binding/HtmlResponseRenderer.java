@@ -250,6 +250,14 @@ public final class HtmlResponseRenderer implements Step {
         // is two instances. Routes without an idempotency: block simply ignore the field.
         model.put("_idempotency", java.util.UUID.randomUUID().toString());
 
+        // The return target a page-frame row link sent along (docs/list-surface.md decision
+        // 11): republished only when app-local, so tql/view/form.html can echo it as a hidden
+        // field and the command's `location: back` lands back on the list it came from.
+        String declaredReturn = exchange.request().param("_return");
+        if (io.tesseraql.core.http.BasePaths.isLocal(declaredReturn)) {
+            model.put("_return", declaredReturn);
+        }
+
         // The shell chrome's reserved model variables, contributed in a fixed order
         // (ShellChrome documents each block): the sidebar menu, the account popover, the
         // theme preference reads, the inbox badge, pins (including the recently-viewed store

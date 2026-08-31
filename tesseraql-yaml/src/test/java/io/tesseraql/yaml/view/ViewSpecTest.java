@@ -474,6 +474,62 @@ class ViewSpecTest {
     }
 
     @Test
+    void keyAcceptsAScalarAndAList(@TempDir Path dir) throws Exception {
+        Path scalar = write(dir, "s.view.yml", """
+                version: tesseraql/v1
+                kind: view
+                recipe: list
+                key: id
+                """);
+        assertThat(ViewSpec.parse(scalar).key()).containsExactly("id");
+        Path composite = write(dir, "c.view.yml", """
+                version: tesseraql/v1
+                kind: view
+                recipe: list
+                key: [order_id, line_no]
+                """);
+        assertThat(ViewSpec.parse(composite).key()).containsExactly("order_id", "line_no");
+    }
+
+    @Test
+    void rejectsKeyOffAList(@TempDir Path dir) throws Exception {
+        Path file = write(dir, "x.view.yml", """
+                version: tesseraql/v1
+                kind: view
+                recipe: detail
+                key: id
+                """);
+        assertThatThrownBy(() -> ViewSpec.parse(file))
+                .isInstanceOf(TqlException.class).hasMessageContaining("TQL-VIEW-3301")
+                .hasMessageContaining("key: is a list-view key");
+    }
+
+    @Test
+    void rejectsADuplicateKeyColumn(@TempDir Path dir) throws Exception {
+        Path file = write(dir, "x.view.yml", """
+                version: tesseraql/v1
+                kind: view
+                recipe: list
+                key: [id, id]
+                """);
+        assertThatThrownBy(() -> ViewSpec.parse(file))
+                .isInstanceOf(TqlException.class).hasMessageContaining("twice");
+    }
+
+    @Test
+    void rejectsAnEmptyKeyList(@TempDir Path dir) throws Exception {
+        Path file = write(dir, "x.view.yml", """
+                version: tesseraql/v1
+                kind: view
+                recipe: list
+                key: []
+                """);
+        assertThatThrownBy(() -> ViewSpec.parse(file))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("key: must name at least one column");
+    }
+
+    @Test
     void rejectsLayoutOffAList(@TempDir Path dir) throws Exception {
         Path file = write(dir, "x.view.yml", """
                 version: tesseraql/v1

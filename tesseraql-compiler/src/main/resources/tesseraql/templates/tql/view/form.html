@@ -29,6 +29,10 @@
          idempotency: answers a replayed submit of this form instance with the original
          response; routes without the block ignore the field. -->
     <input type="hidden" name="_idempotency" th:if="${_idempotency != null}" th:value="${_idempotency}">
+    <!-- The return target a list row link sent along (docs/list-surface.md decision 11):
+         echoed so the command's `location: back` lands back on that list, same conditions,
+         focused on the acting row. Rendered only when the renderer validated it app-local. -->
+    <input type="hidden" name="_return" th:if="${_return != null}" th:value="${_return}">
     <div th:id="|${v.formId}-errors|"></div>
     <div class="hc-stack">
       <th:block th:each="f : ${v.fields}">

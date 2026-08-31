@@ -46,6 +46,22 @@ public final class BasePaths {
     }
 
     /**
+     * Whether a caller-supplied path stays inside this application: one leading slash, not
+     * protocol-relative ({@code //host}), not a backslash trick ({@code /\}), no CR/LF. The
+     * open-redirect guard shared by the login {@code next} target and the {@code location: back}
+     * {@code _return} field (docs/list-surface.md decision 11) — anything else is discarded in
+     * favor of the caller's fallback.
+     */
+    public static boolean isLocal(String path) {
+        return path != null
+                && path.startsWith("/")
+                && !path.startsWith("//")
+                && !path.startsWith("/\\")
+                && path.indexOf('\n') < 0
+                && path.indexOf('\r') < 0;
+    }
+
+    /**
      * The base-relative form of a wire URL — the inverse of {@link #join}, for the places that
      * read a path back off the request and hand it to something that will prefix it again, such
      * as the login page's {@code next} target.

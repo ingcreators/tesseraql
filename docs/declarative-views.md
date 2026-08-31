@@ -137,6 +137,22 @@ only when the contract declares them, so a minimal list is still a quiet page. T
 remains the default while the grid page soaks; apps override the pattern the same way
 (`templates/tql/view/list-page.html`).
 
+### Row identity and returning to the list: `key:` and `location: back`
+
+`key:` names the result columns that identify one row — a single column (`key: id`) or an
+ordered list for a composite key (`key: [order_id, line_no]`). Each row then renders a
+stable anchor (`id="row-…"`) built from an opaque row token over those values. Every key
+column must be present and non-null in each row; a violation is an error (`TQL-VIEW-3322`),
+never a silently skipped row.
+
+On the grid page, each row link also carries the list's own URL — conditions, sort, and
+page included — as a `_return` parameter, with the acting row's anchor as its fragment.
+The form pattern echoes a validated `_return` as a hidden field, and a command route may
+declare `location: back` to follow it: the browser lands back on the same list page,
+scrolled to the row it acted on. A `_return` that does not stay inside the application is
+discarded and the redirect falls back to the root, so the field is never an open-redirect
+surface.
+
 With `refreshOn: <topic>`, the list refreshes itself whenever a command that declares
 `emit: <topic>` commits — detail and dashboard views take the same key; see
 [live views](realtime.md). A child or panel `source:` can also name one of the route's
@@ -466,6 +482,7 @@ Lint family **`TQL-VIEW-33xx`**:
 | 3318 | an embedded view embeds views itself — embedding depth is 1 |
 | 3319 | `response.html.model` declares a reserved view-model name (`v`, `views`) |
 | 3321 | a column `link:` placeholder is not one plain column name — dotted or malformed placeholders render empty at runtime and eject wrong |
+| 3322 | a declared `key:` column is null, absent or blank in a result row — a row without its declared identity is a data defect |
 
 Coverage kind **`view`**: one item per view document, exercised when a declarative
 suite invokes any route referencing its id — an unreferenced document is declared and
