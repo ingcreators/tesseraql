@@ -30,7 +30,8 @@ public record ViewSpec(String id,
         String title, String action, String source,
         String search, List<Field> fields, List<Column> columns, List<Child> children,
         List<Panel> panels, Map<String, String> slots, String template, String refreshOn,
-        String layout, List<String> key, List<Filter> filters, List<Preset> presets) {
+        String layout, List<String> key, List<Filter> filters, List<Preset> presets,
+        List<Action> actions) {
 
     /** Structurally invalid view document (docs/declarative-views.md, TQL-VIEW-3301). */
     public static final TqlErrorCode INVALID_VIEW = new TqlErrorCode(TqlDomain.VIEW, 3301);
@@ -108,6 +109,7 @@ public record ViewSpec(String id,
     private static final java.util.Set<String> FIELD_KEYS = keysOf(Field.class);
     private static final java.util.Set<String> FILTER_KEYS = keysOf(Filter.class);
     private static final java.util.Set<String> PRESET_KEYS = keysOf(Preset.class);
+    private static final java.util.Set<String> ACTION_KEYS = keysOf(Action.class);
     private static final java.util.Set<String> COLUMN_KEYS = keysOf(Column.class);
     private static final java.util.Set<String> CHILD_KEYS = keysOf(Child.class);
     private static final java.util.Set<String> PANEL_KEYS = keysOf(Panel.class);
@@ -200,6 +202,14 @@ public record ViewSpec(String id,
                     ? Map.of()
                     : java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(params));
         }
+    }
+
+    /**
+     * A grid-page bulk action (docs/list-surface.md decision 9): a labelled POST route the
+     * selection bar submits the checked rows' tokens to (repeated {@code ids} fields, the
+     * kit's datagrid-bulk-actions wire). {@code confirm} adds the kit's confirm gate.
+     */
+    public record Action(String label, String action, String confirm) {
     }
 
     /**
@@ -318,6 +328,18 @@ public record ViewSpec(String id,
             throw invalid(name, "presets: requires layout: page (the grid page renders the"
                     + " view-preset links)");
         }
+        List<Action> actions = parseActions(name, tree.get("actions"));
+        if (!actions.isEmpty() && !LIST.equals(view)) {
+            throw invalid(name, "actions: is a list-view key");
+        }
+        if (!actions.isEmpty() && !LAYOUT_PAGE.equals(str(tree.get("layout")))) {
+            throw invalid(name, "actions: requires layout: page (the grid page renders the"
+                    + " selection bar)");
+        }
+        if (!actions.isEmpty() && key.isEmpty()) {
+            throw invalid(name, "actions: requires key: (the selection posts row tokens"
+                    + " built from it)");
+        }
         String action = str(tree.get("action"));
         if (FORM.equals(view) && (action == null || action.isBlank())) {
             throw invalid(name, "a form view must declare action: (the command route it posts to)");
@@ -333,7 +355,26 @@ public record ViewSpec(String id,
                 parseFields(name, tree.get("fields")), parseColumns(name, tree.get("columns")),
                 parseChildren(name, tree.get("children")), parsePanels(name, tree.get("panels")),
                 parseSlots(name, tree.get("slots")), str(tree.get("template")),
-                str(tree.get("refreshOn")), layout, key, filters, presets);
+                str(tree.get("refreshOn")), layout, key, filters, presets, actions);
+    }
+
+    /** The declared bulk actions (docs/list-surface.md decision 9), order preserved. */
+    private static List<Action> parseActions(String source, Object raw) {
+        List<Action> actions = new ArrayList<>();
+        for (Map<String, Object> entry : entries(source, raw, "actions")) {
+            rejectUnknown(source, entry, ACTION_KEYS, "an actions: entry");
+            String label = str(entry.get("label"));
+            String action = str(entry.get("action"));
+            if (label == null || label.isBlank()) {
+                throw invalid(source, "an actions: entry requires label:");
+            }
+            if (action == null || action.isBlank()) {
+                throw invalid(source, "action '" + label + "' requires action: (the POST"
+                        + " route the selection submits to)");
+            }
+            actions.add(new Action(label, action, str(entry.get("confirm"))));
+        }
+        return List.copyOf(actions);
     }
 
     /** The declared view presets (docs/list-surface.md decision 8), order preserved. */

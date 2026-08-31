@@ -114,6 +114,36 @@ class AppLinterViewTest {
     }
 
     @Test
+    void aBulkActionMustMatchAPostRoute(@TempDir Path dir) throws Exception {
+        writeApp(dir, """
+                version: tesseraql/v1
+                kind: view
+                recipe: list
+                layout: page
+                key: id
+                actions:
+                  - label: Ghost
+                    action: /items/ghost
+                """);
+        assertThat(viewCodes(new AppLinter().lint(dir))).contains("TQL-VIEW-3325");
+    }
+
+    @Test
+    void aBulkActionTargetingARealPostRouteLintsClean(@TempDir Path dir) throws Exception {
+        writeApp(dir, """
+                version: tesseraql/v1
+                kind: view
+                recipe: list
+                layout: page
+                key: id
+                actions:
+                  - label: Create-ish
+                    action: /items/create
+                """);
+        assertThat(viewCodes(new AppLinter().lint(dir))).isEmpty();
+    }
+
+    @Test
     void aDottedLinkPlaceholderIsAnError(@TempDir Path dir) throws Exception {
         // docs/list-surface.md decision 3: the runtime renders a dotted path but the ejector
         // rewrites placeholders per column — the divergence is refused at lint time.

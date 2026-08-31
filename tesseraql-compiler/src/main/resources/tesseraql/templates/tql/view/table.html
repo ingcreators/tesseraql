@@ -12,6 +12,13 @@
       <table class="hc-datagrid__table">
         <thead class="hc-datagrid__head">
           <tr>
+            <!-- The selection column (docs/list-surface.md decision 9): the header checkbox
+                 has no name, so it can never leak into the payload. -->
+            <th class="hc-datagrid__headcell"
+                th:if="${v != null && v['selectable'] == true}">
+              <input type="checkbox" class="hc-checkbox"
+                     th:attr="aria-label=#{tql.view.selectAll}">
+            </th>
             <th class="hc-datagrid__headcell" th:each="c : ${columns}"
                 th:attr="data-sortable=${c.sortable != null ? 'true' : null},data-col=${c.sortable != null ? c.name : null},aria-sort=${c.ariaSort}">
               <a th:if="${c.sortable != null}" th:href="${c.sortHref}"
@@ -28,6 +35,12 @@
                #row-… fragment refocuses. Views without a key render anonymous rows. -->
           <tr class="hc-datagrid__row" th:each="r, rStat : ${rows}"
               th:id="${v != null && v['anchors'] != null ? v['anchors'][rStat.index] : null}">
+            <td class="hc-datagrid__cell"
+                th:if="${v != null && v['selectable'] == true}">
+              <input type="checkbox" class="hc-checkbox" name="ids"
+                     th:value="${v['tokens'][rStat.index]}"
+                     th:attr="aria-label=#{tql.view.select}">
+            </td>
             <td class="hc-datagrid__cell" th:each="cell : ${r}">
               <a th:if="${cell.href != null}" th:href="@{${cell.href}}"
                  th:class="${cell.button} ? 'hc-button' : null"
@@ -38,7 +51,7 @@
           </tr>
           <tr th:if="${#lists.isEmpty(rows)}">
             <td class="hc-datagrid__cell"
-                th:attr="colspan=${#lists.isEmpty(columns) ? 1 : #lists.size(columns)}"
+                th:attr="colspan=${(#lists.isEmpty(columns) ? 1 : #lists.size(columns)) + (v != null && v['selectable'] == true ? 1 : 0)}"
                 th:text="#{tql.view.empty}">No rows</td>
           </tr>
         </tbody>

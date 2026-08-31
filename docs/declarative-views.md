@@ -184,6 +184,30 @@ recognizably that view. Sharing a preset is copying the address bar. Preset para
 declared route inputs or the framework `sort`/`dir`/`size` params (`TQL-VIEW-3324`).
 User-created saved views wait for a per-user store; presets are the contract's own.
 
+### Bulk actions: `actions:`
+
+With a declared `key:`, `actions:` renders the selection column and a selection bar:
+
+```yaml
+layout: page
+key: id
+actions:
+  - label: Approve
+    action: /requests/approve
+    confirm: Approve the selected requests?
+```
+
+One form wraps the grid and the bar (the kit's datagrid-bulk-actions recipe): the checked
+rows' tokens travel as repeated `ids` fields by native form serialization, and each action
+button posts to its own route. The bar stays hidden until rows are checked
+(`installDatagridActions`, auto-initialized). On the receiving route, the framework
+decodes single-column-key tokens back into bare key values before binding, so a declared
+`ids: { type: array, items: { type: integer } }` input receives plain ids — composite-key
+tokens pass through as tokens for now. The no-JS submit answers post/redirect/get;
+`location: back` lands on the list the selection came from. Every `actions:` entry must
+match a POST route (`TQL-VIEW-3325`); tokens prove nothing — the route's own security and
+SQL decide what the ids may touch.
+
 ### Row identity and returning to the list: `key:` and `location: back`
 
 `key:` names the result columns that identify one row — a single column (`key: id`) or an
@@ -532,6 +556,7 @@ Lint family **`TQL-VIEW-33xx`**:
 | 3322 | a declared `key:` column is null, absent or blank in a result row — a row without its declared identity is a data defect |
 | 3323 | a `filters:` entry names an input the route does not declare |
 | 3324 | a `presets:` param names an input the route does not declare (framework `sort`/`dir`/`size` excepted) |
+| 3325 | an `actions:` entry targets a URL that matches no POST route |
 
 Coverage kind **`view`**: one item per view document, exercised when a declarative
 suite invokes any route referencing its id — an unreferenced document is declared and

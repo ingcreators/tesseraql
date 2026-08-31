@@ -62,6 +62,23 @@
     <a class="hc-filterbar__clear" th:if="${not #lists.isEmpty(v.filterBar.chips)}"
        th:href="${v.filterBar.clearHref}" th:text="#{tql.view.clearFilters}">Clear all</a>
   </div>
+  <!-- One form wraps the selection bar and the grid (the datagrid-bulk-actions recipe):
+       the checked rows' ids travel by native form serialization, each action button posts
+       to its own route (formaction), and the no-JS submit answers post/redirect/get with
+       `location: back` landing on this list. Without actions the form is inert chrome. -->
+  <form method="post">
+  <input type="hidden" name="_csrf" th:if="${_csrf != null && v.actions != null}"
+         th:value="${_csrf}">
+  <input type="hidden" name="_return" th:if="${v.returnTo != null}" th:value="${v.returnTo}">
+  <!-- The selection bar: hidden until rows are checked (installDatagridActions, auto-init);
+       the count child carries the translated selected-count. -->
+  <div class="hc-cluster" th:if="${v.actions != null}" hidden
+       th:attr="data-hc-datagrid-actions=|#${v.id}-table|">
+    <span data-hc-datagrid-count></span>
+    <button th:each="a : ${v.actions}" type="submit" class="hc-button" data-size="sm"
+            th:formaction="@{${a.action}}" th:text="${a.label}"
+            th:attr="data-hc-confirm=${a.confirm},data-hc-confirm-label=${a.confirm != null} ? ${a.label} : null">Act</button>
+  </div>
   <!-- With refreshOn: (docs/realtime.md) this region listens for the topic on the
        /_tesseraql/topics stream and re-GETs the page itself, selecting this same region —
        the SSE event carries no data. Empty values drop the attributes (plain list). -->
@@ -103,6 +120,7 @@
       </nav>
     </div>
   </div>
+  </form>
   <th:block th:if="${v.slots['footer'] != null}">
     <th:block th:insert="~{__${v.slots['footer']}__}"/>
   </th:block>

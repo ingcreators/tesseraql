@@ -196,6 +196,12 @@ public final class RequestBinder implements Step {
 
     }
 
+    /** Whether {@code name} is a declared {@code type: array} input of this route. */
+    private boolean isArrayInput(String name) {
+        return route != null && route.input() != null && route.input().get(name) != null
+                && "array".equals(route.input().get(name).type());
+    }
+
     private Map<String, Object> parseBody(Exchange exchange) {
         // A form has one representation (docs/vertx-native.md decision 2): the edge parsed it
         // into request().formFields(), and the third path this used to carry — parsing a raw
@@ -203,7 +209,12 @@ public final class RequestBinder implements Step {
         if (!exchange.request().formFields().isEmpty()) {
             Map<String, Object> form = new LinkedHashMap<>();
             exchange.request().formFields().forEach((name, values) -> form.put(name,
-                    values.size() == 1 ? values.get(0) : new java.util.ArrayList<>(values)));
+                    // A declared array input keeps its list-ness even with one value — a
+                    // checkbox group with one box checked is still a selection of one
+                    // (docs/list-surface.md decision 9), not a scalar.
+                    values.size() == 1 && !isArrayInput(name)
+                            ? values.get(0)
+                            : new java.util.ArrayList<>(values)));
             return form;
         }
         // A programmatic caller (an MCP primitive, a delegated workflow step) hands the bound

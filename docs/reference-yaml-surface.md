@@ -697,6 +697,7 @@ Schema for TesseraQL declarative view documents (*.view.yml): what a route rende
 | `key` | any | The result columns that identify one row (docs/declarative-views.md): a column name, or an ordered list for a composite key. Rows gain a stable anchor and an opaque row token; every key column must be present and non-null in each row. List views only. |
 | `filters` | array of any | The grid page's declared filters (docs/declarative-views.md): route inputs rendered as condition chips and a filter dialog. Each entry is an input name, or a name/label mapping. Requires layout: page; list views only. |
 | `presets` | array of [object](#presets) | Named view presets (docs/declarative-views.md): contract-declared param sets the grid page renders as real links - the active one is marked, re-clicking it resets, and no storage is involved. Requires layout: page; list views only. |
+| `actions` | array of [object](#actions) | Bulk actions over the grid page's row selection (docs/declarative-views.md): declaring any renders the selection column and bar. Requires layout: page and key:; list views only. |
 
 ### presets
 
@@ -704,6 +705,14 @@ Schema for TesseraQL declarative view documents (*.view.yml): what a route rende
 | --- | --- | --- |
 | `name` \* | string | The link's label; a message key resolves through the catalog. |
 | `params` \* | map of  | The query state the link applies - declared route inputs plus the framework sort/dir/size params. |
+
+### actions
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `label` \* | string | The button's label; a message key resolves through the catalog. |
+| `action` \* | string | The POST route the selection submits the checked rows' tokens to (repeated ids fields). |
+| `confirm` | string | A confirmation prompt gating the action (the kit's confirm dialog). |
 
 ## Other document kinds
 

@@ -46,6 +46,8 @@ final class ViewRules implements LintRule {
 
     private static final String UNDECLARED_PRESET_PARAM = "TQL-VIEW-3324";
 
+    private static final String UNMATCHED_BULK_ACTION = "TQL-VIEW-3325";
+
     /** Any {@code {…}} segment of a {@code link:} template, valid or not. */
     private static final java.util.regex.Pattern LINK_PLACEHOLDER = java.util.regex.Pattern
             .compile("\\{([^}]*)}");
@@ -150,6 +152,22 @@ final class ViewRules implements LintRule {
                         findings.add(new LintFinding(UNDECLARED_FILTER_INPUT, ERROR, source,
                                 "view " + spec.id() + ": filter " + filter.name()
                                         + " is not a declared input of the route"));
+                    }
+                }
+                for (io.tesseraql.yaml.view.ViewSpec.Action action : spec.actions()) {
+                    boolean matched = false;
+                    for (RouteFile candidate : manifest.routes()) {
+                        if ("POST".equalsIgnoreCase(candidate.httpMethod())
+                                && candidate.urlPath().equals(action.action())) {
+                            matched = true;
+                            break;
+                        }
+                    }
+                    if (!matched) {
+                        findings.add(new LintFinding(UNMATCHED_BULK_ACTION, ERROR, source,
+                                "view " + spec.id() + ": action '" + action.label()
+                                        + "' targets " + action.action()
+                                        + ", which matches no POST route"));
                     }
                 }
                 for (io.tesseraql.yaml.view.ViewSpec.Preset preset : spec.presets()) {

@@ -43,6 +43,8 @@ tql:
     sortSet: "Sort ({count}): {list}"
     presets: Views
     modified: Modified
+    select: Select row
+    selectAll: Select all rows
     notFound: Not found.
   http:
     "400": Bad Request

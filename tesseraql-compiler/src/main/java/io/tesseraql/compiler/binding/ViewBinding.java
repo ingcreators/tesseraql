@@ -727,8 +727,26 @@ public final class ViewBinding {
             // table pattern renders, the fragment a `location: back` redirect refocuses.
             v.put("anchors", tokens.stream().map(token -> "row-" + token).toList());
         }
-        v.put("rows", cellMatrix(context, columns, rows, tokens, returnBase(page, params,
-                pagePath)));
+        String returnBase = returnBase(page, params, pagePath);
+        if (!spec.actions().isEmpty() && tokens != null) {
+            // Bulk actions (docs/list-surface.md decision 9): the selection column's
+            // checkboxes carry the row tokens, the bar's buttons post them.
+            v.put("selectable", true);
+            v.put("tokens", tokens);
+            List<Map<String, Object>> renderedActions = new ArrayList<>();
+            for (ViewSpec.Action action : spec.actions()) {
+                Map<String, Object> a = new LinkedHashMap<>();
+                a.put("label", message(catalog, locale, action.label(), action.label()));
+                a.put("action", action.action());
+                a.put("confirm", action.confirm() == null
+                        ? null
+                        : message(catalog, locale, action.confirm(), action.confirm()));
+                renderedActions.add(a);
+            }
+            v.put("actions", renderedActions);
+            v.put("returnTo", returnBase);
+        }
+        v.put("rows", cellMatrix(context, columns, rows, tokens, returnBase));
     }
 
     /**
