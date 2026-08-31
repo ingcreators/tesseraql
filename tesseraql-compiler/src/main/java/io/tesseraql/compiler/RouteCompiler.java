@@ -427,6 +427,11 @@ public final class RouteCompiler {
             route.process(preCommand);
         }
         PipelineBuilder step = route
+                // A grid page's bulk selection posts row tokens; when a list view's actions:
+                // target this route, they decode against that view's key: before binding
+                // (docs/list-surface.md decision 9). A no-op for every other route.
+                .process(io.tesseraql.compiler.binding.BulkSelectionDecoder
+                        .forRoute(bulkSelectionKey(routeFile.urlPath())))
                 .process(new RequestBinder(definition, routeFile.urlPath(),
                         compiledAppHome, functions))
                 .process(new io.tesseraql.compiler.binding.CatalogBinder());
@@ -646,6 +651,28 @@ public final class RouteCompiler {
                 .process(new io.tesseraql.compiler.binding.WorkflowBulkProcessor(def.id(),
                         actionId, member, bulkMaxKeys()))
                 .process(responseRenderer(definition));
+    }
+
+    /**
+     * The acting list view's key columns when some view's {@code actions:} target this route
+     * (docs/list-surface.md decision 9), or null when none does.
+     */
+    private java.util.List<String> bulkSelectionKey(String urlPath) {
+        if (manifest == null || urlPath == null) {
+            return null;
+        }
+        for (io.tesseraql.yaml.manifest.ViewFile view : manifest.views()) {
+            io.tesseraql.yaml.view.ViewSpec spec = view.spec();
+            if (spec.key().isEmpty()) {
+                continue;
+            }
+            for (io.tesseraql.yaml.view.ViewSpec.Action action : spec.actions()) {
+                if (urlPath.equals(action.action())) {
+                    return spec.key();
+                }
+            }
+        }
+        return null;
     }
 
     /** The bulk request's one declared input: the document keys, refused when absent. */
@@ -1174,6 +1201,11 @@ public final class RouteCompiler {
         applyCommonGovernance(route, routeFile);
         applyIdempotencyBegin(route, definition);
         PipelineBuilder step = route
+                // A grid page's bulk selection posts row tokens; when a list view's actions:
+                // target this route, they decode against that view's key: before binding
+                // (docs/list-surface.md decision 9). A no-op for every other route.
+                .process(io.tesseraql.compiler.binding.BulkSelectionDecoder
+                        .forRoute(bulkSelectionKey(routeFile.urlPath())))
                 .process(new RequestBinder(definition, routeFile.urlPath(),
                         compiledAppHome, functions))
                 .process(new io.tesseraql.compiler.binding.CatalogBinder());

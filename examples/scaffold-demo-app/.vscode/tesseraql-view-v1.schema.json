@@ -124,6 +124,20 @@
         "additionalProperties": false
       },
       "description": "Named view presets (docs/declarative-views.md): contract-declared param sets the grid page renders as real links - the active one is marked, re-clicking it resets, and no storage is involved. Requires layout: page; list views only."
+    },
+    "actions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["label", "action"],
+        "properties": {
+          "label": { "type": "string", "description": "The button's label; a message key resolves through the catalog." },
+          "action": { "type": "string", "description": "The POST route the selection submits the checked rows' tokens to (repeated ids fields)." },
+          "confirm": { "type": "string", "description": "A confirmation prompt gating the action (the kit's confirm dialog)." }
+        },
+        "additionalProperties": false
+      },
+      "description": "Bulk actions over the grid page's row selection (docs/declarative-views.md): declaring any renders the selection column and bar. Requires layout: page and key:; list views only."
     }
   },
   "additionalProperties": false

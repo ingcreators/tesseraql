@@ -619,6 +619,36 @@ class ViewSpecTest {
     }
 
     @Test
+    void actionsRequireAKeyAndThePageLayout(@TempDir Path dir) throws Exception {
+        Path noKey = write(dir, "a.view.yml", """
+                version: tesseraql/v1
+                kind: view
+                recipe: list
+                layout: page
+                actions:
+                  - label: Close
+                    action: /things/close
+                """);
+        assertThatThrownBy(() -> ViewSpec.parse(noKey))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("actions: requires key:");
+        Path parsed = write(dir, "b.view.yml", """
+                version: tesseraql/v1
+                kind: view
+                recipe: list
+                layout: page
+                key: id
+                actions:
+                  - label: Close
+                    action: /things/close
+                    confirm: Close the selected rows?
+                """);
+        assertThat(ViewSpec.parse(parsed).actions()).hasSize(1);
+        assertThat(ViewSpec.parse(parsed).actions().get(0).confirm())
+                .isEqualTo("Close the selected rows?");
+    }
+
+    @Test
     void rejectsFiltersOffAList(@TempDir Path dir) throws Exception {
         Path file = write(dir, "x.view.yml", """
                 version: tesseraql/v1
