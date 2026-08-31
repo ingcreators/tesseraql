@@ -565,6 +565,55 @@ class HtmlResponseRendererViewTest {
     }
 
     @Test
+    void presetsRenderAsRealLinksWithTheActiveOneMarked(@TempDir Path dir) throws Exception {
+        // docs/list-surface.md decision 8: no storage — a preset is a link the contract
+        // declares; "Modified" marks applied state beyond what the active preset pins.
+        HtmlResponseRenderer renderer = renderer(dir, """
+                version: tesseraql/v1
+                kind: view
+                recipe: list
+                layout: page
+                filters: [status]
+                presets:
+                  - name: Open items
+                    params: { status: OPEN }
+                  - name: Closed items
+                    params: { status: CLOSED }
+                """, actionRoute());
+        Exchange exchange = new Exchange(Beans.NONE);
+        exchange.setProperty(TesseraqlProperties.CONTEXT, Map.of(
+                "main", Map.of("rows", List.of()),
+                "params", Map.of("status", "OPEN")));
+        exchange.request().uri("/items?status=OPEN");
+        renderer.process(exchange);
+        String html = exchange.getBody(String.class);
+        assertThat(html).contains("href=\"/items?status=OPEN\"")
+                .contains("href=\"/items?status=CLOSED\"")
+                .contains("aria-current=\"page\"")
+                .contains(">Open items</a>");
+        assertThat(html).doesNotContain(">Modified<");
+
+        // A search term beyond the active preset marks the view as modified.
+        Exchange tweaked = new Exchange(Beans.NONE);
+        tweaked.setProperty(TesseraqlProperties.CONTEXT, Map.of(
+                "main", Map.of("rows", List.of()),
+                "params", Map.of("status", "OPEN", "q", "bolt")));
+        tweaked.request().uri("/items?status=OPEN&q=bolt");
+        HtmlResponseRenderer withSearch = renderer(dir, """
+                version: tesseraql/v1
+                kind: view
+                recipe: list
+                layout: page
+                search: q
+                presets:
+                  - name: Open items
+                    params: { status: OPEN }
+                """, actionRoute());
+        withSearch.process(tweaked);
+        assertThat(tweaked.getBody(String.class)).contains(">Modified<");
+    }
+
+    @Test
     void anAppliedMultiSortRendersTheToolbarReadout(@TempDir Path dir) throws Exception {
         // docs/list-surface.md decision 7: the grid page's toolbar says what the sort set is.
         HtmlResponseRenderer renderer = renderer(dir, """

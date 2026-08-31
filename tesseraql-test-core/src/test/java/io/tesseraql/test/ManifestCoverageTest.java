@@ -503,7 +503,7 @@ class ManifestCoverageTest {
     /** A minimal list-view spec; the compact constructor fills every optional component. */
     private static io.tesseraql.yaml.view.ViewSpec listView(String id) {
         return new io.tesseraql.yaml.view.ViewSpec(id, "list", null, null, null, null, null,
-                null, null, null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null, null, null);
     }
 
     @Test

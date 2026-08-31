@@ -696,6 +696,14 @@ Schema for TesseraQL declarative view documents (*.view.yml): what a route rende
 | `layout` | enum: `card` \| `page` | How a list view frames itself (docs/declarative-views.md): 'card' (the default) renders in the page flow; 'page' renders the operational grid page - fixed chrome, only the grid scrolls, in-place paging. List views only. |
 | `key` | any | The result columns that identify one row (docs/declarative-views.md): a column name, or an ordered list for a composite key. Rows gain a stable anchor and an opaque row token; every key column must be present and non-null in each row. List views only. |
 | `filters` | array of any | The grid page's declared filters (docs/declarative-views.md): route inputs rendered as condition chips and a filter dialog. Each entry is an input name, or a name/label mapping. Requires layout: page; list views only. |
+| `presets` | array of [object](#presets) | Named view presets (docs/declarative-views.md): contract-declared param sets the grid page renders as real links - the active one is marked, re-clicking it resets, and no storage is involved. Requires layout: page; list views only. |
+
+### presets
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `name` \* | string | The link's label; a message key resolves through the catalog. |
+| `params` \* | map of  | The query state the link applies - declared route inputs plus the framework sort/dir/size params. |
 
 ## Other document kinds
 

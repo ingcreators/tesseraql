@@ -678,6 +678,7 @@ public final class ViewBinding {
             v.put("search", search);
         }
         filterModel(v, catalog, locale, context, params, pagePath);
+        presetModel(v, catalog, locale, params, pagePath);
         List<Map<String, Object>> rendered = renderedColumns(catalog, locale, columns);
         // The header contract every sortable grid shares, studio tables included.
         io.tesseraql.yaml.view.SortState state = io.tesseraql.yaml.view.SortState.of(sort, dir,
@@ -896,6 +897,64 @@ public final class ViewBinding {
         bar.put("chips", chips);
         bar.put("clearHref", href(pagePath, chromeState(params)));
         v.put("filterBar", bar);
+    }
+
+    /**
+     * The named view presets (docs/list-surface.md decision 8): real links, no storage. The
+     * active preset is the one whose every param the current URL carries; "Modified" marks an
+     * applied filter or search the active preset does not pin — a tweaked view, still
+     * recognizably that view. Re-clicking the active link is the reset.
+     */
+    private void presetModel(Map<String, Object> v, MessageCatalog catalog, Locale locale,
+            Map<String, Object> params, String pagePath) {
+        if (spec.presets().isEmpty()
+                || !ViewSpec.LAYOUT_PAGE.equals(spec.effectiveLayout())) {
+            return;
+        }
+        List<Map<String, Object>> rendered = new ArrayList<>();
+        ViewSpec.Preset firstActive = null;
+        for (ViewSpec.Preset preset : spec.presets()) {
+            StringBuilder query = new StringBuilder();
+            boolean active = true;
+            for (Map.Entry<String, String> param : preset.params().entrySet()) {
+                query.append('&').append(param.getKey()).append('=')
+                        .append(encode(param.getValue()));
+                if (!param.getValue().equals(str(params.get(param.getKey())))) {
+                    active = false;
+                }
+            }
+            if (active && firstActive == null) {
+                firstActive = preset;
+            }
+            Map<String, Object> p = new LinkedHashMap<>();
+            p.put("label", message(catalog, locale, preset.name(), preset.name()));
+            p.put("href", href(pagePath, query.toString()));
+            p.put("active", active);
+            // Model-computed attribute values: the kit-markup guard verifies every literal
+            // data-variant in a template against the kit's selectors.
+            p.put("variant", active ? "primary" : "ghost");
+            p.put("current", active ? "page" : null);
+            rendered.add(p);
+        }
+        v.put("presets", rendered);
+        v.put("presetModified", firstActive != null
+                && hasStateBeyond(firstActive, params));
+    }
+
+    /** Whether an applied filter or search term goes beyond what the active preset pins. */
+    private boolean hasStateBeyond(ViewSpec.Preset preset, Map<String, Object> params) {
+        List<String> conditions = new ArrayList<>();
+        spec.filters().forEach(filter -> conditions.add(filter.name()));
+        if (spec.search() != null) {
+            conditions.add(spec.search());
+        }
+        for (String name : conditions) {
+            String value = str(params.get(name));
+            if (!value.isEmpty() && !value.equals(preset.params().get(name))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** The display text a chip shows: the matching option's label, else the raw value. */

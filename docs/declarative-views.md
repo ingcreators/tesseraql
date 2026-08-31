@@ -164,6 +164,26 @@ condition, and the route's SQL applies it (`/*%if status */ and status = /* stat
 /*%end*/`). Every filter must name a declared route input (`TQL-VIEW-3323`), and pager,
 sort and search navigation all carry the applied filters.
 
+### Named views: `presets:`
+
+A preset is a contract-declared param set rendered as a real link beside the title:
+
+```yaml
+layout: page
+presets:
+  - name: Open tickets
+    params: { status: open }
+  - name: High priority
+    params: { priority: high, sort: "-created_at" }
+```
+
+No storage is involved: selecting a preset navigates, the active one is the preset whose
+params the current URL carries, and re-clicking it is the reset. A "Modified" badge marks
+an applied filter or search the active preset does not pin — a tweaked view, still
+recognizably that view. Sharing a preset is copying the address bar. Preset params must be
+declared route inputs or the framework `sort`/`dir`/`size` params (`TQL-VIEW-3324`).
+User-created saved views wait for a per-user store; presets are the contract's own.
+
 ### Row identity and returning to the list: `key:` and `location: back`
 
 `key:` names the result columns that identify one row — a single column (`key: id`) or an
@@ -511,6 +531,7 @@ Lint family **`TQL-VIEW-33xx`**:
 | 3321 | a column `link:` placeholder is not one plain column name — dotted or malformed placeholders render empty at runtime and eject wrong |
 | 3322 | a declared `key:` column is null, absent or blank in a result row — a row without its declared identity is a data defect |
 | 3323 | a `filters:` entry names an input the route does not declare |
+| 3324 | a `presets:` param names an input the route does not declare (framework `sort`/`dir`/`size` excepted) |
 
 Coverage kind **`view`**: one item per view document, exercised when a declarative
 suite invokes any route referencing its id — an unreferenced document is declared and

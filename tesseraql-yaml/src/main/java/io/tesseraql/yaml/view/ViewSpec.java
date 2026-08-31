@@ -30,7 +30,7 @@ public record ViewSpec(String id,
         String title, String action, String source,
         String search, List<Field> fields, List<Column> columns, List<Child> children,
         List<Panel> panels, Map<String, String> slots, String template, String refreshOn,
-        String layout, List<String> key, List<Filter> filters) {
+        String layout, List<String> key, List<Filter> filters, List<Preset> presets) {
 
     /** Structurally invalid view document (docs/declarative-views.md, TQL-VIEW-3301). */
     public static final TqlErrorCode INVALID_VIEW = new TqlErrorCode(TqlDomain.VIEW, 3301);
@@ -107,6 +107,7 @@ public record ViewSpec(String id,
             ENVELOPE_KEYS);
     private static final java.util.Set<String> FIELD_KEYS = keysOf(Field.class);
     private static final java.util.Set<String> FILTER_KEYS = keysOf(Filter.class);
+    private static final java.util.Set<String> PRESET_KEYS = keysOf(Preset.class);
     private static final java.util.Set<String> COLUMN_KEYS = keysOf(Column.class);
     private static final java.util.Set<String> CHILD_KEYS = keysOf(Child.class);
     private static final java.util.Set<String> PANEL_KEYS = keysOf(Panel.class);
@@ -184,6 +185,21 @@ public record ViewSpec(String id,
      * {@code name:} alone; {@code label} overrides the heading the chip and field carry.
      */
     public record Filter(String name, String label) {
+    }
+
+    /**
+     * A named view preset (docs/list-surface.md decision 8): a contract-declared param set the
+     * grid page renders as a real link — selecting one navigates, the active one is the preset
+     * whose params the current URL carries, and re-clicking it is the reset. No storage
+     * anywhere; sharing a preset is copying the address bar.
+     */
+    public record Preset(String name, Map<String, String> params) {
+        public Preset {
+            // Not Map.copyOf: declaration order shapes the preset's href, so it is kept.
+            params = params == null
+                    ? Map.of()
+                    : java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(params));
+        }
     }
 
     /**
@@ -294,6 +310,14 @@ public record ViewSpec(String id,
             throw invalid(name, "filters: requires layout: page (the grid page renders the"
                     + " condition chips and the filter dialog)");
         }
+        List<Preset> presets = parsePresets(name, tree.get("presets"));
+        if (!presets.isEmpty() && !LIST.equals(view)) {
+            throw invalid(name, "presets: is a list-view key");
+        }
+        if (!presets.isEmpty() && !LAYOUT_PAGE.equals(str(tree.get("layout")))) {
+            throw invalid(name, "presets: requires layout: page (the grid page renders the"
+                    + " view-preset links)");
+        }
         String action = str(tree.get("action"));
         if (FORM.equals(view) && (action == null || action.isBlank())) {
             throw invalid(name, "a form view must declare action: (the command route it posts to)");
@@ -309,7 +333,38 @@ public record ViewSpec(String id,
                 parseFields(name, tree.get("fields")), parseColumns(name, tree.get("columns")),
                 parseChildren(name, tree.get("children")), parsePanels(name, tree.get("panels")),
                 parseSlots(name, tree.get("slots")), str(tree.get("template")),
-                str(tree.get("refreshOn")), layout, key, filters);
+                str(tree.get("refreshOn")), layout, key, filters, presets);
+    }
+
+    /** The declared view presets (docs/list-surface.md decision 8), order preserved. */
+    @SuppressWarnings("unchecked")
+    private static List<Preset> parsePresets(String source, Object raw) {
+        List<Preset> presets = new ArrayList<>();
+        for (Map<String, Object> entry : entries(source, raw, "presets")) {
+            rejectUnknown(source, entry, PRESET_KEYS, "a presets: entry");
+            String presetName = str(entry.get("name"));
+            if (presetName == null || presetName.isBlank()) {
+                throw invalid(source, "a presets: entry requires name: (the link's label)");
+            }
+            if (presets.stream().anyMatch(other -> other.name().equals(presetName))) {
+                throw invalid(source, "presets: declares '" + presetName + "' twice");
+            }
+            Object rawParams = entry.get("params");
+            if (!(rawParams instanceof Map<?, ?> map) || map.isEmpty()) {
+                throw invalid(source, "preset '" + presetName + "' requires params: (the"
+                        + " query state the link applies)");
+            }
+            Map<String, String> params = new java.util.LinkedHashMap<>();
+            ((Map<String, Object>) map).forEach((key, value) -> {
+                if (value == null || str(value).isBlank()) {
+                    throw invalid(source, "preset '" + presetName + "' param " + key
+                            + " requires a value");
+                }
+                params.put(String.valueOf(key), str(value));
+            });
+            presets.add(new Preset(presetName, params));
+        }
+        return List.copyOf(presets);
     }
 
     /**

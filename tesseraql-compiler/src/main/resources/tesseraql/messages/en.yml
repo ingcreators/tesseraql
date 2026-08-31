@@ -41,6 +41,8 @@ tql:
     clearFilters: Clear all
     removeFilter: "Remove {label}"
     sortSet: "Sort ({count}): {list}"
+    presets: Views
+    modified: Modified
     notFound: Not found.
   http:
     "400": Bad Request
