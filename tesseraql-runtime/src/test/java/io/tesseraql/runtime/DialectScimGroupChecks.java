@@ -14,7 +14,6 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Statement;
 import java.util.List;
 import javax.sql.DataSource;
 
@@ -75,16 +74,9 @@ final class DialectScimGroupChecks {
      */
     private static void ensureIdentitySchema(DataSource dataSource, String dialect)
             throws SQLException {
-        try (Connection connection = dataSource.getConnection();
-                Statement statement = connection.createStatement()) {
-            for (String sql : SqlScripts.statements(DefaultIdentityPack.schema(dialect))) {
-                try {
-                    statement.execute(sql);
-                } catch (SQLException alreadyThere) {
-                    // The parity test proves the files agree; here an existing object is fine.
-                }
-            }
-        }
+        // Tolerated application instead of a swallow-everything loop: only the known
+        // already-exists errors pass; a genuinely broken statement still fails the test.
+        SqlScripts.applyScript(dataSource, DefaultIdentityPack.schema(dialect));
     }
 
     private static String groupCode(DataSource dataSource, String groupId) throws SQLException {

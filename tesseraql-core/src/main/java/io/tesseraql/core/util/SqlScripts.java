@@ -47,7 +47,15 @@ public final class SqlScripts {
      */
     public static void apply(DataSource dataSource, Class<?> anchor, String resourcePath)
             throws SQLException {
-        String script = read(anchor, resourcePath);
+        applyScript(dataSource, read(anchor, resourcePath));
+    }
+
+    /**
+     * Executes an already-read script on the datasource with the same statement splitting and
+     * tolerated already-exists handling as {@link #apply} - for callers whose DDL is not a
+     * classpath resource (e.g. a pack's assembled schema).
+     */
+    public static void applyScript(DataSource dataSource, String script) throws SQLException {
         try (Connection connection = dataSource.getConnection();
                 Statement statement = connection.createStatement()) {
             for (String sql : statements(script)) {
@@ -57,13 +65,14 @@ public final class SqlScripts {
                     // Statements without an IF NOT EXISTS form (Oracle DDL, column/index adds
                     // everywhere but PostgreSQL) get their idempotency from tolerated
                     // already-exists errors instead: ORA-00955/-01430, MySQL 1060/1061
-                    // (duplicate column/key), and the duplicate-column/-index SQLStates of
+                    // (duplicate column/key), SQL Server 2714/2705/1913 (duplicate
+                    // object/column/index), and the duplicate-column/-index SQLStates of
                     // PostgreSQL (42701/42P07) and H2 (42121/42111). Everything else still
                     // fails the bootstrap.
                     int code = ex.getErrorCode();
                     String state = ex.getSQLState();
                     boolean tolerated = code == 955 || code == 1430 || code == 1060
-                            || code == 1061
+                            || code == 1061 || code == 2714 || code == 2705 || code == 1913
                             || "42701".equals(state) || "42P07".equals(state)
                             || "42121".equals(state) || "42111".equals(state);
                     if (!tolerated) {
