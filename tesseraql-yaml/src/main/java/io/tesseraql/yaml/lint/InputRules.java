@@ -37,6 +37,8 @@ final class InputRules implements LintRule {
 
     private static final String INVALID_ELEMENT_CONTRACT = "TQL-YAML-1027";
 
+    private static final String INVALID_SORT_INPUT = "TQL-YAML-1028";
+
     /** The run's memoized IO and cross-rule state, set at the top of {@link #lint}. */
     private LintContext context;
 
@@ -156,6 +158,14 @@ final class InputRules implements LintRule {
                     "input " + name + ": unknown string format " + field.format()
                             + " (known: "
                             + io.tesseraql.yaml.model.InputField.STRING_FORMATS + ")"));
+        }
+        boolean sortTyped = "sort".equals(field.type());
+        boolean hasColumns = field.columns() != null && !field.columns().isEmpty();
+        if (sortTyped != hasColumns) {
+            findings.add(new LintFinding(INVALID_SORT_INPUT, ERROR, source, sortTyped
+                    ? "input " + name + ": type sort requires columns: (the sortable-column"
+                            + " allowlist its keys validate against)"
+                    : "input " + name + ": columns: is a type: sort key"));
         }
         if (field.requiredWhen() != null && !field.requiredWhen().isBlank()) {
             try {

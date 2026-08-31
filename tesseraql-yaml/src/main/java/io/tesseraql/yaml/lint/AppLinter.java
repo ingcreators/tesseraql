@@ -98,7 +98,7 @@ public final class AppLinter {
     }
 
     private static final Set<String> KNOWN_INPUT_TYPES = Set.of("string", "integer", "number",
-            "boolean", "date", "array");
+            "boolean", "date", "array", "sort");
 
     /** The declared-input types — exposed for the same drift tests as {@link #knownAuthModes()}. */
     public static Set<String> knownInputTypes() {

@@ -17,16 +17,59 @@ class InputBinderTest {
 
     private static InputField field(String type, String format) {
         return new InputField(type, true, null, null, null, null, null, null, null, null,
-                format, null, null, null, null, null, null, null, null, null);
+                format, null, null, null, null, null, null, null, null, null, null);
     }
 
     private static Function<String, String> value(String raw) {
         return name -> raw;
     }
 
+    private static InputField sortField(List<String> columns) {
+        return new InputField("sort", false, null, null, null, null, null, null, null, null,
+                null, null, null, null, null, columns, null, null, null, null, null);
+    }
+
+    // type: sort (docs/list-surface.md decision 7): the wire form stays the param, the
+    // validated ORDER BY fragment rides the <name>Sql sibling.
+
+    @Test
+    void aSortInputValidatesAndPublishesItsSqlSibling() {
+        Map<String, Object> bound = InputBinder.bind(
+                Map.of("sort", sortField(List.of("ship_date", "order_no"))),
+                name -> "sort".equals(name) ? "-ship_date,order_no" : null,
+                name -> null, Locale.ENGLISH);
+
+        assertThat(bound.get("sort")).isEqualTo("-ship_date,order_no");
+        assertThat(bound.get("sortSql")).isEqualTo("ship_date desc, order_no asc");
+    }
+
+    @Test
+    void aSortKeyOutsideTheDeclaredColumnsIsRejected() {
+        assertThatThrownBy(() -> InputBinder.bind(
+                Map.of("sort", sortField(List.of("name"))),
+                name -> "sort".equals(name) ? "ghost" : null, name -> null, Locale.ENGLISH))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("outside its declared sort set");
+    }
+
+    @Test
+    void aLegacyDirParamAppliesToABareSingleColumnSort() {
+        // The existing header links send ?sort=name&dir=desc; a sort-typed route keeps them
+        // working by folding the declared dir into the fragment for a bare single column.
+        Map<String, Object> bound = InputBinder.bind(
+                Map.of("sort", sortField(List.of("name")), "dir", field("string", null)),
+                name -> switch (name) {
+                    case "sort" -> "name";
+                    case "dir" -> "desc";
+                    default -> null;
+                }, name -> null, Locale.ENGLISH);
+
+        assertThat(bound.get("sortSql")).isEqualTo("name desc");
+    }
+
     private static InputField arrayOf(InputField.InputItems items) {
         return new InputField("array", false, null, null, null, null, null, null, null, null,
-                null, items, null, null, null, null, null, null, null, null);
+                null, items, null, null, null, null, null, null, null, null, null);
     }
 
     /**
@@ -128,6 +171,7 @@ class InputBinderTest {
     void requiredAndRangeViolationsCarryTheirParams() {
         InputField qty = new InputField("integer", true, null, new BigDecimal(1),
                 new BigDecimal(99), null, null, null, null, null, null, null, null, null, null,
+                null,
                 null, null, null, null, null);
 
         assertThatThrownBy(() -> InputBinder.bind(Map.of("qty", qty), value(null),
@@ -149,7 +193,7 @@ class InputBinderTest {
     @Test
     void enumViolationsListTheOptions() {
         InputField status = new InputField("string", true, null, null, null, null,
-                List.of("open", "closed"), null, null, null, null, null, null, null, null,
+                List.of("open", "closed"), null, null, null, null, null, null, null, null, null,
                 null, null, null, null, null);
 
         assertThatThrownBy(() -> InputBinder.bind(Map.of("status", status), value("other"),
@@ -164,6 +208,7 @@ class InputBinderTest {
     void decimalBoundsAreExactAndFractional() {
         InputField price = new InputField("number", true, null, new BigDecimal("0.5"),
                 new BigDecimal("5"), null, null, null, null, null, null, null, null, null, null,
+                null,
                 null, null, null, null, null);
 
         // 5.9 violates max: 5 (the old long truncation admitted it), and min: 0.5 is declarable.
@@ -182,6 +227,7 @@ class InputBinderTest {
 
         InputField zeroFloor = new InputField("number", true, null, new BigDecimal(0), null,
                 null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+                null,
                 null);
         // -0.9 truncated to 0 under the old comparison and slipped past min: 0.
         assertThatThrownBy(() -> InputBinder.bind(Map.of("delta", zeroFloor), value("-0.9"),
@@ -194,7 +240,8 @@ class InputBinderTest {
     @Test
     void patternAndMinLengthGateStrings() {
         InputField code = new InputField("string", true, null, null, null, null, null, null,
-                null, null, null, null, "[A-Z]{2}-\\d+", 4, null, null, null, null, null, null);
+                null, null, null, null, "[A-Z]{2}-\\d+", 4, null, null, null, null, null, null,
+                null);
 
         assertThat(InputBinder.bind(Map.of("code", code), value("AB-12"), Locale.ENGLISH))
                 .containsEntry("code", "AB-12");

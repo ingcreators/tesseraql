@@ -7,7 +7,10 @@ input:
   q: { type: string, required: false, maxLength: 100 }
   status: { type: string, required: false, maxLength: 32 }
   priority: { type: string, required: false, enum: [low, normal, high] }
-  sort: { type: string, required: false }
+  sort:
+    type: sort
+    columns: [subject, priority, status, created_at]
+    default: "-created_at"
   dir: { type: string, required: false, enum: [asc, desc] }
 
 security:
@@ -26,6 +29,7 @@ sources:
         q: query.q
         status: query.status
         priority: query.priority
+        sort: params.sortSql
 response:
   html:
     status: 200

@@ -893,7 +893,7 @@ One column of a file transfer, in either form: the bare name, or an object addin
 | --- | --- | --- |
 | `domain` | string | Name of a field domain declared under domains/; its type, bounds, pattern, format, enum, classification and mask merge in, and the keys declared here win. Operational keys (required, requiredWhen, default, writable) stay route-local. |
 | `description` | string | What this field is, in the words a caller reads. A wire field on both MCP surfaces derived from input: an mcp/ prompt's argument carries it in prompts/list, and an mcp/ tool's inputSchema carries it as the JSON Schema description a model follows. Declarable on a domain, and inherited from one. |
-| `type` | enum: `string` \| `integer` \| `number` \| `boolean` \| `date` \| `array` | The declared type. A supplied value is coerced to it and refused when it does not fit. |
+| `type` | enum: `string` \| `integer` \| `number` \| `boolean` \| `date` \| `array` \| `sort` | The declared type. A supplied value is coerced to it and refused when it does not fit. `sort` is an ordered sort set (`-ship,order` - a leading `-` for descending) validated against `columns:`; the bound `params.<name>Sql` sibling carries the safe ORDER BY fragment. |
 | `required` | boolean | Refuse the request when this field is absent. |
 | `default` | any | The value bound when the request omits the field. |
 | `min` | number | Smallest accepted numeric value. |
@@ -901,6 +901,7 @@ One column of a file transfer, in either form: the bare name, or an object addin
 | `maxLength` | integer ≥ 0 | Longest accepted string, in characters. |
 | `minLength` | integer ≥ 0 | Shortest accepted string, in characters. |
 | `pattern` | string | Anchored regular expression (TQL-YAML-1012 when it does not compile). |
+| `columns` | array of string | The sortable-column allowlist a `type: sort` input validates its keys against; required for that type and legal on no other. |
 | `format` | string | string: email\|uuid\|url; date/number: a parse pattern. |
 | `requiredWhen` | string | A core expression over params./path./body. (TQL-YAML-1014). |
 | `enum` | array of string | The accepted values; anything else is refused. |

@@ -40,6 +40,7 @@ tql:
     cancel: Cancel
     clearFilters: Clear all
     removeFilter: "Remove {label}"
+    sortSet: "Sort ({count}): {list}"
     notFound: Not found.
   http:
     "400": Bad Request

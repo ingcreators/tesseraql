@@ -36,6 +36,7 @@ tql:
     cancel: キャンセル
     clearFilters: すべて解除
     removeFilter: "{label}の条件を解除"
+    sortSet: "並び順（{count}）: {list}"
     notFound: 見つかりません。
   http:
     "400": リクエストが正しくありません

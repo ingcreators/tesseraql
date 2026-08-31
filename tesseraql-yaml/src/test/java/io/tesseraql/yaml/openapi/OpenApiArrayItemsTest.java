@@ -19,7 +19,7 @@ class OpenApiArrayItemsTest {
 
     private static InputField array(InputField.InputItems items) {
         return new InputField("array", false, null, null, null, null, null, null, null, null,
-                null, items, null, null, null, null, null, null, null, null);
+                null, items, null, null, null, null, null, null, null, null, null);
     }
 
     @Test
@@ -41,12 +41,12 @@ class OpenApiArrayItemsTest {
     void anObjectElementPublishesItsFieldContract() {
         java.util.Map<String, InputField> fields = new java.util.LinkedHashMap<>();
         fields.put("itemId", new InputField("string", true, null, null, null, 40, null, null,
-                null, null, null, null, null, null, null, null, null, null, null, null));
+                null, null, null, null, null, null, null, null, null, null, null, null, null));
         fields.put("qty", new InputField("integer", true, null, java.math.BigDecimal.ONE, null,
-                null, null, null, null, null, null, null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null, null, null, null, null, null, null,
                 null, null));
         fields.put("note", new InputField("string", false, null, null, null, null, null, null,
-                null, null, null, null, null, null, null, null, null, null, null, null));
+                null, null, null, null, null, null, null, null, null, null, null, null, null));
 
         Map<String, Object> schema = OpenApiGenerator.fieldSchema(
                 array(new InputField.InputItems(null, null, fields)));
@@ -79,7 +79,7 @@ class OpenApiArrayItemsTest {
     @Test
     void aFieldDescriptionRidesIntoTheContract() {
         InputField sku = new InputField("string", false, null, null, null, null, null, null, null,
-                null, null, null, null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null, null, null, null,
                 "The stock keeping unit.");
 
         assertThat(OpenApiGenerator.fieldSchema(sku))

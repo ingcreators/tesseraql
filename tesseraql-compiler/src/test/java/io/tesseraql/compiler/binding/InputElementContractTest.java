@@ -26,12 +26,12 @@ class InputElementContractTest {
     private static InputField element(String type, boolean required, BigDecimal min,
             String pattern, String requiredWhen) {
         return new InputField(type, required, null, min, null, null, null, null, null, null,
-                null, null, pattern, null, requiredWhen, null, null, null, null, null);
+                null, null, pattern, null, requiredWhen, null, null, null, null, null, null);
     }
 
     private static InputField lines(Map<String, InputField> fields) {
         return new InputField("array", true, null, null, null, null, null, null, null, null,
-                null, new InputField.InputItems(null, null, fields), null, null, null, null,
+                null, new InputField.InputItems(null, null, fields), null, null, null, null, null,
                 null, null, null, null);
     }
 

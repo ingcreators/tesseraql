@@ -146,12 +146,81 @@ public final class InputBinder {
             effective.put(name, validate(name, field, coerce(name, field, raw, locale),
                     catalogs));
         }
+        publishSortFragments(inputs, effective);
         return effective;
+    }
+
+    /**
+     * For every {@code type: sort} input with a value, publish the validated ORDER BY fragment
+     * as the {@code <name>Sql} sibling (docs/list-surface.md decision 7) — the value the
+     * authored {@code /*# order by {sort} *&#47;} directive binds, while the param itself keeps
+     * the wire form ({@code -ship,order}) for links and saved URLs. A legacy declared
+     * {@code dir} param still applies to a bare single-column value, so existing header links
+     * keep working unchanged.
+     */
+    private static void publishSortFragments(Map<String, InputField> inputs,
+            Map<String, Object> effective) {
+        for (Map.Entry<String, InputField> entry : inputs.entrySet()) {
+            InputField field = entry.getValue();
+            if (!"sort".equals(field.type())) {
+                continue;
+            }
+            Object wire = effective.get(entry.getKey());
+            if (wire == null) {
+                continue;
+            }
+            String dir = effective.get("dir") instanceof String legacy ? legacy : null;
+            effective.put(entry.getKey() + "Sql", sortSql(String.valueOf(wire), dir));
+        }
+    }
+
+    /** Parses and validates a sort wire value; returns the canonical form unchanged. */
+    private static String coerceSort(String name, InputField field, String raw) {
+        List<String> allowed = field.columns() == null ? List.of() : field.columns();
+        StringBuilder canonical = new StringBuilder();
+        for (String token : raw.split(",")) {
+            String key = token.strip();
+            if (key.isEmpty()) {
+                continue;
+            }
+            String column = key.startsWith("-") ? key.substring(1) : key;
+            if (!allowed.contains(column)) {
+                throw reject(name, "sort", Map.of("column", column),
+                        "Input '" + name + "' names a column outside its declared sort set: "
+                                + column);
+            }
+            if (!canonical.isEmpty()) {
+                canonical.append(',');
+            }
+            canonical.append(key);
+        }
+        if (canonical.isEmpty()) {
+            throw reject(name, "sort", Map.of(), "Input '" + name + "' carries no sort key");
+        }
+        return canonical.toString();
+    }
+
+    /** The safe ORDER BY fragment a validated wire value expands to. */
+    private static String sortSql(String wire, String legacyDir) {
+        StringBuilder sql = new StringBuilder();
+        String[] tokens = wire.split(",");
+        boolean bareSingle = tokens.length == 1 && !tokens[0].startsWith("-");
+        for (String token : tokens) {
+            boolean descending = token.startsWith("-")
+                    || (bareSingle && "desc".equalsIgnoreCase(legacyDir));
+            String column = token.startsWith("-") ? token.substring(1) : token;
+            if (!sql.isEmpty()) {
+                sql.append(", ");
+            }
+            sql.append(column).append(descending ? " desc" : " asc");
+        }
+        return sql.toString();
     }
 
     private static Object coerce(String name, InputField field, String raw, Locale locale) {
         String type = field.type() == null ? "string" : field.type();
         return switch (type) {
+            case "sort" -> coerceSort(name, field, raw);
             case "integer" -> parseLong(name, raw);
             case "number" -> field.format() == null
                     ? parseDouble(name, raw)

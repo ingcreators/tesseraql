@@ -694,6 +694,31 @@ public final class ViewBinding {
             c.put("ariaSort", state.ariaSort(column.name()));
             c.put("sortHref", state.href(pagePath, column.name(), null));
         }
+        // The applied multi-sort as a read-out (docs/list-surface.md decision 7): the grid
+        // page's toolbar says what the sort set is; a single sort stays the header's aria-sort.
+        if (ViewSpec.LAYOUT_PAGE.equals(spec.effectiveLayout()) && sort.contains(",")) {
+            StringBuilder set = new StringBuilder();
+            int count = 0;
+            for (String token : sort.split(",")) {
+                String columnName = token.startsWith("-") ? token.substring(1) : token;
+                if (columnName.isBlank()) {
+                    continue;
+                }
+                String label = rendered.stream()
+                        .filter(c -> columnName.equals(c.get("name")))
+                        .map(c -> String.valueOf(c.get("label")))
+                        .findFirst().orElse(ViewFields.humanize(columnName));
+                if (!set.isEmpty()) {
+                    set.append(", ");
+                }
+                set.append(label).append(token.startsWith("-") ? " ↓" : " ↑");
+                count++;
+            }
+            v.put("sortSet", message(catalog, locale, "tql.view.sortSet",
+                    "Sort ({count}): {list}")
+                    .replace("{count}", String.valueOf(count))
+                    .replace("{list}", set));
+        }
         v.put("columns", rendered);
         List<String> tokens = rowTokens(rows);
         if (tokens != null) {
