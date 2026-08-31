@@ -133,24 +133,22 @@ input of the route, and sortable columns require the route to declare the `sort`
 On a paginated route, the list renders the kit's `hc-pagination` nav, with links
 preserving the search, sort and size state ([pagination](pagination.md)).
 
-### The grid page: `layout: page`
+### The grid page
 
-A list defaults to a card in the page flow. Declaring `layout: page` renders the
-operational grid page instead: the chrome — title, search bar, status line, pager — stays
-put, and only the grid scrolls. Page links swap the table region in place and push the
-URL, so every page state stays a bookmarkable address. On a counted route the status line
-shows the absolute window ("21–40 of 56"). Below the desktop breakpoint the frame falls
-back to normal page scrolling, and printing renders every fetched row. Regions render
-only when the contract declares them, so a minimal list is still a quiet page. The card
-remains the default while the grid page soaks; apps override the pattern the same way
-(`templates/tql/view/list-page.html`).
+Every list renders as the operational grid page (docs/list-surface.md, the flip): the
+chrome — title, presets, search bar, condition chips, status line, pager — stays put, and
+only the grid scrolls. Page links swap the table region in place and push the URL, so
+every page state stays a bookmarkable address. On a counted route the status line shows
+the absolute window ("21–40 of 56"). Below the desktop breakpoint the frame falls back to
+normal page scrolling, and printing renders every fetched row. Regions render only when
+the contract declares them, so a minimal list is still a quiet page; apps override the
+pattern by shipping `templates/tql/view/list.html`.
 
 ### Filters: declared params as chips and a dialog
 
 `filters:` lists declared route inputs — bare names, or `{ name, label }` mappings:
 
 ```yaml
-layout: page
 filters: [status, { name: priority, label: How urgent }]
 ```
 
@@ -169,7 +167,6 @@ sort and search navigation all carry the applied filters.
 A preset is a contract-declared param set rendered as a real link beside the title:
 
 ```yaml
-layout: page
 presets:
   - name: Open tickets
     params: { status: open }
@@ -189,7 +186,6 @@ User-created saved views wait for a per-user store; presets are the contract's o
 With a declared `key:`, `actions:` renders the selection column and a selection bar:
 
 ```yaml
-layout: page
 key: id
 actions:
   - label: Approve
@@ -219,7 +215,7 @@ pagination: { strategy: snapshot, size: 20, cap: 500 }
 ```
 
 The search renders every hit's row token as hidden `keys` fields (requires the view's
-single-column `key:` and `layout: page`). The pager becomes POST buttons that resubmit
+single-column `key:`). The pager becomes POST buttons that resubmit
 the membership plus a page number, and each page fetches live state for its slice only.
 The framework decodes the slice into `params.keys`, and the authored SQL binds the
 IN-list (`/*%if keys != null */ and t.id in /* keys */(1) /*%end*/`). A row that vanished
@@ -578,7 +574,7 @@ Lint family **`TQL-VIEW-33xx`**:
 | 3323 | a `filters:` entry names an input the route does not declare |
 | 3324 | a `presets:` param names an input the route does not declare (framework `sort`/`dir`/`size` excepted) |
 | 3325 | an `actions:` entry targets a URL that matches no POST route |
-| 3326 | snapshot pagination on a view without `layout: page` and a single-column `key:` |
+| 3326 | snapshot pagination on a view without a single-column `key:` |
 
 Coverage kind **`view`**: one item per view document, exercised when a declarative
 suite invokes any route referencing its id — an unreferenced document is declared and

@@ -187,7 +187,6 @@ class BulkActionsIntegrationTest {
                 id: things
                 kind: view
                 recipe: list
-                layout: page
                 key: id
                 title: Things
                 actions:

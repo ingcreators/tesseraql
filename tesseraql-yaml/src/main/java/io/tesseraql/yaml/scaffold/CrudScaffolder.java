@@ -381,7 +381,6 @@ public final class CrudScaffolder {
                 id: %s
                 kind: view
                 recipe: list
-                layout: page
                 %s
                 title: %s
                 %scolumns:

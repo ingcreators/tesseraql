@@ -147,12 +147,11 @@ final class ViewRules implements LintRule {
                 if (pagination != null
                         && io.tesseraql.yaml.model.PageSpec.SNAPSHOT
                                 .equals(pagination.effectiveStrategy())
-                        && (spec.key().size() != 1 || !io.tesseraql.yaml.view.ViewSpec.LAYOUT_PAGE
-                                .equals(spec.effectiveLayout()))) {
+                        && spec.key().size() != 1) {
                     findings.add(new LintFinding(INVALID_SNAPSHOT_VIEW, ERROR, source,
-                            "view " + spec.id() + ": pagination strategy snapshot requires"
-                                    + " layout: page and a single-column key: (the membership"
-                                    + " travels as row tokens)"));
+                            "view " + spec.id() + ": pagination strategy snapshot requires a"
+                                    + " single-column key: (the membership travels as row"
+                                    + " tokens)"));
                 }
                 if (spec.search() != null
                         && (inputs == null || !inputs.containsKey(spec.search()))) {

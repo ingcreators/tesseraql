@@ -57,7 +57,9 @@ class DeclarativeViewIntegrationTest {
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body()).contains("hc-datagrid__table");
         // The seeded user renders, its column linked per row from the view's link template.
-        assertThat(response.body()).contains("href=\"/users?sel=sato\"").contains(">sato</a>");
+        // Every grid-page row link carries the return target (docs/list-surface.md, the flip).
+        assertThat(response.body()).contains("href=\"/users?sel=sato&amp;_return=")
+                .contains(">sato</a>");
         assertThat(response.body()).contains(">Status</span>");
         // Shell negotiation (docs/view-composition.md wave 2a): the same URL varies by
         // HX-Request — direct navigation is the shell-wrapped page.

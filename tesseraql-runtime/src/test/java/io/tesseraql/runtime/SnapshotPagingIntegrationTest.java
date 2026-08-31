@@ -199,7 +199,6 @@ class SnapshotPagingIntegrationTest {
                 id: %s
                 kind: view
                 recipe: list
-                layout: page
                 key: id
                 title: Queue
                 columns:
