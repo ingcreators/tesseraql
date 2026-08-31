@@ -278,4 +278,6 @@ export const EXCLUDED = [
   'duplication-consolidation.md',
   // Process-control gap analysis: six candidates for the business-app surface, 2026-08-25.
   'process-control-gaps.md',
+  // Bridging the Idempotency-Key header machinery to the hc form recipe, 2026-08-31.
+  'idempotency-key.md',
 ];
