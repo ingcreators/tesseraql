@@ -58,13 +58,13 @@ public final class JdbcIdempotencyStore implements IdempotencyStore {
 
     private BeginResult classify(Existing existing, String requestHash) {
         if (!existing.requestHash.equals(requestHash)) {
-            return new Conflict("Idempotency key reused for a different request");
+            return new Conflict("Idempotency key reused for a different request", false);
         }
         if ("COMPLETED".equals(existing.status)) {
             return new Replay(existing.responseStatus, existing.responseBody,
                     existing.responseContentType);
         }
-        return new Conflict("Request with this idempotency key is already in progress");
+        return new Conflict("Request with this idempotency key is already in progress", true);
     }
 
     @Override
@@ -83,6 +83,20 @@ public final class JdbcIdempotencyStore implements IdempotencyStore {
             ps.executeUpdate();
         } catch (SQLException ex) {
             throw error("Idempotency complete failed", ex);
+        }
+    }
+
+    @Override
+    public void release(String scope, String key) {
+        try (Connection connection = dataSource.getConnection();
+                PreparedStatement ps = connection.prepareStatement("""
+                        delete from tql_idempotency_record
+                        where scope = ? and idempotency_key = ? and status = 'IN_PROGRESS'""")) {
+            ps.setString(1, scope);
+            ps.setString(2, key);
+            ps.executeUpdate();
+        } catch (SQLException ex) {
+            throw error("Idempotency release failed", ex);
         }
     }
 

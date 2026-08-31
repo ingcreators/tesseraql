@@ -460,7 +460,11 @@ public final class ErrorResponseRenderer implements Step {
                 case 4221, 4223, 4232 -> 422;
                 default -> 500;
             };
-            case IDEM -> code.number() == 4090 ? 409 : 500;
+            case IDEM -> switch (code.number()) {
+                case 4090 -> 409; // in flight: a race with yourself, retry after the first lands
+                case 4221 -> 422; // same key, different payload: a stale tab, not a retry
+                default -> 500;
+            };
             // 3003: a token request naming a member the exchange does not address — the
             // caller's request, not a server fault. The other OAUTH codes are boot refusals
             // and never surface over HTTP.

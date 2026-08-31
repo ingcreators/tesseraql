@@ -25,6 +25,8 @@ public final class IdempotencyProcessors {
     public static final String REPLAY_PROPERTY = "TqlIdemReplay";
     private static final String KEY_HEADER = "Idempotency-Key";
     private static final TqlErrorCode CONFLICT = new TqlErrorCode(TqlDomain.IDEM, 4090);
+    /** Same key, different request: a stale tab or a bug, not a retry (422, not 409). */
+    private static final TqlErrorCode MISMATCH = new TqlErrorCode(TqlDomain.IDEM, 4221);
     private static final TqlErrorCode KEY_REQUIRED = new TqlErrorCode(TqlDomain.FIELD, 2007);
 
     private IdempotencyProcessors() {
@@ -56,9 +58,13 @@ public final class IdempotencyProcessors {
             String hash = requestHash(exchange);
             IdempotencyStore.BeginResult result = store.begin(scope, key, hash, ttlMillis);
             switch (result) {
-                case IdempotencyStore.Proceed _ -> {
-                    // first time: proceed; Complete will persist the response
-                }
+                case IdempotencyStore.Proceed _ ->
+                    // First time: the claim is recorded on the exchange so the runner can
+                    // release it if the request fails before Complete stores a response -
+                    // the key is spent by the commit, not the attempt
+                    // (docs/idempotency-key.md decision 1).
+                    exchange.setProperty(TesseraqlProperties.IDEMPOTENCY_CLAIM,
+                            scope + "\n" + key);
                 case IdempotencyStore.Replay replay -> {
                     exchange.setProperty(REPLAY_PROPERTY, true);
                     exchange.setBody(replay.body());
@@ -68,7 +74,8 @@ public final class IdempotencyProcessors {
                     }
                 }
                 case IdempotencyStore.Conflict conflict ->
-                    throw new TqlException(CONFLICT, conflict.reason());
+                    throw new TqlException(conflict.inFlight() ? CONFLICT : MISMATCH,
+                            conflict.reason());
             }
         }
     }
@@ -94,6 +101,7 @@ public final class IdempotencyProcessors {
             String body = exchange.getBody(String.class);
             String contentType = exchange.response().header(Headers.CONTENT_TYPE);
             store(exchange).complete(scope, key, status, body, contentType);
+            exchange.setProperty(TesseraqlProperties.IDEMPOTENCY_CLAIM, null);
         }
     }
 
@@ -115,7 +123,47 @@ public final class IdempotencyProcessors {
         }
         // Re-set the body so the request binder can read it again after we consumed it.
         exchange.setBody(body);
-        return sha256(method + "\n" + path + "\n" + body);
+        String payload = body.isEmpty() ? formPayload(exchange) : body;
+        return sha256(principalKey(exchange) + "\n" + method + "\n" + path + "\n" + payload);
+    }
+
+    /**
+     * The canonical form payload: a browser form's fields never reach the exchange body (the
+     * edge parses them into {@code formFields()}), so hashing the body alone made every form
+     * post of a route look identical. Sorted {@code name=value} lines, reserved fields
+     * excluded - {@code _csrf} varies by session and {@code _idempotency} is the key itself
+     * (docs/idempotency-key.md decision 2).
+     */
+    private static String formPayload(Exchange exchange) {
+        var fields = exchange.request().formFields();
+        if (fields.isEmpty()) {
+            return "";
+        }
+        StringBuilder canonical = new StringBuilder();
+        fields.entrySet().stream()
+                .filter(field -> !"_csrf".equals(field.getKey())
+                        && !"_idempotency".equals(field.getKey()))
+                .sorted(java.util.Map.Entry.comparingByKey())
+                .forEach(field -> field.getValue().forEach(
+                        value -> canonical.append(field.getKey()).append('=').append(value)
+                                .append('\n')));
+        return canonical.toString();
+    }
+
+    /**
+     * The authenticated principal, folded into every hash: the recipe's scope is per user, and
+     * folding the user in gets that without a schema change - another user replaying a stolen
+     * key mismatches and is refused (docs/idempotency-key.md decision 2).
+     */
+    private static String principalKey(Exchange exchange) {
+        io.tesseraql.security.Principal principal = exchange.getProperty(
+                TesseraqlProperties.PRINCIPAL, io.tesseraql.security.Principal.class);
+        if (principal == null) {
+            return "";
+        }
+        String tenant = principal.tenantId() == null ? "" : principal.tenantId();
+        String subject = principal.subject() == null ? "" : principal.subject();
+        return tenant + ":" + subject;
     }
 
     private static String sha256(String value) {

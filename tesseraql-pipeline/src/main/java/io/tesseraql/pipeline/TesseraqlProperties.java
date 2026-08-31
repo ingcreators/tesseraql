@@ -127,6 +127,14 @@ public final class TesseraqlProperties {
     public static final String COOKIE_PATH_BEAN = "tesseraqlCookiePath";
     public static final String TEMP_STORE_BEAN = "tesseraqlTempStore";
     public static final String IDEMPOTENCY_STORE_BEAN = "tesseraqlIdempotencyStore";
+
+    /**
+     * A claimed-but-not-completed idempotency record, as {@code scope + "\n" + key}. Set by the
+     * begin step on a fresh claim, cleared by the complete step after the response is stored; a
+     * value still present when the pipeline finishes means the request failed before a commit,
+     * and the runner releases the claim so the key stays spendable (docs/idempotency-key.md).
+     */
+    public static final String IDEMPOTENCY_CLAIM = "TqlIdemClaim";
     public static final String OUTBOX_STORE_BEAN = "tesseraqlOutboxStore";
     /** The managed document-number sequence allocator (roadmap Phase 18). */
     public static final String DOCUMENT_SEQUENCES_BEAN = "tesseraqlDocumentSequences";

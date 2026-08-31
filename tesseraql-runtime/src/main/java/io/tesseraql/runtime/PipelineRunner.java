@@ -20,6 +20,9 @@ import java.util.List;
  */
 final class PipelineRunner {
 
+    private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory
+            .getLogger(PipelineRunner.class);
+
     private PipelineRunner() {
     }
 
@@ -87,12 +90,42 @@ final class PipelineRunner {
                 throw new IllegalStateException(unrenderable);
             }
         } finally {
+            // A claim the complete step never cleared means the request failed before a commit:
+            // release it so the key stays spendable - a validation refusal must not strand the
+            // corrected resubmit behind a 409 until TTL (docs/idempotency-key.md decision 1).
+            releaseIdempotencyClaim(exchange);
             // The completion guarantee (docs/vertx-native.md decision 5): the audit row, the
             // permits, the span and the streamed body all ride on this one call, and the failure
             // mode of missing it is silent and only on the error path.
             if (drainOnDone) {
                 exchange.drain();
             }
+        }
+    }
+
+    /** Releases a claimed-but-never-completed idempotency record; log-don't-throw. */
+    private static void releaseIdempotencyClaim(Exchange exchange) {
+        String claim = exchange.getProperty(TesseraqlProperties.IDEMPOTENCY_CLAIM, String.class);
+        if (claim == null) {
+            return;
+        }
+        exchange.setProperty(TesseraqlProperties.IDEMPOTENCY_CLAIM, null);
+        int split = claim.indexOf('\n');
+        if (split < 0) {
+            return;
+        }
+        try {
+            io.tesseraql.core.idempotency.IdempotencyStore store = exchange.beans().lookup(
+                    TesseraqlProperties.IDEMPOTENCY_STORE_BEAN,
+                    io.tesseraql.core.idempotency.IdempotencyStore.class);
+            if (store != null) {
+                store.release(claim.substring(0, split), claim.substring(split + 1));
+            }
+        } catch (RuntimeException failed) {
+            // The response is already decided; a failed release only means the key stays
+            // claimed until TTL - the pre-release behaviour, so log it rather than replace
+            // the answer with a storage error.
+            LOG.warn("Failed to release idempotency claim", failed);
         }
     }
 

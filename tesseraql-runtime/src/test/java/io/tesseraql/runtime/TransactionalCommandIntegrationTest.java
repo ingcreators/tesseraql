@@ -124,6 +124,76 @@ class TransactionalCommandIntegrationTest {
     }
 
     @Test
+    @Order(21)
+    void aRefusalBeforeCommitLeavesTheKeyLiveForTheCorrectedResubmit() throws Exception {
+        // quantity 0 violates min: 1 - refused before any write, with the key already claimed.
+        HttpResponse<String> refused = post("/api/orders", """
+                {"customerId": 1, "lines": [
+                  {"productId": 10, "quantity": 0}
+                ]}""", Map.of("Idempotency-Key", "order-fix"));
+        assertThat(refused.statusCode()).isEqualTo(400);
+
+        // The key is spent by the commit, not the attempt (docs/idempotency-key.md decision 1):
+        // the runner released the stranded claim, so the corrected resubmit with the SAME key
+        // commits instead of answering TQL-IDEM-4090 until TTL.
+        HttpResponse<String> corrected = post("/api/orders", """
+                {"customerId": 1, "lines": [
+                  {"productId": 10, "quantity": 1}
+                ]}""", Map.of("Idempotency-Key", "order-fix"));
+        assertThat(corrected.statusCode()).as(corrected.body()).isEqualTo(201);
+    }
+
+    @Test
+    @Order(22)
+    void reusingACommittedKeyForADifferentPayloadAnswers422() throws Exception {
+        long ordersBefore = count("orders", "1=1");
+        HttpResponse<String> reused = post("/api/orders", """
+                {"customerId": 1, "lines": [
+                  {"productId": 10, "quantity": 9}
+                ]}""", Map.of("Idempotency-Key", "order-1"));
+
+        // Same intent token, different content: a stale tab or a bug, not a retry - 422, so it
+        // renders where the request's own refusals do, and never as a punished 409.
+        assertThat(reused.statusCode()).isEqualTo(422);
+        assertThat(MAPPER.readTree(reused.body()).path("error").path("code").asText())
+                .isEqualTo("TQL-IDEM-4221");
+        assertThat(count("orders", "1=1")).isEqualTo(ordersBefore);
+    }
+
+    @Test
+    @Order(23)
+    void theStoreDistinguishesInFlightFromMismatchAndReleasesOnlyClaims() {
+        org.postgresql.ds.PGSimpleDataSource dataSource = new org.postgresql.ds.PGSimpleDataSource();
+        dataSource.setUrl(POSTGRES.getJdbcUrl());
+        dataSource.setUser(POSTGRES.getUsername());
+        dataSource.setPassword(POSTGRES.getPassword());
+        io.tesseraql.operations.idempotency.JdbcIdempotencyStore store = new io.tesseraql.operations.idempotency.JdbcIdempotencyStore(
+                dataSource);
+
+        assertThat(store.begin("s", "k1", "h1", 60_000))
+                .isInstanceOf(io.tesseraql.core.idempotency.IdempotencyStore.Proceed.class);
+        // Same request while the claim is open: the race with yourself, 409.
+        var inFlight = store.begin("s", "k1", "h1", 60_000);
+        assertThat(inFlight).isInstanceOfSatisfying(
+                io.tesseraql.core.idempotency.IdempotencyStore.Conflict.class,
+                conflict -> assertThat(conflict.inFlight()).isTrue());
+        // A different request against the claim: the reuse, 422's branch.
+        var mismatch = store.begin("s", "k1", "h2", 60_000);
+        assertThat(mismatch).isInstanceOfSatisfying(
+                io.tesseraql.core.idempotency.IdempotencyStore.Conflict.class,
+                conflict -> assertThat(conflict.inFlight()).isFalse());
+
+        // Release frees an open claim; a completed record is a stored response and stays.
+        store.release("s", "k1");
+        assertThat(store.begin("s", "k1", "h1", 60_000))
+                .isInstanceOf(io.tesseraql.core.idempotency.IdempotencyStore.Proceed.class);
+        store.complete("s", "k1", 201, "{}", "application/json");
+        store.release("s", "k1");
+        assertThat(store.begin("s", "k1", "h1", 60_000))
+                .isInstanceOf(io.tesseraql.core.idempotency.IdempotencyStore.Replay.class);
+    }
+
+    @Test
     @Order(3)
     void constraintViolationMapsToFieldErrorAndRollsBackAllSteps() throws Exception {
         long ordersBefore = count("orders", "1=1");
