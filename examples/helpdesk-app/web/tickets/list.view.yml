@@ -2,7 +2,6 @@ version: tesseraql/v1
 id: tickets
 kind: view
 recipe: list
-layout: page
 key: id
 title: Tickets
 search: q

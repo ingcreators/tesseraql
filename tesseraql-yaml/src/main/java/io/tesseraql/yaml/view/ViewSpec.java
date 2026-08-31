@@ -30,7 +30,7 @@ public record ViewSpec(String id,
         String title, String action, String source,
         String search, List<Field> fields, List<Column> columns, List<Child> children,
         List<Panel> panels, Map<String, String> slots, String template, String refreshOn,
-        String layout, List<String> key, List<Filter> filters, List<Preset> presets,
+        List<String> key, List<Filter> filters, List<Preset> presets,
         List<Action> actions) {
 
     /** Structurally invalid view document (docs/declarative-views.md, TQL-VIEW-3301). */
@@ -56,15 +56,6 @@ public record ViewSpec(String id,
     public static final String FORM = "form";
     public static final String DETAIL = "detail";
     public static final String DASHBOARD = "dashboard";
-
-    /** Today's list form: the view rendered as a card in the page flow (docs/list-surface.md). */
-    public static final String LAYOUT_CARD = "card";
-
-    /**
-     * The operational grid page (docs/list-surface.md decision 1): fixed chrome, only the grid
-     * scrolls, the pager swaps the table region in place. Opt-in until the flip.
-     */
-    public static final String LAYOUT_PAGE = "page";
 
     /** The dashboard panel types (docs/declarative-views.md; {@code view} embeds a view). */
     public static final java.util.Set<String> PANEL_TYPES = java.util.Set.of("stat",
@@ -300,14 +291,6 @@ public record ViewSpec(String id,
         if (DASHBOARD.equals(view) && tree.get("panels") == null) {
             throw invalid(name, "a dashboard view must declare panels:");
         }
-        String layout = str(tree.get("layout"));
-        if (layout != null && !LIST.equals(view)) {
-            throw invalid(name, "layout: is a list-view key");
-        }
-        if (layout != null && !LAYOUT_CARD.equals(layout) && !LAYOUT_PAGE.equals(layout)) {
-            throw invalid(name, "layout must be '" + LAYOUT_CARD + "' or '" + LAYOUT_PAGE
-                    + "', got: " + layout);
-        }
         List<String> key = parseKey(name, tree.get("key"));
         if (!key.isEmpty() && !LIST.equals(view)) {
             throw invalid(name, "key: is a list-view key");
@@ -316,25 +299,13 @@ public record ViewSpec(String id,
         if (!filters.isEmpty() && !LIST.equals(view)) {
             throw invalid(name, "filters: is a list-view key");
         }
-        if (!filters.isEmpty() && !LAYOUT_PAGE.equals(str(tree.get("layout")))) {
-            throw invalid(name, "filters: requires layout: page (the grid page renders the"
-                    + " condition chips and the filter dialog)");
-        }
         List<Preset> presets = parsePresets(name, tree.get("presets"));
         if (!presets.isEmpty() && !LIST.equals(view)) {
             throw invalid(name, "presets: is a list-view key");
         }
-        if (!presets.isEmpty() && !LAYOUT_PAGE.equals(str(tree.get("layout")))) {
-            throw invalid(name, "presets: requires layout: page (the grid page renders the"
-                    + " view-preset links)");
-        }
         List<Action> actions = parseActions(name, tree.get("actions"));
         if (!actions.isEmpty() && !LIST.equals(view)) {
             throw invalid(name, "actions: is a list-view key");
-        }
-        if (!actions.isEmpty() && !LAYOUT_PAGE.equals(str(tree.get("layout")))) {
-            throw invalid(name, "actions: requires layout: page (the grid page renders the"
-                    + " selection bar)");
         }
         if (!actions.isEmpty() && key.isEmpty()) {
             throw invalid(name, "actions: requires key: (the selection posts row tokens"
@@ -355,7 +326,7 @@ public record ViewSpec(String id,
                 parseFields(name, tree.get("fields")), parseColumns(name, tree.get("columns")),
                 parseChildren(name, tree.get("children")), parsePanels(name, tree.get("panels")),
                 parseSlots(name, tree.get("slots")), str(tree.get("template")),
-                str(tree.get("refreshOn")), layout, key, filters, presets, actions);
+                str(tree.get("refreshOn")), key, filters, presets, actions);
     }
 
     /** The declared bulk actions (docs/list-surface.md decision 9), order preserved. */
@@ -440,11 +411,6 @@ public record ViewSpec(String id,
             filters.add(filter);
         }
         return List.copyOf(filters);
-    }
-
-    /** The list layout in effect: the declared {@code layout:}, defaulting to the card. */
-    public String effectiveLayout() {
-        return layout == null || layout.isBlank() ? LAYOUT_CARD : layout;
     }
 
     /**

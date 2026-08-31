@@ -79,7 +79,6 @@ class AppLinterViewTest {
                 version: tesseraql/v1
                 kind: view
                 recipe: list
-                layout: page
                 filters: [ghost]
                 """);
         assertThat(viewCodes(new AppLinter().lint(dir))).contains("TQL-VIEW-3323");
@@ -91,7 +90,6 @@ class AppLinterViewTest {
                 version: tesseraql/v1
                 kind: view
                 recipe: list
-                layout: page
                 presets:
                   - name: Ghosts
                     params: { ghost: "1" }
@@ -105,7 +103,6 @@ class AppLinterViewTest {
                 version: tesseraql/v1
                 kind: view
                 recipe: list
-                layout: page
                 presets:
                   - name: Newest
                     params: { sort: name, dir: desc }
@@ -119,7 +116,6 @@ class AppLinterViewTest {
                 version: tesseraql/v1
                 kind: view
                 recipe: list
-                layout: page
                 key: id
                 actions:
                   - label: Ghost
@@ -134,7 +130,6 @@ class AppLinterViewTest {
                 version: tesseraql/v1
                 kind: view
                 recipe: list
-                layout: page
                 key: id
                 actions:
                   - label: Create-ish

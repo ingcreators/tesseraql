@@ -462,7 +462,6 @@ class CrudScaffolderTest {
             }
         }
         assertThat(content(files, "web/pairs/list.view.yml"))
-                .contains("layout: page")
                 .contains("key: [order_id, line_no]")
                 .contains("link: /pairs/{order_id}/{line_no}");
         assertThat(content(files, "web/pairs/{order_id}/{line_no}/select.sql"))
@@ -494,7 +493,6 @@ class CrudScaffolderTest {
     void theListViewDeclaresThePageFrameAndItsKey() {
         List<ScaffoldedFile> files = scaffolder.scaffold(items());
         assertThat(content(files, "web/items/list.view.yml"))
-                .contains("layout: page")
                 .contains("key: id");
     }
 

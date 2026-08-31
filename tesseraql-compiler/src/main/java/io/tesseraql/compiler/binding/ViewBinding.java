@@ -123,16 +123,9 @@ public final class ViewBinding {
         Map<Integer, Embed> panelEmbeds = panelEmbeds(home, viewRef, spec, route,
                 postRouteByPath, viewById);
         ReadSide readSide = readSide(home, viewRef, spec, childEmbeds, panelEmbeds);
-        // layout: page (docs/list-surface.md decision 1) renders through its own pattern file,
-        // so the card pattern stays byte-identical while the grid page is opt-in; an app
-        // overrides either the same way (templates/tql/view/list-page.html, ladder L2).
-        String pattern = ViewSpec.LIST.equals(spec.view())
-                && ViewSpec.LAYOUT_PAGE.equals(spec.effectiveLayout())
-                        ? "list-page"
-                        : spec.view();
         String entry = spec.template() != null
                 ? TemplateResolution.resolve(home, viewDir, spec.template())
-                : "tql/view/" + pattern;
+                : "tql/view/" + spec.view();
         // The grid page's filter fields derive from the declaring route's own input: block
         // (docs/list-surface.md decision 6) — the same declaration the request binder coerces.
         List<ViewFields.FieldDef> filterFields = spec.filters().isEmpty()
@@ -763,7 +756,7 @@ public final class ViewBinding {
         }
         // The applied multi-sort as a read-out (docs/list-surface.md decision 7): the grid
         // page's toolbar says what the sort set is; a single sort stays the header's aria-sort.
-        if (ViewSpec.LAYOUT_PAGE.equals(spec.effectiveLayout()) && sort.contains(",")) {
+        if (sort.contains(",")) {
             StringBuilder set = new StringBuilder();
             int count = 0;
             for (String token : sort.split(",")) {
@@ -847,7 +840,7 @@ public final class ViewBinding {
      */
     private String returnBase(Map<String, Object> page, Map<String, Object> params,
             String pagePath) {
-        if (!ViewSpec.LAYOUT_PAGE.equals(spec.effectiveLayout()) || pagePath.isEmpty()) {
+        if (pagePath.isEmpty()) {
             return null;
         }
         StringBuilder query = new StringBuilder();
@@ -1006,8 +999,7 @@ public final class ViewBinding {
      */
     private void presetModel(Map<String, Object> v, MessageCatalog catalog, Locale locale,
             Map<String, Object> params, String pagePath) {
-        if (spec.presets().isEmpty()
-                || !ViewSpec.LAYOUT_PAGE.equals(spec.effectiveLayout())) {
+        if (spec.presets().isEmpty()) {
             return;
         }
         List<Map<String, Object>> rendered = new ArrayList<>();

@@ -372,7 +372,7 @@ class ManifestLoaderTest {
                 "version: tesseraql/v1\nkind: view\nrecipe: list\n");
         // An unparseable document is left out (the linter reports it per document).
         java.nio.file.Files.writeString(dir.resolve("web/items/broken.view.yml"),
-                "version: tesseraql/v1\nkind: view\nrecipe: list\nlayout: wide\n");
+                "version: tesseraql/v1\nkind: view\nrecipe: list\nchrome: wide\n");
 
         AppManifest manifest = new ManifestLoader().load(dir);
 

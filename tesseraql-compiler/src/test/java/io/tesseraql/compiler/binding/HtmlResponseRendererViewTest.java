@@ -413,14 +413,13 @@ class HtmlResponseRendererViewTest {
     }
 
     @Test
-    void layoutPageRendersTheGridFrameWithAnInPlacePager(@TempDir Path dir) throws Exception {
+    void aListRendersTheGridFrameWithAnInPlacePager(@TempDir Path dir) throws Exception {
         // docs/list-surface.md decision 1: the grid page frame — status line and pager live
         // inside the swapped region, page links swap it in place and push the URL.
         HtmlResponseRenderer renderer = renderer(dir, """
                 version: tesseraql/v1
                 kind: view
                 recipe: list
-                layout: page
                 title: Tickets
                 """);
         Map<String, Object> context = Map.of(
@@ -473,7 +472,6 @@ class HtmlResponseRendererViewTest {
                 version: tesseraql/v1
                 kind: view
                 recipe: list
-                layout: page
                 key: id
                 columns:
                   - name: name
@@ -487,26 +485,6 @@ class HtmlResponseRendererViewTest {
         renderer.process(exchange);
         String html = exchange.getBody(String.class);
         assertThat(html).contains("/things/7/edit?_return=%2Fthings%3Fpage%3D2%23row-Nw");
-    }
-
-    @Test
-    void aCardListLinkCarriesNoReturnTarget(@TempDir Path dir) throws Exception {
-        HtmlResponseRenderer renderer = renderer(dir, """
-                version: tesseraql/v1
-                kind: view
-                recipe: list
-                key: id
-                columns:
-                  - name: name
-                    link: /things/{id}/edit
-                """);
-        Exchange exchange = new Exchange(Beans.NONE);
-        exchange.setProperty(TesseraqlProperties.CONTEXT, Map.of(
-                "main", Map.of("rows", List.of(Map.of("id", 7, "name", "Bolt")))));
-        exchange.request().uri("/things");
-        renderer.process(exchange);
-        assertThat(exchange.getBody(String.class))
-                .contains("href=\"/things/7/edit\"").doesNotContain("_return");
     }
 
     @Test
@@ -542,7 +520,6 @@ class HtmlResponseRendererViewTest {
                 version: tesseraql/v1
                 kind: view
                 recipe: list
-                layout: page
                 filters:
                   - status
                   - { name: quantity, label: Qty }
@@ -572,7 +549,6 @@ class HtmlResponseRendererViewTest {
                 version: tesseraql/v1
                 kind: view
                 recipe: list
-                layout: page
                 filters: [status]
                 presets:
                   - name: Open items
@@ -603,7 +579,6 @@ class HtmlResponseRendererViewTest {
                 version: tesseraql/v1
                 kind: view
                 recipe: list
-                layout: page
                 search: q
                 presets:
                   - name: Open items
@@ -620,7 +595,6 @@ class HtmlResponseRendererViewTest {
                 version: tesseraql/v1
                 kind: view
                 recipe: list
-                layout: page
                 columns:
                   - name: ship_date
                   - name: order_no
@@ -633,19 +607,6 @@ class HtmlResponseRendererViewTest {
         renderer.process(exchange);
         assertThat(exchange.getBody(String.class))
                 .contains("Sort (2): Ship date ↓, Order no ↑");
-    }
-
-    @Test
-    void layoutCardStaysTheDefaultListPattern(@TempDir Path dir) throws Exception {
-        HtmlResponseRenderer renderer = renderer(dir, """
-                version: tesseraql/v1
-                kind: view
-                recipe: list
-                title: Items
-                """);
-        String html = render(renderer, Map.of("main", Map.of("rows", List.of(
-                Map.of("id", 1, "name", "Bolt")))));
-        assertThat(html).contains("hc-card").doesNotContain("tql-list-page");
     }
 
     @Test

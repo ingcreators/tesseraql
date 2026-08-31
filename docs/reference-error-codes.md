@@ -608,7 +608,7 @@ All 576 `TQL-*` codes, scanned from the framework sources on every refresh and g
 | `TQL-VIEW-3323` | a filters: entry names an input the route does not declare. · view …: filter … is not a declared input of the route | [declarative-views](declarative-views.md) | [ViewRules.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/ViewRules.java), [ViewFields.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/view/ViewFields.java) |
 | `TQL-VIEW-3324` | view …: preset '…' param … is not a declared input of the route | [declarative-views](declarative-views.md) | [ViewRules.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/ViewRules.java) |
 | `TQL-VIEW-3325` | view …: action '…' targets …, which matches no POST route | [declarative-views](declarative-views.md) | [ViewRules.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/ViewRules.java) |
-| `TQL-VIEW-3326` | view …: pagination strategy snapshot requires… layout: page and a single-column key: (the membership… travels as row tokens) | — | [ViewRules.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/ViewRules.java) |
+| `TQL-VIEW-3326` | view …: pagination strategy snapshot requires a… single-column key: (the membership travels as row… tokens) | — | [ViewRules.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/ViewRules.java) |
 
 ## WORKFLOW
 

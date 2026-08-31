@@ -1,5 +1,25 @@
 # The list surface — an operational grid page and composite row identity
 
+> **Status: all ten slices shipped 2026-08-31, the flip included.** Slice 1 (#1090) — the
+> page frame, in-place pager, link URL-encoding, lint 3321. Slice 2 (#1091) — `key:`,
+> `RowTokens`, `location: back` + `_return`. Slice 3 (#1092) — composite-key scaffolding;
+> new scaffolds land on the grid page. Slice 4 (#1093) — composite keyset (`by:` list,
+> token cursor, `params.after.*`). Slice 5 (#1094) — `filters:` chips + dialog. Slice 6
+> (#1095) — `type: sort` and the one-param sort set. Slice 7 (#1096) — `presets:`
+> (renamed from the text's `views:` — that name collides with `response.html.views`).
+> Slice 8 (#1097) — `actions:` selection + bulk posts, the `ids` token decoder. Slice 9
+> (#1098) — `strategy: snapshot`, tombstones, the 422 cap. Slice 10 — the flip: the grid
+> page *is* `tql/view/list.html`, the card and the `layout:` switch are gone.
+>
+> Recorded deviations from the text below: the sort-list *editor* (reorderable panel) is
+> deferred — the URL and presets apply a multi-sort; composite keys stop at bulk/snapshot
+> (tokens pass through; tuple-IN binding is the follow-up); the snapshot page fetch
+> reorders app-side by token (the upstream contract's blessed variant) instead of a
+> per-dialect ordinal join; the ejector still emits the static-grid simplification; and
+> the framework-screen soak criterion was met by the gallery apps plus four dedicated
+> integration tests rather than an IAM Admin conversion (those screens are hand-written
+> consoles, not declarative views). The decisions below are otherwise the live contract.
+
 Implementation design for the target state of `recipe: list`: the declarative list view
 becomes an operational grid page of the quality a commercial SaaS back office ships, and
 row identity — today a single-column assumption in half the surface — becomes a declared,

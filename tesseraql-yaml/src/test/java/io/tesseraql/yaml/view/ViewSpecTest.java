@@ -440,40 +440,6 @@ class ViewSpecTest {
     }
 
     @Test
-    void layoutPageIsAcceptedOnAList(@TempDir Path dir) throws Exception {
-        Path file = write(dir, "x.view.yml", """
-                version: tesseraql/v1
-                kind: view
-                recipe: list
-                layout: page
-                """);
-        assertThat(ViewSpec.parse(file).effectiveLayout()).isEqualTo(ViewSpec.LAYOUT_PAGE);
-    }
-
-    @Test
-    void layoutDefaultsToTheCard(@TempDir Path dir) throws Exception {
-        Path file = write(dir, "x.view.yml", """
-                version: tesseraql/v1
-                kind: view
-                recipe: list
-                """);
-        assertThat(ViewSpec.parse(file).effectiveLayout()).isEqualTo(ViewSpec.LAYOUT_CARD);
-    }
-
-    @Test
-    void rejectsAnUnknownLayout(@TempDir Path dir) throws Exception {
-        Path file = write(dir, "x.view.yml", """
-                version: tesseraql/v1
-                kind: view
-                recipe: list
-                layout: wide
-                """);
-        assertThatThrownBy(() -> ViewSpec.parse(file))
-                .isInstanceOf(TqlException.class).hasMessageContaining("TQL-VIEW-3301")
-                .hasMessageContaining("layout must be 'card' or 'page'");
-    }
-
-    @Test
     void keyAcceptsAScalarAndAList(@TempDir Path dir) throws Exception {
         Path scalar = write(dir, "s.view.yml", """
                 version: tesseraql/v1
@@ -535,7 +501,6 @@ class ViewSpecTest {
                 version: tesseraql/v1
                 kind: view
                 recipe: list
-                layout: page
                 filters:
                   - status
                   - { name: priority, label: How urgent }
@@ -547,25 +512,11 @@ class ViewSpecTest {
     }
 
     @Test
-    void filtersRequireThePageLayout(@TempDir Path dir) throws Exception {
-        Path file = write(dir, "x.view.yml", """
-                version: tesseraql/v1
-                kind: view
-                recipe: list
-                filters: [status]
-                """);
-        assertThatThrownBy(() -> ViewSpec.parse(file))
-                .isInstanceOf(TqlException.class)
-                .hasMessageContaining("filters: requires layout: page");
-    }
-
-    @Test
     void rejectsADuplicateFilter(@TempDir Path dir) throws Exception {
         Path file = write(dir, "x.view.yml", """
                 version: tesseraql/v1
                 kind: view
                 recipe: list
-                layout: page
                 filters: [status, status]
                 """);
         assertThatThrownBy(() -> ViewSpec.parse(file))
@@ -578,7 +529,6 @@ class ViewSpecTest {
                 version: tesseraql/v1
                 kind: view
                 recipe: list
-                layout: page
                 presets:
                   - name: Open
                     params: { status: open, sort: "-created_at" }
@@ -595,7 +545,6 @@ class ViewSpecTest {
                 version: tesseraql/v1
                 kind: view
                 recipe: list
-                layout: page
                 presets:
                   - name: Open
                 """);
@@ -604,27 +553,11 @@ class ViewSpecTest {
     }
 
     @Test
-    void presetsRequireThePageLayout(@TempDir Path dir) throws Exception {
-        Path file = write(dir, "x.view.yml", """
-                version: tesseraql/v1
-                kind: view
-                recipe: list
-                presets:
-                  - name: Open
-                    params: { status: open }
-                """);
-        assertThatThrownBy(() -> ViewSpec.parse(file))
-                .isInstanceOf(TqlException.class)
-                .hasMessageContaining("presets: requires layout: page");
-    }
-
-    @Test
     void actionsRequireAKeyAndThePageLayout(@TempDir Path dir) throws Exception {
         Path noKey = write(dir, "a.view.yml", """
                 version: tesseraql/v1
                 kind: view
                 recipe: list
-                layout: page
                 actions:
                   - label: Close
                     action: /things/close
@@ -636,7 +569,6 @@ class ViewSpecTest {
                 version: tesseraql/v1
                 kind: view
                 recipe: list
-                layout: page
                 key: id
                 actions:
                   - label: Close
@@ -659,19 +591,6 @@ class ViewSpecTest {
         assertThatThrownBy(() -> ViewSpec.parse(file))
                 .isInstanceOf(TqlException.class)
                 .hasMessageContaining("filters: is a list-view key");
-    }
-
-    @Test
-    void rejectsLayoutOffAList(@TempDir Path dir) throws Exception {
-        Path file = write(dir, "x.view.yml", """
-                version: tesseraql/v1
-                kind: view
-                recipe: detail
-                layout: page
-                """);
-        assertThatThrownBy(() -> ViewSpec.parse(file))
-                .isInstanceOf(TqlException.class).hasMessageContaining("TQL-VIEW-3301")
-                .hasMessageContaining("layout: is a list-view key");
     }
 
     @Test
