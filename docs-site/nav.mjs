@@ -280,4 +280,6 @@ export const EXCLUDED = [
   'process-control-gaps.md',
   // Bridging the Idempotency-Key header machinery to the hc form recipe, 2026-08-31.
   'idempotency-key.md',
+  // The list view's operational grid page and composite row identity, 2026-08-31.
+  'list-surface.md',
 ];
