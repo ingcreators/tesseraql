@@ -283,8 +283,15 @@ idempotency:
 ```
 
 The presence of the block enables idempotency; every key is optional. Reusing a key for a
-*different* request, or while the first request is still in flight, answers `409 Conflict`
-(`TQL-IDEM-4090`).
+*different* request answers `422` (`TQL-IDEM-4221`) — same intent token plus different content
+is a stale tab or a bug, not a retry. Reusing it while the first request is still in flight
+answers `409 Conflict` (`TQL-IDEM-4090`). The request hash that decides "different" covers the
+JSON body, or a browser form's fields in canonical order, with the authenticated principal
+folded in — one user's key never replays for another.
+
+The key is spent by the *commit*, not the attempt. A refusal before commit — a validation
+failure, a constraint violation, any error — releases the claim, so the corrected resubmit
+with the same key can commit. Only a stored success replays.
 
 ## Error codes
 

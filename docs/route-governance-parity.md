@@ -177,6 +177,9 @@ fit: a heavy export is exactly what an operator would rate-limit.
   at three sites and `buildTemplatePage` is a terminal builder with none, so a begun record stays
   `IN_PROGRESS` and every retry inside the 24h TTL gets `TQL-IDEM-4090` → 409. Narrow in practice:
   it needs `required: true` or a client that volunteers a key, and no shipped app hits it.
+  **Structurally closed since docs/idempotency-key.md decision 1:** the pipeline runner releases
+  any claim the complete step never cleared, so a stranded `IN_PROGRESS` record no longer
+  outlives its request on any builder.
 - **Workflow `assign:` SQL misses the ambient and audit binds.** `AmbientBinds.seed` is called at
   three sites and assign is not one. The failure is *silent*: a missing segment resolves to null,
   so `/* principal.loginId */` binds NULL. That also contradicts the `AmbientBinds` javadoc

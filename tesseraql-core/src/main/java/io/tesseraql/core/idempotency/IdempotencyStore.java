@@ -25,6 +25,13 @@ public interface IdempotencyStore {
     /** Records the final response for a key so later replays can return it. */
     void complete(String scope, String key, int status, String body, String contentType);
 
+    /**
+     * Releases a claim that will never complete: the request failed before a commit, so the key
+     * must stay spendable (docs/idempotency-key.md decision 1). Removes the record only while it
+     * is still in progress - a completed record is a stored response and stays.
+     */
+    void release(String scope, String key);
+
     /** Outcome of {@link #begin}. */
     sealed interface BeginResult permits Proceed, Replay, Conflict {
     }
@@ -37,7 +44,10 @@ public interface IdempotencyStore {
     record Replay(int status, String body, String contentType) implements BeginResult {
     }
 
-    /** Reject: in progress, or the key was reused for a different request. */
-    record Conflict(String reason) implements BeginResult {
+    /**
+     * Reject. {@code inFlight} distinguishes the race (the first request is still running,
+     * 409) from the reuse (same key, different request - a stale tab or a bug, 422).
+     */
+    record Conflict(String reason, boolean inFlight) implements BeginResult {
     }
 }

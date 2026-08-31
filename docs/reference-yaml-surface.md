@@ -16,7 +16,7 @@ Schema for TesseraQL route documents: web/**/<method>.yml, queue consumers under
 | `input` | map of [inputField](#inputfield) | Declared input fields - one contract for routes and jobs alike (a job's parameters bind and validate exactly like a route's). Documented in app-layout.md and jobs.md. |
 | `inputPolicy` | [object](#inputpolicy) | Route-level input handling policy (e.g. unknown-field behavior) layered over the deny-by-default input: contract. |
 | `security` | [object](#security) | How this document authenticates and authorizes. Routes are deny-by-default: one that declares no security is unreachable. Documented in authentication.md. |
-| `idempotency` | [object](#idempotency) | Idempotent replay for commands. A replayed key returns the stored response; a reused key with a different body is TQL-IDEM-4090. Documented in transactional-writes.md. |
+| `idempotency` | [object](#idempotency) | Idempotent replay for commands. A replayed key returns the stored response; a reused key with a different body is TQL-IDEM-4221 (422), and a reuse while the first request runs is TQL-IDEM-4090 (409). Documented in transactional-writes.md. |
 | `admission` | [object](#admission) | Admission policy for this route: concurrency, rate limiting, and the execution lane. Documented in productivity.md (admission) and jobs.md (lanes). |
 | `outbox` | [object](#outbox) | Transactional outbox event recorded with the command and delivered at-least-once after commit. Documented in notifications.md and messaging.md. |
 | `steps` | array of [object](#steps) | The command's ordered statements, executed inside one transaction (command recipes). Each item carries an id: and one binding arm; each result binds under `steps.<id>`. Documented in transactional-writes.md. |
@@ -58,7 +58,7 @@ How this document authenticates and authorizes. Routes are deny-by-default: one 
 
 ### idempotency
 
-Idempotent replay for commands. A replayed key returns the stored response; a reused key with a different body is TQL-IDEM-4090. Documented in transactional-writes.md.
+Idempotent replay for commands. A replayed key returns the stored response; a reused key with a different body is TQL-IDEM-4221 (422), and a reuse while the first request runs is TQL-IDEM-4090 (409). Documented in transactional-writes.md.
 
 | Property | Type | Description |
 | --- | --- | --- |

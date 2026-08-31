@@ -180,12 +180,13 @@ class QueryJsonIntegrationTest {
                 "{\"name\":\"suzuki\"}");
         assertThat(first.statusCode()).isEqualTo(200);
 
-        // Same key, different request body -> conflict (409).
+        // Same key, different request body: a stale tab or a bug, not a retry - 422, not a
+        // punished 409 (docs/idempotency-key.md decision 3).
         HttpResponse<String> conflict = postIdem("/users/deactivate", cookie, csrf, key,
                 "{\"name\":\"tanaka\"}");
-        assertThat(conflict.statusCode()).isEqualTo(409);
+        assertThat(conflict.statusCode()).isEqualTo(422);
         assertThat(MAPPER.readTree(conflict.body()).path("error").path("code").asText())
-                .isEqualTo("TQL-IDEM-4090");
+                .isEqualTo("TQL-IDEM-4221");
 
         // Same key, same request body -> replay of the original response.
         HttpResponse<String> replay = postIdem("/users/deactivate", cookie, csrf, key,

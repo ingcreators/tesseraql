@@ -100,7 +100,7 @@
     },
     "idempotency": {
       "type": "object",
-      "description": "Idempotent replay for commands. A replayed key returns the stored response; a reused key with a different body is TQL-IDEM-4090. Documented in transactional-writes.md.",
+      "description": "Idempotent replay for commands. A replayed key returns the stored response; a reused key with a different body is TQL-IDEM-4221 (422), and a reuse while the first request runs is TQL-IDEM-4090 (409). Documented in transactional-writes.md.",
       "properties": {
         "required": {
           "type": "boolean",
