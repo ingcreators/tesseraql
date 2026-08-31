@@ -40,6 +40,16 @@ final class ViewRules implements LintRule {
 
     private static final String INVALID_VIEW_PATTERN_OVERRIDE = "TQL-VIEW-3307";
 
+    private static final String INVALID_LINK_PLACEHOLDER = "TQL-VIEW-3321";
+
+    /** Any {@code {…}} segment of a {@code link:} template, valid or not. */
+    private static final java.util.regex.Pattern LINK_PLACEHOLDER = java.util.regex.Pattern
+            .compile("\\{([^}]*)}");
+
+    /** What a placeholder must be: one plain column name, the shape the ejector rewrites. */
+    private static final java.util.regex.Pattern PLAIN_COLUMN = java.util.regex.Pattern
+            .compile("[\\p{L}_][\\p{L}\\p{N}_]*");
+
     @Override
     public void lint(LintContext context, AppManifest manifest,
             List<LintFinding> findings) {
@@ -177,6 +187,16 @@ final class ViewRules implements LintRule {
                                     ex.getMessage()));
                         }
                     });
+            // Column link: placeholders (docs/list-surface.md decision 3): each must be one
+            // plain column name — the runtime renders a dotted path but the ejector rewrites
+            // placeholders per column, and a malformed one silently renders empty.
+            lintColumnLinks(source, spec.id(), spec.columns(), findings);
+            for (io.tesseraql.yaml.view.ViewSpec.Child child : spec.children()) {
+                lintColumnLinks(source, spec.id(), child.columns(), findings);
+            }
+            for (io.tesseraql.yaml.view.ViewSpec.Panel panel : spec.panels()) {
+                lintColumnLinks(source, spec.id(), panel.columns(), findings);
+            }
             // Embedded views (docs/view-composition.md wave 2b): the id resolves in the
             // registry, and the embedded document does not embed further (depth is 1).
             java.util.List<String> embeds = new ArrayList<>();
@@ -250,6 +270,30 @@ final class ViewRules implements LintRule {
                         });
             } catch (java.io.IOException ex) {
                 throw new java.io.UncheckedIOException(ex);
+            }
+        }
+    }
+
+    /**
+     * A {@code link:} placeholder must be one plain column name (TQL-VIEW-3321,
+     * docs/list-surface.md decision 3). A dotted or malformed placeholder is refused: the
+     * runtime substitutes an empty string for what it cannot resolve, and the ejector's
+     * rewrite only understands plain names — both failure modes are silent.
+     */
+    private static void lintColumnLinks(String source, String viewId,
+            List<io.tesseraql.yaml.view.ViewSpec.Column> columns, List<LintFinding> findings) {
+        for (io.tesseraql.yaml.view.ViewSpec.Column column : columns) {
+            if (column.link() == null) {
+                continue;
+            }
+            java.util.regex.Matcher matcher = LINK_PLACEHOLDER.matcher(column.link());
+            while (matcher.find()) {
+                String expr = matcher.group(1);
+                if (!PLAIN_COLUMN.matcher(expr).matches()) {
+                    findings.add(new LintFinding(INVALID_LINK_PLACEHOLDER, ERROR, source,
+                            "view " + viewId + ": link " + column.link() + " placeholder {"
+                                    + expr + "} must be a plain column name"));
+                }
             }
         }
     }

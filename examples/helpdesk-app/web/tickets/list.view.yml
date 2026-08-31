@@ -2,6 +2,7 @@ version: tesseraql/v1
 id: tickets
 kind: view
 recipe: list
+layout: page
 title: Tickets
 search: q
 columns:

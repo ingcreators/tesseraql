@@ -30,6 +30,7 @@ tql:
     prev: "\u2039 \u524d\u3078"
     next: "\u6b21\u3078 \u203a"
     search: "検索…"
+    range: "{total}件中 {from}–{to}件"
     notFound: 見つかりません。
   http:
     "400": リクエストが正しくありません

@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<!-- The operational grid page (docs/list-surface.md decision 1): the list-view pattern behind
+     `layout: page`. The chrome — title, search bar, status line, pager — stays put and only
+     the grid scrolls (the .tql-list-page fill chain in tesseraql.css); the pager swaps the
+     table region in place and pushes the URL, so every page state stays a bookmarkable
+     address. The status line and pager live INSIDE the swapped region, so a search, sort or
+     page swap updates them together with the rows. Regions render only when the contract
+     declares them; with a minimal contract this page is the card pattern plus the frame. The
+     `v` model shape is shared with tql/view/list.html and is the public rendering contract;
+     an app overrides this pattern by shipping templates/tql/view/list-page.html
+     (customization ladder L2), or fills the header/footer slots (L1). -->
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: shell(${v.title}, ~{}, ~{}, ~{:: #page-content})}">
+<div id="page-content" class="tql-page-fill hc-stack">
+<section class="tql-list-page hc-stack" th:fragment="view(v)">
+  <div class="hc-cluster">
+    <h2 th:text="${v.title}">List</h2>
+    <span class="hc-spacer"></span>
+    <th:block th:if="${v.slots['header'] != null}">
+      <th:block th:insert="~{__${v.slots['header']}__}"/>
+    </th:block>
+  </div>
+  <div class="hc-cluster" th:if="${v.search != null}">
+    <input class="hc-input" type="search"
+           th:id="|${v.id}-search|"
+           th:name="${v.search.param}" th:value="${v.search.value}"
+           th:placeholder="#{tql.view.search}"
+           th:attr="hx-get=${v.path},hx-target=|#${v.id}-table|,hx-select=|#${v.id}-table|,hx-include=|#${v.id}-table input[type='hidden']|"
+           hx-trigger="input changed delay:300ms, search" hx-swap="outerHTML">
+  </div>
+  <!-- With refreshOn: (docs/realtime.md) this region listens for the topic on the
+       /_tesseraql/topics stream and re-GETs the page itself, selecting this same region —
+       the SSE event carries no data. Empty values drop the attributes (plain list). -->
+  <div th:id="|${v.id}-table|" class="tql-list-page__region hc-stack"
+       th:attr="hx-ext=${v.liveExt},sse-connect=@{${v.liveConnect}},hx-get=${v.liveGet},hx-trigger=${v.liveTrigger},hx-select=${v.liveSelect},hx-include=${v.liveInclude},hx-target=${v.liveTarget},hx-swap=${v.liveSwap}">
+    <input type="hidden" name="sort" th:if="${v.sort != ''}" th:value="${v.sort}">
+    <input type="hidden" name="dir" th:if="${v.dir != ''}" th:value="${v.dir}">
+    <div class="tql-list-page__grid">
+      <th:block th:insert="~{tql/view/table :: table(|${v.id}-table|, ${v.columns}, ${v.rows})}"/>
+    </div>
+    <div class="hc-cluster" th:if="${v.page != null}">
+      <p class="tql-list-page__status" aria-live="polite"
+         th:if="${v.page['range'] != null}" th:text="${v.page['range']}">1–20 of 56</p>
+      <span class="hc-spacer"></span>
+      <nav class="hc-pagination" aria-label="Pagination">
+        <a th:if="${v.page['prevHref'] != null}" class="hc-pagination__item"
+           th:href="${v.page['prevHref']}"
+           th:attr="hx-get=${v.page['prevHref']},hx-target=|#${v.id}-table|,hx-select=|#${v.id}-table|"
+           hx-swap="outerHTML" hx-push-url="true" th:text="#{tql.view.prev}">&lsaquo; Prev</a>
+        <span th:if="${v.page['prevHref'] == null}" class="hc-pagination__item"
+              aria-disabled="true" th:text="#{tql.view.prev}">&lsaquo; Prev</span>
+        <span class="hc-pagination__item" aria-current="page"
+              th:text="${v.page['totalPages'] != null}
+                       ? |${v.page['number']} / ${v.page['totalPages']}|
+                       : ${v.page['number']}">1</span>
+        <a th:if="${v.page['nextHref'] != null}" class="hc-pagination__item"
+           th:href="${v.page['nextHref']}"
+           th:attr="hx-get=${v.page['nextHref']},hx-target=|#${v.id}-table|,hx-select=|#${v.id}-table|"
+           hx-swap="outerHTML" hx-push-url="true" th:text="#{tql.view.next}">Next &rsaquo;</a>
+        <span th:if="${v.page['nextHref'] == null}" class="hc-pagination__item"
+              aria-disabled="true" th:text="#{tql.view.next}">Next &rsaquo;</span>
+      </nav>
+    </div>
+  </div>
+  <th:block th:if="${v.slots['footer'] != null}">
+    <th:block th:insert="~{__${v.slots['footer']}__}"/>
+  </th:block>
+</section>
+</div>
+</html>

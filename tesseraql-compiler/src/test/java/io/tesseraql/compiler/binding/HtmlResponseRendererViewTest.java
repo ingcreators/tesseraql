@@ -396,6 +396,59 @@ class HtmlResponseRendererViewTest {
     }
 
     @Test
+    void aListColumnLinkEncodesTheSubstitutedValue(@TempDir Path dir) throws Exception {
+        // docs/list-surface.md decision 3: only the values are encoded, never the template's
+        // own separators — a key containing / or ? used to break the href.
+        HtmlResponseRenderer renderer = renderer(dir, """
+                version: tesseraql/v1
+                kind: view
+                recipe: list
+                columns:
+                  - name: name
+                    link: /items/{id}
+                """);
+        String html = render(renderer, Map.of("main", Map.of("rows", List.of(
+                Map.of("id", "a/b?c", "name", "Bolt")))));
+        assertThat(html).contains("/items/a%2Fb%3Fc").doesNotContain("/items/a/b");
+    }
+
+    @Test
+    void layoutPageRendersTheGridFrameWithAnInPlacePager(@TempDir Path dir) throws Exception {
+        // docs/list-surface.md decision 1: the grid page frame — status line and pager live
+        // inside the swapped region, page links swap it in place and push the URL.
+        HtmlResponseRenderer renderer = renderer(dir, """
+                version: tesseraql/v1
+                kind: view
+                recipe: list
+                layout: page
+                title: Tickets
+                """);
+        Map<String, Object> context = Map.of(
+                "main", Map.of("rows", List.of(Map.of("id", 1, "name", "Bolt"))),
+                "page", Map.of("number", 2, "size", 1, "hasNext", true, "hasPrev", true,
+                        "totalRows", 3, "totalPages", 3));
+        String html = render(renderer, context);
+        assertThat(html).contains("tql-list-page").contains("hc-datagrid__table")
+                .contains(">Bolt<");
+        assertThat(html).contains("hx-push-url").contains("hc-pagination");
+        // A counted offset page shows its absolute window (tql.view.range).
+        assertThat(html).contains("2–2 of 3");
+    }
+
+    @Test
+    void layoutCardStaysTheDefaultListPattern(@TempDir Path dir) throws Exception {
+        HtmlResponseRenderer renderer = renderer(dir, """
+                version: tesseraql/v1
+                kind: view
+                recipe: list
+                title: Items
+                """);
+        String html = render(renderer, Map.of("main", Map.of("rows", List.of(
+                Map.of("id", 1, "name", "Bolt")))));
+        assertThat(html).contains("hc-card").doesNotContain("tql-list-page");
+    }
+
+    @Test
     void anEmptyListRendersTheEmptyMessage(@TempDir Path dir) throws Exception {
         HtmlResponseRenderer renderer = renderer(dir,
                 "version: tesseraql/v1\nkind: view\nrecipe: list\n");

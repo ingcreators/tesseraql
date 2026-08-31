@@ -77,6 +77,11 @@
     "refreshOn": {
       "type": "string",
       "description": "Refetch this view's refresh region whenever a command emits this topic (docs/realtime.md). List, detail and dashboard views only - not forms."
+    },
+    "layout": {
+      "type": "string",
+      "enum": ["card", "page"],
+      "description": "How a list view frames itself (docs/declarative-views.md): 'card' (the default) renders in the page flow; 'page' renders the operational grid page - fixed chrome, only the grid scrolls, in-place paging. List views only."
     }
   },
   "additionalProperties": false

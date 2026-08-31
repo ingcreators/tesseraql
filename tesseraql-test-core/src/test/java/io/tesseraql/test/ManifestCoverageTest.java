@@ -506,10 +506,10 @@ class ManifestCoverageTest {
         // covers through its route's SQL; the unreferenced one stays declared-only.
         io.tesseraql.yaml.view.ViewSpec referenced = new io.tesseraql.yaml.view.ViewSpec(
                 "items", "list", null, null, null, null, null, null, null, null, null, null,
-                null);
+                null, null);
         io.tesseraql.yaml.view.ViewSpec orphan = new io.tesseraql.yaml.view.ViewSpec(
                 "drafts", "list", null, null, null, null, null, null, null, null, null, null,
-                null);
+                null, null);
         AppManifest manifest = new AppManifest(APP_HOME, new AppConfig(Map.of(), name -> null),
                 List.of(route("web/items/get.yml", VIEW_ROUTE)),
                 List.of(), List.of(), List.of(), List.of(), List.of(),

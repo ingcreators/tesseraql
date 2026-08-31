@@ -693,6 +693,7 @@ Schema for TesseraQL declarative view documents (*.view.yml): what a route rende
 | `panels` | array of any | The panels a dashboard view composes, in order. Documented in declarative-views.md. |
 | `slots` | map of string | Named regions this view exposes for a composing parent to fill. Documented in declarative-views.md. |
 | `refreshOn` | string | Refetch this view's refresh region whenever a command emits this topic (docs/realtime.md). List, detail and dashboard views only - not forms. |
+| `layout` | enum: `card` \| `page` | How a list view frames itself (docs/declarative-views.md): 'card' (the default) renders in the page flow; 'page' renders the operational grid page - fixed chrome, only the grid scrolls, in-place paging. List views only. |
 
 ## Other document kinds
 
