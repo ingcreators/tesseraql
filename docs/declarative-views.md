@@ -208,6 +208,27 @@ tokens pass through as tokens for now. The no-JS submit answers post/redirect/ge
 match a POST route (`TQL-VIEW-3325`); tokens prove nothing — the route's own security and
 SQL decide what the ids may touch.
 
+### Work queues: `pagination: { strategy: snapshot }`
+
+A work queue wants the opposite of a live re-query: acting on page 1 must not slide rows
+up from page 2. Snapshot paging freezes the *membership* at search time while each row's
+*state* stays live:
+
+```yaml
+pagination: { strategy: snapshot, size: 20, cap: 500 }
+```
+
+The search renders every hit's row token as hidden `keys` fields (requires the view's
+single-column `key:` and `layout: page`). The pager becomes POST buttons that resubmit
+the membership plus a page number, and each page fetches live state for its slice only.
+The framework decodes the slice into `params.keys`, and the authored SQL binds the
+IN-list (`/*%if keys != null */ and t.id in /* keys */(1) /*%end*/`). A row that vanished
+since the search renders as a tombstone, so the page arithmetic and the user's count
+hold; the status line says "of N (as of search)" deliberately. A search whose hits exceed
+`cap:` (default 500) answers 422 — narrow it, never truncate. Reload is a new search, by
+design: snapshot pages have no URL and want none. Tokens prove nothing; every page fetch
+runs the route's own security and SQL.
+
 ### Row identity and returning to the list: `key:` and `location: back`
 
 `key:` names the result columns that identify one row — a single column (`key: id`) or an
@@ -557,6 +578,7 @@ Lint family **`TQL-VIEW-33xx`**:
 | 3323 | a `filters:` entry names an input the route does not declare |
 | 3324 | a `presets:` param names an input the route does not declare (framework `sort`/`dir`/`size` excepted) |
 | 3325 | an `actions:` entry targets a URL that matches no POST route |
+| 3326 | snapshot pagination on a view without `layout: page` and a single-column `key:` |
 
 Coverage kind **`view`**: one item per view document, exercised when a declarative
 suite invokes any route referencing its id — an unreferenced document is declared and

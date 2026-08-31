@@ -615,9 +615,15 @@
         "strategy": {
           "enum": [
             "offset",
-            "keyset"
+            "keyset",
+            "snapshot"
           ],
-          "description": "`offset` (the default) pages by row offset; `keyset` pages by the `by:` cursor column and stays stable while rows are inserted."
+          "description": "`offset` (the default) pages by row offset; `keyset` pages by the `by:` cursor column and stays stable while rows are inserted; `snapshot` freezes a work queue's membership at search time as row tokens the page carries - requires the view's key:, and the authored SQL binds the page's `keys` IN-list."
+        },
+        "cap": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "The snapshot membership cap (default 500): a search whose hits exceed it answers 422 rather than truncating. Only legal on strategy: snapshot."
         },
         "size": {
           "type": "integer",

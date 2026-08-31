@@ -42,6 +42,8 @@ public final class ViewBinding {
     static final TqlErrorCode EMBED_DEPTH = new TqlErrorCode(TqlDomain.VIEW, 3318);
     /** TQL-VIEW-3322: a declared list key: column is null, absent or blank in a result row. */
     static final TqlErrorCode INVALID_ROW_KEY = new TqlErrorCode(TqlDomain.VIEW, 3322);
+    /** TQL-FIELD-4222: a snapshot search exceeded its declared cap (HTTP 422 — narrow it). */
+    static final TqlErrorCode SNAPSHOT_OVER_CAP = new TqlErrorCode(TqlDomain.FIELD, 4222);
 
     /**
      * An embedded view (docs/view-composition.md wave 2b): the sub-binding plus the host
@@ -61,12 +63,14 @@ public final class ViewBinding {
     private final Map<String, io.tesseraql.yaml.model.ResponseSpec.FieldPolicy> readPolicies;
     private final Map<String, String> catalogByColumn;
     private final List<ViewFields.FieldDef> filterFields;
+    private final io.tesseraql.yaml.model.PageSpec pagination;
 
     private ViewBinding(ViewSpec spec, String entryTemplate, List<ViewFields.FieldDef> fields,
             Map<String, String> slots, Path appHome, Map<Integer, Embed> childEmbeds,
             Map<Integer, Embed> panelEmbeds,
             Map<String, io.tesseraql.yaml.model.ResponseSpec.FieldPolicy> readPolicies,
-            Map<String, String> catalogByColumn, List<ViewFields.FieldDef> filterFields) {
+            Map<String, String> catalogByColumn, List<ViewFields.FieldDef> filterFields,
+            io.tesseraql.yaml.model.PageSpec pagination) {
         this.spec = spec;
         this.entryTemplate = entryTemplate;
         this.fields = fields;
@@ -77,6 +81,7 @@ public final class ViewBinding {
         this.readPolicies = readPolicies;
         this.catalogByColumn = catalogByColumn;
         this.filterFields = filterFields;
+        this.pagination = pagination;
     }
 
     /**
@@ -136,7 +141,8 @@ public final class ViewBinding {
                         route == null ? null : route.input());
         return new ViewBinding(spec, entry, fields, resolveSlots(home, viewDir, spec), home,
                 Map.copyOf(childEmbeds), Map.copyOf(panelEmbeds), readSide.policies(),
-                readSide.catalogs(), filterFields);
+                readSide.catalogs(), filterFields,
+                route == null ? null : route.pagination());
     }
 
     /**
@@ -649,7 +655,61 @@ public final class ViewBinding {
         Map<String, Object> params = params(context);
         v.put("path", pagePath);
         live(v, pagePath, spec.id() + "-table", true);
-        Map<String, Object> page = pager(context, params, pagePath);
+        List<String> snapshotTokens = null;
+        List<Boolean> tombstones = null;
+        Map<String, Object> page;
+        boolean snapshot = pagination != null && io.tesseraql.yaml.model.PageSpec.SNAPSHOT
+                .equals(pagination.effectiveStrategy()) && !spec.key().isEmpty();
+        if (snapshot) {
+            // The work queue's snapshot (docs/list-surface.md decision 10): membership frozen
+            // at search time, state fetched live per page, tombstones for vanished rows.
+            int size = pagination.effectiveSize();
+            Object rawSnapshot = context.get("snapshot");
+            if (rawSnapshot instanceof Map<?, ?> postedRaw) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> posted = (Map<String, Object>) postedRaw;
+                @SuppressWarnings("unchecked")
+                List<String> all = (List<String>) posted.get("keys");
+                long number = posted.get("number") instanceof Number n ? n.longValue() : 1;
+                int from = (int) Math.min((number - 1) * size, all.size());
+                int to = (int) Math.min(number * size, all.size());
+                List<String> slice = all.subList(from, to);
+                Map<String, Map<String, Object>> byToken = new LinkedHashMap<>();
+                for (Map<String, Object> row : rows) {
+                    byToken.put(io.tesseraql.core.rows.RowTokens.encode(row, spec.key()), row);
+                }
+                List<Map<String, Object>> display = new ArrayList<>(slice.size());
+                tombstones = new ArrayList<>(slice.size());
+                for (String token : slice) {
+                    Map<String, Object> row = byToken.get(token);
+                    display.add(row == null ? Map.of() : row);
+                    tombstones.add(row == null);
+                }
+                rows = display;
+                snapshotTokens = slice;
+                v.put("snapshotKeys", all);
+                page = snapshotPage(number, size, all.size());
+            } else {
+                // The producer fetched cap+1 and trimmed; its hasNext IS the over-cap signal.
+                Object pageInfo = context.get("page");
+                if (pageInfo instanceof Map<?, ?> info
+                        && Boolean.TRUE.equals(info.get("hasNext"))) {
+                    throw new TqlException(SNAPSHOT_OVER_CAP, "View " + spec.id()
+                            + ": the search matched more than " + pagination.effectiveCap()
+                            + " rows — narrow it (pagination.cap, docs/list-surface.md"
+                            + " decision 10)");
+                }
+                List<String> all = rowTokens(rows);
+                v.put("snapshotKeys", all);
+                int to = Math.min(size, rows.size());
+                rows = rows.subList(0, to);
+                snapshotTokens = all.subList(0, to);
+                page = snapshotPage(1, size, all.size());
+            }
+            v.put("snapshot", true);
+        } else {
+            page = pager(context, params, pagePath);
+        }
         if (page != null && page.get("next") == null && page.get("totalRows") != null) {
             // A counted offset page knows its absolute window — the grid page's status line
             // reads it (docs/list-surface.md decision 1). A keyset page has no absolute
@@ -660,11 +720,17 @@ public final class ViewBinding {
             long to = (number - 1) * size + rows.size();
             page.put("from", from);
             page.put("to", to);
-            page.put("range", message(catalog, locale, "tql.view.range",
+            String range = message(catalog, locale, "tql.view.range",
                     "{from}–{to} of {total}")
                     .replace("{from}", String.valueOf(from))
                     .replace("{to}", String.valueOf(to))
-                    .replace("{total}", String.valueOf(page.get("totalRows"))));
+                    .replace("{total}", String.valueOf(page.get("totalRows")));
+            if (snapshot) {
+                // The count is the snapshot's, deliberately — only a new search changes it.
+                range = range + " " + message(catalog, locale, "tql.view.asOfSearch",
+                        "(as of search)");
+            }
+            page.put("range", range);
         }
         v.put("page", page);
         String sort = str(params.get("sort"));
@@ -721,7 +787,10 @@ public final class ViewBinding {
                     .replace("{list}", set));
         }
         v.put("columns", rendered);
-        List<String> tokens = rowTokens(rows);
+        List<String> tokens = snapshotTokens != null ? snapshotTokens : rowTokens(rows);
+        if (tombstones != null) {
+            v.put("tombstones", tombstones);
+        }
         if (tokens != null) {
             // The row's machine identity (docs/list-surface.md decision 2): the anchor the
             // table pattern renders, the fragment a `location: back` redirect refocuses.
@@ -915,6 +984,18 @@ public final class ViewBinding {
         bar.put("chips", chips);
         bar.put("clearHref", href(pagePath, chromeState(params)));
         v.put("filterBar", bar);
+    }
+
+    /** The synthetic page window of a snapshot slice — the membership is the total. */
+    private static Map<String, Object> snapshotPage(long number, int size, int total) {
+        Map<String, Object> page = new LinkedHashMap<>();
+        page.put("number", number);
+        page.put("size", size);
+        page.put("totalRows", total);
+        page.put("totalPages", Math.max(1, (total + size - 1L) / size));
+        page.put("hasNext", number * (long) size < total);
+        page.put("hasPrev", number > 1);
+        return page;
     }
 
     /**
