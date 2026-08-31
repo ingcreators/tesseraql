@@ -76,9 +76,15 @@ final class InputRules implements LintRule {
                         "page: is a query-json/query-html key (recipe is " + recipe + ")"));
             }
             if (io.tesseraql.yaml.model.PageSpec.KEYSET.equals(page.effectiveStrategy())
-                    && (page.by() == null || page.by().isBlank())) {
+                    && page.effectiveBy().isEmpty()) {
                 findings.add(new LintFinding(INVALID_PAGE_STRATEGY, ERROR, source,
-                        "page: strategy keyset requires by: (the cursor column)"));
+                        "page: strategy keyset requires by: (the cursor column, or an ordered"
+                                + " list for a composite cursor)"));
+            }
+            if (page.effectiveBy().stream().anyMatch(column -> column == null
+                    || column.isBlank())) {
+                findings.add(new LintFinding(INVALID_PAGE_STRATEGY, ERROR, source,
+                        "page: by: entries must be column names"));
             }
             if (!io.tesseraql.yaml.model.PageSpec.OFFSET.equals(page.effectiveStrategy())
                     && !io.tesseraql.yaml.model.PageSpec.KEYSET.equals(page.effectiveStrategy())) {

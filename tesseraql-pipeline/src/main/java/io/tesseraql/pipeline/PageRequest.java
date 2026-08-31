@@ -11,7 +11,9 @@ package io.tesseraql.pipeline;
  * @param size   the page size after bounding
  * @param offset rows to skip (0 for keyset)
  * @param count  whether to run the total-count wrapper
- * @param by     the keyset cursor column (null for offset)
+ * @param by     the keyset cursor columns in declaration order (null for offset); a composite
+ *        cursor mints one opaque row token (docs/list-surface.md decision 5)
  */
-public record PageRequest(long number, int size, long offset, boolean count, String by) {
+public record PageRequest(long number, int size, long offset, boolean count,
+        java.util.List<String> by) {
 }

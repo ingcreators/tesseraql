@@ -175,8 +175,20 @@ public class SqlStep implements Step {
             info.put("size", page.size());
             info.put("hasNext", hasNext);
             info.put("hasPrev", page.number() > 1);
-            if (page.by() != null && !rows.isEmpty()) {
-                info.put("next", rows.get(rows.size() - 1).get(page.by()));
+            if (page.by() != null && !page.by().isEmpty() && !rows.isEmpty()) {
+                Map<String, Object> last = rows.get(rows.size() - 1);
+                if (page.by().size() == 1) {
+                    info.put("next", last.get(page.by().get(0)));
+                } else {
+                    // A composite cursor is one opaque row token (docs/list-surface.md
+                    // decision 5); a null cursor component cannot mint one — the page ends.
+                    try {
+                        info.put("next",
+                                io.tesseraql.core.rows.RowTokens.encode(last, page.by()));
+                    } catch (IllegalArgumentException missingCursorComponent) {
+                        // deliberately no next
+                    }
+                }
             }
             if (page.count()) {
                 long total = countAll(statements, bound);

@@ -78,6 +78,38 @@ The framework derives the next cursor from the last row's `by:` column (`page.ne
 the `Link: <…?after=N>; rel="next"` header/`nextHref` follow. `count:` composes when a
 total is worth its cost.
 
+### Composite cursors
+
+A cursor over several columns declares `by:` as an ordered list — `by: [order_id,
+line_no]`. The next cursor becomes one opaque row token, and the framework decodes an
+incoming `?after=` into `params.after.<column>` parts (numeric parts bind as numbers). The
+authored SQL writes the tuple predicate, binding each part like any other params
+expression:
+
+```yaml
+pagination: { strategy: keyset, by: [order_id, line_no] }
+sources:
+  main:
+    sql:
+      file: lines.sql
+      mode: query
+      params:
+        after_order_id: params.after.order_id
+        after_line_no: params.after.line_no
+```
+
+```sql
+/*%if after_order_id != null */
+  and (t.order_id, t.line_no) > (/* after_order_id */ 0, /* after_line_no */ 0)
+/*%end*/
+order by t.order_id, t.line_no
+```
+
+Dialects without row-value comparison expand the same predicate as
+`a > x or (a = x and b > y)`. A malformed or wrong-arity `after` token is refused as an
+input error; a single-column `by:` keeps today's shape — the author declares the `after`
+input and binds it directly.
+
 ## Machine-checkable
 
 `TQL-YAML-1015` (pagination on a non-query recipe), `1016` (keyset without `by:`/unknown
