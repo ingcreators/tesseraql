@@ -114,9 +114,16 @@ public final class ViewBinding {
         Map<Integer, Embed> panelEmbeds = panelEmbeds(home, viewRef, spec, route,
                 postRouteByPath, viewById);
         ReadSide readSide = readSide(home, viewRef, spec, childEmbeds, panelEmbeds);
+        // layout: page (docs/list-surface.md decision 1) renders through its own pattern file,
+        // so the card pattern stays byte-identical while the grid page is opt-in; an app
+        // overrides either the same way (templates/tql/view/list-page.html, ladder L2).
+        String pattern = ViewSpec.LIST.equals(spec.view())
+                && ViewSpec.LAYOUT_PAGE.equals(spec.effectiveLayout())
+                        ? "list-page"
+                        : spec.view();
         String entry = spec.template() != null
                 ? TemplateResolution.resolve(home, viewDir, spec.template())
-                : "tql/view/" + spec.view();
+                : "tql/view/" + pattern;
         return new ViewBinding(spec, entry, fields, resolveSlots(home, viewDir, spec), home,
                 Map.copyOf(childEmbeds), Map.copyOf(panelEmbeds), readSide.policies(),
                 readSide.catalogs());
@@ -632,7 +639,24 @@ public final class ViewBinding {
         Map<String, Object> params = params(context);
         v.put("path", pagePath);
         live(v, pagePath, spec.id() + "-table", true);
-        v.put("page", pager(context, params, pagePath));
+        Map<String, Object> page = pager(context, params, pagePath);
+        if (page != null && page.get("next") == null && page.get("totalRows") != null) {
+            // A counted offset page knows its absolute window — the grid page's status line
+            // reads it (docs/list-surface.md decision 1). A keyset page has no absolute
+            // position, and an uncounted one no total; both keep the plain page number.
+            long number = page.get("number") instanceof Number n ? n.longValue() : 1;
+            long size = page.get("size") instanceof Number n ? n.longValue() : rows.size();
+            long from = rows.isEmpty() ? 0 : (number - 1) * size + 1;
+            long to = (number - 1) * size + rows.size();
+            page.put("from", from);
+            page.put("to", to);
+            page.put("range", message(catalog, locale, "tql.view.range",
+                    "{from}–{to} of {total}")
+                    .replace("{from}", String.valueOf(from))
+                    .replace("{to}", String.valueOf(to))
+                    .replace("{total}", String.valueOf(page.get("totalRows"))));
+        }
+        v.put("page", page);
         String sort = str(params.get("sort"));
         String dir = str(params.get("dir"));
         v.put("sort", sort);
@@ -712,7 +736,10 @@ public final class ViewBinding {
         Map<String, Object> pager = new LinkedHashMap<>((Map<String, Object>) raw);
         long number = pager.get("number") instanceof Number n ? n.longValue() : 1;
         StringBuilder state = new StringBuilder();
-        for (String key : List.of("sort", "dir")) {
+        // size rides along so a chosen page size survives navigation; sort/dir and the search
+        // term were always carried. Anything else the route declares still is not — the
+        // filter chips design (docs/list-surface.md decision 6) widens this deliberately.
+        for (String key : List.of("sort", "dir", "size")) {
             String value = str(params.get(key));
             if (!value.isEmpty()) {
                 state.append('&').append(key).append('=').append(encode(value));
@@ -855,7 +882,7 @@ public final class ViewBinding {
                 cell.put("button", column.text() != null);
                 cell.put("href", column.link() == null
                         ? null
-                        : Interpolation.interpolateString(column.link(), rowContext));
+                        : Interpolation.interpolateUrl(column.link(), rowContext));
                 line.add(cell);
             }
             cells.add(line);

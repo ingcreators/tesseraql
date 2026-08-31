@@ -432,11 +432,58 @@ class ViewSpecTest {
                 version: tesseraql/v1
                 kind: view
                 recipe: list
-                layout: wide
+                chrome: wide
                 """);
         assertThatThrownBy(() -> ViewSpec.parse(file))
                 .isInstanceOf(TqlException.class).hasMessageContaining("TQL-VIEW-3314")
-                .hasMessageContaining("layout");
+                .hasMessageContaining("chrome");
+    }
+
+    @Test
+    void layoutPageIsAcceptedOnAList(@TempDir Path dir) throws Exception {
+        Path file = write(dir, "x.view.yml", """
+                version: tesseraql/v1
+                kind: view
+                recipe: list
+                layout: page
+                """);
+        assertThat(ViewSpec.parse(file).effectiveLayout()).isEqualTo(ViewSpec.LAYOUT_PAGE);
+    }
+
+    @Test
+    void layoutDefaultsToTheCard(@TempDir Path dir) throws Exception {
+        Path file = write(dir, "x.view.yml", """
+                version: tesseraql/v1
+                kind: view
+                recipe: list
+                """);
+        assertThat(ViewSpec.parse(file).effectiveLayout()).isEqualTo(ViewSpec.LAYOUT_CARD);
+    }
+
+    @Test
+    void rejectsAnUnknownLayout(@TempDir Path dir) throws Exception {
+        Path file = write(dir, "x.view.yml", """
+                version: tesseraql/v1
+                kind: view
+                recipe: list
+                layout: wide
+                """);
+        assertThatThrownBy(() -> ViewSpec.parse(file))
+                .isInstanceOf(TqlException.class).hasMessageContaining("TQL-VIEW-3301")
+                .hasMessageContaining("layout must be 'card' or 'page'");
+    }
+
+    @Test
+    void rejectsLayoutOffAList(@TempDir Path dir) throws Exception {
+        Path file = write(dir, "x.view.yml", """
+                version: tesseraql/v1
+                kind: view
+                recipe: detail
+                layout: page
+                """);
+        assertThatThrownBy(() -> ViewSpec.parse(file))
+                .isInstanceOf(TqlException.class).hasMessageContaining("TQL-VIEW-3301")
+                .hasMessageContaining("layout: is a list-view key");
     }
 
     @Test

@@ -40,6 +40,10 @@
 <meta name="tql-account-base" th:if="${_account != null && _account.accountHref != null}" th:content="${_account.accountHref}">
 <title th:text="${title}">TesseraQL</title>
 <link rel="stylesheet" th:href="@{/assets/vendor/hypermedia-components__core/dist/hc.min.css}">
+<!-- The kit's opt-in print stylesheet (ships standalone, deliberately outside hc.min.css):
+     screen chrome — sidebar, toolbars, pagination — drops out of print, so a printed page
+     is its content (docs/list-surface.md decision 1 requires it for the grid page). -->
+<link rel="stylesheet" th:href="@{/assets/vendor/hypermedia-components__core/dist/hc.print.css}">
 <!-- The neutral variant ramp (enum-validated server-side): hc.min.css carries only the default
      ramp, so a non-default neutral links its token sheet on top. -->
 <link rel="stylesheet" th:if="${_neutral}"

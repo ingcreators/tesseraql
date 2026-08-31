@@ -51,4 +51,26 @@ final class Interpolation {
         matcher.appendTail(out);
         return out.toString();
     }
+
+    /**
+     * Resolves placeholders like {@link #interpolateString}, URL-encoding each resolved value —
+     * the variant for templates that are URLs (a view column's {@code link:},
+     * docs/list-surface.md decision 3). Only the values are encoded; the template's own
+     * separators stay what the author wrote. A value containing {@code /}, {@code ?} or
+     * {@code #} used to break the href it was substituted into.
+     */
+    static String interpolateUrl(String template, EvaluationContext evaluation) {
+        Matcher matcher = PLACEHOLDER.matcher(template);
+        StringBuilder out = new StringBuilder();
+        while (matcher.find()) {
+            Object resolved = evaluation.resolve(Arrays.asList(matcher.group(1).split("\\.")));
+            String text = resolved == null ? "" : String.valueOf(resolved);
+            String encoded = java.net.URLEncoder
+                    .encode(text, java.nio.charset.StandardCharsets.UTF_8)
+                    .replace("+", "%20");
+            matcher.appendReplacement(out, Matcher.quoteReplacement(encoded));
+        }
+        matcher.appendTail(out);
+        return out.toString();
+    }
 }

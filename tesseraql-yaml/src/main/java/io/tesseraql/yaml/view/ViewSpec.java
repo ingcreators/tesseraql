@@ -29,7 +29,8 @@ public record ViewSpec(String id,
         @com.fasterxml.jackson.annotation.JsonProperty("recipe") String view,
         String title, String action, String source,
         String search, List<Field> fields, List<Column> columns, List<Child> children,
-        List<Panel> panels, Map<String, String> slots, String template, String refreshOn) {
+        List<Panel> panels, Map<String, String> slots, String template, String refreshOn,
+        String layout) {
 
     /** Structurally invalid view document (docs/declarative-views.md, TQL-VIEW-3301). */
     public static final TqlErrorCode INVALID_VIEW = new TqlErrorCode(TqlDomain.VIEW, 3301);
@@ -54,6 +55,15 @@ public record ViewSpec(String id,
     public static final String FORM = "form";
     public static final String DETAIL = "detail";
     public static final String DASHBOARD = "dashboard";
+
+    /** Today's list form: the view rendered as a card in the page flow (docs/list-surface.md). */
+    public static final String LAYOUT_CARD = "card";
+
+    /**
+     * The operational grid page (docs/list-surface.md decision 1): fixed chrome, only the grid
+     * scrolls, the pager swaps the table region in place. Opt-in until the flip.
+     */
+    public static final String LAYOUT_PAGE = "page";
 
     /** The dashboard panel types (docs/declarative-views.md; {@code view} embeds a view). */
     public static final java.util.Set<String> PANEL_TYPES = java.util.Set.of("stat",
@@ -254,6 +264,14 @@ public record ViewSpec(String id,
         if (DASHBOARD.equals(view) && tree.get("panels") == null) {
             throw invalid(name, "a dashboard view must declare panels:");
         }
+        String layout = str(tree.get("layout"));
+        if (layout != null && !LIST.equals(view)) {
+            throw invalid(name, "layout: is a list-view key");
+        }
+        if (layout != null && !LAYOUT_CARD.equals(layout) && !LAYOUT_PAGE.equals(layout)) {
+            throw invalid(name, "layout must be '" + LAYOUT_CARD + "' or '" + LAYOUT_PAGE
+                    + "', got: " + layout);
+        }
         String action = str(tree.get("action"));
         if (FORM.equals(view) && (action == null || action.isBlank())) {
             throw invalid(name, "a form view must declare action: (the command route it posts to)");
@@ -269,7 +287,12 @@ public record ViewSpec(String id,
                 parseFields(name, tree.get("fields")), parseColumns(name, tree.get("columns")),
                 parseChildren(name, tree.get("children")), parsePanels(name, tree.get("panels")),
                 parseSlots(name, tree.get("slots")), str(tree.get("template")),
-                str(tree.get("refreshOn")));
+                str(tree.get("refreshOn")), layout);
+    }
+
+    /** The list layout in effect: the declared {@code layout:}, defaulting to the card. */
+    public String effectiveLayout() {
+        return layout == null || layout.isBlank() ? LAYOUT_CARD : layout;
     }
 
     private static List<Panel> parsePanels(String source, Object raw) {

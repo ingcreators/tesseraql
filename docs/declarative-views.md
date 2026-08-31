@@ -108,8 +108,9 @@ response:
 With no `columns:`, a list renders the result set's own columns in authored SQL order —
 `select *` plus a migration shows the new column with zero edits. `columns:` selects,
 orders, and decorates: `label` overrides the heading, `link` renders a per-row link with
-`{expr}` placeholders resolved per row, and `text:`/`link:` columns render a per-row
-action button.
+`{column}` placeholders resolved per row, and `text:`/`link:` columns render a per-row
+action button. Each placeholder must be one plain column name (`TQL-VIEW-3321`), and the
+substituted values are URL-encoded — a key containing `/` or `?` cannot break the href.
 
 Lists also carry search and server-driven sort:
 
@@ -122,7 +123,19 @@ input of the route, and sortable columns require the route to declare the `sort`
 `dir` inputs its SQL applies.
 
 On a paginated route, the list renders the kit's `hc-pagination` nav, with links
-preserving the search and sort state ([pagination](pagination.md)).
+preserving the search, sort and size state ([pagination](pagination.md)).
+
+### The grid page: `layout: page`
+
+A list defaults to a card in the page flow. Declaring `layout: page` renders the
+operational grid page instead: the chrome — title, search bar, status line, pager — stays
+put, and only the grid scrolls. Page links swap the table region in place and push the
+URL, so every page state stays a bookmarkable address. On a counted route the status line
+shows the absolute window ("21–40 of 56"). Below the desktop breakpoint the frame falls
+back to normal page scrolling, and printing renders every fetched row. Regions render
+only when the contract declares them, so a minimal list is still a quiet page. The card
+remains the default while the grid page soaks; apps override the pattern the same way
+(`templates/tql/view/list-page.html`).
 
 With `refreshOn: <topic>`, the list refreshes itself whenever a command that declares
 `emit: <topic>` commits — detail and dashboard views take the same key; see
@@ -452,6 +465,7 @@ Lint family **`TQL-VIEW-33xx`**:
 | 3317 | `response.html.shell` is not `auto`, `always`, or `never` |
 | 3318 | an embedded view embeds views itself — embedding depth is 1 |
 | 3319 | `response.html.model` declares a reserved view-model name (`v`, `views`) |
+| 3321 | a column `link:` placeholder is not one plain column name — dotted or malformed placeholders render empty at runtime and eject wrong |
 
 Coverage kind **`view`**: one item per view document, exercised when a declarative
 suite invokes any route referencing its id — an unreferenced document is declared and

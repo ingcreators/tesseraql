@@ -61,6 +61,47 @@ class AppLinterViewTest {
     }
 
     @Test
+    void aPlainColumnLinkPlaceholderProducesNoFindings(@TempDir Path dir) throws Exception {
+        writeApp(dir, """
+                version: tesseraql/v1
+                kind: view
+                recipe: list
+                columns:
+                  - name: name
+                    link: /items/{id}/lines/{line_no}
+                """);
+        assertThat(viewCodes(new AppLinter().lint(dir))).isEmpty();
+    }
+
+    @Test
+    void aDottedLinkPlaceholderIsAnError(@TempDir Path dir) throws Exception {
+        // docs/list-surface.md decision 3: the runtime renders a dotted path but the ejector
+        // rewrites placeholders per column — the divergence is refused at lint time.
+        writeApp(dir, """
+                version: tesseraql/v1
+                kind: view
+                recipe: list
+                columns:
+                  - name: name
+                    link: /items/{row.id}
+                """);
+        assertThat(viewCodes(new AppLinter().lint(dir))).contains("TQL-VIEW-3321");
+    }
+
+    @Test
+    void aMalformedLinkPlaceholderIsAnError(@TempDir Path dir) throws Exception {
+        writeApp(dir, """
+                version: tesseraql/v1
+                kind: view
+                recipe: list
+                columns:
+                  - name: name
+                    link: /items/{}
+                """);
+        assertThat(viewCodes(new AppLinter().lint(dir))).contains("TQL-VIEW-3321");
+    }
+
+    @Test
     void aWellFormedFormViewProducesNoFindings(@TempDir Path dir) throws Exception {
         writeApp(dir, """
                 version: tesseraql/v1
