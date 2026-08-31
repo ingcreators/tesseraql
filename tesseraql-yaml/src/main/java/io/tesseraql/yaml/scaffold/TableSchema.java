@@ -61,6 +61,23 @@ public record TableSchema(String name, List<Column> columns, List<String> primar
         return column(primaryKey.get(0));
     }
 
+    /**
+     * Every primary-key column resolved, in key-sequence order (docs/list-surface.md decision
+     * 4) — empty when the table declares no key, or names a column the introspection did not
+     * surface.
+     */
+    public List<Column> primaryKeyColumns() {
+        List<Column> resolved = new java.util.ArrayList<>(primaryKey.size());
+        for (String name : primaryKey) {
+            Optional<Column> column = column(name);
+            if (column.isEmpty()) {
+                return List.of();
+            }
+            resolved.add(column.get());
+        }
+        return List.copyOf(resolved);
+    }
+
     /** Finds a column by name, case-insensitively. */
     public Optional<Column> column(String name) {
         return columns.stream()

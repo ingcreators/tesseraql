@@ -359,10 +359,17 @@ final class StudioSupport {
         }
     }
 
-    /** The k0/v0..k2/v2 primary-key slots of a data-browser row-edit request (Track J4). */
+    /**
+     * The key-column slots a data-browser row-edit request may carry — matches the k0/v0…
+     * inputs the edit routes declare. Wide enough for any real composite key
+     * (docs/list-surface.md decision 4 lifted the old three-slot cap).
+     */
+    static final int DATA_KEY_SLOTS = 8;
+
+    /** The k0/v0..k7/v7 primary-key slots of a data-browser row-edit request (Track J4). */
     static Map<String, String> dataRowKey(Map<String, Object> params) {
         Map<String, String> key = new java.util.LinkedHashMap<>();
-        for (int i = 0; i < 3; i++) {
+        for (int i = 0; i < DATA_KEY_SLOTS; i++) {
             String column = str(params, "k" + i);
             String value = str(params, "v" + i);
             if (column != null && value != null) {

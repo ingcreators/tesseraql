@@ -425,16 +425,77 @@ class CrudScaffolderTest {
     }
 
     @Test
-    void compositeKeysAreRejectedWithAClearError() {
-        TableSchema pairs = new TableSchema("pairs", List.of(
-                column("a", Types.INTEGER, false, false),
-                column("b", Types.INTEGER, false, false)),
-                List.of("a", "b"), Map.of());
+    void aTableWithoutAPrimaryKeyIsRejectedWithAClearError() {
+        TableSchema heap = new TableSchema("heap", List.of(
+                column("a", Types.INTEGER, false, false)),
+                List.of(), Map.of());
 
-        assertThatThrownBy(() -> scaffolder.scaffold(pairs))
+        assertThatThrownBy(() -> scaffolder.scaffold(heap))
                 .isInstanceOf(TqlException.class)
                 .hasMessageContaining("TQL-APP-5203")
-                .hasMessageContaining("single-column primary key");
+                .hasMessageContaining("needs a primary key");
+    }
+
+    /** A composite key: two assigned integer columns, one unique index for the rule shape. */
+    private static TableSchema pairs() {
+        return new TableSchema("pairs", List.of(
+                column("order_id", Types.INTEGER, false, false),
+                column("line_no", Types.INTEGER, false, false),
+                column("label", Types.VARCHAR, false, false)),
+                List.of("order_id", "line_no"),
+                Map.of("uq_pairs_label", "label"));
+    }
+
+    @Test
+    void aCompositeKeyScaffoldsNestedPathsAndAndJoinedPredicates() {
+        List<ScaffoldedFile> files = scaffolder.scaffold(pairs());
+
+        // docs/list-surface.md decision 4: nested path segments, one per key column.
+        assertThat(files).extracting(ScaffoldedFile::path)
+                .contains("web/pairs/{order_id}/{line_no}/get.yml",
+                        "web/pairs/{order_id}/{line_no}/update/post.yml",
+                        "web/pairs/{order_id}/{line_no}/delete/post.yml");
+        for (ScaffoldedFile file : files) {
+            if (file.path().endsWith(".yml") && file.path().startsWith("web/")
+                    && !file.path().endsWith(".view.yml")) {
+                parser.parseRoute(file.content(), file.path());
+            }
+        }
+        assertThat(content(files, "web/pairs/list.view.yml"))
+                .contains("layout: page")
+                .contains("key: [order_id, line_no]")
+                .contains("link: /pairs/{order_id}/{line_no}");
+        assertThat(content(files, "web/pairs/{order_id}/{line_no}/select.sql"))
+                .contains("t.order_id = /* order_id */ 1")
+                .contains("and t.line_no = /* line_no */ 1");
+        assertThat(content(files, "web/pairs/{order_id}/{line_no}/update/post.yml"))
+                .contains("order_id: params.order_id")
+                .contains("line_no: params.line_no")
+                .contains("location: /pairs/{path.order_id}/{path.line_no}");
+        assertThat(content(files, "web/pairs/{order_id}/{line_no}/delete/delete.sql"))
+                .contains("order_id = /* order_id */ 1")
+                .contains("and line_no = /* line_no */ 1");
+        assertThat(content(files, "web/pairs/frags.html"))
+                .contains("${v.row['order_id']}/${v.row['line_no']}/delete");
+        // The unique rule excludes the row being updated by the whole key tuple.
+        assertThat(content(files, "rules/pairs-label-free.sql"))
+                .contains("/*%if exclude_order_id != null */")
+                .contains("and not (order_id = /* exclude_order_id */1"
+                        + " and line_no = /* exclude_line_no */1)");
+        assertThat(content(files, "rules/pairs.yml"))
+                .contains("exclude_order_id: integer")
+                .contains("exclude_line_no: integer");
+        assertThat(content(files, "tests/pairs-crud-test.yml"))
+                .contains("order_id: -1")
+                .contains("line_no: -1");
+    }
+
+    @Test
+    void theListViewDeclaresThePageFrameAndItsKey() {
+        List<ScaffoldedFile> files = scaffolder.scaffold(items());
+        assertThat(content(files, "web/items/list.view.yml"))
+                .contains("layout: page")
+                .contains("key: id");
     }
 
     @Test

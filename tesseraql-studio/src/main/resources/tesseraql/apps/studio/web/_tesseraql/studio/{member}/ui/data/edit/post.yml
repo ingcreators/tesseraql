@@ -37,6 +37,36 @@ input:
   v2:
     type: string
     required: false
+  k3:
+    type: string
+    required: false
+  v3:
+    type: string
+    required: false
+  k4:
+    type: string
+    required: false
+  v4:
+    type: string
+    required: false
+  k5:
+    type: string
+    required: false
+  v5:
+    type: string
+    required: false
+  k6:
+    type: string
+    required: false
+  v6:
+    type: string
+    required: false
+  k7:
+    type: string
+    required: false
+  v7:
+    type: string
+    required: false
   cn0: { type: string, required: false }
   cv0: { type: string, required: false }
   cs0: { type: string, required: false }
@@ -116,6 +146,16 @@ steps:
         v1: params.v1
         k2: params.k2
         v2: params.v2
+        k3: params.k3
+        v3: params.v3
+        k4: params.k4
+        v4: params.v4
+        k5: params.k5
+        v5: params.v5
+        k6: params.k6
+        v6: params.v6
+        k7: params.k7
+        v7: params.v7
         cn0: params.cn0
         cv0: params.cv0
         cs0: params.cs0

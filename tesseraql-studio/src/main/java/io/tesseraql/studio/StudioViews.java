@@ -401,9 +401,9 @@ public final class StudioViews {
 
     /**
      * The scaffold page model (Studio backlog B3): the dev datasource's introspected tables, each
-     * flagged {@code scaffoldable} (a base table with a single-column primary key the CRUD generator
-     * supports). A {@code null} catalog — scaffolding disabled, or no datasource — yields an empty,
-     * {@code enabled: false} model carrying an explanatory note.
+     * flagged {@code scaffoldable} (a base table with a primary key — composite keys included
+     * since docs/list-surface.md decision 4). A {@code null} catalog — scaffolding disabled, or
+     * no datasource — yields an empty, {@code enabled: false} model carrying an explanatory note.
      */
     public static Map<String, Object> scaffoldTables(CatalogSchema catalog, boolean enabled) {
         Map<String, Object> model = new LinkedHashMap<>();
@@ -418,7 +418,7 @@ public final class StudioViews {
                 row.put("columnCount", table.columns().size());
                 row.put("primaryKey", String.join(", ", table.primaryKey()));
                 boolean scaffoldable = "TABLE".equalsIgnoreCase(table.type())
-                        && table.primaryKey().size() == 1;
+                        && !table.primaryKey().isEmpty();
                 row.put("scaffoldable", scaffoldable);
                 tables.add(row);
             }
