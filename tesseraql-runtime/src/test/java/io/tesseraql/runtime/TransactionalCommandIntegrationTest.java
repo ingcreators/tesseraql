@@ -187,10 +187,13 @@ class TransactionalCommandIntegrationTest {
         store.release("s", "k1");
         assertThat(store.begin("s", "k1", "h1", 60_000))
                 .isInstanceOf(io.tesseraql.core.idempotency.IdempotencyStore.Proceed.class);
-        store.complete("s", "k1", 201, "{}", "application/json");
+        store.complete("s", "k1", 201, "{}", "application/json",
+                java.util.Map.of("HX-Trigger", "{\"hc:toast\":{}}"));
         store.release("s", "k1");
-        assertThat(store.begin("s", "k1", "h1", 60_000))
-                .isInstanceOf(io.tesseraql.core.idempotency.IdempotencyStore.Replay.class);
+        assertThat(store.begin("s", "k1", "h1", 60_000)).isInstanceOfSatisfying(
+                io.tesseraql.core.idempotency.IdempotencyStore.Replay.class,
+                replay -> assertThat(replay.headers())
+                        .containsEntry("HX-Trigger", "{\"hc:toast\":{}}"));
     }
 
     @Test

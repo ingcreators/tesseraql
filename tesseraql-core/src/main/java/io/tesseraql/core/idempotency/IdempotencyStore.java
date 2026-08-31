@@ -22,8 +22,14 @@ public interface IdempotencyStore {
      */
     BeginResult begin(String scope, String key, String requestHash, long ttlMillis);
 
-    /** Records the final response for a key so later replays can return it. */
-    void complete(String scope, String key, int status, String body, String contentType);
+    /**
+     * Records the final response for a key so later replays can return it. {@code headers}
+     * carries the allowlisted response headers a replay must re-emit - the {@code HX-Trigger}
+     * toast, the PRG {@code Location} (docs/idempotency-key.md decision 6); empty when the
+     * response set none of them.
+     */
+    void complete(String scope, String key, int status, String body, String contentType,
+            java.util.Map<String, String> headers);
 
     /**
      * Releases a claim that will never complete: the request failed before a commit, so the key
@@ -40,8 +46,9 @@ public interface IdempotencyStore {
     record Proceed() implements BeginResult {
     }
 
-    /** Return the previously stored response. */
-    record Replay(int status, String body, String contentType) implements BeginResult {
+    /** Return the previously stored response, its allowlisted headers included. */
+    record Replay(int status, String body, String contentType,
+            java.util.Map<String, String> headers) implements BeginResult {
     }
 
     /**

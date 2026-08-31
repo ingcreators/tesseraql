@@ -44,7 +44,8 @@ public final class RetentionSweeper {
     }
 
     /** What one sweep removed. */
-    public record Result(int outboxEvents, int jobExecutions, int stepExecutions, int attachments) {
+    public record Result(int outboxEvents, int jobExecutions, int stepExecutions, int attachments,
+            int idempotencyRecords) {
     }
 
     /** Removes delivered outbox events and finished executions older than the given windows. */
@@ -62,16 +63,30 @@ public final class RetentionSweeper {
         Instant now = Instant.now();
         int outbox;
         int[] jobs;
+        int idempotency;
         try (Connection connection = dataSource.getConnection()) {
             outbox = deleteOutbox(connection, now.minus(outboxRetention));
             jobs = deleteExecutions(connection, now.minus(jobRetention));
+            // Config-free by design (docs/idempotency-key.md decision 7): expiry is already
+            // per-record policy (the route's declared ttl), so the sweep only collects what
+            // has lapsed - before this, a key never re-presented lived forever.
+            idempotency = deleteExpiredIdempotency(connection, now);
         } catch (SQLException ex) {
             throw new TqlException(SWEEP_ERROR, "Retention sweep failed: " + ex.getMessage());
         }
         int attachments = attachmentRetention == null
                 ? 0
                 : sweepAttachments(now.minus(attachmentRetention));
-        return new Result(outbox, jobs[0], jobs[1], attachments);
+        return new Result(outbox, jobs[0], jobs[1], attachments, idempotency);
+    }
+
+    private static int deleteExpiredIdempotency(Connection connection, Instant now)
+            throws SQLException {
+        try (PreparedStatement ps = connection.prepareStatement(
+                "delete from tql_idempotency_record where expires_at < ?")) {
+            ps.setTimestamp(1, Timestamp.from(now));
+            return ps.executeUpdate();
+        }
     }
 
     /**

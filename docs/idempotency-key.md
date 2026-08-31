@@ -1,5 +1,10 @@
 # Idempotency keys for browser forms — bridging the header machinery to the hc recipe
 
+> **Status: all three slices shipped 2026-08-31.** Slice 1 (#1085) — release-on-failure,
+> the form-aware principal-folded hash, the 4221/4090 split. Slice 2 (#1086) — the
+> `_idempotency` transport end to end. Slice 3 — replay-header fidelity and the
+> retention prune. The decisions below are the live contract; the "gaps" read as history.
+>
 > Recorded 2026-08-31, as the follow-up the hc 0.4.0 adoption (#1081, #1083) left open.
 > The kit's `network-retry` recipe pairs with its `idempotency-key` recipe: a Retry that
 > re-issues a POST is provably safe only when the form carries a one-time key and the

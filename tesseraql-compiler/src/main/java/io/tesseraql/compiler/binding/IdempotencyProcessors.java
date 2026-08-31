@@ -25,6 +25,13 @@ public final class IdempotencyProcessors {
     public static final String REPLAY_PROPERTY = "TqlIdemReplay";
     private static final String KEY_HEADER = "Idempotency-Key";
     private static final String KEY_FIELD = "_idempotency";
+    /**
+     * The headers a replay re-emits (docs/idempotency-key.md decision 6): the htmx signals and
+     * the PRG Location. Everything else - security headers, cache control - is the fresh
+     * response's business, applied by the edge as always.
+     */
+    private static final java.util.List<String> REPLAYED_HEADERS = java.util.List.of(
+            "HX-Trigger", "HX-Redirect", "HX-Retarget", "HX-Reswap", "Location");
     private static final TqlErrorCode CONFLICT = new TqlErrorCode(TqlDomain.IDEM, 4090);
     /** Same key, different request: a stale tab or a bug, not a retry (422, not 409). */
     private static final TqlErrorCode MISMATCH = new TqlErrorCode(TqlDomain.IDEM, 4221);
@@ -73,6 +80,11 @@ public final class IdempotencyProcessors {
                     if (replay.contentType() != null) {
                         exchange.response().header(Headers.CONTENT_TYPE, replay.contentType());
                     }
+                    // The stored HX-Trigger toast and the PRG Location replay too - the user
+                    // who double-clicked still sees "Order placed" and still lands on the
+                    // receipt page (docs/idempotency-key.md decision 6).
+                    replay.headers().forEach((name, value) -> exchange.response()
+                            .header(name, value));
                 }
                 case IdempotencyStore.Conflict conflict ->
                     throw new TqlException(conflict.inFlight() ? CONFLICT : MISMATCH,
@@ -101,7 +113,14 @@ public final class IdempotencyProcessors {
             int status = exchange.response().statusOr200();
             String body = exchange.getBody(String.class);
             String contentType = exchange.response().header(Headers.CONTENT_TYPE);
-            store(exchange).complete(scope, key, status, body, contentType);
+            java.util.Map<String, String> replayed = new java.util.LinkedHashMap<>();
+            for (String name : REPLAYED_HEADERS) {
+                String value = exchange.response().header(name);
+                if (value != null) {
+                    replayed.put(name, value);
+                }
+            }
+            store(exchange).complete(scope, key, status, body, contentType, replayed);
             exchange.setProperty(TesseraqlProperties.IDEMPOTENCY_CLAIM, null);
         }
     }

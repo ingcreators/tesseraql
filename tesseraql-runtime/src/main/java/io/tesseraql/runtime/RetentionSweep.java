@@ -42,11 +42,12 @@ final class RetentionSweep {
             RetentionSweeper.Result result = sweeper.sweep(outboxRetention, jobRetention,
                     attachmentRetention);
             if (result.outboxEvents() > 0 || result.jobExecutions() > 0
-                    || result.attachments() > 0) {
+                    || result.attachments() > 0 || result.idempotencyRecords() > 0) {
                 LOG.info("Retention sweep removed {} outbox event(s), {} execution(s), "
-                        + "{} step(s), {} attachment(s)", result.outboxEvents(),
-                        result.jobExecutions(), result.stepExecutions(),
-                        result.attachments());
+                        + "{} step(s), {} attachment(s), {} idempotency record(s)",
+                        result.outboxEvents(), result.jobExecutions(),
+                        result.stepExecutions(), result.attachments(),
+                        result.idempotencyRecords());
             }
         });
     }
