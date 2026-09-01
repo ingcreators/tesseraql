@@ -1,6 +1,19 @@
 # The workflow surface — transitions, the stepper, and the task queue
 
-> **Status: designed 2026-09-01; no slices started.** The workflow-actions campaign from
+> **Status: slice 1 (the region and the stepper) shipped 2026-09-01.** Recorded
+> deviations from the text below: the gallery dogfood is the **purchase-request** detail
+> view, not helpdesk — both workflow gallery apps are deliberately bearer-only API
+> shapes, and converting helpdesk's posture was a bigger decision than a dogfood
+> warrants; purchase-request also exercises the managed-mode instance read the inline IT
+> app's second workflow covers. The browser flow (PRG + CSRF) is proven by
+> `WorkflowSurfaceIntegrationTest` on browser-auth'd workflows. The PRG fallback is
+> `_return`-else-root with no referer leg — the region always renders `_return`, so the
+> referer leg was dead weight. The missing key/state-column check is a render-time
+> refusal (`TQL-VIEW-3328`), not a static lint: `select *` makes a static check a liar.
+> Open question 1 resolved accordingly: gallery workflows stay bearer, and a bearer
+> workflow's region still renders — its actions are the API's. Slices 2-3 not started.
+>
+> **Original design below.** The workflow-actions campaign from
 > [hc-recipe-alignment.md](hc-recipe-alignment.md): the `workflow:` engine ships
 > transitions, guards, per-transition security, and correct 409 semantics, and no surface
 > renders any of it. This design gives the engine its face — a transitions region and

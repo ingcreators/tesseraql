@@ -81,6 +81,29 @@ class ViewSpecTest {
     }
 
     @Test
+    void parsesADetailViewWithAWorkflow(@TempDir Path dir) throws Exception {
+        ViewSpec spec = ViewSpec.parse(write(dir, "ticket.view.yml", """
+                version: tesseraql/v1
+                kind: view
+                recipe: detail
+                workflow: ticket
+                """));
+        assertThat(spec.workflow()).isEqualTo("ticket");
+    }
+
+    @Test
+    void rejectsWorkflowOnANonDetailView(@TempDir Path dir) throws Exception {
+        Path file = write(dir, "x.view.yml", """
+                version: tesseraql/v1
+                kind: view
+                recipe: list
+                workflow: ticket
+                """);
+        assertThatThrownBy(() -> ViewSpec.parse(file))
+                .isInstanceOf(TqlException.class).hasMessageContaining("detail-view key");
+    }
+
+    @Test
     void rejectsChildrenOnANonDetailView(@TempDir Path dir) throws Exception {
         Path file = write(dir, "x.view.yml", """
                 version: tesseraql/v1

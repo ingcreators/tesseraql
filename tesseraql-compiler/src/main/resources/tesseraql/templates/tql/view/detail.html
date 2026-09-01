@@ -22,6 +22,46 @@
        th:attr="hx-ext=${v.liveExt},sse-connect=@{${v.liveConnect}},hx-get=${v.liveGet},hx-trigger=${v.liveTrigger},hx-select=${v.liveSelect},hx-target=${v.liveTarget},hx-swap=${v.liveSwap}">
   <div class="hc-empty" th:if="${v.notFound}"><p class="hc-empty__title"
       th:text="#{tql.view.notFound}">Not found.</p></div>
+  <!-- The workflow surface (docs/workflow-surface.md): the stepper is the lifecycle in
+       picture form, and the toolbar renders ONLY the transitions legal for this user on
+       this state — wrong role and wrong state are absent, a refused guard is disabled with
+       its reason. A viewer whose policy permits no transition gets the stepper alone. The
+       optimistic lock is the state itself: a stale post answers 409 from current truth. -->
+  <div class="hc-stack" data-hc-workflow th:if="${v.workflow != null and !v.notFound}">
+    <ol class="hc-stepper">
+      <li class="hc-stepper__step" th:each="s,si : ${v.workflow.states}"
+          th:attr="aria-current=${s.current} ? 'step' : null,data-state=${s.complete} ? 'complete' : null">
+        <span class="hc-stepper__marker" aria-hidden="true"
+              th:text="${s.complete} ? '&#10003;' : ${si.count}">1</span>
+        <span class="hc-stepper__label"><span th:text="${s.label}">Draft</span><span
+              class="hc-sr-only" th:if="${s.complete}"> (completed)</span></span>
+      </li>
+    </ol>
+    <form method="post" th:if="${not #lists.isEmpty(v.workflow.transitions)}">
+      <input type="hidden" name="_csrf" th:if="${_csrf != null}" th:value="${_csrf}">
+      <input type="hidden" name="_return" th:value="${v.workflow.returnTo}">
+      <div class="hc-cluster" role="toolbar" th:attr="aria-label=${v.workflow.toolbarLabel}">
+        <th:block th:each="t : ${v.workflow.transitions}">
+          <button th:if="${t.enabled}" type="submit" class="hc-button" data-size="sm"
+                  th:formaction="@{${t.action}}"
+                  th:attr="data-hc-confirm=${t.confirm},data-hc-confirm-label=${t.confirm != null} ? ${t.label} : null">
+            <span th:text="${t.label}">Approve</span><span th:if="${t.progress != null}"
+                  th:text="| (${t.progress})|"> (1 of 3 stamped)</span>
+          </button>
+          <!-- Could-but-not-now (the upstream contract): disabled WITH the reason visible —
+               a missing button teaches nothing, a visible refusal teaches the lifecycle. -->
+          <span th:if="${!t.enabled}" class="hc-button" data-size="sm" aria-disabled="true">
+            <span th:text="${t.label}">Approve</span><span th:if="${t.reason != null}"
+                  class="hc-sr-only" th:text="|: ${t.reason}|">: reason</span>
+          </span>
+        </th:block>
+      </div>
+      <p th:if="${v.workflow.blockedReason != null}" th:text="${v.workflow.blockedReason}">
+        Assigned to someone else.</p>
+      <p th:each="t : ${v.workflow.transitions}" th:if="${!t.enabled and t.reason != null}"
+         th:text="|${t.label} — ${t.reason}|">Approve — needs an amount.</p>
+    </form>
+  </div>
   <div class="hc-stack" th:unless="${v.notFound}">
     <div class="hc-field" th:each="f : ${v.fields}">
       <span class="hc-field__label" th:text="${f.label}">Label</span>

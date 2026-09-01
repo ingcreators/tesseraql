@@ -312,6 +312,35 @@ named queries as child lists: a `children:` entry names a source that must be on
 the route's `sources:` (`TQL-VIEW-3308`). A detail offers the same `header`/`footer`
 slots as a list.
 
+### Workflow transitions: `workflow:`
+
+A detail view over a workflow-governed document opts into the workflow surface
+(docs/workflow-surface.md) with one key:
+
+```yaml
+kind: view
+recipe: detail
+workflow: purchase_request
+```
+
+The id must name a declared `kind: workflow` document — an unknown id fails the build
+(`TQL-VIEW-3327`), and nothing is ever inferred from table names. The page then renders
+the lifecycle stepper (`hc-stepper`, states in declaration order, the current one
+marked) and a toolbar of exactly the transitions legal for the viewing principal on the
+row's current state. Wrong role is absent; wrong state is absent; a transition whose
+expression guard says no renders disabled with the guard's declared `message:`. A guard
+that needs the transition's own connection — a SQL file, or a `decision.*` read —
+renders enabled, and the executor's refusal is the answer. A `join:` transition shows
+its stamp progress when the row selects the stamp columns.
+
+The buttons are native submits posting each transition's own synthesized route with the
+page as `_return`: a form post answers 303 back here, so the redirected GET re-renders
+current truth — a stale post is refused with 409, because the state itself is the
+optimistic lock. API callers keep the JSON contract unchanged. Transitions into a
+terminal state carry the confirm gate. The view's SQL must select the document's key
+column and, in app mode, its state column; a row missing either refuses loudly
+(`TQL-VIEW-3328`) instead of rendering a lifecycle that may be wrong.
+
 ## Views embed views
 
 `children:` and `panels:` accept view references (docs/view-composition.md wave 2b) —

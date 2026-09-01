@@ -49,6 +49,8 @@ public final class RouteCompiler {
     private static final TqlErrorCode PROMPT_WRITES = new TqlErrorCode(TqlDomain.ROUTE, 3116);
     /** TQL-ROUTE-3117: a prompt-text recipe declares no response.text: to render its message. */
     private static final TqlErrorCode PROMPT_WITHOUT_TEXT = new TqlErrorCode(TqlDomain.ROUTE, 3117);
+    /** TQL-VIEW-3327: a detail view's workflow: names no declared kind: workflow document. */
+    private static final TqlErrorCode UNKNOWN_WORKFLOW = new TqlErrorCode(TqlDomain.VIEW, 3327);
     private static final String DEFAULT_DATASOURCE = "main";
     private static final int DEFAULT_MAX_ROWS = 10_000;
     private static final long DEFAULT_IDEMPOTENCY_TTL = java.time.Duration.ofHours(24).toMillis();
@@ -462,7 +464,14 @@ public final class RouteCompiler {
             }
             step = source(step, routeFile, entry.getKey(), entry.getValue());
         }
-        applySessionRotation(step, definition).process(responseRenderer(definition));
+        // A synthesized transition gains the browser leg (docs/workflow-surface.md decision
+        // 3): a form-encoded post answers 303 back to the region's _return, an API caller
+        // keeps the JSON contract untouched.
+        io.tesseraql.pipeline.Step renderer = responseRenderer(definition);
+        if (workflow != null) {
+            renderer = new io.tesseraql.compiler.binding.WorkflowTransitionRenderer(renderer);
+        }
+        applySessionRotation(step, definition).process(renderer);
         applyIdempotencyComplete(step, definition);
     }
 
@@ -1145,15 +1154,15 @@ public final class RouteCompiler {
      */
     private void buildTemplatePage(RuntimeContext context, Path appHome, RouteFile routeFile) {
         Path routeDir = routeFile.source().getParent();
-        // Rotation is honoured on pages the way buildJson honours it: the post-sign-in or
-        // post-elevation confirmation page is exactly where a declared rotate belongs, and the
-        // declaration used to compile here and rotate nothing. Safe beside the shell's theme
-        // cookie because every Set-Cookie writer appends now.
-        PipelineBuilder route = applySessionRotation(
-                pipelineThroughSql(context, routeFile), routeFile.definition());
+        PipelineBuilder route = pipelineThroughSql(context, routeFile);
         if (routeFile.definition().response().file() != null) {
-            route.process(new io.tesseraql.compiler.binding.FileResponseRenderer(
-                    routeFile.definition().response().file(), appHome, routeDir));
+            // Rotation is honoured on pages the way buildJson honours it: the post-sign-in or
+            // post-elevation confirmation page is exactly where a declared rotate belongs, and
+            // the declaration used to compile here and rotate nothing. Safe beside the shell's
+            // theme cookie because every Set-Cookie writer appends now.
+            applySessionRotation(route, routeFile.definition())
+                    .process(new io.tesseraql.compiler.binding.FileResponseRenderer(
+                            routeFile.definition().response().file(), appHome, routeDir));
         } else {
             var html = routeFile.definition().response().html();
             // A declarative view (roadmap Phase 39): compile the response.html.view reference —
@@ -1165,6 +1174,11 @@ public final class RouteCompiler {
                                     html.view(), routeFile.definition(), this::postRouteByPath,
                                     this::viewPathById)
                             : null;
+            // A workflow-declaring detail view gains its facts step after the row loads and
+            // before the renderer (docs/workflow-surface.md decision 2).
+            if (viewBinding != null && viewBinding.workflowRef() != null) {
+                attachWorkflow(route, viewBinding);
+            }
             // Declarative parts on a hand-owned template (docs/view-composition.md wave 2c):
             // each response.html.views id compiles like a view: reference and publishes its
             // model as views['<id>'].
@@ -1176,14 +1190,48 @@ public final class RouteCompiler {
                             this::viewPathById));
                 }
             }
-            route.process(new HtmlResponseRenderer(withDefaultHeaders(html), appHome,
-                    routeDir, i18n.defaultTag(), viewBinding, boundViews, functions)
-                    .basePath(basePath()));
+            applySessionRotation(route, routeFile.definition())
+                    .process(new HtmlResponseRenderer(withDefaultHeaders(html), appHome,
+                            routeDir, i18n.defaultTag(), viewBinding, boundViews, functions)
+                            .basePath(basePath()));
         }
         applyHttpCache(route, routeFile.definition());
         // pipelineThroughSql opened the idempotency record; closing it here is what stops a
         // retry with the same key answering 409 for the whole TTL instead of serving the page.
         applyIdempotencyComplete(route, routeFile.definition());
+    }
+
+    /**
+     * Compiles a detail view's {@code workflow:} declaration (docs/workflow-surface.md): the
+     * named workflow must exist — an explicit declaration or a build failure, never inference —
+     * and the route gains the facts step that evaluates render-time legality after the row
+     * loads. The view binding receives the definition and base path for the display model.
+     */
+    private void attachWorkflow(PipelineBuilder route,
+            io.tesseraql.compiler.binding.ViewBinding viewBinding) {
+        String ref = viewBinding.workflowRef();
+        io.tesseraql.yaml.manifest.WorkflowFile workflowFile = manifest.workflows().stream()
+                .filter(candidate -> ref.equals(candidate.definition().id()))
+                .findFirst().orElse(null);
+        if (workflowFile == null || workflowFile.definition().document() == null) {
+            throw new TqlException(UNKNOWN_WORKFLOW, "View '" + viewBinding.workflowRef()
+                    + "': workflow: names " + (workflowFile == null
+                            ? "no declared workflow — declare kind: workflow '" + ref + "'"
+                            : "a workflow without a document: — the region has nothing to"
+                                    + " render transitions of"));
+        }
+        io.tesseraql.yaml.model.WorkflowDefinition def = workflowFile.definition();
+        boolean managed = workflowManaged(def);
+        String dialect = datasourceDialect(DEFAULT_DATASOURCE);
+        java.util.List<io.tesseraql.yaml.workflow.TransitionExecutor.CompiledTransition> compiled = new java.util.ArrayList<>();
+        for (io.tesseraql.yaml.model.TransitionSpec transition : def.transitions()) {
+            compiled.add(io.tesseraql.yaml.workflow.TransitionExecutor.compile(def, transition,
+                    managed, dialect, workflowFile.source().getParent(), functions));
+        }
+        route.process(new io.tesseraql.compiler.binding.WorkflowViewBinder(
+                viewBinding.sourceKey(), def, managed, DEFAULT_DATASOURCE, def.transitions(),
+                compiled));
+        viewBinding.workflow(def, workflowBasePath(def));
     }
 
     /** The view registry lookup — the file declaring this view id (docs/view-composition.md). */

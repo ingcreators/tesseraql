@@ -56,6 +56,12 @@ tql:
     truncatedCount: "{max}+ results"
   inbox:
     bell: Notifications
+  workflow:
+    actions: Actions
+    notNow: Not available in this state.
+    assigned: "Assigned to someone else — only the task holder may act."
+    confirm: "This finishes the document's lifecycle. Continue?"
+    stamped: "{done} of {total} stamped"
   http:
     "400": Bad Request
     "401": Unauthorized

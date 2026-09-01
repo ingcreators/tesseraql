@@ -62,6 +62,11 @@ public final class ViewBinding {
     private final Map<String, String> catalogByColumn;
     private final List<ViewFields.FieldDef> filterFields;
     private final io.tesseraql.yaml.model.PageSpec pagination;
+    // The workflow a detail view declares (docs/workflow-surface.md), handed in by the
+    // compiler after resolution — the fluent-setter shape HtmlResponseRenderer.basePath uses,
+    // because the definition lives in the manifest the of(...) factory deliberately never sees.
+    private io.tesseraql.yaml.model.WorkflowDefinition workflow;
+    private String workflowBasePath;
 
     private ViewBinding(ViewSpec spec, String entryTemplate, List<ViewFields.FieldDef> fields,
             Map<String, String> slots, Path appHome, Map<Integer, Embed> childEmbeds,
@@ -90,6 +95,23 @@ public final class ViewBinding {
      */
     public Map<String, io.tesseraql.yaml.model.ResponseSpec.FieldPolicy> readPolicies() {
         return readPolicies;
+    }
+
+    /** The view's declared {@code workflow:} id, or null — the compiler resolves it. */
+    public String workflowRef() {
+        return spec.workflow();
+    }
+
+    /** The view's data source key — the result set the workflow facts step evaluates. */
+    public String sourceKey() {
+        return spec.source();
+    }
+
+    /** Hands over the resolved workflow and its base path (docs/workflow-surface.md). */
+    public void workflow(io.tesseraql.yaml.model.WorkflowDefinition definition,
+            String basePath) {
+        this.workflow = definition;
+        this.workflowBasePath = basePath;
     }
 
     /**
@@ -507,7 +529,95 @@ public final class ViewBinding {
             children.add(c);
         }
         v.put("children", children);
+        if (workflow != null) {
+            v.put("workflow", workflowModel(catalog, locale, context, pagePath));
+        }
         live(v, pagePath, spec.id() + "-view", false);
+    }
+
+    /**
+     * The transitions region and stepper display model (docs/workflow-surface.md), built from
+     * the facts the {@link WorkflowViewBinder} published: the stepper walks the states in
+     * declaration order — the only order the model has — marking the current one and, by
+     * position, the walked path; each legal transition becomes a button posting its own
+     * synthesized route, disabled-with-reason when its guard said no, and confirm-gated when
+     * it enters a terminal state. Absent facts (no row) render nothing.
+     */
+    private Map<String, Object> workflowModel(MessageCatalog catalog, Locale locale,
+            Map<String, Object> context, String pagePath) {
+        Object raw = context.get("workflow");
+        if (!(raw instanceof Map<?, ?> factsRaw)) {
+            return null;
+        }
+        @SuppressWarnings("unchecked")
+        Map<String, Object> facts = (Map<String, Object>) factsRaw;
+        String current = str(facts.get("state"));
+        Map<String, Object> model = new LinkedHashMap<>();
+        List<Map<String, Object>> states = new ArrayList<>();
+        int currentIndex = -1;
+        for (int i = 0; i < workflow.states().size(); i++) {
+            if (workflow.states().get(i).id().equals(current)) {
+                currentIndex = i;
+            }
+        }
+        for (int i = 0; i < workflow.states().size(); i++) {
+            io.tesseraql.yaml.model.StateSpec state = workflow.states().get(i);
+            Map<String, Object> entry = new LinkedHashMap<>();
+            entry.put("label", message(catalog, locale,
+                    "workflow." + workflow.id() + ".state." + state.id(),
+                    humanize(state.id())));
+            entry.put("current", i == currentIndex);
+            entry.put("complete", currentIndex >= 0 && i < currentIndex);
+            states.add(entry);
+        }
+        model.put("states", states);
+        String docId = str(facts.get("docId"));
+        List<Map<String, Object>> transitions = new ArrayList<>();
+        Object list = facts.get("transitions");
+        boolean blocked = false;
+        if (list instanceof List<?> entries) {
+            for (Object entryRaw : entries) {
+                if (!(entryRaw instanceof Map<?, ?> factRaw)) {
+                    continue;
+                }
+                @SuppressWarnings("unchecked")
+                Map<String, Object> fact = (Map<String, Object>) factRaw;
+                String id = str(fact.get("id"));
+                Map<String, Object> t = new LinkedHashMap<>();
+                t.put("id", id);
+                t.put("label", message(catalog, locale,
+                        "workflow." + workflow.id() + ".transition." + id, humanize(id)));
+                boolean enabled = Boolean.TRUE.equals(fact.get("enabled"));
+                t.put("enabled", enabled);
+                blocked |= Boolean.TRUE.equals(fact.get("blocked"));
+                if (!enabled && fact.get("reason") != null) {
+                    t.put("reason", str(fact.get("reason")));
+                } else if (!enabled && !Boolean.TRUE.equals(fact.get("blocked"))) {
+                    t.put("reason", message(catalog, locale, "tql.workflow.notNow",
+                            "Not available in this state."));
+                }
+                t.put("action", workflowBasePath + "/" + encode(docId) + "/" + id);
+                if (Boolean.TRUE.equals(fact.get("terminal"))) {
+                    t.put("confirm", message(catalog, locale, "tql.workflow.confirm",
+                            "This finishes the document's lifecycle. Continue?"));
+                }
+                if (fact.get("joinTotal") != null) {
+                    t.put("progress", message(catalog, locale, "tql.workflow.stamped",
+                            "{done} of {total} stamped")
+                            .replace("{done}", String.valueOf(fact.get("joinDone")))
+                            .replace("{total}", String.valueOf(fact.get("joinTotal"))));
+                }
+                transitions.add(t);
+            }
+        }
+        model.put("transitions", transitions);
+        if (blocked) {
+            model.put("blockedReason", message(catalog, locale, "tql.workflow.assigned",
+                    "Assigned to someone else — only the task holder may act."));
+        }
+        model.put("toolbarLabel", message(catalog, locale, "tql.workflow.actions", "Actions"));
+        model.put("returnTo", pagePath);
+        return model;
     }
 
     /** A dashboard's model: one entry per declared panel, in authored order. */

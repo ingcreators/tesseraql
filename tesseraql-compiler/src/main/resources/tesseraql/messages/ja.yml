@@ -52,6 +52,12 @@ tql:
     truncatedCount: "{max}+ 件"
   inbox:
     bell: 通知
+  workflow:
+    actions: 操作
+    notNow: この状態では実行できません。
+    assigned: 別の担当者に割り当てられています。タスク保持者のみ実行できます。
+    confirm: この文書のライフサイクルを完了します。続行しますか？
+    stamped: "{done} / {total} 承認済み"
   http:
     "400": リクエストが正しくありません
     "401": 認証が必要です
