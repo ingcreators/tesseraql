@@ -229,7 +229,7 @@ job, and the row records why.
 | --- | --- | --- |
 | session-expiry | **Adopted (#1113)** | shell + browser auth |
 | unsaved-changes | **Adopted (#1114)** | form views |
-| datagrid-bulk-errors | **Adopt — the bulk HTML face** | `actions:`, `_bulk` routes |
+| datagrid-bulk-errors | **Adopt — designed: [bulk-report.md](bulk-report.md)** | `actions:`, `_bulk` routes |
 | edit-conflict | **Adopt — needs its own design slice** | `update` command routes |
 | csv-import | **Adopt — its own campaign, when named** | file transfers |
 | row-detail | Aligned (list-surface decision 11) | `location: back`, `#row-<token>` |
@@ -311,6 +311,12 @@ which is the same line the autosave recipe draws.
 
 ## datagrid-bulk-errors — adopt, the bulk HTML face
 
+> **Designed: [bulk-report.md](bulk-report.md)** (2026-09-01, shaped in review): a shared
+> report model for bulk actions and the future csv-import consumer — reason groups
+> bounded by construction, references by row number **and** identity, links by the
+> existing row tokens, and a 307-to-the-list response that keeps a snapshot's frozen
+> membership through the round trip.
+
 The contract builds on datagrid-bulk-actions: execution semantics named per action
 (best-effort vs atomic), failures reported grouped by reason in a bounded
 `aria-live` region above the grid, every named row linked and marked
@@ -381,7 +387,7 @@ per-user-preference store demand, the same trigger `datagrid-prefs` waits on.
 4. ~~reference-lookup campaign~~ — designed and shipped (#1105, #1109–#1111).
 5. ~~session-expiry slice~~ — shipped (#1113).
 6. ~~unsaved-changes slice~~ — shipped (#1114).
-7. **datagrid-bulk-errors slice**: the bulk report region, once its consumer is live.
+7. **datagrid-bulk-errors**: designed as [bulk-report.md](bulk-report.md); slices follow.
 8. **edit-conflict**: design-first slice — the declared version column.
 9. **csv-import campaign**: design document first, when the user names it; it is the
    trigger that unlocks file-upload and async-job.
