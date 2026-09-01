@@ -1,0 +1,27 @@
+version: tesseraql/v1
+id: api.suppliers.search
+kind: route
+recipe: query-json
+
+# The supplier master's search route — the `source:` of the supplier domain's lookup
+# (docs/reference-lookup.md decision 1). An ordinary route: this security and this SQL
+# are what govern the resolve, the dialog, and the submit-time existence check alike.
+security:
+  policy: pr.read
+
+input:
+  q:
+    type: string
+    maxLength: 100
+
+sources:
+  main:
+    sql:
+      file: search.sql
+      mode: query
+      params:
+        q: params.q
+response:
+  json:
+    body:
+      data: main.rows

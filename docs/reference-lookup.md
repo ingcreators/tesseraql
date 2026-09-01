@@ -1,6 +1,18 @@
 # The reference lookup field — code entry, one truth, and the search dialog
 
-> **Status: slices 1 (direct entry) and 2 (the search dialog) shipped 2026-09-01.**
+> **Status: all three slices shipped 2026-09-01 — the campaign is complete.** Slice 3's
+> recorded deviation: the gallery dogfood is **purchase-request's** new-request form
+> gaining an optional preferred supplier — not procurement's partners, which the text
+> below called the natural fit. Procurement has no form views at all (its surface is
+> lists and dashboards) and its partners table carries no code column, while
+> purchase-request is where the gallery's forms live — the same reasoning that made it
+> the workflow surface's dogfood. The supplier reference is a `domains/` document
+> (`domains/supplier.yml`) carrying the whole `lookup:` block, referenced from the form
+> route as `supplier_id: { domain: supplier }`. Docs landed in declarative-views.md's
+> form section with the lookups.md cross-link; this design doc stays the campaign
+> ledger, off the site.
+>
+> **Slices 1 (direct entry) and 2 (the search dialog) shipped 2026-09-01.**
 > Slice 2's recorded deviations: the shell did not yet provide the
 > `data-hc-remote-dialog-root` host decision 4 assumed — the slice adds it to
 > `tql/shell.html` beside the network-retry and toast hosts (Studio's pages keep their

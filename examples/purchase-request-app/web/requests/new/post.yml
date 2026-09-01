@@ -12,6 +12,12 @@ input:
     type: number
     required: true
     min: 0.01
+  # The preferred supplier, a reference into the supplier master (domains/supplier.yml,
+  # docs/reference-lookup.md): the form renders the lookup field, the framework
+  # existence-checks the submitted id against /api/suppliers/search. Optional — a
+  # requester who knows the supplier names it, purchasing fills the rest in later.
+  supplier_id:
+    domain: supplier
 
 security:
   policy: pr.write
@@ -33,6 +39,7 @@ steps:
       params:
         title: params.title
         amount: params.amount
+        supplier_id: params.supplier_id
 response:
   json:
     status: 201
