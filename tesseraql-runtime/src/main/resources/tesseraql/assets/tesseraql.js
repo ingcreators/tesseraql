@@ -100,16 +100,32 @@ registerCodeLanguage("tql-sql", (text) => {
 // hc-alert field-errors fragments (ErrorResponseRenderer); swap client errors inline so
 // installFieldErrors can distribute them — server errors keep htmx's default handling.
 // A lookup field's unresolved 422 re-renders the whole field (docs/reference-lookup.md,
-// the recipe's "standard one-line beforeSwap allowance"), so its marker rides the same rule.
+// the recipe's "standard one-line beforeSwap allowance"), so its marker rides the same rule,
+// and so does the session-expiry 401's re-login dialog (docs/hypermedia-ui.md "Session
+// expiry") — its marker is what keeps other 401s (a fragment on a page whose shell predates
+// the host) on htmx's default no-swap handling.
 document.body.addEventListener("htmx:beforeSwap", (event) => {
     const status = event.detail.xhr.status;
     if (status >= 400 && status < 500
             && (event.detail.serverResponse.includes("data-hc-field-errors")
-                || event.detail.serverResponse.includes("data-hc-lookup"))) {
+                || event.detail.serverResponse.includes("data-hc-lookup")
+                || event.detail.serverResponse.includes("data-tql-session-expired"))) {
         event.detail.shouldSwap = true;
         event.detail.isError = false;
     }
 });
+
+// The session-expiry replay needs the FRESH session's CSRF token: the page's meta tag still
+// carries the dead session's, and installCsrfHeader reads the meta at request time. The login
+// success response ships the new token in the hc:sessionrenewed payload; capture phase, so the
+// meta is already swapped when the kit's bubble-phase listener fires the replay.
+document.addEventListener("hc:sessionrenewed", (event) => {
+    const token = event.detail && event.detail.csrfToken;
+    const meta = document.querySelector('meta[name="csrf-token"]');
+    if (token && meta) {
+        meta.setAttribute("content", token);
+    }
+}, true);
 
 // Sidebar active-link marking (data-hc-nav-current on the shell sidebar) and share-URL copy buttons
 // (data-hc-copy) are now the kit's installNavCurrent and installCopy behaviors (hc 0.1.6, #270/#272),

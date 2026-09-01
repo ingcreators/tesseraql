@@ -69,10 +69,19 @@ final class LoginRoutes {
     /**
      * Answers a throttled credential attempt (docs/credential-throttle.md): a browser
      * form bounces to the login page's rate message, an API caller gets the 429 envelope
-     * with Retry-After. Reveals the throttle, never the account.
+     * with Retry-After. Reveals the throttle, never the account. The session-expiry
+     * dialog's attempt re-renders the dialog instead of bouncing — a redirect would
+     * navigate the page whose work the dialog exists to preserve.
      */
     static void renderThrottled(Exchange exchange, boolean browserForm,
             java.time.Duration wait, String next) throws Exception {
+        if (browserForm && isHtmx(exchange)) {
+            exchange.response().status(429);
+            exchange.response().header("Retry-After",
+                    String.valueOf(Math.max(1, wait.toSeconds())));
+            renderDialog(exchange, "tql.session.throttled");
+            return;
+        }
         if (browserForm) {
             redirect(exchange, 303, LOGIN_PATH + "?error=rate"
                     + (next == null
@@ -180,6 +189,14 @@ final class LoginRoutes {
         }
         if (principal.isEmpty()) {
             throttle.recordFailure(loginId, address);
+            if (browserForm && isHtmx(exchange)) {
+                // The session-expiry dialog's attempt failed: re-render the dialog with the
+                // error inline (the recipe's 422 shape) — same anonymous message as the
+                // login page, whatever the cause (wrong password, wrong or replayed code).
+                exchange.response().status(422);
+                renderDialog(exchange, "tql.session.invalid");
+                return;
+            }
             if (browserForm) {
                 // Post/redirect/get: bounce back to the login page with an error flag and the
                 // original target, so a refresh does not re-submit the credentials.
@@ -200,6 +217,20 @@ final class LoginRoutes {
                 io.tesseraql.pipeline.auth.SignInAdmission.admitted(exchange));
         setSessionCookie(exchange, io.tesseraql.security.session.SessionCookie.issue(
                 sessions.cookieName(), sessionId, io.tesseraql.pipeline.CookiePath.of(exchange)));
+        if (browserForm && isHtmx(exchange)) {
+            // The session-expiry dialog's attempt succeeded (the recipe's 200): no body, only
+            // the hc:sessionrenewed trigger — the kit closes the dialog and replays the
+            // interrupted request. The fresh session's CSRF token rides in the payload
+            // because the page's <meta> still carries the dead session's token, and the
+            // bootstrap must swap it before the replay's installCsrfHeader reads it.
+            exchange.response().status(200);
+            exchange.response().header("HX-Trigger", mapper.writeValueAsString(
+                    Map.of("hc:sessionrenewed",
+                            Map.of("csrfToken", sessions.csrfToken(sessionId)))));
+            exchange.response().header(Headers.CONTENT_TYPE, "text/plain; charset=utf-8");
+            exchange.setBody("");
+            return;
+        }
         if (browserForm) {
             redirect(exchange, 303, next);
             return;
@@ -354,6 +385,33 @@ final class LoginRoutes {
      */
     private static String safeNext(Object raw) {
         return LoginRedirects.sanitize(str(raw), "/");
+    }
+
+    /** Whether the request came from htmx — the session-expiry dialog's own legs included. */
+    private static boolean isHtmx(Exchange exchange) {
+        return "true".equals(exchange.request().header("HX-Request"));
+    }
+
+    /**
+     * Re-renders the session-expiry dialog into the shell's shared host with the given error
+     * message inline — the failure legs of the dialog's own login post. Default i18n settings,
+     * like every renderer on these framework pipelines.
+     */
+    private static void renderDialog(Exchange exchange, String messageKey) {
+        io.tesseraql.yaml.i18n.I18nSettings i18n = io.tesseraql.yaml.i18n.I18nSettings
+                .defaults();
+        String tag = exchange.getProperty(io.tesseraql.pipeline.TesseraqlProperties.LOCALE,
+                i18n.defaultTag(), String.class);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> methods = exchange.beans().lookup(
+                io.tesseraql.pipeline.TesseraqlProperties.LOGIN_METHODS_BEAN, Map.class);
+        exchange.response().header("HX-Retarget", "[data-hc-session-expiry]");
+        exchange.response().header("HX-Reswap", "innerHTML");
+        exchange.response().header(Headers.CONTENT_TYPE, "text/html; charset=utf-8");
+        exchange.setBody(io.tesseraql.compiler.binding.SessionExpiredDialog.render(exchange,
+                i18n, tag, methods == null ? Map.of() : methods,
+                io.tesseraql.compiler.binding.SessionExpiredDialog.alert(i18n, tag,
+                        messageKey)));
     }
 
     private static boolean isFormPost(Exchange exchange) {

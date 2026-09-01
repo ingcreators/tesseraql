@@ -1598,6 +1598,12 @@ public final class TesseraqlRuntime implements AutoCloseable {
             new LoginRoutes(
                     new PasswordAuthenticator(identity), realm, sessionStore, totpStore,
                     credentialThrottle, identity).install(context);
+            // The session-expiry recipe's switch (docs/hypermedia-ui.md "Session expiry"):
+            // with this bean bound, an htmx 401 renders the re-login dialog instead of the
+            // dead inline fragment. The same model the login page reads, so the dialog can
+            // only ever offer the methods the page offers.
+            context.bind(TesseraqlProperties.LOGIN_METHODS_BEAN,
+                    LoginMethods.of(manifest.config()));
             // A session buys a short-lived bearer (docs/session-token-exchange.md). Off by
             // default: an endpoint that turns a session into a credential should exist because
             // somebody decided it should, not because they upgraded.

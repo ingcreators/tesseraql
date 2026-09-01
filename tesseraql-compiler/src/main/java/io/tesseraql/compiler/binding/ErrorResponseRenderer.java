@@ -133,6 +133,26 @@ public final class ErrorResponseRenderer implements Step {
             redirectToLogin(exchange);
             return;
         }
+        // The htmx flavor of the same bounce (the kit's session-expiry recipe): a fragment
+        // action whose session is gone gets the re-login dialog aimed at the shell's shared
+        // host, and the kit replays the interrupted request after sign-in. Only when the
+        // runtime wired browser sessions (the bean) — an api-key or webhook 401 reached over
+        // htmx would render a dialog signing in cannot cure, but that is the same trade the
+        // full-page redirect branch above already makes for HTML GETs.
+        if (status == 401 && "true".equals(exchange.request().header("HX-Request"))) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> methods = exchange.beans()
+                    .lookup(TesseraqlProperties.LOGIN_METHODS_BEAN, Map.class);
+            if (methods != null) {
+                exchange.response().header("HX-Retarget", "[data-hc-session-expiry]");
+                exchange.response().header("HX-Reswap", "innerHTML");
+                exchange.response().header(Headers.CONTENT_TYPE, "text/html; charset=utf-8");
+                applySecurityHeaders(exchange);
+                exchange.setBody(SessionExpiredDialog.render(exchange, i18n, tag, methods,
+                        null));
+                return;
+            }
+        }
         // Per-app custom error pages (roadmap Phase 45): a top-level browser GET renders
         // templates/errors/<status>.html (else errors/error.html) when the app provides one —
         // htmx swaps keep the inline fragment and API clients keep the JSON envelope.
