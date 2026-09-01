@@ -1,0 +1,150 @@
+# The reference lookup field — code entry, one truth, and the search dialog
+
+> **Status: designed 2026-09-01; no slices started.** The reference-lookup campaign from
+> [hc-recipe-alignment.md](hc-recipe-alignment.md): business forms above a few hundred
+> master rows have no blessed answer — `codes:` renders a `<select>` and stops. This
+> design gives the form surface the master-reference field: direct code entry for users
+> who know the code, a search dialog for those who don't, and one truth for what the
+> field holds. Measured against main at #1104; the upstream contract is
+> `recipes/reference-lookup/contract.md` in the hypermedia-components repository.
+
+The contract's core rule — **two fields, one truth**: the visible code input is what
+users type, the hidden id is what the form submits, the display name is presentation.
+An unresolved code means an empty id (the classic defect is a stale id riding under a
+corrected code), and the consuming endpoint re-validates on submit anyway, because a
+client-supplied id proves nothing.
+
+## What exists
+
+- `codes:` covers the small-master case end to end: a `catalogs/*.yml` catalog renders
+  as a `<select>` (`ViewFields.defaultWidget`), and `InputBinder` validates the
+  submitted key against the active set, reloading once on a miss. docs/lookups.md
+  decision 10 draws the line this design crosses: catalog-or-enrichment is a question
+  of size, and above it the select stops being an interface.
+- `enrich:` (`KeyedReference`) folds reference data into read rows — the read side of
+  the same masters, deliberately not a form feature.
+- The kit ships the whole client half in 0.4.0: `installRemoteDialog` and
+  `installCloseDialog` are auto-init behaviors, `hc-dialog`/`hc-field__hint`/
+  `hc-field__message` are in the CSS, and the `reference-lookup`, `remote-dialog` and
+  `live-search` recipes name the composition. None of it is pinned by the manifest
+  guard yet — Studio already depends on remote-dialog unpinned, a drift gap this
+  campaign closes in passing.
+- Synthesized companion routes are established practice: attachments compile one
+  document into three routes; workflows synthesize transition, bulk, and delegate
+  routes off one basePath. The form surface has no companion routes yet.
+- The generated field pattern (`tql/view/field.html`) renders no hint or message
+  markup today; errors land in the form-top alert and `installFieldErrors`
+  redistributes them. The lookup field is the first widget that owns a hint line.
+
+## Decision 1 — `lookup:` is an input-field key naming a query route
+
+```yaml
+input:
+  customer_id:
+    type: string
+    lookup:
+      source: /api/customers/search
+      code: customer_code
+      label: name
+```
+
+`lookup:` is a new `InputField` record component (automatically legal in `domains/`
+documents, where a master reference belongs — declare it once, reference it
+everywhere). `source:` names a **GET query route by literal URL path** — the same
+resolution the form's `action:` already uses for POST routes, gaining the missing
+`getRouteByPath` analogue. The referenced route is an ordinary route: its own
+`security:`, its own SQL, its own `input:`. The framework never writes the search
+query; the route's author owns what "searching customers" means, which columns match,
+and what the row set excludes.
+
+The route's contract: its SQL must select the declared field's column (the id),
+`code:`, and `label:`; it should declare a search input (`q`, or whatever its SQL
+binds) for the dialog leg. A `lookup:` naming no GET route, or a route whose rows lack
+the named columns, fails the build.
+
+## Decision 2 — the field renders as code + hidden id, resolved by a companion route
+
+`ViewFields` maps a `lookup:` input to a new `lookup` widget (joining
+`ViewSpec.WIDGETS`): the visible code input, the hidden id input (the declared field
+name — what submits), the 🔍 button (`type="button"`, `aria-haspopup="dialog"`), and
+the `hc-field__hint` line carrying the resolved display name. Marked `data-hc-lookup`
+per the contract.
+
+The compiler synthesizes one companion route per form with lookup fields:
+`GET <form action path>/_lookup/<field>?<code>=…` — the resolve endpoint. It runs the
+**referenced route's** pipeline (its security, its SQL) filtered to code equality, and
+renders the whole field fragment back:
+
+- exactly one row → **200 resolved**: hint = label, hidden id = the key, the code
+  echoed in canonical form;
+- zero rows (or more than one — an ambiguous code is not a resolution) →
+  **422 unresolved**: `aria-invalid`, the message in the field-errors shape, **hidden
+  id emptied** — the two-fields-one-truth rule's teeth;
+- empty code → **200 cleared**: empty id, hint emptied. Required-ness stays the submit
+  endpoint's business.
+
+The code input carries `hx-get` on change targeting the whole field with `outerHTML` —
+the field re-renders as a unit, so code, id, and hint can never disagree.
+
+## Decision 3 — submit-time truth is the `codes:` precedent, automatic
+
+A `lookup:` field validates at bind time exactly as `codes:` does: `InputBinder`
+resolves the submitted id against the source (one keyed row fetch through the
+referenced route's SQL), and a miss rejects with the standard field error. The
+upstream contract leaves re-validation to "the consuming endpoint anyway"; this
+framework's stance is that a declared reference validates itself — an author should
+not be able to forget the existence check any more than they can forget a `codes:`
+check. The fetch is one indexed row by key inside the command's own connection, the
+same currency a validation SQL rule spends.
+
+## Decision 4 — the dialog is the kit's composition, synthesized
+
+The 🔍 button loads `GET <form action path>/_lookup/<field>/dialog` into the page's
+`data-hc-remote-dialog-root` host (the shell provides one). The synthesized dialog is
+the remote-dialog + live-search composition: a search form (opting out of
+close-on-success, per the contract — the first debounced 200 must not close the
+dialog) posting the referenced route's declared search input, and a result list where
+**each row is a button** rendering label + code, whose click re-renders the field
+resolved (the same fragment as a resolved code entry) and closes the dialog
+(`data-hc-close-dialog-on-success`).
+
+Result rows come from the referenced route's rows, capped by that route's own bounds —
+and the dialog should say when results are capped, which is the result-cap banner this
+campaign already shipped for lists. Authorization applies per the referenced route's
+own `security:` on every request; the dialog never lists masters the user may not
+reference. Inactive-but-visible rows (the contract's aria-disabled refusals) need a
+convention the source SQL owns; deferred until a gallery master needs it.
+
+## Recorded deviations
+
+- No `pick?id=` endpoint: picking a row re-renders the field through the same resolve
+  fragment, keyed by id instead of code — one fragment, not two.
+- Free-text-plus-id (nullable id) is out of scope for slice 1-3; the contract allows
+  it and nothing here forecloses it.
+- Multi-select references stay `transfer`-recipe territory, unadopted (recorded in
+  hypermedia-ui.md since 0.1.9).
+
+## Slices
+
+1. **Direct entry end to end**: `lookup:` on `InputField` (+ schema + `.vscode` copies
+   + reference regen), the `lookup` widget in `ViewFields`/`field.html`, the resolve
+   companion route, bind-time existence validation, manifest-guard pins for
+   `installRemoteDialog`/`installCloseDialog` and the three recipes (closing the
+   Studio drift gap), lint for a dangling `source:`.
+2. **The search dialog**: the dialog + results companion fragments, the live-search
+   composition, close-on-success wiring, capped-results notice.
+3. **Gallery + domain packaging**: a real master in a gallery app (procurement's
+   suppliers or items are the natural fit), a `domains/` document carrying the
+   `lookup:`, docs (`declarative-views.md` form section + `lookups.md` cross-link),
+   and the hand-written docs sweep.
+
+## Open questions
+
+- Whether the resolve companion reuses the referenced route's compiled pipeline or
+  re-renders its SQL with an equality arm — slice 1 decides against the code (the
+  pipeline reuse is cleaner but the route's own page/response shape gets in the way).
+- Whether `source:` should also accept a route id (the view surface resolves views by
+  id, routes by path — path chosen here for consistency with `action:`, but ids are
+  the more rename-stable currency; revisit at 1.0 alongside the schema freeze).
+- Per-tenant masters: the referenced route's scope/tenancy governance already applies
+  (it is an ordinary route), so nothing extra is designed — verify in slice 1's IT.

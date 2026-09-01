@@ -284,4 +284,8 @@ export const EXCLUDED = [
   'list-surface.md',
   // The hc 0.4.0 recipe adoption ledger: seven contracts weighed against the view surface, 2026-09-01.
   'hc-recipe-alignment.md',
+  // The ledger's two feature campaigns, designed 2026-09-01: the workflow surface
+  // (transitions region, stepper, task queue) and the reference lookup field.
+  'workflow-surface.md',
+  'reference-lookup.md',
 ];

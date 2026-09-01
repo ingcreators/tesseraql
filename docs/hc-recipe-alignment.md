@@ -1,24 +1,30 @@
 # The hc 0.4.0 recipes and the view surface — an adoption ledger
 
-> **Status: assessment recorded 2026-09-01; the result-cap and unread-badge slices
-> shipped the same day.** The unread-badge slice landed as designed: the bell's
-> `aria-label` is gone (it froze the announced name), the name is now subtree text — the
-> shell's hidden localized "Notifications" stem plus the fragment's hidden "(N)" — the
-> badge is `aria-hidden`, the count caps at 99+, and `sse-connect` stayed outside the
-> swapped span. The fragment is deliberately locale-free so one pushed payload serves
-> every session.
-> Mode B (the snapshot search's in-page reject, 200), the 400→422 flip on the keys guard,
-> mode A (the warn-truncation banner + "cap+" count + the `truncated` context flag), and
-> the gallery snapshot dogfood are in. One recorded deviation: mode A rides the
-> `materialize: { maxRows, onOverflow: warn }` execution bound — a declared `page.cap` on
-> offset/keyset lists stays refused, because on an unpaged list the bound IS the cap
-> declaration and a paged offset list never over-fetches. hypermedia-components
-> 0.4.0 shipped nine new recipe contracts (#1081 adopted the bump). Two were settled the
-> same week: network-retry became the shell host (#1083) and idempotency-key became the
-> form-recipe bridge campaign (#1084–#1087). This document weighs the remaining seven
-> against what the framework actually renders, measured against main at #1101, and names
-> the recommended order. Contracts cited live under `recipes/<name>/contract.md` in the
-> hypermedia-components repository — they are not in the WebJar.
+> **Status: assessment recorded 2026-09-01; both small slices shipped and both
+> campaigns designed the same day.**
+>
+> - **result-cap shipped (#1103)**: mode B (the snapshot search's in-page reject, 200),
+>   the 400→422 flip on the keys guard, mode A (the warn-truncation banner + "cap+"
+>   count + the `truncated` context flag), the gallery snapshot dogfood. One recorded
+>   deviation: mode A rides the `materialize: { maxRows, onOverflow: warn }` execution
+>   bound — a declared `page.cap` on offset/keyset lists stays refused, because on an
+>   unpaged list the bound IS the cap declaration and a paged offset list never
+>   over-fetches.
+> - **unread-badge shipped (#1104)**: the bell's `aria-label` is gone (it froze the
+>   announced name); the name is subtree text — the shell's hidden localized
+>   "Notifications" stem plus the fragment's hidden "(N)" — the badge is `aria-hidden`,
+>   the count caps at 99+, and `sse-connect` stayed outside the swapped span. The
+>   fragment is deliberately locale-free so one pushed payload serves every session.
+> - **workflow-actions designed**: [workflow-surface.md](workflow-surface.md).
+> - **reference-lookup designed**: [reference-lookup.md](reference-lookup.md).
+>
+> hypermedia-components 0.4.0 shipped nine new recipe contracts (#1081 adopted the
+> bump). Two were settled the same week: network-retry became the shell host (#1083)
+> and idempotency-key became the form-recipe bridge campaign (#1084–#1087). This
+> document weighs the remaining seven against what the framework actually renders,
+> measured against main at #1101, and names the recommended order. Contracts cited live
+> under `recipes/<name>/contract.md` in the hypermedia-components repository — they are
+> not in the WebJar.
 
 TesseraQL is contract-first: a recipe is adopted when a declaration renders it, not when
 its markup is pasted somewhere. So each verdict below answers two questions. Does the
