@@ -195,9 +195,18 @@ public final class TransitionExecutor {
         }
         if (transition.guard() != null
                 && !transition.guard().evalBoolean(new EvaluationContext(context))) {
+            // The declared refusal text rides the details, exactly like the SQL guard form
+            // below: the error fragment's alert body and the bulk report's reason group both
+            // read details.message, and an expression guard's message was the one refusal
+            // that never reached them.
+            Map<String, Object> details = new LinkedHashMap<>();
+            if (transition.guardMessage() != null) {
+                details.put("message", transition.guardMessage());
+            }
             throw TqlException.builder(GUARD_FAILED)
                     .message("Workflow '" + transition.workflowId() + "': transition '"
                             + transition.transitionId() + "' guard rejected the request")
+                    .details(details)
                     .build();
         }
         // The SQL guard form (docs/workflow-expressiveness.md): a 2-way query evaluated on

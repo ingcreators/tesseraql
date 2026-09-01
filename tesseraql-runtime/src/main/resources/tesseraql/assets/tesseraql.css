@@ -124,3 +124,8 @@ a:hover{text-decoration-thickness:2px}
    row from shifting when the badge appears. */
 .tql-unsaved-badge{visibility:hidden}
 form[data-dirty] .tql-unsaved-badge{visibility:visible}
+
+/* The bulk report region (docs/bulk-report.md decision 2): bounded by construction — the
+   capped reason groups do the real bounding, this scroll is the upstream contract's
+   backstop so pathological content can never eat the grid's height. */
+.tql-bulk-report{max-block-size:min(25vh,12rem);overflow:auto}

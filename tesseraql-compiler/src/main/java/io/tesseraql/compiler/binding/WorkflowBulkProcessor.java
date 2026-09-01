@@ -95,6 +95,13 @@ public final class WorkflowBulkProcessor implements Step {
                     // gives it, so a client reads one vocabulary either way.
                     outcome.put("guard", refused.details().get("code"));
                 }
+                if (refused.details() != null && refused.details().get("message") != null) {
+                    // A guard's DECLARED refusal text (the same field the single endpoint's
+                    // error fragment surfaces) — never the exception's internal message, which
+                    // is not written for end users. The bulk report groups by it
+                    // (docs/bulk-report.md decision 1); additive for JSON callers.
+                    outcome.put("message", refused.details().get("message"));
+                }
             }
             outcomes.add(outcome);
         }

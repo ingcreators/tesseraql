@@ -192,6 +192,22 @@ public final class HtmlResponseRenderer implements Step {
                 io.tesseraql.security.policy.PolicyEngine.class);
         io.tesseraql.security.Principal requestPrincipal = exchange.getProperty(
                 TesseraqlProperties.PRINCIPAL, io.tesseraql.security.Principal.class);
+        // The bulk-report pickup (docs/bulk-report.md decision 6): the redirect landed here
+        // with a report handle, and the re-rendered list carries the report. Subject-scoped
+        // at the store, so a foreign or expired handle is simply absent — the plain list.
+        String bulkHandle = exchange.request().param(BulkReportRoundTrip.PARAM);
+        if (bulkHandle != null && requestPrincipal != null && viewBinding != null) {
+            io.tesseraql.core.bulk.BulkReportStore reports = exchange.beans().lookup(
+                    TesseraqlProperties.BULK_REPORT_STORE_BEAN,
+                    io.tesseraql.core.bulk.BulkReportStore.class);
+            java.util.Optional<String> stored = reports == null
+                    ? java.util.Optional.empty()
+                    : reports.find(bulkHandle, requestPrincipal.subject());
+            if (stored.isPresent()) {
+                context.put("bulkReport", io.tesseraql.yaml.JsonMappers.constrained()
+                        .readValue(stored.get(), Map.class));
+            }
+        }
         if (!readPolicies.isEmpty()) {
             viewContext = (Map<String, Object>) new FieldPolicyApplier(readPolicies,
                     policyEngine, requestPrincipal).apply(context);

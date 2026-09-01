@@ -69,6 +69,12 @@ tql:
     stamped: "{done} of {total} stamped"
     comment: Comment
     commentRequired: "Required for: {transitions}"
+  bulk:
+    summary: "{succeeded} of {requested} succeeded; {failed} failed."
+    allSucceeded: "All {requested} succeeded."
+    row: "Row {number} — {key}"
+    more: "…and {count} more"
+    numberColumn: Row number
   session:
     expiredTitle: Session expired
     expiredBody: Sign in again to continue. The action you started will complete after you sign in.
