@@ -229,7 +229,7 @@ job, and the row records why.
 | --- | --- | --- |
 | session-expiry | **Adopted (#1113)** | shell + browser auth |
 | unsaved-changes | **Adopted (#1114)** | form views |
-| datagrid-bulk-errors | **Adopt — designed: [bulk-report.md](bulk-report.md)** | `actions:`, `_bulk` routes |
+| datagrid-bulk-errors | **Adopted (#1115–#1117)** — [bulk-report.md](bulk-report.md) | `actions:`, `_bulk` routes |
 | edit-conflict | **Adopt — needs its own design slice** | `update` command routes |
 | csv-import | **Adopt — its own campaign, when named** | file transfers |
 | row-detail | Aligned (list-surface decision 11) | `location: back`, `#row-<token>` |
@@ -387,7 +387,8 @@ per-user-preference store demand, the same trigger `datagrid-prefs` waits on.
 4. ~~reference-lookup campaign~~ — designed and shipped (#1105, #1109–#1111).
 5. ~~session-expiry slice~~ — shipped (#1113).
 6. ~~unsaved-changes slice~~ — shipped (#1114).
-7. **datagrid-bulk-errors**: designed as [bulk-report.md](bulk-report.md); slices follow.
+7. ~~datagrid-bulk-errors~~ — designed and shipped ([bulk-report.md](bulk-report.md),
+   #1115–#1117); csv-import remains its recorded future consumer.
 8. **edit-conflict**: design-first slice — the declared version column.
 9. **csv-import campaign**: design document first, when the user names it; it is the
    trigger that unlocks file-upload and async-job.
