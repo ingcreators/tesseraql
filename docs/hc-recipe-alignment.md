@@ -228,7 +228,7 @@ job, and the row records why.
 | Recipe | Verdict | Anchor |
 | --- | --- | --- |
 | session-expiry | **Adopted (#1113)** | shell + browser auth |
-| unsaved-changes | **Adopt — small slice** | form views |
+| unsaved-changes | **Adopted (#1114)** | form views |
 | datagrid-bulk-errors | **Adopt — the bulk HTML face** | `actions:`, `_bulk` routes |
 | edit-conflict | **Adopt — needs its own design slice** | `update` command routes |
 | csv-import | **Adopt — its own campaign, when named** | file transfers |
@@ -293,6 +293,9 @@ session may rotate the CSRF token, and the replayed mutation must not fail on th
 stale page token — the login success response has to hand the fresh token to the page.
 
 ## unsaved-changes — adopt, small
+
+> **Shipped (#1114).** The guard rides every declarative form view by default, with the
+> Modified badge next to Save; a hand-written console form opts in with the one attribute.
 
 The contract is client-only: `data-hc-dirty-guard` on a form arms the kit's
 auto-installed guard — baseline snapshot on first focus, `data-dirty` toggling with
@@ -377,7 +380,7 @@ per-user-preference store demand, the same trigger `datagrid-prefs` waits on.
 3. ~~workflow-actions campaign~~ — designed and shipped (#1105–#1108).
 4. ~~reference-lookup campaign~~ — designed and shipped (#1105, #1109–#1111).
 5. ~~session-expiry slice~~ — shipped (#1113).
-6. **unsaved-changes slice** (small, one PR): the dirty guard on form views.
+6. ~~unsaved-changes slice~~ — shipped (#1114).
 7. **datagrid-bulk-errors slice**: the bulk report region, once its consumer is live.
 8. **edit-conflict**: design-first slice — the declared version column.
 9. **csv-import campaign**: design document first, when the user names it; it is the
