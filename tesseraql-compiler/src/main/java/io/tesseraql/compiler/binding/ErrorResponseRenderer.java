@@ -429,9 +429,10 @@ public final class ErrorResponseRenderer implements Step {
                 default -> 500;
             };
             // 4220: declarative validation rejected the input (roadmap Phase 19); 4222: a
-            // snapshot search exceeded its declared cap (docs/list-surface.md decision 10) —
-            // both are "the request's content is refused, narrow it"; other FIELD
-            // failures are malformed requests.
+            // snapshot page fetch posted more keys than the declared cap (the search itself
+            // renders over-cap in-page, docs/hc-recipe-alignment.md) — both are "the
+            // request's content is refused, narrow it"; other FIELD failures are malformed
+            // requests.
             case FIELD -> code.number() == 4220 || code.number() == 4222 ? 422 : 400;
             // 5030: the live-event registry is at capacity — server saturation, not caller
             // misbehavior (docs/contract-bugfixes.md track I).

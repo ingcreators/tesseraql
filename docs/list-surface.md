@@ -18,7 +18,11 @@
 > per-dialect ordinal join; the ejector still emits the static-grid simplification; and
 > the framework-screen soak criterion was met by the gallery apps plus four dedicated
 > integration tests rather than an IAM Admin conversion (those screens are hand-written
-> consoles, not declarative views). The decisions below are otherwise the live contract.
+> consoles, not declarative views). Superseded by the result-cap slice
+> ([hc-recipe-alignment.md](hc-recipe-alignment.md)): a search over `cap:` now answers
+> 200 with an in-page reject block — over-cap is a user state — while a page fetch
+> posting more keys than the cap is the 422. The decisions below are otherwise the live
+> contract.
 
 Implementation design for the target state of `recipe: list`: the declarative list view
 becomes an operational grid page of the quality a commercial SaaS back office ships, and

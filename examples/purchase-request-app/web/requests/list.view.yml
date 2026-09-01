@@ -2,6 +2,7 @@ version: tesseraql/v1
 id: requests
 kind: view
 recipe: list
+key: id
 title: Purchase requests
 search: q
 columns:

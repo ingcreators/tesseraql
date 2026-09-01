@@ -519,11 +519,19 @@ public class SqlStep implements Step {
     private Map<String, Object> executeQuery(io.tesseraql.core.sql.SqlStatement statements,
             BoundSql bound) {
         try {
+            boolean[] truncated = new boolean[1];
             List<Map<String, Object>> rows = statements.read(sqlPath, bound,
-                    io.tesseraql.core.sql.SqlStatement.cappedRows(dialect, maxRows, overflow()));
+                    io.tesseraql.core.sql.SqlStatement.cappedRows(dialect, maxRows,
+                            overflow(truncated)));
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("rows", rows);
             result.put("rowCount", rows.size());
+            if (truncated[0]) {
+                // A warn-mode truncation is a fact of this result set, not just a log line
+                // (docs/hc-recipe-alignment.md, result-cap): the list view renders it as the
+                // truncation banner, and a JSON body can map the same flag.
+                result.put("truncated", true);
+            }
             return result;
         } catch (java.sql.SQLException ex) {
             throw executionError(ex);
@@ -531,9 +539,10 @@ public class SqlStep implements Step {
     }
 
     /** The caller's half of the capped read: warn truncates with a log, fail refuses. */
-    private io.tesseraql.core.sql.SqlStatement.RowOverflow overflow() {
+    private io.tesseraql.core.sql.SqlStatement.RowOverflow overflow(boolean[] truncated) {
         return () -> {
             if ("warn".equals(onOverflow)) {
+                truncated[0] = true;
                 LOG.log(System.Logger.Level.WARNING,
                         "Result truncated at maxRows={0} for {1}", maxRows,
                         sqlPath);

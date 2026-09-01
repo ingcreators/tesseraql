@@ -44,6 +44,12 @@ tql:
     tombstone: この一覧から外れました。
     asOfSearch: "（検索時点）"
     notFound: 見つかりません。
+    overCap: "{cap} 行を超えて一致しています。"
+    overCapBody: "検索を {cap} 行以内に絞り込んでから、一覧を処理してください。"
+    truncated: "先頭 {max} 行を表示しています。"
+    truncatedBody: "{max} 行を超えて一致しています。検索または絞り込みで残りを確認してください。"
+    truncatedSorted: "{max} 行を超えて一致しています（{sort} 順）。検索または絞り込みで残りを確認してください。"
+    truncatedCount: "{max}+ 件"
   http:
     "400": リクエストが正しくありません
     "401": 認証が必要です

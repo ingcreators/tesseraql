@@ -48,6 +48,12 @@ tql:
     tombstone: No longer in this list.
     asOfSearch: "(as of search)"
     notFound: Not found.
+    overCap: "More than {cap} rows match."
+    overCapBody: "Narrow the search to at most {cap} rows, then work the list."
+    truncated: "Showing the first {max} rows."
+    truncatedBody: "More than {max} rows match. Narrow the search or filters to see the rest."
+    truncatedSorted: "More than {max} rows match, sorted by {sort}. Narrow the search or filters to see the rest."
+    truncatedCount: "{max}+ results"
   http:
     "400": Bad Request
     "401": Unauthorized

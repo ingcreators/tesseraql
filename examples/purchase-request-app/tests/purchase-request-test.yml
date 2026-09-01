@@ -16,6 +16,16 @@ tests:
       rows:
         - id: PR-1001
 
+  - name: a snapshot page fetch narrows to the posted membership keys
+    sql:
+      file: web/requests/requests.sql
+    params:
+      keys: [PR-1002]
+    expect:
+      rowCount: 1
+      rows:
+        - id: PR-1002
+
   - name: the detail query loads one request
     sql:
       file: web/requests/{id}/request.sql

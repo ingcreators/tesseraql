@@ -8,6 +8,20 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **The list surface adopts the result-cap contract**
+  (docs/hc-recipe-alignment.md). Over-cap is a user state, not an error: a snapshot
+  search whose hits exceed `pagination.cap` now answers 200 and renders the reject block
+  in-page — the table gives way to "more than N rows match, narrow it" while the search
+  chrome stays usable — instead of the 422 error page. A page fetch posting more
+  membership keys than the cap is the opposite case (the framework never rendered that
+  many) and flips from 400 to 422 (`TQL-FIELD-4222`). A warn-mode `materialize.maxRows`
+  truncation on a plain list stops being silent: the page renders a persistent warning
+  banner naming the shown count and the current sort, the status line hedges the total as
+  "N+ results", and the query result carries `truncated: true` so a JSON body can map the
+  same fact. The purchase-request gallery app's approval queue now runs
+  `strategy: snapshot` as the feature's dogfood. Both are pre-1.0 behavior changes,
+  recorded here rather than migrated.
+
 - **The outbox table gains its delivery indexes** (`V11__outbox_indexes.sql`, all three
   dialect variants). Scheduled delivery turned `tql_outbox_event` from a drain-fast queue
   into a table that holds rows for days, and the table had no indexes at all: the
