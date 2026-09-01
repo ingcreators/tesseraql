@@ -8,6 +8,14 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **The outbox table gains its delivery indexes** (`V11__outbox_indexes.sql`, all three
+  dialect variants). Scheduled delivery turned `tql_outbox_event` from a drain-fast queue
+  into a table that holds rows for days, and the table had no indexes at all: the
+  dispatcher's claim poll filtered `status` and the `not_before` window over delivered
+  history, and a withdrawal scanned for `(app_name, cancel_key)` row by row. Both lookups
+  now have a covering index; the bootstrap applies the script idempotently through the
+  tolerated duplicate-index errors, exactly as the session expiry index does.
+
 - **An app switches to a theme built with the kit's theme builder, in two config keys.** The
   framework already re-themed itself for free — every surface it renders reads the kit's
   `--hc-*` tokens — but there was nowhere to say which theme. `tesseraql.ui.theme`,
