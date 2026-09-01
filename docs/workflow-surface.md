@@ -11,7 +11,17 @@
 > referer leg was dead weight. The missing key/state-column check is a render-time
 > refusal (`TQL-VIEW-3328`), not a static lint: `select *` makes a static check a liar.
 > Open question 1 resolved accordingly: gallery workflows stay bearer, and a bearer
-> workflow's region still renders — its actions are the API's. Slices 2-3 not started.
+> workflow's region still renders — its actions are the API's.
+>
+> **Slice 2 (comment-required) shipped the same day**, with three recorded deviations: a
+> missing required comment answers the framework's standard required-input refusal
+> (**400**, TQL-FIELD-2001), not the upstream contract's 422 — consistency with every
+> other required input outweighs matching the number; the comment field renders
+> **upfront** beside the transitions that demand it (one shared field, the pressed button
+> decides), not only-on-refusal — progressive disclosure needs the fragment swaps slice 1
+> deferred; and in app mode the history append is the app's contract, so the comment
+> reaches storage only where the command SQL binds it (documented, not silent). Lint
+> `TQL-WORKFLOW-3120` refuses any `comment:` value but `required`. Slice 3 not started.
 >
 > **Original design below.** The workflow-actions campaign from
 > [hc-recipe-alignment.md](hc-recipe-alignment.md): the `workflow:` engine ships

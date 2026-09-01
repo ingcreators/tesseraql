@@ -168,6 +168,39 @@ class WorkflowSurfaceIntegrationTest {
     }
 
     @Test
+    void aCommentRequiredTransitionRefusesWithoutOneAndRecordsItInHistory() throws Exception {
+        // Bring M-2 into the state whose exit demands a comment; open itself needs none.
+        assertThat(postForm("/api/cases/M-2/open",
+                "_csrf=" + actorCsrf + "&_return=/cases/M-2", actorCookie).statusCode())
+                .isEqualTo(303);
+        HttpResponse<String> page = get("/cases/M-2", actorCookie);
+        assertThat(page.body()).contains("name=\"comment\"")
+                .contains("Required for:");
+
+        // Without a comment: the framework's standard required-input refusal (400, the
+        // TQL-FIELD-2001 shape every required input answers — a recorded deviation from the
+        // upstream contract's 422, consistency inside the framework being worth more).
+        HttpResponse<String> refused = postForm("/api/cases/M-2/close",
+                "_csrf=" + actorCsrf + "&_return=/cases/M-2", actorCookie);
+        assertThat(refused.statusCode()).isEqualTo(400);
+
+        // With one: the transition applies and the history row finally carries its note.
+        HttpResponse<String> closed = postForm("/api/cases/M-2/close",
+                "_csrf=" + actorCsrf + "&_return=/cases/M-2"
+                        + "&comment=Resolved+by+phone",
+                actorCookie);
+        assertThat(closed.statusCode()).isEqualTo(303);
+        try (Connection connection = DriverManager.getConnection(
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+                Statement statement = connection.createStatement();
+                var rows = statement.executeQuery("select note from tql_workflow_history"
+                        + " where doc_id = 'M-2' and transition = 'close'")) {
+            assertThat(rows.next()).isTrue();
+            assertThat(rows.getString("note")).isEqualTo("Resolved by phone");
+        }
+    }
+
+    @Test
     void theJsonContractIsUntouchedForApiCallers() throws Exception {
         HttpRequest request = HttpRequest.newBuilder(
                 URI.create("http://localhost:" + runtime.port() + "/api/docs/D-6/submit"))
@@ -213,7 +246,8 @@ class WorkflowSurfaceIntegrationTest {
                     + " ('D-4', 'draft', 10), ('D-5', 'draft', 10), ('D-6', 'draft', 10)");
             statement.execute("create table cases (id varchar(64) primary key,"
                     + " subject varchar(100) not null)");
-            statement.execute("insert into cases (id, subject) values ('M-1', 'A case')");
+            statement.execute("insert into cases (id, subject) values ('M-1', 'A case'),"
+                    + " ('M-2', 'Another case')");
         }
     }
 
@@ -301,7 +335,11 @@ class WorkflowSurfaceIntegrationTest {
                   - { id: closed, type: terminal }
                 transitions:
                   - { id: open, from: new, to: open, command: { file: touch-case.sql } }
-                  - { id: close, from: open, to: closed, command: { file: touch-case.sql } }
+                  - id: close
+                    from: open
+                    to: closed
+                    comment: required
+                    command: { file: touch-case.sql }
                 """);
         Files.writeString(home.resolve("workflow/touch-case.sql"), """
                 update cases set subject = subject where id = /* key */'M-1'

@@ -118,6 +118,16 @@ class AppLinterWorkflowTest {
         assertThat(codes(new AppLinter().lint(dir))).contains("TQL-WORKFLOW-3119");
     }
 
+    /** comment: takes only 'required' — anything else is a typo, not an optional comment. */
+    @Test
+    void anUnknownCommentValueIsAnError(@TempDir Path dir) throws Exception {
+        writeWorkflow(dir, JOINED.replace(
+                "- { id: reject, from: review, to: rejected, command: { file: approve.sql } }",
+                "- { id: reject, from: review, to: rejected, comment: optional,"
+                        + " command: { file: approve.sql } }"));
+        assertThat(codes(new AppLinter().lint(dir))).contains("TQL-WORKFLOW-3120");
+    }
+
     @Test
     void escalateTransitionFromWrongStateIsAnError(@TempDir Path dir) throws Exception {
         // submit starts from draft, not the deadline's 'submitted' state, so it can never advance.

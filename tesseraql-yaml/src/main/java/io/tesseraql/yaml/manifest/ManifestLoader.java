@@ -524,7 +524,7 @@ public final class ManifestLoader {
                     transition.from(), transition.to(), transition.guard(),
                     transition.command(), transition.assign(),
                     transition.security(), merged, transition.stamp(), transition.bulk(),
-                    transition.join()));
+                    transition.join(), transition.comment()));
         }
         // A dispatch consumes shared decisions the way its members do
         // (docs/transition-engine.md track B): the same resolution, the same errors.

@@ -126,6 +126,7 @@ public final class WorkflowViewBinder implements Step {
         boolean terminal = def.states().stream()
                 .anyMatch(state -> state.id().equals(spec.to()) && state.isTerminal());
         facts.put("terminal", terminal);
+        facts.put("commentRequired", spec.commentRequired());
         boolean enabled = true;
         if (transition.guard() != null) {
             // The executor's own evaluation shape: the request context with the loaded row

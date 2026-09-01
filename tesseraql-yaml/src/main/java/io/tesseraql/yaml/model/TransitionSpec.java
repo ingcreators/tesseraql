@@ -55,7 +55,17 @@ public record TransitionSpec(String id, String from, String to, GuardSpec guard,
         Boolean bulk,
         // The AND-join, declared rather than hand-guarded (docs/process-control-gaps.md gap 5):
         // what it buys is the lint coverage and the inbox visibility, not new capability.
-        JoinSpec join) {
+        JoinSpec join,
+        // The transition's comment posture (docs/workflow-surface.md decision 5): `required`
+        // makes the synthesized route refuse a post without one (the standard field-errors
+        // 422); any transition accepts an optional comment once declared anywhere in the
+        // workflow, and the engine writes it to tql_workflow_history.note.
+        String comment) {
+
+    /** Whether a post to this transition must carry a comment (docs/workflow-surface.md). */
+    public boolean commentRequired() {
+        return "required".equalsIgnoreCase(comment);
+    }
 
     /** Whether this transition also serves the {@code _bulk} endpoint. Defaults to false. */
     public boolean isBulk() {

@@ -611,6 +611,31 @@ public final class ViewBinding {
             }
         }
         model.put("transitions", transitions);
+        // The comment field renders when any offered transition demands one
+        // (docs/workflow-surface.md decision 5, upfront rather than only-on-refusal — a
+        // recorded deviation): one textarea, shared by the form, the pressed button's verb
+        // decides which transition it rides. The hint names the demanding transitions; it
+        // is never HTML-required, because that would block the transitions that don't.
+        List<String> demanding = new ArrayList<>();
+        if (list instanceof List<?> entries) {
+            for (Object entryRaw : entries) {
+                if (entryRaw instanceof Map<?, ?> fact
+                        && Boolean.TRUE.equals(fact.get("commentRequired"))
+                        && Boolean.TRUE.equals(fact.get("enabled"))) {
+                    String id = str(fact.get("id"));
+                    demanding.add(message(catalog, locale,
+                            "workflow." + workflow.id() + ".transition." + id, humanize(id)));
+                }
+            }
+        }
+        if (!demanding.isEmpty()) {
+            Map<String, Object> comment = new LinkedHashMap<>();
+            comment.put("label", message(catalog, locale, "tql.workflow.comment", "Comment"));
+            comment.put("hint", message(catalog, locale, "tql.workflow.commentRequired",
+                    "Required for: {transitions}")
+                    .replace("{transitions}", String.join(", ", demanding)));
+            model.put("comment", comment);
+        }
         if (blocked) {
             model.put("blockedReason", message(catalog, locale, "tql.workflow.assigned",
                     "Assigned to someone else — only the task holder may act."));
