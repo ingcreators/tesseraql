@@ -322,12 +322,12 @@ later; the plain-form shape above is the no-JS baseline it must keep.
 A declarative list view gets all of this from `actions:` alone ([declarative
 views](declarative-views.md)), and a bulk action against a workflow's `_bulk` endpoint
 also gets the failure surface — the kit's `datagrid-bulk-errors` contract, rendered the
-TesseraQL way ([bulk-report.md](bulk-report.md)). The grid shows a row-number column;
-after the action, the same page renders a bounded report above the grid: totals, the
-failures grouped by reason (a guard's declared message when one exists, the `TQL-*` code
-otherwise), each group capped with "…and N more", and every named row linked by its
-anchor — "Row 12 — PR-1003" on a snapshot list, the key alone elsewhere, because only a
-frozen membership makes a number authoritative. Failed rows are marked
+TesseraQL way ([bulk-report.md](bulk-report.md)). The grid shows a row-number column.
+After the action, the same page renders a bounded report above the grid: totals, then
+the failures grouped by reason — a guard's declared message when one exists, the
+`TQL-*` code otherwise — each group capped with "…and N more". Every named row links by
+its anchor: "Row 12 — PR-1003" on a snapshot list, the key alone elsewhere, because
+only a frozen membership makes a number authoritative. Failed rows are marked
 (`data-attention="error"`, `aria-describedby` naming their reason group) and stay
 checked, so pressing the action again applies to exactly the failures.
 
