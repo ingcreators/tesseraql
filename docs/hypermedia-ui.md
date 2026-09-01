@@ -269,6 +269,23 @@ redirects on success, while degrading to a plain form post with no JavaScript:
   confirm event: `hx-trigger="hc:confirmed"` on the form. The no-JS path posts straight
   through (the server re-validates anyway).
 
+## Unsaved changes
+
+Every declarative form view renders with the kit's `unsaved-changes` guard:
+`data-hc-dirty-guard` on the `<form>`, and the auto-installed `installDirtyGuard` does the
+rest — baseline snapshot on first focus, `data-dirty` toggling with `hc:dirtychange`, the
+browser's own prompt on tab close, a `confirm` on boosted navigation, clean again when the
+form's own save answers 2xx. The framework adds a visible badge next to the Save button
+(`tql.view.modified`, styled off `form[data-dirty]` with `visibility` so the action row
+never shifts). Client-only by construction: no endpoint changes, and without JavaScript
+nothing guards and nothing breaks — the form submits natively.
+
+Two rules worth knowing before extending it. A request from inside the form that is not
+the form's own save deliberately does **not** clean the state — a draft is not the record,
+the same line the kit's autosave recipe draws. And the baseline compares canonical wire
+values (`FormData`), so display regrouping by `installFormat` is never "dirty". A
+hand-written console form opts in with the same single attribute.
+
 ## Bulk actions
 
 A list that offers one action against many rows follows the kit's `datagrid-bulk-actions`
