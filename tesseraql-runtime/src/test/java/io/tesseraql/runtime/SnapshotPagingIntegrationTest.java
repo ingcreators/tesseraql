@@ -27,8 +27,11 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 /**
  * Snapshot pagination end to end (docs/list-surface.md decision 10): the search freezes the
  * membership as row tokens the page carries, the pager posts them back with a page number,
- * each page fetches live state for its slice only, a vanished row renders as a tombstone —
- * and a search over the declared cap is refused with 422.
+ * each page fetches live state for its slice only, a vanished row renders as a tombstone.
+ * Over-cap follows the result-cap contract (docs/hc-recipe-alignment.md): a search over the
+ * declared cap is a user state — HTTP 200 with the reject block rendered in-page — while a
+ * page fetch posting more keys than the cap is a broken client and gets 422. A warn-mode
+ * maxRows truncation on a plain list renders the persistent banner and the hedged count.
  */
 @Testcontainers
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
@@ -108,10 +111,44 @@ class SnapshotPagingIntegrationTest {
 
     @Test
     @Order(4)
-    void aSearchOverTheCapIsRefusedWith422() throws Exception {
+    void aSearchOverTheCapRendersTheRejectBlockInPage() throws Exception {
         HttpResponse<String> capped = get("/capped");
 
-        assertThat(capped.statusCode()).isEqualTo(422);
+        // Over-cap is a user state, not an error: the list page still renders (search chrome
+        // included, so the user can narrow), the table gives way to the reject block, and
+        // the count is withheld.
+        assertThat(capped.statusCode()).isEqualTo(200);
+        assertThat(capped.body()).contains("data-hc-result-cap")
+                .contains("More than 3 rows match.")
+                .doesNotContain(">Alpha<")
+                .doesNotContain("name=\"page\"");
+    }
+
+    @Test
+    @Order(5)
+    void aPageFetchPostingMoreKeysThanTheCapIsRefusedWith422() throws Exception {
+        HttpResponse<String> flooded = postForm("/capped", ALL_KEYS + "&page=1");
+
+        // Five keys over a cap of 3: the framework never rendered that many, so the posted
+        // membership can only come from a broken or hostile client.
+        assertThat(flooded.statusCode()).isEqualTo(422);
+    }
+
+    @Test
+    @Order(6)
+    void aWarnTruncationRendersThePersistentBannerAndTheHedgedCount() throws Exception {
+        HttpResponse<String> truncated = get("/truncated");
+
+        assertThat(truncated.statusCode()).isEqualTo(200);
+        // Mode A keeps the rows it has and says so: the warning banner names the shown count
+        // and the sort, and the status line hedges the total as "cap+".
+        // Gamma was deleted by the tombstone test above, so the first three are now
+        // Alpha, Beta, Delta — Echo is the row the truncation cuts.
+        assertThat(truncated.body()).contains("data-hc-result-cap")
+                .contains("Showing the first 3 rows.")
+                .contains("3+ results")
+                .contains(">Alpha<")
+                .doesNotContain(">Echo<");
     }
 
     private static HttpResponse<String> get(String path) throws Exception {
@@ -160,7 +197,47 @@ class SnapshotPagingIntegrationTest {
                 POSTGRES.getPassword()));
         writeQueue(home, "queue", 10);
         writeQueue(home, "capped", 3);
+        writeTruncated(home);
         return home;
+    }
+
+    /** A plain (non-snapshot) list whose warn-mode maxRows truncates the five seeded rows. */
+    private static void writeTruncated(Path home) throws IOException {
+        Path dir = home.resolve("web/truncated");
+        Files.createDirectories(dir);
+        Files.writeString(dir.resolve("get.yml"), """
+                version: tesseraql/v1
+                id: truncated.page
+                kind: route
+                recipe: query-html
+                sources:
+                  main:
+                    sql:
+                      file: items.sql
+                      mode: query
+                      materialize:
+                        maxRows: 3
+                        onOverflow: warn
+                response:
+                  html:
+                    view: truncated
+                """);
+        Files.writeString(dir.resolve("items.sql"), """
+                select t.id, t.name
+                from queue_items t
+                order by t.id
+                ;
+                """);
+        Files.writeString(dir.resolve("list.view.yml"), """
+                version: tesseraql/v1
+                id: truncated
+                kind: view
+                recipe: list
+                title: Items
+                columns:
+                  - { name: id, label: "#" }
+                  - { name: name }
+                """);
     }
 
     /** A snapshot-paginated queue page over the same table, with the given cap. */

@@ -100,9 +100,25 @@
         <input type="hidden" th:if="${f.value != ''}" th:name="${f.name}" th:value="${f.value}">
       </th:block>
     </span>
-    <div class="tql-list-page__grid">
+    <!-- The result-cap surfaces (docs/hc-recipe-alignment.md): both render INSIDE the
+         swapped region, so a narrowed search replaces them together with the rows. Mode B —
+         a snapshot search over its cap — shows the reject block where the table would be;
+         mode A — a warn-mode maxRows truncation — keeps the rows and adds the persistent
+         banner plus the hedged "cap+" count. Over-cap is a user state: always HTTP 200. -->
+    <div class="hc-empty" data-hc-result-cap role="status" th:if="${v.overCap != null}">
+      <p class="hc-empty__title" th:text="${v.overCap['title']}">More than 500 rows match.</p>
+      <p class="hc-empty__description" th:text="${v.overCap['body']}">Narrow the search.</p>
+    </div>
+    <div class="hc-alert" data-variant="warning" role="status" data-hc-result-cap
+         th:if="${v.truncated != null}">
+      <p class="hc-alert__title" th:text="${v.truncated['title']}">Showing the first 500 rows.</p>
+      <p class="hc-alert__body" th:text="${v.truncated['body']}">Narrow the filters.</p>
+    </div>
+    <div class="tql-list-page__grid" th:if="${v.overCap == null}">
       <th:block th:insert="~{tql/view/table :: table(|${v.id}-table|, ${v.columns}, ${v.rows})}"/>
     </div>
+    <p class="tql-list-page__status" aria-live="polite" th:if="${v.truncated != null}"
+       th:text="${v.truncated['count']}">500+ results</p>
     <div class="hc-cluster" th:if="${v.page != null}">
       <p class="tql-list-page__status" aria-live="polite"
          th:if="${v.page['range'] != null}" th:text="${v.page['range']}">1–20 of 56</p>

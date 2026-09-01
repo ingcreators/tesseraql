@@ -221,9 +221,23 @@ The framework decodes the slice into `params.keys`, and the authored SQL binds t
 IN-list (`/*%if keys != null */ and t.id in /* keys */(1) /*%end*/`). A row that vanished
 since the search renders as a tombstone, so the page arithmetic and the user's count
 hold; the status line says "of N (as of search)" deliberately. A search whose hits exceed
-`cap:` (default 500) answers 422 — narrow it, never truncate. Reload is a new search, by
-design: snapshot pages have no URL and want none. Tokens prove nothing; every page fetch
-runs the route's own security and SQL.
+`cap:` (default 500) still answers 200 — over-cap is a user state, not an error. The page
+renders a reject block where the table would be, asking the user to narrow, and keeps the
+search chrome so they can. Never truncate: a truncated queue silently hides items from
+every operator. A page fetch posting more keys than the cap is different — the framework
+never rendered that many, so it is refused with 422 (`TQL-FIELD-4222`). Reload is a new
+search, by design: snapshot pages have no URL and want none. Tokens prove nothing; every
+page fetch runs the route's own security and SQL.
+
+### Truncation is visible: the result-cap banner
+
+A plain (non-snapshot) list bounded by `materialize: { maxRows: N, onOverflow: warn }`
+used to truncate silently — the log warned, the page pretended the shown rows were
+everything. Now the list renders a persistent warning banner naming the shown count (and
+the current sort, when one is applied), and the status line hedges the total as "N+
+results" — the exact total is the count query the cap exists to avoid. The truncation is
+also a fact of the result set: the query's context carries `truncated: true`, so a JSON
+body can map the same flag.
 
 ### Row identity and returning to the list: `key:` and `location: back`
 

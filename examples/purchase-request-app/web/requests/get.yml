@@ -14,9 +14,13 @@ input:
 security:
   policy: pr.read
 
+# The approval queue is a work queue: membership freezes at search time so acting on
+# page 1 never slides rows up from page 2, and a search over the cap renders the
+# result-cap reject block in-page (docs/declarative-views.md, "Work queues").
 pagination:
+  strategy: snapshot
   size: 20
-  count: true
+  cap: 500
 
 sources:
   main:
@@ -25,6 +29,7 @@ sources:
       mode: query
       params:
         q: query.q
+        keys: params.keys
 response:
   html:
     status: 200

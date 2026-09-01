@@ -23,6 +23,14 @@ public final class PageBinder implements Step {
 
     private static final TqlErrorCode VALIDATION = new TqlErrorCode(TqlDomain.FIELD, 2001);
 
+    /**
+     * TQL-FIELD-4222: a snapshot page fetch posted more membership keys than the declared cap
+     * (HTTP 422). The search itself renders over-cap in-page as the result-cap reject block
+     * (docs/hc-recipe-alignment.md); a keys list this long can only be a broken or hostile
+     * client, because the framework never rendered that many.
+     */
+    static final TqlErrorCode SNAPSHOT_OVER_CAP = new TqlErrorCode(TqlDomain.FIELD, 4222);
+
     private final PageSpec spec;
     private final List<String> snapshotKey;
 
@@ -46,7 +54,7 @@ public final class PageBinder implements Step {
             List<String> posted = exchange.request().formFields().get("keys");
             if (posted == null || posted.isEmpty()) {
                 // The search: fetch the whole membership; the producer's size+1 over-fetch is
-                // the over-cap detection the view refuses on (TQL-FIELD-4222).
+                // the over-cap detection the view renders the reject block on.
                 exchange.setProperty(TesseraqlProperties.PAGE,
                         new PageRequest(1, spec.effectiveCap(), 0, false, null));
             } else {
@@ -117,7 +125,10 @@ public final class PageBinder implements Step {
             return;
         }
         if (posted.size() > spec.effectiveCap()) {
-            throw reject("keys", posted.size() + " keys");
+            throw new TqlException(SNAPSHOT_OVER_CAP, "Snapshot page fetch posted "
+                    + posted.size() + " keys — more than the declared cap "
+                    + spec.effectiveCap() + " (pagination.cap, docs/list-surface.md"
+                    + " decision 10)");
         }
         long number = positiveLong(exchange, "page", 1);
         int from = (int) Math.min((number - 1) * size, posted.size());

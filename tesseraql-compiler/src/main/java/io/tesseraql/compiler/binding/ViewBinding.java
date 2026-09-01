@@ -42,8 +42,6 @@ public final class ViewBinding {
     static final TqlErrorCode EMBED_DEPTH = new TqlErrorCode(TqlDomain.VIEW, 3318);
     /** TQL-VIEW-3322: a declared list key: column is null, absent or blank in a result row. */
     static final TqlErrorCode INVALID_ROW_KEY = new TqlErrorCode(TqlDomain.VIEW, 3322);
-    /** TQL-FIELD-4222: a snapshot search exceeded its declared cap (HTTP 422 — narrow it). */
-    static final TqlErrorCode SNAPSHOT_OVER_CAP = new TqlErrorCode(TqlDomain.FIELD, 4222);
 
     /**
      * An embedded view (docs/view-composition.md wave 2b): the sub-binding plus the host
@@ -684,24 +682,43 @@ public final class ViewBinding {
                 page = snapshotPage(number, size, all.size());
             } else {
                 // The producer fetched cap+1 and trimmed; its hasNext IS the over-cap signal.
+                // Over-cap is a user state, not an error (docs/hc-recipe-alignment.md,
+                // result-cap mode B): the page renders the reject block where the table would
+                // be — no rows, count withheld — and keeps the search chrome for narrowing.
                 Object pageInfo = context.get("page");
                 if (pageInfo instanceof Map<?, ?> info
                         && Boolean.TRUE.equals(info.get("hasNext"))) {
-                    throw new TqlException(SNAPSHOT_OVER_CAP, "View " + spec.id()
-                            + ": the search matched more than " + pagination.effectiveCap()
-                            + " rows — narrow it (pagination.cap, docs/list-surface.md"
-                            + " decision 10)");
+                    String cap = String.valueOf(pagination.effectiveCap());
+                    Map<String, Object> overCap = new LinkedHashMap<>();
+                    overCap.put("title", message(catalog, locale, "tql.view.overCap",
+                            "More than {cap} rows match.").replace("{cap}", cap));
+                    overCap.put("body", message(catalog, locale, "tql.view.overCapBody",
+                            "Narrow the search to at most {cap} rows, then work the list.")
+                            .replace("{cap}", cap));
+                    v.put("overCap", overCap);
+                    v.put("snapshotKeys", List.of());
+                    rows = List.of();
+                    snapshotTokens = List.of();
+                    page = null;
+                } else {
+                    List<String> all = rowTokens(rows);
+                    v.put("snapshotKeys", all);
+                    int to = Math.min(size, rows.size());
+                    rows = rows.subList(0, to);
+                    snapshotTokens = all.subList(0, to);
+                    page = snapshotPage(1, size, all.size());
                 }
-                List<String> all = rowTokens(rows);
-                v.put("snapshotKeys", all);
-                int to = Math.min(size, rows.size());
-                rows = rows.subList(0, to);
-                snapshotTokens = all.subList(0, to);
-                page = snapshotPage(1, size, all.size());
             }
             v.put("snapshot", true);
         } else {
             page = pager(context, params, pagePath);
+            if (Boolean.TRUE.equals(data.get("truncated"))) {
+                // A warn-mode maxRows truncation (docs/hc-recipe-alignment.md, result-cap
+                // mode A): the shown rows ARE the cap, so the banner names their count and
+                // the declared sort, and the status line hedges the total as "cap+".
+                v.put("truncated",
+                        truncatedBanner(catalog, locale, params, columns, rows.size()));
+            }
         }
         if (page != null && page.get("next") == null && page.get("totalRows") != null) {
             // A counted offset page knows its absolute window — the grid page's status line
@@ -977,6 +994,39 @@ public final class ViewBinding {
         bar.put("chips", chips);
         bar.put("clearHref", href(pagePath, chromeState(params)));
         v.put("filterBar", bar);
+    }
+
+    /**
+     * The mode A truncation banner (docs/hc-recipe-alignment.md, result-cap): a persistent
+     * warning naming how many rows are shown and, when the current sort names a declared
+     * column, first by what — "the first N" is meaningless until the user knows the order.
+     * The count line hedges the total as "N+"; the exact total is the query the cap avoided.
+     */
+    private static Map<String, Object> truncatedBanner(MessageCatalog catalog, Locale locale,
+            Map<String, Object> params, List<ViewSpec.Column> columns, int shown) {
+        String max = String.valueOf(shown);
+        String sortLabel = null;
+        String sort = str(params.get("sort"));
+        for (ViewSpec.Column column : columns) {
+            if (column.name().equals(sort)) {
+                sortLabel = column.label() == null ? column.name() : column.label();
+            }
+        }
+        Map<String, Object> banner = new LinkedHashMap<>();
+        banner.put("title", message(catalog, locale, "tql.view.truncated",
+                "Showing the first {max} rows.").replace("{max}", max));
+        String body = sortLabel == null
+                ? message(catalog, locale, "tql.view.truncatedBody",
+                        "More than {max} rows match. Narrow the search or filters to see"
+                                + " the rest.")
+                : message(catalog, locale, "tql.view.truncatedSorted",
+                        "More than {max} rows match, sorted by {sort}. Narrow the search or"
+                                + " filters to see the rest.")
+                        .replace("{sort}", sortLabel);
+        banner.put("body", body.replace("{max}", max));
+        banner.put("count", message(catalog, locale, "tql.view.truncatedCount",
+                "{max}+ results").replace("{max}", max));
+        return banner;
     }
 
     /** The synthetic page window of a snapshot slice — the membership is the total. */

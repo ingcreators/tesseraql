@@ -1,6 +1,12 @@
 # The hc 0.4.0 recipes and the view surface — an adoption ledger
 
-> **Status: assessment recorded 2026-09-01; no slices started.** hypermedia-components
+> **Status: assessment recorded 2026-09-01; the result-cap slice shipped the same day.**
+> Mode B (the snapshot search's in-page reject, 200), the 400→422 flip on the keys guard,
+> mode A (the warn-truncation banner + "cap+" count + the `truncated` context flag), and
+> the gallery snapshot dogfood are in. One recorded deviation: mode A rides the
+> `materialize: { maxRows, onOverflow: warn }` execution bound — a declared `page.cap` on
+> offset/keyset lists stays refused, because on an unpaged list the bound IS the cap
+> declaration and a paged offset list never over-fetches. hypermedia-components
 > 0.4.0 shipped nine new recipe contracts (#1081 adopted the bump). Two were settled the
 > same week: network-retry became the shell host (#1083) and idempotency-key became the
 > form-recipe bridge campaign (#1084–#1087). This document weighs the remaining seven
