@@ -631,6 +631,29 @@ update or delete. Downstream consumers (a "request approved" mail, an event for 
 system) ride the outbox ([notifications](notifications.md), [messaging](messaging.md)), dispatched
 after commit.
 
+### The comment: the note's declared source
+
+The note is the acting user's comment (docs/workflow-surface.md decision 5). Every
+synthesized transition route accepts one optional `comment` body field — the only field a
+transition accepts — and the engine writes it to the history row's note in the same
+transaction. A transition that must not happen silently declares it:
+
+```yaml
+- id: reject
+  from: submitted
+  to: rejected
+  comment: required
+  command: { file: reject.sql }
+```
+
+`comment: required` makes the route refuse a post without one — the framework's standard
+required-input refusal (400), with the field-errors envelope naming the field. Any other
+value is a lint error (`TQL-WORKFLOW-3120`). The detail page's transitions region renders
+one shared comment field when an offered transition demands it, hinting which ones do; the
+pressed button decides which transition the comment rides. In app mode the history append
+is the app's own contract, so a comment travels only where the app's command SQL records
+it — declare the bind and write it, or the comment is accepted and dropped.
+
 ## Governance and testing
 
 A lint family catches a malformed or unreachable state machine before it ships:

@@ -8,6 +8,19 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **A transition can demand the acting user's comment, and the history note finally has
+  a writer** (docs/workflow-surface.md slice 2). Every synthesized transition route now
+  accepts one optional `comment` body field — the only field a transition accepts — and
+  the engine writes it to `tql_workflow_history.note` in the transition's transaction
+  (the column existed since Phase 28 and was always null). `comment: required` on a
+  transition refuses a post without one, using the framework's standard required-input
+  400 (a recorded deviation from the upstream recipe's 422); any other value is
+  `TQL-WORKFLOW-3120`. The detail page's transitions region renders one shared comment
+  field when an offered transition demands it, hinting which ones do. In app mode the
+  history append stays the app's contract: bind `body.comment` in the command SQL or
+  the comment is accepted and dropped (documented). The purchase-request gallery's
+  `reject` is the specimen.
+
 - **A detail view renders its workflow: the transitions region and the lifecycle
   stepper** (docs/workflow-surface.md slice 1). A `workflow: <id>` on a
   `recipe: detail` view — an explicit declaration, never table-name inference

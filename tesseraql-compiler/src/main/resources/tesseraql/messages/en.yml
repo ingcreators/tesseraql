@@ -62,6 +62,8 @@ tql:
     assigned: "Assigned to someone else — only the task holder may act."
     confirm: "This finishes the document's lifecycle. Continue?"
     stamped: "{done} of {total} stamped"
+    comment: Comment
+    commentRequired: "Required for: {transitions}"
   http:
     "400": Bad Request
     "401": Unauthorized

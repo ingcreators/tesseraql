@@ -58,6 +58,8 @@ final class WorkflowRules implements LintRule {
     private static final String UNSAFE_JOIN = "TQL-WORKFLOW-3118";
 
     private static final String STAMP_OUTSIDE_JOIN = "TQL-WORKFLOW-3119";
+    /** TQL-WORKFLOW-3120: comment: only takes 'required' — anything else is a typo. */
+    private static final String INVALID_COMMENT = "TQL-WORKFLOW-3120";
 
     private static final String INVALID_GUARD_DECLARATION = "TQL-WORKFLOW-3108";
 
@@ -262,6 +264,11 @@ final class WorkflowRules implements LintRule {
             }
             lintGuard(t.guard(), dir, where, source, findings);
             lintStamp(t, where, source, findings);
+            if (t.comment() != null && !"required".equalsIgnoreCase(t.comment())) {
+                findings.add(new LintFinding(INVALID_COMMENT, ERROR, source,
+                        where + " comment: takes only 'required', got '" + t.comment()
+                                + "' — an optional comment needs no declaration"));
+            }
             if (t.commandFile() != null && !Files.isRegularFile(dir.resolve(t.commandFile()))) {
                 findings.add(new LintFinding(MISSING_TRANSITION_REFERENCE, ERROR, source,
                         where + " references missing command '" + t.commandFile() + "'"));

@@ -28,4 +28,6 @@ transitions:
         params: { amount: document.amount }
     assign: { file: approver.sql }
   - { id: approve, from: submitted, to: approved, command: { file: approve.sql } }
-  - { id: reject, from: submitted, to: rejected, command: { file: reject.sql } }
+  # A rejection needs its reason on the record (docs/workflow-surface.md decision 5): the
+  # route refuses a post without a comment, and the engine writes it to the history note.
+  - { id: reject, from: submitted, to: rejected, comment: required, command: { file: reject.sql } }

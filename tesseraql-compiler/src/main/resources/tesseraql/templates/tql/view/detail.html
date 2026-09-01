@@ -40,6 +40,16 @@
     <form method="post" th:if="${not #lists.isEmpty(v.workflow.transitions)}">
       <input type="hidden" name="_csrf" th:if="${_csrf != null}" th:value="${_csrf}">
       <input type="hidden" name="_return" th:value="${v.workflow.returnTo}">
+      <!-- The shared comment (docs/workflow-surface.md decision 5): one field, the pressed
+           button decides which transition it rides; the hint names the transitions that
+           refuse without one. Never HTML-required — that would block the ones that don't. -->
+      <div class="hc-field" th:if="${v.workflow.comment != null}">
+        <label class="hc-field__label" th:for="|${v.id}-wf-comment|"
+               th:text="${v.workflow.comment.label}">Comment</label>
+        <textarea class="hc-input" rows="2" name="comment"
+                  th:id="|${v.id}-wf-comment|" maxlength="2000"></textarea>
+        <p class="hc-field__hint" th:text="${v.workflow.comment.hint}">Required for: Reject</p>
+      </div>
       <div class="hc-cluster" role="toolbar" th:attr="aria-label=${v.workflow.toolbarLabel}">
         <th:block th:each="t : ${v.workflow.transitions}">
           <button th:if="${t.enabled}" type="submit" class="hc-button" data-size="sm"

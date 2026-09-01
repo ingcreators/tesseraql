@@ -783,8 +783,26 @@ public final class RouteCompiler {
             io.tesseraql.yaml.model.Binding command,
             io.tesseraql.yaml.model.TransitionSpec transition) {
         return RouteDefinition.synthesizedCommand(routeId, security, command,
-                transition.decide(), workflowResponse());
+                transition.decide(), workflowResponse())
+                // The one body field a transition accepts (docs/workflow-surface.md decision
+                // 5): optional everywhere, refused-when-absent where the transition declares
+                // comment: required — the standard field-errors 422, no new machinery. The
+                // engine writes it to the history row's note.
+                .withInputAndErrors(java.util.Map.of("comment",
+                        transition.commentRequired() ? COMMENT_REQUIRED : COMMENT), null);
     }
+
+    /** A transition's comment input: the free text the history row records. */
+    private static final io.tesseraql.yaml.model.InputField COMMENT = new io.tesseraql.yaml.model.InputField(
+            "string", false, null, null, null, 2000, null, null, null, null, null, null, null,
+            null, null, null, null, null, null, null,
+            "The acting user's comment, recorded on the workflow history row.");
+
+    /** The refused-when-absent variant for a {@code comment: required} transition. */
+    private static final io.tesseraql.yaml.model.InputField COMMENT_REQUIRED = new io.tesseraql.yaml.model.InputField(
+            "string", true, null, null, null, 2000, null, null, null, null, null, null, null,
+            null, null, null, null, null, null, null,
+            "The acting user's comment, recorded on the workflow history row.");
 
     /** The compiled task-assignment reminder (Phase 20 channels), or {@code null} when undeclared. */
     private io.tesseraql.yaml.notify.NotifyEvents.CompiledNotify assignNotify(

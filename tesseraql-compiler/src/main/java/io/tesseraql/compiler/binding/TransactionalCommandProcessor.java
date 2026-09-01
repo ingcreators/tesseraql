@@ -508,7 +508,8 @@ public final class TransactionalCommandProcessor implements Step {
                             workflow.transition().transitionId(),
                             wf.fromState(), workflow.transition().to(),
                             (String) audit.get("user"),
-                            ((java.sql.Timestamp) audit.get("now")).toInstant(), null));
+                            ((java.sql.Timestamp) audit.get("now")).toInstant(),
+                            transitionComment(context)));
                     applyTasks(exchange, connection, statements, wf, context,
                             (String) audit.get("user"));
                 }
@@ -646,6 +647,24 @@ public final class TransactionalCommandProcessor implements Step {
     private static WorkflowTaskStore lookupTaskStore(Exchange exchange) {
         return exchange.beans().lookup(
                 TesseraqlProperties.WORKFLOW_TASK_STORE_BEAN, WorkflowTaskStore.class);
+    }
+
+    /**
+     * The acting user's comment for the history row's {@code note}
+     * (docs/workflow-surface.md decision 5): the transition's one declared body field,
+     * already bound and length-checked by the request binder; blank records as null — an
+     * empty note is no note.
+     */
+    private static String transitionComment(Map<String, Object> context) {
+        Object body = context.get("body");
+        if (!(body instanceof Map<?, ?> fields)) {
+            return null;
+        }
+        Object comment = fields.get("comment");
+        if (comment == null || String.valueOf(comment).isBlank()) {
+            return null;
+        }
+        return String.valueOf(comment);
     }
 
     /**
