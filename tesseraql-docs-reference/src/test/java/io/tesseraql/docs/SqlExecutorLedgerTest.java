@@ -59,6 +59,9 @@ class SqlExecutorLedgerTest {
             "tesseraql-operations/src/main/java/io/tesseraql/operations/attachment/JdbcAttachmentStore.java",
             "tesseraql-operations/src/main/java/io/tesseraql/operations/audit/JdbcRouteAuditStore.java",
             "tesseraql-operations/src/main/java/io/tesseraql/operations/batch/JobRepository.java",
+            // The bulk-report handle store (docs/bulk-report.md decision 6): a keyed
+            // framework store like its Jdbc siblings, not a route executor.
+            "tesseraql-operations/src/main/java/io/tesseraql/operations/bulk/JdbcBulkReportStore.java",
             "tesseraql-operations/src/main/java/io/tesseraql/operations/catalog/JdbcCatalogStore.java",
             "tesseraql-operations/src/main/java/io/tesseraql/operations/credential/JdbcCredentialTokenStore.java",
             "tesseraql-operations/src/main/java/io/tesseraql/operations/credential/JdbcTotpStore.java",
