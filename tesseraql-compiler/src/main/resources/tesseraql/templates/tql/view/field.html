@@ -7,7 +7,8 @@
 <html xmlns:th="http://www.thymeleaf.org">
 <th:block th:fragment="field(f)">
   <input th:if="${f.widget == 'hidden'}" type="hidden" th:name="${f.name}" th:value="${f.value}">
-  <div class="hc-field" th:unless="${f.widget == 'hidden'}" th:switch="${f.widget}">
+  <div class="hc-field" th:unless="${f.widget == 'hidden'}" th:switch="${f.widget}"
+       th:attr="data-hc-lookup=${f.widget == 'lookup'} ? 'true'">
     <label class="hc-field__label" th:for="|field-${f.name}|" th:text="${f.label}">Label</label>
     <th:block th:case="'checkbox'">
       <input type="hidden" th:name="${f.name}" value="false">
@@ -20,6 +21,26 @@
         <option th:each="o : ${f.options}" th:value="${o.value}" th:text="${o.label}"
                 th:selected="${f.value != null and o.value == f.value.toString()}">option</option>
       </select>
+    </th:block>
+    <!-- The reference-lookup field (docs/reference-lookup.md): the visible code input is what
+         users type, the hidden id below is what submits, and the whole field re-renders as a
+         unit through the synthesized resolve route — so code, id, and hint can never disagree.
+         A prefilled id (an edit form) self-resolves on load through the same fragment. -->
+    <th:block th:case="'lookup'">
+      <div class="hc-input-group">
+        <input class="hc-input" th:id="|field-${f.name}|" type="text"
+               th:name="${f.lookup.param}" th:value="${f.lookup.code}"
+               th:required="${f.required}"
+               th:attr="maxlength=${f.maxLength},aria-invalid=${f.lookup.invalid} ? 'true',aria-describedby=|field-${f.name}-hint|,hx-get=${f.lookup.resolve}"
+               hx-trigger="change" hx-target="closest [data-hc-lookup]" hx-swap="outerHTML">
+      </div>
+      <p class="hc-field__hint" th:id="|field-${f.name}-hint|"
+         th:unless="${f.lookup.invalid}" th:text="${f.lookup.hint}"></p>
+      <p class="hc-field__message" th:id="|field-${f.name}-hint|"
+         th:if="${f.lookup.invalid}" th:text="${f.lookup.message}"></p>
+      <input type="hidden" th:name="${f.name}" th:value="${f.value}"
+             th:attr="hx-get=${f.lookup.load} ? ${f.lookup.resolve}" hx-trigger="load"
+             hx-target="closest [data-hc-lookup]" hx-swap="outerHTML" hx-include="this">
     </th:block>
     <th:block th:case="'textarea'">
       <textarea class="hc-input" th:id="|field-${f.name}|" th:name="${f.name}" rows="4"

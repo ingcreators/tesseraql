@@ -489,4 +489,19 @@ class SchemaSyncTest {
         assertThat(types)
                 .containsExactlyInAnyOrderElementsOf(AppLinter.knownInputTypes());
     }
+
+    /**
+     * The widget enum is a hand-copied list nothing else guarded — {@code lookup} joining
+     * {@code ViewSpec.WIDGETS} is exactly the change that would have silently missed it.
+     */
+    @Test
+    void schemaWidgetEnumMatchesTheViewWidgetVocabulary() throws Exception {
+        JsonNode schema = new ObjectMapper().readTree(
+                getClass().getResourceAsStream("/schema/tesseraql-defs-v1.schema.json"));
+        List<String> widgets = new ArrayList<>();
+        schema.path("$defs").path("inputField").path("properties").path("widget").path("enum")
+                .forEach(node -> widgets.add(node.asText()));
+        assertThat(widgets)
+                .containsExactlyInAnyOrderElementsOf(io.tesseraql.yaml.view.ViewSpec.WIDGETS);
+    }
 }

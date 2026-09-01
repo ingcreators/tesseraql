@@ -205,6 +205,148 @@ public final class RouteCompiler {
                 .attachments()) {
             buildAttachment(context, attachmentFile, onlyRouteIds);
         }
+        // Reference lookups (docs/reference-lookup.md decision 2): a form whose action route
+        // declares lookup: fields gains one synthesized GET fragment route per field — the
+        // resolve companion the code input and the dialog both re-render through.
+        for (RouteFile routeFile : manifest.routes()) {
+            buildLookupCompanions(context, routeFile, onlyRouteIds);
+        }
+    }
+
+    /**
+     * Builds the resolve companions of one form action route (docs/reference-lookup.md):
+     * {@code GET <action path>/_lookup/<field>}, governed by the <em>referenced</em> route's
+     * {@code security:} — the fragment answers with master rows, so the master's own route
+     * says who may read them. Synthesized only where a form view renders the field; the
+     * submit-time existence check needs no companion and applies regardless.
+     */
+    private void buildLookupCompanions(RuntimeContext context, RouteFile routeFile,
+            java.util.Set<String> onlyRouteIds) {
+        if (!"POST".equalsIgnoreCase(routeFile.httpMethod())) {
+            return;
+        }
+        RouteDefinition definition = routeFile.definition();
+        java.util.List<String> lookupFields = definition.input().entrySet().stream()
+                .filter(entry -> entry.getValue().lookup() != null)
+                .map(java.util.Map.Entry::getKey)
+                .toList();
+        if (lookupFields.isEmpty()) {
+            return;
+        }
+        io.tesseraql.yaml.view.ViewSpec formView = formViewForAction(routeFile.urlPath());
+        if (formView == null) {
+            return;
+        }
+        for (String fieldName : lookupFields) {
+            String lookupId = definition.id() + "._lookup." + fieldName;
+            if (onlyRouteIds != null && !onlyRouteIds.contains(lookupId)
+                    && !onlyRouteIds.contains(definition.id())) {
+                continue;
+            }
+            io.tesseraql.yaml.model.InputField field = definition.input().get(fieldName);
+            RouteFile source = lookupSourceRoute(definition.id(), fieldName, field);
+            io.tesseraql.compiler.binding.LookupReferences.Compiled compiled = compileLookup(
+                    definition.id(), fieldName, field, source);
+            io.tesseraql.yaml.view.ViewFields.FieldDef fieldDef = io.tesseraql.yaml.view.ViewFields
+                    .deriveField(formView, fieldName, field);
+            String path = routeFile.urlPath() + "/_lookup/" + fieldName;
+            RouteDefinition companion = RouteDefinition.synthesizedCommand(lookupId,
+                    source.definition().security(), null, java.util.Map.of(), null)
+                    .withInputAndErrors(companionInput(fieldName, field), null);
+            if (mountRest) {
+                mount(context, "GET", path, lookupId);
+            }
+            PipelineBuilder route = pipelines.pipeline(lookupId);
+            applyCommonGovernance(route, lookupId, "GET", path, companion);
+            route.process(new RequestBinder(companion, path, compiledAppHome, functions))
+                    .process(new io.tesseraql.compiler.binding.LookupResolveProcessor(
+                            compiled, fieldDef, path, compiledAppHome, i18n.defaultTag(),
+                            responseHeaders.headers(), basePath(), defaultTimeoutSeconds()));
+        }
+    }
+
+    /** The first form view whose {@code action:} is this path — the fragment's label source. */
+    private io.tesseraql.yaml.view.ViewSpec formViewForAction(String path) {
+        for (io.tesseraql.yaml.manifest.ViewFile view : manifest.views()) {
+            try {
+                io.tesseraql.yaml.view.ViewSpec spec = io.tesseraql.yaml.view.ViewSpec
+                        .parse(view.source());
+                if (io.tesseraql.yaml.view.ViewSpec.FORM.equals(spec.view())
+                        && path.equals(spec.action())) {
+                    return spec;
+                }
+            } catch (RuntimeException unparseable) {
+                // The compiler already refuses a broken view on its own route; the
+                // companion scan just skips it.
+            }
+        }
+        return null;
+    }
+
+    /**
+     * The companion's declared inputs: the code param users type and the id the same fragment
+     * resolves a prefilled or picked row by — both optional; an empty request is the cleared
+     * state.
+     */
+    private static java.util.Map<String, io.tesseraql.yaml.model.InputField> companionInput(
+            String fieldName, io.tesseraql.yaml.model.InputField field) {
+        java.util.Map<String, io.tesseraql.yaml.model.InputField> input = new java.util.LinkedHashMap<>();
+        input.put(field.lookup().code(), plainInput("string"));
+        input.put(fieldName, plainInput(field.type()));
+        return input;
+    }
+
+    /** A bare typed input declaration — nothing but coercion. */
+    private static io.tesseraql.yaml.model.InputField plainInput(String type) {
+        return new io.tesseraql.yaml.model.InputField(type, false, null, null, null, null,
+                null, null, null, null, null, null, null, null, null, null, null, null, null,
+                null, null);
+    }
+
+    /** The GET route a {@code lookup:} field's {@code source:} names — or a build failure. */
+    private RouteFile lookupSourceRoute(String routeId, String fieldName,
+            io.tesseraql.yaml.model.InputField field) {
+        io.tesseraql.yaml.model.InputField.LookupSpec spec = field.lookup();
+        if (blank(spec.source()) || blank(spec.code()) || blank(spec.label())) {
+            throw new TqlException(
+                    io.tesseraql.compiler.binding.LookupReferences.INVALID_LOOKUP,
+                    "Route '" + routeId + "': input " + fieldName + ": lookup: declares"
+                            + " source:, code: and label: — all three");
+        }
+        for (RouteFile candidate : manifest.routes()) {
+            if ("GET".equalsIgnoreCase(candidate.httpMethod())
+                    && candidate.urlPath().equals(spec.source())) {
+                return candidate;
+            }
+        }
+        throw new TqlException(io.tesseraql.compiler.binding.LookupReferences.INVALID_LOOKUP,
+                "Route '" + routeId + "': input " + fieldName + ": lookup source "
+                        + spec.source() + " matches no GET route");
+    }
+
+    /** One field's compiled lookup: the referenced route's parsed SQL and connection facts. */
+    private io.tesseraql.compiler.binding.LookupReferences.Compiled compileLookup(
+            String routeId, String fieldName, io.tesseraql.yaml.model.InputField field,
+            RouteFile source) {
+        Binding main = source.definition().main();
+        if (main == null || main.file() == null || main.isHttp()) {
+            throw new TqlException(
+                    io.tesseraql.compiler.binding.LookupReferences.INVALID_LOOKUP,
+                    "Route '" + routeId + "': input " + fieldName + ": lookup source "
+                            + field.lookup().source()
+                            + " declares no main SQL query to resolve against");
+        }
+        String datasource = bindingDatasource(main, source.definition().effectiveDatasource());
+        String dialect = datasourceDialect(datasource);
+        Path file = io.tesseraql.core.dialect.DialectSqlResolver.resolve(
+                source.source().getParent().resolve(main.file()).normalize(), dialect);
+        return new io.tesseraql.compiler.binding.LookupReferences.Compiled(fieldName,
+                field.lookup(), parseSql(file), file.toString(), main.params(), datasource,
+                dialect);
+    }
+
+    private static boolean blank(String value) {
+        return value == null || value.isBlank();
     }
 
     /**
@@ -529,7 +671,25 @@ public final class RouteCompiler {
                 .resolve(sourceDir.resolve(file).normalize(), dialect);
         return new io.tesseraql.compiler.binding.TransactionalCommandProcessor(routeId,
                 io.tesseraql.compiler.binding.CommandDeclaration.of(definition), stepFile,
-                datasource, dialect, appName, workflow, commandBounds(), functions);
+                datasource, dialect, appName, workflow, commandBounds(), functions)
+                .lookups(compiledLookups(definition));
+    }
+
+    /**
+     * The compiled {@code lookup:} references of a command's input fields — the submit-time
+     * existence check (docs/reference-lookup.md decision 3): a declared reference validates
+     * itself, so an author cannot forget the check any more than a {@code codes:} one.
+     */
+    private java.util.List<io.tesseraql.compiler.binding.LookupReferences.Compiled> compiledLookups(
+            RouteDefinition definition) {
+        java.util.List<io.tesseraql.compiler.binding.LookupReferences.Compiled> compiled = new java.util.ArrayList<>();
+        definition.input().forEach((name, field) -> {
+            if (field.lookup() != null) {
+                compiled.add(compileLookup(definition.id(), name, field,
+                        lookupSourceRoute(definition.id(), name, field)));
+            }
+        });
+        return compiled;
     }
 
     /**

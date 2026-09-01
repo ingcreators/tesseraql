@@ -36,7 +36,9 @@ class HypermediaComponentsManifestTest {
             "installChatScroll", // copilot hc-chat transcript follows the stream
             "installDatagrid", // the view compiler's list/table markup (tql/view/table.html)
             "installDatagridActions", // IAM Admin bulk selection bar (users list)
-            "installNetworkRetry"); // the shell's no-answer Retry host (data-hc-network-retry)
+            "installNetworkRetry", // the shell's no-answer Retry host (data-hc-network-retry)
+            "installRemoteDialog", // Studio drawers + the lookup search dialog host
+            "installCloseDialog"); // close-on-success for remote-dialog compositions
 
     /** Custom events the framework listens for / documents. */
     private static final List<String> REQUIRED_EVENTS = List.of(
@@ -49,7 +51,10 @@ class HypermediaComponentsManifestTest {
             "chat-messages", "streaming-response", // the copilot panel (docs/copilot.md)
             "sse-updates", // the live inbox badge (docs/inbox.md)
             "datagrid-bulk-actions", // IAM Admin bulk disable (users list)
-            "network-retry"); // the shell's host follows this client contract
+            "network-retry", // the shell's host follows this client contract
+            "reference-lookup", // the lookup: field (docs/reference-lookup.md)
+            "remote-dialog", // Studio drawers + the lookup search dialog
+            "live-search"); // the lookup dialog's search leg
 
     /** Named exports the framework imports from the behaviors bundle as an ES module. */
     private static final List<String> REQUIRED_BUNDLE_EXPORTS = List.of(

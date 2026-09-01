@@ -54,6 +54,37 @@ class FieldDomainsTest {
         assertThat(FieldDomains.load(dir).isEmpty()).isTrue();
     }
 
+    /**
+     * {@code lookup:} is a describing key (docs/reference-lookup.md decision 1): a domain may
+     * declare the master reference once, and a referencing field inherits it whole.
+     */
+    @Test
+    void aDomainMayDeclareALookupAndAReferenceInheritsIt(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("domains"));
+        Files.writeString(dir.resolve("domains/masters.yml"), """
+                version: tesseraql/v1
+                domains:
+                  customer:
+                    type: string
+                    lookup:
+                      source: /api/customers/search
+                      code: customer_code
+                      label: name
+                """);
+
+        FieldDomains domains = FieldDomains.load(dir);
+        InputField declared = new InputField(null, true, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null, "customer", null, null, null,
+                null);
+        InputField merged = declared.mergedWith(domains.require("customer", "test"));
+
+        assertThat(merged.lookup()).isNotNull();
+        assertThat(merged.lookup().source()).isEqualTo("/api/customers/search");
+        assertThat(merged.lookup().code()).isEqualTo("customer_code");
+        assertThat(merged.lookup().label()).isEqualTo("name");
+        assertThat(merged.required()).isTrue();
+    }
+
     @Test
     void operationalKeysAreRejectedInsideADomain(@TempDir Path dir) throws Exception {
         Files.createDirectories(dir.resolve("domains"));

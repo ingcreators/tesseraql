@@ -99,10 +99,13 @@ registerCodeLanguage("tql-sql", (text) => {
 // htmx 2 does not swap error responses by default. TesseraQL answers htmx requests with
 // hc-alert field-errors fragments (ErrorResponseRenderer); swap client errors inline so
 // installFieldErrors can distribute them — server errors keep htmx's default handling.
+// A lookup field's unresolved 422 re-renders the whole field (docs/reference-lookup.md,
+// the recipe's "standard one-line beforeSwap allowance"), so its marker rides the same rule.
 document.body.addEventListener("htmx:beforeSwap", (event) => {
     const status = event.detail.xhr.status;
     if (status >= 400 && status < 500
-            && event.detail.serverResponse.includes("data-hc-field-errors")) {
+            && (event.detail.serverResponse.includes("data-hc-field-errors")
+                || event.detail.serverResponse.includes("data-hc-lookup"))) {
         event.detail.shouldSwap = true;
         event.detail.isError = false;
     }

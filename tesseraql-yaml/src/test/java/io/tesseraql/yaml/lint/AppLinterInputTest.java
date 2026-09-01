@@ -34,7 +34,7 @@ class AppLinterInputTest {
     private static List<String> codes(List<LintFinding> findings) {
         return findings.stream().map(LintFinding::code)
                 .filter(c -> c.startsWith("TQL-YAML-101") || c.startsWith("TQL-YAML-102")
-                        || c.startsWith("TQL-YAML-104"))
+                        || c.startsWith("TQL-YAML-104") || c.startsWith("TQL-YAML-105"))
                 .toList();
     }
 
@@ -370,6 +370,83 @@ class AppLinterInputTest {
                   note:
                     type: string
                     requiredWhen: params.mail != null
+                """);
+        assertThat(codes(new AppLinter().lint(dir))).isEmpty();
+    }
+
+    /** The {@code lookup:} declaration (docs/reference-lookup.md, {@code TQL-YAML-1059}). */
+    @Test
+    void aDanglingLookupSourceIsAnError(@TempDir Path dir) throws Exception {
+        writeRoute(dir, "post", """
+                input:
+                  customer_id:
+                    type: string
+                    lookup:
+                      source: /api/customers/search
+                      code: customer_code
+                      label: name
+                """);
+        assertThat(codes(new AppLinter().lint(dir))).contains("TQL-YAML-1059");
+    }
+
+    @Test
+    void anIncompleteLookupIsAnError(@TempDir Path dir) throws Exception {
+        writeRoute(dir, "post", """
+                input:
+                  customer_id:
+                    type: string
+                    lookup:
+                      source: /items
+                """);
+        assertThat(codes(new AppLinter().lint(dir))).contains("TQL-YAML-1059");
+    }
+
+    @Test
+    void aLookupOnALineItemElementIsAnError(@TempDir Path dir) throws Exception {
+        writeRoute(dir, "post", """
+                input:
+                  lines:
+                    type: array
+                    items:
+                      fields:
+                        item_id:
+                          type: string
+                          lookup:
+                            source: /items
+                            code: sku
+                            label: name
+                """);
+        assertThat(codes(new AppLinter().lint(dir))).contains("TQL-YAML-1059");
+    }
+
+    @Test
+    void aLookupNamingAResolvableGetQueryRouteIsClean(@TempDir Path dir) throws Exception {
+        writeRoute(dir, "post", """
+                input:
+                  item_id:
+                    type: string
+                    lookup:
+                      source: /items
+                      code: sku
+                      label: name
+                """);
+        // The probe app's own GET /web/items route (writeRoute's sibling) is the source.
+        Files.writeString(dir.resolve("web/items/get.yml"), """
+                version: tesseraql/v1
+                id: items.search
+                kind: route
+                recipe: query-json
+                input:
+                  q:
+                    type: string
+                sources:
+                  main:
+                    sql:
+                      file: list.sql
+                response:
+                  json:
+                    body:
+                      data: main.rows
                 """);
         assertThat(codes(new AppLinter().lint(dir))).isEmpty();
     }

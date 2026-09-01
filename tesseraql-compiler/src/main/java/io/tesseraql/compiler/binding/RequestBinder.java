@@ -48,6 +48,13 @@ public final class RequestBinder implements Step {
     private final ObjectMapper mapper = io.tesseraql.yaml.JsonMappers.constrained();
     /** Pre-compiled {@code requiredWhen} conditions (roadmap Phase 40) — bad syntax fails the build. */
     private final Map<String, io.tesseraql.core.expr.Expr> requiredWhen = new LinkedHashMap<>();
+    /**
+     * The code-input names the route's {@code lookup:} fields declare
+     * (docs/reference-lookup.md decision 2). The visible code rides the form post beside the
+     * hidden id, but it is presentation: accepted past the mass-assignment guard because the
+     * same declaration names it, then dropped — only the id binds.
+     */
+    private final java.util.Set<String> lookupCodeFields = new java.util.LinkedHashSet<>();
     /** What binding an object array's elements needs: this route's input policy and functions. */
     private final InputBinder.ElementRules elements;
 
@@ -73,6 +80,10 @@ public final class RequestBinder implements Step {
         this.appHome = appHome;
         this.elements = new InputBinder.ElementRules(route.effectiveInputPolicy(), functions);
         route.input().forEach((name, field) -> {
+            if (field.lookup() != null && field.lookup().code() != null
+                    && !route.input().containsKey(field.lookup().code())) {
+                lookupCodeFields.add(field.lookup().code());
+            }
             if (field.requiredWhen() != null && !field.requiredWhen().isBlank()) {
                 requiredWhen.put(name,
                         io.tesseraql.core.expr.ExpressionParser.parse(field.requiredWhen(),
@@ -253,6 +264,12 @@ public final class RequestBinder implements Step {
             }
             InputField field = route.input().get(key);
             if (field == null) {
+                // A lookup field's visible code input (docs/reference-lookup.md): declared
+                // by the same lookup: block, presentation-only — treated as not supplied.
+                if (lookupCodeFields.contains(key)) {
+                    dropped.add(key);
+                    continue;
+                }
                 if (policy.rejectsUnknownFields()) {
                     throw new TqlException(FIELD_REJECTED, "Unknown input field '" + key + "'");
                 }

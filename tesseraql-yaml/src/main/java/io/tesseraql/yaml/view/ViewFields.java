@@ -32,7 +32,16 @@ public final class ViewFields {
     public record FieldDef(String name, String labelKey, String labelFallback, String widget,
             boolean required, Integer maxLength, java.math.BigDecimal min,
             java.math.BigDecimal max, List<String> options, String codes,
-            String column, String step, String policy) {
+            String column, String step, String policy, InputField.LookupSpec lookup) {
+
+        /** The pre-{@code lookup:} shape every earlier caller constructs. */
+        public FieldDef(String name, String labelKey, String labelFallback, String widget,
+                boolean required, Integer maxLength, java.math.BigDecimal min,
+                java.math.BigDecimal max, List<String> options, String codes,
+                String column, String step, String policy) {
+            this(name, labelKey, labelFallback, widget, required, maxLength, min, max,
+                    options, codes, column, step, policy, null);
+        }
 
         /**
          * The result-set column the prefill reads: explicit, else the input name — which under
@@ -87,13 +96,17 @@ public final class ViewFields {
                     filter.label() != null ? filter.label() : derived.labelKey(),
                     filter.label() != null ? filter.label() : derived.labelFallback(),
                     // A boolean filter is three-valued (any/yes/no) — a checkbox cannot say
-                    // "any", so it renders as a select like every fixed value set.
-                    "checkbox".equals(derived.widget()) ? "select" : derived.widget(),
+                    // "any", so it renders as a select like every fixed value set. A lookup
+                    // filters as plain text: the dialog condition is the route's own SQL arm,
+                    // and the resolve machinery belongs to the form field, not the filter.
+                    "checkbox".equals(derived.widget())
+                            ? "select"
+                            : "lookup".equals(derived.widget()) ? "text" : derived.widget(),
                     false, derived.maxLength(), derived.min(), derived.max(),
                     "checkbox".equals(derived.widget())
                             ? List.of("true", "false")
                             : derived.options(),
-                    derived.codes(), null, derived.step(), null));
+                    derived.codes(), null, derived.step(), null, null));
         }
         return List.copyOf(defs);
     }
@@ -122,11 +135,28 @@ public final class ViewFields {
         return new FieldDef(name, labelKey, fallback, widget, input.required(),
                 input.maxLength(), input.min(), input.max(), options, input.codes(),
                 override == null ? null : override.column(),
-                "number".equals(input.type()) ? "any" : null, input.policy());
+                "number".equals(input.type()) ? "any" : null, input.policy(), input.lookup());
+    }
+
+    /**
+     * One field's derived definition — how a lookup field's synthesized resolve route
+     * (docs/reference-lookup.md decision 2) renders the same fragment the form renders,
+     * honoring the view's own {@code fields:} override for the field when it has one.
+     */
+    public static FieldDef deriveField(ViewSpec spec, String name, InputField input) {
+        ViewSpec.Field override = spec.fields().stream()
+                .filter(candidate -> name.equals(candidate.name()))
+                .findFirst().orElse(null);
+        return fieldDef(spec, name, input, override);
     }
 
     /** The widget an input renders as when the view does not say otherwise. */
     private static String defaultWidget(InputField input) {
+        // A master reference renders as the lookup field (docs/reference-lookup.md): code
+        // entry plus hidden id — a select cannot carry a business master's row count.
+        if (input.lookup() != null) {
+            return "lookup";
+        }
         // A fixed value set renders as a select whether the set is declared (enum:) or held in
         // a code catalog (codes:) — the source differs, the control does not.
         if (input.enumValues() != null && !input.enumValues().isEmpty()) {

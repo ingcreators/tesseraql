@@ -39,13 +39,19 @@ final class InputRules implements LintRule {
 
     private static final String INVALID_SORT_INPUT = "TQL-YAML-1028";
 
+    private static final String INVALID_LOOKUP = "TQL-YAML-1059";
+
     /** The run's memoized IO and cross-rule state, set at the top of {@link #lint}. */
     private LintContext context;
+
+    /** The manifest under lint — the lookup rule resolves `source:` against its routes. */
+    private AppManifest manifest;
 
     @Override
     public void lint(LintContext context, AppManifest manifest,
             List<LintFinding> findings) {
         this.context = context;
+        this.manifest = manifest;
         Path appHome = context.appHome();
         for (RouteFile route : manifest.routes()) {
             lintInputs(appHome, route, findings);
@@ -185,6 +191,61 @@ final class InputRules implements LintRule {
                                 + ex.getMessage()));
             }
         }
+        lintLookup(source, route, name, field, findings);
+    }
+
+    /**
+     * The {@code lookup:} declaration (docs/reference-lookup.md decision 1,
+     * {@code TQL-YAML-1059}): all three keys, a {@code source:} that names a GET route — the
+     * compiler fails the build on a dangling one, and this is the same check where an author
+     * reads findings — and that route carrying the SQL query the resolve leg re-renders.
+     */
+    private void lintLookup(String source, RouteFile route, String name,
+            io.tesseraql.yaml.model.InputField field, List<LintFinding> findings) {
+        io.tesseraql.yaml.model.InputField.LookupSpec lookup = field.lookup();
+        if (lookup == null) {
+            return;
+        }
+        Integer line = context.lineOf(route.source(), name + ":");
+        if (name.contains(".items.fields.")) {
+            findings.add(new LintFinding(INVALID_LOOKUP, ERROR, source,
+                    "input " + name + ": lookup: is not supported on line-item element fields",
+                    line, null));
+            return;
+        }
+        if (isBlank(lookup.source()) || isBlank(lookup.code()) || isBlank(lookup.label())) {
+            findings.add(new LintFinding(INVALID_LOOKUP, ERROR, source,
+                    "input " + name + ": lookup: declares source: (the GET query route),"
+                            + " code: and label: (its row columns) — all three",
+                    line, null));
+            return;
+        }
+        RouteFile referenced = null;
+        for (RouteFile candidate : manifest.routes()) {
+            if ("GET".equalsIgnoreCase(candidate.httpMethod())
+                    && candidate.urlPath().equals(lookup.source())) {
+                referenced = candidate;
+                break;
+            }
+        }
+        if (referenced == null) {
+            findings.add(new LintFinding(INVALID_LOOKUP, ERROR, source,
+                    "input " + name + ": lookup source " + lookup.source()
+                            + " matches no GET route",
+                    line, null));
+            return;
+        }
+        io.tesseraql.yaml.model.Binding main = referenced.definition().main();
+        if (main == null || main.file() == null || main.isHttp()) {
+            findings.add(new LintFinding(INVALID_LOOKUP, ERROR, source,
+                    "input " + name + ": lookup source " + lookup.source()
+                            + " declares no main SQL query for the resolve leg to re-render",
+                    line, null));
+        }
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 
     /**

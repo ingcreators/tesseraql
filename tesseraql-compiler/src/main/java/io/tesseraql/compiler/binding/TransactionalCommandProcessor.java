@@ -119,6 +119,13 @@ public final class TransactionalCommandProcessor implements Step {
     private final String appName;
     private final String dialect;
     private final WorkflowBinding workflow;
+    /**
+     * The compiled {@code lookup:} references of the command's input fields
+     * (docs/reference-lookup.md decision 3), existence-checked on the command's own
+     * connection beside the validation rules. Set by the compiler after construction;
+     * empty for a command without lookup fields.
+     */
+    private List<LookupReferences.Compiled> lookups = List.of();
 
     /**
      * A compiled step: a parsed 2-way SQL statement or a managed sequence allocation. Its result
@@ -211,6 +218,12 @@ public final class TransactionalCommandProcessor implements Step {
         // and evaluate inside the executor's pipeline.
         this.decisions = io.tesseraql.yaml.decision.DecisionSets.compileUses(declared.decide(),
                 dialect, functions);
+    }
+
+    /** The lookup existence checks this command runs (docs/reference-lookup.md decision 3). */
+    public TransactionalCommandProcessor lookups(List<LookupReferences.Compiled> compiled) {
+        this.lookups = List.copyOf(compiled);
+        return this;
     }
 
     /** Compiles the validate: block, failing fast on misdeclared rules (roadmap Phase 19). */
@@ -448,6 +461,20 @@ public final class TransactionalCommandProcessor implements Step {
                 io.tesseraql.yaml.workflow.TransitionExecutor.Session wf = workflow == null
                         ? null
                         : beginWorkflow(exchange, connection, context, statements);
+                // A declared reference validates itself (docs/reference-lookup.md decision
+                // 3): each lookup: field's bound id must match exactly one source row —
+                // one indexed read on the command's connection, the currency a validation
+                // SQL rule spends. Checked before the authored rules, like the binder's
+                // own constraints.
+                List<Map<String, Object>> unresolved = LookupReferences.violations(lookups,
+                        statements, connection, scopeResolver(exchange), context);
+                if (!unresolved.isEmpty()) {
+                    throw TqlException.builder(VALIDATION_FAILED)
+                            .message("Route '" + routeId + "': " + unresolved.size()
+                                    + " lookup reference(s) did not resolve")
+                            .details(Map.of("fields", unresolved))
+                            .build();
+                }
                 // Validation runs first, inside the transaction (roadmap Phase 19): expression
                 // rules against the bound context, SQL rules on the command's connection. A
                 // violation rejects the request before a single step writes.

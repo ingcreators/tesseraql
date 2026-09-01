@@ -490,13 +490,34 @@
             "datetime-local",
             "checkbox",
             "select",
-            "hidden"
+            "hidden",
+            "lookup"
           ],
           "description": "Presentation hint (docs/declarative-views.md): the form widget this field renders as, declared once on a domain; a per-view fields: override wins. Never part of the HTTP contract."
         },
         "codes": {
           "type": "string",
           "description": "The code catalog this field's values come from (docs/lookups.md): the binder accepts only that catalog's active codes, and the violation is the enum field error. Declared on a domain, so the value set has one home instead of an enum that drifts from the master."
+        },
+        "lookup": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "type": "string",
+              "description": "URL path of the GET query route that searches the master — an ordinary route with its own security: and SQL, resolved the way a form's action: is. Its rows must carry this field's column (the id), code: and label:."
+            },
+            "code": {
+              "type": "string",
+              "description": "The row column holding the code users type — the visible half of the field; the hidden id is what submits."
+            },
+            "label": {
+              "type": "string",
+              "description": "The row column holding the display name the field's hint shows. Presentation only, never submitted."
+            }
+          },
+          "required": ["source", "code", "label"],
+          "additionalProperties": false,
+          "description": "The master reference this field holds a key of (docs/reference-lookup.md): direct code entry resolved through a synthesized companion route, existence-checked again at submit. Declarable on a domain, like codes:."
         },
         "policy": {
           "type": "string",

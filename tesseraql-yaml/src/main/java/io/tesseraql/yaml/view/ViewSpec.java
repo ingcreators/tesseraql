@@ -81,9 +81,9 @@ public record ViewSpec(String id,
     private static final java.util.Set<String> X_TYPES = java.util.Set.of("category", "number",
             "date");
 
-    /** The slice-1 widget vocabulary (docs/declarative-views.md, TQL-VIEW-3305). */
+    /** The widget vocabulary (docs/declarative-views.md, TQL-VIEW-3305). */
     public static final java.util.Set<String> WIDGETS = java.util.Set.of("text", "textarea",
-            "number", "date", "datetime-local", "checkbox", "select", "hidden");
+            "number", "date", "datetime-local", "checkbox", "select", "hidden", "lookup");
 
     /**
      * The envelope every document family carries. It is not part of this record — the parsed
