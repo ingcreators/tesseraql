@@ -7,6 +7,12 @@
 > second consumer the bulk report was built for ([bulk-report.md](bulk-report.md)
 > decision 1), so the shared failure surface stops being an intention and becomes
 > a fragment two feeders fill.
+>
+> **Amended in review, same day.** Three things the first draft left implicit or
+> open: `onError:` decides what a partly-invalid file offers to confirm (decision 3),
+> the always-asynchronous commit is settled rather than weighed (decision 6), and the
+> format is an axis rather than a name — Excel import rides this design unchanged and
+> the export side inherits the job card through the shared status mount (decision 8).
 
 Today an import is a fire-and-forget upload: `POST` the file, get `202` and a
 transfer id, poll for the outcome, and discover in the answer that row 3 had a
@@ -248,6 +254,28 @@ otherwise applied batch. The report distinguishes the two passes by where an ent
 came from, because "your file is malformed" and "your data conflicts" are
 different sentences to the person holding the file.
 
+**And `onError:` decides what the review offers, which is the rule this design
+would otherwise have left implicit.** Ten rows with three rejected by the parse is
+never "all ten failed" — the pass runs to the end and reports the three
+individually, by line, field and reason. What differs is the affordance under them:
+
+| `onError:` | the confirm form offers | the answer |
+| --- | --- | --- |
+| `skip` | "import the valid 7" | `200` + report + confirm |
+| `rollback` (the default) | nothing — all or nothing is the declaration, and three broken rows leave no committable set | `422` + report, no confirm |
+
+One rule states both: **the confirm form exists exactly when a committable set
+exists** — the clean rows under `skip`, every row or none under `rollback` — and the
+status code follows the same test, which is also the contract's own rule that a file
+with nothing importable answers `422` and omits the affordance. A clean file under
+`rollback` therefore confirms all ten rows and answers `200` like any other.
+
+Offering "import the valid 7" under a declared `rollback` is refused: it would let
+the surface quietly overrule the declaration. Refusing `review:` *with* `rollback` at
+build time is refused too — an all-or-nothing file that validates clean is a perfectly
+good reviewed import, and the review is what tells the author their file is not clean
+before they find out by rollback.
+
 ## Decision 4 — the report is the bulk report, generalized
 
 `tql/view/list.html`'s inlined report markup moves to **`tql/view/report.html ::
@@ -342,9 +370,24 @@ attachment routes used to skip tenancy, and its Javadoc says so.
 
 The commit answers `202` with a running job card. Not "asynchronous above some
 row count" — always, because one shape is worth more than a threshold nobody can
-predict, and because the import path is already asynchronous by construction. For
-a small file the card's first poll finds the terminal state, which is the contract
-working, not overhead.
+predict, and because the import path is already asynchronous by construction:
+`startImport` submits to a virtual-thread executor and returns a transfer id, and
+there is no synchronous import path at all (exports have `exportInline`; imports have
+no equivalent). For a small file the card's first poll finds the terminal state,
+which is the contract working, not overhead — and the running card triggers on
+`load` as well as its interval, so that first poll is immediate rather than one
+cadence away.
+
+**The alternative was weighed and declined.** The commit could start the import,
+wait a bounded moment, and answer `200` with the result summary when it finished in
+time — the csv-import contract's own shape — falling back to the card when it did
+not. It is affordable: every request already runs on its own virtual thread, so the
+wait parks one of those and holds no pooled connection. It was declined for what it
+costs on the other side: one endpoint with two response shapes, a second branch in
+the no-JS path, and an operational number (how long to wait) that has to be chosen
+and then defended. What it buys back is a single round trip that the `load` trigger
+already makes imperceptible. Simplicity wins, and the divergence is recorded below
+rather than engineered around.
 
 The card is the upstream shape: it carries its own `hx-get` and `hx-trigger`,
 targets itself, swaps `outerHTML`, carries the contract's dialect-neutral markers
@@ -440,7 +483,54 @@ stale-token fragment swap. The allowance is substring-gated per fragment kind
 precisely so each new kind states itself; reusing `data-hc-field-errors` to sneak
 past the gate would be a lie about what the fragment is.
 
-## Decision 8 — what this surface refuses
+## Decision 8 — the format is a declaration, so Excel rides this unchanged
+
+Nothing in this design is CSV. The name comes from the upstream recipe; the
+mechanism is the framework's existing `format:` axis, and `format: excel` is
+already a legal import today — the codec is an opt-in module resolved through the
+standard mechanism, and `FileCodec.read(in, spec, handler)` is the format SPI the
+parse pass drives. So "excel-import" is not a future recipe to design: it is
+`recipe: file-import` with `review: required` and `format: excel`, and it works
+the day the codec is on the classpath. The one format that can never take a review
+is PDF, and it is already refused as output-only (`TQL-LD-2830`) upstream of
+anything here.
+
+Three things must therefore be **supplied by the format** rather than assumed, and
+they are cheap only if they are decided now:
+
+- **The row reference.** Decision 3 says the report speaks the file line, which is
+  the right answer for a text format and the wrong word for a workbook, where the
+  reference is a sheet and a row (`sheet:` and `startRow:` are already import keys).
+  The parse asks the codec for the row's location and the report carries it as a
+  **label**, the way decision 4 already makes the link a value rather than a
+  derivation. Same slot, one more thing the feeder fills.
+- **The upload's `accept` list.** The file input's accepted types come from the
+  declared format, never a literal — a CSV import offering `.xlsx` and an Excel
+  import offering only `.csv` are the same bug in two directions.
+- **The size bound.** A workbook is several times the bytes of the same rows as
+  text, so the 10 MB body cap bites sooner for the same feed. That is a
+  configuration fact, not a design one, but it belongs in the prose beside the
+  format table so nobody discovers it by 413.
+
+**The export side inherits the card for free, and that is not a coincidence.**
+`mountTransferStatus` is the *shared* status endpoint: `buildFileImport` and
+`buildFileExport` both call it, and a transfer row already carries its `direction`.
+So the HTML negotiation decision 6 adds lands on one mount and answers for both
+directions, and `file-export` already owns `{path}/{transferId}/file` — which is
+exactly the async-job contract's "the artifact itself, `Content-Disposition:
+attachment`, idempotent". An asynchronous Excel export therefore becomes: kick off,
+get the card, watch it, download from the done card. The card's `done` state is the
+only direction-aware part — an import's done card shows what the database rejected,
+an export's shows the download link — so the state is written direction-aware from
+the start rather than retrofitted when the second consumer arrives.
+
+What an export deliberately does *not* inherit is the review phase. There is nothing
+to validate before writing a file the user has not received yet, and the contract's
+two phases exist to put a human between a parse and a write. An export's equivalent
+question — "is this the right filtered set?" — is answered by the page that kicked it
+off, not by a report.
+
+## Decision 9 — what this surface refuses
 
 - **No merge or diff UI.** The answer to a conflict is a fresh upload, per the
   contract. Nothing here edits a parked row.
@@ -467,7 +557,7 @@ past the gate would be a lie about what the fragment is.
 | --- | --- |
 | upload parses and validates without importing | decision 1, `review: required` |
 | all rows valid → `200` + report + confirm form | decision 1 |
-| some rows invalid → `200` + report + "import the valid N" | decision 1, decision 4 |
+| some rows invalid → `200` + report + "import the valid N" | decision 1, decision 4; `onError: skip` is what makes the partial set committable |
 | nothing valid / unreadable → `422`, no confirm form | decision 1 (`TQL-LD-2863`), decision 4's file-level entry |
 | re-upload replaces the batch with a fresh token | decision 2, supersession |
 | report = summary + real error table + tokened confirm form | decision 4 |
@@ -523,7 +613,10 @@ past the gate would be a lie about what the fragment is.
    so the completion signal is visible; the operations console's deploy form
    retrofitted to the upload recipe; the drift guard's recipe and behaviour entries;
    and the user-facing prose in [file-transfers.md](file-transfers.md) and
-   [hypermedia-ui.md](hypermedia-ui.md).
+   [hypermedia-ui.md](hypermedia-ui.md). The dogfood declares `format: csv`, and the
+   same route with `format: excel` is what proves decision 8 — one integration test
+   over the Excel codec, asserting the report's reference reads as a sheet row, is
+   what keeps the format axis honest rather than aspirational.
 
 Slices 4 and 5 are adjacent for a reason worth stating: slice 4 ships a confirm
 button, and what its success answers is slice 5's card. Slice 4 therefore answers
@@ -537,7 +630,11 @@ largest divergence from the csv-import contract, and it is deliberate: the frame
 has no synchronous import path, and inventing one for small files would mean two
 execution shapes and two report paths for one declaration. The async-job contract
 is the one that fits, and the csv-import contract itself names batch imports as
-async-job's subject.
+async-job's subject — which is worth noting for what it is: the two upstream
+contracts overlap here and upstream did not resolve the overlap, so this is a choice
+between them more than a departure from one. Settled in review after the bounded-wait
+alternative was weighed and declined (decision 6): simplicity of one response shape,
+against a round trip the `load` trigger already hides.
 
 **The completion signal is `emit:`/`refreshOn:`, not `HX-Trigger`.** Same job, a
 different mechanism, already recorded as aligned for `data-region` in the ledger:
