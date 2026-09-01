@@ -183,9 +183,13 @@ class ViewEjectorTest {
                 "web/orders/new/page.html");
 
         assertThat(file.content()).contains("data-hc-lookup")
+                .contains("id=\"field-customer_id-field\"")
                 .contains("name=\"customer_code\"")
                 .contains("hx-get=\"/orders/create/_lookup/customer_id\"")
                 .contains("hx-target=\"closest [data-hc-lookup]\"")
+                .contains("aria-haspopup=\"dialog\"")
+                .contains("hx-get=\"/orders/create/_lookup/customer_id/dialog\"")
+                .contains("hx-target=\"[data-hc-remote-dialog-root]\"")
                 .contains("<input type=\"hidden\" name=\"customer_id\"")
                 .contains("hc-field__hint");
     }

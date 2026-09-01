@@ -207,6 +207,11 @@
      events render here. installToast would lazily create a region, but the shell owning it
      keeps placement/ARIA deliberate and the documented contract literal. -->
 <div class="hc-toast-region" data-hc-toast-region role="region" aria-label="Notifications"></div>
+<!-- The remote-dialog mount point (docs/reference-lookup.md decision 4): a lookup field's 🔍
+     button and any app trigger swap a server-rendered <dialog> in here; installRemoteDialog
+     opens the first one with showModal(). One host per page, empty in source, outside every
+     page's swap targets — the same stance as the network-retry host above. -->
+<div data-hc-remote-dialog-root></div>
 </body>
 </html>
 <!-- Public 4-arg API (back-compat): app-authored and scaffolder-generated shells call this. It

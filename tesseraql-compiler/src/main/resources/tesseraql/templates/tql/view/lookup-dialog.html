@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<!-- The lookup search dialog (docs/reference-lookup.md decision 4): the remote-dialog +
+     live-search composition over a lookup field's referenced route. installRemoteDialog opens
+     it from the shell's data-hc-remote-dialog-root; the search form opts OUT of
+     close-on-success (a debounced 200 must not dismiss the dialog), while a row pick — which
+     re-renders the field itself, resolved by id — rides the dialog's own close-on-success.
+     Override via templates/tql/view/lookup-dialog.html (customization ladder L2); the
+     dialog(d)/results(d) signatures and the `d` shape are the public contract. -->
+<html xmlns:th="http://www.thymeleaf.org">
+<th:block th:fragment="dialog(d)">
+  <dialog class="hc-dialog" data-hc-close-dialog-on-success
+          th:attr="aria-labelledby=|lookup-title-${d.field}|">
+    <h2 class="hc-dialog__title" th:id="|lookup-title-${d.field}|" th:text="${d.title}">
+      Select</h2>
+    <form role="search" method="get" th:if="${d.searchParam != null}"
+          th:action="${d.dialogUrl}" data-hc-close-dialog-on-success="false">
+      <input class="hc-input" type="search" th:name="${d.searchParam}" th:value="${d.q}"
+             th:placeholder="#{tql.lookup.placeholder}"
+             th:attr="aria-label=#{tql.lookup.search},hx-get=${d.resultsUrl},hx-target=|#lookup-results-${d.field}|"
+             hx-trigger="input changed delay:300ms, search" hx-swap="innerHTML"
+             hx-sync="closest form:replace">
+    </form>
+    <ul class="hc-menu" th:id="|lookup-results-${d.field}|">
+      <th:block th:replace="~{tql/view/lookup-dialog :: results(${d})}"/>
+    </ul>
+    <form method="dialog"><button class="hc-button" th:text="#{tql.view.cancel}">Cancel</button></form>
+  </dialog>
+</th:block>
+<!-- The result list alone — what the live-search leg swaps. Each row is a button whose click
+     re-renders the whole field through the same resolve fragment, keyed by id, and closes the
+     dialog (the nearest close-on-success carrier is the dialog itself). -->
+<th:block th:fragment="results(d)">
+  <li th:each="r : ${d.rows}">
+    <button class="hc-menu__item" type="button"
+            th:attr="hx-get=${r.pick},hx-target=${d.target}" hx-swap="outerHTML"
+            th:text="|${r.code} — ${r.label}|">C-1041 — Acme Trading K.K.</button>
+  </li>
+  <li th:if="${d.rows.isEmpty()}"><p class="hc-field__hint"
+      th:text="#{tql.view.empty}">No rows</p></li>
+  <!-- The capped-results notice (the result-cap stance): the list says when it is cut. -->
+  <li th:if="${d.truncated}"><p class="hc-field__hint" th:text="${d.more}">50+ results</p></li>
+</th:block>
+</html>

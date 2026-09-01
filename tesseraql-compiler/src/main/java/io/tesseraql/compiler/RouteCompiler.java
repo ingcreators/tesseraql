@@ -262,7 +262,58 @@ public final class RouteCompiler {
                     .process(new io.tesseraql.compiler.binding.LookupResolveProcessor(
                             compiled, fieldDef, path, compiledAppHome, i18n.defaultTag(),
                             responseHeaders.headers(), basePath(), defaultTimeoutSeconds()));
+            // The search dialog and its live-search results leg (decision 4). Their inputs
+            // are the referenced route's own declarations, so the search bind coerces and
+            // the SQL's arms mean exactly what they mean on the route itself. One pipeline
+            // id per mount — (pipeline, method) is a mount's identity.
+            String searchParam = searchParam(source.definition());
+            buildLookupFragment(context, lookupId + ".dialog", path + "/dialog", source,
+                    compiled, fieldDef, path, searchParam,
+                    io.tesseraql.compiler.binding.LookupDialogProcessor.Fragment.DIALOG);
+            buildLookupFragment(context, lookupId + ".results", path + "/results", source,
+                    compiled, fieldDef, path, searchParam,
+                    io.tesseraql.compiler.binding.LookupDialogProcessor.Fragment.RESULTS);
         }
+    }
+
+    /** One dialog-side mount: the same governance and binder shape as the resolve leg. */
+    private void buildLookupFragment(RuntimeContext context, String pipelineId, String path,
+            RouteFile source, io.tesseraql.compiler.binding.LookupReferences.Compiled compiled,
+            io.tesseraql.yaml.view.ViewFields.FieldDef fieldDef, String companionPath,
+            String searchParam,
+            io.tesseraql.compiler.binding.LookupDialogProcessor.Fragment fragment) {
+        RouteDefinition definition = RouteDefinition.synthesizedCommand(pipelineId,
+                source.definition().security(), null, java.util.Map.of(), null)
+                .withInputAndErrors(source.definition().input(), null);
+        if (mountRest) {
+            mount(context, "GET", path, pipelineId);
+        }
+        PipelineBuilder route = pipelines.pipeline(pipelineId);
+        applyCommonGovernance(route, pipelineId, "GET", path, definition);
+        route.process(new RequestBinder(definition, path, compiledAppHome, functions))
+                .process(new io.tesseraql.compiler.binding.LookupDialogProcessor(compiled,
+                        fieldDef, companionPath, searchParam, fragment, compiledAppHome,
+                        i18n.defaultTag(), responseHeaders.headers(), basePath(),
+                        defaultTimeoutSeconds()));
+    }
+
+    /**
+     * The referenced route's search input the dialog posts: {@code q} when declared, else the
+     * route's first string input, else none — the route's author owns what searching means,
+     * so the dialog only ever binds what the route already declares.
+     */
+    private static String searchParam(RouteDefinition source) {
+        io.tesseraql.yaml.model.InputField q = source.input().get("q");
+        if (q != null) {
+            return "q";
+        }
+        for (var entry : source.input().entrySet()) {
+            String type = entry.getValue().type();
+            if (type == null || "string".equals(type)) {
+                return entry.getKey();
+            }
+        }
+        return null;
     }
 
     /** The first form view whose {@code action:} is this path — the fragment's label source. */

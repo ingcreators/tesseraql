@@ -8,6 +8,20 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **The lookup search dialog: 🔍 for the users who don't know the code**
+  (docs/reference-lookup.md slice 2). The lookup field gains its search button, and the
+  compiler synthesizes the dialog legs beside the resolve companion:
+  `GET <action>/_lookup/<field>/dialog` answers the kit's remote-dialog + live-search
+  composition — a search form posting the referenced route's own declared input (`q`, or
+  its first string input), opting out of close-on-success so a debounced 200 never
+  dismisses the dialog — and `…/results` answers the swappable list, where each row is a
+  button that re-renders the field resolved by id and closes the dialog. Both legs bind
+  the referenced route's declared inputs and answer under its `security:`. The list reads
+  at most 50 rows and says when it is cut ("50+ results — keep typing"); a dialog is a
+  picker, and the search input is how the rest is reached. The shared shell now provides
+  the `data-hc-remote-dialog-root` mount every remote dialog swaps into (Studio's pages
+  keep their own), and ejected forms keep the whole composition live.
+
 - **The reference lookup field: `lookup:` on an input declares a master reference**
   (docs/reference-lookup.md slice 1). Above the catalog size line, `codes:` stops being
   an interface; a `lookup:` block — `source:` naming a GET query route by path, plus its

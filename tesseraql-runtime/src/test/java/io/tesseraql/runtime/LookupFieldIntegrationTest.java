@@ -142,6 +142,63 @@ class LookupFieldIntegrationTest {
     }
 
     @Test
+    void theFieldButtonAndTheShellHostCarryTheDialogWiring() throws Exception {
+        HttpResponse<String> page = get("/orders/new", actorCookie);
+
+        assertThat(page.body()).contains("aria-haspopup=\"dialog\"")
+                .contains("hx-get=\"/orders/new/_lookup/customer_id/dialog\"")
+                .contains("hx-target=\"[data-hc-remote-dialog-root]\"")
+                .contains("data-hc-remote-dialog-root");
+    }
+
+    @Test
+    void theDialogIsTheRemoteDialogLiveSearchComposition() throws Exception {
+        HttpResponse<String> dialog = get("/orders/new/_lookup/customer_id/dialog",
+                actorCookie);
+
+        assertThat(dialog.statusCode()).isEqualTo(200);
+        // Close-on-success on the dialog, opted OUT on the search form — the first debounced
+        // 200 must not close the dialog before a row can be picked.
+        assertThat(dialog.body())
+                .contains("<dialog class=\"hc-dialog\" data-hc-close-dialog-on-success")
+                .contains("data-hc-close-dialog-on-success=\"false\"")
+                .contains("name=\"q\"")
+                .contains("hx-get=\"/orders/new/_lookup/customer_id/results\"")
+                .contains("<form method=\"dialog\">");
+        // A row is a button rendering label + code, whose pick re-renders the field by id.
+        assertThat(dialog.body()).contains("C-1041 — Acme Trading K.K.")
+                .contains("hx-get=\"/orders/new/_lookup/customer_id?customer_id=cus-1\"")
+                .contains("hx-target=\"#field-customer_id-field\"");
+    }
+
+    @Test
+    void theResultsLegFiltersThroughTheRoutesOwnSearchInput() throws Exception {
+        HttpResponse<String> results = get(
+                "/orders/new/_lookup/customer_id/results?q=Beta", actorCookie);
+
+        assertThat(results.statusCode()).isEqualTo(200);
+        assertThat(results.body()).contains("Beta Industries")
+                .doesNotContain("Acme Trading");
+    }
+
+    @Test
+    void theDialogSaysWhenItsListIsCut() throws Exception {
+        // 64 customers against the 50-row cap: the list is cut and says so.
+        HttpResponse<String> results = get("/orders/new/_lookup/customer_id/results",
+                actorCookie);
+
+        assertThat(results.statusCode()).isEqualTo(200);
+        assertThat(results.body()).contains("50+");
+    }
+
+    @Test
+    void theDialogAnswersUnderTheReferencedRoutesSecurity() throws Exception {
+        HttpResponse<String> refused = get("/orders/new/_lookup/vip_id/dialog", actorCookie);
+
+        assertThat(refused.statusCode()).isEqualTo(403);
+    }
+
+    @Test
     void theCompanionAnswersUnderTheReferencedRoutesSecurity() throws Exception {
         // vip_id's source route demands a policy this principal fails: the resolve leg must
         // never list masters the user may not reference.
@@ -219,6 +276,16 @@ class LookupFieldIntegrationTest {
                     + " ('cus-4', 'C-DUP', 'Dup Two')");
             statement.execute("create table orders (order_id serial primary key,"
                     + " customer_id varchar(32) not null, note varchar(200))");
+            // Bulk rows past the dialog's 50-row cap, so the capped-results notice has
+            // something to say; every code is distinct and none collides with the fixtures.
+            StringBuilder bulk = new StringBuilder(
+                    "insert into customers (customer_id, customer_code, name) values ");
+            for (int i = 1; i <= 60; i++) {
+                bulk.append(i > 1 ? ", " : "")
+                        .append("('bulk-").append(i).append("', 'B-").append(1000 + i)
+                        .append("', 'Bulk Customer ").append(i).append("')");
+            }
+            statement.execute(bulk.toString());
         }
     }
 
@@ -284,7 +351,8 @@ class LookupFieldIntegrationTest {
                 from customers
                 where 1 = 1
                 /*%if q != null && q != "" */
-                  and (name like /* q */'%a%' or customer_code like /* q */'%a%')
+                  and (name like '%' || /* q */'a' || '%'
+                       or customer_code like '%' || /* q */'a' || '%')
                 /*%end*/
                 order by name
                 """);

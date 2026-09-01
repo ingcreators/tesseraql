@@ -1,8 +1,19 @@
 # The reference lookup field — code entry, one truth, and the search dialog
 
-> **Status: slice 1 (direct entry end to end) shipped 2026-09-01.** Recorded deviations
-> from the text below. The 🔍 button ships with its dialog in slice 2 — a button whose
-> target route does not exist yet is worse than none. The submit-time existence check
+> **Status: slices 1 (direct entry) and 2 (the search dialog) shipped 2026-09-01.**
+> Slice 2's recorded deviations: the shell did not yet provide the
+> `data-hc-remote-dialog-root` host decision 4 assumed — the slice adds it to
+> `tql/shell.html` beside the network-retry and toast hosts (Studio's pages keep their
+> own). The dialog list is capped at the dialog's own 50 rows with the "{cap}+ results"
+> notice, not the referenced route's read bound — a dialog is a picker, and rendering a
+> route's 10k-row bound into a `<dialog>` serves nobody; the route's bound still applies
+> above it. The search input is the referenced route's `q` when declared, else its first
+> string-typed input, else the dialog renders no search form. Row picks call the resolve
+> companion with `?<field>=<id>` — the recorded no-`pick`-endpoint deviation, now
+> exercised. Inactive-but-visible rows stay deferred as designed.
+>
+> Slice 1's recorded deviations. The 🔍 button shipped with its dialog in slice 2 — a
+> button whose target route does not exist yet is worse than none. The submit-time existence check
 > answers the validation stage's **422** (the `TQL-FIELD-4220` shape, field code
 > `invalid-reference`), not the binder's 400: `InputBinder` holds no connection, so the
 > check runs beside the validation rules on the command's own connection — the

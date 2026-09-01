@@ -101,6 +101,40 @@ public final class LookupReferences {
     }
 
     /**
+     * The dialog leg's search read (docs/reference-lookup.md decision 4): the referenced
+     * route's SQL as authored — its own 2-way arms decide what the bound search input means —
+     * reading at most {@code cap + 1} rows, so the caller can say the list is cut without
+     * materializing the master.
+     */
+    public static List<Map<String, Object>> search(Compiled lookup, SqlStatement statements,
+            Connection connection, io.tesseraql.core.sql.ScopeResolver scopes,
+            Map<String, Object> context, int cap)
+            throws io.tesseraql.core.sql.SqlStatementException {
+        EvaluationContext evaluation = new EvaluationContext(context);
+        Map<String, Object> params = new LinkedHashMap<>();
+        lookup.params().forEach((bindName, sourceExpr) -> params.put(bindName,
+                evaluation.resolve(Arrays.asList(sourceExpr.split("\\.")))));
+        io.tesseraql.core.sql.AmbientBinds.seed(params, evaluation);
+        BoundSql bound = SqlRenderer.render(lookup.nodes(), params, scopes, context);
+        List<Object> values = new ArrayList<>();
+        bound.parameters().forEach(parameter -> values.add(parameter.value()));
+        return statements.read(connection, lookup.sourcePath(), bound.sql(), values,
+                (resultSet, span) -> {
+                    List<Map<String, Object>> rows = new ArrayList<>();
+                    java.sql.ResultSetMetaData meta = resultSet.getMetaData();
+                    while (rows.size() <= cap && resultSet.next()) {
+                        Map<String, Object> row = new LinkedHashMap<>();
+                        for (int i = 1; i <= meta.getColumnCount(); i++) {
+                            row.put(meta.getColumnLabel(i), resultSet.getObject(i));
+                        }
+                        rows.add(row);
+                    }
+                    span.attribute("rowCount", rows.size());
+                    return rows;
+                });
+    }
+
+    /**
      * A declared column's value in a source row, tolerating the dialect's label case-folding
      * (an unquoted Oracle label answers uppercase); a column the row does not carry at all is
      * the authoring defect {@code TQL-VIEW-3329} names — {@code select *} makes a build-time
