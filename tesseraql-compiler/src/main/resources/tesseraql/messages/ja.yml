@@ -65,6 +65,12 @@ tql:
     stamped: "{done} / {total} 承認済み"
     comment: コメント
     commentRequired: "必須: {transitions}"
+  bulk:
+    summary: "{requested}件中 {succeeded}件成功、{failed}件失敗。"
+    allSucceeded: "{requested}件すべて成功しました。"
+    row: "行 {number} — {key}"
+    more: "…ほか {count} 行"
+    numberColumn: 行番号
   session:
     expiredTitle: セッションの有効期限が切れました
     expiredBody: 続行するには再度サインインしてください。開始した操作はサインイン後に自動的に完了します。

@@ -19,6 +19,10 @@
               <input type="checkbox" class="hc-checkbox"
                      th:attr="aria-label=#{tql.view.selectAll}">
             </th>
+            <!-- The row-number column (docs/bulk-report.md decision 4): rendered when the
+                 view declares actions:, because its bulk report speaks in these numbers. -->
+            <th class="hc-datagrid__headcell" th:if="${v != null && v['numbers'] != null}"
+                th:attr="aria-label=#{tql.bulk.numberColumn}">#</th>
             <th class="hc-datagrid__headcell" th:each="c : ${columns}"
                 th:attr="data-sortable=${c.sortable != null ? 'true' : null},data-col=${c.sortable != null ? c.name : null},aria-sort=${c.ariaSort}">
               <a th:if="${c.sortable != null}" th:href="${c.sortHref}"
@@ -33,16 +37,22 @@
           <!-- With a declared key: the enclosing view model carries one anchor per row
                (docs/list-surface.md decision 2) — the id a `location: back` redirect's
                #row-… fragment refocuses. Views without a key render anonymous rows. -->
+          <!-- A row a bulk report names is marked (docs/bulk-report.md decision 5):
+               data-attention says what the row requires, aria-describedby points at its
+               reason group in the report, and the retry set re-renders checked. -->
           <tr class="hc-datagrid__row" th:each="r, rStat : ${rows}"
               th:id="${v != null && v['anchors'] != null ? v['anchors'][rStat.index] : null}"
-              th:attr="data-tombstone=${v != null && v['tombstones'] != null && v['tombstones'][rStat.index] == true} ? 'true' : null"
+              th:attr="data-tombstone=${v != null && v['tombstones'] != null && v['tombstones'][rStat.index] == true} ? 'true' : null,data-attention=${v != null && v['attention'] != null && v['attention'][rStat.index] != null} ? 'error' : null,aria-describedby=${v != null && v['attention'] != null ? v['attention'][rStat.index] : null}"
               th:with="tombstone=${v != null && v['tombstones'] != null && v['tombstones'][rStat.index] == true}">
             <td class="hc-datagrid__cell"
                 th:if="${v != null && v['selectable'] == true}">
               <input type="checkbox" class="hc-checkbox" name="ids" th:unless="${tombstone}"
                      th:value="${v['tokens'][rStat.index]}"
+                     th:checked="${v['checked'] != null && v['checked'][rStat.index] == true}"
                      th:attr="aria-label=#{tql.view.select}">
             </td>
+            <td class="hc-datagrid__cell" th:if="${v != null && v['numbers'] != null}"
+                th:text="${v['numbers'][rStat.index]}">1</td>
             <!-- A snapshot row that vanished since the search (docs/list-surface.md decision
                  10): the page arithmetic and the user's count hold; only a new search drops
                  it from the membership. -->

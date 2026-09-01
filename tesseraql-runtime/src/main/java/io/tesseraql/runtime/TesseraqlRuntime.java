@@ -636,6 +636,14 @@ public final class TesseraqlRuntime implements AutoCloseable {
             } else {
                 FrameworkMigrations.migrate(dataSource, frameworkDataSource);
             }
+            // Bulk-report round trips (docs/bulk-report.md decision 6): ambient framework
+            // state like sessions, so it follows the framework datasource — a report stored
+            // on one node must resolve on the node the redirect lands on. Movable-store
+            // bootstrap (its own idempotent ensureSchema), like the other operations stores.
+            io.tesseraql.operations.bulk.JdbcBulkReportStore bulkReports = new io.tesseraql.operations.bulk.JdbcBulkReportStore(
+                    frameworkDataSource);
+            bulkReports.ensureSchema();
+            context.bind(TesseraqlProperties.BULK_REPORT_STORE_BEAN, bulkReports);
             // Browser sessions: "jdbc" by default (docs/contract-bugfixes.md track G) — tql_session
             // shared across all runtime nodes, so a login made on one node resolves on every other
             // (design ch. 11.2) and survives a restart. "memory" is the explicit per-node opt-in

@@ -866,11 +866,19 @@ public final class RouteCompiler {
         }
         PipelineBuilder route = pipelines.pipeline(routeId);
         applyCommonGovernance(route, routeId, "POST", urlPath, definition);
-        route.process(new RequestBinder(definition, urlPath, compiledAppHome, functions))
+        // The grid page's browser leg (docs/bulk-report.md decision 6): a list view's
+        // `actions:` posting here decodes its `ids` selection, binds it as the action set
+        // (never the form's snapshot membership), and answers 307 back to the list with the
+        // parked outcome report. JSON callers ride through both steps untouched.
+        java.util.List<String> actingKey = bulkSelectionKey(urlPath);
+        route.process(io.tesseraql.compiler.binding.BulkSelectionDecoder.forRoute(actingKey))
+                .process(io.tesseraql.compiler.binding.BulkReportRoundTrip.bridge(actingKey))
+                .process(new RequestBinder(definition, urlPath, compiledAppHome, functions))
                 .process(new io.tesseraql.compiler.binding.CatalogBinder())
                 .process(new io.tesseraql.compiler.binding.WorkflowBulkProcessor(def.id(),
                         actionId, member, bulkMaxKeys()))
-                .process(responseRenderer(definition));
+                .process(io.tesseraql.compiler.binding.BulkReportRoundTrip.response(actingKey,
+                        responseRenderer(definition)));
     }
 
     /**

@@ -77,14 +77,37 @@
   <th:block th:if="${v.snapshotKeys != null}">
     <input type="hidden" name="keys" th:each="k : ${v.snapshotKeys}" th:value="${k}">
   </th:block>
+  <!-- The bulk report (docs/bulk-report.md): the outcome of the action this page just took,
+       handed back through the redirect. Bounded by construction — each reason group caps its
+       entries and the row marks in the grid carry the rest; the region's own scroll is the
+       backstop, never the design. -->
+  <div class="tql-bulk-report" role="status" th:if="${v.bulkReport != null}"
+       th:id="|${v.id}-bulk-report|">
+    <div class="hc-alert" th:attr="data-variant=${v.bulkReport['variant']}">
+      <p class="hc-alert__title" th:text="${v.bulkReport['summary']}">17 of 20 succeeded; 3 failed.</p>
+      <th:block th:each="g : ${v.bulkReport['groups']}">
+        <p class="hc-alert__body" th:id="${g['id']}" th:text="${g['heading']}">Reason (3)</p>
+        <ul class="hc-alert__errors">
+          <li class="hc-alert__error" th:each="r : ${g['rows']}">
+            <a th:href="${r['href']}" th:text="${r['label']}">Row 12 — PR-1003</a>
+          </li>
+          <li class="hc-alert__error" th:if="${g['more'] != null}" th:text="${g['more']}">…and 2 more</li>
+        </ul>
+      </th:block>
+    </div>
+  </div>
   <!-- The selection bar: hidden until rows are checked (installDatagridActions, auto-init);
        the count child carries the translated selected-count. -->
   <div class="hc-cluster" th:if="${v.actions != null}" hidden
        th:attr="data-hc-datagrid-actions=|#${v.id}-table|">
     <span data-hc-datagrid-count></span>
+    <!-- On a snapshot list each action button carries the CURRENT page as its own submit
+         value (docs/bulk-report.md decision 6): the bulk round trip's re-post then lands on
+         the page the user acted from. A button value, not a hidden input — a hidden `page`
+         would pair with the pager buttons' `page` and turn the scalar bind into a list. -->
     <button th:each="a : ${v.actions}" type="submit" class="hc-button" data-size="sm"
             th:formaction="@{${a.action}}" th:text="${a.label}"
-            th:attr="data-hc-confirm=${a.confirm},data-hc-confirm-label=${a.confirm != null} ? ${a.label} : null">Act</button>
+            th:attr="data-hc-confirm=${a.confirm},data-hc-confirm-label=${a.confirm != null} ? ${a.label} : null,name=${v.snapshot != null && v.page != null && v.page['number'] != null} ? 'page' : null,value=${v.snapshot != null && v.page != null && v.page['number'] != null} ? ${v.page['number']} : null">Act</button>
   </div>
   <!-- With refreshOn: (docs/realtime.md) this region listens for the topic on the
        /_tesseraql/topics stream and re-GETs the page itself, selecting this same region —

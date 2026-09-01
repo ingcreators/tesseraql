@@ -40,7 +40,11 @@ public final class RequestBinder implements Step {
             // The snapshot pager's framework-owned fields (docs/list-surface.md decision 10):
             // the membership tokens and the page number travel in the POST body, like the
             // framework-owned ?page=/?size= query params they mirror.
-            "keys", "page", "size");
+            "keys", "page", "size",
+            // The grid page's selection (docs/list-surface.md decision 9): checked rows ride
+            // every submit of the one form that wraps the grid — a pager press with rows
+            // checked must not read as mass assignment.
+            "ids");
 
     private final RouteDefinition route;
     private final java.util.List<String> pathParams;

@@ -108,6 +108,13 @@ public final class TesseraqlProperties {
     public static final String CREDENTIAL_THROTTLE_BEAN = "tesseraqlCredentialThrottle";
 
     /**
+     * The bulk-report store (docs/bulk-report.md decision 6): where a bulk endpoint's browser
+     * leg parks the outcome report for the redirect round trip. Absent on a hand-built
+     * context, in which case the browser leg falls back to the JSON contract.
+     */
+    public static final String BULK_REPORT_STORE_BEAN = "tesseraqlBulkReportStore";
+
+    /**
      * The login-method model of the bundled sign-in surface, as a template-ready map
      * ({@code password}/{@code sso} flags and method URLs). Bound only when the runtime wires
      * browser sessions; its presence is what tells the error renderer that a session-expired

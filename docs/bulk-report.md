@@ -1,6 +1,15 @@
 # The bulk report — one failure surface for bulk actions and imports
 
-> **Status: design, written 2026-09-01, measured against main at #1114.** The
+> **Status: slice 1 (the snapshot leg) shipped as #1116, 2026-09-01.** Two adjacent
+> fixes rode it: `ids` joined the binder's framework-owned fields (a pager press with
+> rows checked used to read as mass assignment), and an expression guard's declared
+> message now rides `details.message` like the SQL-guard form's. One recorded detail:
+> the current page travels as the action buttons' own submit value, never a hidden
+> input — a hidden `page` would pair with the pager buttons' and turn the scalar bind
+> into a list. Slice 2 (the non-frozen strategies + the hypermedia-ui.md section) is
+> open.
+>
+> **Design, written 2026-09-01, measured against main at #1114.** The
 > datagrid-bulk-errors adopt from the catalog ledger
 > ([hc-recipe-alignment.md](hc-recipe-alignment.md)), shaped in review: the report
 > references rows by number **and** identity, links by row token, and bounds every
