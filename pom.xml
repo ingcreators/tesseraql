@@ -165,7 +165,7 @@
     <webjars-locator.version>1.1.4</webjars-locator.version>
     <flyway.version>13.3.0</flyway.version>
     <commons-csv.version>1.14.1</commons-csv.version>
-    <jxls.version>3.1.0</jxls.version>
+    <jxls.version>3.2.0</jxls.version>
     <fastexcel.version>0.20.2</fastexcel.version>
     <openhtmltopdf.version>1.1.73</openhtmltopdf.version>
     <pdfbox.version>3.0.8</pdfbox.version>
