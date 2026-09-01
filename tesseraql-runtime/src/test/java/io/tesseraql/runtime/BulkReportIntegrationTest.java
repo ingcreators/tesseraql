@@ -144,6 +144,43 @@ class BulkReportIntegrationTest {
     }
 
     @Test
+    void anOffsetListsBulkActionTakesTheOrdinary303Leg() throws Exception {
+        // No frozen membership in the form: the state lives in the _return URL, so the
+        // round trip is a 303 and the report references rows by identity alone — a row
+        // number would not be authoritative here (docs/bulk-report.md decision 4).
+        String body = "_csrf=" + encode(csrf) + "&_return=" + encode("/docs-offset")
+                + "&ids=" + encode(token("B-6")) + "&ids=" + encode(token("B-7"));
+
+        HttpResponse<String> redirect = send(HttpRequest.newBuilder(
+                uri("/api/docs/_bulk/submit"))
+                .header("Cookie", cookie)
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .POST(HttpRequest.BodyPublishers.ofString(body))
+                .build());
+
+        assertThat(redirect.statusCode()).isEqualTo(303);
+        String location = redirect.headers().firstValue("Location").orElseThrow();
+        assertThat(location).startsWith("/docs-offset?bulkReport=");
+
+        HttpResponse<String> page = send(HttpRequest.newBuilder(uri(location))
+                .header("Cookie", cookie).build());
+
+        assertThat(page.statusCode()).isEqualTo(200);
+        assertThat(page.body())
+                .contains("0 of 2 succeeded; 2 failed.")
+                .contains("needs a positive amount (1)")
+                .contains("TQL-WORKFLOW-3201 (1)")
+                // Identity-only reference: no membership, no authoritative number.
+                .contains(">B-6</a>")
+                .doesNotContain("Row 1 — B-6")
+                .contains("data-attention=\"error\"")
+                // The offset grid still numbers its rows for orientation.
+                .contains("aria-label=\"Row number\"");
+        assertThat(page.body())
+                .containsPattern("value=\"" + token("B-6") + "\"\\s+aria-label=\"[^\"]+\" checked");
+    }
+
+    @Test
     void aForeignOrExpiredHandleRendersThePlainList() throws Exception {
         HttpResponse<String> page = send(HttpRequest.newBuilder(
                 uri("/docs?bulkReport=not-a-handle"))
@@ -189,7 +226,10 @@ class BulkReportIntegrationTest {
                     + " status varchar(32) not null, amount int not null)");
             statement.execute("insert into docs (id, status, amount) values"
                     + " ('B-1', 'draft', 100), ('B-2', 'draft', 0), ('B-3', 'review', 50),"
-                    + " ('B-4', 'draft', 10), ('B-5', 'draft', 10)");
+                    + " ('B-4', 'draft', 10), ('B-5', 'draft', 10),"
+                    // The offset-leg fixtures: both fail deterministically whatever the test
+                    // order — B-6's guard always refuses, B-7 is already past the transition.
+                    + " ('B-6', 'draft', 0), ('B-7', 'review', 30)");
         }
     }
 
@@ -308,6 +348,49 @@ class BulkReportIntegrationTest {
                 recipe: list
                 key: id
                 title: Docs
+                columns:
+                  - { name: id, label: "#" }
+                  - { name: status }
+                  - { name: amount }
+                actions:
+                  - label: Submit
+                    action: /api/docs/_bulk/submit
+                """);
+        // The offset sibling (docs/bulk-report.md slice 2): same key, same action, no frozen
+        // membership — its bulk round trip is the 303 leg.
+        Path offsetDir = home.resolve("web/docs-offset");
+        Files.createDirectories(offsetDir);
+        Files.writeString(offsetDir.resolve("get.yml"), """
+                version: tesseraql/v1
+                id: docs.offset.page
+                kind: route
+                recipe: query-html
+
+                security:
+                  policy: wf.act
+
+                sources:
+                  main:
+                    sql:
+                      file: docs-offset.sql
+                      mode: query
+                response:
+                  html:
+                    status: 200
+                    view: docs_offset
+                """);
+        Files.writeString(offsetDir.resolve("docs-offset.sql"), """
+                select id, status, amount
+                from docs
+                order by id asc
+                """);
+        Files.writeString(offsetDir.resolve("list.view.yml"), """
+                version: tesseraql/v1
+                id: docs_offset
+                kind: view
+                recipe: list
+                key: id
+                title: Docs (offset)
                 columns:
                   - { name: id, label: "#" }
                   - { name: status }

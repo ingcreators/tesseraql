@@ -317,6 +317,27 @@ post/redirect/get like any other mutating form. A destructive action gates on
 enhancement from the recipe (swap the tbody in place instead of reloading) can layer on
 later; the plain-form shape above is the no-JS baseline it must keep.
 
+### The declarative face and the bulk report
+
+A declarative list view gets all of this from `actions:` alone ([declarative
+views](declarative-views.md)), and a bulk action against a workflow's `_bulk` endpoint
+also gets the failure surface — the kit's `datagrid-bulk-errors` contract, rendered the
+TesseraQL way ([bulk-report.md](bulk-report.md)). The grid shows a row-number column;
+after the action, the same page renders a bounded report above the grid: totals, the
+failures grouped by reason (a guard's declared message when one exists, the `TQL-*` code
+otherwise), each group capped with "…and N more", and every named row linked by its
+anchor — "Row 12 — PR-1003" on a snapshot list, the key alone elsewhere, because only a
+frozen membership makes a number authoritative. Failed rows are marked
+(`data-attention="error"`, `aria-describedby` naming their reason group) and stay
+checked, so pressing the action again applies to exactly the failures.
+
+Execution is **best-effort per key by construction** — one transaction per key is the
+`_bulk` contract, and the report says what happened. The round trip is a redirect
+carrying a short-lived, subject-scoped report handle: a snapshot list answers 307 (the
+browser re-posts the intact form, so the frozen membership survives), an offset or
+keyset list the ordinary 303 to its own URL. An expired or foreign handle simply renders
+the plain list — the durable record is workflow history, not the report.
+
 ## Marking the current navigation item
 
 The kit's auto-installed `installNavCurrent` behavior marks the current sidebar item with
