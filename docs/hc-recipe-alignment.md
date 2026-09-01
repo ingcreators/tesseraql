@@ -227,7 +227,7 @@ job, and the row records why.
 
 | Recipe | Verdict | Anchor |
 | --- | --- | --- |
-| session-expiry | **Adopt — recommended first slice** | shell + browser auth |
+| session-expiry | **Adopted (#1113)** | shell + browser auth |
 | unsaved-changes | **Adopt — small slice** | form views |
 | datagrid-bulk-errors | **Adopt — the bulk HTML face** | `actions:`, `_bulk` routes |
 | edit-conflict | **Adopt — needs its own design slice** | `update` command routes |
@@ -260,6 +260,12 @@ job, and the row records why.
 | sse-updates | Adopted | [realtime.md](realtime.md), inbox badge |
 
 ## session-expiry — adopt, recommended first
+
+> **Shipped (#1113).** The CSRF question below resolved as the trigger payload: the login
+> success hands the fresh session's token in `hc:sessionrenewed`, and the bootstrap swaps
+> the page's stale meta in a capture-phase listener before the kit's replay reads it. One
+> recorded deviation: an enabled SSO method renders as a full-page link inside the dialog
+> — a provider round trip cannot happen in place, so that leg forfeits the replay visibly.
 
 The contract: an expired session must not cost the user their work. A protected
 endpoint hit by an htmx request answers 401 with a login `<dialog>` retargeted at the
@@ -370,8 +376,7 @@ per-user-preference store demand, the same trigger `datagrid-prefs` waits on.
 2. ~~unread-badge slice~~ — shipped (#1104).
 3. ~~workflow-actions campaign~~ — designed and shipped (#1105–#1108).
 4. ~~reference-lookup campaign~~ — designed and shipped (#1105, #1109–#1111).
-5. **session-expiry slice** (small, one PR): the 401 dialog + replay; brings the
-   shared error-dialog host into full use and the 401 allowance with it.
+5. ~~session-expiry slice~~ — shipped (#1113).
 6. **unsaved-changes slice** (small, one PR): the dirty guard on form views.
 7. **datagrid-bulk-errors slice**: the bulk report region, once its consumer is live.
 8. **edit-conflict**: design-first slice — the declared version column.
