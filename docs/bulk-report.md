@@ -3,8 +3,9 @@
 > **Status: slice 2 (the non-frozen strategies + the docs section) shipped as #1117,
 > 2026-09-01 — the bulk-actions consumer is complete.** The strategy discriminator is
 > the form itself: membership present = snapshot = 307; absent = offset/keyset = 303.
-> What stays open is the recorded future consumer: csv-import fills the same report
-> fragment when its campaign is named.
+> The recorded future consumer is now named and designed: csv-import fills the same
+> report fragment ([csv-import.md](csv-import.md)), and slice 3 below says what the
+> fragment owes it.
 >
 > **Slice 1 (the snapshot leg) shipped as #1116, 2026-09-01.** Two adjacent
 > fixes rode it: `ids` joined the binder's framework-owned fields (a pager press with
@@ -151,5 +152,11 @@ pressing the action again applies to exactly the failures.
    API's.
 2. **The non-frozen strategies**: the 303 + handle leg, offset/keyset numbering rules,
    and the docs section in [hypermedia-ui.md](hypermedia-ui.md).
-3. **csv-import consumes the fragment** — recorded as the future consumer with its
-   campaign ([hc-recipe-alignment.md](hc-recipe-alignment.md)); not scheduled here.
+3. **csv-import consumes the fragment** — named and designed as its own campaign
+   ([csv-import.md](csv-import.md)). Its decision 4 is where this design's decision 1
+   is actually paid for: the markup moves out of `tql/view/list.html` into a shared
+   fragment, an entry's link becomes a value instead of a `#row-<token>` derivation,
+   and the entry gains the field and rejected-value slots decision 1 promised the
+   second feeder. Two defects this campaign shipped are fixed there rather than
+   inherited — reason groups keyed on the code alone lose a second message, and the
+   group cap is applied when the report is stored, so no renderer can widen it.
