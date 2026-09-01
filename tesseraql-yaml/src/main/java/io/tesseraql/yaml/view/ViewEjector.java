@@ -391,7 +391,9 @@ public final class ViewEjector {
             return;
         }
         html.append("      <div class=\"hc-field\"")
-                .append("lookup".equals(field.widget()) ? " data-hc-lookup=\"true\"" : "")
+                .append("lookup".equals(field.widget())
+                        ? " id=\"" + id + "-field\" data-hc-lookup=\"true\""
+                        : "")
                 .append(">\n"
                         + "        <label class=\"hc-field__label\" for=\"")
                 .append(id).append("\">")
@@ -471,6 +473,12 @@ public final class ViewEjector {
                 .append(resolve)
                 .append("\" hx-trigger=\"change\" hx-target=\"closest [data-hc-lookup]\""
                         + " hx-swap=\"outerHTML\">\n"
+                        + "          <button class=\"hc-button\" type=\"button\""
+                        + " aria-haspopup=\"dialog\""
+                        + " th:attr=\"aria-label=#{tql.lookup.search}\" hx-get=\"")
+                .append(resolve).append("/dialog\""
+                        + " hx-target=\"[data-hc-remote-dialog-root]\""
+                        + " hx-swap=\"innerHTML\">🔍</button>\n"
                         + "        </div>\n"
                         + "        <p class=\"hc-field__hint\" id=\"")
                 .append(id)

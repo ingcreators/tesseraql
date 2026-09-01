@@ -58,6 +58,9 @@ tql:
     bell: Notifications
   lookup:
     unresolved: No match for this code.
+    search: Search
+    placeholder: Code or name
+    more: "{cap}+ results — keep typing to narrow."
   workflow:
     actions: Actions
     notNow: Not available in this state.

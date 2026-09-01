@@ -54,6 +54,9 @@ tql:
     bell: 通知
   lookup:
     unresolved: このコードに一致するものがありません。
+    search: 検索
+    placeholder: コードまたは名称
+    more: "{cap}件以上あります。入力を続けて絞り込んでください。"
   workflow:
     actions: 操作
     notNow: この状態では実行できません。

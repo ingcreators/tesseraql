@@ -8,7 +8,7 @@
 <th:block th:fragment="field(f)">
   <input th:if="${f.widget == 'hidden'}" type="hidden" th:name="${f.name}" th:value="${f.value}">
   <div class="hc-field" th:unless="${f.widget == 'hidden'}" th:switch="${f.widget}"
-       th:attr="data-hc-lookup=${f.widget == 'lookup'} ? 'true'">
+       th:attr="data-hc-lookup=${f.widget == 'lookup'} ? 'true',id=${f.widget == 'lookup'} ? |field-${f.name}-field|">
     <label class="hc-field__label" th:for="|field-${f.name}|" th:text="${f.label}">Label</label>
     <th:block th:case="'checkbox'">
       <input type="hidden" th:name="${f.name}" value="false">
@@ -33,10 +33,16 @@
                th:required="${f.required}"
                th:attr="maxlength=${f.maxLength},aria-invalid=${f.lookup.invalid} ? 'true',aria-describedby=|field-${f.name}-hint|,hx-get=${f.lookup.resolve}"
                hx-trigger="change" hx-target="closest [data-hc-lookup]" hx-swap="outerHTML">
+        <!-- The 🔍 leg (decision 4): loads the synthesized search dialog into the shell's
+             remote-dialog root; type=button so it never submits, and without JavaScript it
+             is simply inert — direct code entry stays the whole interface. -->
+        <button class="hc-button" type="button" aria-haspopup="dialog"
+                th:attr="aria-label=#{tql.lookup.search},hx-get=|${f.lookup.resolve}/dialog|"
+                hx-target="[data-hc-remote-dialog-root]" hx-swap="innerHTML">🔍</button>
       </div>
       <p class="hc-field__hint" th:id="|field-${f.name}-hint|"
          th:unless="${f.lookup.invalid}" th:text="${f.lookup.hint}"></p>
-      <p class="hc-field__message" th:id="|field-${f.name}-hint|"
+      <p class="hc-field__message" data-variant="error" th:id="|field-${f.name}-hint|"
          th:if="${f.lookup.invalid}" th:text="${f.lookup.message}"></p>
       <input type="hidden" th:name="${f.name}" th:value="${f.value}"
              th:attr="hx-get=${f.lookup.load} ? ${f.lookup.resolve}" hx-trigger="load"
