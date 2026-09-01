@@ -146,20 +146,36 @@ class InboxDeliveryIntegrationTest {
 
             inbox.deliver("live-evt-1", null, "inbox-user", "approvals", "s", "live", null);
             assertThat(frames.readLine()).isEqualTo("event: inbox:badge");
+            // The fragment carries the count twice, telling the same truth: the visual
+            // badge (aria-hidden) and the visually hidden "(N)" that joins the bell's
+            // accessible name (the unread-badge contract, docs/hc-recipe-alignment.md).
             assertThat(frames.readLine()).startsWith("data: ")
-                    .contains("<span class=\"hc-badge\">");
+                    .contains("<span class=\"hc-badge\" aria-hidden=\"true\">")
+                    .contains("<span class=\"hc-sr-only\">(");
             assertThat(frames.readLine()).isEmpty();
 
-            // The same fragment the page itself renders (InboxBadge, one markup source).
-            assertThat(get("/_tesseraql/account").body())
-                    .contains("<span class=\"hc-badge\">")
-                    .contains("sse-connect=\"/_tesseraql/events\"");
+            // The same fragment the page itself renders (InboxBadge, one markup source),
+            // and the anchor's name stem is subtree text, not a frozen aria-label.
+            String account = get("/_tesseraql/account").body();
+            assertThat(account)
+                    .contains("<span class=\"hc-badge\" aria-hidden=\"true\">")
+                    .contains("sse-connect=\"/_tesseraql/events\"")
+                    .contains("class=\"hc-sr-only\">Notifications<");
+            assertThat(accountBell(account)).doesNotContain("aria-label");
 
             // All-read pushes the empty payload — the badge clears without a reload.
             inbox.markAllRead(null, "inbox-user");
             assertThat(frames.readLine()).isEqualTo("event: inbox:badge");
             assertThat(frames.readLine()).isEqualTo("data: ");
         }
+    }
+
+    /** The bell anchor's markup, cut from the page for attribute-level assertions. */
+    private static String accountBell(String html) {
+        int start = html.indexOf("id=\"tql-inbox-bell\"");
+        assertThat(start).isNotNegative();
+        int open = html.lastIndexOf("<a ", start);
+        return html.substring(open, html.indexOf(">", start) + 1);
     }
 
     /** The event stream rides the browser session: anonymous connections are refused. */

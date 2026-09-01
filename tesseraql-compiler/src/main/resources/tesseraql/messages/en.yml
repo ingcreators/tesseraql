@@ -54,6 +54,8 @@ tql:
     truncatedBody: "More than {max} rows match. Narrow the search or filters to see the rest."
     truncatedSorted: "More than {max} rows match, sorted by {sort}. Narrow the search or filters to see the rest."
     truncatedCount: "{max}+ results"
+  inbox:
+    bell: Notifications
   http:
     "400": Bad Request
     "401": Unauthorized

@@ -127,11 +127,17 @@
            an inbox channel is configured. The badge is LIVE (docs/inbox.md "Live badge", the
            kit's sse-updates recipe): the bell owns an EventSource to /_tesseraql/events and
            the framework pushes the same pre-rendered fragment the page loaded with
-           (InboxBadge, one markup source) whenever the unread count changes. -->
+           (InboxBadge, one markup source) whenever the unread count changes. The accessible
+           name is the subtree — the hidden "Notifications" stem here plus the fragment's
+           hidden "(N)" — so the count and the name change together (the unread-badge
+           contract, docs/hc-recipe-alignment.md). No aria-label: it would override the
+           subtree and freeze the announced name; sse-connect stays OUTSIDE the swapped
+           span so an update never tears down the event stream. -->
       <a th:if="${_inbox != null}" class="hc-button" data-variant="ghost" th:href="${_inbox.href}"
-         aria-label="Notifications" id="tql-inbox-bell"
+         id="tql-inbox-bell" data-hc-unread
          hx-ext="sse" th:sse-connect="@{/_tesseraql/events}">
-        <svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#bell}"/></svg>
+        <svg class="hc-icon" aria-hidden="true"><use th:href="@{/assets/_tesseraql/icons.svg#bell}"/></svg>
+        <span class="hc-sr-only" th:text="#{tql.inbox.bell}">Notifications</span>
         <span id="tql-inbox-badge" sse-swap="inbox:badge" hx-swap="innerHTML"
               th:utext="${_inbox.badge}"></span>
       </a>

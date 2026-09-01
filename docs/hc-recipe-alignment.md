@@ -1,6 +1,12 @@
 # The hc 0.4.0 recipes and the view surface — an adoption ledger
 
-> **Status: assessment recorded 2026-09-01; the result-cap slice shipped the same day.**
+> **Status: assessment recorded 2026-09-01; the result-cap and unread-badge slices
+> shipped the same day.** The unread-badge slice landed as designed: the bell's
+> `aria-label` is gone (it froze the announced name), the name is now subtree text — the
+> shell's hidden localized "Notifications" stem plus the fragment's hidden "(N)" — the
+> badge is `aria-hidden`, the count caps at 99+, and `sse-connect` stayed outside the
+> swapped span. The fragment is deliberately locale-free so one pushed payload serves
+> every session.
 > Mode B (the snapshot search's in-page reject, 200), the 400→422 flip on the keys guard,
 > mode A (the warn-truncation banner + "cap+" count + the `truncated` context flag), and
 > the gallery snapshot dogfood are in. One recorded deviation: mode A rides the

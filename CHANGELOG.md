@@ -6,6 +6,21 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ## Unreleased
 
+### Fixed
+
+- **The inbox bell's unread count now reaches screen readers**
+  (docs/hc-recipe-alignment.md, the unread-badge slice). The bell anchor carried a
+  static `aria-label="Notifications"`, which overrides the subtree — so the count was
+  never announced, in any state. The label is gone: the accessible name is now the
+  subtree — a visually hidden localized "Notifications" stem in the shell plus the badge
+  fragment's hidden "(N)" — so the name and the count change together, on page render
+  and on every SSE push alike. The visual badge is `aria-hidden` presentation now, the
+  count caps at "99+" in both channels — display and name always tell the same truth —
+  and
+  the fragment stays locale-free so one pushed payload serves every session.
+  `sse-connect` stays outside the swapped span, so an update never tears down the event
+  stream.
+
 ### Added
 
 - **The list surface adopts the result-cap contract**
