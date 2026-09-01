@@ -8,6 +8,16 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **The bundled task queue: `/_tesseraql/tasks`** (docs/workflow-surface.md slice 3 —
+  the campaign's last piece). The signed-in user's open workflow tasks, listed by the
+  same predicate `canAct` tests — direct assignee or candidate group — most urgent
+  first, capped at 200 with an honest "200+" count. A row links into the document's
+  detail page when a detail view declares the task's workflow, where the transitions
+  region offers exactly the legal moves: the queue lists, the detail acts. Backed by
+  the new `WorkflowTaskStore.listOpenTasks` and `tql_workflow_task`'s first indexes
+  (`V3`, `(assignee, status)` and `(candidate_group, status)`, all three dialects —
+  the queue read was a full scan).
+
 - **A transition can demand the acting user's comment, and the history note finally has
   a writer** (docs/workflow-surface.md slice 2). Every synthesized transition route now
   accepts one optional `comment` body field — the only field a transition accepts — and

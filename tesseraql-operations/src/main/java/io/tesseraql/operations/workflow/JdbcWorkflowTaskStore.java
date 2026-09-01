@@ -42,6 +42,10 @@ public final class JdbcWorkflowTaskStore implements WorkflowTaskStore {
             // idempotency, the tql_session V2 precedent.
             io.tesseraql.core.util.SqlScripts.applyForVendor(dataSource, getClass(),
                     "/tesseraql/db/migration/workflow-task/V2__delegated_from.sql");
+            // The queue page's indexes (docs/workflow-surface.md decision 6); tolerated
+            // duplicate-index idempotency, the outbox V11 recipe.
+            io.tesseraql.core.util.SqlScripts.applyForVendor(dataSource, getClass(),
+                    "/tesseraql/db/migration/workflow-task/V3__task_queue_indexes.sql");
         } catch (SQLException ex) {
             throw error("Failed to create workflow task schema", ex);
         }
@@ -119,6 +123,45 @@ public final class JdbcWorkflowTaskStore implements WorkflowTaskStore {
             throw error("Failed to read overdue workflow tasks", ex);
         }
         return overdue;
+    }
+
+    @Override
+    public List<OpenTask> listOpenTasks(Connection cx, String subject, Collection<String> groups,
+            int limit) {
+        List<String> groupList = groups == null ? List.of() : new ArrayList<>(groups);
+        // The canAct predicate, listed instead of tested: what the principal may act on IS
+        // their queue. Deadlines first, undated after, oldest first within each.
+        StringBuilder sql = new StringBuilder("select task_id, doc_type, doc_id, state, "
+                + "assignee, candidate_group, due_at, delegated_from, created_at "
+                + "from tql_workflow_task where status = 'OPEN' and (assignee = ?");
+        if (!groupList.isEmpty()) {
+            sql.append(" or candidate_group in (")
+                    .append(String.join(", ", java.util.Collections.nCopies(groupList.size(), "?")))
+                    .append(')');
+        }
+        sql.append(") order by case when due_at is null then 1 else 0 end, due_at, created_at");
+        List<OpenTask> tasks = new ArrayList<>();
+        try (PreparedStatement ps = cx.prepareStatement(sql.toString())) {
+            ps.setString(1, subject);
+            for (int i = 0; i < groupList.size(); i++) {
+                ps.setString(2 + i, groupList.get(i));
+            }
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next() && tasks.size() < limit) {
+                    Timestamp due = rs.getTimestamp("due_at");
+                    Timestamp created = rs.getTimestamp("created_at");
+                    tasks.add(new OpenTask(rs.getString("task_id"), rs.getString("doc_type"),
+                            rs.getString("doc_id"), rs.getString("state"),
+                            rs.getString("assignee"), rs.getString("candidate_group"),
+                            due == null ? null : due.toInstant(),
+                            rs.getString("delegated_from"),
+                            created == null ? null : created.toInstant()));
+                }
+            }
+        } catch (SQLException ex) {
+            throw error("Failed to list the principal's open workflow tasks", ex);
+        }
+        return tasks;
     }
 
     @Override

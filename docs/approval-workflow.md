@@ -564,12 +564,25 @@ $.status = 'OPEN' and (
 The task store (`WorkflowTaskStore`/`JdbcWorkflowTaskStore`) is provisioned whenever any transition
 assigns, independent of the state mode, so one inbox spans every workflow.
 
-The inbox page is an ordinary `query-html` route whose SELECT applies `/*%scope workflow_inbox … */`,
-rendering an `hc-table` fragment through the existing Thymeleaf/`hc-shell` pipeline (any gap belongs
-upstream in Hypermedia Components — no app CSS over `hc-*`). The fragment refreshes in place with
-htmx (`hx-trigger="load, every 30s"`), and the action buttons POST to the transition routes. Because
-the *transition* carries its own `/*%scope … */` write authority, a task appearing in an inbox is
-necessary but not sufficient — the write still confirms authority server-side.
+An app-authored inbox page is an ordinary `query-html` route whose SELECT applies
+`/*%scope workflow_inbox … */`, rendering an `hc-table` fragment through the existing
+Thymeleaf/`hc-shell` pipeline (any gap belongs upstream in Hypermedia Components — no app CSS
+over `hc-*`). The fragment refreshes in place with htmx (`hx-trigger="load, every 30s"`), and
+the action buttons POST to the transition routes. Because the *transition* carries its own
+`/*%scope … */` write authority, a task appearing in an inbox is necessary but not sufficient —
+the write still confirms authority server-side.
+
+### The bundled task queue: `/_tesseraql/tasks`
+
+The framework also ships the queue ready-made (docs/workflow-surface.md decision 6): the
+signed-in user's open tasks — the `canAct` predicate listed instead of tested, direct
+assignee or candidate group — most urgent first (deadlines before the undated, then oldest),
+capped at 200 with the honest "200+" count over it. A row links to the document's detail
+page when a detail view declares the task's workflow (`workflow:`,
+[declarative-views.md](declarative-views.md)) — the queue lists, the detail acts, and the
+detail's transitions region offers exactly the legal moves. A task records the state it is
+open in, not the transition owed; the detail page's legal set says the rest. Backed by
+`WorkflowTaskStore.listOpenTasks` and the `tql_workflow_task` queue indexes (V3).
 
 ## Deadlines, escalation, and delegation
 

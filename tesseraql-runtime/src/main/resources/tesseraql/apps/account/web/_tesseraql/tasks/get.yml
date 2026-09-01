@@ -1,0 +1,24 @@
+version: tesseraql/v1
+id: tql.tasks.home
+kind: route
+recipe: query-html
+
+# The signed-in user's task queue (docs/workflow-surface.md decision 6): every open workflow
+# task the canAct predicate would let them act on, most urgent first. The subject and groups
+# are always the session principal's — the queue can only ever list the caller's work.
+
+sources:
+  main:
+    service:
+      name: account.tasks.view
+      params:
+        subject: principal.subject
+        groups: principal.groups
+response:
+  html:
+    status: 200
+    template: tasks.html
+    model:
+      tasks: main
+    headers:
+      Cache-Control: "no-store"

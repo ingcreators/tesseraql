@@ -201,6 +201,28 @@ class WorkflowSurfaceIntegrationTest {
     }
 
     @Test
+    void theTaskQueueListsTheCallersOpenTasksAndLinksIntoTheDetailPage() throws Exception {
+        // Opening M-3 assigns the resulting state's task to the actor.
+        assertThat(postForm("/api/cases/M-3/open",
+                "_csrf=" + actorCsrf + "&_return=/cases/M-3", actorCookie).statusCode())
+                .isEqualTo(303);
+
+        // The actor's queue lists it, badges the state, and links into the detail page —
+        // resolved through the detail view that declares the workflow.
+        HttpResponse<String> queue = get("/_tesseraql/tasks", actorCookie);
+        assertThat(queue.statusCode()).isEqualTo(200);
+        assertThat(queue.body()).contains("case M-3")
+                .contains("href=\"/cases/M-3\"")
+                .contains(">open<");
+
+        // The approver holds no task: the queue answers the honest empty state — the list is
+        // the canAct predicate, never someone else's work.
+        HttpResponse<String> empty = get("/_tesseraql/tasks", approverCookie);
+        assertThat(empty.statusCode()).isEqualTo(200);
+        assertThat(empty.body()).doesNotContain("case M-3");
+    }
+
+    @Test
     void theJsonContractIsUntouchedForApiCallers() throws Exception {
         HttpRequest request = HttpRequest.newBuilder(
                 URI.create("http://localhost:" + runtime.port() + "/api/docs/D-6/submit"))
@@ -247,7 +269,7 @@ class WorkflowSurfaceIntegrationTest {
             statement.execute("create table cases (id varchar(64) primary key,"
                     + " subject varchar(100) not null)");
             statement.execute("insert into cases (id, subject) values ('M-1', 'A case'),"
-                    + " ('M-2', 'Another case')");
+                    + " ('M-2', 'Another case'), ('M-3', 'A queued case')");
         }
     }
 
@@ -334,12 +356,20 @@ class WorkflowSurfaceIntegrationTest {
                   - { id: open }
                   - { id: closed, type: terminal }
                 transitions:
-                  - { id: open, from: new, to: open, command: { file: touch-case.sql } }
+                  - id: open
+                    from: new
+                    to: open
+                    command: { file: touch-case.sql }
+                    assign: { file: assign-actor.sql }
                   - id: close
                     from: open
                     to: closed
                     comment: required
                     command: { file: touch-case.sql }
+                """);
+        Files.writeString(home.resolve("workflow/assign-actor.sql"), """
+                select 'actor-1' as assignee
+                ;
                 """);
         Files.writeString(home.resolve("workflow/touch-case.sql"), """
                 update cases set subject = subject where id = /* key */'M-1'

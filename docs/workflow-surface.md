@@ -21,7 +21,17 @@
 > decides), not only-on-refusal — progressive disclosure needs the fragment swaps slice 1
 > deferred; and in app mode the history append is the app's contract, so the comment
 > reaches storage only where the command SQL binds it (documented, not silent). Lint
-> `TQL-WORKFLOW-3120` refuses any `comment:` value but `required`. Slice 3 not started.
+> `TQL-WORKFLOW-3120` refuses any `comment:` value but `required`.
+>
+> **Slice 3 (the task queue) shipped the same day — the campaign is complete.** The
+> bundled page is `/_tesseraql/tasks` in the account app (the inbox's sibling), backed by
+> the new `WorkflowTaskStore.listOpenTasks` and the V3 `(assignee, status)` /
+> `(candidate_group, status)` indexes (the outbox V11 recipe — V1's "no index keeps the
+> DDL portable" comment predates it). Row links resolve through the detail views that
+> declare `workflow:`, derived from the host manifest at boot. Recorded deviation: the
+> page is a plain bounded list (cap 200, hedged count), not `strategy: snapshot` —
+> snapshot earns its keep when acting happens in the list, and this queue acts on the
+> detail page; it graduates if the queue ever gains bulk actions.
 >
 > **Original design below.** The workflow-actions campaign from
 > [hc-recipe-alignment.md](hc-recipe-alignment.md): the `workflow:` engine ships

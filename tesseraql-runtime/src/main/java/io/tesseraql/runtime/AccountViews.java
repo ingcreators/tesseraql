@@ -288,6 +288,68 @@ final class AccountViews {
         return model;
     }
 
+    /**
+     * TQL-ACCOUNT-5807: the task queue page could not read the task store — a server-side
+     * failure (500), numbered outside the 4xxx refusal space the status ledger governs, the
+     * outbox store's 5101 precedent.
+     */
+    private static final TqlErrorCode TASKS_ERROR = new TqlErrorCode(TqlDomain.ACCOUNT, 5807);
+
+    /** The queue page's cap: 200 rows plus the one that says there are more (result-cap). */
+    private static final int TASKS_CAP = 200;
+
+    /**
+     * The signed-in principal's task queue (docs/workflow-surface.md decision 6): the open
+     * tasks the {@code canAct} predicate would let them act on, most urgent first. A row links
+     * to the document's detail page when one declares the task's workflow — the queue lists,
+     * the detail acts. Tasks record the state they are open in, not the transition owed.
+     */
+    static Map<String, Object> workflowTasks(Map<String, Object> params,
+            io.tesseraql.core.workflow.WorkflowTaskStore tasks,
+            javax.sql.DataSource dataSource, Map<String, String> detailPaths) {
+        Map<String, Object> model = new LinkedHashMap<>();
+        model.put("enabled", tasks != null && dataSource != null);
+        List<Map<String, Object>> rows = new ArrayList<>();
+        boolean truncated = false;
+        if (tasks != null && dataSource != null) {
+            String subject = subject(params);
+            List<String> groups = new ArrayList<>();
+            if (params.get("groups") instanceof List<?> raw) {
+                raw.forEach(group -> groups.add(String.valueOf(group)));
+            }
+            try (java.sql.Connection cx = dataSource.getConnection()) {
+                List<io.tesseraql.core.workflow.WorkflowTaskStore.OpenTask> open = tasks
+                        .listOpenTasks(cx, subject, groups, TASKS_CAP + 1);
+                truncated = open.size() > TASKS_CAP;
+                for (io.tesseraql.core.workflow.WorkflowTaskStore.OpenTask task : open.subList(0,
+                        Math.min(TASKS_CAP, open.size()))) {
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    row.put("docType", task.docType());
+                    row.put("docId", task.docId());
+                    row.put("state", task.state());
+                    row.put("dueAt", task.dueAt() == null ? "" : task.dueAt().toString());
+                    row.put("group", task.candidateGroup() == null ? "" : task.candidateGroup());
+                    row.put("delegatedFrom",
+                            task.delegatedFrom() == null ? "" : task.delegatedFrom());
+                    String pattern = detailPaths.get(task.docType());
+                    row.put("href", pattern == null
+                            ? ""
+                            : pattern.replaceFirst("\\{[^}]+\\}",
+                                    java.net.URLEncoder.encode(task.docId(),
+                                            java.nio.charset.StandardCharsets.UTF_8)));
+                    rows.add(row);
+                }
+            } catch (java.sql.SQLException ex) {
+                throw new TqlException(TASKS_ERROR,
+                        "Failed to read the task queue: " + ex.getMessage());
+            }
+        }
+        model.put("rows", rows);
+        model.put("count", rows.size());
+        model.put("truncated", truncated);
+        return model;
+    }
+
     /** Marks one of the caller's messages read; not theirs (or unknown) is 4806. */
     static Map<String, Object> markInboxRead(Map<String, Object> params,
             io.tesseraql.core.inbox.InboxStore inbox) {
