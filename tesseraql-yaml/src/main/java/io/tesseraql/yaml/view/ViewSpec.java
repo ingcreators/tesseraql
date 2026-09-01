@@ -31,7 +31,11 @@ public record ViewSpec(String id,
         String search, List<Field> fields, List<Column> columns, List<Child> children,
         List<Panel> panels, Map<String, String> slots, String template, String refreshOn,
         List<String> key, List<Filter> filters, List<Preset> presets,
-        List<Action> actions) {
+        List<Action> actions,
+        // The workflow whose transitions region and stepper this detail view renders
+        // (docs/workflow-surface.md decision 1) — an explicit declaration or nothing,
+        // never inferred from table names. Legal only on recipe: detail.
+        String workflow) {
 
     /** Structurally invalid view document (docs/declarative-views.md, TQL-VIEW-3301). */
     public static final TqlErrorCode INVALID_VIEW = new TqlErrorCode(TqlDomain.VIEW, 3301);
@@ -315,6 +319,10 @@ public record ViewSpec(String id,
         if (FORM.equals(view) && (action == null || action.isBlank())) {
             throw invalid(name, "a form view must declare action: (the command route it posts to)");
         }
+        String workflow = str(tree.get("workflow"));
+        if (workflow != null && !workflow.isBlank() && !DETAIL.equals(view)) {
+            throw invalid(name, "workflow: is a detail-view key");
+        }
         String id = str(tree.get("id"));
         if (id == null || id.isBlank()) {
             id = name.endsWith(".view.yml")
@@ -326,7 +334,7 @@ public record ViewSpec(String id,
                 parseFields(name, tree.get("fields")), parseColumns(name, tree.get("columns")),
                 parseChildren(name, tree.get("children")), parsePanels(name, tree.get("panels")),
                 parseSlots(name, tree.get("slots")), str(tree.get("template")),
-                str(tree.get("refreshOn")), key, filters, presets, actions);
+                str(tree.get("refreshOn")), key, filters, presets, actions, workflow);
     }
 
     /** The declared bulk actions (docs/list-surface.md decision 9), order preserved. */

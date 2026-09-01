@@ -78,6 +78,10 @@
       "type": "string",
       "description": "Refetch this view's refresh region whenever a command emits this topic (docs/realtime.md). List, detail and dashboard views only - not forms."
     },
+    "workflow": {
+      "type": "string",
+      "description": "The workflow whose transitions region and lifecycle stepper this page renders (docs/workflow-surface.md): the server shows only the transitions legal for this user on the row's current state. Detail views only; the id must name a declared kind: workflow document."
+    },
     "key": {
       "oneOf": [
         { "type": "string" },

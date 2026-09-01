@@ -6,6 +6,25 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ## Unreleased
 
+### Added
+
+- **A detail view renders its workflow: the transitions region and the lifecycle
+  stepper** (docs/workflow-surface.md slice 1). A `workflow: <id>` on a
+  `recipe: detail` view — an explicit declaration, never table-name inference
+  (`TQL-VIEW-3327` on an unknown id) — renders the `hc-stepper` over the declared
+  states and a toolbar of exactly the transitions legal for the viewing principal on
+  the row's current state. Wrong role is absent, wrong state is absent, a refused
+  expression guard is disabled with its declared reason, and an open task the caller
+  does not hold disables the whole bar — the render-time half of the checks the
+  executor already enforces, evaluated through the same policy engine and guard
+  expressions. Synthesized transition routes gain the browser leg: a form-encoded post
+  answers 303 back to the page's `_return` (the state itself is the optimistic lock —
+  a stale replay is the executor's 409), while API callers keep `{"ok": true}`
+  untouched; a browser-auth'd workflow gets the CSRF step automatically. The view's
+  SQL must select the key column and, in app mode, the state column
+  (`TQL-VIEW-3328`). The purchase-request gallery detail page adopts it as the
+  managed-mode dogfood.
+
 ### Fixed
 
 - **The inbox bell's unread count now reaches screen readers**

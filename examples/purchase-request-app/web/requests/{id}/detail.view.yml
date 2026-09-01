@@ -2,6 +2,9 @@ version: tesseraql/v1
 id: requests.detail.view
 kind: view
 recipe: detail
+# The workflow surface (docs/workflow-surface.md): the page renders the lifecycle stepper
+# and the transitions legal for the viewing principal on the request's current state.
+workflow: purchase_request
 title: Purchase request
 fields:
   - { name: id, label: "#" }
