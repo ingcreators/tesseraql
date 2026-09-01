@@ -99,6 +99,12 @@ bundled `sse` extension — the same `SseRoutes` transport that carries the
 - **One markup source** — `InboxBadge.html` renders the fragment for both the page's
   initial `_inbox.badge` and the pushed payload; an all-read inbox pushes an empty
   payload, clearing the badge. A pushed update and a reload are byte-identical.
+- **The count is the accessible name's, too** — the fragment carries the visual badge
+  (`aria-hidden`) plus a visually hidden "(N)", capped at 99+. The bell anchor has no
+  `aria-label`: its name is the subtree — a hidden localized "Notifications" stem in the
+  shell plus the fragment's count — so what a screen reader hears changes together with
+  what the badge shows (the kit's unread-badge contract). The fragment itself stays
+  locale-free, which is what lets one pushed payload serve every session.
 - **Bounded by construction** — subscriptions are capped per subject and globally (a new
   stream evicts the oldest), and each stream ends itself after a fixed lifetime; the
   browser's EventSource reconnects at the server-set `retry` delay, which also covers
