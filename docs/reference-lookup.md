@@ -1,6 +1,28 @@
 # The reference lookup field — code entry, one truth, and the search dialog
 
-> **Status: designed 2026-09-01; no slices started.** The reference-lookup campaign from
+> **Status: slice 1 (direct entry end to end) shipped 2026-09-01.** Recorded deviations
+> from the text below. The 🔍 button ships with its dialog in slice 2 — a button whose
+> target route does not exist yet is worse than none. The submit-time existence check
+> answers the validation stage's **422** (the `TQL-FIELD-4220` shape, field code
+> `invalid-reference`), not the binder's 400: `InputBinder` holds no connection, so the
+> check runs beside the validation rules on the command's own connection — the
+> currency decision 3 already named. "A route whose rows lack the named columns fails
+> the build" became the render-time refusal `TQL-VIEW-3329`, the `TQL-VIEW-3328`
+> precedent: `select *` makes a static column check a liar; the build still fails on a
+> dangling or incomplete declaration (`TQL-FIELD-4623`, lint `TQL-YAML-1059`). Open
+> question 1 is decided as the design suspected — re-render the SQL, not the pipeline:
+> the framework wraps the rendered SQL in a key-equality derived table
+> (`select * from (…) tql_lookup where <col> = ?`), stripping a trailing `ORDER BY`
+> (SQL Server refuses an ordered derived table), so scopes and 2-way arms apply
+> unchanged. Companions synthesize only where a form view targets the action route; the
+> submit-time check applies regardless. A prefilled id (an edit form) self-resolves on
+> load through the same fragment keyed by id — the no-pick-endpoint deviation extended
+> to prefill. The visible code input rides the form post beside the hidden id and the
+> binder drops it as declared presentation. Open question 3: tenant routing and the
+> scope resolver are threaded through the fetch (the `SqlStep` seams); the IT proves
+> the referenced route's `security:` on the companion, not a per-tenant master.
+>
+> **Original design below.** The reference-lookup campaign from
 > [hc-recipe-alignment.md](hc-recipe-alignment.md): business forms above a few hundred
 > master rows have no blessed answer — `codes:` renders a `<select>` and stops. This
 > design gives the form surface the master-reference field: direct code entry for users

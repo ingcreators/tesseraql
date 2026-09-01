@@ -60,7 +60,12 @@ public record InputField(
         // JSON Schema, whose description is the hint a model follows when choosing a value. Not
         // operational, so a domain may carry it and a field that declares none inherits it —
         // what an SKU is has one home, like its type and its pattern.
-        String description) {
+        String description,
+        // The master reference this field holds a key of (docs/reference-lookup.md decision 1):
+        // above the catalog size line (docs/lookups.md decision 10) the value set is a business
+        // master, searched through a declared query route instead of held in memory. Like codes:
+        // it describes what the field is, so a domain may carry it.
+        LookupSpec lookup) {
 
     /**
      * The keys that belong to a route's <em>use</em> of a field rather than to the field itself
@@ -71,6 +76,22 @@ public record InputField(
      */
     public static final java.util.Set<String> OPERATIONAL_KEYS = java.util.Set.of("required",
             "requiredWhen", "default", "writable", "policy", "domain");
+
+    /**
+     * The 21-key shape every caller predating {@code lookup:} constructs
+     * (docs/reference-lookup.md); the new descriptive key defaults to absent, the way
+     * {@code http-call} extended {@code TestCase}.
+     */
+    public InputField(String type, boolean required, Object defaultValue,
+            java.math.BigDecimal min, java.math.BigDecimal max, Integer maxLength,
+            List<String> enumValues, Boolean writable, String classification, String mask,
+            String format, InputItems items, String pattern, Integer minLength,
+            String requiredWhen, List<String> columns, String domain, String widget,
+            String codes, String policy, String description) {
+        this(type, required, defaultValue, min, max, maxLength, enumValues, writable,
+                classification, mask, format, items, pattern, minLength, requiredWhen, columns,
+                domain, widget, codes, policy, description, null);
+    }
 
     /** The semantic string formats {@code format:} validates (roadmap Phase 40). */
     public static final java.util.Set<String> STRING_FORMATS = java.util.Set.of("email", "uuid",
@@ -115,14 +136,27 @@ public record InputField(
                 widget != null ? widget : d.widget(),
                 codes != null ? codes : d.codes(),
                 policy,
-                description != null ? description : d.description());
+                description != null ? description : d.description(),
+                lookup != null ? lookup : d.lookup());
     }
 
     /** This field with a resolved element contract in place of its own. */
     public InputField withItems(InputItems replacement) {
         return new InputField(type, required, defaultValue, min, max, maxLength, enumValues,
                 writable, classification, mask, format, replacement, pattern, minLength,
-                requiredWhen, columns, domain, widget, codes, policy, description);
+                requiredWhen, columns, domain, widget, codes, policy, description, lookup);
+    }
+
+    /**
+     * The {@code lookup:} declaration (docs/reference-lookup.md decision 1): {@code source} names
+     * a GET query route by its literal URL path — the resolution a form's {@code action:} already
+     * uses — whose rows must carry this field's column (the id), the {@code code} column users
+     * type, and the {@code label} column the field's hint displays. The referenced route is an
+     * ordinary route: its own {@code security:}, its own SQL, its own idea of what searching this
+     * master means.
+     */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record LookupSpec(String source, String code, String label) {
     }
 
     /**

@@ -926,10 +926,21 @@ One column of a file transfer, in either form: the bare name, or an object addin
 | `writable` | boolean | `false` makes the field read-only: it renders in a derived form but is never bound from the request. |
 | `classification` | string | Data classification label carried into masking and audit. Documented in data-scoping.md. |
 | `mask` | string | The masking rule applied when the principal may not see the value. |
-| `widget` | enum: `text` \| `textarea` \| `number` \| `date` \| `datetime-local` \| `checkbox` \| `select` \| `hidden` | Presentation hint (docs/declarative-views.md): the form widget this field renders as, declared once on a domain; a per-view fields: override wins. Never part of the HTTP contract. |
+| `widget` | enum: `text` \| `textarea` \| `number` \| `date` \| `datetime-local` \| `checkbox` \| `select` \| `hidden` \| `lookup` | Presentation hint (docs/declarative-views.md): the form widget this field renders as, declared once on a domain; a per-view fields: override wins. Never part of the HTTP contract. |
 | `codes` | string | The code catalog this field's values come from (docs/lookups.md): the binder accepts only that catalog's active codes, and the violation is the enum field error. Declared on a domain, so the value set has one home instead of an enum that drifts from the master. |
+| `lookup` | [object](#inputfieldlookup) | The master reference this field holds a key of (docs/reference-lookup.md): direct code entry resolved through a synthesized companion route, existence-checked again at submit. Declarable on a domain, like codes:. |
 | `policy` | string | Write authorization (docs/declarative-views.md): a security policy the principal must satisfy to supply this field; a failing principal's value follows the route's readOnly behavior, and the derived form omits the field. Operational — never accepted inside a domain. |
 | `items` | [object](#inputfielditems) | Element constraints for `type: array`: `type:`/`enum:` for scalar elements, `fields:` for object elements. |
+
+#### inputField.lookup
+
+The master reference this field holds a key of (docs/reference-lookup.md): direct code entry resolved through a synthesized companion route, existence-checked again at submit. Declarable on a domain, like codes:.
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `source` \* | string | URL path of the GET query route that searches the master — an ordinary route with its own security: and SQL, resolved the way a form's action: is. Its rows must carry this field's column (the id), code: and label:. |
+| `code` \* | string | The row column holding the code users type — the visible half of the field; the hidden id is what submits. |
+| `label` \* | string | The row column holding the display name the field's hint shows. Presentation only, never submitted. |
 
 #### inputField.items
 

@@ -52,6 +52,8 @@ tql:
     truncatedCount: "{max}+ 件"
   inbox:
     bell: 通知
+  lookup:
+    unresolved: このコードに一致するものがありません。
   workflow:
     actions: 操作
     notNow: この状態では実行できません。

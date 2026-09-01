@@ -8,6 +8,26 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **The reference lookup field: `lookup:` on an input declares a master reference**
+  (docs/reference-lookup.md slice 1). Above the catalog size line, `codes:` stops being
+  an interface; a `lookup:` block — `source:` naming a GET query route by path, plus its
+  rows' `code:` and `label:` columns — renders the field as direct code entry: a visible
+  code input, a hidden id (the only thing the form submits), and a hint carrying the
+  resolved display name. The compiler synthesizes one resolve companion per form field
+  (`GET <action>/_lookup/<field>`), which re-renders the whole field as a unit — 200
+  resolved, 422 unresolved with the hidden id emptied (a stale id may never ride under a
+  corrected code), 200 cleared — running the referenced route's own SQL wrapped in a
+  key-equality derived table under that route's own `security:`, so what resolves is
+  exactly what the master's author lets this caller see. A submitted id is
+  existence-checked again inside the command's transaction, one keyed read on its own
+  connection — a declared reference validates itself, the `codes:` stance. Legal in
+  `domains/` documents ("a customer reference" declared once); a dangling or incomplete
+  `lookup:` is lint `TQL-YAML-1059` and build failure `TQL-FIELD-4623`; a source row
+  missing a declared column is the render-time refusal `TQL-VIEW-3329`. Ejected forms
+  keep the live resolve wiring. The manifest guard now pins `installRemoteDialog` /
+  `installCloseDialog` and the `reference-lookup`/`remote-dialog`/`live-search` recipes —
+  Studio already depended on remote-dialog unpinned. The search dialog is slice 2.
+
 - **The bundled task queue: `/_tesseraql/tasks`** (docs/workflow-surface.md slice 3 —
   the campaign's last piece). The signed-in user's open workflow tasks, listed by the
   same predicate `canAct` tests — direct assignee or candidate group — most urgent

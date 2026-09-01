@@ -161,6 +161,36 @@ class ViewEjectorTest {
     }
 
     /**
+     * A lookup field ejects live (docs/reference-lookup.md): the resolve wiring survives the
+     * flip, like an ejected select keeps reading its catalog.
+     */
+    @Test
+    void ejectsALookupFieldWithItsResolveWiring(@TempDir Path dir) throws Exception {
+        ViewSpec spec = parse(dir, """
+                version: tesseraql/v1
+                kind: view
+                recipe: form
+                id: orders.new
+                action: /orders/create
+                """);
+        List<ViewFields.FieldDef> fields = List.of(
+                new ViewFields.FieldDef("customer_id", "k", "Customer", "lookup", true, null,
+                        null, null, List.of(), null, null, null, null,
+                        new io.tesseraql.yaml.model.InputField.LookupSpec(
+                                "/api/customers/search", "customer_code", "name")));
+
+        ScaffoldedFile file = ViewEjector.eject(dir, dir, "page.view.yml", spec, fields,
+                "web/orders/new/page.html");
+
+        assertThat(file.content()).contains("data-hc-lookup")
+                .contains("name=\"customer_code\"")
+                .contains("hx-get=\"/orders/create/_lookup/customer_id\"")
+                .contains("hx-target=\"closest [data-hc-lookup]\"")
+                .contains("<input type=\"hidden\" name=\"customer_id\"")
+                .contains("hc-field__hint");
+    }
+
+    /**
      * An apostrophe ends the single-quoted OGNL literal the selected-option expression splices
      * values into; {@code Escapes.html} never touches it, so an option like {@code O'Brien}
      * broke the ejected template at parse time — and, read as injection, let a view spec splice

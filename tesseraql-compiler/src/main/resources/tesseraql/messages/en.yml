@@ -56,6 +56,8 @@ tql:
     truncatedCount: "{max}+ results"
   inbox:
     bell: Notifications
+  lookup:
+    unresolved: No match for this code.
   workflow:
     actions: Actions
     notNow: Not available in this state.

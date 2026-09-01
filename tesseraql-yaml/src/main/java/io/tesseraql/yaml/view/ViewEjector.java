@@ -367,7 +367,7 @@ public final class ViewEjector {
                 .append(formId).append("-errors\"></div>\n"
                         + "    <div class=\"hc-stack\">\n");
         for (ViewFields.FieldDef field : fields) {
-            field(html, field);
+            field(html, spec, field);
         }
         html.append("      <span class=\"hc-action\">\n"
                 + "        <button type=\"submit\" class=\"hc-button\""
@@ -382,7 +382,7 @@ public final class ViewEjector {
         return pageClose(html);
     }
 
-    private static void field(StringBuilder html, ViewFields.FieldDef field) {
+    private static void field(StringBuilder html, ViewSpec spec, ViewFields.FieldDef field) {
         String id = "field-" + field.name();
         String label = escape(field.labelFallback());
         if ("hidden".equals(field.widget())) {
@@ -390,10 +390,14 @@ public final class ViewEjector {
                     .append("\" th:value=\"${").append(prefill(field)).append("}\">\n");
             return;
         }
-        html.append("      <div class=\"hc-field\">\n"
-                + "        <label class=\"hc-field__label\" for=\"").append(id).append("\">")
+        html.append("      <div class=\"hc-field\"")
+                .append("lookup".equals(field.widget()) ? " data-hc-lookup=\"true\"" : "")
+                .append(">\n"
+                        + "        <label class=\"hc-field__label\" for=\"")
+                .append(id).append("\">")
                 .append(label).append("</label>\n");
         switch (field.widget()) {
+            case "lookup" -> lookup(html, spec, field, id);
             case "checkbox" -> html.append("        <input type=\"hidden\" name=\"")
                     .append(field.name()).append("\" value=\"false\">\n"
                             + "        <input class=\"hc-checkbox\" id=\"")
@@ -445,6 +449,41 @@ public final class ViewEjector {
                     .append(" th:value=\"${").append(prefill(field)).append("}\">\n");
         }
         html.append("      </div>\n");
+    }
+
+    /**
+     * The lookup field's static markup (docs/reference-lookup.md decision 2): the visible code
+     * input resolving on change through the form's synthesized companion route, the hint line,
+     * and the hidden id that submits. A prefilled id self-resolves on load, keyed by id — the
+     * same fragment; the ejected page keeps the live behaviour, like an ejected select keeps
+     * reading its catalog.
+     */
+    private static void lookup(StringBuilder html, ViewSpec spec, ViewFields.FieldDef field,
+            String id) {
+        String resolve = spec.action() + "/_lookup/" + field.name();
+        String prefill = prefill(field);
+        html.append("        <div class=\"hc-input-group\">\n"
+                + "          <input class=\"hc-input\" id=\"").append(id)
+                .append("\" type=\"text\" name=\"").append(field.lookup().code())
+                .append("\"").append(field.required() ? " required" : "")
+                .append(" aria-describedby=\"").append(id).append("-hint\"\n"
+                        + "                 hx-get=\"")
+                .append(resolve)
+                .append("\" hx-trigger=\"change\" hx-target=\"closest [data-hc-lookup]\""
+                        + " hx-swap=\"outerHTML\">\n"
+                        + "        </div>\n"
+                        + "        <p class=\"hc-field__hint\" id=\"")
+                .append(id)
+                .append("-hint\"></p>\n"
+                        + "        <input type=\"hidden\" name=\"")
+                .append(field.name())
+                .append("\" th:value=\"${").append(prefill).append("}\"\n"
+                        + "               th:attr=\"hx-get=${")
+                .append(prefill)
+                .append(" != null && ").append(prefill).append(" != ''} ? '")
+                .append(resolve).append("'\" hx-trigger=\"load\""
+                        + " hx-target=\"closest [data-hc-lookup]\" hx-swap=\"outerHTML\""
+                        + " hx-include=\"this\">\n");
     }
 
     private static StringBuilder pageOpen(ViewSpec spec) {

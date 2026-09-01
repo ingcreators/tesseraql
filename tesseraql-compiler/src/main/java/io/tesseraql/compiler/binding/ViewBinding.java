@@ -492,6 +492,15 @@ public final class ViewBinding {
             f.put("step", field.step());
             Object value = field.valueFrom(row);
             f.put("value", value == null ? "" : String.valueOf(value));
+            // A lookup field's render extras (docs/reference-lookup.md decision 2): the code
+            // input's name and resolve URL, plus the initial state — one shape with the
+            // synthesized resolve route's re-render, so the form's first paint and every
+            // swap are the same fragment contract.
+            if ("lookup".equals(field.widget()) && field.lookup() != null) {
+                f.put("lookup", LookupFieldModel.initial(field,
+                        String.valueOf(v.get("action")) + "/_lookup/" + field.name(),
+                        String.valueOf(f.get("value"))));
+            }
             rendered.add(f);
         }
         v.put("fields", rendered);
