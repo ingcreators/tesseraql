@@ -61,6 +61,16 @@ public interface WorkflowTaskStore {
     List<Overdue> overdue(Connection cx, Instant asOf, int limit);
 
     /**
+     * The principal's open tasks — the task queue page's read (docs/workflow-surface.md
+     * decision 6): every open task held as the direct assignee or through a candidate group,
+     * exactly the {@link #canAct} predicate, most urgent first (deadlines before the undated,
+     * then oldest). {@code limit} bounds the page; the caller over-fetches by one for its
+     * result-cap notice.
+     */
+    List<OpenTask> listOpenTasks(Connection cx, String subject, Collection<String> groups,
+            int limit);
+
+    /**
      * One open task: the document, the state it is open in, and who can act — a direct
      * {@code assignee}, a {@code candidateGroup}, or both (at least one is non-null).
      *
@@ -92,5 +102,24 @@ public interface WorkflowTaskStore {
      * @param assignee the current assignee, or {@code null}
      */
     record Overdue(String taskId, String docType, String docId, String state, String assignee) {
+    }
+
+    /**
+     * One row of a principal's task queue (docs/workflow-surface.md decision 6). A task
+     * records the state it is open in, not the transition owed — the document's detail page
+     * and its legal set say the rest.
+     *
+     * @param taskId         the task id
+     * @param docType        the workflow {@code document.type}
+     * @param docId          the business document key
+     * @param state          the state the task is open in
+     * @param assignee       the direct assignee, or {@code null} for a group-claimed task
+     * @param candidateGroup the candidate group it reached the principal through, or {@code null}
+     * @param dueAt          the deadline, or {@code null}
+     * @param delegatedFrom  whose absence redirected it here, or {@code null}
+     * @param createdAt      when the task opened
+     */
+    record OpenTask(String taskId, String docType, String docId, String state, String assignee,
+            String candidateGroup, Instant dueAt, String delegatedFrom, Instant createdAt) {
     }
 }

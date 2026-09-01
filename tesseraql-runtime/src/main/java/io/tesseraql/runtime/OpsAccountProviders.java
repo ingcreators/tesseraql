@@ -45,6 +45,51 @@ final class OpsAccountProviders {
 
     private OpsAccountProviders(Deps deps) {
         this.deps = deps;
+        this.workflowDetailPaths = workflowDetailPaths(deps.manifest());
+    }
+
+    /**
+     * The host app's workflow document types mapped to the detail page that renders them —
+     * derived from the detail views declaring {@code workflow:} (docs/workflow-surface.md
+     * decision 6), so the queue links straight into the acting surface. Two views for one
+     * workflow keep the first route's path; a workflow no view declares renders unlinked.
+     */
+    private final Map<String, String> workflowDetailPaths;
+
+    private static Map<String, String> workflowDetailPaths(
+            io.tesseraql.yaml.manifest.AppManifest manifest) {
+        Map<String, String> byDocType = new LinkedHashMap<>();
+        if (manifest == null) {
+            return byDocType;
+        }
+        Map<String, String> workflowDocTypes = new LinkedHashMap<>();
+        for (io.tesseraql.yaml.manifest.WorkflowFile workflow : manifest.workflows()) {
+            if (workflow.definition().document() != null) {
+                workflowDocTypes.put(workflow.definition().id(),
+                        workflow.definition().document().type());
+            }
+        }
+        for (io.tesseraql.yaml.manifest.RouteFile route : manifest.routes()) {
+            var response = route.definition().response();
+            if (response == null || response.html() == null || response.html().view() == null) {
+                continue;
+            }
+            var view = manifest.viewById(response.html().view());
+            if (view == null) {
+                continue;
+            }
+            try {
+                String workflowId = io.tesseraql.yaml.view.ViewSpec.parse(view.source())
+                        .workflow();
+                String docType = workflowId == null ? null : workflowDocTypes.get(workflowId);
+                if (docType != null) {
+                    byDocType.putIfAbsent(docType, route.urlPath());
+                }
+            } catch (RuntimeException unparseable) {
+                // The compiler already refused a broken view; the queue map just skips it.
+            }
+        }
+        return byDocType;
     }
 
     /** Builds the runtime's provider registry with every ops/account provider registered. */
@@ -260,6 +305,17 @@ final class OpsAccountProviders {
                 // read, mark all read - the subject always the session principal's.
                 .register("account.inbox.view",
                         params -> AccountViews.inbox(params, deps.inboxStore()))
+                // The task queue page (docs/workflow-surface.md decision 6): the store and
+                // datasource resolve at call time (the identity() idiom — a runtime without
+                // workflows answers the honest empty state); the docType → detail-page map
+                // derives once from the host manifest's workflow-declaring detail views.
+                .register("account.tasks.view",
+                        params -> AccountViews.workflowTasks(params,
+                                deps.context().lookup(
+                                        TesseraqlProperties.WORKFLOW_TASK_STORE_BEAN,
+                                        io.tesseraql.core.workflow.WorkflowTaskStore.class),
+                                deps.context().lookup("main", javax.sql.DataSource.class),
+                                workflowDetailPaths))
                 .register("account.inbox.read",
                         params -> AccountViews.markInboxRead(params, deps.inboxStore()))
                 .register("account.inbox.readAll",

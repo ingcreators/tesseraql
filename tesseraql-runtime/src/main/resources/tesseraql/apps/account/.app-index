@@ -23,3 +23,5 @@ web/_tesseraql/inbox/get.yml
 web/_tesseraql/inbox/inbox.html
 web/_tesseraql/inbox/read-all/post.yml
 web/_tesseraql/inbox/read/post.yml
+web/_tesseraql/tasks/get.yml
+web/_tesseraql/tasks/tasks.html
