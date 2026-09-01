@@ -43,6 +43,10 @@ public final class JdbcOutboxStore implements OutboxStore {
             // bootstrap's tolerated duplicate-column errors, as V3..V8 do for the batch tables.
             io.tesseraql.core.util.SqlScripts.applyForVendor(dataSource, JdbcOutboxStore.class,
                     "/tesseraql/db/migration/operations/V9__outbox_scheduled_delivery.sql");
+            // The claim/withdraw indexes matter most where rows are held for days (scheduled
+            // delivery); idempotent through the tolerated duplicate-index errors.
+            io.tesseraql.core.util.SqlScripts.applyForVendor(dataSource, JdbcOutboxStore.class,
+                    "/tesseraql/db/migration/operations/V11__outbox_indexes.sql");
         } catch (SQLException ex) {
             throw error("Failed to create outbox schema", ex);
         }
