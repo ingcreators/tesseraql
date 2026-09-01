@@ -282,4 +282,6 @@ export const EXCLUDED = [
   'idempotency-key.md',
   // The list view's operational grid page and composite row identity, 2026-08-31.
   'list-surface.md',
+  // The hc 0.4.0 recipe adoption ledger: seven contracts weighed against the view surface, 2026-09-01.
+  'hc-recipe-alignment.md',
 ];
