@@ -108,6 +108,14 @@ public final class TesseraqlProperties {
     public static final String CREDENTIAL_THROTTLE_BEAN = "tesseraqlCredentialThrottle";
 
     /**
+     * The login-method model of the bundled sign-in surface, as a template-ready map
+     * ({@code password}/{@code sso} flags and method URLs). Bound only when the runtime wires
+     * browser sessions; its presence is what tells the error renderer that a session-expired
+     * htmx request has a login dialog to offer (the kit's session-expiry recipe).
+     */
+    public static final String LOGIN_METHODS_BEAN = "tesseraqlLoginMethods";
+
+    /**
      * The app's resolved {@code tesseraql.security.responseHeaders} block, as a plain map.
      *
      * <p>Bound in the registry rather than threaded through constructors because the surfaces

@@ -129,6 +129,38 @@ Timeouts are declared, not defaulted: only hard send failures fire unless a form
 with `data-hx-request='{"timeout": 10000}'` or the page sets a global
 `htmx.config.timeout`.
 
+## Session expiry
+
+A session that expires mid-page must not cost the user their work — the kit's
+`session-expiry` recipe, and the framework renders it end to end. A full-page navigation
+without a session keeps the classic bounce to `/_tesseraql/login?redirect=…`
+([authentication.md](authentication.md)). An **htmx** request instead answers 401 with a
+re-login `<dialog>` retargeted at the shell's shared host (`data-hc-remote-dialog-root
+data-hc-session-expiry`, one per page, at body end): `installRemoteDialog` opens it, and
+the kit's auto-installed `installSessionExpiry` remembers the interrupted request. The
+server refuses before acting, which is what makes the replay of a mutation safe.
+
+The dialog's own form posts back to `POST /_tesseraql/login` and answers three shapes:
+
+- **Success** is `200` with no body and `HX-Trigger: {"hc:sessionrenewed": {"csrfToken":
+  …}}` — the kit closes the dialog and replays the interrupted request through the full
+  htmx pipeline. The payload carries the **fresh session's CSRF token** because the page's
+  `<meta name="csrf-token">` still holds the dead session's; the bootstrap swaps the meta
+  in a capture-phase listener, so the replay's `installCsrfHeader` reads the new value.
+- **Bad credentials** answer `422` re-rendering the dialog in place with the error inline
+  — never the login page's 303 bounce, which would navigate the page whose work the
+  dialog exists to preserve. Wrong password, wrong code, and replayed code all read the
+  same, exactly like the login page.
+- **A throttled attempt** answers `429` the same way, with `Retry-After` and the rate
+  message ([credential-throttle.md](credential-throttle.md)).
+
+The offered methods mirror the login page's own model: the password form when password
+login is enabled, and an enabled SSO method as a full-page link — a provider round trip
+cannot happen inside a dialog, so that leg forfeits the replay and says so by navigating.
+The dialog fragment carries the `data-tql-session-expired` marker, which is what the
+bootstrap's beforeSwap allowance gates the 401 swap on: a 401 without the marker (an
+API-shaped credential failure) keeps htmx's default no-swap handling.
+
 ## Response-header signals (HX-Trigger)
 
 A route's `response.html.headers` are emitted on the rendered response. A nested map value is

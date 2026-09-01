@@ -65,6 +65,18 @@ tql:
     stamped: "{done} / {total} 承認済み"
     comment: コメント
     commentRequired: "必須: {transitions}"
+  session:
+    expiredTitle: セッションの有効期限が切れました
+    expiredBody: 続行するには再度サインインしてください。開始した操作はサインイン後に自動的に完了します。
+    login: ログインID
+    password: パスワード
+    otp: 6桁のコードまたはリカバリーコード（二要素認証が有効な場合）
+    signIn: サインイン
+    cancel: キャンセル
+    oidc: OIDC でサインイン
+    saml: SAML でサインイン
+    invalid: 認証情報が正しくありません。もう一度お試しください。
+    throttled: 試行回数が多すぎます。数分待ってからやり直してください。
   http:
     "400": リクエストが正しくありません
     "401": 認証が必要です

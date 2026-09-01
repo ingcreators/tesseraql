@@ -69,6 +69,18 @@ tql:
     stamped: "{done} of {total} stamped"
     comment: Comment
     commentRequired: "Required for: {transitions}"
+  session:
+    expiredTitle: Session expired
+    expiredBody: Sign in again to continue. The action you started will complete after you sign in.
+    login: Login
+    password: Password
+    otp: 6-digit code or a recovery code (if two-factor is enabled)
+    signIn: Sign in
+    cancel: Cancel
+    oidc: Sign in with OIDC
+    saml: Sign in with SAML
+    invalid: Invalid credentials. Please try again.
+    throttled: Too many attempts. Wait a few minutes and try again.
   http:
     "400": Bad Request
     "401": Unauthorized

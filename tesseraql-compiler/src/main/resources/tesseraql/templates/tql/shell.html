@@ -210,8 +210,11 @@
 <!-- The remote-dialog mount point (docs/reference-lookup.md decision 4): a lookup field's 🔍
      button and any app trigger swap a server-rendered <dialog> in here; installRemoteDialog
      opens the first one with showModal(). One host per page, empty in source, outside every
-     page's swap targets — the same stance as the network-retry host above. -->
-<div data-hc-remote-dialog-root></div>
+     page's swap targets — the same stance as the network-retry host above.
+     data-hc-session-expiry arms the kit's replay bridge (docs/hypermedia-ui.md "Session
+     expiry"): a 401 retargets the re-login dialog here, and the interrupted request replays
+     after hc:sessionrenewed. -->
+<div data-hc-remote-dialog-root data-hc-session-expiry></div>
 </body>
 </html>
 <!-- Public 4-arg API (back-compat): app-authored and scaffolder-generated shells call this. It

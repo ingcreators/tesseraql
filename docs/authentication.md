@@ -475,7 +475,9 @@ The bundled admin console — **Studio** (`/_tesseraql/studio`), the **Operation
 **browser session** (`auth: browser`): it is opened in a browser, not with a hand-minted token.
 Opening a protected page without a session redirects (302) to the login page,
 `GET /_tesseraql/login?redirect=<original-path>`; after signing in, the browser returns to the
-`redirect` target. In a hosted stack the bounce is origin-absolute — a member serves no sign-in
+`redirect` target. An **htmx** request whose session expired gets a re-login dialog in place
+instead, and the interrupted request replays after sign-in — the kit's session-expiry recipe
+([hypermedia-ui.md](hypermedia-ui.md), "Session expiry"). In a hosted stack the bounce is origin-absolute — a member serves no sign-in
 of its own, so the stack's one login answers and `redirect` carries the member page's prefixed
 path back through the round trip ([hosting.md](hosting.md)).
 
