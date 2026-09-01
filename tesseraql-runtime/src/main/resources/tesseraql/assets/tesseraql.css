@@ -118,3 +118,9 @@ a:hover{text-decoration-thickness:2px}
    the tint marks it without stealing the selection color. */
 .hc-datagrid__row:target{scroll-margin-block:3rem}
 .hc-datagrid__row:target > td{background:color-mix(in srgb, var(--hc-color-accent,#4a6da7) 12%, transparent)}
+
+/* The unsaved badge of the kit's unsaved-changes recipe (docs/hypermedia-ui.md "Unsaved
+   changes"): installDirtyGuard toggles data-dirty on the form; visibility keeps the action
+   row from shifting when the badge appears. */
+.tql-unsaved-badge{visibility:hidden}
+form[data-dirty] .tql-unsaved-badge{visibility:visible}

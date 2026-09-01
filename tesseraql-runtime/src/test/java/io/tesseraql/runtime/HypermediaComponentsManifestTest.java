@@ -39,13 +39,15 @@ class HypermediaComponentsManifestTest {
             "installNetworkRetry", // the shell's no-answer Retry host (data-hc-network-retry)
             "installRemoteDialog", // Studio drawers + the lookup search dialog host
             "installCloseDialog", // close-on-success for remote-dialog compositions
-            "installSessionExpiry"); // the 401 re-login dialog's replay bridge (shell host)
+            "installSessionExpiry", // the 401 re-login dialog's replay bridge (shell host)
+            "installDirtyGuard"); // the form view's unsaved-changes guard (data-hc-dirty-guard)
 
     /** Custom events the framework listens for / documents. */
     private static final List<String> REQUIRED_EVENTS = List.of(
             "hc:confirmed", "hc:toast", "hc:copied", "hc:datagridsort",
             "hc:themechange", // the bootstrap persists it to the account preference
-            "hc:sessionrenewed"); // the bootstrap swaps the CSRF meta before the kit replays
+            "hc:sessionrenewed", // the bootstrap swaps the CSRF meta before the kit replays
+            "hc:dirtychange"); // the unsaved-changes state flip apps may mirror to text
 
     /** Recipes the scaffolds emit and the hypermedia-ui/copilot/inbox contracts document. */
     private static final List<String> REQUIRED_RECIPES = List.of(
@@ -57,7 +59,8 @@ class HypermediaComponentsManifestTest {
             "reference-lookup", // the lookup: field (docs/reference-lookup.md)
             "remote-dialog", // Studio drawers + the lookup search dialog
             "live-search", // the lookup dialog's search leg
-            "session-expiry"); // the 401 re-login dialog (ErrorResponseRenderer + shell host)
+            "session-expiry", // the 401 re-login dialog (ErrorResponseRenderer + shell host)
+            "unsaved-changes"); // the form view's dirty guard (tql/view/form.html)
 
     /** Named exports the framework imports from the behaviors bundle as an ES module. */
     private static final List<String> REQUIRED_BUNDLE_EXPORTS = List.of(

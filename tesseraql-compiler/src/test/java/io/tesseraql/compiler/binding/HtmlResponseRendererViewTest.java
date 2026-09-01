@@ -637,6 +637,9 @@ class HtmlResponseRendererViewTest {
         assertThat(html).contains("<select").contains(">OPEN<").contains(">CLOSED<");
         assertThat(html).contains("type=\"checkbox\"");
         assertThat(html).contains(">Save</button>");
+        // The unsaved-changes guard and its badge (docs/hypermedia-ui.md "Unsaved changes"):
+        // client-only, so the markup is the whole adoption surface to pin.
+        assertThat(html).contains("data-hc-dirty-guard").contains("tql-unsaved-badge");
     }
 
     @Test

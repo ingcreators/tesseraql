@@ -20,9 +20,13 @@
   <div class="hc-card__body hc-stack">
   <div class="hc-empty" th:if="${v.notFound}"><p class="hc-empty__title"
       th:text="#{tql.view.notFound}">Not found.</p></div>
+  <!-- data-hc-dirty-guard is the kit's unsaved-changes recipe (docs/hypermedia-ui.md
+       "Unsaved changes"): baseline on first focus, data-dirty tracking, the browser's own
+       tab-close prompt, a confirm on boosted navigation, clean on this form's 2xx. Client-only
+       enhancement — without JavaScript nothing guards and nothing breaks. -->
   <form th:unless="${v.notFound}" th:id="${v.formId}" method="post" th:action="@{${v.action}}"
         th:attr="hx-post=@{${v.action}},hx-target=|#${v.formId}-errors|"
-        hx-swap="innerHTML"
+        hx-swap="innerHTML" data-hc-dirty-guard
         hx-disabled-elt="find button[type=submit]" hx-indicator="find .hc-spinner">
     <input type="hidden" name="_csrf" th:if="${_csrf != null}" th:value="${_csrf}">
     <!-- The one-time intent key (docs/idempotency-key.md decision 4): a route that declares
@@ -42,6 +46,10 @@
         <button type="submit" class="hc-button" data-variant="primary"
                 th:text="#{tql.view.submit}">Save</button>
         <span class="hc-spinner htmx-indicator" aria-hidden="true"></span>
+        <!-- Visible while the guard holds data-dirty (visibility, so the row never shifts);
+             announced through the recipe's hc:dirtychange only if an app opts into more. -->
+        <span class="hc-badge tql-unsaved-badge" data-variant="warning"
+              th:text="#{tql.view.modified}">Modified</span>
         <th:block th:if="${v.slots['actions'] != null}">
           <th:block th:insert="~{__${v.slots['actions']}__}"/>
         </th:block>
