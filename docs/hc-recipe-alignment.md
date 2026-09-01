@@ -48,7 +48,7 @@ any, should grow the rendering?
 | workflow-actions | **Adopt — its own design campaign** | `workflow:` + detail views |
 | reference-lookup | **Adopt — its own design campaign** | `input:` fields |
 | line-items | **Defer**, trigger named | `items.fields:` |
-| async-job | **Defer**, trigger named | file transfers |
+| async-job | **Designed — [csv-import.md](csv-import.md) decision 6** | the import commit leg |
 
 ## Already settled
 
@@ -190,7 +190,13 @@ never name the remove button `remove` (named controls shadow the form's DOM API 
 htmx's outerHTML swap), and array inputs keep single-value list-ness (the list-surface
 campaign's trap).
 
-## async-job — defer, with the trigger named
+## async-job — designed, as the import commit leg
+
+> **Designed: [csv-import.md](csv-import.md) decision 6.** The trigger below named the
+> list surface's "export this filtered set" as the most plausible first kick-off; the
+> csv-import campaign got there first, and the commit leg is the kick-off. Every card
+> state maps onto the transfer machinery, and the expired tombstone is the transfer row
+> outliving its spool — a state no other store in the tree could have provided.
 
 The contract: 202 plus a self-polling job card whose polling attributes travel with the
 fragment; terminal cards carry no trigger; expired ids are 200 tombstones; the server
@@ -231,7 +237,7 @@ job, and the row records why.
 | unsaved-changes | **Adopted (#1114)** | form views |
 | datagrid-bulk-errors | **Adopted (#1115–#1117)** — [bulk-report.md](bulk-report.md) | `actions:`, `_bulk` routes |
 | edit-conflict | **Adopt — needs its own design slice** | `update` command routes |
-| csv-import | **Adopt — its own campaign, when named** | file transfers |
+| csv-import | **Designed — [csv-import.md](csv-import.md)** | file transfers |
 | row-detail | Aligned (list-surface decision 11) | `location: back`, `#row-<token>` |
 | datagrid-pager | Aligned (list-surface slice 1) | the in-place pager |
 | datagrid-sort | Aligned (list-surface slice 6, hc-briefs) | `type: sort` |
@@ -251,7 +257,7 @@ job, and the row records why.
 | undo-delete | Defer — needs soft delete + grace period | delete routes |
 | sortable | Defer — first user-ordered list | display-order column |
 | multi-step-form | Defer — first multi-step business form | Studio wizard is hand-built |
-| file-upload | Defer — first HTML upload surface | csv-import names it |
+| file-upload | **Designed — [csv-import.md](csv-import.md) decision 7** | the import upload leg |
 | lazy-panel | Defer — first deferred-region demand | — |
 | sse-toast | Defer — the inbox + badge is the chosen push surface | — |
 | transfer | Defer — recorded in [reference-lookup.md](reference-lookup.md) | multi-select references |
@@ -349,7 +355,14 @@ column, how it bumps, what the 409 renders), so this is a design-first slice, no
 template patch. The shared dialog host and the 409 allowance arrive with the
 session-expiry slice, which is one reason it goes first.
 
-## csv-import — adopt, as its own campaign when named
+## csv-import — designed, and the trigger fired
+
+> **Designed: [csv-import.md](csv-import.md)** (2026-09-01). The review phase is a
+> declaration on the import the framework already has (`import.review: required`), the
+> parked batch is the transfer row plus its retained spool, the confirm token is that
+> row's single-shot claim, and the commit answers the async-job card. It fills the bulk
+> report's generalized fragment as its second feeder, which is what turns
+> [bulk-report.md](bulk-report.md) decision 1 from an intention into a fragment.
 
 The contract: bulk CSV in two phases — upload parses and validates without importing,
 the response is a validation report (summary, real error table, tokened confirm
@@ -390,6 +403,7 @@ per-user-preference store demand, the same trigger `datagrid-prefs` waits on.
 7. ~~datagrid-bulk-errors~~ — designed and shipped ([bulk-report.md](bulk-report.md),
    #1115–#1117); csv-import remains its recorded future consumer.
 8. **edit-conflict**: design-first slice — the declared version column.
-9. **csv-import campaign**: design document first, when the user names it; it is the
-   trigger that unlocks file-upload and async-job.
+9. ~~csv-import campaign~~ — named and designed ([csv-import.md](csv-import.md));
+   it fired the file-upload and async-job triggers with it, so those two rows are
+   designed rather than deferred.
 10. line-items and the deferred catalog rows wait for their named triggers.

@@ -290,4 +290,7 @@ export const EXCLUDED = [
   'reference-lookup.md',
   // The bulk report: one failure surface for bulk actions and imports, designed 2026-09-01.
   'bulk-report.md',
+  // The reviewed upload: the csv-import contract, and the file-upload and async-job
+  // contracts it triggers, designed 2026-09-01.
+  'csv-import.md',
 ];
