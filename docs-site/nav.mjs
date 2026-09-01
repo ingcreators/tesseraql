@@ -288,4 +288,6 @@ export const EXCLUDED = [
   // (transitions region, stepper, task queue) and the reference lookup field.
   'workflow-surface.md',
   'reference-lookup.md',
+  // The bulk report: one failure surface for bulk actions and imports, designed 2026-09-01.
+  'bulk-report.md',
 ];
