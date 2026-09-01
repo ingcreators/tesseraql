@@ -7,3 +7,4 @@ action: /requests/new
 fields:
   - { name: title }
   - { name: amount }
+  - { name: supplier_id, label: Preferred supplier }

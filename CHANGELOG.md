@@ -8,6 +8,17 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **The gallery's first reference lookup: purchase-request gains its supplier master**
+  (docs/reference-lookup.md slice 3 — the campaign's last piece). A `suppliers` table
+  (V2), the `/api/suppliers/search` route that owns what searching suppliers means, and
+  a `domains/supplier.yml` document carrying the whole `lookup:` block — so the
+  new-request form declares `supplier_id: { domain: supplier }` and gets code entry,
+  the search dialog, and submit-time existence checking from one line. The field is
+  optional: a requester who knows the supplier names it, purchasing fills the rest in
+  later. The form-side documentation lands in declarative-views.md's form section, with
+  lookups.md's catalog-or-enrichment line now pointing at the lookup field as the
+  form-side answer above it.
+
 - **The lookup search dialog: 🔍 for the users who don't know the code**
   (docs/reference-lookup.md slice 2). The lookup field gains its search button, and the
   compiler synthesizes the dialog legs beside the resolve companion:

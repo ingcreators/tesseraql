@@ -275,6 +275,8 @@ server-side:
 | `type: boolean` | `checkbox` (with the hidden-false companion the recipe requires) |
 | `type: date` / `datetime` | `date` / `datetime-local` widget |
 | `enum: [...]` | `select` with the enum options |
+| `codes: <catalog>` | `select` over the catalog's active codes |
+| `lookup:` | the reference lookup field: code entry + hidden id + search dialog |
 | `required: true` | `required` attribute + the label convention |
 | `writable: false`, `_csrf` | never rendered |
 
@@ -301,6 +303,19 @@ child table, in a dashboard's table panel, and in the template the page is eject
 into, which calls the catalog rather than carrying today's names as literals. A code
 the catalog does not name renders as itself — a missing name does not blank a cell.
 Ordering is still the SQL's, so a `sortable:` coded column sorts by code.
+
+Above the catalog size line ([lookups](lookups.md), "Catalog or enrichment"), a field
+declares `lookup:` instead of `codes:` — a business master is searched, not listed. The
+block names a GET query route by path (`source:`) plus its rows' `code:` and `label:`
+columns; the field renders as a visible code input, a hidden id (the only thing the
+form submits), a hint carrying the resolved name, and a 🔍 button opening the
+synthesized search dialog. Typing a code re-renders the whole field through the
+companion route — resolved, unresolved (422, hidden id emptied), or cleared — and a
+submitted id is existence-checked again inside the command's transaction. The referenced
+route's own `security:` and SQL govern every leg; a domain may carry the whole block, so
+"a supplier reference" is declared once. A dangling `source:` is lint `TQL-YAML-1059`
+and build failure `TQL-FIELD-4623`; a source row missing a declared column is
+`TQL-VIEW-3329` at render.
 
 A form's `action:` resolves `{placeholder}`s per record, and prefills fall back from
 camelCase input names to snake_case columns.

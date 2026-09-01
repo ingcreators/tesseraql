@@ -15,8 +15,13 @@
 >   "Notifications" stem plus the fragment's hidden "(N)" — the badge is `aria-hidden`,
 >   the count caps at 99+, and `sse-connect` stayed outside the swapped span. The
 >   fragment is deliberately locale-free so one pushed payload serves every session.
-> - **workflow-actions designed**: [workflow-surface.md](workflow-surface.md).
-> - **reference-lookup designed**: [reference-lookup.md](reference-lookup.md).
+> - **workflow-actions designed**: [workflow-surface.md](workflow-surface.md), and the
+>   campaign shipped all three slices 2026-09-01 (#1106–#1108).
+> - **reference-lookup designed**: [reference-lookup.md](reference-lookup.md), and the
+>   campaign shipped all three slices 2026-09-01 (#1109–#1111): `lookup:` + the resolve
+>   companion, the search dialog, and the purchase-request supplier dogfood. The
+>   manifest guard now pins `installRemoteDialog`/`installCloseDialog` and the three
+>   recipes — the Studio drift gap this ledger flagged is closed.
 >
 > hypermedia-components 0.4.0 shipped nine new recipe contracts (#1081 adopted the
 > bump). Two were settled the same week: network-retry became the shell host (#1083)

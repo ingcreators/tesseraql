@@ -26,6 +26,22 @@ tests:
       rows:
         - id: PR-1002
 
+  - name: the supplier search finds the whole master unfiltered
+    sql:
+      file: web/api/suppliers/search/search.sql
+    expect:
+      rowCount: 3
+
+  - name: the supplier search narrows by name or code
+    sql:
+      file: web/api/suppliers/search/search.sql
+    params:
+      q: North
+    expect:
+      rowCount: 1
+      rows:
+        - supplier_code: S-100
+
   - name: the detail query loads one request
     sql:
       file: web/requests/{id}/request.sql

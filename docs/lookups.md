@@ -289,6 +289,11 @@ A composite-keyed master of three hundred rows is a catalog. A single-keyed mast
 hundred thousand is an enrichment. The language dimension multiplies a catalog's size and does
 not change the test.
 
+`enrich:` is the read side of a business master. On the form side, the same line decides
+the widget: below it `codes:` renders a select, above it the field declares `lookup:` —
+the [reference lookup field](declarative-views.md#form-views-fields-derive-from-the-command-route),
+code entry plus a search dialog over the master's own query route.
+
 ### 11. Validation resolves against the key set, and a miss re-checks the source
 
 A catalog-backed domain validates that the value is in the catalog — the check nothing

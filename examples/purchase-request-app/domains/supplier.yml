@@ -1,0 +1,13 @@
+# The supplier reference (docs/reference-lookup.md, docs/field-domains.md): what "a
+# supplier" is — its key's shape and the master route that resolves and searches it —
+# declared once, so every form referencing a supplier renders and validates the same field.
+version: tesseraql/v1
+
+domains:
+  supplier:
+    type: string
+    maxLength: 40
+    lookup:
+      source: /api/suppliers/search
+      code: supplier_code
+      label: name
