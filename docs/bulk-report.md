@@ -1,6 +1,12 @@
 # The bulk report — one failure surface for bulk actions and imports
 
-> **Status: slice 1 (the snapshot leg) shipped as #1116, 2026-09-01.** Two adjacent
+> **Status: slice 2 (the non-frozen strategies + the docs section) shipped as #1117,
+> 2026-09-01 — the bulk-actions consumer is complete.** The strategy discriminator is
+> the form itself: membership present = snapshot = 307; absent = offset/keyset = 303.
+> What stays open is the recorded future consumer: csv-import fills the same report
+> fragment when its campaign is named.
+>
+> **Slice 1 (the snapshot leg) shipped as #1116, 2026-09-01.** Two adjacent
 > fixes rode it: `ids` joined the binder's framework-owned fields (a pager press with
 > rows checked used to read as mass assignment), and an expression guard's declared
 > message now rides `details.message` like the SQL-guard form's. One recorded detail:

@@ -23,8 +23,11 @@ import java.util.Map;
  * folds the per-key outcomes into the report shape (reason groups bounded by construction),
  * parks it in the {@link BulkReportStore}, and answers <b>307</b> to the list URL plus the
  * report handle — the browser re-posts the intact form to the list's own POST leg, so a
- * snapshot's frozen membership survives the round trip. Everything else — a JSON caller, a
- * composite-key view, a missing store — keeps the JSON outcomes contract untouched.
+ * snapshot's frozen membership survives the round trip. An offset or keyset list (no
+ * membership in the form) takes the ordinary <b>303</b>: its state lives in the
+ * {@code _return} URL, so a fresh GET is the honest re-render. Everything else — a JSON
+ * caller, a composite-key view, a missing store — keeps the JSON outcomes contract
+ * untouched.
  */
 public final class BulkReportRoundTrip {
 
@@ -114,11 +117,14 @@ public final class BulkReportRoundTrip {
             String handle = store.put(principal.subject(), payload, TTL_MILLIS);
             String target = returnTo + (returnTo.contains("?") ? "&" : "?") + PARAM + "="
                     + handle;
-            // 307, not 303: the browser re-POSTS the intact form to the list route's own
-            // page leg (a snapshot's membership, sort and filters all live in that body),
-            // and the bulk action itself is behind us — a refresh re-posts the idempotent
-            // page fetch, which is the post/redirect/get property in method-preserving form.
-            exchange.response().status(307);
+            // The form itself names the acting strategy (docs/bulk-report.md decision 6): a
+            // snapshot list's form carried its frozen membership, so the answer is 307 — the
+            // browser re-POSTS the intact form to the list route's own page leg, and the
+            // membership, sort and filters all survive; a refresh re-posts the idempotent
+            // page fetch, the post/redirect/get property in method-preserving form. A form
+            // without membership is an offset or keyset list, whose state lives in the
+            // `_return` URL — the ordinary 303 GET is the honest re-render there.
+            exchange.response().status(membership != null ? 307 : 303);
             exchange.response().header("Location",
                     io.tesseraql.pipeline.BasePath.url(exchange, target));
             exchange.setBody("");
