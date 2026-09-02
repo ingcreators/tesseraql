@@ -96,6 +96,28 @@ class IdempotencyProcessorsTest {
     }
 
     @Test
+    void theOverwriteRetryHashesAsTheSaveItReplaces() throws Exception {
+        // docs/edit-conflict.md decision 6: a deliberate overwrite is the same intent as the save
+        // it replaces, and differs from it in exactly _lock and _overwrite. Left in the hash, the
+        // retry would read as "same key, different request" and answer 422 for a payload the user
+        // cannot clear without reloading.
+        FakeStore save = new FakeStore();
+        Exchange a = exchange(save);
+        a.request().formFields().put("name", List.of("Second item"));
+        a.request().formFields().put("_lock", List.of("3"));
+        begin(a);
+
+        FakeStore overwrite = new FakeStore();
+        Exchange b = exchange(overwrite);
+        b.request().formFields().put("name", List.of("Second item"));
+        b.request().formFields().put("_lock", List.of("3"));
+        b.request().formFields().put("_overwrite", List.of("1"));
+        begin(b);
+
+        assertThat(save.lastHash).isEqualTo(overwrite.lastHash);
+    }
+
+    @Test
     void reservedFieldsStayOutOfTheHash() throws Exception {
         // _csrf varies by session and _idempotency is the key itself: neither may make two
         // submissions of the same form look like different requests.

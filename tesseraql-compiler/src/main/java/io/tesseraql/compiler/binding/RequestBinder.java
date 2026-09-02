@@ -31,12 +31,19 @@ public final class RequestBinder implements Step {
     private static final TqlErrorCode FIELD_REJECTED = new TqlErrorCode(TqlDomain.FIELD, 2002);
     private static final System.Logger LOG = System.getLogger(RequestBinder.class.getName());
     /**
-     * Framework-reserved request fields that are not application inputs and never bound: the
-     * hidden CSRF token a no-JS form post carries (validated by the {@code csrf} step) passes the
-     * mass-assignment guard even under {@code unknownFields: reject}.
+     * Framework-reserved request fields that are not application inputs and never bound. Each is
+     * owned by the step that consumes it — the {@code csrf} gate, the idempotency processors, the
+     * redirect renderer, the lock binder — and each passes the mass-assignment guard even under
+     * {@code unknownFields: reject}, which is the default rather than an opt-in.
      */
     private static final java.util.Set<String> RESERVED_FIELDS = java.util.Set.of("_csrf",
             "_idempotency", "_return",
+            // The declared lock and its waiver (docs/edit-conflict.md decision 4): the value the
+            // user saw, and the deliberate act of overwriting it. Both are posted to the author's
+            // own route, which is the `ids` case rather than the framework-mounted sub-route
+            // csv-import refused to reserve `token` for. Reserving only the first would answer
+            // 400 on every overwrite, before the lock is ever read.
+            io.tesseraql.core.sql.LockBinding.PARAM, LockBinder.OVERWRITE_FIELD,
             // The snapshot pager's framework-owned fields (docs/list-surface.md decision 10):
             // the membership tokens and the page number travel in the POST body, like the
             // framework-owned ?page=/?size= query params they mirror.

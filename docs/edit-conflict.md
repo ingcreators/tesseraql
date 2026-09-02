@@ -56,11 +56,15 @@ otherwise. Both are wrong, for every declarative form in the framework, not just
 one.
 
 **And `expect:` under `sources:` is inert.** One shared `binding` schema definition serves
-both `steps:` and `sources:`, so `expect:`, `keys:` and `mode: update` all validate under
-a read acquisition — where `SqlStep` has no row-count logic at all. The optimistic-locking
-example in [transactional-writes.md](transactional-writes.md) is written in exactly that
-shape, while the acceptance test it was derived from uses `steps:`. A reader copying the
-documented snippet gets a declaration the executor ignores.
+both `steps:` and `sources:`, so `expect:` and `keys:` validate under a read acquisition and
+then do nothing at all — `SqlStep` has no row-count logic and captures no generated keys. The
+optimistic-locking example in [transactional-writes.md](transactional-writes.md) is written
+in exactly that shape, while the acceptance test it was derived from uses `steps:`, so a
+reader copying the documented snippet gets a declaration the executor ignores.
+
+`mode: update` under a source is a different thing and stays legal: it is honoured — the step
+really does execute the update and publish its affected count — so refusing it would narrow
+working behaviour rather than close a hole. Only the two genuinely inert keys are refused.
 
 ## Decision 1 — the lock is one route-level key, and it names a column
 
@@ -102,22 +106,28 @@ cheaper and truer.
 **It is part of what the route accepts.** A caller must send the lock value. That is
 contract, not mechanism, and OpenAPI can say so.
 
-`lock:` takes one bare column name, validated at compile with the identifier check the
-workflow `stamp:` block already uses. It implies `expect: { rowCount: 1, onMismatch:
+`lock:` names one bare column, validated at compile with the identifier check the workflow
+`stamp:` block already uses; the block form of decision 4 adds the column's type beside it. It implies `expect: { rowCount: 1, onMismatch:
 conflict }`, and the implied expectation attaches to exactly one step: the one whose
 rendered statement carries the `/*%lock*/` directive. Every other step of a multi-step
 command is untouched. Declaring `expect:` on that same step is refused, because two
 statements of one intent can disagree.
 
-The refusals split by where each can actually fire, and saying which is part of the design
-rather than an implementation detail. `TransactionalCommandProcessor.validate` sees one
-`steps:` binding at a time, so the two step-shaped refusals live there under
-`TQL-ROUTE-3102`, at the code the `expect:` refusals already use: `expect:` declared beside
-the lock, and more than one step carrying `/*%lock*/`. The route-shaped ones live where the
-route is compiled: `lock:` on anything but an HTTP command route — `queue-consume` is the
-other write recipe and an MCP tool may carry `command-json`, so "a recipe that writes" is
-not narrow enough — and the `lock:`/`/*%lock*/` pairing in both directions, which needs the
-route's whole rendered statement set. The `sources:` defect fix lives where sources are
+The refusals split by what each home can actually see, and saying which is part of the design
+rather than an implementation detail. The command processor sees one step's parse at a time,
+so the **step-shaped** refusals live there under `TQL-ROUTE-3102`, at the code the `expect:`
+refusals already use: `expect:` declared beside the lock, a second directive or a second
+carrier step, a lock on a step that is not an update, and a directive on a route that
+declared no column — the processor holds the parse, so that half of the pairing costs it
+nothing.
+
+The **route-shaped** ones live where the route is compiled, under `TQL-ROUTE-3119`: a column
+that is not an identifier, a `lock:` no statement carries — the other half of the pairing,
+which needs the route's whole statement set — and a `lock:` on anything but an HTTP command
+route. That last one is a property of the surface rather than the recipe: `queue-consume` is
+the other write recipe and an MCP tool may carry `command-json`, and neither has a request
+form to carry the value back, so each builder names its own surface instead of letting the
+recipe string imply it. The `sources:` defect fix lives where sources are
 compiled, in `RouteCompiler`, and not under a code whose own text says "the route's steps
 declaration is invalid".
 
@@ -133,8 +143,17 @@ the same directive is already legal in two clauses.
 
 What the compiler does check is exact, and it is more than it sounds. The directive must be
 present, exactly once across the route's steps, and — inherited free from `parseScope` — it
-must be followed by a parenthesized dummy predicate, or the parse fails. Position falls to
-a lint warning beside decision 10's, in the one layer that reads the SQL text. The residual
+must be followed by a parenthesized dummy predicate, or the parse fails.
+
+It must also be **unconditional**, and that refusal is not a nicety. A `/*%lock*/` inside a
+`/*%if*/` passes every other check and then renders away on the branch that omits it: no
+predicate, no bind, and the UPDATE meets its own implied row count on the author's remaining
+predicates alone. The answer is 200 and the other operator's edit is gone — the exact defect
+this surface exists to abolish, reintroduced by a declaration that looks right. The node tree
+shows it plainly, so it is refused rather than warned about.
+
+Clause *position* does fall to a lint warning beside decision 10's, in the one layer that
+reads the SQL text. The residual
 risk is small by construction: `/*%lock*/(1=1)` in a SET list is a syntax error at the
 first execution, so the placements the compiler lets through are the ones the database
 refuses anyway.
@@ -266,6 +285,24 @@ declared inputs use, typed from a `domains/` entry named for the lock column whe
 declares one and opaque otherwise. Reading a domain's *type* is not the same as subjecting
 the field to `writable:`, `policy:` or `mask:`, which is all decision 1 rejected. A form
 post and a JSON number therefore normalize identically.
+
+**And the type has to be declared, which is why `lock:` has a block form.** Every form value
+arrives as a string. An untyped lock on an integer column would send a string to an integer
+comparison and the driver would refuse it — a 500 on every browser save, while the same
+route's JSON leg worked, because its number arrived as a number. So the declaration carries
+the type wherever the column is not opaque:
+
+```yaml
+lock: version                                 # the bare column: compared exactly as it arrived
+lock: { column: version, type: integer }      # typed, so a form's "3" and a JSON 3 are one bind
+```
+
+The type is declared rather than looked up by the column's name. Reading it out of a
+`domains/` entry named for the column was the first shape, and it is wrong twice over. Every
+domain the framework generates is keyed `<table>.<column>`, so a bare `version` would never
+match one. And this codebase does not infer a column's declared knowledge from its spelling
+anywhere else — a `columns:` entry and a detail `fields:` entry both take an explicit
+`domain:` for exactly that reason.
 
 A locked route reached with neither `_lock` nor `_overwrite` answers **400
 `TQL-FIELD-2011`** — the next free number beside the missing-framework-field refusals that
@@ -471,8 +508,8 @@ The house precedent for the identity half is explicit. Workflow task-authority b
 renders "Assigned to someone else" from a boolean and never puts the assignee in the model.
 State the fact; do not invent the payload.
 
-The path to closing this is named rather than worked around: a block form of `lock:` with
-a `read:` naming a query route whose own `security:` and SQL govern the fetch — the
+The path to closing this is named rather than worked around: a `read:` key on the block form
+of `lock:`, naming a query route whose own `security:` and SQL govern the fetch — the
 reference-lookup companion shape, where the referenced route's security governs every leg.
 That is also what the upstream `datagrid-edit-conflict` recipe's "theirs in the cells" half
 would need. It waits for a use case, not for a slice.
@@ -549,7 +586,9 @@ a declaration that looks correct. Only the lint sees the SET list, because it re
 text and `TransactionalCommandProcessor` sees a parse with no clause positions, so the lint
 is where that warning belongs. The heuristic itself is fixed while it is open: `isUpdate`
 learns to skip leading comments, which every scaffolded file's checksum line defeats today,
-and the predicate check uses the declared column name where there is one. And the framework
+and the predicate check uses the declared column name where there is one. A second warning
+joins it for the placement decision 1 leaves to a lint: a `/*%lock*/` that is not in the
+statement's WHERE. And the framework
 stops telling authors to write `expect.rows`: the key is `rowCount`, and the lint message,
 the boot refusal and the scaffolded SQL comment all say `rows` today.
 

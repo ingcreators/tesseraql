@@ -8,6 +8,63 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **The declared optimistic lock: `lock:` on a command route** (docs/edit-conflict.md slice 1,
+  the machinery). A command route names the column whose value a caller must send back unchanged
+  for the write to apply, and the framework only ever **compares** it — expanding a
+  `/*%lock*/ (1=1)` directive the authored statement carries in its own WHERE into
+  `(<column> = ?)`. The SET list that advances the column stays the author's, which is what makes
+  the lock work for a counter, a ULID, a timestamp and a vendor rowversion alike, and what keeps
+  the authored statement the only statement the framework issues.
+
+  It is written either as the bare column (`lock: version`) or as a block that also names the
+  column's type (`lock: { column: version, type: integer }`). A form value always arrives as a
+  string, so an untyped lock on a numeric column could not be compared at all; the type is
+  declared rather than guessed from a `domains/` entry with a matching name, because nothing else
+  in the framework infers a column's declared knowledge from its spelling.
+
+  The declaration is route-level, not a step key: every route surface a page reads is
+  contract-level, and one route has exactly one lock, so a per-step spelling would let a route
+  declare two locks against one form field. It implies `expect: { rowCount: 1, onMismatch:
+  conflict }` on the step that carries the directive.
+
+  The **step-shaped** refusals are `TQL-ROUTE-3102`: `expect:` declared beside the lock (two
+  statements of one intent can disagree), a second directive or a second carrier step, a lock on
+  a step that is not an update, a directive on a route that declared no column, and — the
+  sharpest of them — a directive nested inside an `/*%if*/` or a `/*%for*/`, which would render
+  away on the branch that omits it and let the write meet its own row-count expectation with no
+  lock predicate at all. The lock predicate is not conditional.
+
+  The **route-shaped** refusals are `TQL-ROUTE-3119`: a column that is not a SQL identifier — it
+  is interpolated into the statement's text, so that check is the injection boundary — a `lock:`
+  no statement carries, and a `lock:` on anything but an HTTP command route. That last is a
+  property of the surface rather than the recipe: an MCP tool and a queue consumer are
+  `command-json` documents too, and neither has a request form to carry the value back.
+
+  A stale write answers **`TQL-SQL-4094`** (409) rather than overloading `TQL-SQL-4092`, so a
+  client can tell a declared lock — which will grow a dialog and a waiver — from any other
+  row-count expectation that happened to fail. Its envelope keeps `details.conflict` exactly as
+  it was and adds a **sibling** `details.lock` naming the column and the two fields; a sibling
+  rather than more entries inside `conflict`, because the renderer hands that whole map to the
+  message catalog as the hint's interpolation parameters, where a key named like a placeholder
+  would silently rewrite the sentence.
+
+  `_lock` and `_overwrite` are both framework-reserved request fields, read and typed by their
+  own step ahead of the write. Reserving only the first would answer 400 on every overwrite
+  before the lock was ever read, because rejecting unknown fields is the framework default rather
+  than an opt-in. The step coerces the value through the same scalar coercion a declared input
+  gets, so a form's `"7"` and a JSON `7` reach an integer column identically, and it owns the
+  refusals that coercion would otherwise report against a form control that does not exist: a
+  malformed value, a duplicated key, and a locked route reached with neither field are all
+  **`TQL-FIELD-2011`** (400), before the transaction opens. Both fields stay out of the
+  idempotency request hash: a deliberate overwrite is the same intent as the save it replaces,
+  and left in the hash the retry would read as "same key, different request".
+
+  Rendering a lock directive on a statement nobody armed is **`TQL-SQL-2115`**, never a fallback
+  to `(1=1)` — a silently unlocked write is the defect this surface exists to abolish.
+
+  Nothing declares `lock:` yet: the scaffolder and the gallery follow in slice 4, so this slice
+  is purely additive.
+
 - **The inventory gallery app imports supplier prices** (docs/csv-import.md slice 6, the
   dogfood). `examples/inventory-app` gains `/products/prices/import`: a reviewed CSV upload with
   a row contract (`sku` required, `price` a number at or above zero), `onError: skip`, and
@@ -374,6 +431,15 @@ All notable changes to TesseraQL are documented here. The format follows
   joins it there.
 
 ### Fixed
+
+- **`expect:` and `keys:` under `sources:` are refused instead of silently ignored**
+  (`TQL-ROUTE-3120`). One `binding` schema definition serves both `steps:` and `sources:`, so
+  both keys validated under a read acquisition and then did nothing at all — a read captures no
+  generated keys and counts no affected rows. The optimistic-locking example in
+  transactional-writes.md was written in exactly that shape, so a reader copying the documented
+  snippet got a declaration the executor ignored; the snippet is now `steps:`. `mode: update`
+  under a source is deliberately left legal: that one is honoured, so refusing it would narrow
+  working behaviour rather than close a hole.
 
 - **The status-mapping ledger could not see the file-transfer domain.** It policed the
   `4xxx` band, and the transfer refusals are numbered `28xx`, so an unmapped one answered

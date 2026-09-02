@@ -113,6 +113,19 @@ public sealed interface SqlNode {
     }
 
     /**
+     * An optimistic-lock comparison site: {@code /*%lock*}{@code / (1=1)}
+     * (docs/edit-conflict.md decision 2). The parenthesized dummy keeps the template runnable in a
+     * plain SQL tool; at render time it becomes {@code (<column> = ?)} against the value the
+     * caller sent back, or {@code (1=1)} when the caller deliberately waived the lock.
+     *
+     * <p>The node carries no column, because the column is the route's {@code lock:} declaration
+     * and a second copy could disagree with nothing able to cross-check it. The framework only
+     * ever compares: the authored statement is what advances the column.
+     */
+    record Lock(int sourceLine) implements SqlNode {
+    }
+
+    /**
      * A file-reference site for an analytics datasource: {@code /* ${scope.name}/rel/path *}{@code
      * / 'dummy'} or {@code /* ${dataset.param} *}{@code / 'dummy'} (docs/duckdb.md). The dummy
      * literal keeps the template runnable in a plain SQL tool; at render time a

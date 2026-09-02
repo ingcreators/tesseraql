@@ -24,6 +24,25 @@ class SqlLineCoverageTest {
     }
 
     @Test
+    void aLockDirectiveLineIsCoverableAndASeededRenderCoversIt() {
+        // renderLock covers its line, so the line has to be counted as coverable — otherwise a
+        // covered-but-uncoverable line pushes the ratio above 1.
+        List<SqlNode> nodes = Sql2WayParser.parse("""
+                update t set a = 1
+                 where id = /* id */ 0 and /*%lock*/ (1=1)""");
+        Set<Integer> coverable = SqlCoverableLines.compute(nodes);
+        assertThat(coverable).containsExactly(1, 2);
+
+        SqlCoverage coverage = new SqlCoverage();
+        coverage.record("update.sql", SqlRenderer.render(nodes,
+                Map.of("id", 1L, io.tesseraql.core.sql.LockBinding.PARAM,
+                        new io.tesseraql.core.sql.LockBinding("version", 3L, false)))
+                .coverageTrace(), coverable);
+
+        assertThat(coverage.report("update.sql").lineRatio()).isEqualTo(1.0);
+    }
+
+    @Test
     void lineRatioReflectsUncoveredConditionalBody() {
         List<SqlNode> nodes = Sql2WayParser.parse(SQL);
         Set<Integer> coverable = SqlCoverableLines.compute(nodes);

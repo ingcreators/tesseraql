@@ -43,6 +43,10 @@ import java.util.Map;
  *                on (roadmap Phase 53), defaulting to {@code main}; on a read route every binding
  *                runs there (a named read query may override per binding), and a transactional
  *                route moves its whole single-connection transaction there
+ * @param lock the optimistic lock of a command route (docs/edit-conflict.md decision 1): the
+ *             column whose value a caller must send back unchanged for the write to apply. The
+ *             framework only ever compares it, through the {@code /*%lock*}{@code /} directive
+ *             the authored statement carries; the statement itself advances it
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record RouteDefinition(
@@ -85,7 +89,12 @@ public record RouteDefinition(
         @com.fasterxml.jackson.annotation.JsonFormat(with = com.fasterxml.jackson.annotation.JsonFormat.Feature.ACCEPT_SINGLE_VALUE_AS_ARRAY) List<String> emit,
         // Source tables whose code catalogs this command's write makes stale
         // (docs/lookups.md, decision 13); a single string or a list in YAML.
-        @com.fasterxml.jackson.annotation.JsonFormat(with = com.fasterxml.jackson.annotation.JsonFormat.Feature.ACCEPT_SINGLE_VALUE_AS_ARRAY) List<String> invalidates) {
+        @com.fasterxml.jackson.annotation.JsonFormat(with = com.fasterxml.jackson.annotation.JsonFormat.Feature.ACCEPT_SINGLE_VALUE_AS_ARRAY) List<String> invalidates,
+        // The optimistic lock (docs/edit-conflict.md decision 1): route-level, because a page
+        // must be able to read it and one route has exactly one lock. Left un-normalized, so a
+        // blank column fails the identifier check at route build time loudly instead of coercing
+        // to null here.
+        LockSpec lock) {
 
     public RouteDefinition {
         input = input == null ? Map.of() : Map.copyOf(input);
@@ -122,7 +131,8 @@ public record RouteDefinition(
                 security, null, null, null,
                 command == null ? Map.of() : Map.of("command", command),
                 Map.of(), Map.of(), decide, Map.of(),
-                null, null, null, null, null, null, response, null, null, null, null, null);
+                null, null, null, null, null, null, response, null, null, null, null, null,
+                null);
     }
 
     /**
@@ -138,7 +148,7 @@ public record RouteDefinition(
                 idempotency, admission, outbox, steps, sources, validate, decide,
                 notifications,
                 errors, fileImport, fileExport, webhook, publish, consume, response, pagination,
-                datasource, cache, emit, invalidates);
+                datasource, cache, emit, invalidates, lock);
     }
 
     /**
@@ -154,7 +164,7 @@ public record RouteDefinition(
         return new RouteDefinition(version, id, kind, recipe, effectiveInput, inputPolicy,
                 security, idempotency, admission, outbox, steps, sources, validate, decide,
                 notifications, effectiveErrors, fileImport, fileExport, webhook, publish, consume,
-                response, pagination, datasource, cache, emit, invalidates);
+                response, pagination, datasource, cache, emit, invalidates, lock);
     }
 
     /**
@@ -168,7 +178,7 @@ public record RouteDefinition(
         return new RouteDefinition(version, id, kind, recipe, input, inputPolicy, security,
                 idempotency, admission, outbox, steps, sources, effective, decide,
                 notifications, errors, fileImport, fileExport, webhook, publish, consume,
-                response, pagination, datasource, cache, emit, invalidates);
+                response, pagination, datasource, cache, emit, invalidates, lock);
     }
 
     /**
@@ -183,7 +193,7 @@ public record RouteDefinition(
         return new RouteDefinition(version, id, kind, recipe, input, inputPolicy, security,
                 idempotency, admission, outbox, steps, sources, validate, effective,
                 notifications, errors, fileImport, fileExport, webhook, publish, consume,
-                response, pagination, datasource, cache, emit, invalidates);
+                response, pagination, datasource, cache, emit, invalidates, lock);
     }
 
     /** The input policy, or framework defaults (reject unknown / reject read-only). */

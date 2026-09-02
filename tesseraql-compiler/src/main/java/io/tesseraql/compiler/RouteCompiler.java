@@ -50,6 +50,10 @@ public final class RouteCompiler {
     private static final TqlErrorCode PROMPT_WRITES = new TqlErrorCode(TqlDomain.ROUTE, 3116);
     /** TQL-ROUTE-3117: a prompt-text recipe declares no response.text: to render its message. */
     private static final TqlErrorCode PROMPT_WITHOUT_TEXT = new TqlErrorCode(TqlDomain.ROUTE, 3117);
+    /** TQL-ROUTE-3119: the route's lock: declaration is invalid or unhonoured by its recipe. */
+    private static final TqlErrorCode INVALID_LOCK = new TqlErrorCode(TqlDomain.ROUTE, 3119);
+    /** TQL-ROUTE-3120: a read acquisition under sources: declares write-only keys. */
+    private static final TqlErrorCode INVALID_SOURCE = new TqlErrorCode(TqlDomain.ROUTE, 3120);
     /** TQL-VIEW-3327: a detail view's workflow: names no declared kind: workflow document. */
     private static final TqlErrorCode UNKNOWN_WORKFLOW = new TqlErrorCode(TqlDomain.VIEW, 3327);
     private static final String DEFAULT_DATASOURCE = "main";
@@ -464,6 +468,8 @@ public final class RouteCompiler {
     private void buildRoute(RuntimeContext context, Path appHome, RouteFile routeFile) {
         RouteDefinition definition = routeFile.definition();
         requireRotationHonoured(definition);
+        requireLockHonoured(definition, null);
+        refuseWriteKeysOnSources(definition);
         switch (definition.recipe()) {
             case "query-json", "command-json" -> buildJson(context, routeFile);
             case "query-html", "page" -> buildTemplatePage(context, appHome, routeFile);
@@ -573,6 +579,69 @@ public final class RouteCompiler {
         }
     }
 
+    /**
+     * The route-shaped half of the lock refusals (docs/edit-conflict.md decision 1).
+     *
+     * <p>"A recipe that writes" is not narrow enough: {@code queue-consume} is the other write
+     * recipe and an MCP tool may carry {@code command-json}, and neither renders a form that
+     * could carry the {@code _lock} the declaration promises. So the honoured set is exactly one
+     * — an HTTP command route.
+     *
+     * <p>The identifier check is not a formality. The lock column is interpolated into the SQL
+     * text, because a lock compares a column named in YAML and no bind can name a column, so this
+     * is the injection boundary — the same check the workflow {@code stamp:} block applies, and
+     * {@code LockBinding}'s constructor holds the other end of it.
+     */
+    private void requireLockHonoured(RouteDefinition definition, String otherSurface) {
+        io.tesseraql.yaml.model.LockSpec lock = definition.lock();
+        if (lock == null) {
+            return;
+        }
+        // The surface is the caller's to state, not the recipe's to imply: an MCP tool and a
+        // queue consumer are both command-json documents reusing RouteDefinition, and only an
+        // HTTP route mounts the step that reads the lock fields off a request.
+        if (otherSurface != null) {
+            throw new TqlException(INVALID_LOCK, "Route '" + definition.id()
+                    + "': lock: is honoured by an HTTP command route, not by " + otherSurface
+                    + " - there is no request form to carry the value back");
+        }
+        if (!"command-json".equals(definition.recipe()) || !usesTransactionalCommand(definition)) {
+            throw new TqlException(INVALID_LOCK, "Route '" + definition.id()
+                    + "': lock: is honoured by an HTTP command route with steps:, not by recipe '"
+                    + definition.recipe() + "'");
+        }
+        if (!io.tesseraql.core.sql.SqlIdentifiers.isIdentifier(lock.column())) {
+            throw new TqlException(INVALID_LOCK, "Route '" + definition.id() + "': lock column '"
+                    + lock.column()
+                    + "' must be a SQL identifier — it is interpolated into the statement's text");
+        }
+    }
+
+    /**
+     * Refuses the write-only step keys under a read acquisition (docs/edit-conflict.md).
+     *
+     * <p>One {@code binding} schema definition serves both {@code steps:} and {@code sources:},
+     * so {@code expect:} and {@code keys:} validate under a source and then do nothing at all —
+     * {@code SqlStep} has no row-count logic and captures no generated keys. A declaration that
+     * validates and does nothing is the silent-tolerance shape this codebase has swept twice.
+     *
+     * <p>Deliberately not {@code mode: update}: that one is honoured under a source — the step
+     * really does execute the update and publish its affected count — so refusing it would narrow
+     * working behaviour rather than close a hole.
+     */
+    private static void refuseWriteKeysOnSources(RouteDefinition definition) {
+        definition.sources().forEach((name, binding) -> {
+            String offending = binding.expect() != null
+                    ? "expect:"
+                    : (!binding.keys().isEmpty() ? "keys:" : null);
+            if (offending != null) {
+                throw new TqlException(INVALID_SOURCE, "Route '" + definition.id() + "': source '"
+                        + name + "' declares " + offending + ", which a read acquisition does not"
+                        + " honour — move the statement to steps:");
+            }
+        });
+    }
+
     /** The terminal renderer: a redirect when declared, otherwise the JSON response. */
     private io.tesseraql.pipeline.Step responseRenderer(RouteDefinition definition) {
         if (definition.response() != null && definition.response().redirect() != null) {
@@ -631,6 +700,14 @@ public final class RouteCompiler {
                 .process(new RequestBinder(definition, routeFile.urlPath(),
                         compiledAppHome, functions))
                 .process(new io.tesseraql.compiler.binding.CatalogBinder());
+        // The framework-owned lock (docs/edit-conflict.md decision 4): _lock and _overwrite are
+        // reserved, so the request binder let them past untyped; this reads them off the parsed
+        // body and refuses a locked route reached with neither. Before the http: sources, so a
+        // malformed caller costs no partner call and never opens the transaction.
+        if (definition.lock() != null) {
+            step = step.process(new io.tesseraql.compiler.binding.LockBinder(
+                    routeFile.definition().id(), definition.lock()));
+        }
         // http: sources run before the command, which is the whole point of allowing them here:
         // the connection is not taken until the fetch is done, so the transaction never waits on
         // a third party (docs/lookups.md, decision 19).
@@ -721,10 +798,43 @@ public final class RouteCompiler {
         String dialect = datasourceDialect(datasource);
         java.util.function.Function<String, Path> stepFile = file -> io.tesseraql.core.dialect.DialectSqlResolver
                 .resolve(sourceDir.resolve(file).normalize(), dialect);
+        if (definition.lock() != null) {
+            requireLockDirective(definition, stepFile);
+        }
         return new io.tesseraql.compiler.binding.TransactionalCommandProcessor(routeId,
                 io.tesseraql.compiler.binding.CommandDeclaration.of(definition), stepFile,
                 datasource, dialect, appName, workflow, commandBounds(), functions)
                 .lookups(compiledLookups(definition));
+    }
+
+    /**
+     * The pairing, in the direction only the route can see (docs/edit-conflict.md decision 1): a
+     * {@code lock:} declaration whose statements carry no directive would compare nothing, which
+     * is a lock that silently is not one. The opposite direction — a directive on a route that
+     * declared no column — is refused by the processor, which already holds the parse.
+     *
+     * <p>This runs only for a route that declares {@code lock:}, so an unlocked route pays no
+     * extra parsing at all.
+     */
+    private void requireLockDirective(RouteDefinition definition,
+            java.util.function.Function<String, Path> stepFile) {
+        boolean carried = definition.steps().values().stream()
+                .filter(binding -> binding.file() != null)
+                .anyMatch(binding -> {
+                    boolean[] found = {false};
+                    io.tesseraql.core.sql.SqlNode.walk(parseSql(stepFile.apply(binding.file())),
+                            node -> {
+                                if (node instanceof io.tesseraql.core.sql.SqlNode.Lock) {
+                                    found[0] = true;
+                                }
+                            });
+                    return found[0];
+                });
+        if (!carried) {
+            throw new TqlException(INVALID_LOCK, "Route '" + definition.id() + "': lock column '"
+                    + definition.lock().column() + "' is declared but no step's statement carries"
+                    + " the lock directive — add /*%lock*/ (1=1) to the WHERE of the update");
+        }
     }
 
     /**
@@ -1168,6 +1278,8 @@ public final class RouteCompiler {
      */
     private void buildQueueConsume(RouteFile routeFile) {
         RouteDefinition definition = routeFile.definition();
+        requireLockHonoured(definition, "a queue consumer");
+        refuseWriteKeysOnSources(definition);
         io.tesseraql.yaml.model.ConsumeSpec consume = definition.consume();
         if (consume == null || consume.channel() == null || consume.channel().isBlank()
                 || consume.topic() == null || consume.topic().isBlank()) {
@@ -1766,6 +1878,8 @@ public final class RouteCompiler {
      */
     private void buildMcpTool(ToolFile toolFile) {
         RouteDefinition definition = toolFile.definition();
+        requireLockHonoured(definition, "an MCP tool");
+        refuseWriteKeysOnSources(definition);
         Path toolDir = toolFile.source().getParent();
         String routeId = "mcp." + definition.id();
 
@@ -1828,6 +1942,8 @@ public final class RouteCompiler {
      */
     private void buildMcpResource(ResourceFile resourceFile) {
         RouteDefinition definition = resourceFile.definition();
+        requireLockHonoured(definition, "an MCP resource");
+        refuseWriteKeysOnSources(definition);
         Path resourceDir = resourceFile.source().getParent();
         String routeId = "mcp.resource." + definition.id();
 
@@ -1863,6 +1979,8 @@ public final class RouteCompiler {
      */
     private void buildMcpUi(Path appHome, UiResourceFile uiFile) {
         RouteDefinition definition = uiFile.definition();
+        requireLockHonoured(definition, "an MCP UI resource");
+        refuseWriteKeysOnSources(definition);
         Path uiDir = uiFile.source().getParent();
         String routeId = "mcp.ui." + definition.id();
 
@@ -1902,6 +2020,8 @@ public final class RouteCompiler {
      */
     private void buildMcpPrompt(io.tesseraql.yaml.manifest.PromptFile promptFile) {
         RouteDefinition definition = promptFile.definition();
+        requireLockHonoured(definition, "an MCP prompt");
+        refuseWriteKeysOnSources(definition);
         Path promptDir = promptFile.source().getParent();
         if (!"prompt-text".equals(definition.recipe())) {
             throw new TqlException(UNSUPPORTED_RECIPE, "Prompt '" + definition.id()

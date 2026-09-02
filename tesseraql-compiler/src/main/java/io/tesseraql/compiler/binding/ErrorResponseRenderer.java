@@ -569,8 +569,9 @@ public final class ErrorResponseRenderer implements Step {
             };
             case SQL -> switch (code.number()) {
                 case 4001, 4002 -> 400; // not-null / check violation
-                // unique / foreign-key / row-count expectation / serialization conflict
-                case 4090, 4091, 4092, 4093 -> 409;
+                // unique / foreign-key / row-count expectation / serialization conflict, and the
+                // declared lock's stale write (docs/edit-conflict.md decision 5)
+                case 4090, 4091, 4092, 4093, 4094 -> 409;
                 default -> 500;
             };
             case TENANT, APP -> switch (code.number()) {

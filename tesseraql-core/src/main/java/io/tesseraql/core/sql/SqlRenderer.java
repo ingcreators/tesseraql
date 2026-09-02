@@ -26,6 +26,8 @@ public final class SqlRenderer {
     /** TQL-SQL-2108: an embedded variable resolved to a value carrying SQL meta-characters. */
     private static final TqlErrorCode UNSAFE_EMBEDDED = new TqlErrorCode(TqlDomain.SQL, 2108);
     private static final TqlErrorCode UNSEEDED_AMBIENT = new TqlErrorCode(TqlDomain.SQL, 2112);
+    /** TQL-SQL-2115: a lock directive rendered on a statement with no lock value seeded. */
+    private static final TqlErrorCode UNSEEDED_LOCK = new TqlErrorCode(TqlDomain.SQL, 2115);
     /** TQL-DECISION-4722: a decision.* bind names a decision the route never evaluated. */
     private static final TqlErrorCode UNSEEDED_DECISION = new TqlErrorCode(TqlDomain.DECISION,
             4722);
@@ -41,10 +43,21 @@ public final class SqlRenderer {
     private final ScopeResolver scopeResolver;
     private final Map<String, Object> scopeContext;
     private final FilePathResolver filePathResolver;
+    /**
+     * The lock the command seeded, lifted out of the bind scope by the constructor
+     * (docs/edit-conflict.md decision 2). Lifting it out is this directive's version of the
+     * save-and-restore {@link #renderScope} performs: a scope renders a sub-template whose own
+     * binds must resolve, so its bindings are layered and then restored, while a lock has no
+     * sub-template — so the honest equivalent is that the value never enters the scope at all and
+     * no author expression can reach it. Null on every statement that seeded none.
+     */
+    private final LockBinding lock;
 
     private SqlRenderer(Map<String, Object> params, ScopeResolver scopeResolver,
             Map<String, Object> scopeContext, FilePathResolver filePathResolver) {
         this.scope = new HashMap<>(params);
+        Object seeded = this.scope.remove(LockBinding.PARAM);
+        this.lock = seeded instanceof LockBinding binding ? binding : null;
         this.context = new EvaluationContext(scope);
         this.scopeResolver = scopeResolver;
         this.scopeContext = scopeContext;
@@ -100,6 +113,7 @@ public final class SqlRenderer {
                 case SqlNode.If ifNode -> renderIf(ifNode);
                 case SqlNode.For forNode -> renderFor(forNode);
                 case SqlNode.Scope scopeNode -> renderScope(scopeNode);
+                case SqlNode.Lock lockNode -> renderLock(lockNode);
                 case SqlNode.FilePath filePath -> appendFilePath(filePath);
             }
         }
@@ -159,6 +173,33 @@ public final class SqlRenderer {
         } finally {
             saved.forEach(scope::put);
             added.forEach(scope::remove);
+        }
+        coverage.coverLine(node.sourceLine());
+    }
+
+    /**
+     * Expands a {@code /*%lock*}{@code /} directive (docs/edit-conflict.md decision 2) into the
+     * comparison the caller's own save has to satisfy, or into {@code (1=1)} when the caller
+     * waived it. The framework only ever compares — the SET list that advances the column is the
+     * author's, which is what keeps the lock working for a counter, a ULID, a timestamp and a
+     * vendor rowversion alike.
+     *
+     * <p>An unseeded lock is a refusal, never a fallback: rendering {@code (1=1)} for a statement
+     * nobody armed would be a silently unlocked write, which is the defect this whole surface
+     * exists to abolish. {@link ScopeResolver#UNSUPPORTED} refuses for the same reason.
+     */
+    private void renderLock(SqlNode.Lock node) {
+        if (lock == null) {
+            throw TqlException.builder(UNSEEDED_LOCK)
+                    .message("A lock directive rendered with no lock value seeded; it expands only"
+                            + " on a route that declares lock: (docs/edit-conflict.md)")
+                    .build();
+        }
+        if (lock.waived()) {
+            mapToSource("(1=1)", node.sourceLine());
+        } else {
+            mapToSource("(" + lock.column() + " = ?)", node.sourceLine());
+            parameters.add(new BoundParameter(LockBinding.PARAM, lock.value(), node.sourceLine()));
         }
         coverage.coverLine(node.sourceLine());
     }

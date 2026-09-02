@@ -196,8 +196,8 @@ validate:
     field: endDate
     code: end-before-start
 
-sources:
-  main:
+steps:
+  - id: main
     sql:
       file: insert-member.sql
       mode: update
@@ -209,7 +209,7 @@ response:
   json:
     status: 201
     body:
-      memberId: sql.keys.id
+      memberId: steps.main.keys.id
 ```
 
 Rules evaluate in their authored order and **all of them run** — the response carries every

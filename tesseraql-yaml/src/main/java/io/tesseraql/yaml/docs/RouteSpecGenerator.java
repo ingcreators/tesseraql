@@ -211,6 +211,11 @@ public final class RouteSpecGenerator {
                             + (scope.asBoolean() ? " as boolean" : "");
                     controls.add(new RouteSpec.Control("scope", expression, depth));
                 }
+                case SqlNode.Lock _ -> {
+                    // The lock directive takes no argument: its column is the route's lock:
+                    // declaration, which the route spec already carries.
+                    controls.add(new RouteSpec.Control("lock", "", depth));
+                }
                 case SqlNode.Text _ -> {
                     // Literal SQL text carries no binds or control structure.
                 }

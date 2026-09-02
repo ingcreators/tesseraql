@@ -217,6 +217,21 @@ public final class InputBinder {
         return sql.toString();
     }
 
+    /**
+     * Coerces one value the way a declared input would be coerced, for a framework-owned field
+     * that never reaches {@link #bind} at all (docs/edit-conflict.md decision 4).
+     *
+     * <p>A reserved field is skipped by the mass-assignment guard, so it is never typed either,
+     * and the step that consumes it owes the coercion the binder used to do for free. The
+     * <em>type</em> only, never the constraints: a domain's {@code pattern:} or {@code enum:} must
+     * not be able to refuse the framework's own value, and a field error naming {@code _lock}
+     * would address a form control that does not exist. A null {@code field} means opaque — the
+     * value passes through as it arrived.
+     */
+    public static Object coerceScalar(String name, InputField field, String raw, Locale locale) {
+        return field == null ? raw : coerce(name, field, raw, locale);
+    }
+
     private static Object coerce(String name, InputField field, String raw, Locale locale) {
         String type = field.type() == null ? "string" : field.type();
         return switch (type) {
