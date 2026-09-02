@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<!-- The asynchronous job card (docs/csv-import.md decision 6, the kit's async-job recipe): a
+     self-polling fragment that carries its own trigger, targets itself, swaps outerHTML, and —
+     when the run is over — carries no trigger at all. That is the whole stop condition: a
+     terminal card renders without hx-trigger, so the polling ends because there is nothing left
+     to poll with.
+
+     The cadence is the server's. A running card writes the interval it wants and a small import
+     is finished before a long one has been asked twice; a client-side backoff would be a second
+     policy for something the server already knows.
+
+     `aria-live` sits on the progress line alone, never on the card: every poll replaces the card,
+     and announcing the whole thing each time would re-read its buttons.
+
+     One card for both directions (docs/csv-import.md decision 8), because one status endpoint
+     serves both — an import's done state is what the database rejected, an export's is the file.
+
+     Override via templates/tql/view/job-card.html (customization ladder L2); card(c) is the
+     public contract. -->
+<html xmlns:th="http://www.thymeleaf.org">
+<div class="hc-card" th:fragment="card(c)" th:id="${c['id']}"
+     data-hc-job th:attr="data-state=${c['state']},hx-get=${c['poll']},hx-trigger=${c['trigger']}"
+     hx-target="this" hx-swap="outerHTML">
+  <div class="hc-card__body hc-stack">
+    <div class="hc-cluster">
+      <span class="hc-badge" th:attr="data-variant=${c['variant']}"
+            th:text="${c['label']}">Running</span>
+      <span class="hc-spacer"></span>
+      <!-- Cancel exists only while there is a run to stop, and it posts: a GET that changes a
+           run would be a lie about the method. -->
+      <form th:if="${c['cancel'] != null}" method="post" th:action="@{${c['cancel']}}"
+            th:attr="hx-post=@{${c['cancel']}},hx-target=|#${c['id']}|"
+            hx-swap="outerHTML" hx-disabled-elt="find button[type=submit]">
+        <input type="hidden" name="_csrf" th:if="${_csrf != null}" th:value="${_csrf}">
+        <button type="submit" class="hc-button" data-variant="ghost" data-size="sm"
+                th:text="#{tql.job.cancel}">Cancel</button>
+      </form>
+    </div>
+    <!-- The polite line: the one part of the card whose changes are worth announcing. -->
+    <p class="hc-field__message" aria-live="polite" th:text="${c['progress']}">12 of 30 rows</p>
+    <progress class="hc-progress" th:if="${c['max'] != null}"
+              th:attr="max=${c['max']},value=${c['value']}"></progress>
+    <!-- The done state, direction-aware: an import says what the database rejected, an export
+         hands over the artifact itself. -->
+    <th:block th:if="${c['report'] != null}">
+      <th:block th:insert="~{tql/view/report :: report(${c['report']})}"/>
+    </th:block>
+    <a class="hc-button" data-variant="primary" th:if="${c['file'] != null}"
+       th:href="@{${c['file']}}" th:text="#{tql.job.download}">Download</a>
+    <p class="hc-field__message" data-variant="error" th:if="${c['failure'] != null}"
+       th:text="${c['failure']}">The import failed.</p>
+  </div>
+</div>
+</html>

@@ -67,9 +67,13 @@
              it posts to and a hidden field, and the server refuses a pair that disagrees. It
              exists exactly when a committable set does — under onError: rollback a partly
              invalid file renders the report and no button at all. -->
+        <!-- The confirm swaps the JOB region, not this one (docs/csv-import.md decision 6):
+             the csv-import contract wants the report slot polite and the async-job contract
+             forbids aria-live on a card that re-renders every poll. Both hold only because the
+             card lands beside the report rather than in it. -->
         <form th:if="${v.token != null}" method="post" th:action="@{${v.confirmAction}}"
-              th:attr="hx-post=@{${v.confirmAction}},hx-target=|#${v.formId}-result|"
-              hx-swap="outerHTML" hx-disabled-elt="find button[type=submit]">
+              th:attr="hx-post=@{${v.confirmAction}},hx-target=|#${v.formId}-job|"
+              hx-swap="innerHTML" hx-disabled-elt="find button[type=submit]">
           <input type="hidden" name="_csrf" th:if="${_csrf != null}" th:value="${_csrf}">
           <input type="hidden" name="token" th:value="${v.token}">
           <span class="hc-action">
@@ -81,6 +85,9 @@
         </form>
       </div>
     </div>
+    <!-- The running import's own region, beside the report and never inside it. Empty until a
+         confirm puts a card here; the card then carries its own polling and its own stop. -->
+    <div th:id="|${v.formId}-job|"></div>
     <th:block th:if="${v.slots['footer'] != null}">
       <th:block th:insert="~{__${v.slots['footer']}__}"/>
     </th:block>

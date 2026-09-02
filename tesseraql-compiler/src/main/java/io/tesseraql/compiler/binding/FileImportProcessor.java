@@ -42,12 +42,22 @@ public final class FileImportProcessor implements Step {
     private final Map<String, io.tesseraql.yaml.model.InputField> input;
     /** The page a reviewed upload answers when the route declares one, else null. */
     private final Step html;
+    /** The route's {@code emit:} topics, announced when the import's transaction commits. */
+    private final java.util.List<String> emit;
 
     public FileImportProcessor(String routeId, String urlPath, String appName, String format,
             FileReadSpec readSpec, String localeDeclaration, Path rowSqlFile, String onError,
             boolean review, Map<String, io.tesseraql.yaml.model.InputField> input) {
         this(routeId, urlPath, appName, format, readSpec, localeDeclaration, rowSqlFile, onError,
-                review, input, null);
+                review, input, null, java.util.List.of());
+    }
+
+    /** The shape before an import announced its own completion. */
+    public FileImportProcessor(String routeId, String urlPath, String appName, String format,
+            FileReadSpec readSpec, String localeDeclaration, Path rowSqlFile, String onError,
+            boolean review, Map<String, io.tesseraql.yaml.model.InputField> input, Step html) {
+        this(routeId, urlPath, appName, format, readSpec, localeDeclaration, rowSqlFile, onError,
+                review, input, html, java.util.List.of());
     }
 
     /**
@@ -56,8 +66,10 @@ public final class FileImportProcessor implements Step {
      */
     public FileImportProcessor(String routeId, String urlPath, String appName, String format,
             FileReadSpec readSpec, String localeDeclaration, Path rowSqlFile, String onError,
-            boolean review, Map<String, io.tesseraql.yaml.model.InputField> input, Step html) {
+            boolean review, Map<String, io.tesseraql.yaml.model.InputField> input, Step html,
+            java.util.List<String> emit) {
         this.html = html;
+        this.emit = java.util.List.copyOf(emit);
         this.routeId = routeId;
         this.urlPath = urlPath;
         this.appName = appName;
@@ -88,7 +100,12 @@ public final class FileImportProcessor implements Step {
             FileTransferService.ImportRequest request = new FileTransferService.ImportRequest(
                     routeId, appName, format,
                     readSpec.withLocale(FormatSources.resolve(exchange, localeDeclaration)),
-                    rowSqlFile, onError, ImportContracts.of(exchange, input));
+                    rowSqlFile, onError, ImportContracts.of(exchange, input))
+                    // The route's live-view topics travel WITH the request, because the run
+                    // outlives it: an import announces itself when its transaction commits on
+                    // the background thread, not when this response goes out
+                    // (docs/csv-import.md decision 6).
+                    .announcing(emit, ImportTopics.tenant(exchange));
             if (review) {
                 FileTransferService.ImportReview outcome = transfers.reviewImport(request,
                         subject(exchange), content);

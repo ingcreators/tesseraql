@@ -71,6 +71,25 @@ final class ImportReports {
     }
 
     /**
+     * The report a finished import's card carries: the same entries, summarized by what the run
+     * did rather than by what it would do. The rejections are whatever the run recorded — a
+     * parse refusal names its column, a write refusal names its failure class — so one shape
+     * covers both passes, which is the point of the row error carrying them the same way.
+     */
+    static ReportModel ofTransfer(String id, FileTransferService.TransferStatus status,
+            RowLocator locate, MessageCatalog catalog, Locale locale) {
+        List<ReportModel.Entry> entries = new ArrayList<>();
+        for (FileTransferService.RowError error : status.errors()) {
+            entries.add(entry(locate, catalog, locale, error));
+        }
+        String summary = ViewMessages.text(catalog, locale, "tql.import.imported",
+                "{rows} row(s) imported; {rejected} rejected.",
+                Map.of("rows", status.rows(), "rejected", status.errors().size()));
+        return new ReportModel(id, entries.isEmpty() ? "success" : "warning", summary, List.of(),
+                entries, GROUP_CAP, ENTRY_CAP, TABLE_CAP);
+    }
+
+    /**
      * One rejection. The reason is the (column, complaint) pair — the value is deliberately not
      * in it, or a hundred bad numbers in one column would be a hundred reasons.
      */

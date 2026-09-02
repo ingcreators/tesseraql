@@ -96,6 +96,21 @@ tql:
     fileError: "The file could not be read: {reason}"
     expires: "This check expires at {at}."
     stale: "Upload the file again — a confirmation cannot be retried."
+    imported: "{rows} row(s) imported; {rejected} rejected."
+  job:
+    title: Job
+    running: Running
+    done: Done
+    failed: Failed
+    cancelled: Cancelled
+    expired: Expired
+    cancel: Cancel
+    download: Download
+    progress: "{rows} rows"
+    progressOf: "{rows} of {total} rows"
+    failedBody: "Nothing was written. {rejected} row(s) were rejected."
+    cancelledBody: Cancelled before it finished; nothing was written.
+    expiredBody: This job is no longer available.
   session:
     expiredTitle: Session expired
     expiredBody: Sign in again to continue. The action you started will complete after you sign in.

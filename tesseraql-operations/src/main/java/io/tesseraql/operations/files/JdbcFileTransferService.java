@@ -78,6 +78,8 @@ public final class JdbcFileTransferService implements FileTransferService {
     private static final TqlErrorCode BATCH_PARSE_MOVED = new TqlErrorCode(TqlDomain.LD, 2865);
     private static final TqlErrorCode BATCH_SPOOL_GONE = new TqlErrorCode(TqlDomain.LD, 2866);
     private static final int MAX_RECORDED_ERRORS = 100;
+    /** How often a running import publishes its counter and looks for a stop request. */
+    private static final long PROGRESS_INTERVAL_NANOS = java.time.Duration.ofSeconds(2).toNanos();
     /** The review window, unless the app narrows or widens it (tesseraql.transfers.reviewTtl). */
     private static final long DEFAULT_REVIEW_TTL_MILLIS = 30 * 60 * 1000L;
     /** A parked batch's life: waiting, spent, replaced by a newer upload, or swept. */
@@ -98,6 +100,7 @@ public final class JdbcFileTransferService implements FileTransferService {
     private int sqlTimeoutSeconds;
     private long reviewTtlMillis = DEFAULT_REVIEW_TTL_MILLIS;
     private io.tesseraql.core.telemetry.Tracer tracer = io.tesseraql.core.telemetry.NoopTracer.INSTANCE;
+    private java.util.function.Supplier<io.tesseraql.core.events.TopicBus> topicBus;
 
     public JdbcFileTransferService(JobRepository jobs, TempStore tempStore, DataSource dataSource,
             FileCodecs codecs) {
@@ -151,6 +154,17 @@ public final class JdbcFileTransferService implements FileTransferService {
         return this;
     }
 
+    /**
+     * Where a finished import announces itself (docs/csv-import.md decision 6). A supplier
+     * rather than the bus, because the bus is bound later in the boot than this service is
+     * built — and only when the application declares topics at all, so it can stay absent.
+     */
+    public JdbcFileTransferService topicBus(
+            java.util.function.Supplier<io.tesseraql.core.events.TopicBus> topicBus) {
+        this.topicBus = topicBus;
+        return this;
+    }
+
     private io.tesseraql.core.telemetry.Span span(String mode, Object sqlId) {
         return tracer.start("tesseraql.sql.execute")
                 .attribute("surface", "transfer")
@@ -190,6 +204,9 @@ public final class JdbcFileTransferService implements FileTransferService {
             io.tesseraql.core.util.SqlScripts.applyForVendor(dataSource,
                     JdbcFileTransferService.class,
                     "/tesseraql/db/migration/operations/V12__import_review_batch.sql");
+            io.tesseraql.core.util.SqlScripts.applyForVendor(dataSource,
+                    JdbcFileTransferService.class,
+                    "/tesseraql/db/migration/operations/V13__transfer_expected_rows.sql");
         } catch (SQLException ex) {
             throw new TqlException(TRANSFER_ERROR,
                     "Failed to create file transfer schema: " + ex.getMessage());
@@ -207,7 +224,7 @@ public final class JdbcFileTransferService implements FileTransferService {
             throw new TqlException(EMPTY_UPLOAD,
                     "file-import expects the uploaded file as the request body");
         }
-        return launchImport(request, codec, upload, null);
+        return launchImport(request, codec, upload, null, null);
     }
 
     /**
@@ -217,11 +234,11 @@ public final class JdbcFileTransferService implements FileTransferService {
      * review already refused, and refuses to write anything if the parse no longer agrees.
      */
     private String launchImport(ImportRequest request, FileCodec codec, SpoolRef upload,
-            Set<Long> expectedRejects) {
+            Set<Long> expectedRejects, Long expectedRows) {
         String transferId = jobs.startExecution(request.routeId(), request.appName(), "import",
                 null);
         insertTransfer(transferId, request.routeId(), request.appName(), "IMPORT",
-                request.format(), null, null, null, Map.of());
+                request.format(), null, null, null, Map.of(), expectedRows);
         executor.submit(guarded(transferId, () -> {
             try {
                 runImport(transferId, request, codec, upload, expectedRejects);
@@ -343,8 +360,8 @@ public final class JdbcFileTransferService implements FileTransferService {
                 .map(execution -> execution.status().name()).orElse("UNKNOWN");
         return findTransfer(transferId).map(transfer -> new TransferStatus(
                 transferId, transfer.routeId(), transfer.appName(), transfer.direction(),
-                executionStatus, transfer.rowCount(), transfer.errors(), transfer.filename(),
-                transfer.downloadedAt() != null));
+                executionStatus, transfer.rowCount(), transfer.expectedRows(),
+                transfer.errors(), transfer.filename(), transfer.downloadedAt() != null));
     }
 
     /** The connected vendor (for label normalization and the row-limit clause), detected once. */
@@ -496,6 +513,11 @@ public final class JdbcFileTransferService implements FileTransferService {
         // behaving exactly as declared, under a message blaming the file for having changed.
         Set<Long> parseRejected = new java.util.LinkedHashSet<>();
         long[] applied = {0};
+        // The observation clock, shared by the progress flush and the stop poll: both ask a
+        // question of the database, so both ask it on an interval rather than per row. One
+        // clock, because they are the same boundary — "between rows, occasionally".
+        long[] nextTick = {System.nanoTime() + PROGRESS_INTERVAL_NANOS};
+        boolean[] stopping = {false};
         io.tesseraql.core.telemetry.Span span = span("import", request.rowSqlFile());
         try (Connection connection = dataSource.getConnection();
                 java.io.InputStream content = tempStore.openInput(upload)) {
@@ -504,6 +526,23 @@ public final class JdbcFileTransferService implements FileTransferService {
             try {
                 codec.read(content, request.readSpec(),
                         (rowNumber, values) -> {
+                            // The cooperative stop (docs/csv-import.md decision 6): the job
+                            // repository has held a cancel flag all along and the import loop
+                            // never looked at it, so a Cancel button would have answered 200 and
+                            // changed nothing. Checked here, between rows, where stopping is
+                            // exact — and where the same tick publishes the row counter.
+                            if (System.nanoTime() >= nextTick[0]) {
+                                nextTick[0] = System.nanoTime() + PROGRESS_INTERVAL_NANOS;
+                                recordProgress(transferId, applied[0]);
+                                stopping[0] = stopping[0] || jobs.isCancelRequested(transferId);
+                            }
+                            if (stopping[0]) {
+                                // The codec owns the loop, so the way out is to stop doing work:
+                                // the remaining rows are read and dropped, and the transaction
+                                // rolls back below. Reading on costs a parse per row and buys a
+                                // shape that needs no exception to escape a third-party loop.
+                                return;
+                            }
                             // Typed columns (date/datetime/number) parse before binding, so bad
                             // values surface as row errors, not dialect cast failures. The parse
                             // sits outside the savepoint because it touches no database: a row
@@ -539,6 +578,16 @@ public final class JdbcFileTransferService implements FileTransferService {
                 // It cannot differ — that is the point of freezing the spec — so a difference
                 // means the bytes or the declaration moved, and writing part of a set nobody
                 // reviewed is the one outcome worse than refusing.
+                if (stopping[0]) {
+                    // Nothing was written, and that is the strongest answer this shape can give:
+                    // an import is one transaction with a savepoint per row, so a stop that
+                    // arrives before the commit takes everything with it. A partial import
+                    // nobody asked for would be the worse outcome.
+                    connection.rollback();
+                    recordRows(transferId, 0, errors);
+                    jobs.stopExecution(transferId, "Import cancelled; nothing was written");
+                    return;
+                }
                 if (expectedRejects != null && !parseRejected.equals(expectedRejects)) {
                     connection.rollback();
                     recordRows(transferId, 0, errors);
@@ -563,6 +612,14 @@ public final class JdbcFileTransferService implements FileTransferService {
                             + " row(s) rejected; import rolled back");
                 } else {
                     jobs.completeExecution(transferId);
+                }
+                // The completion signal (docs/csv-import.md decision 6). It fires here rather
+                // than on the request that confirmed the import, because the request returns
+                // before a single row is written: emitting there would tell every open page to
+                // refetch the rows this run has not written yet. Rolled back means nothing
+                // changed, so nothing is announced.
+                if (!rollbackAll) {
+                    emit(request);
                 }
             } finally {
                 connection.setAutoCommit(autoCommit);
@@ -616,6 +673,26 @@ public final class JdbcFileTransferService implements FileTransferService {
     /** What a parse-only pass found: the report, and the complete set of rows it refused. */
     private record ParseOutcome(long rows, long rejectedCount, List<RowError> errors,
             Set<Long> rejected, String fileError) {
+    }
+
+    @Override
+    public boolean cancel(String transferId) {
+        return jobs.requestCancel(transferId);
+    }
+
+    /**
+     * Announces a finished import on the route's declared topics. The bus is looked up rather
+     * than injected because it is bound after this service is constructed, and only when the
+     * application declares topics at all; without one this is a no-op, as it is for a command.
+     */
+    private void emit(ImportRequest request) {
+        io.tesseraql.core.events.TopicBus bus = topicBus == null ? null : topicBus.get();
+        if (bus == null || request.emit().isEmpty()) {
+            return;
+        }
+        for (String topic : request.emit()) {
+            bus.emit(request.tenantId(), topic);
+        }
     }
 
     @Override
@@ -778,7 +855,8 @@ public final class JdbcFileTransferService implements FileTransferService {
                 request.format(), readSpec(batch.readSpecJson(), request.readSpec()),
                 request.rowSqlFile(), request.onError(),
                 contract(batch.contractJson(), request.contract()));
-        String transferId = launchImport(frozen, codec, upload, batch.rejected());
+        String transferId = launchImport(frozen, codec, upload, batch.rejected(),
+                batch.rowCount());
         linkTransfer(batchId, transferId);
         return transferId;
     }
@@ -1257,20 +1335,34 @@ public final class JdbcFileTransferService implements FileTransferService {
     // --- tql_file_transfer persistence ---
 
     private record TransferRow(String routeId, String appName, String direction, String format,
-            String filename, String spoolUri, long rowCount, List<RowError> errors,
-            String afterTiming, String afterSqlFile, Map<String, Object> params,
-            Timestamp downloadedAt) {
+            String filename, String spoolUri, long rowCount, Long expectedRows,
+            List<RowError> errors, String afterTiming, String afterSqlFile,
+            Map<String, Object> params, Timestamp downloadedAt) {
     }
 
     private void insertTransfer(String transferId, String routeId, String appName,
             String direction, String format, String filename, String afterTiming,
             String afterSqlFile, Map<String, Object> params) {
+        insertTransfer(transferId, routeId, appName, direction, format, filename, afterTiming,
+                afterSqlFile, params, null);
+    }
+
+    /**
+     * @param expectedRows how many rows this run will attempt, when that is known before it
+     *                     starts — a reviewed import parsed the whole file already. Null
+     *                     otherwise, and the progress card then counts up without a total
+     *                     rather than showing a guessed one (docs/csv-import.md decision 6).
+     */
+    private void insertTransfer(String transferId, String routeId, String appName,
+            String direction, String format, String filename, String afterTiming,
+            String afterSqlFile, Map<String, Object> params, Long expectedRows) {
         try (Connection connection = dataSource.getConnection();
                 PreparedStatement statement = connection.prepareStatement("""
                         insert into tql_file_transfer
                           (transfer_id, route_id, app_name, direction, format, filename,
-                           after_timing, after_sql_file, params_json, row_count, created_at)
-                        values (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)""")) {
+                           after_timing, after_sql_file, params_json, row_count, created_at,
+                           expected_rows)
+                        values (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)""")) {
             applyTimeout(statement);
             statement.setString(1, transferId);
             statement.setString(2, routeId);
@@ -1282,11 +1374,31 @@ public final class JdbcFileTransferService implements FileTransferService {
             statement.setString(8, afterSqlFile);
             statement.setString(9, toJson(params));
             statement.setTimestamp(10, Timestamp.from(Instant.now()));
+            if (expectedRows == null) {
+                statement.setNull(11, java.sql.Types.BIGINT);
+            } else {
+                statement.setLong(11, expectedRows);
+            }
             statement.executeUpdate();
         } catch (SQLException ex) {
             throw new TqlException(TRANSFER_ERROR,
                     "Failed to record file transfer: " + ex.getMessage());
         }
+    }
+
+    /**
+     * Publishes how far the run has got, without its errors. The whole outcome — counts and
+     * rejections together — is written once at the end, and a poller watching that saw
+     * {@code RUNNING} with zero rows for the entire import and then the final number
+     * (docs/csv-import.md decision 6). This is a counter, flushed on a clock rather than per
+     * row: a write per row would cost more than the import.
+     */
+    private void recordProgress(String transferId, long rows) {
+        update("update tql_file_transfer set row_count = ? where transfer_id = ?",
+                statement -> {
+                    statement.setLong(1, rows);
+                    statement.setString(2, transferId);
+                });
     }
 
     private void recordSpool(String transferId, SpoolRef ref, long rows) {
@@ -1341,6 +1453,7 @@ public final class JdbcFileTransferService implements FileTransferService {
                         rs.getString("filename"),
                         rs.getString("spool_uri"),
                         rs.getLong("row_count"),
+                        expectedRows(rs),
                         fromJsonErrors(rs.getString("error_json")),
                         rs.getString("after_timing"),
                         rs.getString("after_sql_file"),
@@ -1351,6 +1464,12 @@ public final class JdbcFileTransferService implements FileTransferService {
             throw new TqlException(TRANSFER_ERROR,
                     "Failed to read file transfer: " + ex.getMessage());
         }
+    }
+
+    /** The declared row total, or null — the column is nullable and {@code getLong} is not. */
+    private static Long expectedRows(ResultSet rs) throws SQLException {
+        long value = rs.getLong("expected_rows");
+        return rs.wasNull() ? null : value;
     }
 
     private void update(String sql, SqlBindings bindings) {
