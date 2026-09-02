@@ -293,4 +293,7 @@ export const EXCLUDED = [
   // The reviewed upload: the csv-import contract, and the file-upload and async-job
   // contracts it triggers, designed 2026-09-01.
   'csv-import.md',
+  // The declared lock: the edit-conflict contract for update command routes,
+  // designed 2026-09-02.
+  'edit-conflict.md',
 ];
