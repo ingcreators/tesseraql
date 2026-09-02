@@ -188,14 +188,15 @@ render **refuses**: `TQL-VIEW-3330`, at render rather than at build, on the `TQL
 precedent — `select *` makes a static column check a liar, so the check belongs where the
 row is. A column that is present and null is a different thing and refuses too, because a
 null lock compares against nothing: an equality predicate on null matches no row, so the
-form would be unsaveable rather than unlocked. This is the decision's whole point. A framework-owned hidden field guarded by
+form would be unsaveable rather than unlocked.
+
+This is the decision's whole point. A framework-owned hidden field guarded by
 `th:if="${v.lock != null}"` would silently vanish from a form whose read forgot to project
 the column, and the save that followed would be unlocked with nothing to say so. That would
 be a regression: *today* the scaffolded route declares `version: { required: true }`, an
-unprojected column prefills to the empty string, and the submit fails loudly at 400 (`TQL-FIELD-2001`, the binder's
-required rejection). A
-design that turns a loud failure into a quiet one has lost, however elegant the
-declaration.
+unprojected column prefills to the empty string, and the submit fails loudly at 400
+(`TQL-FIELD-2001`, the binder's required rejection). A design that turns a loud failure
+into a quiet one has lost, however elegant the declaration.
 
 Every renderer of a form owes the field, not just the pattern. `ViewEjector.form` emits
 `_csrf` and nothing else, so an ejected form has already drifted away from `_idempotency`
@@ -212,14 +213,17 @@ legal: an API caller sends the value it read.
 ## Decision 4 — `_lock` and `_overwrite` are framework-owned, consumed by their own step
 
 The form gains a fourth conditional hidden input beside `_csrf`, `_idempotency` and
-`_return`. **Both** framework names join `RequestBinder.RESERVED_FIELDS`, each with its
-reason commented in place the way `ids` and the snapshot pager's `keys`/`page`/`size` did — `_csrf`, `_idempotency`
-and `_return` went in bare, and a reader two campaigns later deserves the reason: `_lock`, the value the user
-saw, and `_overwrite`, the waiver of decision 6. Reserving only the first would refuse the
-second. `guardMassAssignment` runs before any `input:` lookup and rejects every undeclared
-body key with `TQL-FIELD-2002`, and rejecting is the framework **default** rather than the
-scaffolder's opt-in — `unknownFields` unset means reject. An unreserved `_overwrite` would
-therefore answer 400 on every overwrite, on all three legs, before the lock is read at all.
+`_return`. **Two** framework names join `RequestBinder.RESERVED_FIELDS`, not one: `_lock`,
+the value the user saw, and `_overwrite`, the waiver of decision 6. Each goes in with its
+reason commented in place, the way `ids` and the snapshot pager's `keys`/`page`/`size` did;
+`_csrf`, `_idempotency` and `_return` went in bare, and a reader two campaigns later
+deserves better.
+
+Reserving only the first would refuse the second. `guardMassAssignment` runs before any
+`input:` lookup and rejects every undeclared body key with `TQL-FIELD-2002`, and rejecting
+is the framework **default** rather than the scaffolder's opt-in: `unknownFields` unset
+means reject. An unreserved `_overwrite` would answer 400 on every overwrite, on all three
+legs, before the lock is read at all.
 
 The governing precedent is `ids`, not the `token` refusal. [csv-import.md](csv-import.md)
 refused reserving the bare word `token` because the commit leg is a framework-mounted
@@ -240,10 +244,10 @@ That step owes one thing the binder used to do for free. Today the lock is an `i
 field with a domain, so a posted string is coerced to the declared type before it becomes a
 bind; a reserved field never is, and a raw `String` bound against an integer column is a
 dialect-by-dialect coin flip. So the lock step coerces through the same scalar coercion
-declared inputs use, typed from the `domain:` the lock column declares when there is one and
-opaque otherwise. Reading a domain's *type* is not the same as subjecting the field to
-`writable:`, `policy:` or `mask:`, which is all decision 1 rejected. A form post and a JSON
-number therefore normalize identically.
+declared inputs use, typed from a `domains/` entry named for the lock column when the app
+declares one and opaque otherwise. Reading a domain's *type* is not the same as subjecting
+the field to `writable:`, `policy:` or `mask:`, which is all decision 1 rejected. A form
+post and a JSON number therefore normalize identically.
 
 A locked route reached with neither `_lock` nor `_overwrite` answers **400
 `TQL-FIELD-2011`** — the next free number beside the missing-framework-field refusals that
