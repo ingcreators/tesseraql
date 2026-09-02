@@ -85,6 +85,79 @@ class ImportReviewRecipeTest {
                 .hasMessageContaining("security.auth");
     }
 
+    @Test
+    void aOneShotImportDeclaringAPageIsRefused(@TempDir Path dir) throws Exception {
+        // `response.html:` on a file recipe used to lint clean, compile and be dropped. It is
+        // honoured now, and refused where it cannot mean anything: a one-shot import has no
+        // report to render (docs/csv-import.md decision 7).
+        assertThatThrownBy(() -> compile(dir, """
+                security:
+                  auth: bearer
+                  policy: items.write
+                import:
+                  format: csv
+                  columns: [name, qty]
+                response:
+                  html:
+                    view: items-import
+                """))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("TQL-ROUTE-3118")
+                .hasMessageContaining("response.html:");
+    }
+
+    @Test
+    void aReviewedImportDeclaringAPageCompilesTheView(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("web/api/items/import"));
+        Files.writeString(dir.resolve("web/api/items/import/items-import.view.yml"), """
+                version: tesseraql/v1
+                kind: view
+                recipe: import
+                title: Import items
+                action: /api/items/import
+                """);
+        Map<String, List<String>> pipelines = compile(dir, """
+                security:
+                  auth: bearer
+                  policy: items.write
+                import:
+                  format: csv
+                  columns: [name, qty]
+                  review: required
+                response:
+                  html:
+                    view: items-import
+                """);
+
+        // One processor still, because the page is the same answer negotiated: the report is
+        // what the parse found either way (docs/csv-import.md decision 1).
+        assertThat(pipelines.get("items.import")).contains("FileImportProcessor");
+    }
+
+    @Test
+    void anImportViewMustNameAFileImportRoute(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("web/api/items/import"));
+        Files.writeString(dir.resolve("web/api/items/import/items-import.view.yml"), """
+                version: tesseraql/v1
+                kind: view
+                recipe: import
+                action: /api/items/nowhere
+                """);
+        assertThatThrownBy(() -> compile(dir, """
+                security:
+                  auth: bearer
+                  policy: items.write
+                import:
+                  format: csv
+                  review: required
+                response:
+                  html:
+                    view: items-import
+                """))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("matches no POST route");
+    }
+
     private static Map<String, List<String>> compile(Path dir, String body) throws Exception {
         writeApp(dir, body);
         AppManifest manifest = new ManifestLoader().load(dir);

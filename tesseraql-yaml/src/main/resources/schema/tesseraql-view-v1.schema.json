@@ -22,12 +22,13 @@
       "description": "Declarative view documents (the *.view.yml convention)."
     },
     "recipe": {
-      "description": "Which view this document is: list | form | detail | dashboard. A form derives its fields from the action: route's input: block; a dashboard composes panels:.",
+      "description": "Which view this document is: list | form | detail | dashboard | import. A form derives its fields from the action: route's input: block; a dashboard composes panels:; an import renders the upload form, the validation report and the confirm form of its action: file-import route.",
       "enum": [
         "list",
         "form",
         "detail",
-        "dashboard"
+        "dashboard",
+        "import"
       ]
     },
     "title": {

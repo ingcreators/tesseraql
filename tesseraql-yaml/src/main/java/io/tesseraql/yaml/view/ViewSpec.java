@@ -61,6 +61,14 @@ public record ViewSpec(String id,
     public static final String DETAIL = "detail";
     public static final String DASHBOARD = "dashboard";
 
+    /**
+     * The reviewed-upload page (docs/csv-import.md decision 7): the kit's file-upload form, the
+     * report the parse answered, and the confirm form that commits exactly what was reviewed.
+     * One document serves two routes at one URL — the GET that renders the empty form, and the
+     * file-import POST whose {@code response.html.view} names it back.
+     */
+    public static final String IMPORT = "import";
+
     /** The dashboard panel types (docs/declarative-views.md; {@code view} embeds a view). */
     public static final java.util.Set<String> PANEL_TYPES = java.util.Set.of("stat",
             "sparkline", "chart", "table", "view");
@@ -136,7 +144,7 @@ public record ViewSpec(String id,
 
     /** The recipe values a view document may declare. */
     public static java.util.Set<String> recipes() {
-        return java.util.Set.of(LIST, FORM, DETAIL, DASHBOARD);
+        return java.util.Set.of(LIST, FORM, DETAIL, DASHBOARD, IMPORT);
     }
 
     /**
@@ -281,10 +289,9 @@ public record ViewSpec(String id,
         }
         rejectUnknown(name, tree, DOCUMENT_KEYS, "a view document");
         String view = str(tree.get("recipe"));
-        if (!LIST.equals(view) && !FORM.equals(view) && !DETAIL.equals(view)
-                && !DASHBOARD.equals(view)) {
-            throw invalid(name, "recipe must be '" + LIST + "', '" + FORM + "', '" + DETAIL
-                    + "' or '" + DASHBOARD + "', got: " + view);
+        if (!recipes().contains(view)) {
+            throw invalid(name, "recipe must be one of "
+                    + new java.util.TreeSet<>(recipes()) + ", got: " + view);
         }
         if (!DETAIL.equals(view) && tree.get("children") != null) {
             throw invalid(name, "children: is a detail-view key");
@@ -318,6 +325,22 @@ public record ViewSpec(String id,
         String action = str(tree.get("action"));
         if (FORM.equals(view) && (action == null || action.isBlank())) {
             throw invalid(name, "a form view must declare action: (the command route it posts to)");
+        }
+        // The import view's action names the file-import route, and everything else the page
+        // renders comes from that route's own declaration: the accepted file types, the
+        // expected columns, the address the confirm form posts to. Without it the page would
+        // be a file input pointing at nothing.
+        if (IMPORT.equals(view) && (action == null || action.isBlank())) {
+            throw invalid(name, "an import view must declare action: (the file-import route it"
+                    + " uploads to)");
+        }
+        if (IMPORT.equals(view) && tree.get("fields") != null) {
+            throw invalid(name, "fields: is not an import-view key — on a file-import route"
+                    + " input: is the row contract, not a form (docs/csv-import.md decision 3)");
+        }
+        if (IMPORT.equals(view) && tree.get("columns") != null) {
+            throw invalid(name, "columns: is not an import-view key — the expected columns are"
+                    + " the action route's import.columns:");
         }
         String workflow = str(tree.get("workflow"));
         if (workflow != null && !workflow.isBlank() && !DETAIL.equals(view)) {

@@ -176,6 +176,14 @@ public interface FileTransferService {
     ImportReview reviewImport(ImportRequest request, String subject, java.io.InputStream content);
 
     /**
+     * Where a data row of {@code format} sits in the file, for a surface that has to name it
+     * (docs/csv-import.md decision 8). Delegates to the codec, which is the only thing that
+     * knows whether the answer is a line or a sheet and a row — and which lives here, because
+     * this service is what resolves a format to a codec.
+     */
+    RowReference locate(String format, FileReadSpec spec, long row);
+
+    /**
      * Claims a parked batch and starts its import, returning the transfer id
      * (docs/csv-import.md decision 5). The claim is a conditional update taken <em>before</em>
      * the run, so a replayed confirm loses the race rather than importing twice; a batch that is

@@ -43,6 +43,18 @@ public final class TabularReader {
     }
 
     /**
+     * Where data row {@code row} sits in the file, counted the way the author counts
+     * (docs/csv-import.md decision 8). It lives here because the skip is here: the reader
+     * consumes {@code startRow - 1} rows and then the header row, and any other copy of that
+     * arithmetic would drift from the loop the moment either changes.
+     *
+     * @param row the 1-based data-row ordinal the reader handed the row handler
+     */
+    public static long fileRow(FileReadSpec spec, long row) {
+        return spec.startRow() - 1 + (spec.headerRow() ? 1 : 0) + row;
+    }
+
+    /**
      * Reads a file's rows into parameter maps. The iterator is positioned at the first row of the
      * file; the reader consumes the skipped rows, the header row, and every data row after it.
      */

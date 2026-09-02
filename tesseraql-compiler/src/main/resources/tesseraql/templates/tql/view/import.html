@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<!-- The reviewed-upload pattern (docs/csv-import.md decision 7): the kit's file-upload recipe,
+     the report the parse answered, and the confirm form that commits exactly what was reviewed.
+     One document, two states — before an upload the page is the form alone; after one it is the
+     form plus a report, and the confirm button exists exactly when something can be committed.
+
+     The upload form is the kit's with nothing invented: both encodings (enctype for the native
+     submit, hx-encoding for htmx), a labelled file input, an hc-progress the form's hx-indicator
+     points at, and hx-disabled-elt as the double-submit guard. Without JavaScript the form posts
+     natively and the server answers this whole page.
+
+     The swap unit is the result region alone, inside a live region that is never swapped: an
+     aria-live element has to be in the DOM before its content changes to be announced, so
+     replacing it would silence the very announcement the csv-import contract asks for.
+
+     Override via templates/tql/view/import.html (customization ladder L2); view(v) is the
+     public contract. -->
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: shell(${v.title}, ~{}, ~{}, ~{:: #page-content})}">
+<div id="page-content" class="hc-stack">
+<section class="hc-card" th:fragment="view(v)" th:id="|${v.id}-view|">
+  <div class="hc-card__header">
+    <h2 th:text="${v.title}">Import</h2>
+    <span class="hc-spacer"></span>
+    <th:block th:if="${v.slots['header'] != null}">
+      <th:block th:insert="~{__${v.slots['header']}__}"/>
+    </th:block>
+  </div>
+  <div class="hc-card__body hc-stack">
+    <form th:id="${v.formId}" method="post" enctype="multipart/form-data"
+          th:action="@{${v.action}}"
+          th:attr="hx-post=@{${v.action}},hx-target=|#${v.formId}-result|,hx-select=|#${v.formId}-result|,hx-indicator=|#${v.formId}-progress|"
+          hx-encoding="multipart/form-data" hx-swap="outerHTML"
+          hx-disabled-elt="find button[type=submit]">
+      <input type="hidden" name="_csrf" th:if="${_csrf != null}" th:value="${_csrf}">
+      <div class="hc-field">
+        <label class="hc-field__label" th:for="|${v.formId}-file|" th:text="${v.uploadLabel}">File</label>
+        <!-- The accepted types come from the declared format, never a literal: a CSV import
+             offering .xlsx and an Excel import offering only .csv are the same bug in two
+             directions (docs/csv-import.md decision 8). -->
+        <input class="hc-input" type="file" name="file" required
+               th:id="|${v.formId}-file|" th:attr="accept=${v.accept}">
+        <!-- What the file has to contain, from the import's own columns: — so the page and the
+             parse cannot disagree about what is expected. -->
+        <p class="hc-field__message" th:if="${v.columns != null}"
+           th:text="|#{tql.import.columns}: ${#strings.listJoin(v.columns, ', ')}|">Columns: sku, qty</p>
+      </div>
+      <span class="hc-action">
+        <button type="submit" class="hc-button" data-variant="primary"
+                th:text="${v.uploadSubmit}">Check file</button>
+        <!-- installUploadProgress drives this bar only for the form it sits inside, and only
+             while that form's own request is in flight; the htmx-indicator class plus the
+             form's hx-indicator is what makes it visible at all. -->
+        <progress class="hc-progress htmx-indicator" data-hc-upload-progress
+                  th:id="|${v.formId}-progress|" max="100" value="0"></progress>
+      </span>
+    </form>
+    <!-- The live region: present before the first upload, and never the swap unit. -->
+    <div aria-live="polite">
+      <!-- The swap target, and the marker the bootstrap's beforeSwap allowance reads so a 422
+           report and a 409 stale-token answer reach the page instead of being discarded. -->
+      <div th:id="|${v.formId}-result|" class="hc-stack" data-tql-import-report>
+        <th:block th:if="${v.report != null}">
+          <th:block th:insert="~{tql/view/report :: report(${v.report})}"/>
+        </th:block>
+        <!-- The confirm form (docs/csv-import.md decision 5): the token rides both the address
+             it posts to and a hidden field, and the server refuses a pair that disagrees. It
+             exists exactly when a committable set does — under onError: rollback a partly
+             invalid file renders the report and no button at all. -->
+        <form th:if="${v.token != null}" method="post" th:action="@{${v.confirmAction}}"
+              th:attr="hx-post=@{${v.confirmAction}},hx-target=|#${v.formId}-result|"
+              hx-swap="outerHTML" hx-disabled-elt="find button[type=submit]">
+          <input type="hidden" name="_csrf" th:if="${_csrf != null}" th:value="${_csrf}">
+          <input type="hidden" name="token" th:value="${v.token}">
+          <span class="hc-action">
+            <button type="submit" class="hc-button" data-variant="primary"
+                    th:text="${v.confirmSubmit}">Import</button>
+            <span class="hc-field__message" th:if="${v.expires != null}"
+                  th:text="${v.expires}">This check expires at …</span>
+          </span>
+        </form>
+      </div>
+    </div>
+    <th:block th:if="${v.slots['footer'] != null}">
+      <th:block th:insert="~{__${v.slots['footer']}__}"/>
+    </th:block>
+  </div>
+</section>
+</div>
+</html>

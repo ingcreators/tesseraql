@@ -320,6 +320,32 @@ and build failure `TQL-FIELD-4623`; a source row missing a declared column is
 A form's `action:` resolves `{placeholder}`s per record, and prefills fall back from
 camelCase input names to snake_case columns.
 
+## Import views: the reviewed upload
+
+`recipe: import` renders the two-phase upload of a `file-import` route that declares
+`import.review: required` ([csv-import.md](csv-import.md)). The document is short,
+because everything it needs is already declared on the route it names:
+
+```yaml
+version: tesseraql/v1
+kind: view
+recipe: import
+title: Import supplier prices
+action: /suppliers/prices/import
+```
+
+`action:` is the file-import route, and the page reads it for the file types the input
+accepts (from the declared `format:`), the columns the file must carry (from
+`import.columns:`), and the address the confirm form posts to. Declaring any of those on
+the page instead would be a second copy of the import, free to disagree with the one the
+parse enforces — so `fields:` and `columns:` are refused here.
+
+The same document serves two routes at one URL: a `get.yml` renders the empty form, and the
+`post.yml` file-import route names it back through `response.html.view`. What the upload
+answers is the same report the JSON leg answers, negotiated — `200` with the confirm form
+when something can be committed, `422` without one when nothing can. `response.html:` on a
+one-shot import (no `review:`) is refused at build time: there is no report for it to render.
+
 ## Detail views
 
 `recipe: detail` renders a labelled value list over one row, and composes its route's
@@ -527,6 +553,7 @@ the **public rendering contract**:
 | `tql/view/field.html` | `field(f)` | one labelled field; dispatches to `tql/view/field-<widget>.html` when that fragment resolves, else renders the generic input |
 | `tql/view/table.html` | `table(tableId, columns, rows)` | the shared datagrid a list renders and a detail's children reuse: sortable headers, row anchors, selection and row-number columns |
 | `tql/view/report.html` | `report(r)` | the outcome report a bulk action or a reviewed upload answers with: a summary, file-level failures, and the rest grouped by reason — every group bounded, and the group list bounded too |
+| `tql/view/import.html` | `view(v)` | the reviewed upload: the kit's file-upload form, the report the parse answered, and the confirm form that commits exactly what was reviewed |
 
 `v` carries `{id, kind, title, action, csrf, fields[]|columns[], data, errorsTarget}`;
 a field `f` carries `{name, label, widget, required, maxLength, min, max, options,

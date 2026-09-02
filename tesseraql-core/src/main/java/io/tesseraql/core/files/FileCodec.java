@@ -25,6 +25,19 @@ public interface FileCodec {
     void read(InputStream in, FileReadSpec spec, RowHandler handler) throws Exception;
 
     /**
+     * Where a data row sits in the file, for a report that has to name it
+     * (docs/csv-import.md decision 8). The handler is given a data-row ordinal, which a header
+     * row and any skipped rows shift away from what the author sees; a text format's answer is
+     * the file line, and a workbook's is a sheet and a row.
+     *
+     * <p>Defaults to the line, because that is right for every format that has no sheets — and
+     * a format that does has to say so, which is the point.
+     */
+    default RowReference locate(FileReadSpec spec, long row) {
+        return new RowReference(null, TabularReader.fileRow(spec, row));
+    }
+
+    /**
      * Writes the export to the output: the model carries the rows and whatever else the export
      * declared for a template to compose around them (docs/export-pipeline.md, decision 1).
      *

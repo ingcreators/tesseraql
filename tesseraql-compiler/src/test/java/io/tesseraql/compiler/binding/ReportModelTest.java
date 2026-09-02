@@ -131,6 +131,54 @@ class ReportModelTest {
         assertThat(group.get("more")).isEqualTo("…ほか 1 件");
     }
 
+    @Test
+    void aFeederThatAsksForTheTableGetsTheEnumerationAndItsAnchors() {
+        ReportModel.Rendered rendered = new ReportModel("r", "warning", "3 failed.", List.of(),
+                List.of(new ReportModel.Entry("qty", "qty — is not a number", "Line 2", null,
+                        "qty", "abc"),
+                        new ReportModel.Entry("qty", "qty — is not a number", "Line 3", null,
+                                "qty", "xyz"),
+                        new ReportModel.Entry("sku", "sku — is required", "Line 7", null,
+                                "sku", null)),
+                10, 5, 2).render(CATALOG, EN);
+
+        Map<?, ?> table = (Map<?, ?>) rendered.model().get("table");
+        // Bounded like everything else, and the caption says the total rather than letting
+        // "showing 2" read as "2 is all there was".
+        assertThat(table.get("caption")).isEqualTo("Rejected rows (2 of 3 shown)");
+        assertThat(table.get("more")).isEqualTo("…and 1 more");
+        List<?> rows = (List<?>) table.get("rows");
+        assertThat(rows).hasSize(2);
+        Map<?, ?> first = (Map<?, ?>) rows.get(0);
+        assertThat(first.get("id")).isEqualTo("r-row-0");
+        assertThat(first.get("field")).isEqualTo("qty");
+        assertThat(first.get("value")).isEqualTo("abc");
+        assertThat(first.get("message")).isEqualTo("qty — is not a number");
+
+        // The two halves are wired together: a grouped entry links to the table row that
+        // details it, and an entry past the table cap links nowhere rather than to a row that
+        // is not on the page.
+        Map<?, ?> group = (Map<?, ?>) ((List<?>) rendered.model().get("groups")).get(0);
+        List<?> entries = (List<?>) group.get("rows");
+        assertThat(((Map<?, ?>) entries.get(0)).get("href")).isEqualTo("#r-row-0");
+        assertThat(((Map<?, ?>) entries.get(1)).get("href")).isEqualTo("#r-row-1");
+        Map<?, ?> second = (Map<?, ?>) ((List<?>) rendered.model().get("groups")).get(1);
+        assertThat(((Map<?, ?>) ((List<?>) second.get("rows")).get(0)).get("href")).isNull();
+    }
+
+    @Test
+    void aFeederThatAsksForNoTableGetsNoneAndKeepsItsOwnLinks() {
+        ReportModel.Rendered rendered = new ReportModel("r", "warning", "1 failed.", List.of(),
+                List.of(new ReportModel.Entry("C", "reason", "Row 1 — B-2", "#row-abc", null,
+                        null)),
+                10, 5).render(CATALOG, EN);
+
+        assertThat(rendered.model().get("table")).isNull();
+        Map<?, ?> group = (Map<?, ?>) ((List<?>) rendered.model().get("groups")).get(0);
+        assertThat(((Map<?, ?>) ((List<?>) group.get("rows")).get(0)).get("href"))
+                .isEqualTo("#row-abc");
+    }
+
     private static Object heading(List<?> groups, int index) {
         return ((Map<?, ?>) groups.get(index)).get("heading");
     }

@@ -147,13 +147,12 @@ public record RowContract(Map<String, Column> columns) {
 
     /**
      * A violation in the shape the row loop already records, so a constraint failure reaches the
-     * report's Field and Value columns the way a bad date does. Anything that lands as a bare
-     * message loses exactly the two things the table exists to show.
+     * report's Field, Value and Reason columns the way a bad date does. Anything that lands as a
+     * bare message loses exactly the three things the table exists to show.
      */
     private static ColumnValueException reject(String name, Object value, String complaint) {
-        String text = value == null ? null : String.valueOf(value);
-        return new ColumnValueException(name, text,
-                "Column '" + name + "': " + (text == null ? "" : "'" + text + "' ") + complaint);
+        return new ColumnValueException(name, value == null ? null : String.valueOf(value),
+                complaint);
     }
 
     /** Builds the frozen contract; columns with nothing declared are left out. */

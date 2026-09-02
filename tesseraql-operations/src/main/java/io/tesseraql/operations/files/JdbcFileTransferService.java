@@ -599,8 +599,11 @@ public final class JdbcFileTransferService implements FileTransferService {
             return;
         }
         if (ex instanceof io.tesseraql.core.files.ColumnValueException bad) {
+            // The complaint, not the composed sentence: the column and the value ride in their
+            // own components, and a message that repeats them is a reason no report can group
+            // on — the value is in it, so every bad row would be its own reason.
             errors.add(RowError.ofColumn(rowNumber, bad.column(), bad.value(),
-                    bad.getMessage()));
+                    bad.complaint()));
             return;
         }
         errors.add(new RowError(rowNumber, null, null,
@@ -613,6 +616,12 @@ public final class JdbcFileTransferService implements FileTransferService {
     /** What a parse-only pass found: the report, and the complete set of rows it refused. */
     private record ParseOutcome(long rows, long rejectedCount, List<RowError> errors,
             Set<Long> rejected, String fileError) {
+    }
+
+    @Override
+    public io.tesseraql.core.files.RowReference locate(String format,
+            io.tesseraql.core.files.FileReadSpec spec, long row) {
+        return codecs.require(format).locate(spec, row);
     }
 
     @Override
