@@ -8,6 +8,36 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **`import.review: required` — an upload that validates and asks before it writes**
+  (docs/csv-import.md slice 1, the machinery). A `file-import` route declaring it stops
+  importing on upload: it parses the file, validates every typed column, parks the batch,
+  and answers `200` with the report and a confirm token — or `422` with the report and no
+  token when nothing can be committed. `POST {path}/{batchId}/commit` spends the token and
+  runs an ordinary import. `required` is the only accepted value (`TQL-ROUTE-3118`), and a
+  job document declaring it is refused at lint (`TQL-YAML-1060`): a review is a person
+  confirming a parsed batch, and a poll-driven feed has nobody to confirm it.
+
+  What `onError:` means is now visible before the write rather than after it. Ten rows with
+  three rejected is three errors, never all ten — and the affordance follows the
+  declaration: `skip` offers "import the valid seven", `rollback` offers nothing, because
+  all-or-nothing leaves no committable set. One rule states both, and the status code reads
+  off the same fact: the confirm token exists exactly when a committable set does.
+
+  The parked batch is its own row (`tql_import_batch`, operations V12) rather than a
+  transfer, because a transfer's status is its job execution's and parking one would add a
+  state to `JobStatus` that nothing in the batch platform could ever finish. The batch holds
+  the uploaded bytes and the **resolved** read spec, so the commit re-parses exactly what
+  the review parsed even though the locale is resolved per request and the commit is a
+  different request; a parse that no longer agrees refuses rather than writing a set nobody
+  reviewed. The token is single-shot by a conditional claim taken before the run, a
+  re-upload supersedes the batch before it, and an unconfirmed batch is always swept
+  (`tesseraql.transfers.reviewTtl`, 30 minutes) — unlike produced export files, parked bytes
+  are business data the user never chose to store. A reviewed import needs an authenticated
+  route (`TQL-ROUTE-3118` again): a batch belongs to the principal who parked it, and an
+  unauthenticated route would give every batch the same empty owner while the code still read
+  as though it were scoping. Every refusal carries its sentence in `details.message`, so the
+  four ways to lose a token stay tellable apart instead of all reading "Conflict".
+
 - **The gallery's first reference lookup: purchase-request gains its supplier master**
   (docs/reference-lookup.md slice 3 — the campaign's last piece). A `suppliers` table
   (V2), the `/api/suppliers/search` route that owns what searching suppliers means, and
@@ -93,7 +123,29 @@ All notable changes to TesseraQL are documented here. The format follows
   (`TQL-VIEW-3328`). The purchase-request gallery detail page adopts it as the
   managed-mode dogfood.
 
+### Changed
+
+- **A rejected import row now names the column and the value it refused.**
+  `FileTransferService.RowError` carries `field` and `value` beside the row and the message,
+  and the transfer status endpoint emits them when the parse knew them — a failing per-row
+  statement has neither and leaves both out. The report a reviewed upload answers is a
+  `Row` / `Field` / `Message` table, and a table cannot get its field back out of an English
+  sentence. **Breaking**: the record gained two components, and `RowError.of(row, message)`
+  is the shape for a rejection with no column to blame.
+
+- **A transfer's status endpoint carries the governance every other route does.**
+  It applied security alone, so a transfer's state resolved no tenant and its refusals
+  localized in the default locale while the parent route's did not — the same gap
+  `applyAttachmentGovernance` exists to have closed on the attachment routes. The commit leg
+  joins it there.
+
 ### Fixed
+
+- **The status-mapping ledger could not see the file-transfer domain.** It policed the
+  `4xxx` band, and the transfer refusals are numbered `28xx`, so an unmapped one answered
+  "Internal Server Error" with nothing to catch it — the very defect the ledger exists for,
+  in the one range it could not see. `LD` joins in full, its request-time refusals answer
+  real statuses, and every remaining 500 in the domain is recorded with its reason.
 
 - **The inbox bell's unread count now reaches screen readers**
   (docs/hc-recipe-alignment.md, the unread-badge slice). The bell anchor carried a

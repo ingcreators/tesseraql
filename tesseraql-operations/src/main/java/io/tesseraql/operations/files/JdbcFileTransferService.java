@@ -1,5 +1,6 @@
 package io.tesseraql.operations.files;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.error.TqlDomain;
@@ -40,6 +41,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import javax.sql.DataSource;
@@ -64,7 +67,24 @@ public final class JdbcFileTransferService implements FileTransferService {
     private static final Logger LOG = LoggerFactory.getLogger(JdbcFileTransferService.class);
     private static final TqlErrorCode TRANSFER_ERROR = new TqlErrorCode(TqlDomain.LD, 2810);
     private static final TqlErrorCode EMPTY_UPLOAD = new TqlErrorCode(TqlDomain.LD, 2820);
+    // The review-batch refusals (docs/csv-import.md decision 5). They are distinct codes so a
+    // log and an operator can tell them apart, and they all answer the same status, because to
+    // the caller they are one situation — this token cannot be spent, upload again — and
+    // answering them differently would tell a holder of someone else's token which tokens exist.
+    private static final TqlErrorCode BATCH_UNKNOWN = new TqlErrorCode(TqlDomain.LD, 2860);
+    private static final TqlErrorCode BATCH_EXPIRED = new TqlErrorCode(TqlDomain.LD, 2861);
+    private static final TqlErrorCode BATCH_CLAIMED = new TqlErrorCode(TqlDomain.LD, 2862);
+    private static final TqlErrorCode BATCH_FOREIGN = new TqlErrorCode(TqlDomain.LD, 2864);
+    private static final TqlErrorCode BATCH_PARSE_MOVED = new TqlErrorCode(TqlDomain.LD, 2865);
+    private static final TqlErrorCode BATCH_SPOOL_GONE = new TqlErrorCode(TqlDomain.LD, 2866);
     private static final int MAX_RECORDED_ERRORS = 100;
+    /** The review window, unless the app narrows or widens it (tesseraql.transfers.reviewTtl). */
+    private static final long DEFAULT_REVIEW_TTL_MILLIS = 30 * 60 * 1000L;
+    /** A parked batch's life: waiting, spent, replaced by a newer upload, or swept. */
+    private static final String PARKED = "PARKED";
+    private static final String COMMITTED = "COMMITTED";
+    private static final String SUPERSEDED = "SUPERSEDED";
+    private static final String EXPIRED = "EXPIRED";
 
     private final JobRepository jobs;
     private final TempStore tempStore;
@@ -76,6 +96,7 @@ public final class JdbcFileTransferService implements FileTransferService {
 
     private volatile String dialect;
     private int sqlTimeoutSeconds;
+    private long reviewTtlMillis = DEFAULT_REVIEW_TTL_MILLIS;
     private io.tesseraql.core.telemetry.Tracer tracer = io.tesseraql.core.telemetry.NoopTracer.INSTANCE;
 
     public JdbcFileTransferService(JobRepository jobs, TempStore tempStore, DataSource dataSource,
@@ -106,6 +127,16 @@ public final class JdbcFileTransferService implements FileTransferService {
      */
     public JdbcFileTransferService sqlTimeoutSeconds(int seconds) {
         this.sqlTimeoutSeconds = Math.max(0, seconds);
+        return this;
+    }
+
+    /**
+     * How long a parked review batch may wait for its confirm (docs/csv-import.md decision 2).
+     * Unlike produced export files, which expire only when an app opts in, a parked batch is
+     * always swept: it holds business data the user never chose to store.
+     */
+    public JdbcFileTransferService reviewTtlMillis(long millis) {
+        this.reviewTtlMillis = millis > 0 ? millis : DEFAULT_REVIEW_TTL_MILLIS;
         return this;
     }
 
@@ -151,6 +182,14 @@ public final class JdbcFileTransferService implements FileTransferService {
             io.tesseraql.core.util.SqlScripts.applyForVendor(dataSource,
                     JdbcFileTransferService.class,
                     "/tesseraql/db/migration/operations/V1__framework_operations.sql");
+            // Every version this store's own tables need must be listed, not just V1: Flyway
+            // covers only the four bundled vendors, so H2 — `tesseraql dev`, the embedded-db
+            // path, and much of the test surface — has nothing else. A version added to the
+            // migration set and not here exists on PostgreSQL and does not exist on H2, and the
+            // difference shows up as a missing table at the first upload.
+            io.tesseraql.core.util.SqlScripts.applyForVendor(dataSource,
+                    JdbcFileTransferService.class,
+                    "/tesseraql/db/migration/operations/V12__import_review_batch.sql");
         } catch (SQLException ex) {
             throw new TqlException(TRANSFER_ERROR,
                     "Failed to create file transfer schema: " + ex.getMessage());
@@ -168,13 +207,24 @@ public final class JdbcFileTransferService implements FileTransferService {
             throw new TqlException(EMPTY_UPLOAD,
                     "file-import expects the uploaded file as the request body");
         }
+        return launchImport(request, codec, upload, null);
+    }
+
+    /**
+     * Records the transfer and runs the import off the request thread. Shared by the one-shot
+     * upload and by a confirmed review batch, because a commit <em>is</em> an ordinary import
+     * (docs/csv-import.md decision 2) — the only difference is that a commit knows which rows the
+     * review already refused, and refuses to write anything if the parse no longer agrees.
+     */
+    private String launchImport(ImportRequest request, FileCodec codec, SpoolRef upload,
+            Set<Long> expectedRejects) {
         String transferId = jobs.startExecution(request.routeId(), request.appName(), "import",
                 null);
         insertTransfer(transferId, request.routeId(), request.appName(), "IMPORT",
                 request.format(), null, null, null, Map.of());
         executor.submit(guarded(transferId, () -> {
             try {
-                runImport(transferId, request, codec, upload);
+                runImport(transferId, request, codec, upload, expectedRejects);
             } finally {
                 tempStore.delete(upload);
             }
@@ -434,9 +484,17 @@ public final class JdbcFileTransferService implements FileTransferService {
     }
 
     private void runImport(String transferId, ImportRequest request, FileCodec codec,
-            SpoolRef upload) {
+            SpoolRef upload, Set<Long> expectedRejects) {
         List<SqlNode> rowSql = parse(request.rowSqlFile());
         List<RowError> errors = new ArrayList<>();
+        // The reported errors are capped; the rejection index is not. A commit that cannot say
+        // which rows it excluded cannot claim to have applied exactly what was reviewed.
+        //
+        // Only PARSE rejections belong in it. A row the database refuses is a different fact
+        // about a different pass, and folding the two together would make the agreement check
+        // fire on the first unique-key clash — rolling back an `onError: skip` import that was
+        // behaving exactly as declared, under a message blaming the file for having changed.
+        Set<Long> parseRejected = new java.util.LinkedHashSet<>();
         long[] applied = {0};
         io.tesseraql.core.telemetry.Span span = span("import", request.rowSqlFile());
         try (Connection connection = dataSource.getConnection();
@@ -446,25 +504,45 @@ public final class JdbcFileTransferService implements FileTransferService {
             try {
                 codec.read(content, request.readSpec(),
                         (rowNumber, values) -> {
+                            // Typed columns (date/datetime/number) parse before binding, so bad
+                            // values surface as row errors, not dialect cast failures. The parse
+                            // sits outside the savepoint because it touches no database: a row
+                            // the file already lost costs no transaction work, and keeping the
+                            // two passes structurally apart is what lets the agreement check
+                            // compare like with like.
+                            Map<String, Object> typed;
+                            try {
+                                typed = io.tesseraql.core.files.ColumnValues
+                                        .parseRow(request.readSpec(), values);
+                            } catch (RuntimeException ex) {
+                                parseRejected.add(rowNumber);
+                                record(errors, rowNumber, ex);
+                                return;
+                            }
                             Savepoint savepoint = connection.setSavepoint();
                             try {
-                                // Typed columns (date/datetime/number) parse before binding, so
-                                // bad values surface as row errors, not dialect cast failures.
-                                Map<String, Object> typed = io.tesseraql.core.files.ColumnValues
-                                        .parseRow(request.readSpec(), values);
                                 applied[0] += executeUpdate(connection,
                                         SqlRenderer.render(rowSql, typed));
                                 releaseQuietly(connection, savepoint);
                             } catch (SQLException | RuntimeException ex) {
                                 connection.rollback(savepoint);
-                                if (errors.size() < MAX_RECORDED_ERRORS) {
-                                    errors.add(new RowError(rowNumber, ex.getMessage()));
-                                } else if (errors.size() == MAX_RECORDED_ERRORS) {
-                                    errors.add(
-                                            new RowError(rowNumber, "... further errors omitted"));
-                                }
+                                record(errors, rowNumber, ex);
                             }
                         });
+                // The agreement check (docs/csv-import.md decision 2): re-parsing the parked
+                // bytes under the parked spec must refuse exactly the rows the review refused.
+                // It cannot differ — that is the point of freezing the spec — so a difference
+                // means the bytes or the declaration moved, and writing part of a set nobody
+                // reviewed is the one outcome worse than refusing.
+                if (expectedRejects != null && !parseRejected.equals(expectedRejects)) {
+                    connection.rollback();
+                    recordRows(transferId, 0, errors);
+                    jobs.failExecution(transferId, BATCH_PARSE_MOVED
+                            + ": the file no longer parses as it did when it was reviewed ("
+                            + expectedRejects.size() + " row(s) were rejected then, "
+                            + parseRejected.size() + " now); nothing was written");
+                    return;
+                }
                 boolean rollbackAll = !errors.isEmpty()
                         && ON_ERROR_ROLLBACK.equals(request.onError());
                 if (rollbackAll) {
@@ -492,6 +570,431 @@ public final class JdbcFileTransferService implements FileTransferService {
             jobs.failExecution(transferId, ex.getMessage());
         } finally {
             span.end();
+        }
+    }
+
+    /**
+     * Records one rejected row, bounded. The cap is on what is <em>reported</em>: the caller
+     * keeps the complete rejection index separately, because the two answer different questions
+     * — what to show the author, and what the commit is allowed to write.
+     */
+    private static void record(List<RowError> errors, long rowNumber, Exception ex) {
+        if (errors.size() > MAX_RECORDED_ERRORS) {
+            return;
+        }
+        if (errors.size() == MAX_RECORDED_ERRORS) {
+            errors.add(RowError.of(rowNumber, "... further errors omitted"));
+            return;
+        }
+        // A value the declared type refused knows which column and which text; a failing
+        // statement knows neither, and says so with nulls rather than with a guess.
+        errors.add(ex instanceof io.tesseraql.core.files.ColumnValueException bad
+                ? new RowError(rowNumber, bad.column(), bad.value(), bad.getMessage())
+                : RowError.of(rowNumber, ex.getMessage()));
+    }
+
+    // The reviewed upload (docs/csv-import.md)
+
+    /** What a parse-only pass found: the report, and the complete set of rows it refused. */
+    private record ParseOutcome(long rows, long rejectedCount, List<RowError> errors,
+            Set<Long> rejected, String fileError) {
+    }
+
+    @Override
+    public ImportReview reviewImport(ImportRequest request, String subject,
+            java.io.InputStream content) {
+        FileCodec codec = codecs.require(request.format());
+        SpoolRef upload = spool(content);
+        if (upload.bytes() == 0) {
+            tempStore.delete(upload);
+            throw new TqlException(EMPTY_UPLOAD,
+                    "file-import expects the uploaded file as the request body");
+        }
+        // Everything from here either parks the bytes or drops them. Without the finally, a
+        // failure between the spool and the row — a pool timeout, a lock wait, a constraint —
+        // leaves bytes on disk that no row points at, and the sweep only walks rows.
+        boolean parked = false;
+        try {
+            ParseOutcome outcome = parseOnly(codec, request.readSpec(), upload);
+            // A file the codec could not finish reading has no ready rows, whatever the counter
+            // reached before it threw: saying "899 rows ready" beside a refusal would be the
+            // status code and the report disagreeing, which is the thing this shape prevents.
+            long ready = outcome.fileError() != null ? 0 : outcome.rows() - outcome.rejectedCount();
+            // The affordance rule, in one expression (docs/csv-import.md decision 3): a
+            // committable set is the clean rows under `skip`, and every row or none under
+            // `rollback`. No set, no token, and the status code reads off the same fact.
+            boolean committable = outcome.fileError() == null && ready > 0
+                    && (outcome.rejectedCount() == 0 || ON_ERROR_SKIP.equals(request.onError()));
+            if (!committable) {
+                return new ImportReview(null, outcome.rows(), ready, outcome.rejectedCount(),
+                        outcome.errors(), outcome.fileError(), null);
+            }
+            String batchId = UUID.randomUUID().toString().replace("-", "");
+            Instant expiresAt = Instant.now().plusMillis(reviewTtlMillis);
+            supersede(request.appName(), request.routeId(), subject);
+            insertBatch(batchId, request, subject, upload, outcome, ready, expiresAt);
+            parked = true;
+            return new ImportReview(batchId, outcome.rows(), ready, outcome.rejectedCount(),
+                    outcome.errors(), null, expiresAt);
+        } finally {
+            if (!parked) {
+                releaseSpool(upload);
+            }
+        }
+    }
+
+    /**
+     * The parse without the write. The loop is the codec's, unchanged - only the handler
+     * differs, which is what makes "the commit is an ordinary import" true rather than
+     * aspirational: one reader, two policies.
+     */
+    private ParseOutcome parseOnly(FileCodec codec, io.tesseraql.core.files.FileReadSpec spec,
+            SpoolRef upload) {
+        List<RowError> errors = new ArrayList<>();
+        Set<Long> rejected = new java.util.LinkedHashSet<>();
+        long[] rows = {0};
+        try (java.io.InputStream content = tempStore.openInput(upload)) {
+            codec.read(content, spec, (rowNumber, values) -> {
+                rows[0]++;
+                try {
+                    io.tesseraql.core.files.ColumnValues.parseRow(spec, values);
+                } catch (RuntimeException ex) {
+                    rejected.add(rowNumber);
+                    record(errors, rowNumber, ex);
+                }
+            });
+        } catch (Exception ex) {
+            // A header that does not map, or an upload no codec can read, fails before any row
+            // is examined. It used to end as a failed transfer with an empty error list - the
+            // commonest real import failure, reported as nothing at all. Rows already refused
+            // below a file-level failure are kept: they are true, and the author will want them
+            // once the file itself is readable.
+            return new ParseOutcome(rows[0], rejected.size(), errors, rejected, ex.getMessage());
+        }
+        return new ParseOutcome(rows[0], rejected.size(), errors, rejected, null);
+    }
+
+    /**
+     * A refusal the confirming caller is meant to act on. The error envelope renders only the
+     * code and a status phrase, so the sentence has to ride {@code details.message} — the
+     * channel a thrower uses to declare text safe to show — or the caller reads "Conflict" and
+     * learns nothing about which of the four ways to lose a token they hit.
+     */
+    private static TqlException refuseCommit(TqlErrorCode code, String message) {
+        return TqlException.builder(code)
+                .message(message)
+                .details(Map.of("message", message))
+                .build();
+    }
+
+    @Override
+    public String commitImport(String batchId, String subject, ImportRequest request) {
+        BatchRow batch = findBatch(batchId)
+                .orElseThrow(() -> refuseCommit(BATCH_UNKNOWN,
+                        "No import batch to commit; upload the file again"));
+        if (!batch.appName().equals(request.appName())
+                || !batch.routeId().equals(request.routeId())
+                || !batch.subject().equals(subject)) {
+            // Deliberately the same answer shape as an unknown batch: whose it is, is not
+            // something a caller holding someone else's token gets to confirm.
+            LOG.warn("Import batch {} confirmed by the wrong owner or route", batchId);
+            throw refuseCommit(BATCH_FOREIGN,
+                    "No import batch to commit; upload the file again");
+        }
+        if (batch.claimedAt() != null) {
+            throw refuseCommit(BATCH_CLAIMED,
+                    "This import was already committed; upload the file again to import it"
+                            + " once more");
+        }
+        if (SUPERSEDED.equals(batch.status())) {
+            // Not "already committed": a newer upload replaced it, and telling the author their
+            // import ran when it did not is the one wrong sentence here.
+            throw refuseCommit(BATCH_EXPIRED,
+                    "A newer upload replaced this one; confirm that upload instead");
+        }
+        if (EXPIRED.equals(batch.status()) || batch.expiresAt() == null
+                || batch.expiresAt().toInstant().isBefore(Instant.now())) {
+            throw refuseCommit(BATCH_EXPIRED,
+                    "The review window for this import has passed; upload the file again");
+        }
+        SpoolRef upload = batch.spool();
+        // Read the bytes before claiming, not after. The spool may be unreachable from this node
+        // — the default temp store is node-local, and a stack can serve the confirm from a
+        // different member — and that has to be a refusal the caller sees, naming the store, not
+        // a 202 followed by a transfer that fails somewhere they are not looking. Claiming first
+        // would also burn the token on a commit that never ran.
+        if (upload == null || !spoolReadable(upload)) {
+            throw refuseCommit(BATCH_SPOOL_GONE,
+                    "The reviewed file is not readable from this node (tesseraql.temp.store: "
+                            + tempStore.getClass().getSimpleName()
+                            + "); upload it again, or move the temp store off the node with"
+                            + " tesseraql.temp.store: db");
+        }
+        // Claim before running: a crash after claiming leaves an import whose transfer says what
+        // happened, while claiming after running would let a replay import twice.
+        if (!claimBatch(batchId)) {
+            throw refuseCommit(BATCH_CLAIMED,
+                    "This import was already committed; upload the file again to import it"
+                            + " once more");
+        }
+        FileCodec codec = codecs.require(request.format());
+        // The route supplies what it declares - the per-row statement, the failure policy - and
+        // the batch supplies the read spec, so the commit parses exactly what the review parsed
+        // even though the locale expression would resolve against a different request.
+        ImportRequest frozen = new ImportRequest(request.routeId(), request.appName(),
+                request.format(), readSpec(batch.readSpecJson(), request.readSpec()),
+                request.rowSqlFile(), request.onError());
+        String transferId = launchImport(frozen, codec, upload, batch.rejected());
+        linkTransfer(batchId, transferId);
+        return transferId;
+    }
+
+    @Override
+    public int expireReviewBatches(Instant cutoff) {
+        int reclaimed = 0;
+        // The row stays, without its bytes: that is what lets a late confirm be told the batch
+        // expired rather than that it never existed.
+        for (BatchSpool batch : parkedBatches(
+                "select batch_id, spool_id, spool_uri from tql_import_batch"
+                        + " where status = 'PARKED' and expires_at < ?",
+                statement -> statement.setTimestamp(1, Timestamp.from(cutoff)),
+                "Failed to list expired import batches")) {
+            if (claim(batch.batchId(), EXPIRED)) {
+                releaseSpool(batch.spool());
+                reclaimed++;
+            }
+        }
+        return reclaimed;
+    }
+
+    // tql_import_batch persistence
+
+    private record BatchRow(String routeId, String appName, String subject, String status,
+            String spoolId, String spoolUri, String readSpecJson, long rowCount,
+            Set<Long> rejected, Timestamp claimedAt, Timestamp expiresAt) {
+
+        SpoolRef spool() {
+            return spoolOf(spoolId, spoolUri);
+        }
+    }
+
+    /**
+     * Drops a parked upload's bytes. Delete what we can and keep going: a node-local spool
+     * written on another node is not ours to free, and one bad reference must not stall the
+     * sweep — the same guard the transfer retention sweep carries, for the same reason.
+     */
+    private void releaseSpool(SpoolRef spool) {
+        if (spool == null) {
+            return;
+        }
+        try {
+            tempStore.delete(spool);
+        } catch (RuntimeException ex) {
+            LOG.warn("Could not reclaim import spool {}: {}", spool.id(), ex.toString());
+        }
+    }
+
+    /** Whether this node can actually read the parked bytes. */
+    private boolean spoolReadable(SpoolRef spool) {
+        try (java.io.InputStream probe = tempStore.openInput(spool)) {
+            return probe.read() >= 0;
+        } catch (IOException | RuntimeException ex) {
+            LOG.warn("Parked import spool {} is unreadable here: {}", spool.id(), ex.toString());
+            return false;
+        }
+    }
+
+    /**
+     * The reference a parked batch's bytes live under. Both halves are stored because the temp
+     * stores disagree about which one addresses them: the file store resolves the URI, while the
+     * database and blob stores look the id up as a key. Rebuilding the id from anything else
+     * works on one store and silently fails on the others.
+     */
+    private static SpoolRef spoolOf(String spoolId, String spoolUri) {
+        return spoolUri == null || spoolId == null
+                ? null
+                : new SpoolRef(spoolId, SpoolKind.BINARY, URI.create(spoolUri), 1, 0,
+                        Instant.now());
+    }
+
+    private void insertBatch(String batchId, ImportRequest request, String subject,
+            SpoolRef upload, ParseOutcome outcome, long ready, Instant expiresAt) {
+        try (Connection connection = dataSource.getConnection();
+                PreparedStatement statement = connection.prepareStatement("""
+                        insert into tql_import_batch
+                          (batch_id, route_id, app_name, subject, format, spool_id, spool_uri,
+                           read_spec_json, report_json, row_count, ready_count, rejected_count,
+                           status, expires_at, created_at)
+                        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PARKED', ?, ?)""")) {
+            applyTimeout(statement);
+            statement.setString(1, batchId);
+            statement.setString(2, request.routeId());
+            statement.setString(3, request.appName());
+            statement.setString(4, subject);
+            statement.setString(5, request.format());
+            statement.setString(6, upload.id());
+            statement.setString(7, upload.uri().toString());
+            statement.setString(8, toJson(request.readSpec()));
+            statement.setString(9, toJson(Map.of(
+                    "errors", outcome.errors(), "rejected", outcome.rejected())));
+            statement.setLong(10, outcome.rows());
+            statement.setLong(11, ready);
+            statement.setLong(12, outcome.rejectedCount());
+            statement.setTimestamp(13, Timestamp.from(expiresAt));
+            statement.setTimestamp(14, Timestamp.from(Instant.now()));
+            statement.executeUpdate();
+        } catch (SQLException ex) {
+            throw new TqlException(TRANSFER_ERROR,
+                    "Failed to park the import batch: " + ex.getMessage());
+        }
+    }
+
+    /**
+     * A new upload replaces this subject's earlier unclaimed batch for the same route
+     * (docs/csv-import.md decision 2). Without it two tokens are live at once and the superseded
+     * report stays committable - the author reviews one file and can still commit the other.
+     */
+    private void supersede(String appName, String routeId, String subject) {
+        for (BatchSpool batch : parkedBatches(
+                "select batch_id, spool_id, spool_uri from tql_import_batch where app_name = ?"
+                        + " and route_id = ? and subject = ? and status = 'PARKED'",
+                statement -> {
+                    statement.setString(1, appName);
+                    statement.setString(2, routeId);
+                    statement.setString(3, subject);
+                },
+                "Failed to supersede the previous import batch")) {
+            if (claim(batch.batchId(), SUPERSEDED)) {
+                releaseSpool(batch.spool());
+            }
+        }
+    }
+
+    /** One parked batch's identity and bytes, for the two paths that reclaim them. */
+    private record BatchSpool(String batchId, String spoolId, String spoolUri) {
+
+        SpoolRef spool() {
+            return spoolOf(spoolId, spoolUri);
+        }
+    }
+
+    private List<BatchSpool> parkedBatches(String sql, SqlBindings binder, String failure) {
+        List<BatchSpool> batches = new ArrayList<>();
+        try (Connection connection = dataSource.getConnection();
+                PreparedStatement statement = connection.prepareStatement(sql)) {
+            applyTimeout(statement);
+            binder.bind(statement);
+            try (ResultSet rs = statement.executeQuery()) {
+                while (rs.next()) {
+                    batches.add(new BatchSpool(rs.getString(1), rs.getString(2),
+                            rs.getString(3)));
+                }
+            }
+        } catch (SQLException ex) {
+            throw new TqlException(TRANSFER_ERROR, failure + ": " + ex.getMessage());
+        }
+        return batches;
+    }
+
+    /**
+     * Moves a parked batch to a terminal state, winner takes all. The transition happens BEFORE
+     * the bytes go: a confirm that claimed the batch a moment earlier still holds it, and losing
+     * this race must cost the loser nothing — deleting first would pull the file out from under
+     * an import already running.
+     */
+    private boolean claim(String batchId, String status) {
+        try (Connection connection = dataSource.getConnection();
+                PreparedStatement statement = connection.prepareStatement(
+                        "update tql_import_batch set status = ?, spool_id = null,"
+                                + " spool_uri = null where batch_id = ? and status = 'PARKED'")) {
+            applyTimeout(statement);
+            statement.setString(1, status);
+            statement.setString(2, batchId);
+            return statement.executeUpdate() == 1;
+        } catch (SQLException ex) {
+            throw new TqlException(TRANSFER_ERROR,
+                    "Failed to retire the import batch: " + ex.getMessage());
+        }
+    }
+
+    /** Atomically claims a parked batch for a confirm; true only for the winning caller. */
+    private boolean claimBatch(String batchId) {
+        try (Connection connection = dataSource.getConnection();
+                PreparedStatement statement = connection.prepareStatement(
+                        "update tql_import_batch set claimed_at = ?, status = '" + COMMITTED
+                                + "' where batch_id = ? and claimed_at is null"
+                                + " and status = '" + PARKED + "'")) {
+            applyTimeout(statement);
+            statement.setTimestamp(1, Timestamp.from(Instant.now()));
+            statement.setString(2, batchId);
+            return statement.executeUpdate() == 1;
+        } catch (SQLException ex) {
+            throw new TqlException(TRANSFER_ERROR,
+                    "Failed to claim the import batch: " + ex.getMessage());
+        }
+    }
+
+    private void linkTransfer(String batchId, String transferId) {
+        update("update tql_import_batch set transfer_id = ? where batch_id = ?", statement -> {
+            statement.setString(1, transferId);
+            statement.setString(2, batchId);
+        });
+    }
+
+    private Optional<BatchRow> findBatch(String batchId) {
+        try (Connection connection = dataSource.getConnection();
+                PreparedStatement statement = connection.prepareStatement(
+                        "select route_id, app_name, subject, status, spool_id, spool_uri,"
+                                + " read_spec_json, report_json, row_count, claimed_at,"
+                                + " expires_at from tql_import_batch where batch_id = ?")) {
+            applyTimeout(statement);
+            statement.setString(1, batchId);
+            try (ResultSet rs = statement.executeQuery()) {
+                if (!rs.next()) {
+                    return Optional.empty();
+                }
+                return Optional.of(new BatchRow(rs.getString("route_id"),
+                        rs.getString("app_name"), rs.getString("subject"), rs.getString("status"),
+                        rs.getString("spool_id"), rs.getString("spool_uri"),
+                        rs.getString("read_spec_json"), rs.getLong("row_count"),
+                        rejectedRows(rs.getString("report_json")), rs.getTimestamp("claimed_at"),
+                        rs.getTimestamp("expires_at")));
+            }
+        } catch (SQLException ex) {
+            throw new TqlException(TRANSFER_ERROR,
+                    "Failed to read the import batch: " + ex.getMessage());
+        }
+    }
+
+    private Set<Long> rejectedRows(String reportJson) {
+        if (reportJson == null || reportJson.isBlank()) {
+            return Set.of();
+        }
+        try {
+            Map<String, Object> report = mapper.readValue(reportJson,
+                    new TypeReference<Map<String, Object>>() {
+                    });
+            Set<Long> rows = new java.util.LinkedHashSet<>();
+            if (report.get("rejected") instanceof List<?> stored) {
+                stored.forEach(row -> rows.add(((Number) row).longValue()));
+            }
+            return rows;
+        } catch (JsonProcessingException ex) {
+            throw new TqlException(TRANSFER_ERROR,
+                    "Failed to read the import batch report: " + ex.getMessage());
+        }
+    }
+
+    private io.tesseraql.core.files.FileReadSpec readSpec(String json,
+            io.tesseraql.core.files.FileReadSpec fallback) {
+        if (json == null || json.isBlank()) {
+            return fallback;
+        }
+        try {
+            return mapper.readValue(json, io.tesseraql.core.files.FileReadSpec.class);
+        } catch (JsonProcessingException ex) {
+            throw new TqlException(TRANSFER_ERROR,
+                    "Failed to read the parked read spec: " + ex.getMessage());
         }
     }
 

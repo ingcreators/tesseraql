@@ -618,7 +618,7 @@ class ManifestCoverageTest {
                                         Map.of()))),
                         false,
                         new io.tesseraql.yaml.model.ImportSpec("csv", List.of(), null, null, null,
-                                null, null)));
+                                null, null, null)));
     }
 
     @Test

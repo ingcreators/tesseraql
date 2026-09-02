@@ -1524,6 +1524,40 @@ class AppLinterTest {
     }
 
     @Test
+    void refusesAReviewOnAJobBecauseAJobHasNobodyToConfirmIt(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), "tesseraql:\n  app:\n"
+                + "    name: review-lint\n");
+        Files.createDirectories(dir.resolve("batch/intake"));
+        Files.writeString(dir.resolve("batch/intake/upsert.sql"), "insert into t values (1)\n");
+        Files.writeString(dir.resolve("batch/intake/job.yml"), """
+                version: tesseraql/v1
+                id: orders.intake
+                kind: job
+                recipe: file-import
+                trigger:
+                  poll:
+                    transport: local
+                    path: /data/inbound
+                import:
+                  format: csv
+                  review: required
+                pipeline:
+                  - id: row
+                    sql:
+                      file: upsert.sql
+                """);
+
+        List<LintFinding> findings = new AppLinter().lint(dir);
+
+        // The shared import: block is schema-legal on both document kinds, so an editor will
+        // offer the key here — which is exactly why the refusal has to be a lint, and why its
+        // message says "job" rather than borrowing the route's code.
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-YAML-1060") && f.isError()
+                && f.message().contains("orders.intake"));
+    }
+
+    @Test
     void nudgesKnownHostsFileOnUncheckedSftpPolls(@TempDir Path dir) throws Exception {
         Files.createDirectories(dir.resolve("config"));
         Files.writeString(dir.resolve("config/tesseraql.yml"), """

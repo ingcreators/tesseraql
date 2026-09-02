@@ -267,6 +267,7 @@ file-import parsing and column-to-bind mapping (headerRow, startRow, columns, on
 | `sheet` | string | For workbook formats, the sheet to read (default: the first). |
 | `locale` | string | The locale `type:`/`format:` columns parse dates and numbers in. A literal, or a request source such as `principal.claim.locale`; unset, `tesseraql.files.locale` applies. |
 | `onError` | string | What a failing row does: `rollback` (default) fails the whole import, `skip` records the row and commits the rest. Either way the rejected rows are reported with their row numbers. |
+| `review` | enum: `required` | `required` splits the import in two (docs/csv-import.md): the upload parses, validates and parks the batch without writing anything, answering a report and a confirm token, and a second request commits exactly what was reviewed. Absent means the one-shot import. Only a route may declare it — a poll-driven import job has nobody to confirm (TQL-YAML-1060). |
 
 ### export
 
@@ -663,6 +664,7 @@ file-import parsing and column-to-bind mapping (headerRow, startRow, columns, on
 | `sheet` | string | For workbook formats, the sheet to read (default: the first). |
 | `locale` | string | The locale `type:`/`format:` columns parse dates and numbers in. A literal, or a request source such as `principal.claim.locale`; unset, `tesseraql.files.locale` applies. |
 | `onError` | string | What a failing row does: `rollback` (default) fails the whole import, `skip` records the row and commits the rest. Either way the rejected rows are reported with their row numbers. |
+| `review` | enum: `required` | `required` splits the import in two (docs/csv-import.md): the upload parses, validates and parks the batch without writing anything, answering a report and a confirm token, and a second request commits exactly what was reviewed. Absent means the one-shot import. Only a route may declare it — a poll-driven import job has nobody to confirm (TQL-YAML-1060). |
 
 ### sla
 

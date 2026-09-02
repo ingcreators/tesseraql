@@ -100,7 +100,9 @@ upload — nothing was accepted for processing, and a `Location` invites a calle
 poll an import that cannot start without a commit. A reviewed upload answers `200`
 with the report and the token, in the all-valid case and the some-rows-invalid case
 alike; only a file with nothing importable, or one that could not be read at all,
-answers `422` (`TQL-LD-2863`), and only that case omits the confirm affordance.
+answers `422`, and only that case omits the confirm affordance. That `422` carries the
+report, not an error envelope: the caller needs the rejected rows, and an envelope
+would replace them, so this refusal deliberately has no error code of its own.
 `respondAccepted` stays reachable on the no-review path alone.
 
 **The parse is synchronous, and its bound is the body cap.** Answering with a
@@ -144,7 +146,11 @@ component beside the transfer table and owned by the same service:
   another's upload. On a stack this matters more than it looks: the framework pools
   are shared, and a subject-only scope would be one namespace across every
   application.
-- `spool_uri` — the uploaded bytes, kept.
+- `spool_id` and `spool_uri` — the uploaded bytes, kept, addressed both ways. The temp stores
+  disagree about which half locates them: the file store resolves the URI, while the database
+  and blob stores look the id up as a key. Parking one of the two works on one store and
+  silently fails on the others — including the `db` store this design requires for more than
+  one node.
 - `read_spec_json` — the **resolved** read spec (decision 3 says why).
 - `report_json` — the bounded report, and the *complete* set of rejected row
   numbers. The two are different things: the display is capped, the rejection index
@@ -326,6 +332,19 @@ breaking under the pre-1.0 rule, with no shim. The override lint cannot catch it
 to say it loudly in the CHANGELOG, not a reason to avoid the extraction.
 
 ## Decision 5 — the commit is single-shot, and the claim is the batch row
+
+**A reviewed import needs an authenticated route, and that is refused at build time.** A batch
+belongs to the principal who parked it, and an unauthenticated route has no principal to be:
+left alone, every batch gets the same empty owner and anyone can confirm anyone's upload while
+the code still reads as though it were scoping. `review: required` without a `security.auth:`
+declaration is `TQL-ROUTE-3118`, beside the bad-value refusal.
+
+**And a refusal has to arrive as a sentence.** The error envelope renders the code and a status
+phrase, nothing else, so a message the caller is meant to act on rides `details.message` — the
+channel a thrower uses to declare text safe to show. Without it all four ways to lose a token
+read as "Conflict", and the distinction between "a newer upload replaced this" and "this was
+already committed" — the distinction supersession exists to be able to draw — never reaches the
+person holding the token. The bulk report's guard text learned this the same way.
 
 `POST {path}/{transferId}/commit` is the confirm leg — addressed by the batch id,
 which the confirm form carries both in the action path and as a hidden `token`
@@ -558,7 +577,7 @@ off, not by a report.
 | upload parses and validates without importing | decision 1, `review: required` |
 | all rows valid → `200` + report + confirm form | decision 1 |
 | some rows invalid → `200` + report + "import the valid N" | decision 1, decision 4; `onError: skip` is what makes the partial set committable |
-| nothing valid / unreadable → `422`, no confirm form | decision 1 (`TQL-LD-2863`), decision 4's file-level entry |
+| nothing valid / unreadable → `422`, no confirm form | decision 1 (the report, not an envelope), decision 4's file-level entry |
 | re-upload replaces the batch with a fresh token | decision 2, supersession |
 | report = summary + real error table + tokened confirm form | decision 4 |
 | token in the path **and** a hidden input, pair must match | decision 5 |
