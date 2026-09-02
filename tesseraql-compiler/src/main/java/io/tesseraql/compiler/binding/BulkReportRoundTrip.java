@@ -20,11 +20,11 @@ import java.util.Map;
  * binds the action set from the SELECTION — never from the form's {@code keys}, which on a
  * snapshot list is the whole frozen membership riding along for the page render — and keeps
  * that membership aside for numbering. The {@link #response} runs after the processor: it
- * folds the per-key outcomes into the report shape (reason groups bounded by construction),
- * parks it in the {@link BulkReportStore}, and answers <b>307</b> to the list URL plus the
- * report handle — the browser re-posts the intact form to the list's own POST leg, so a
- * snapshot's frozen membership survives the round trip. An offset or keyset list (no
- * membership in the form) takes the ordinary <b>303</b>: its state lives in the
+ * folds the per-key outcomes into the report shape (one entry per failed key, grouped and
+ * bounded when it renders), parks it in the {@link BulkReportStore}, and answers <b>307</b> to
+ * the list URL plus the report handle — the browser re-posts the intact form to the list's own
+ * POST leg, so a snapshot's frozen membership survives the round trip. An offset or keyset
+ * list (no membership in the form) takes the ordinary <b>303</b>: its state lives in the
  * {@code _return} URL, so a fresh GET is the honest re-render. Everything else — a JSON
  * caller, a composite-key view, a missing store — keeps the JSON outcomes contract
  * untouched.
@@ -43,9 +43,6 @@ public final class BulkReportRoundTrip {
 
     /** How long a parked report outlives its redirect; a refresh may re-read it. */
     private static final long TTL_MILLIS = 15 * 60 * 1000L;
-
-    /** Report entries rendered per reason group; the grid's row marks carry the rest. */
-    private static final int GROUP_CAP = 5;
 
     private BulkReportRoundTrip() {
     }
@@ -131,58 +128,59 @@ public final class BulkReportRoundTrip {
         };
     }
 
-    /** The stored report: totals, the full failed set for marks, bounded reason groups. */
+    /**
+     * The stored report: totals plus one entry per failed key, complete and ungrouped.
+     *
+     * <p>Complete, because the display bound belongs to whoever renders it
+     * (docs/csv-import.md decision 4). This used to group here and drop everything past the
+     * fifth row of a group, so a report could not be re-rendered with a wider bound and could
+     * never recover what storing it had already thrown away. The set is bounded anyway: it is
+     * one entry per failed key of one submitted selection.
+     *
+     * <p>Ungrouped, because grouping is a render decision — the reason key, the heading, the
+     * caps — and the render owns it for both feeders now.
+     */
     private static Map<String, Object> payload(Map<?, ?> report, List<String> membership,
             List<String> viewKey) {
         Map<String, Object> stored = new LinkedHashMap<>();
         stored.put("requested", report.get("requested"));
         stored.put("succeeded", report.get("succeeded"));
         stored.put("failed", report.get("failed"));
-        Map<String, Map<String, Object>> groups = new LinkedHashMap<>();
-        // token -> index of its reason group: what the list render needs to mark a failed
-        // row (data-attention + aria-describedby) and re-check the retry set.
-        Map<String, Integer> tokenGroups = new LinkedHashMap<>();
+        List<Map<String, Object>> entries = new ArrayList<>();
+        // Position by token, once: the frozen membership is a whole page-set, and every
+        // failed key used to scan it.
+        Map<String, Integer> positions = new LinkedHashMap<>();
+        if (membership != null) {
+            for (int i = 0; i < membership.size(); i++) {
+                positions.putIfAbsent(membership.get(i), i + 1);
+            }
+        }
         if (report.get("outcomes") instanceof List<?> outcomes) {
-            for (Object entry : outcomes) {
-                if (!(entry instanceof Map<?, ?> outcome)
+            for (Object candidate : outcomes) {
+                if (!(candidate instanceof Map<?, ?> outcome)
                         || Integer.valueOf(200).equals(outcome.get("status"))) {
                     continue;
                 }
                 String key = String.valueOf(outcome.get("key"));
+                Map<String, Object> entry = new LinkedHashMap<>();
+                entry.put("reason", outcome.get("guard") != null
+                        ? String.valueOf(outcome.get("guard"))
+                        : String.valueOf(outcome.get("code")));
+                entry.put("message", outcome.get("message"));
+                entry.put("key", key);
                 String token = io.tesseraql.core.rows.RowTokens.encode(
                         Map.of(viewKey.get(0), key), viewKey);
-                String reason = outcome.get("guard") != null
-                        ? String.valueOf(outcome.get("guard"))
-                        : String.valueOf(outcome.get("code"));
-                Map<String, Object> group = groups.computeIfAbsent(reason, r -> {
-                    Map<String, Object> g = new LinkedHashMap<>();
-                    g.put("reason", r);
-                    g.put("code", outcome.get("code"));
-                    g.put("message", outcome.get("message"));
-                    g.put("count", 0);
-                    g.put("rows", new ArrayList<Map<String, Object>>());
-                    return g;
-                });
-                tokenGroups.put(token, new ArrayList<>(groups.keySet()).indexOf(reason));
-                group.put("count", (Integer) group.get("count") + 1);
-                @SuppressWarnings("unchecked")
-                List<Map<String, Object>> rows = (List<Map<String, Object>>) group.get("rows");
-                if (rows.size() < GROUP_CAP) {
-                    Map<String, Object> row = new LinkedHashMap<>();
-                    row.put("key", key);
-                    row.put("token", token);
-                    int number = membership == null ? -1 : membership.indexOf(token);
-                    if (number >= 0) {
-                        // Authoritative only on a snapshot list: the posted membership order
-                        // IS the frozen order (docs/bulk-report.md decision 4).
-                        row.put("number", number + 1);
-                    }
-                    rows.add(row);
+                entry.put("token", token);
+                Integer number = positions.get(token);
+                if (number != null) {
+                    // Authoritative only on a snapshot list: the posted membership order IS
+                    // the frozen order (docs/bulk-report.md decision 4).
+                    entry.put("number", number);
                 }
+                entries.add(entry);
             }
         }
-        stored.put("groups", new ArrayList<>(groups.values()));
-        stored.put("tokenGroups", tokenGroups);
+        stored.put("entries", entries);
         return stored;
     }
 }

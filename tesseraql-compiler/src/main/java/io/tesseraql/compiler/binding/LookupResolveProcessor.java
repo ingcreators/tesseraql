@@ -131,21 +131,12 @@ public final class LookupResolveProcessor implements Step {
     }
 
     private String label(MessageCatalog catalog, Locale locale) {
-        String exact = catalog.forLocale(locale.toLanguageTag()).get(field.labelKey());
-        if (exact != null) {
-            return exact;
-        }
-        String language = catalog.forLocale(locale.getLanguage()).get(field.labelKey());
-        return language != null ? language : field.labelFallback();
+        return ViewMessages.text(catalog, locale, field.labelKey(), field.labelFallback());
     }
 
     private static String message(MessageCatalog catalog, Locale locale) {
-        String exact = catalog.forLocale(locale.toLanguageTag()).get("tql.lookup.unresolved");
-        if (exact != null) {
-            return exact;
-        }
-        String language = catalog.forLocale(locale.getLanguage()).get("tql.lookup.unresolved");
-        return language != null ? language : "No match for this code.";
+        return ViewMessages.text(catalog, locale, "tql.lookup.unresolved",
+                "No match for this code.");
     }
 
     /** The declared path with its {@code {param}} placeholders filled from the request. */

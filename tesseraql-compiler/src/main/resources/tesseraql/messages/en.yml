@@ -73,8 +73,10 @@ tql:
     summary: "{succeeded} of {requested} succeeded; {failed} failed."
     allSucceeded: "All {requested} succeeded."
     row: "Row {number} — {key}"
-    more: "…and {count} more"
     numberColumn: Row number
+  report:
+    more: "…and {count} more"
+    moreReasons: "…and {count} more reason(s)"
   session:
     expiredTitle: Session expired
     expiredBody: Sign in again to continue. The action you started will complete after you sign in.

@@ -8,6 +8,28 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **`tql/view/report.html :: report(r)` — the outcome report is a fragment, with two feeders**
+  (docs/csv-import.md slice 3). The bulk report's markup was inlined in the list pattern and its
+  render model was built by a private method reachable only from the list path, so the "one
+  display contract, two consumers" of docs/bulk-report.md decision 1 had nothing a second
+  consumer could fill. It is now a pattern of the public rendering contract, overridable at L2
+  like every other, fed by a shared `ReportModel`:
+
+  - **the link is a value, not a derivation.** An entry carries its own `href` — the bulk feeder
+    fills `#row-<token>` as before, an import feeder fills its preview row. Position is not
+    identity in a grid; in a file the line number *is* the identity, and each feeder says which
+    it has.
+  - **an entry carries `field` and `value`.** "Line 3 — qty: `abc`" is the contract's
+    Row / Field / Message line; a bulk action knows neither and leaves both out.
+  - **a report carries file-level entries.** A header that does not map, or a file no codec
+    could read, belongs to no row and gets a slot above the groups rather than a fabricated
+    row number.
+  - **both bounds belong to the feeder.** How many entries a reason group shows, and how many
+    reason groups the report shows, are parameters now — a bulk action's convenience banner and
+    a validation report the author has to work through do not want the same number.
+
+  The list renders exactly as before on screen, through the fragment.
+
 - **A file-import route's `input:` is what each row must satisfy**
   (docs/csv-import.md slice 2). On an import route the body is rows, so `input:` describes a
   row rather than the request, and `import.columns:` keeps the job it had — which cell feeds
@@ -167,6 +189,43 @@ All notable changes to TesseraQL are documented here. The format follows
   managed-mode dogfood.
 
 ### Changed
+
+- **An application's own `tql/view/list.html` no longer renders the outcome report.**
+  **Breaking**, with no shim: the report markup moved into `tql/view/report.html`, and an L2
+  override of the list pattern that predates the move simply stops showing the report — the
+  page still renders, and the failures it used to name are silently absent. The override lint
+  cannot catch this (it checks the fragment signature, not what the file contains), which is
+  the reason to say it loudly here. An override picks the report back up by inserting
+  `~{tql/view/report :: report(${v.report})}` where the old `hc-alert` block was. The view
+  model's slot is renamed with it: `v.bulkReport` is `v.report`, because the model is no longer
+  the bulk action's alone.
+
+- **Reason groups key on (code, message), and the bound is applied when the report renders.**
+  Two defects of the shipped bulk report, fixed rather than inherited by the second feeder. A
+  group used to be keyed by the error code and headed by the first message that created it, so
+  two entries sharing a code with different messages merged and the second message disappeared
+  — harmless when one guard means one sentence, wrong the moment a parse pass emits one code
+  with a sentence per column. And the per-group cap was applied when the report was **stored**,
+  so no renderer could widen it and an already-stored report could never recover the rows
+  storing it had dropped. A parked bulk report now holds one complete, ungrouped entry per
+  failed key; grouping and both bounds are the render's, and a bounded group list carries the
+  same "…and N more" honesty its entries already did.
+
+- **A rejected import row's message is the framework's sentence, not the driver's.**
+  A row the per-row statement failed used to report the database's own `getMessage()` — table
+  and constraint names the author never wrote, SQL, and on several dialects the conflicting
+  row's values, which is another record's data shown to whoever uploaded the file. The message
+  is now the sentence for the portable failure class (`SqlErrors` already derives it: unique,
+  foreign key, not-null, check, serialization), and the driver's text rides on as a new
+  `detail` component of `FileTransferService.RowError`, emitted by the transfer status endpoint
+  — the operational face — and never by the report. Parse rejections are unchanged: their
+  message was always the framework's. **Breaking**: the record gained a component; use
+  `RowError.of(row, message)` and `RowError.ofColumn(row, field, value, message)`.
+
+- **A composed view pattern's override is held to its own fragment signature.** The override
+  lint expected `view(v)` for every file whose name does not begin with `field`, so overriding
+  a pattern a view *composes* — `table.html`, `lookup-dialog.html`, and now `report.html` —
+  reported `TQL-VIEW-3307` against a file that was correct.
 
 - **One compiled-pattern cache, not two.** A declared `pattern:` is matched through
   `FieldPatterns` in core now, shared by the request binder and the import row pass. Two caches

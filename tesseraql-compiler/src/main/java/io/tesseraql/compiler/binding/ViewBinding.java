@@ -993,9 +993,20 @@ public final class ViewBinding {
         v.put("rows", cellMatrix(context, columns, rows, tokens, returnBase));
     }
 
+    /** Entries per reason group on a list's report: the grid's row marks carry the rest. */
+    private static final int BULK_ENTRY_CAP = 5;
+
     /**
-     * The bulk report the redirect handed back (docs/bulk-report.md decisions 1-5): the
-     * bounded reason groups for the region above the grid, plus the per-row mark and
+     * Reason groups on a list's report. A bulk route's guards are a small declared vocabulary,
+     * so this is generous rather than tight — but it is a bound, because a route whose refusals
+     * carry per-row text has as many reasons as it has failures.
+     */
+    private static final int BULK_GROUP_CAP = 10;
+
+    /**
+     * The bulk feeder of the shared report (docs/bulk-report.md decisions 1-5,
+     * docs/csv-import.md decision 4): the stored per-key outcomes become report entries
+     * labelled by number and identity and linked by row token, plus the per-row mark and
      * re-check state the table pattern consumes. Reads the payload the round trip stored;
      * absent, expired or foreign reports simply never reach this context.
      */
@@ -1007,75 +1018,54 @@ public final class ViewBinding {
         long requested = longOf(report.get("requested"));
         long succeeded = longOf(report.get("succeeded"));
         long failed = longOf(report.get("failed"));
-        Map<String, Object> model = new LinkedHashMap<>();
-        model.put("variant", failed == 0 ? "success" : "warning");
-        String summary = failed == 0
-                ? message(catalog, locale, "tql.bulk.allSucceeded", "All {requested} succeeded.")
-                : message(catalog, locale, "tql.bulk.summary",
-                        "{succeeded} of {requested} succeeded; {failed} failed.");
-        model.put("summary", summary
-                .replace("{requested}", String.valueOf(requested))
-                .replace("{succeeded}", String.valueOf(succeeded))
-                .replace("{failed}", String.valueOf(failed)));
-        List<Map<String, Object>> groups = new ArrayList<>();
-        if (report.get("groups") instanceof List<?> storedGroups) {
-            for (int i = 0; i < storedGroups.size(); i++) {
-                if (!(storedGroups.get(i) instanceof Map<?, ?> stored)) {
+        String summary = ViewMessages.text(catalog, locale,
+                failed == 0 ? "tql.bulk.allSucceeded" : "tql.bulk.summary",
+                failed == 0
+                        ? "All {requested} succeeded."
+                        : "{succeeded} of {requested} succeeded; {failed} failed.",
+                Map.of("requested", requested, "succeeded", succeeded, "failed", failed));
+        List<ReportModel.Entry> entries = new ArrayList<>();
+        List<String> entryTokens = new ArrayList<>();
+        if (report.get("entries") instanceof List<?> stored) {
+            for (Object candidate : stored) {
+                if (!(candidate instanceof Map<?, ?> entry)) {
                     continue;
                 }
-                Map<String, Object> group = new LinkedHashMap<>();
-                group.put("id", spec.id() + "-bulk-group-" + i);
-                // The heading is the guard's DECLARED refusal text when one exists; the code
-                // is the honest fallback — the same vocabulary the JSON outcomes speak.
-                String heading = stored.get("message") != null
-                        ? String.valueOf(stored.get("message"))
-                        : String.valueOf(stored.get("reason"));
-                group.put("heading", heading + " (" + longOf(stored.get("count")) + ")");
-                List<Map<String, Object>> rows = new ArrayList<>();
-                if (stored.get("rows") instanceof List<?> storedRows) {
-                    for (Object entry : storedRows) {
-                        if (!(entry instanceof Map<?, ?> row)) {
-                            continue;
-                        }
-                        Map<String, Object> rendered = new LinkedHashMap<>();
-                        String label = row.get("number") != null
-                                ? message(catalog, locale, "tql.bulk.row",
-                                        "Row {number} — {key}")
-                                        .replace("{number}",
-                                                String.valueOf(longOf(row.get("number"))))
-                                        .replace("{key}", String.valueOf(row.get("key")))
-                                : String.valueOf(row.get("key"));
-                        rendered.put("label", label);
-                        rendered.put("href", "#row-" + row.get("token"));
-                        rows.add(rendered);
-                    }
-                }
-                group.put("rows", rows);
-                long more = longOf(stored.get("count")) - rows.size();
-                group.put("more", more > 0
-                        ? message(catalog, locale, "tql.bulk.more", "…and {count} more")
-                                .replace("{count}", String.valueOf(more))
-                        : null);
-                groups.add(group);
+                String token = String.valueOf(entry.get("token"));
+                String label = entry.get("number") != null
+                        ? ViewMessages.text(catalog, locale, "tql.bulk.row",
+                                "Row {number} — {key}",
+                                Map.of("number", longOf(entry.get("number")),
+                                        "key", String.valueOf(entry.get("key"))))
+                        : String.valueOf(entry.get("key"));
+                // A bulk entry names a row, never a column: position is not identity in a
+                // grid, so the anchor is the token the row already carries.
+                entries.add(new ReportModel.Entry(String.valueOf(entry.get("reason")),
+                        entry.get("message") == null
+                                ? null
+                                : String.valueOf(entry.get("message")),
+                        label, "#row-" + token, null, null));
+                entryTokens.add(token);
             }
         }
-        model.put("groups", groups);
-        v.put("bulkReport", model);
+        ReportModel.Rendered rendered = new ReportModel(spec.id() + "-bulk",
+                failed == 0 ? "success" : "warning", summary, List.of(), entries,
+                BULK_GROUP_CAP, BULK_ENTRY_CAP).render(catalog, locale);
+        v.put("report", rendered.model());
         // The per-row consequences: the mark's describedby names the row's reason group,
         // and the retry set re-renders checked (docs/bulk-report.md decisions 5 and 7).
-        if (report.get("tokenGroups") instanceof Map<?, ?> tokenGroups) {
-            List<String> attention = new ArrayList<>(tokens.size());
-            List<Boolean> checked = new ArrayList<>(tokens.size());
-            for (String token : tokens) {
-                Object groupIndex = tokenGroups.get(token);
-                attention.add(groupIndex == null
-                        ? null
-                        : spec.id() + "-bulk-group-" + longOf(groupIndex));
-                checked.add(groupIndex != null);
-            }
-            v.put("attention", attention);
-            v.put("checked", checked);
+        Map<String, String> groupByToken = new LinkedHashMap<>();
+        for (int i = 0; i < entryTokens.size(); i++) {
+            groupByToken.putIfAbsent(entryTokens.get(i), rendered.groupIds().get(i));
         }
+        List<String> attention = new ArrayList<>(tokens.size());
+        List<Boolean> checked = new ArrayList<>(tokens.size());
+        for (String token : tokens) {
+            attention.add(groupByToken.get(token));
+            checked.add(groupByToken.containsKey(token));
+        }
+        v.put("attention", attention);
+        v.put("checked", checked);
     }
 
     /** A stored report number, whatever width JSON round-tripping gave it. */
@@ -1623,15 +1613,7 @@ public final class ViewBinding {
     /** Message-catalog lookup: exact tag, then bare language, then the fallback text. */
     private static String message(MessageCatalog catalog, Locale locale, String key,
             String fallback) {
-        if (key == null) {
-            return fallback;
-        }
-        String exact = catalog.forLocale(locale.toLanguageTag()).get(key);
-        if (exact != null) {
-            return exact;
-        }
-        String language = catalog.forLocale(locale.getLanguage()).get(key);
-        return language != null ? language : fallback;
+        return ViewMessages.text(catalog, locale, key, fallback);
     }
 
     private static String humanize(String name) {

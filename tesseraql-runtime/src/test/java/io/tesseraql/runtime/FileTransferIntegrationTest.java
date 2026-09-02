@@ -99,6 +99,27 @@ class FileTransferIntegrationTest {
     }
 
     @Test
+    void aRefusedWriteReportsItsFailureClassAndKeepsTheDriverTextOffThePage() throws Exception {
+        // Two rows with one key, applied by a plain insert: the second is a unique violation,
+        // the commonest real write-pass rejection (docs/csv-import.md decision 4).
+        String transferId = startTransfer("/api/items/import-strict",
+                "name,qty\nzeta,1\nzeta,2\n");
+        JsonNode status = awaitTerminal("/api/items/import-strict/" + transferId);
+
+        assertThat(status.get("status").asText()).isEqualTo("COMPLETED");
+        assertThat(status.get("rowCount").asLong()).isEqualTo(1);
+        JsonNode error = status.get("errors").get(0);
+        assertThat(error.get("row").asLong()).isEqualTo(2);
+        // The message is the framework's sentence for the class — no SQL, no constraint name,
+        // and no values from the row that was already there.
+        assertThat(error.get("message").asText())
+                .isEqualTo("A record with these values already exists.");
+        // The driver's own text is kept, on this operational face and not on the report.
+        assertThat(error.get("detail").asText()).contains("items_pkey");
+        assertThat(itemCount("zeta")).isEqualTo(1);
+    }
+
+    @Test
     void exportStreamsCsvAndMarksRowsInTheExtractionTransaction() throws Exception {
         seedOrder("o-1", false);
         seedOrder("o-2", false);
@@ -418,6 +439,7 @@ class FileTransferIntegrationTest {
 
         writeImportRoute(home, "web/api/items/import", "items.import", "rollback");
         writeImportRoute(home, "web/api/items/import-lenient", "items.importLenient", "skip");
+        writeStrictImportRoute(home);
         writeExportRoute(home, "web/api/orders/export", "orders.export", "extract",
                 "where not download_only");
         writeExportRoute(home, "web/api/orders/export-on-download", "orders.exportOnDownload",
@@ -602,6 +624,34 @@ class FileTransferIntegrationTest {
                 insert into items (name, qty)
                 values ( /* name */ 'sample', cast( /* qty */ '1' as integer) )
                 on conflict (name) do update set qty = excluded.qty
+                ;
+                """);
+    }
+
+    /**
+     * The same import without the upsert: a repeated key is then a real database rejection,
+     * which is what the write pass's failure-class mapping has to be exercised over.
+     */
+    private static void writeStrictImportRoute(Path home) throws IOException {
+        Path route = home.resolve("web/api/items/import-strict");
+        Files.createDirectories(route);
+        Files.writeString(route.resolve("post.yml"), """
+                version: tesseraql/v1
+                id: items.importStrict
+                kind: route
+                recipe: file-import
+                import:
+                  format: csv
+                  columns: [name, qty]
+                  onError: skip
+                steps:
+                  - id: row
+                    sql:
+                      file: insert-item.sql
+                """);
+        Files.writeString(route.resolve("insert-item.sql"), """
+                insert into items (name, qty)
+                values ( /* name */ 'sample', cast( /* qty */ '1' as integer) )
                 ;
                 """);
     }

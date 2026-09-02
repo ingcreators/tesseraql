@@ -373,7 +373,11 @@ the user must act on is not a bulk action's convenience banner.
 the driver's `getMessage()`. That text belongs in the log and on the operations
 console; putting it on a page shows the user SQL, and sometimes another row's
 values. The report renders the framework's message for the failure class and keeps
-the driver text where operators already look.
+the driver text where operators already look — as a `detail` beside the sentence,
+emitted by the transfer's status endpoint, which is the operational face the console
+and every integration caller already read. The class is not guessed here: `SqlErrors`
+already derives a portable one from SQLState and vendor code, and the sentence is
+per class.
 
 The import's error table renders as the contract's real `<table>` — a caption,
 `scope="col"` headers, the line number as a `scope="row"` header — with the
@@ -676,8 +680,9 @@ off, not by a report.
    commit pass, the list consuming the fragment unchanged on screen. A breaking
    CHANGELOG entry for the override contract.
 4. **The HTML face.** The import view, the file-upload recipe markup, the report
-   slot, the confirm form, the `422`/`409` fragments and the fourth allowance
-   marker, `response.html:` honoured on a file recipe (and refused without
+   slot — including the error table this decision describes, which lands with the
+   feeder that fills it rather than as markup nothing reaches — the confirm form,
+   the `422`/`409` fragments and the fourth allowance marker, `response.html:` honoured on a file recipe (and refused without
    `review:`), the `413` htmx arm, the i18n keys.
 5. **The job card.** HTML negotiation on the status endpoint, the self-polling
    card and its five states in their own region, the server-written cadence, the

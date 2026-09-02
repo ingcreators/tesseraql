@@ -325,9 +325,13 @@ also gets the failure surface — the kit's `datagrid-bulk-errors` contract, ren
 TesseraQL way ([bulk-report.md](bulk-report.md)). The grid shows a row-number column.
 After the action, the same page renders a bounded report above the grid: totals, then
 the failures grouped by reason — a guard's declared message when one exists, the
-`TQL-*` code otherwise — each group capped with "…and N more". Every named row links by
-its anchor: "Row 12 — PR-1003" on a snapshot list, the key alone elsewhere, because
-only a frozen membership makes a number authoritative. Failed rows are marked
+`TQL-*` code otherwise — each group capped with "…and N more", and the group list capped
+the same way. A reason is a (code, message) pair, so one code carrying a sentence per row
+is as many reasons as it has sentences. Every named row links by its anchor:
+"Row 12 — PR-1003" on a snapshot list, the key alone elsewhere, because only a frozen
+membership makes a number authoritative. The markup is the shared `tql/view/report.html`
+pattern, which a reviewed upload's validation report fills the same way
+([csv-import.md](csv-import.md)). Failed rows are marked
 (`data-attention="error"`, `aria-describedby` naming their reason group) and stay
 checked, so pressing the action again applies to exactly the failures.
 

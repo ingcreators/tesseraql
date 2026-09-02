@@ -81,12 +81,23 @@ public interface FileTransferService {
      * the column and the text it could not accept, the write pass has neither and leaves both
      * null. {@code row} is the table row the reader counted, which the surface turns into the
      * file line the author sees.
+     *
+     * <p>{@code message} is always the framework's own sentence, safe to render on a page.
+     * {@code detail} is the database's — the driver text a write-pass rejection used to publish
+     * as its message, which names SQL and sometimes another row's values. It rides beside the
+     * sentence rather than replacing it, so an operator reading the transfer keeps the diagnosis
+     * the report deliberately does not show (docs/csv-import.md decision 4).
      */
-    record RowError(long row, String field, String value, String message) {
+    record RowError(long row, String field, String value, String message, String detail) {
 
-        /** A rejection with no column to blame — a failing per-row statement. */
+        /** A rejection with no column to blame and nothing beneath it — the parse's own. */
         public static RowError of(long row, String message) {
-            return new RowError(row, null, null, message);
+            return new RowError(row, null, null, message, null);
+        }
+
+        /** A value the declared type or the row contract refused: column, text, sentence. */
+        public static RowError ofColumn(long row, String field, String value, String message) {
+            return new RowError(row, field, value, message, null);
         }
     }
 

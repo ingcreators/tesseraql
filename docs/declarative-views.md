@@ -525,6 +525,8 @@ the **public rendering contract**:
 | `tql/view/list.html` | `view(v)` | an `hc-datagrid` table: columns × rows, row links |
 | `tql/view/form.html` | `view(v)` | the card (title, header slot, not-found state) around the blessed mutating-form recipe: `hx-post` to `action`, `_csrf`, inline field-errors target, `hx-disabled-elt` + spinner, no-JS fallback post |
 | `tql/view/field.html` | `field(f)` | one labelled field; dispatches to `tql/view/field-<widget>.html` when that fragment resolves, else renders the generic input |
+| `tql/view/table.html` | `table(tableId, columns, rows)` | the shared datagrid a list renders and a detail's children reuse: sortable headers, row anchors, selection and row-number columns |
+| `tql/view/report.html` | `report(r)` | the outcome report a bulk action or a reviewed upload answers with: a summary, file-level failures, and the rest grouped by reason — every group bounded, and the group list bounded too |
 
 `v` carries `{id, kind, title, action, csrf, fields[]|columns[], data, errorsTarget}`;
 a field `f` carries `{name, label, widget, required, maxLength, min, max, options,
@@ -551,7 +553,10 @@ as a hand-written template today.
   shared classpath fragments, with existence-check fallthrough. Dropping `templates/tql/view/form.html` into the app restyles every
   form; a `field-date.html` retargets one widget everywhere; the per-view `template:`
   key points a single view at a custom fragment. Lint checks an override file declares
-  the expected `th:fragment` signature (`TQL-VIEW-3307`).
+  the expected `th:fragment` signature for that pattern (`TQL-VIEW-3307`). It cannot check
+  what the file *contains*, so an override taken before a pattern grew a composed fragment
+  keeps rendering while silently dropping it — a pattern's composition is recorded as breaking
+  in the CHANGELOG for exactly that reason.
 - **L3 — eject**: `tesseraql scaffold eject-view --app . --route web/…/get.yml`
   renders the view's pattern once into a real template (deterministic output, stamped
   with the scaffold checksum so edit detection applies) and flips the route from

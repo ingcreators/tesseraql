@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<!-- The shared outcome-report pattern (docs/bulk-report.md decision 1, docs/csv-import.md
+     decision 4): what an action or an upload just refused, summarized and grouped by reason.
+     Two feeders fill the same model — a bulk action's per-key outcomes and a reviewed import's
+     parse rejections — so the display contract cannot fork between them.
+
+     Bounded by construction: each group renders its true count and its first few entries, the
+     group list is bounded the same way, and both say what they left out. The region's own
+     scroll (.tql-report in tesseraql.css) is the backstop, never the design.
+
+     Override via templates/tql/view/report.html (customization ladder L2); report(r) is the
+     public contract. -->
+<html xmlns:th="http://www.thymeleaf.org">
+<div class="tql-report" th:fragment="report(r)" th:id="${r['region']}" role="status">
+  <div class="hc-alert" th:attr="data-variant=${r['variant']}">
+    <p class="hc-alert__title" th:text="${r['summary']}">17 of 20 succeeded; 3 failed.</p>
+    <!-- Failures belonging to the file rather than to any row: a header that does not map, an
+         upload no codec could read. They sit above the groups because they have no row number
+         and inventing one would be a lie the author then goes looking for. -->
+    <ul class="hc-alert__errors" th:if="${r['fileErrors'] != null}">
+      <li class="hc-alert__error" th:each="f : ${r['fileErrors']}" th:text="${f}">The header row does not map.</li>
+    </ul>
+    <th:block th:each="g : ${r['groups']}">
+      <p class="hc-alert__body" th:id="${g['id']}" th:text="${g['heading']}">Reason (3)</p>
+      <ul class="hc-alert__errors">
+        <li class="hc-alert__error" th:each="e : ${g['rows']}">
+          <a th:if="${e['href'] != null}" th:href="${e['href']}" th:text="${e['label']}">Row 12 — PR-1003</a>
+          <span th:if="${e['href'] == null}" th:text="${e['label']}">Row 12</span>
+          <!-- The column and the text it refused: a validation report's Row / Field / Message
+               line. A bulk action knows neither and leaves both out. -->
+          <span th:if="${e['field'] != null}" th:text="|— ${e['field']}|">— qty</span>
+          <code th:if="${e['value'] != null}" th:text="${e['value']}">abc</code>
+        </li>
+        <li class="hc-alert__error" th:if="${g['more'] != null}" th:text="${g['more']}">…and 2 more</li>
+      </ul>
+    </th:block>
+    <p class="hc-alert__body" th:if="${r['more'] != null}" th:text="${r['more']}">…and 2 more reason(s)</p>
+  </div>
+</div>
+</html>

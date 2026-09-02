@@ -375,4 +375,23 @@ class AppLinterViewTest {
                 "<div th:fragment=\"field(f)\"></div>");
         assertThat(viewCodes(new AppLinter().lint(dir))).isEmpty();
     }
+
+    @Test
+    void aComposedPatternIsHeldToItsOwnSignature(@TempDir Path dir) throws Exception {
+        // The patterns a view composes each declare their own fragment; holding an override of
+        // one of those to view(v) reported a break that was not there.
+        writeApp(dir, "version: tesseraql/v1\nkind: view\nrecipe: list\n");
+        Files.createDirectories(dir.resolve("templates/tql/view"));
+        Files.writeString(dir.resolve("templates/tql/view/report.html"),
+                "<div th:fragment=\"report(r)\"></div>");
+        Files.writeString(dir.resolve("templates/tql/view/table.html"),
+                "<div th:fragment=\"table(tableId, columns, rows)\"></div>");
+        Files.writeString(dir.resolve("templates/tql/view/lookup-dialog.html"),
+                "<div th:fragment=\"dialog(d)\"></div>");
+        assertThat(viewCodes(new AppLinter().lint(dir))).isEmpty();
+
+        Files.writeString(dir.resolve("templates/tql/view/report.html"),
+                "<div th:fragment=\"view(v)\"></div>");
+        assertThat(viewCodes(new AppLinter().lint(dir))).contains("TQL-VIEW-3307");
+    }
 }

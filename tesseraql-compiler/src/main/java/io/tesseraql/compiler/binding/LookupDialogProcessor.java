@@ -147,12 +147,7 @@ public final class LookupDialogProcessor implements Step {
 
     private static String message(MessageCatalog catalog, Locale locale, String key,
             String fallback) {
-        String exact = catalog.forLocale(locale.toLanguageTag()).get(key);
-        if (exact != null) {
-            return exact;
-        }
-        String language = catalog.forLocale(locale.getLanguage()).get(key);
-        return language != null ? language : fallback;
+        return ViewMessages.text(catalog, locale, key, fallback);
     }
 
     /** The declared path with its {@code {param}} placeholders filled from the request. */
