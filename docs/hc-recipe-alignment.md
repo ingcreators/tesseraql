@@ -236,7 +236,7 @@ job, and the row records why.
 | session-expiry | **Adopted (#1113)** | shell + browser auth |
 | unsaved-changes | **Adopted (#1114)** | form views |
 | datagrid-bulk-errors | **Adopted (#1115–#1117)** — [bulk-report.md](bulk-report.md) | `actions:`, `_bulk` routes |
-| edit-conflict | **Adopt — needs its own design slice** | `update` command routes |
+| edit-conflict | **Designed** — [edit-conflict.md](edit-conflict.md) | `update` command routes |
 | csv-import | **Adopted (#1127–#1133)** — [csv-import.md](csv-import.md) | file transfers |
 | row-detail | Aligned (list-surface decision 11) | `location: back`, `#row-<token>` |
 | datagrid-pager | Aligned (list-surface slice 1) | the in-place pager |
@@ -339,12 +339,24 @@ report region on the grid page, fed by the outcome report the endpoint already
 produces. The atomic branch stays out of scope until an invariant-shaped bulk action
 exists; recording that TesseraQL bulk is best-effort per key is part of the slice.
 
-## edit-conflict — adopt, needs its own design slice
+## edit-conflict — designed, and the lock was already there
+
+> **Designed: [edit-conflict.md](edit-conflict.md)** (2026-09-02). The assessment below
+> was right that the framework's only lock is the workflow engine's, and wrong about what
+> that leaves: the scaffolder has hand-wired a complete optimistic lock for years, so a
+> scaffolded app already refuses a stale write. What is missing is the framework's
+> knowledge of it — `version` is a literal in the generator and a substring in the lint —
+> and a face for the 409 it already answers. `lock:` is a route-level declaration of a
+> column the framework only ever **compares**, expanded as a `/*%lock*/(1=1)` directive
+> inside the author's own UPDATE, with the author's statement still advancing it. The
+> recorded deviations and the three live defects the design fixes in passing are listed
+> there.
 
 The contract: optimistic locking for edit forms — a hidden `version` rides every
 save, a stale save answers 409 with a conflict dialog (theirs/yours diff, overwrite
 with the fresh version, reload, keep editing), and the no-JS branch is a full 409
-page offering the same choices.
+page offering the same choices. The kit's own manifest states it more narrowly — the
+dialog offers "overwrite / reload" — and the design follows the manifest.
 
 The framework's only optimistic lock today is the workflow engine's state-as-lock,
 which covers transitions and nothing else. A plain `update` command route rendered as
@@ -402,7 +414,12 @@ per-user-preference store demand, the same trigger `datagrid-prefs` waits on.
 6. ~~unsaved-changes slice~~ — shipped (#1114).
 7. ~~datagrid-bulk-errors~~ — designed and shipped ([bulk-report.md](bulk-report.md),
    #1115–#1117); csv-import remains its recorded future consumer.
-8. **edit-conflict**: design-first slice — the declared version column.
+8. **edit-conflict**: designed ([edit-conflict.md](edit-conflict.md)) — the declared
+   version column is `lock:`, a route-level declaration of a column the framework compares
+   and the author's own statement advances. Four slices, unshipped; the dogfood is a
+   regeneration rather than a new app, because the gallery's one edit form
+   (`scaffold-demo-app`'s `items.edit`) has carried the whole hand-wired lock since Phase 18
+   and is the design's worked example throughout.
 9. ~~csv-import campaign~~ — designed and shipped ([csv-import.md](csv-import.md),
    #1125–#1133). It fired the file-upload and async-job triggers with it, so all three
    rows are adopted: the reviewed upload is `import.review: required` with an
