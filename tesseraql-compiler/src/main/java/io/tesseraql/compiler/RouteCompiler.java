@@ -468,7 +468,7 @@ public final class RouteCompiler {
             case "query-json", "command-json" -> buildJson(context, routeFile);
             case "query-html", "page" -> buildTemplatePage(context, appHome, routeFile);
             case "query-export" -> buildQueryExport(context, appHome, routeFile);
-            case "file-import" -> buildFileImport(context, routeFile);
+            case "file-import" -> buildFileImport(context, appHome, routeFile);
             case "file-export" -> buildFileExport(context, appHome, routeFile);
             case "webhook" -> buildWebhook(context, routeFile);
             // queue-consume routes live under consume/, compiled from manifest.consumers(), not here.
@@ -1277,7 +1277,8 @@ public final class RouteCompiler {
      * file-import (design ch. 28): POST of the raw file body starts an asynchronous import
      * applying the per-row statement; GET {path}/{transferId} reports its state.
      */
-    private void buildFileImport(RuntimeContext context, RouteFile routeFile) {
+    private void buildFileImport(RuntimeContext context, Path appHome,
+            RouteFile routeFile) {
         RouteDefinition definition = routeFile.definition();
         io.tesseraql.yaml.model.ImportSpec spec = definition.fileImport();
         String routeId = definition.id();
@@ -1304,6 +1305,20 @@ public final class RouteCompiler {
                     + " batch belongs to the principal who uploaded it, so the route needs a"
                     + " security.auth: declaration");
         }
+        // `response.html:` on a file recipe used to lint clean, compile, and be dropped in
+        // silence — the shape this codebase has swept twice, sitting in the compiler. It is
+        // honoured now, and refused where it cannot mean anything: a one-shot import has no
+        // report to render, and rendering its 202 envelope as a page would be the same silent
+        // tolerance in a new costume (docs/csv-import.md decision 7).
+        var html = definition.response() == null ? null : definition.response().html();
+        if (html != null && !spec.reviewRequired()) {
+            throw new TqlException(INVALID_REVIEW, "Route '" + routeId + "' declares"
+                    + " response.html: without import.review: required; a one-shot import"
+                    + " answers 202 and a transfer id, which is not a page");
+        }
+        io.tesseraql.pipeline.Step page = html == null
+                ? null
+                : importPage(appHome, routeFile, html);
         String served = routeId;
         if (mountRest) {
             mount(context, routeFile.httpMethod(), routeFile.urlPath(), served);
@@ -1313,11 +1328,29 @@ public final class RouteCompiler {
         route.process(new io.tesseraql.compiler.binding.FileImportProcessor(
                 routeId, routeFile.urlPath(), appName, spec.format(),
                 spec.toReadSpec(), formatDeclaration(spec.locale(), "tesseraql.files.locale"),
-                rowSql, spec.effectiveOnError(), spec.reviewRequired(), definition.input()));
+                rowSql, spec.effectiveOnError(), spec.reviewRequired(), definition.input(),
+                page));
         mountTransferStatus(context, routeFile, routeId);
         if (spec.reviewRequired()) {
-            mountImportCommit(context, routeFile, routeId, appName, spec, rowSql);
+            mountImportCommit(context, appHome, routeFile, routeId, appName, spec, rowSql);
         }
+    }
+
+    /**
+     * The page a reviewed upload answers (docs/csv-import.md decision 7): the same renderer
+     * every other HTML route gets, built here because a file recipe never reached the two sites
+     * that construct it. The view it names is the import page's own document, which the GET at
+     * the same URL renders empty — two routes, one document, one address.
+     */
+    private io.tesseraql.pipeline.Step importPage(Path appHome, RouteFile routeFile,
+            io.tesseraql.yaml.model.ResponseSpec.HtmlResponse html) {
+        io.tesseraql.compiler.binding.ViewBinding viewBinding = html.view() == null
+                ? null
+                : io.tesseraql.compiler.binding.ViewBinding.of(appHome, html.view(),
+                        routeFile.definition(), this::postRouteByPath, this::viewPathById);
+        return new HtmlResponseRenderer(withDefaultHeaders(html), appHome,
+                routeFile.source().getParent(), i18n.defaultTag(), viewBinding, java.util.Map.of(),
+                functions).basePath(basePath());
     }
 
     /**
@@ -1325,8 +1358,8 @@ public final class RouteCompiler {
      * (docs/csv-import.md decision 5). It sits under the parent route's own security, like the
      * status endpoint, and carries the full common governance because it is a write.
      */
-    private void mountImportCommit(RuntimeContext context, RouteFile routeFile, String routeId,
-            String appName, io.tesseraql.yaml.model.ImportSpec spec, Path rowSql) {
+    private void mountImportCommit(RuntimeContext context, Path appHome, RouteFile routeFile,
+            String routeId, String appName, io.tesseraql.yaml.model.ImportSpec spec, Path rowSql) {
         String path = routeFile.urlPath() + "/{batchId}/commit";
         String pipelineId = routeId + ".commit";
         if (mountRest) {
@@ -1336,7 +1369,7 @@ public final class RouteCompiler {
         applyCommonGovernance(route, pipelineId, "POST", path, routeFile.definition());
         route.process(new io.tesseraql.compiler.binding.ImportCommitProcessor(
                 routeId, routeFile.urlPath(), appName, spec.format(), spec.toReadSpec(),
-                rowSql, spec.effectiveOnError()));
+                rowSql, spec.effectiveOnError(), appHome, i18n.defaultTag()));
     }
 
     /**

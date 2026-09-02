@@ -125,7 +125,9 @@ a:hover{text-decoration-thickness:2px}
 .tql-unsaved-badge{visibility:hidden}
 form[data-dirty] .tql-unsaved-badge{visibility:visible}
 
-/* The outcome report region (docs/bulk-report.md decision 2, docs/csv-import.md decision 4):
+/* The outcome report's summary (docs/bulk-report.md decision 2, docs/csv-import.md decision 4):
    bounded by construction — the capped reason groups do the real bounding, this scroll is the
-   upstream contract's backstop so pathological content can never eat the page's height. */
-.tql-report{max-block-size:min(25vh,12rem);overflow:auto}
+   upstream contract's backstop so pathological content can never eat the page's height. It
+   wraps the grouped alert alone: an import report's enumerated table below is what the author
+   came to read, and capping that would hide the thing the surface exists for. */
+.tql-report__summary{max-block-size:min(25vh,12rem);overflow:auto}

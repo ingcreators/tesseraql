@@ -548,8 +548,10 @@ multipart, and the `413` it produces is a router-level JSON envelope emitted by 
 handler that runs before any route context exists — so it carries no marker, htmx
 declines to swap it, and an over-cap upload from a browser renders *nothing at all*.
 The `413` gains an htmx arm that answers the field-errors fragment with the same
-marker every other refusal carries, which is the only way the swap gate lets it
-through; being pre-route, it says the limit and names the key, not the route. And
+marker every other refusal carries — the generic one, not this surface's, because the
+handler refuses any over-cap body and not only an upload — which is the only way the
+swap gate lets it through; being pre-route, it says the limit and names the key, not
+the route. And
 [file-transfers.md](file-transfers.md) currently says in one paragraph that the
 upload rides the body bound and in another that there is no framework size cap on
 transfer uploads; the second is stale and wrong, and an import surface is the wrong
@@ -727,6 +729,22 @@ of the route compiler. The framework keeps `hx-*`, which means the recipes' own
 templates — so the markers those checks look for (`data-hc-job`, the hidden `token`,
 `data-hc-upload-progress`) are emitted deliberately and asserted by TesseraQL's own
 tests instead.
+
+**The upload form is not reset after a check.** The file-upload contract asks for an
+out-of-band pristine form on success, because a file input cannot be reset from
+markup. This surface keeps the selection instead, and that is the better answer for
+the loop it is actually in: a review's next move is often "fix the file and check
+again", which is one click when the input still holds the file and a re-pick when it
+does not — the browser re-reads the file from disk, so the second check sees the
+edit. The contract's reset is aimed at a fire-and-forget upload, where nothing
+follows.
+
+**The confirm's htmx answer is `HX-Redirect`, not a `303` the XHR would follow.**
+Both callers land on the same URL — the transfer's own status resource — but htmx
+surfaces a redirect status to the XHR rather than to the tab, so a raw `303` would
+swap whatever that resource answers into a page region. The house shape for exactly
+this is already in the tree (the deploy form's post/redirect/get), and it is what
+slice 5 replaces with the card while the no-JS `303` stays untouched.
 
 **The report is not the record.** The parked batch and its report are bounded by a
 TTL and swept; the durable record is the transfer row and its execution history,

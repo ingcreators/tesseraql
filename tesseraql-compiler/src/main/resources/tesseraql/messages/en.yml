@@ -77,6 +77,25 @@ tql:
   report:
     more: "…and {count} more"
     moreReasons: "…and {count} more reason(s)"
+    tableCaption: "Rejected rows ({shown} of {count} shown)"
+    rowColumn: Row
+    fieldColumn: Field
+    valueColumn: Value
+    messageColumn: Reason
+  import:
+    file: File
+    columns: Columns
+    upload: Check file
+    commit: Import
+    line: "Line {number}"
+    sheetRow: "{sheet} row {number}"
+    allValid: "{rows} row(s) ready to import."
+    partial: "{ready} of {rows} row(s) can be imported; {rejected} were rejected."
+    blocked: "{rejected} of {rows} row(s) were rejected, so none can be imported."
+    unreadable: This file could not be imported.
+    fileError: "The file could not be read: {reason}"
+    expires: "This check expires at {at}."
+    stale: "Upload the file again — a confirmation cannot be retried."
   session:
     expiredTitle: Session expired
     expiredBody: Sign in again to continue. The action you started will complete after you sign in.

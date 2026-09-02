@@ -131,7 +131,7 @@ class BulkReportIntegrationTest {
                 .contains("#row-" + token("B-2"))
                 // The markup is the shared report pattern now (docs/csv-import.md decision 4),
                 // filled here by the bulk feeder — same region, same anchors, one fragment.
-                .contains("class=\"tql-report\"")
+                .contains("class=\"tql-report hc-stack\"")
                 .contains("id=\"docs-bulk-report\"")
                 // The failed rows are marked with their reason group; the retry set is
                 // re-checked. B-2 sits in the first group rendered.
@@ -191,7 +191,7 @@ class BulkReportIntegrationTest {
                 .header("Cookie", cookie).build());
 
         assertThat(page.statusCode()).isEqualTo(200);
-        assertThat(page.body()).doesNotContain("class=\"tql-report\"");
+        assertThat(page.body()).doesNotContain("class=\"tql-report");
     }
 
     @Test

@@ -67,13 +67,28 @@ public final class ViewBinding {
     // because the definition lives in the manifest the of(...) factory deliberately never sees.
     private io.tesseraql.yaml.model.WorkflowDefinition workflow;
     private String workflowBasePath;
+    /** The upload the import view's {@code action:} names, resolved at build time. */
+    private final ImportTarget importTarget;
+
+    /**
+     * What an import view renders around its report: the address it uploads to, the file types
+     * that address accepts, and the columns it expects.
+     *
+     * @param accept the file input's {@code accept} list, or null when the format's codec is not
+     *               on this classpath — a hosted application's optional codec is discovered by
+     *               its own module loader at runtime, and refusing to compile the page over an
+     *               attribute that only narrows a file picker would be the wrong trade
+     */
+    record ImportTarget(String action, String accept, List<String> columns) {
+    }
 
     private ViewBinding(ViewSpec spec, String entryTemplate, List<ViewFields.FieldDef> fields,
             Map<String, String> slots, Path appHome, Map<Integer, Embed> childEmbeds,
             Map<Integer, Embed> panelEmbeds,
             Map<String, io.tesseraql.yaml.model.ResponseSpec.FieldPolicy> readPolicies,
             Map<String, String> catalogByColumn, List<ViewFields.FieldDef> filterFields,
-            io.tesseraql.yaml.model.PageSpec pagination) {
+            io.tesseraql.yaml.model.PageSpec pagination, ImportTarget importTarget) {
+        this.importTarget = importTarget;
         this.spec = spec;
         this.entryTemplate = entryTemplate;
         this.fields = fields;
@@ -155,7 +170,47 @@ public final class ViewBinding {
         return new ViewBinding(spec, entry, fields, resolveSlots(home, viewDir, spec), home,
                 Map.copyOf(childEmbeds), Map.copyOf(panelEmbeds), readSide.policies(),
                 readSide.catalogs(), filterFields,
-                route == null ? null : route.pagination());
+                route == null ? null : route.pagination(),
+                ViewSpec.IMPORT.equals(spec.view())
+                        ? importTarget(viewRef, spec, postRouteByPath)
+                        : null);
+    }
+
+    /**
+     * The import view's upload target, read off the {@code action:} route's own declaration —
+     * the same reason a form derives its fields from its action route rather than restating
+     * them. A page that named its accepted types or its expected columns itself would be a
+     * second copy of the import, free to disagree with the one the parse enforces.
+     */
+    private static ImportTarget importTarget(String viewRef, ViewSpec spec,
+            Function<String, RouteDefinition> postRouteByPath) {
+        RouteDefinition action = postRouteByPath.apply(spec.action());
+        if (action == null) {
+            throw new TqlException(UNKNOWN_ACTION, "View " + viewRef + ": action "
+                    + spec.action() + " matches no POST route");
+        }
+        io.tesseraql.yaml.model.ImportSpec importSpec = action.fileImport();
+        if (importSpec == null) {
+            throw new TqlException(UNKNOWN_ACTION, "View " + viewRef + ": action route "
+                    + action.id() + " is not a file-import route — an import view renders one"
+                    + " import's upload, report and confirm");
+        }
+        io.tesseraql.core.files.FileCodecs codecs = io.tesseraql.core.files.FileCodecs.discover();
+        String format = importSpec.format();
+        String accept = null;
+        if (format != null && codecs.supports(format)) {
+            io.tesseraql.core.files.FileCodec codec = codecs.require(format);
+            // The media type alone: a codec's contentType() is a response header value, so it
+            // carries the charset a download needs and an `accept` list must not have — file
+            // pickers match on the type, and `text/csv; charset=utf-8` matches nothing.
+            String media = codec.contentType();
+            int parameters = media.indexOf(';');
+            accept = codec.extension() + ","
+                    + (parameters < 0 ? media : media.substring(0, parameters)).trim();
+        }
+        return new ImportTarget(spec.action(), accept,
+                importSpec.columns().stream()
+                        .map(io.tesseraql.yaml.model.ColumnSpec::name).toList());
     }
 
     /**
@@ -449,6 +504,8 @@ public final class ViewBinding {
         Map<String, Object> data = sourceOf(context, spec.source());
         if (ViewSpec.FORM.equals(spec.view())) {
             formModel(v, catalog, locale, context, data, permits);
+        } else if (ViewSpec.IMPORT.equals(spec.view())) {
+            importModel(v, catalog, locale, context);
         } else if (ViewSpec.DETAIL.equals(spec.view())) {
             detailModel(v, catalog, locale, context, data, pagePath, permits);
         } else if (ViewSpec.DASHBOARD.equals(spec.view())) {
@@ -457,6 +514,46 @@ public final class ViewBinding {
             listModel(v, catalog, locale, context, data, pagePath);
         }
         return v;
+    }
+
+    /**
+     * The reviewed upload's model (docs/csv-import.md decision 7). Two states, one document:
+     * before an upload it is the kit's file-upload form alone, and after one it is that form
+     * plus the report the parse answered and — exactly when a committable set exists — the
+     * confirm form that spends the token.
+     *
+     * <p>The report and the token arrive through the context because they belong to the
+     * request that parsed the file: the GET that renders the empty page has neither, and
+     * nothing here fabricates them.
+     */
+    private void importModel(Map<String, Object> v, MessageCatalog catalog, Locale locale,
+            Map<String, Object> context) {
+        v.put("formId", spec.id() + "-upload");
+        v.put("action", importTarget.action());
+        v.put("accept", importTarget.accept());
+        v.put("columns", importTarget.columns().isEmpty() ? null : importTarget.columns());
+        v.put("uploadLabel", message(catalog, locale, "tql.import.file", "File"));
+        v.put("uploadSubmit", message(catalog, locale, "tql.import.upload", "Check file"));
+        v.put("confirmSubmit", message(catalog, locale, "tql.import.commit", "Import"));
+        if (!(context.get(ImportContext.KEY) instanceof ImportContext outcome)) {
+            return;
+        }
+        v.put("report", ImportReports
+                .of(spec.id() + "-import", outcome.review(), outcome.locate(), catalog, locale)
+                .render(catalog, locale).model());
+        // The confirm form exists exactly when a committable set does (decision 3): the token
+        // is the same fact the status code was read off, so the button and the 200 can never
+        // disagree about whether there is anything to import.
+        if (!outcome.review().committable()) {
+            return;
+        }
+        v.put("token", outcome.review().batchId());
+        v.put("confirmAction", outcome.commitUrl());
+        v.put("expires", outcome.review().expiresAt() == null
+                ? null
+                : ViewMessages.text(catalog, locale, "tql.import.expires",
+                        "This check expires at {at}.",
+                        Map.of("at", String.valueOf(outcome.review().expiresAt()))));
     }
 
     /**

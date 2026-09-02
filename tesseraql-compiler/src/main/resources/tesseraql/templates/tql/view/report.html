@@ -5,14 +5,16 @@
      parse rejections — so the display contract cannot fork between them.
 
      Bounded by construction: each group renders its true count and its first few entries, the
-     group list is bounded the same way, and both say what they left out. The region's own
-     scroll (.tql-report in tesseraql.css) is the backstop, never the design.
+     group list is bounded the same way, and both say what they left out. The summary's own
+     scroll (.tql-report__summary in tesseraql.css) is the backstop, never the design — and it
+     wraps the summary alone, because the enumerated table below is the thing the author scrolls
+     on purpose.
 
      Override via templates/tql/view/report.html (customization ladder L2); report(r) is the
      public contract. -->
 <html xmlns:th="http://www.thymeleaf.org">
-<div class="tql-report" th:fragment="report(r)" th:id="${r['region']}" role="status">
-  <div class="hc-alert" th:attr="data-variant=${r['variant']}">
+<div class="tql-report hc-stack" th:fragment="report(r)" th:id="${r['region']}" role="status">
+  <div class="tql-report__summary hc-alert" th:attr="data-variant=${r['variant']}">
     <p class="hc-alert__title" th:text="${r['summary']}">17 of 20 succeeded; 3 failed.</p>
     <!-- Failures belonging to the file rather than to any row: a header that does not map, an
          upload no codec could read. They sit above the groups because they have no row number
@@ -35,6 +37,35 @@
       </ul>
     </th:block>
     <p class="hc-alert__body" th:if="${r['more'] != null}" th:text="${r['more']}">…and 2 more reason(s)</p>
+  </div>
+  <!-- The enumerated half (docs/csv-import.md decision 4): the grouped alert above says what
+       went wrong and how often, this says which rows. A real table with a caption, scope="col"
+       headers and the reference as a scope="row" header — a validation report is something the
+       author works through, not a banner. A feeder whose surface is its own enumeration (a
+       grid's marked rows) asks for no table and this never renders. -->
+  <div class="hc-table-scroll" th:if="${r['table'] != null}">
+    <table class="hc-table">
+      <caption th:text="${r['table']['caption']}">Rejected rows (50 of 137 shown)</caption>
+      <thead>
+        <tr>
+          <th scope="col" th:text="#{tql.report.rowColumn}">Row</th>
+          <th scope="col" th:text="#{tql.report.fieldColumn}">Field</th>
+          <th scope="col" th:text="#{tql.report.valueColumn}">Value</th>
+          <th scope="col" th:text="#{tql.report.messageColumn}">Reason</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr th:each="e : ${r['table']['rows']}">
+          <th scope="row" th:id="${e['id']}" th:text="${e['label']}">Line 3</th>
+          <td th:text="${e['field']}">qty</td>
+          <td><code th:if="${e['value'] != null}" th:text="${e['value']}">abc</code></td>
+          <td th:text="${e['message']}">is not a number</td>
+        </tr>
+        <tr th:if="${r['table']['more'] != null}">
+          <td colspan="4" th:text="${r['table']['more']}">…and 87 more</td>
+        </tr>
+      </tbody>
+    </table>
   </div>
 </div>
 </html>

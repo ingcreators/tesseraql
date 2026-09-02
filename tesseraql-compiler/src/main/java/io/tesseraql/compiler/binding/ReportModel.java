@@ -40,13 +40,23 @@ import java.util.Map;
  * @param entries    every failure, complete and in the order the feeder found them
  * @param groupCap   how many reason groups render
  * @param entryCap   how many entries render inside one group
+ * @param tableCap   how many entries the enumerated table renders, or 0 for no table — a
+ *                   validation report the author has to work through renders the contract's
+ *                   real Row / Field / Message table under the grouped summary, where a bulk
+ *                   action's grid is its own enumeration and wants none
  */
 public record ReportModel(String id, String variant, String summary, List<String> fileErrors,
-        List<Entry> entries, int groupCap, int entryCap) {
+        List<Entry> entries, int groupCap, int entryCap, int tableCap) {
 
     public ReportModel {
         fileErrors = fileErrors == null ? List.of() : List.copyOf(fileErrors);
         entries = entries == null ? List.of() : List.copyOf(entries);
+    }
+
+    /** The shape before a feeder could ask for the enumerated table. */
+    public ReportModel(String id, String variant, String summary, List<String> fileErrors,
+            List<Entry> entries, int groupCap, int entryCap) {
+        this(id, variant, summary, fileErrors, entries, groupCap, entryCap, 0);
     }
 
     /**
@@ -78,12 +88,28 @@ public record ReportModel(String id, String variant, String summary, List<String
         return id + "-report";
     }
 
+    /** The DOM id of the enumerated table's {@code index}-th row. */
+    private String rowId(int index) {
+        return id + "-row-" + index;
+    }
+
     /** Builds the {@code r} model the fragment consumes. */
     public Rendered render(MessageCatalog catalog, Locale locale) {
+        // A feeder that named no link gets the report's own two halves wired together: the
+        // grouped entry jumps to the table row that details it. Only for entries the table
+        // actually renders — a link to a row past the cap would land nowhere.
+        List<Entry> linked = new ArrayList<>(entries.size());
+        for (int i = 0; i < entries.size(); i++) {
+            Entry entry = entries.get(i);
+            linked.add(entry.href() != null || i >= tableCap
+                    ? entry
+                    : new Entry(entry.code(), entry.message(), entry.label(), "#" + rowId(i),
+                            entry.field(), entry.value()));
+        }
         // Insertion-ordered: the feeder's order is the reading order, and a reviewed import
         // renders the same report twice (review, then commit) from the same entries.
         Map<List<String>, List<Entry>> grouped = new LinkedHashMap<>();
-        for (Entry entry : entries) {
+        for (Entry entry : linked) {
             grouped.computeIfAbsent(java.util.Arrays.asList(entry.code(), entry.message()),
                     key -> new ArrayList<>()).add(entry);
         }
@@ -109,12 +135,47 @@ public record ReportModel(String id, String variant, String summary, List<String
                 ? null
                 : ViewMessages.text(catalog, locale, "tql.report.moreReasons",
                         "…and {count} more reason(s)", Map.of("count", hiddenReasons)));
+        model.put("table", tableCap <= 0 || entries.isEmpty() ? null : table(catalog, locale));
         List<String> groupIds = new ArrayList<>(entries.size());
         for (Entry entry : entries) {
             groupIds.add(idsByKey.getOrDefault(
                     java.util.Arrays.asList(entry.code(), entry.message()), regionId()));
         }
         return new Rendered(model, groupIds);
+    }
+
+    /**
+     * The enumerated table: the same entries the groups summarize, in the order the feeder
+     * found them, as the contract's real Row / Field / Message rows. Bounded like everything
+     * else, and it says what it bounded — a caption that names the total, so "showing 50" can
+     * never read as "50 is all there was".
+     */
+    private Map<String, Object> table(MessageCatalog catalog, Locale locale) {
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (int i = 0; i < Math.min(tableCap, entries.size()); i++) {
+            Entry entry = entries.get(i);
+            Map<String, Object> row = new LinkedHashMap<>();
+            // The anchor the grouped summary above links to, so a reason names examples and
+            // each example lands on its own line of the enumeration.
+            row.put("id", rowId(i));
+            row.put("label", entry.label());
+            row.put("href", entry.href());
+            row.put("field", entry.field());
+            row.put("value", entry.value());
+            row.put("message", entry.message() != null ? entry.message() : entry.code());
+            rows.add(row);
+        }
+        Map<String, Object> table = new LinkedHashMap<>();
+        table.put("caption", ViewMessages.text(catalog, locale, "tql.report.tableCaption",
+                "Rejected rows ({shown} of {count} shown)",
+                Map.of("shown", rows.size(), "count", entries.size())));
+        table.put("rows", rows);
+        long more = entries.size() - (long) rows.size();
+        table.put("more", more <= 0
+                ? null
+                : ViewMessages.text(catalog, locale, "tql.report.more", "…and {count} more",
+                        Map.of("count", more)));
+        return table;
     }
 
     /** One reason group: its heading with the true count, its bounded entries, its remainder. */

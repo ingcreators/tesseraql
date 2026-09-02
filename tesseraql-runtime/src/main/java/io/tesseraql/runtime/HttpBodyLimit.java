@@ -140,14 +140,24 @@ final class HttpBodyLimit {
         if (ctx.response().ended()) {
             return;
         }
+        // An htmx upload gets the refusal as a fragment it can actually show. This handler runs
+        // before any route context exists, so it says the limit and names the configuration key
+        // rather than the route — but a browser posting a file over the cap used to render
+        // nothing at all: htmx declines to swap a 4xx whose body carries no allowance marker,
+        // and a router-level JSON envelope carries none (docs/csv-import.md decision 7).
+        boolean htmx = "true".equals(ctx.request().getHeader("HX-Request"));
         ctx.response()
                 .setStatusCode(413)
-                .putHeader("Content-Type", "application/json; charset=utf-8")
+                .putHeader("Content-Type", htmx
+                        ? "text/html; charset=utf-8"
+                        : "application/json; charset=utf-8")
                 // The code, not a message built from the request — the same envelope
                 // discipline the admission gate's refusal follows.
-                .end(io.tesseraql.core.error.ErrorEnvelope.json(BODY_TOO_LARGE,
-                        "The request body exceeds tesseraql.http.maxBodyBytes ("
-                                + maxBodyBytes + " bytes)"))
+                .end(htmx
+                        ? overLimitFragment(maxBodyBytes)
+                        : io.tesseraql.core.error.ErrorEnvelope.json(BODY_TOO_LARGE,
+                                "The request body exceeds tesseraql.http.maxBodyBytes ("
+                                        + maxBodyBytes + " bytes)"))
                 .onComplete(written -> {
                     refusalWrite.set(written.succeeded()
                             ? "completed"
@@ -157,6 +167,24 @@ final class HttpBodyLimit {
                                 String.valueOf(written.cause()));
                     }
                 });
+    }
+
+    /**
+     * The over-limit refusal as markup: the field-errors fragment every other refusal answers
+     * with, carrying the marker the bootstrap's swap allowance already reads. Deliberately not
+     * the import surface's own marker — this handler refuses any over-cap body, not only an
+     * upload, and a fragment that named itself a report would be lying to whatever posted.
+     *
+     * <p>English and route-free, because a pre-route handler has neither a negotiated locale nor
+     * a route to read one from. What it honestly knows is the bound it enforced and the key that
+     * sets it, so that is what it says.
+     */
+    private static String overLimitFragment(long maxBodyBytes) {
+        return "<div class=\"hc-alert\" data-variant=\"error\" role=\"alert\""
+                + " data-hc-field-errors data-error-code=\"" + BODY_TOO_LARGE + "\">"
+                + "<p class=\"hc-alert__title\">That request is too large.</p>"
+                + "<p class=\"hc-alert__body\">The limit is " + maxBodyBytes
+                + " bytes (tesseraql.http.maxBodyBytes).</p></div>";
     }
 
     /** The request's declared {@code Content-Length}, or {@code -1} when absent or malformed. */

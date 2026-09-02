@@ -103,13 +103,20 @@ registerCodeLanguage("tql-sql", (text) => {
 // the recipe's "standard one-line beforeSwap allowance"), so its marker rides the same rule,
 // and so does the session-expiry 401's re-login dialog (docs/hypermedia-ui.md "Session
 // expiry") — its marker is what keeps other 401s (a fragment on a page whose shell predates
-// the host) on htmx's default no-swap handling.
+// the host) on htmx's default no-swap handling. A reviewed upload adds the fourth marker
+// (docs/csv-import.md decision 7): the 422 a file with nothing importable answers and the 409 a
+// spent token answers are both states the author has to read, and both arrive as refusals by
+// status. The over-cap 413 rides the field-errors marker instead — it refuses any request body,
+// not only an upload. The allowance is gated per fragment kind precisely so each kind states
+// itself; borrowing another kind's marker to get past the gate would be a lie about what the
+// fragment is.
 document.body.addEventListener("htmx:beforeSwap", (event) => {
     const status = event.detail.xhr.status;
     if (status >= 400 && status < 500
             && (event.detail.serverResponse.includes("data-hc-field-errors")
                 || event.detail.serverResponse.includes("data-hc-lookup")
-                || event.detail.serverResponse.includes("data-tql-session-expired"))) {
+                || event.detail.serverResponse.includes("data-tql-session-expired")
+                || event.detail.serverResponse.includes("data-tql-import-report"))) {
         event.detail.shouldSwap = true;
         event.detail.isError = false;
     }

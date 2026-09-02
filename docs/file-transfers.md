@@ -280,8 +280,11 @@ on conflict (name) do update set qty = excluded.qty
 
 The uploaded file is the `POST` body — either the raw file content, or `multipart/form-data`
 (a part named `file` is preferred, otherwise the first file part). The upload spools to disk
-before the request returns, so arbitrarily large files never sit in memory; there is no
-framework size cap on transfer uploads. An empty upload is rejected (`TQL-LD-2820`).
+before the request returns, so arbitrarily large files never sit in memory — but it does ride
+the runtime's request-body bound, `tesseraql.http.maxBodyBytes` (10 MB by default), and a file
+over it is refused with a `413` naming the key. A workbook is several times the bytes of the
+same rows as text, so the same feed reaches that bound sooner as `format: excel` than as
+`format: csv`. An empty upload is rejected (`TQL-LD-2820`).
 
 The statement runs once per parsed row, all inside one import. What happens to a failing row is
 the `onError:` choice:

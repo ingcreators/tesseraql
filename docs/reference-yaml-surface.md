@@ -684,7 +684,7 @@ Schema for TesseraQL declarative view documents (*.view.yml): what a route rende
 | `version` \* | const `tesseraql/v1` | The document format version. Always `tesseraql/v1`. |
 | `id` \* | string, min length 1 | Unique document id, e.g. products.page; referenced by tests, coverage, governance approvals, and logs. |
 | `kind` \* | const `view` | Declarative view documents (the *.view.yml convention). |
-| `recipe` | enum: `list` \| `form` \| `detail` \| `dashboard` | Which view this document is: list \| form \| detail \| dashboard. A form derives its fields from the action: route's input: block; a dashboard composes panels:. |
+| `recipe` | enum: `list` \| `form` \| `detail` \| `dashboard` \| `import` | Which view this document is: list \| form \| detail \| dashboard \| import. A form derives its fields from the action: route's input: block; a dashboard composes panels:; an import renders the upload form, the validation report and the confirm form of its action: file-import route. |
 | `title` | string | The heading this view renders. A message key resolves through the app bundles; anything else renders literally. |
 | `template` | string | The pattern override this view renders through instead of its bundled `tql/view/*` pattern (customization ladder L2). Resolved beside the view document, then under the app template root. Documented in declarative-views.md. |
 | `action` | string | The id of the command route a form view submits to; its `input:` block is where the form's fields come from. |

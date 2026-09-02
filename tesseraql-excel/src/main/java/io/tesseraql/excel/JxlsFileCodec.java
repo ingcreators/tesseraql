@@ -84,6 +84,20 @@ public final class JxlsFileCodec implements FileCodec {
         }
     }
 
+    /**
+     * A workbook row is a sheet and a row, never a line (docs/csv-import.md decision 8). The
+     * number is the shared arithmetic — a sheet row counts the same way a file line does — and
+     * the sheet is what only this format can supply. A blank {@code sheet:} reads the first
+     * sheet, and the reference says so by carrying no name rather than guessing one: naming a
+     * sheet the author never wrote would be worse than leaving the report to say "row 7".
+     */
+    @Override
+    public io.tesseraql.core.files.RowReference locate(FileReadSpec spec, long row) {
+        String declared = spec.sheet() == null || spec.sheet().isBlank() ? null : spec.sheet();
+        return new io.tesseraql.core.files.RowReference(declared,
+                TabularReader.fileRow(spec, row));
+    }
+
     /** Workbook cell access: header labels read as text, data cells per the column's type. */
     private static final TabularReader.Cells<org.dhatim.fastexcel.reader.Row> CELLS = new TabularReader.Cells<org.dhatim.fastexcel.reader.Row>() {
 

@@ -8,6 +8,42 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **`recipe: import` — a reviewed upload has a face** (docs/csv-import.md slice 4). A
+  `file-import` route declaring `import.review: required` can now answer a page instead of only
+  JSON, and the page is one short view document:
+
+  ```yaml
+  version: tesseraql/v1
+  kind: view
+  recipe: import
+  title: Import supplier prices
+  action: /suppliers/prices/import
+  ```
+
+  `action:` names the file-import route, and everything the page renders comes from that route's
+  own declaration: the file types the input accepts (from `format:`), the columns the file must
+  carry (from `import.columns:`), the address the confirm form posts to. Declaring any of those
+  on the page would be a second copy of the import, free to disagree with the one the parse
+  enforces, so `fields:` and `columns:` are refused on an import view.
+
+  The upload form is the kit's `file-upload` recipe with nothing invented — both encodings, a
+  labelled file input, `data-hc-upload-progress` inside the requesting form with the form's
+  `hx-indicator` on it, `hx-disabled-elt` as the double-submit guard. The answer is the same
+  report the JSON leg answers, negotiated: `200` with the confirm form when a committable set
+  exists, `422` without one when none does. The confirm carries the token in the address *and*
+  in a hidden field and answers post/redirect/get to the transfer; a spent token answers `409`
+  and a fragment saying the fix is a fresh upload. Without JavaScript every leg still works: the
+  forms post natively and the server answers whole pages.
+
+  Two documents at one URL, the way a snapshot list already is — a `get.yml` renders the empty
+  form and the `post.yml` file-import route names the same view back.
+
+- **A rejected import row is named by the file line, not the parse's own counter.** `FileCodec`
+  gained `locate(spec, row)`: the reader counts data rows, and a header row plus any rows skipped
+  above the table shift that away from what the author sees. The report says "Line 3" for the
+  third line of the file. It is the *format's* answer, so a workbook says a sheet and a row
+  instead — the Excel codec overrides it, and the axis is real rather than aspirational.
+
 - **`tql/view/report.html :: report(r)` — the outcome report is a fragment, with two feeders**
   (docs/csv-import.md slice 3). The bulk report's markup was inlined in the list pattern and its
   render model was built by a private method reachable only from the list path, so the "one
@@ -189,6 +225,32 @@ All notable changes to TesseraQL are documented here. The format follows
   managed-mode dogfood.
 
 ### Changed
+
+- **`response.html:` on a file-import route is honoured, and refused where it cannot mean
+  anything.** It used to lint clean, compile, and be dropped in silence — the silent-tolerance
+  shape this codebase has swept twice, sitting in the compiler. A route declaring it without
+  `import.review: required` is now `TQL-ROUTE-3118`: a one-shot import answers `202` and a
+  transfer id, which is not a page, and rendering that envelope as one would be the same
+  tolerance in a new costume.
+
+- **An over-cap upload from a browser renders something.** The `413` behind
+  `tesseraql.http.maxBodyBytes` is emitted by a handler that runs before any route exists, so it
+  was a JSON envelope carrying no swap marker — and htmx discards a `4xx` body without one, which
+  meant a file over the limit produced *nothing at all* on screen. An htmx request now gets the
+  refusal as the field-errors fragment every other refusal answers with — not the import
+  surface's own marker, because this handler refuses any over-cap body and not only an upload.
+  Being pre-route it says the bound and names the configuration key rather than the route, which
+  is all a pre-route handler honestly knows. Separately, the bootstrap's `htmx:beforeSwap`
+  allowance gains its fourth marker, `data-tql-import-report`, which is what lets the reviewed
+  upload's `422` report and `409` stale-token answer reach the page; the allowance is gated per
+  fragment kind precisely so each kind states itself.
+
+- **A rejected value's message is the reason alone.** `ColumnValueException` carried one composed
+  sentence ("Column 'qty': 'abc' is not a number") and `RowError.message` published it, which put
+  the rejected *value* inside the reason — so a hundred bad numbers in one column grouped as a
+  hundred reasons. The complaint is now its own component, the column and the value ride the
+  components they already had, and the report's Field / Value / Reason columns each read one of
+  them. **Breaking** for a caller reading `message` for the column name: it is in `field`.
 
 - **An application's own `tql/view/list.html` no longer renders the outcome report.**
   **Breaking**, with no shim: the report markup moved into `tql/view/report.html`, and an L2

@@ -40,10 +40,24 @@ public final class FileImportProcessor implements Step {
     private final String onError;
     private final boolean review;
     private final Map<String, io.tesseraql.yaml.model.InputField> input;
+    /** The page a reviewed upload answers when the route declares one, else null. */
+    private final Step html;
 
     public FileImportProcessor(String routeId, String urlPath, String appName, String format,
             FileReadSpec readSpec, String localeDeclaration, Path rowSqlFile, String onError,
             boolean review, Map<String, io.tesseraql.yaml.model.InputField> input) {
+        this(routeId, urlPath, appName, format, readSpec, localeDeclaration, rowSqlFile, onError,
+                review, input, null);
+    }
+
+    /**
+     * @param html the compiled {@code response.html:} page (docs/csv-import.md decision 7), or
+     *             null for the JSON-only shape — the declaration used to compile and be dropped
+     */
+    public FileImportProcessor(String routeId, String urlPath, String appName, String format,
+            FileReadSpec readSpec, String localeDeclaration, Path rowSqlFile, String onError,
+            boolean review, Map<String, io.tesseraql.yaml.model.InputField> input, Step html) {
+        this.html = html;
         this.routeId = routeId;
         this.urlPath = urlPath;
         this.appName = appName;
@@ -76,8 +90,13 @@ public final class FileImportProcessor implements Step {
                     readSpec.withLocale(FormatSources.resolve(exchange, localeDeclaration)),
                     rowSqlFile, onError, ImportContracts.of(exchange, input));
             if (review) {
-                respondReview(exchange, transfers.reviewImport(request, subject(exchange),
-                        content));
+                FileTransferService.ImportReview outcome = transfers.reviewImport(request,
+                        subject(exchange), content);
+                if (html != null && Negotiation.prefersHtml(exchange)) {
+                    respondReviewPage(exchange, outcome, transfers, request.readSpec());
+                } else {
+                    respondReview(exchange, outcome);
+                }
                 return;
             }
             respondAccepted(exchange, urlPath, transfers.startImport(request, content), false);
@@ -115,6 +134,28 @@ public final class FileImportProcessor implements Step {
         exchange.response().status(review.committable() ? 200 : 422);
         exchange.response().header(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
         exchange.setBody(MAPPER.writeValueAsString(body));
+    }
+
+    /**
+     * The same answer as a page (docs/csv-import.md decision 7). The two legs are
+     * content-negotiated faces of one contract, so the status codes are identical: a page is
+     * still 200 with a confirm form or 422 without one.
+     *
+     * <p>The status is set <em>after</em> the renderer, which writes the route's declared one.
+     * A conditional {@code status.when:} would put the rule in the author's document, and the
+     * rule is the framework's — the token exists exactly when a committable set does, and that
+     * is not something a page should be able to declare its way out of.
+     */
+    private void respondReviewPage(Exchange exchange, FileTransferService.ImportReview review,
+            FileTransferService transfers, FileReadSpec spec) throws Exception {
+        String commitUrl = review.committable()
+                ? io.tesseraql.pipeline.BasePath.url(exchange,
+                        urlPath + "/" + review.batchId() + "/commit")
+                : null;
+        new ImportContext(review, row -> transfers.locate(format, spec, row), commitUrl)
+                .publish(exchange);
+        html.process(exchange);
+        exchange.response().status(review.committable() ? 200 : 422);
     }
 
     /**
