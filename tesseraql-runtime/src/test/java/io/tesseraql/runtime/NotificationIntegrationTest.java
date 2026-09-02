@@ -61,9 +61,20 @@ class NotificationIntegrationTest {
     // extension's per-method restarts would re-roll a dynamic port under the running runtime.
     static final int SMTP_PORT = chooseSmtpPort();
 
+    // GreenMail waits 2 seconds for its server to come up and then gives up. That is enough on
+    // a quiet machine and not on a loaded CI runner, where this suite starts a Vert.x runtime, a
+    // PostgreSQL container and a webhook stub alongside it — and the extension pays the cost
+    // again on every test method, because it restarts the server per test. The startup budget
+    // is the only thing being widened here: a server that is genuinely broken still fails, ten
+    // seconds later.
     @RegisterExtension
-    static final GreenMailExtension MAIL = new GreenMailExtension(
-            ServerSetupTest.SMTP.port(SMTP_PORT));
+    static final GreenMailExtension MAIL = new GreenMailExtension(smtpSetup());
+
+    private static com.icegreen.greenmail.util.ServerSetup smtpSetup() {
+        com.icegreen.greenmail.util.ServerSetup setup = ServerSetupTest.SMTP.port(SMTP_PORT);
+        setup.setServerStartupTimeout(10_000);
+        return setup;
+    }
 
     private static int chooseSmtpPort() {
         try {
