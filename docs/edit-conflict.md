@@ -116,15 +116,16 @@ statements of one intent can disagree.
 The refusals split by what each home can actually see, and saying which is part of the design
 rather than an implementation detail. The command processor sees one step's parse at a time,
 so the **step-shaped** refusals live there under `TQL-ROUTE-3102`, at the code the `expect:`
-refusals already use: `expect:` declared beside the lock, a second directive or a second
-carrier step, a lock on a step that is not an update, and a directive on a route that
-declared no column — the processor holds the parse, so that half of the pairing costs it
-nothing.
+refusals already use. Those are: `expect:` declared beside the lock; a second directive in one
+statement; a second carrier step; a lock on a step that is not an update; a directive nested
+inside an `/*%if*/` or `/*%for*/`; and a directive on a route that declared no column. The processor
+already holds the parse, so that half of the pairing costs it nothing.
 
-The **route-shaped** ones live where the route is compiled, under `TQL-ROUTE-3119`: a column
-that is not an identifier, a `lock:` no statement carries — the other half of the pairing,
-which needs the route's whole statement set — and a `lock:` on anything but an HTTP command
-route. That last one is a property of the surface rather than the recipe: `queue-consume` is
+The **route-shaped** ones live where the route is compiled, under `TQL-ROUTE-3119`. A column
+that is not an identifier; an `input:` field named for the lock column; a declared type that
+cannot round-trip through a form field; a `lock:` no statement carries, which is the other half
+of the pairing and needs the route's whole statement set; and a `lock:` on anything but an HTTP
+command route. That last one is a property of the surface rather than the recipe: `queue-consume` is
 the other write recipe and an MCP tool may carry `command-json`, and neither has a request
 form to carry the value back, so each builder names its own surface instead of letting the
 recipe string imply it. The `sources:` defect fix lives where sources are
@@ -202,12 +203,18 @@ silent lost update, shipped by the campaign that exists to abolish them. It also
 table and the key restated in YAML, where the authored UPDATE already encodes both, and
 nothing can cross-check the two because the framework does not parse the author's WHERE.
 
-Comparing but never advancing is also what keeps the lock type-agnostic. The framework
-needs equality and nothing else, so a bigint counter, a ULID, an ETag string, a timestamp
-and SQL Server's `rowversion` all work, and the framework never has to know how to advance
-a value whose type it did not choose. The author writes `version = version + 1`, or
+Comparing but never advancing is also what keeps the lock type-agnostic *in the statement*.
+The framework needs equality and nothing else, and never has to know how to advance a value
+whose type it did not choose: the author writes `version = version + 1`, or
 `updated_at = /* audit.now */'…'`, or nothing at all where the database advances the column
-itself.
+itself. A bigint counter, a ULID and an ETag string all work, and so does any column an API
+caller reads and echoes.
+
+What is *not* type-agnostic is the round trip through a browser form, and decision 4 records
+where it stops: the value has to render into a hidden field and parse back to the same value.
+A `datetime` fails that today — a result row renders a timestamp as an ISO instant and the
+input coercion reads a space-separated pattern — and a binary `rowversion` has no textual form
+at all. Both are refused rather than half-supported.
 
 ## Decision 3 — the lock's read side is a declared column of the rendered row
 
@@ -245,7 +252,18 @@ too. An L2 override that drops it is the app's own choice, and the design says s
 than pretending the pattern is the only renderer.
 
 A create form has no row and no lock, and a `lock:` on a route no form view targets is
-legal: an API caller sends the value it read.
+legal: an API caller sends the value it read. A create form whose action route *does* declare
+one renders no `_lock` and every submit answers `TQL-FIELD-2011` — the loud failure this
+decision asks for, rather than a build-time refusal the design does not need.
+
+A view that declares a read policy for the lock column is refused at build. A masked value
+survives as a present, non-null key, so it would pass every render check and land in a form
+whose save can never match — "This record changed", reported for a masking decision.
+
+The ejected form is the one renderer that cannot refuse. It has no view binding and no `v`, so
+an unprojected column renders an empty value and the save fails at the write instead — at 400
+for a typed lock, 409 for an opaque one. Loud either way, with a different code, which is the
+price of ejecting and is recorded rather than papered over.
 
 ## Decision 4 — `_lock` and `_overwrite` are framework-owned, consumed by their own step
 
@@ -296,6 +314,13 @@ the type wherever the column is not opaque:
 lock: version                                 # the bare column: compared exactly as it arrived
 lock: { column: version, type: integer }      # typed, so a form's "3" and a JSON 3 are one bind
 ```
+
+The declared type is also a **bound**, not just a hint: it is refused at build unless the
+value's rendered form parses back to the same value. `integer`, `number`, `string` and `date`
+do; `datetime` does not, because the two halves disagree about the pattern. A value with no
+textual form at all — SQL Server's binary `rowversion` is the case that matters — refuses at
+render instead, because its string form is an identity hash that differs on every paint, so
+the lock could never match and the record would be permanently unsaveable.
 
 The type is declared rather than looked up by the column's name. Reading it out of a
 `domains/` entry named for the column was the first shape, and it is wrong twice over. Every
@@ -748,10 +773,11 @@ one authored, and the pairing lints keep pointing the authored one at the declar
    retryable, `4090`/`4091` are constraint violations with their own declaration, and
    `TQL-WORKFLOW-3201`'s missing catalog entry is a defect fixed in slice 3. Written into
    decision 5.
-3. What does an `input:` field named for the lock column mean once `lock:` exists — refused,
-   or allowed as an ordinary writable column that happens to share the name? Recommended:
-   refused on the locked route, because two owners of one column is the disagreement the
-   whole design avoids — *gates slice 2*.
+3. ~~What does an `input:` field named for the lock column mean?~~ **Settled 2026-09-02 with
+   slice 2: refused**, `TQL-ROUTE-3119`. Two owners of one column is the disagreement the whole
+   design avoids, and a form derives its fields from `input:`, so the page would render a
+   writable control for the column beside the framework's own hidden field. Route-shaped,
+   because the check needs only the route's own declaration.
 4. Does the scaffolder's delete leg keep its hand-written slot fragment, or does the
    confirmed delete become a declared affordance? Only the generator can rewrite that
    fragment, and it is the second locked form on one page — *gates slice 4*.

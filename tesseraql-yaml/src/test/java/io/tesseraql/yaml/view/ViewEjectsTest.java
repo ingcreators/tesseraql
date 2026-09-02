@@ -21,6 +21,42 @@ import org.junit.jupiter.api.io.TempDir;
  */
 class ViewEjectsTest {
 
+    /**
+     * The lock reaches the ejected form (docs/edit-conflict.md decision 3). Without this the
+     * wiring could pass a hard-coded null and every other test would stay green.
+     */
+    @Test
+    void anEjectedFormCarriesTheActionRouteDeclaredLock(@TempDir Path tmp) throws IOException {
+        Path app = copyHelpdesk(tmp);
+        Path action = app.resolve("web/tickets/new/post.yml");
+        Files.writeString(action, Files.readString(action) + "\nlock: version\n");
+
+        ViewEjects.Result result = ViewEjects.eject(app, new ManifestLoader().load(app),
+                "web/tickets/new/get.yml", false);
+
+        assertThat(result.blocked()).isFalse();
+        assertThat(Files.readString(app.resolve(result.templatePath())))
+                .contains("name=\"_lock\"")
+                .contains("row['version']");
+    }
+
+    /**
+     * And the other direction: an unlocked action route ejects no lock field. Without this,
+     * the wiring could hard-code a constant column and stay green.
+     */
+    @Test
+    void anEjectedFormWithoutADeclaredLockCarriesNoLockField(@TempDir Path tmp)
+            throws IOException {
+        Path app = copyHelpdesk(tmp);
+
+        ViewEjects.Result result = ViewEjects.eject(app, new ManifestLoader().load(app),
+                "web/tickets/new/get.yml", false);
+
+        assertThat(Files.readString(app.resolve(result.templatePath())))
+                .doesNotContain("name=\"_lock\"")
+                .contains("name=\"_idempotency\"");
+    }
+
     @Test
     void ejectsTheHelpdeskListViewAndFlipsTheRoute(@TempDir Path tmp) throws IOException {
         Path app = copyHelpdesk(tmp);

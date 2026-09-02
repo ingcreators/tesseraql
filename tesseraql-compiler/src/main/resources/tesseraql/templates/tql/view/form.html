@@ -37,6 +37,13 @@
          echoed so the command's `location: back` lands back on that list, same conditions,
          focused on the acting row. Rendered only when the renderer validated it app-local. -->
     <input type="hidden" name="_return" th:if="${_return != null}" th:value="${_return}">
+    <!-- The declared optimistic lock (docs/edit-conflict.md decisions 3 and 4): the value the
+         record carried when this form was rendered, sent back unchanged so the write applies
+         only if nobody moved the row in between. The guard reads "the action route declares no
+         lock:", never "the value is missing" — a row that cannot supply a declared lock refuses
+         the render at TQL-VIEW-3330, so this field can never quietly vanish from a locked form
+         and leave the save unlocked. -->
+    <input type="hidden" name="_lock" th:if="${v.lock != null}" th:value="${v.lock}">
     <div th:id="|${v.formId}-errors|"></div>
     <div class="hc-stack">
       <th:block th:each="f : ${v.fields}">

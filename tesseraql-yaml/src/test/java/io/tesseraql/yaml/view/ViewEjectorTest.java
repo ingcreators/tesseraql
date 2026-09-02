@@ -158,6 +158,49 @@ class ViewEjectorTest {
         assertThat(file.content()).contains("<option value=\"OPEN\"")
                 .contains(">OPEN</option>");
         assertThat(file.content()).contains("th:text=\"#{tql.view.submit}\"");
+        // The framework fields an ejected form owes; it had drifted to _csrf alone.
+        assertThat(file.content()).contains("name=\"_idempotency\"")
+                .contains("name=\"_return\"");
+        // No lock declared, so no lock field.
+        assertThat(file.content()).doesNotContain("name=\"_lock\"");
+    }
+
+    /**
+     * An ejected form carries the declared lock too (docs/edit-conflict.md decision 3): every
+     * renderer of a locked form owes the field, not only the pattern.
+     */
+    @Test
+    void anEjectedFormCarriesTheDeclaredLock(@TempDir Path dir) throws Exception {
+        assertThat(ejectFormWithLock(dir, "version"))
+                .contains("<input type=\"hidden\" name=\"_lock\"")
+                .contains("th:value=\"${row == null ? '' : row['version']}\"");
+    }
+
+    /**
+     * A one-character column quotes with entities: a single-quoted one-character string is a
+     * char literal in OGNL, and {@code row.get('v')} misses the String key.
+     */
+    @Test
+    void aOneCharacterLockColumnQuotesWithEntities(@TempDir Path dir) throws Exception {
+        assertThat(ejectFormWithLock(dir, "v"))
+                .contains("row[&quot;v&quot;]");
+    }
+
+    private static String ejectFormWithLock(Path dir, String lockColumn) throws Exception {
+        ViewSpec spec = parse(dir, """
+                version: tesseraql/v1
+                kind: view
+                recipe: form
+                id: items.edit
+                action: /items/update
+                """);
+        List<ViewFields.FieldDef> fields = List.of(
+                new ViewFields.FieldDef("name", "k", "Name", "text", true, 200, null, null,
+                        List.of(), null, null, null, null));
+        return ViewEjector.eject(dir, dir, "page.view.yml", spec, fields,
+                "web/items/edit/page.html", id -> {
+                    throw new IllegalStateException("no embedded views in this fixture");
+                }, lockColumn).content();
     }
 
     /**

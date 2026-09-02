@@ -80,6 +80,7 @@ public final class ViewEjects {
         Path viewDir = viewFile.getParent();
         ViewSpec spec = registered.spec();
         List<ViewFields.FieldDef> fields = List.of();
+        String lockColumn = null;
         if (ViewSpec.FORM.equals(spec.view())) {
             RouteFile action = manifest.routes().stream()
                     .filter(candidate -> "POST".equalsIgnoreCase(candidate.httpMethod())
@@ -88,6 +89,10 @@ public final class ViewEjects {
                     .orElseThrow(() -> new TqlException(ViewSpec.INVALID_VIEW,
                             "The view's action " + spec.action() + " matches no POST route"));
             fields = ViewFields.derive(html.view(), spec, action.definition().input());
+            // The lock rides the ejected form too (docs/edit-conflict.md decision 3): every
+            // renderer of a locked form owes the field, not just the pattern.
+            io.tesseraql.yaml.model.LockSpec lock = action.definition().lock();
+            lockColumn = lock == null ? null : lock.column();
         }
         // The template is named after the view FILE and lands beside it (colocated views eject
         // next to their route exactly as before; a templates/ view ejects into templates/, where
@@ -125,7 +130,7 @@ public final class ViewEjects {
         // The header comment names the FILE the pattern was pinned from — the id lives inside
         // it, the file name is what locates it on disk.
         ScaffoldedFile ejected = ViewEjector.eject(home, viewDir, fileName, spec, fields,
-                targetPath, embedTemplate);
+                targetPath, embedTemplate, lockColumn);
         ScaffoldWriter.Report report = new ScaffoldWriter().apply(home, List.of(ejected), force);
         if (report.blocked()) {
             return new Result(normalized, targetPath, true);
