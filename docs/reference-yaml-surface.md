@@ -34,7 +34,7 @@ Schema for TesseraQL route documents: web/**/<method>.yml, queue consumers under
 | `pagination` | [object](#pagination) | Declarative pagination: the framework appends the dialect clause; authored SQL carries no LIMIT/FETCH. |
 | `datasource` | string | The named connector under tesseraql.datasources the route's SQL runs on, defaulting to main. The name must be declared (TQL-YAML-1035); a non-main route cannot declare notify:/publish:/outbox: or sequence allocation - they ride the main connector (TQL-YAML-1036). |
 | `cache` | [object](#cache) | Declarative HTTP caching for query responses (docs/response-shaping.md): Cache-Control from maxAge/visibility (private default; public lints onto auth: public only) and a content ETag answering If-None-Match with 304. Query recipes only (TQL-YAML-1025). |
-| `emit` | any | Topic(s) broadcast to live views after this command commits (docs/realtime.md). A name is lowercase dot/dash-separated segments; the event carries the topic name only, never data. |
+| `emit` | any | Topic(s) broadcast to live views after this route's write commits (docs/realtime.md): a command-json command at its commit, a file-import when its background import's transaction commits. A name is lowercase dot/dash-separated segments; the event carries the topic name only, never data. |
 | `invalidates` | any | Source table(s) whose code catalogs this command's write makes stale (docs/lookups.md). Named by table, not by catalog: a maintenance screen for a shared code master writes a row whose kind is request data, so which catalog is affected is not known until the write happens. Dropped after the commit, so a rollback invalidates nothing. |
 
 ### inputPolicy

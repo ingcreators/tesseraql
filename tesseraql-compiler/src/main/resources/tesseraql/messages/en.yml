@@ -88,6 +88,7 @@ tql:
     upload: Check file
     commit: Import
     line: "Line {number}"
+    row: "Row {number}"
     sheetRow: "{sheet} row {number}"
     allValid: "{rows} row(s) ready to import."
     partial: "{ready} of {rows} row(s) can be imported; {rejected} were rejected."

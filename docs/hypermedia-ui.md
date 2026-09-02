@@ -342,6 +342,42 @@ browser re-posts the intact form, so the frozen membership survives), an offset 
 keyset list the ordinary 303 to its own URL. An expired or foreign handle simply renders
 the plain list — the durable record is workflow history, not the report.
 
+## Uploads that ask before they write
+
+A `file-import` route declaring `import.review: required` gets the kit's `csv-import`,
+`file-upload` and `async-job` contracts at once from one view document
+([csv-import.md](csv-import.md)). The upload form is the kit's with nothing invented — both
+encodings, a labelled file input whose accepted types come from the declared `format:`, an
+`hc-progress` bar the auto-installed `installUploadProgress` drives, and `hx-disabled-elt` as
+the double-submit guard:
+
+```html
+<form method="post" enctype="multipart/form-data" hx-post="/products/prices/import"
+      hx-encoding="multipart/form-data" hx-target="#upload-result" hx-select="#upload-result"
+      hx-swap="outerHTML" hx-disabled-elt="find button[type=submit]"
+      hx-indicator="#upload-progress">
+  <input class="hc-input" type="file" name="file" accept=".csv,text/csv" required>
+  <button type="submit" class="hc-button" data-variant="primary">Check file</button>
+  <progress class="hc-progress htmx-indicator" data-hc-upload-progress id="upload-progress"
+            max="100" value="0"></progress>
+</form>
+```
+
+The answer is the shared outcome report — the same fragment a bulk action fills — with the
+grouped reasons above and the rejected rows enumerated below, each naming its line, its column
+and the value that was refused. A confirm form appears exactly when something can be committed.
+
+Confirming answers a **job card**: a fragment that polls itself on the cadence the server wrote,
+carries the contract's `data-hc-job` and `data-state`, and stops by rendering without a trigger
+when the run reaches a terminal state. It swaps into its own region beside the report, because
+the report slot is `aria-live` and a card that re-renders on every poll must not be. Cancel
+posts to the transfer's own cancel leg; a stopped import writes nothing.
+
+Three refusals reach the page through the bootstrap's `htmx:beforeSwap` allowance: the `422` of
+a file with nothing importable and the `409` of a spent token carry `data-tql-import-report`,
+and an over-cap upload's `413` carries the field-errors marker every other refusal uses. Without
+a marker htmx discards a `4xx` body, which is why each fragment kind states itself.
+
 ## Marking the current navigation item
 
 The kit's auto-installed `installNavCurrent` behavior marks the current sidebar item with

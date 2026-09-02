@@ -1,0 +1,9 @@
+version: tesseraql/v1
+id: prices-import
+kind: view
+recipe: import
+title: Import supplier prices
+# The file-import route this page uploads to. Everything else the page renders — the file
+# types the input accepts, the columns the file must carry, the address the confirm form
+# posts to — comes from that route's own declaration (docs/csv-import.md decision 7).
+action: /products/prices/import

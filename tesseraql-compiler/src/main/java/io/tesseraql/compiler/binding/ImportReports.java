@@ -96,16 +96,30 @@ final class ImportReports {
     private static ReportModel.Entry entry(RowLocator locate, MessageCatalog catalog,
             Locale locale, FileTransferService.RowError error) {
         RowReference where = locate.locate(error.row());
-        String label = where.sheet() == null
-                ? ViewMessages.text(catalog, locale, "tql.import.line", "Line {number}",
-                        Map.of("number", where.number()))
-                : ViewMessages.text(catalog, locale, "tql.import.sheetRow", "{sheet} row {number}",
-                        Map.of("sheet", where.sheet(), "number", where.number()));
+        String label = label(where, catalog, locale);
         String reason = error.field() == null
                 ? String.valueOf(error.message())
                 : error.field() + " — " + error.message();
         return new ReportModel.Entry(error.field() == null ? "row" : error.field(), reason,
                 label, null, error.field(), error.value());
+    }
+
+    /**
+     * How the report refers to a row: the format's own word for it. A text file has lines; a
+     * workbook has rows on a sheet, and a named sheet is worth saying because a feed often
+     * carries several.
+     */
+    private static String label(RowReference where, MessageCatalog catalog, Locale locale) {
+        if (!where.sheeted()) {
+            return ViewMessages.text(catalog, locale, "tql.import.line", "Line {number}",
+                    Map.of("number", where.number()));
+        }
+        if (where.sheet() == null) {
+            return ViewMessages.text(catalog, locale, "tql.import.row", "Row {number}",
+                    Map.of("number", where.number()));
+        }
+        return ViewMessages.text(catalog, locale, "tql.import.sheetRow", "{sheet} row {number}",
+                Map.of("sheet", where.sheet(), "number", where.number()));
     }
 
     /**

@@ -680,7 +680,7 @@
       "additionalProperties": true
     },
     "emit": {
-      "description": "Topic(s) broadcast to live views after this command commits (docs/realtime.md). A name is lowercase dot/dash-separated segments; the event carries the topic name only, never data.",
+      "description": "Topic(s) broadcast to live views after this route's write commits (docs/realtime.md): a command-json command at its commit, a file-import when its background import's transaction commits. A name is lowercase dot/dash-separated segments; the event carries the topic name only, never data.",
       "oneOf": [
         {
           "type": "string"

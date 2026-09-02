@@ -1,0 +1,50 @@
+version: tesseraql/v1
+id: prices.import
+kind: route
+recipe: file-import
+
+security:
+  policy: inv.write
+
+# On a file-import route `input:` is the row contract (docs/csv-import.md decision 3): what
+# each ROW must satisfy, not what the request must. The parse holds every row to this before
+# anything is written, so the report says which line and which column, and the commit is held
+# to exactly the same answers.
+input:
+  sku:
+    type: string
+    required: true
+    maxLength: 40
+  supplier:
+    type: string
+    required: true
+    maxLength: 60
+  price:
+    type: number
+    required: true
+    min: 0
+
+import:
+  format: csv
+  columns: [sku, supplier, price]
+  # A price feed is worth importing in part: a supplier whose row is malformed should not
+  # hold back the rest, and the report says which rows were left out.
+  onError: skip
+  # The upload validates and asks before it writes. The answer is a report and a token; a
+  # second request spends the token and runs an ordinary import.
+  review: required
+
+# Announced when the import's transaction commits (docs/csv-import.md decision 6), which is
+# the only moment the rows exist. The products list declares refreshOn: for this topic.
+emit:
+  - prices.imported
+
+response:
+  html:
+    status: 200
+    view: prices-import
+
+steps:
+  - id: row
+    sql:
+      file: upsert-price.sql

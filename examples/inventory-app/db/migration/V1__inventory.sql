@@ -13,4 +13,9 @@ insert into products (sku, name, category, stock, reorder_level) values
   ('KB-101', 'Mechanical keyboard', 'peripherals', 42, 10),
   ('MS-230', 'Wireless mouse', 'peripherals', 7, 15),
   ('MN-274', '27-inch monitor', 'displays', 18, 5),
-  ('DK-450', 'Standing desk', 'furniture', 3, 5);
+  ('DK-450', 'Standing desk', 'furniture', 3, 5),
+  -- The two SKUs the shipped supplier price feed quotes (data/drops/supplier-prices.csv).
+  -- They are here so the feed is about this catalogue: the analytics drop and the reviewed
+  -- upload both read that file, and a price for a product nobody sells teaches nothing.
+  ('WIDGET-1', 'Widget', 'peripherals', 60, 10),
+  ('GADGET-7', 'Gadget', 'peripherals', 55, 10);

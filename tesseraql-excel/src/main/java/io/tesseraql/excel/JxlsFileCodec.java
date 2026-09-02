@@ -94,7 +94,7 @@ public final class JxlsFileCodec implements FileCodec {
     @Override
     public io.tesseraql.core.files.RowReference locate(FileReadSpec spec, long row) {
         String declared = spec.sheet() == null || spec.sheet().isBlank() ? null : spec.sheet();
-        return new io.tesseraql.core.files.RowReference(declared,
+        return io.tesseraql.core.files.RowReference.sheetRow(declared,
                 TabularReader.fileRow(spec, row));
     }
 

@@ -1,0 +1,14 @@
+version: tesseraql/v1
+id: prices.importPage
+kind: route
+recipe: page
+
+security:
+  policy: inv.write
+
+# The empty half of the two-documents-at-one-URL pair (docs/csv-import.md decision 7): this
+# renders the upload form, and the POST beside it answers the same page with the report.
+response:
+  html:
+    status: 200
+    view: prices-import

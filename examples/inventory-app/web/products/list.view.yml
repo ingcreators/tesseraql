@@ -4,9 +4,14 @@ kind: view
 recipe: list
 title: Products
 search: q
+# The completion signal (docs/csv-import.md decision 6): a reviewed price import emits this
+# topic when its transaction commits, and this list refetches itself over the existing event
+# stream — on every open page, not only the tab that pressed the button.
+refreshOn: prices.imported
 columns:
   - { name: sku, label: SKU, sortable: true }
   - { name: name, sortable: true }
   - { name: category, sortable: true }
   - { name: stock, sortable: true }
   - { name: reorder_level, label: Reorder at }
+  - { name: best_price, label: Best price }

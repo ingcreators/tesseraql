@@ -28,9 +28,13 @@ final class LiveViewRules {
     static final java.util.regex.Pattern TOPIC_NAME = java.util.regex.Pattern
             .compile("[a-z0-9]+(?:[.-][a-z0-9]+)*");
 
+    /** The recipes whose writes have a moment the framework can announce them at. */
+    private static final java.util.Set<String> EMITTING_RECIPES = new java.util.TreeSet<>(
+            java.util.List.of("command-json", "file-import"));
+
     /**
-     * Live-view emit lints (docs/realtime.md): emit: is a command-json key (TQL-YAML-1038, the
-     * topics broadcast after that command's commit), and a topic name must match the slug shape
+     * Live-view emit lints (docs/realtime.md): emit: belongs to a route whose write the
+     * framework can announce (TQL-YAML-1038), and a topic name must match the slug shape
      * (TQL-YAML-1039) so it survives URL, SSE event-name, and selector contexts unquoted.
      *
      * <p>Reached from routes, queue consumers, and MCP tools alike. The file the definition came
@@ -42,9 +46,13 @@ final class LiveViewRules {
         if (definition.emit().isEmpty()) {
             return;
         }
-        if (!"command-json".equals(definition.recipe())) {
+        // A route may emit when it writes and the framework knows when the write landed. A
+        // command knows at its commit; a file-import knows when its background transaction
+        // commits, which is later than the request and is exactly why an import announces
+        // itself from the run rather than from the response (docs/csv-import.md decision 6).
+        if (!EMITTING_RECIPES.contains(definition.recipe())) {
             findings.add(new LintFinding(LintCodes.EMIT_UNSUPPORTED, ERROR, source,
-                    "emit: is only supported on command-json routes, not '"
+                    "emit: is only supported on " + EMITTING_RECIPES + " routes, not '"
                             + definition.recipe() + "'"));
         }
         for (String topic : definition.emit()) {

@@ -290,6 +290,26 @@ class ImportPageIntegrationTest {
     }
 
     @Test
+    void anExcelImportRidesTheSameDesignAndSaysSheetRow() throws Exception {
+        // The format is an axis, not a name (docs/csv-import.md decision 8): the same recipe,
+        // the same review, the same page — only `format:` differs. What the format supplies is
+        // where a row sits, and a workbook's answer is a sheet and a row, never a line.
+        HttpResponse<String> answer = uploadWorkbook();
+
+        assertThat(answer.statusCode()).isEqualTo(200);
+        assertThat(answer.body())
+                .contains("1 of 2 row(s) can be imported; 1 were rejected.")
+                // Sheet and row, and the row is the one the author sees in the workbook: the
+                // header shifts the data ordinal by one, and row 3 is the bad line.
+                .contains("items row 3")
+                .doesNotContain("Line 3")
+                .contains("is not a valid number")
+                // Committable, so the confirm form is there — an Excel import is not a
+                // different feature, it is this one with a different codec.
+                .contains("name=\"token\"");
+    }
+
+    @Test
     void theJsonContractIsUntouched() throws Exception {
         HttpResponse<String> answer = send(HttpRequest.newBuilder(uri("/items/import"))
                 .header("Cookie", cookie)
@@ -376,6 +396,44 @@ class ImportPageIntegrationTest {
                 .header("Accept", "text/html")
                 .header("Content-Type", "multipart/form-data; boundary=" + BOUNDARY)
                 .POST(HttpRequest.BodyPublishers.ofString(body))
+                .build());
+    }
+
+    /** A two-row workbook whose second row's quantity is not a number. */
+    private static HttpResponse<String> uploadWorkbook() throws Exception {
+        byte[] xlsx;
+        try (org.apache.poi.xssf.usermodel.XSSFWorkbook workbook = new org.apache.poi.xssf.usermodel.XSSFWorkbook();
+                java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream()) {
+            org.apache.poi.ss.usermodel.Sheet sheet = workbook.createSheet("items");
+            org.apache.poi.ss.usermodel.Row header = sheet.createRow(0);
+            header.createCell(0).setCellValue("name");
+            header.createCell(1).setCellValue("qty");
+            org.apache.poi.ss.usermodel.Row good = sheet.createRow(1);
+            good.createCell(0).setCellValue("epsilon");
+            good.createCell(1).setCellValue(3);
+            org.apache.poi.ss.usermodel.Row bad = sheet.createRow(2);
+            bad.createCell(0).setCellValue("broken");
+            bad.createCell(1).setCellValue("not-a-number");
+            workbook.write(out);
+            xlsx = out.toByteArray();
+        }
+        String prologue = "--" + BOUNDARY + "\r\n"
+                + "Content-Disposition: form-data; name=\"_csrf\"\r\n\r\n" + csrf + "\r\n"
+                + "--" + BOUNDARY + "\r\n"
+                + "Content-Disposition: form-data; name=\"file\"; filename=\"items.xlsx\"\r\n"
+                + "Content-Type: application/vnd.openxmlformats-officedocument"
+                + ".spreadsheetml.sheet\r\n\r\n";
+        String epilogue = "\r\n--" + BOUNDARY + "--\r\n";
+        java.io.ByteArrayOutputStream body = new java.io.ByteArrayOutputStream();
+        body.write(prologue.getBytes(StandardCharsets.UTF_8));
+        body.write(xlsx);
+        body.write(epilogue.getBytes(StandardCharsets.UTF_8));
+        return send(HttpRequest.newBuilder(uri("/items/excel-import"))
+                .header("Cookie", cookie)
+                .header("X-CSRF-Token", csrf)
+                .header("Accept", "text/html")
+                .header("Content-Type", "multipart/form-data; boundary=" + BOUNDARY)
+                .POST(HttpRequest.BodyPublishers.ofByteArray(body.toByteArray()))
                 .build());
     }
 
@@ -496,6 +554,59 @@ class ImportPageIntegrationTest {
                       file: upsert-item.sql
                 """);
         Files.writeString(route.resolve("upsert-item.sql"), """
+                insert into items (name, qty)
+                values ( /* name */ 'sample', cast( /* qty */ '1' as integer) )
+                on conflict (name) do update set qty = excluded.qty
+                ;
+                """);
+
+        // The same import, one word different (docs/csv-import.md decision 8): `format: excel`
+        // is not a second recipe, and the report's row reference is what proves the axis.
+        Path excel = Files.createDirectories(home.resolve("web/items/excel-import"));
+        Files.writeString(excel.resolve("excel-import.view.yml"), """
+                version: tesseraql/v1
+                kind: view
+                recipe: import
+                title: Import items from a workbook
+                action: /items/excel-import
+                """);
+        Files.writeString(excel.resolve("get.yml"), """
+                version: tesseraql/v1
+                id: items.excelImportPage
+                kind: route
+                recipe: page
+                security:
+                  auth: browser
+                  policy: items.write
+                response:
+                  html:
+                    view: excel-import
+                """);
+        Files.writeString(excel.resolve("post.yml"), """
+                version: tesseraql/v1
+                id: items.excelImport
+                kind: route
+                recipe: file-import
+                security:
+                  auth: browser
+                  policy: items.write
+                import:
+                  format: excel
+                  sheet: items
+                  columns:
+                    - name
+                    - { name: qty, type: number }
+                  onError: skip
+                  review: required
+                response:
+                  html:
+                    view: excel-import
+                steps:
+                  - id: row
+                    sql:
+                      file: upsert-item.sql
+                """);
+        Files.writeString(excel.resolve("upsert-item.sql"), """
                 insert into items (name, qty)
                 values ( /* name */ 'sample', cast( /* qty */ '1' as integer) )
                 on conflict (name) do update set qty = excluded.qty
