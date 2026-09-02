@@ -8,6 +8,39 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **The declared lock reaches the form** (docs/edit-conflict.md slice 2, the read side). A form
+  view whose `action:` route declares `lock:` renders the record's lock value as a fourth
+  framework-owned hidden field, beside `_csrf`, `_idempotency` and `_return`. The value is a
+  lookup of that column in the row the form was rendered from — an exact key, then a
+  case-insensitive scan for the dialects that fold result-set labels, and nothing further, which
+  is how a lookup field already resolves its declared columns.
+
+  **A row that cannot supply a declared lock refuses the render** (`TQL-VIEW-3330`), for the
+  absent column and the present-but-null one alike, with different messages because they have
+  opposite fixes. That refusal is the decision, not a nicety: a hidden field guarded on its own
+  value would simply vanish from a form whose read forgot to project the column, and the save
+  that followed would be unlocked with nothing to say so. A null lock is refused for its own
+  reason — an equality predicate on null matches no row, so the form would be unsaveable rather
+  than unlocked. The check is at render rather than at build, on the lookup precedent:
+  `select *` makes a static column check a liar.
+
+  A create form has no record and so no lock, and renders none. A locked route that no form view
+  targets stays legal — an API caller sends the value it read. A view declaring a read policy for
+  the lock column is refused at build: a masked value survives as a present, non-null key, so it
+  would land in a form whose save can never match.
+
+- **The declared lock type is a bound, not a hint.** It is refused at build unless the value's
+  rendered form parses back to the same value — `integer`, `number`, `string` and `date` do,
+  `datetime` does not, because a result row renders a timestamp as an ISO instant while the input
+  coercion reads a space-separated pattern. A value with no textual form at all refuses at render
+  instead: SQL Server's binary `rowversion` stringifies to an identity hash that differs on every
+  paint, so the lock could never match and the record would be permanently unsaveable.
+
+- **An `input:` field named for the lock column is refused** (`TQL-ROUTE-3119`), settling the
+  question slice 1 left open. Two owners of one column is the disagreement the whole design
+  avoids, and because a form derives its fields from `input:`, the page would otherwise render a
+  writable control for the column beside the framework's own hidden field.
+
 - **The declared optimistic lock: `lock:` on a command route** (docs/edit-conflict.md slice 1,
   the machinery). A command route names the column whose value a caller must send back unchanged
   for the write to apply, and the framework only ever **compares** it — expanding a
@@ -341,6 +374,13 @@ All notable changes to TesseraQL are documented here. The format follows
   managed-mode dogfood.
 
 ### Changed
+
+- **An ejected form carries all four framework fields.** `ViewEjector` emitted `_csrf` alone, so
+  every ejected form had already drifted away from `_idempotency` and `_return`; it now emits
+  those two and, for a locked action route, `_lock`. An ejected page has no view binding, so it
+  cannot refuse an unprojected lock column the way the pattern does — the field renders empty and
+  the save fails at the write instead. Loud either way, with a different code, and recorded here
+  because ejecting means owning it.
 
 - **`FileTransferService.TransferStatus` carries the row total, and `ImportRequest` carries the
   topics.** **Breaking** on both records: a status gained `expectedRows` (null when the run

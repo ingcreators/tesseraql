@@ -52,6 +52,14 @@ public final class RouteCompiler {
     private static final TqlErrorCode PROMPT_WITHOUT_TEXT = new TqlErrorCode(TqlDomain.ROUTE, 3117);
     /** TQL-ROUTE-3119: the route's lock: declaration is invalid or unhonoured by its recipe. */
     private static final TqlErrorCode INVALID_LOCK = new TqlErrorCode(TqlDomain.ROUTE, 3119);
+    /**
+     * The declared lock types whose rendered form parses back to the same value
+     * (docs/edit-conflict.md decision 4). Deliberately not {@code datetime}: a result row
+     * renders a timestamp as an ISO instant and the input coercion reads a space-separated
+     * pattern, so the round trip loses.
+     */
+    private static final java.util.Set<String> ROUND_TRIP_LOCK_TYPES = java.util.Set.of(
+            "integer", "number", "string", "date");
     /** TQL-ROUTE-3120: a read acquisition under sources: declares write-only keys. */
     private static final TqlErrorCode INVALID_SOURCE = new TqlErrorCode(TqlDomain.ROUTE, 3120);
     /** TQL-VIEW-3327: a detail view's workflow: names no declared kind: workflow document. */
@@ -614,6 +622,24 @@ public final class RouteCompiler {
             throw new TqlException(INVALID_LOCK, "Route '" + definition.id() + "': lock column '"
                     + lock.column()
                     + "' must be a SQL identifier — it is interpolated into the statement's text");
+        }
+        // The lock has to survive a round trip through a form field, and only some types do.
+        // A `datetime` does not: a result row renders a timestamp as an ISO instant, and the
+        // input coercion reads `yyyy-MM-dd HH:mm:ss` back — so every browser save would fail.
+        // Refusing at build turns that into one error instead of a permanently unsaveable page.
+        if (lock.type() != null && !ROUND_TRIP_LOCK_TYPES.contains(lock.type())) {
+            throw new TqlException(INVALID_LOCK, "Route '" + definition.id() + "': lock type '"
+                    + lock.type() + "' does not survive a round trip through a form field —"
+                    + " a lock column is one of " + ROUND_TRIP_LOCK_TYPES);
+        }
+        // Two owners of one column is the disagreement the whole design avoids
+        // (docs/edit-conflict.md, decision 4). A form derives its fields from input:, so the page
+        // would render a writable control for the column beside the framework's own hidden field.
+        if (definition.input().containsKey(lock.column())) {
+            throw new TqlException(INVALID_LOCK, "Route '" + definition.id() + "': input: declares"
+                    + " '" + lock.column() + "', which is also the lock column — the lock is the"
+                    + " framework's value, sent as " + io.tesseraql.core.sql.LockBinding.PARAM
+                    + ", not an application input");
         }
     }
 

@@ -59,6 +59,28 @@ class LockDeclarationTest {
     }
 
     @Test
+    void anInputFieldNamedForTheLockColumnIsRefused(@TempDir Path dir) {
+        // Two owners of one column: the form would render a writable control for it beside
+        // the framework's own hidden field. The fixture already declares input: { id, name }.
+        assertThatThrownBy(() -> compile(dir, "lock: id\n", LOCKED_SQL))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("TQL-ROUTE-3119")
+                .hasMessageContaining("input:");
+    }
+
+    @Test
+    void aLockTypeThatCannotRoundTripIsRefused(@TempDir Path dir) {
+        // A result row renders a timestamp as an ISO instant and the input coercion reads a
+        // space-separated pattern back, so every browser save would fail. One build error
+        // beats a permanently unsaveable page.
+        assertThatThrownBy(() -> compile(dir,
+                "lock: { column: version, type: datetime }\n", LOCKED_SQL))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("TQL-ROUTE-3119")
+                .hasMessageContaining("round trip");
+    }
+
+    @Test
     void aLockDeclaredWithNoDirectiveIsRefused(@TempDir Path dir) {
         // Direction A of the pairing: a lock that compares nothing is a lock that is not one.
         assertThatThrownBy(() -> compile(dir, "lock: version\n", UNLOCKED_SQL))

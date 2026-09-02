@@ -30,13 +30,17 @@ public final class ViewEjector {
      * Generates the ejected template for a view. {@code fields} carries a form view's derived
      * definitions (empty for list/detail); {@code targetPath} is the app-home-relative path the
      * template will live at (drives the checksum stamp).
+     *
+     * <p>A form ejected through this overload carries no {@code _lock} field: the caller has no
+     * action route to read a {@code lock:} declaration off. A production caller that has one
+     * takes the longer signature, or the ejected page silently drops the lock.
      */
     public static ScaffoldedFile eject(Path appHome, Path routeDir, String viewRef,
             ViewSpec spec, List<ViewFields.FieldDef> fields, String targetPath) {
         return eject(appHome, routeDir, viewRef, spec, fields, targetPath, id -> {
             throw new TqlException(ViewSpec.INVALID_VIEW,
                     "No embedded-view resolver — cannot eject an embedding view here");
-        });
+        }, null);
     }
 
     /**
@@ -45,15 +49,18 @@ public final class ViewEjector {
      * layout while embedded views stay declarative, inserted as
      * {@code ~{<pattern> :: view(${views['<id>']})}} against the flipped route's
      * {@code views:} models.
+     *
+     * @param lockColumn the action route's declared lock column (docs/edit-conflict.md decision
+     *                   3), or null for an unlocked route
      */
     public static ScaffoldedFile eject(Path appHome, Path routeDir, String viewRef,
             ViewSpec spec, List<ViewFields.FieldDef> fields, String targetPath,
-            java.util.function.Function<String, String> embedTemplate) {
+            java.util.function.Function<String, String> embedTemplate, String lockColumn) {
         java.util.Map<String, String> codes = catalogByColumn(appHome, viewRef, spec);
         String body = switch (spec.view()) {
             case ViewSpec.LIST -> list(appHome, routeDir, spec, codes);
             case ViewSpec.DETAIL -> detail(appHome, routeDir, spec, codes, embedTemplate);
-            case ViewSpec.FORM -> form(appHome, routeDir, spec, fields);
+            case ViewSpec.FORM -> form(appHome, routeDir, spec, fields, lockColumn);
             case ViewSpec.DASHBOARD -> dashboard(appHome, routeDir, spec, codes, embedTemplate);
             default -> throw new TqlException(ViewSpec.INVALID_VIEW,
                     "Cannot eject view kind " + spec.view());
@@ -344,7 +351,7 @@ public final class ViewEjector {
     }
 
     private static String form(Path appHome, Path routeDir, ViewSpec spec,
-            List<ViewFields.FieldDef> fields) {
+            List<ViewFields.FieldDef> fields, String lockColumn) {
         require(fields != null && !fields.isEmpty(),
                 "a form view ejects from its derived fields — the action route declares none");
         String formId = spec.id().replace('.', '-') + "-form";
@@ -363,7 +370,26 @@ public final class ViewEjector {
                         + " hx-indicator=\"find .hc-spinner\">\n"
                         + "    <input type=\"hidden\" name=\"_csrf\" th:if=\"${_csrf != null}\""
                         + " th:value=\"${_csrf}\">\n"
-                        + "    <div id=\"")
+                        // The framework fields an ejected form owes, which it had drifted away
+                        // from: the one-time intent key and the list a row link sent along are
+                        // top-level model variables the renderer publishes for every HTML
+                        // response, so these expressions are literally the pattern's.
+                        + "    <input type=\"hidden\" name=\"_idempotency\""
+                        + " th:if=\"${_idempotency != null}\" th:value=\"${_idempotency}\">\n"
+                        + "    <input type=\"hidden\" name=\"_return\" th:if=\"${_return != null}\""
+                        + " th:value=\"${_return}\">\n");
+        if (lockColumn != null) {
+            // The declared lock (docs/edit-conflict.md decision 3), read off the row the section
+            // already bound. An ejected page has no view binding, so it cannot refuse an
+            // unprojected column the way the pattern does at TQL-VIEW-3330: the field renders
+            // empty and the save fails at the write instead. Loud either way, different code —
+            // ejecting means owning it.
+            html.append("    <input type=\"hidden\" name=\"")
+                    .append(io.tesseraql.core.sql.LockBinding.PARAM)
+                    .append("\" th:value=\"${row == null ? '' : row").append(key(lockColumn))
+                    .append("}\">\n");
+        }
+        html.append("    <div id=\"")
                 .append(formId).append("-errors\"></div>\n"
                         + "    <div class=\"hc-stack\">\n");
         for (ViewFields.FieldDef field : fields) {

@@ -42,6 +42,8 @@ public final class ViewBinding {
     static final TqlErrorCode EMBED_DEPTH = new TqlErrorCode(TqlDomain.VIEW, 3318);
     /** TQL-VIEW-3322: a declared list key: column is null, absent or blank in a result row. */
     static final TqlErrorCode INVALID_ROW_KEY = new TqlErrorCode(TqlDomain.VIEW, 3322);
+    /** TQL-VIEW-3330: the row a locked form renders from carries no value for its lock column. */
+    static final TqlErrorCode MISSING_LOCK = new TqlErrorCode(TqlDomain.VIEW, 3330);
 
     /**
      * An embedded view (docs/view-composition.md wave 2b): the sub-binding plus the host
@@ -69,6 +71,11 @@ public final class ViewBinding {
     private String workflowBasePath;
     /** The upload the import view's {@code action:} names, resolved at build time. */
     private final ImportTarget importTarget;
+    /**
+     * The lock column the form's {@code action:} route declares, resolved at build time like
+     * {@link #importTarget} — the value itself is per render, and comes from the row.
+     */
+    private final String lockColumn;
 
     /**
      * What an import view renders around its report: the address it uploads to, the file types
@@ -87,8 +94,10 @@ public final class ViewBinding {
             Map<Integer, Embed> panelEmbeds,
             Map<String, io.tesseraql.yaml.model.ResponseSpec.FieldPolicy> readPolicies,
             Map<String, String> catalogByColumn, List<ViewFields.FieldDef> filterFields,
-            io.tesseraql.yaml.model.PageSpec pagination, ImportTarget importTarget) {
+            io.tesseraql.yaml.model.PageSpec pagination, ImportTarget importTarget,
+            String lockColumn) {
         this.importTarget = importTarget;
+        this.lockColumn = lockColumn;
         this.spec = spec;
         this.entryTemplate = entryTemplate;
         this.fields = fields;
@@ -167,13 +176,25 @@ public final class ViewBinding {
                 ? List.of()
                 : ViewFields.deriveFilters(viewRef, spec,
                         route == null ? null : route.input());
+        String lock = ViewSpec.FORM.equals(spec.view())
+                ? lockColumn(spec, postRouteByPath)
+                : null;
+        if (lock != null && readSide.policies().containsKey(lock)) {
+            // A masked value is present and non-null, so it would sail past every render check
+            // into a form whose save can never match — "This record changed", for a masking
+            // decision. Refuse the combination instead (docs/edit-conflict.md decision 3).
+            throw new TqlException(MISSING_LOCK, "View " + viewRef + ": the action route's lock"
+                    + " column '" + lock + "' carries a read policy — a masked or hidden lock"
+                    + " cannot be sent back unchanged, so the form could never be saved");
+        }
         return new ViewBinding(spec, entry, fields, resolveSlots(home, viewDir, spec), home,
                 Map.copyOf(childEmbeds), Map.copyOf(panelEmbeds), readSide.policies(),
                 readSide.catalogs(), filterFields,
                 route == null ? null : route.pagination(),
                 ViewSpec.IMPORT.equals(spec.view())
                         ? importTarget(viewRef, spec, postRouteByPath)
-                        : null);
+                        : null,
+                lock);
     }
 
     /**
@@ -211,6 +232,22 @@ public final class ViewBinding {
         return new ImportTarget(spec.action(), accept,
                 importSpec.columns().stream()
                         .map(io.tesseraql.yaml.model.ColumnSpec::name).toList());
+    }
+
+    /**
+     * The lock column the form's {@code action:} route declares (docs/edit-conflict.md decision
+     * 1), read off that route rather than restated on the page — the same reason a form derives
+     * its fields from its action rather than listing them, and the same move
+     * {@link #importTarget} makes for an import.
+     *
+     * <p>No refusal for a null action: {@link #formFields} resolved the same action a moment
+     * earlier and threw {@code TQL-VIEW-3303}, so a null here is unreachable rather than
+     * tolerated.
+     */
+    private static String lockColumn(ViewSpec spec,
+            Function<String, RouteDefinition> postRouteByPath) {
+        RouteDefinition action = postRouteByPath.apply(spec.action());
+        return action == null || action.lock() == null ? null : action.lock().column();
     }
 
     /**
@@ -570,6 +607,15 @@ public final class ViewBinding {
         Map<String, Object> row = firstRow(data);
         v.put("row", row);
         v.put("notFound", context.containsKey(spec.source()) && rows(data).isEmpty());
+        // The declared lock (docs/edit-conflict.md decision 3), looked up in the row this form
+        // was rendered from. Deliberately not guarded on the value: a field that vanished when
+        // the read forgot to project the column would leave the save silently unlocked, which is
+        // the regression this surface exists to refuse. The gate is the row's emptiness, which is
+        // exactly and only "this render has no record" — a create form, or a not-found edit page
+        // that emits no form at all.
+        if (lockColumn != null && !row.isEmpty()) {
+            v.put("lock", String.valueOf(lockValue(row)));
+        }
         List<Map<String, Object>> rendered = new ArrayList<>();
         for (ViewFields.FieldDef field : fields) {
             // A field whose write policy: the principal fails never renders (wave 4) —
@@ -1684,6 +1730,56 @@ public final class ViewBinding {
             options.add(option);
         });
         return options;
+    }
+
+    /**
+     * The lock value in the rendered row: an exact key, then a case-insensitive scan for the
+     * dialects that fold result-set labels, and nothing further — the resolution
+     * {@link LookupReferences#column} performs for a lookup's declared columns.
+     *
+     * <p>Absent and present-but-null are both refusals, with different messages because they have
+     * opposite fixes: project the column, or fix the data. A null lock compares against nothing —
+     * an equality predicate on null matches no row — so the form would be unsaveable rather than
+     * unlocked, which is worse than either.
+     *
+     * <p>A value with no textual form refuses too. SQL Server's {@code rowversion} arrives as a
+     * {@code byte[]}, whose string form is an identity hash — a different one on every render —
+     * so the lock could never match and the record would be permanently unsaveable. Better to
+     * say so at the render than to ship a hidden field that is guaranteed to conflict.
+     *
+     * <p>The check is at render, not at build, on the {@code TQL-VIEW-3329} precedent:
+     * {@code select *} makes a static column check a liar. A masked lock column cannot reach
+     * here: a view declaring a read policy for it is refused at build, because a masked value
+     * survives as a present, non-null key and would sail past every check below into a form that
+     * can never be saved.
+     */
+    private Object lockValue(Map<String, Object> row) {
+        String key = row.containsKey(lockColumn) ? lockColumn : null;
+        if (key == null) {
+            for (String candidate : row.keySet()) {
+                if (candidate.equalsIgnoreCase(lockColumn)) {
+                    key = candidate;
+                    break;
+                }
+            }
+        }
+        if (key == null) {
+            throw new TqlException(MISSING_LOCK, "View " + spec.id() + ": the action route's lock"
+                    + " column '" + lockColumn + "' is not in the rendered row — the view's own"
+                    + " source: must select it");
+        }
+        Object value = row.get(key);
+        if (value == null) {
+            throw new TqlException(MISSING_LOCK, "View " + spec.id() + ": the action route's lock"
+                    + " column '" + lockColumn + "' is null in the rendered row — a null lock"
+                    + " compares against nothing, so the form would be unsaveable");
+        }
+        if (value.getClass().isArray() || value instanceof Map || value instanceof List) {
+            throw new TqlException(MISSING_LOCK, "View " + spec.id() + ": the action route's lock"
+                    + " column '" + lockColumn + "' holds a " + value.getClass().getSimpleName()
+                    + ", which has no textual form a form field can send back unchanged");
+        }
+        return value;
     }
 
     private static Map<String, Object> firstRow(Map<String, Object> data) {

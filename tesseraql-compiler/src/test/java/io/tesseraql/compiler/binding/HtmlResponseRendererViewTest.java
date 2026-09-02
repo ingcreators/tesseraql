@@ -41,6 +41,17 @@ class HtmlResponseRendererViewTest {
                 RouteDefinition.class);
     }
 
+    /** The same shape with a declared lock (docs/edit-conflict.md decision 3). */
+    private static RouteDefinition lockedActionRoute() {
+        return MAPPER.convertValue(Map.of(
+                "id", "items.update",
+                "kind", "route",
+                "recipe", "command-json",
+                "lock", "version",
+                "input", Map.of("name", Map.of("type", "string", "required", true))),
+                RouteDefinition.class);
+    }
+
     private static HtmlResponseRenderer renderer(Path dir, String viewYaml) throws Exception {
         return renderer(dir, viewYaml, null);
     }
@@ -49,7 +60,11 @@ class HtmlResponseRendererViewTest {
             RouteDefinition route) throws Exception {
         Files.writeString(dir.resolve("page.view.yml"), viewYaml);
         ViewBinding binding = ViewBinding.of(dir, "page", route,
-                path -> "/items/create".equals(path) ? actionRoute() : null,
+                path -> switch (path) {
+                    case "/items/create" -> actionRoute();
+                    case "/items/update" -> lockedActionRoute();
+                    default -> null;
+                },
                 id -> dir.resolve("page.view.yml"));
         return new HtmlResponseRenderer(new HtmlResponse(200, null, "page", null, null,
                 Map.of(), Map.of(), Map.of(), null), dir, dir, "en", binding);
@@ -658,6 +673,87 @@ class HtmlResponseRendererViewTest {
         assertThat(html).contains("<textarea").contains(">Item name</label>");
         // Unselected inputs are not rendered.
         assertThat(html).doesNotContain("name=\"quantity\"");
+    }
+
+    @Test
+    void aLockedFormCarriesTheRecordLockAsAFrameworkOwnedHiddenField(@TempDir Path dir)
+            throws Exception {
+        String html = render(lockedRenderer(dir), rowContext(Map.of(
+                "id", 7, "name", "Bolt", "version", 3)));
+
+        assertThat(html).contains("name=\"_lock\"").contains("value=\"3\"");
+    }
+
+    @Test
+    void anUnlockedFormCarriesNoLockField(@TempDir Path dir) throws Exception {
+        HtmlResponseRenderer renderer = renderer(dir, """
+                version: tesseraql/v1
+                kind: view
+                recipe: form
+                action: /items/create
+                """);
+
+        assertThat(render(renderer, Map.of())).doesNotContain("name=\"_lock\"");
+    }
+
+    @Test
+    void aRowMissingTheLockColumnRefusesTheRender(@TempDir Path dir) throws Exception {
+        // The whole point of decision 3: a hidden field guarded on the value would vanish here
+        // and leave the save silently unlocked.
+        HtmlResponseRenderer renderer = lockedRenderer(dir);
+        Map<String, Object> context = rowContext(Map.of("id", 7, "name", "Bolt"));
+
+        assertThatThrownBy(() -> render(renderer, context))
+                .hasMessageContaining("TQL-VIEW-3330")
+                .hasMessageContaining("'version'")
+                .hasMessageContaining("is not in the rendered row");
+    }
+
+    @Test
+    void aNullLockValueRefusesTheRenderToo(@TempDir Path dir) throws Exception {
+        // An equality predicate on null matches no row, so the form would be unsaveable rather
+        // than unlocked — worse than either.
+        Map<String, Object> row = new java.util.HashMap<>();
+        row.put("id", 7);
+        row.put("name", "Bolt");
+        row.put("version", null);
+        HtmlResponseRenderer renderer = lockedRenderer(dir);
+        Map<String, Object> context = rowContext(row);
+
+        assertThatThrownBy(() -> render(renderer, context))
+                .hasMessageContaining("TQL-VIEW-3330")
+                .hasMessageContaining("is null");
+    }
+
+    @Test
+    void aFoldedResultSetLabelStillResolvesTheLock(@TempDir Path dir) throws Exception {
+        // Some dialects fold labels to upper case; the lookup field resolves its columns the
+        // same way.
+        String html = render(lockedRenderer(dir), rowContext(Map.of(
+                "ID", 7, "NAME", "Bolt", "VERSION", 3)));
+
+        assertThat(html).contains("name=\"_lock\"").contains("value=\"3\"");
+    }
+
+    @Test
+    void aCreateFormOnALockedRouteRendersNoLockAndDoesNotRefuse(@TempDir Path dir)
+            throws Exception {
+        // No record, so no lock to send. The submit answers TQL-FIELD-2011, which is the loud
+        // failure decision 3 asks for rather than a silent one.
+        assertThat(render(lockedRenderer(dir), Map.of())).doesNotContain("name=\"_lock\"");
+    }
+
+    private static HtmlResponseRenderer lockedRenderer(Path dir) throws Exception {
+        return renderer(dir, """
+                version: tesseraql/v1
+                kind: view
+                recipe: form
+                action: /items/update
+                """);
+    }
+
+    private static Map<String, Object> rowContext(Map<String, Object> row) {
+        return Map.of("main", Map.of("rows", List.of(row)));
     }
 
     @Test
