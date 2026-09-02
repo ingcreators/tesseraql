@@ -120,7 +120,9 @@ public final class FileImportProcessor implements Step {
     /**
      * A rejection as the wire sees it. {@code field} and {@code value} ride only when the parse
      * knew them — a failing per-row statement does not — so a caller can tell a value the file
-     * got wrong from a write the database refused.
+     * got wrong from a write the database refused. {@code detail} is the driver's own text on
+     * that second kind: this is the transfer's operational face, not the author's page, and it
+     * is the one place the diagnosis the report withholds stays readable.
      */
     static java.util.List<Map<String, Object>> errorRows(
             java.util.List<FileTransferService.RowError> errors) {
@@ -134,6 +136,9 @@ public final class FileImportProcessor implements Step {
                 row.put("value", error.value());
             }
             row.put("message", String.valueOf(error.message()));
+            if (error.detail() != null) {
+                row.put("detail", error.detail());
+            }
             return row;
         }).toList();
     }

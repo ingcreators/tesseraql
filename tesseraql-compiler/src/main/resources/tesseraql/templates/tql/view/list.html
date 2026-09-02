@@ -78,24 +78,12 @@
     <input type="hidden" name="keys" th:each="k : ${v.snapshotKeys}" th:value="${k}">
   </th:block>
   <!-- The bulk report (docs/bulk-report.md): the outcome of the action this page just took,
-       handed back through the redirect. Bounded by construction — each reason group caps its
-       entries and the row marks in the grid carry the rest; the region's own scroll is the
-       backstop, never the design. -->
-  <div class="tql-bulk-report" role="status" th:if="${v.bulkReport != null}"
-       th:id="|${v.id}-bulk-report|">
-    <div class="hc-alert" th:attr="data-variant=${v.bulkReport['variant']}">
-      <p class="hc-alert__title" th:text="${v.bulkReport['summary']}">17 of 20 succeeded; 3 failed.</p>
-      <th:block th:each="g : ${v.bulkReport['groups']}">
-        <p class="hc-alert__body" th:id="${g['id']}" th:text="${g['heading']}">Reason (3)</p>
-        <ul class="hc-alert__errors">
-          <li class="hc-alert__error" th:each="r : ${g['rows']}">
-            <a th:href="${r['href']}" th:text="${r['label']}">Row 12 — PR-1003</a>
-          </li>
-          <li class="hc-alert__error" th:if="${g['more'] != null}" th:text="${g['more']}">…and 2 more</li>
-        </ul>
-      </th:block>
-    </div>
-  </div>
+       handed back through the redirect. The markup is the shared report pattern, filled here
+       by the bulk feeder and by a reviewed import elsewhere (docs/csv-import.md decision 4);
+       the row marks in the grid carry what the bounded groups left out. -->
+  <th:block th:if="${v.report != null}">
+    <th:block th:insert="~{tql/view/report :: report(${v.report})}"/>
+  </th:block>
   <!-- The selection bar: hidden until rows are checked (installDatagridActions, auto-init);
        the count child carries the translated selected-count. -->
   <div class="hc-cluster" th:if="${v.actions != null}" hidden

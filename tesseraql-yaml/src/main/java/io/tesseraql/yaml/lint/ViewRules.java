@@ -404,6 +404,18 @@ final class ViewRules implements LintRule {
     }
 
     /**
+     * The signature each shipped pattern declares, for the overrides whose name does not say it.
+     * A view pattern is {@code view(v)} and a widget is {@code field(f)}, but the patterns a
+     * view <em>composes</em> — the shared datagrid, the report, the lookup dialog — each carry
+     * their own, and holding an override of one of those to {@code view(v)} reported a break
+     * that was not there.
+     */
+    private static final java.util.Map<String, String> PATTERN_SIGNATURES = java.util.Map.of(
+            "table", "table(tableId, columns, rows)",
+            "report", "report(r)",
+            "lookup-dialog", "dialog(d)");
+
+    /**
      * An L2 pattern override must carry the pattern's fragment signature so it stays compatible
      * with fragment-level composition (docs/declarative-views.md; warning, not error — the whole
      * file still renders today).
@@ -417,9 +429,9 @@ final class ViewRules implements LintRule {
             for (Path file : files.filter(f -> f.getFileName().toString().endsWith(".html"))
                     .sorted().toList()) {
                 String name = file.getFileName().toString();
-                String expected = name.startsWith("field")
-                        ? "th:fragment=\"field(f)\""
-                        : "th:fragment=\"view(v)\"";
+                String expected = "th:fragment=\"" + PATTERN_SIGNATURES.getOrDefault(
+                        name.substring(0, name.length() - ".html".length()),
+                        name.startsWith("field") ? "field(f)" : "view(v)") + "\"";
                 String content = java.nio.file.Files.readString(file);
                 if (!content.contains(expected)) {
                     findings.add(new LintFinding(INVALID_VIEW_PATTERN_OVERRIDE, WARNING,

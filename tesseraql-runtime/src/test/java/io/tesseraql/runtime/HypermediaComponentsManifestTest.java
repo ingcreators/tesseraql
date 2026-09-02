@@ -55,6 +55,7 @@ class HypermediaComponentsManifestTest {
             "chat-messages", "streaming-response", // the copilot panel (docs/copilot.md)
             "sse-updates", // the live inbox badge (docs/inbox.md)
             "datagrid-bulk-actions", // IAM Admin bulk disable (users list)
+            "datagrid-bulk-errors", // the shared outcome report (tql/view/report.html)
             "network-retry", // the shell's host follows this client contract
             "reference-lookup", // the lookup: field (docs/reference-lookup.md)
             "remote-dialog", // Studio drawers + the lookup search dialog

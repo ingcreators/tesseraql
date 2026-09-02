@@ -582,6 +582,13 @@ public final class JdbcFileTransferService implements FileTransferService {
      * Records one rejected row, bounded. The cap is on what is <em>reported</em>: the caller
      * keeps the complete rejection index separately, because the two answer different questions
      * — what to show the author, and what the commit is allowed to write.
+     *
+     * <p>The two passes produce different rejections and say so differently. A value the
+     * declared type or the row contract refused knows which column and which text, and its
+     * message is already the framework's. A failing per-row statement knows neither column nor
+     * text, and its message used to be the driver's — SQL and, on several dialects, the
+     * conflicting row's values. It becomes the sentence for the failure class, with the driver
+     * text kept beside it for the operator (docs/csv-import.md decision 4).
      */
     private static void record(List<RowError> errors, long rowNumber, Exception ex) {
         if (errors.size() > MAX_RECORDED_ERRORS) {
@@ -591,11 +598,14 @@ public final class JdbcFileTransferService implements FileTransferService {
             errors.add(RowError.of(rowNumber, "... further errors omitted"));
             return;
         }
-        // A value the declared type refused knows which column and which text; a failing
-        // statement knows neither, and says so with nulls rather than with a guess.
-        errors.add(ex instanceof io.tesseraql.core.files.ColumnValueException bad
-                ? new RowError(rowNumber, bad.column(), bad.value(), bad.getMessage())
-                : RowError.of(rowNumber, ex.getMessage()));
+        if (ex instanceof io.tesseraql.core.files.ColumnValueException bad) {
+            errors.add(RowError.ofColumn(rowNumber, bad.column(), bad.value(),
+                    bad.getMessage()));
+            return;
+        }
+        errors.add(new RowError(rowNumber, null, null,
+                io.tesseraql.core.files.RowFailures.message(ex),
+                io.tesseraql.core.files.RowFailures.detail(ex)));
     }
 
     // The reviewed upload (docs/csv-import.md)

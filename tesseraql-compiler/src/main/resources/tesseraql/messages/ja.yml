@@ -69,8 +69,10 @@ tql:
     summary: "{requested}件中 {succeeded}件成功、{failed}件失敗。"
     allSucceeded: "{requested}件すべて成功しました。"
     row: "行 {number} — {key}"
-    more: "…ほか {count} 行"
     numberColumn: 行番号
+  report:
+    more: "…ほか {count} 件"
+    moreReasons: "…ほか {count} 件の理由"
   session:
     expiredTitle: セッションの有効期限が切れました
     expiredBody: 続行するには再度サインインしてください。開始した操作はサインイン後に自動的に完了します。
