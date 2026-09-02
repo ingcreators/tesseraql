@@ -202,6 +202,94 @@ class ImportPageIntegrationTest {
     }
 
     @Test
+    void anHtmxConfirmAnswersTheJobCardAndTheCardStopsWhenTheRunDoes() throws Exception {
+        String token = tokenOf(upload("name,qty\nalpha,1\nbeta,2\n"));
+
+        HttpResponse<String> accepted = confirm(token, true);
+
+        // 202 and the card — the async-job contract's own shape, and the one place the
+        // framework kicks a job off from a page.
+        assertThat(accepted.statusCode()).isEqualTo(202);
+        assertThat(accepted.body())
+                .contains("data-hc-job")
+                .contains("id=\"tql-job-")
+                .contains("hx-target=\"this\"");
+
+        String card = awaitTerminalCard(transferOf(accepted.body()));
+        assertThat(card)
+                .contains("data-state=\"done\"")
+                // The stop condition IS the absent trigger: nothing left to poll with.
+                .doesNotContain("hx-trigger=")
+                // Terminal, so no Cancel either.
+                .doesNotContain("tql.job.cancel")
+                .doesNotContain("name=\"_csrf\"")
+                // The denominator the review made knowable.
+                .contains("2 of 2 rows");
+        assertThat(itemCount()).isEqualTo(2);
+    }
+
+    @Test
+    void anUnknownTransferIsATombstoneForTheCardAndA404ForTheApi() throws Exception {
+        HttpResponse<String> card = send(HttpRequest.newBuilder(
+                uri("/items/import/does-not-exist"))
+                .header("Cookie", cookie).header("HX-Request", "true").build());
+
+        // 200, because a polling card that receives an error keeps polling an error.
+        assertThat(card.statusCode()).isEqualTo(200);
+        assertThat(card.body()).contains("data-state=\"expired\"").doesNotContain("hx-trigger=");
+
+        HttpResponse<String> api = send(HttpRequest.newBuilder(
+                uri("/items/import/does-not-exist"))
+                .header("Cookie", cookie).header("Accept", "application/json").build());
+        assertThat(api.statusCode()).isEqualTo(404);
+        assertThat(api.body()).contains("TQL-LD-2822");
+    }
+
+    @Test
+    void aPlainNavigationToTheTransferGetsTheCardInsideTheAppsChrome() throws Exception {
+        String token = tokenOf(upload("name,qty\nalpha,1\n"));
+        HttpResponse<String> redirected = confirm(token, false);
+        String target = redirected.headers().firstValue("Location").orElseThrow();
+
+        HttpResponse<String> page = send(HttpRequest.newBuilder(uri(target))
+                .header("Cookie", cookie).header("Accept", "text/html").build());
+
+        // The no-JS leg lands on a real page: the same card, with the shell around it.
+        assertThat(page.statusCode()).isEqualTo(200);
+        assertThat(page.body()).contains("<title>").contains("data-hc-job");
+    }
+
+    @Test
+    void cancellingARunningImportStopsItAndWritesNothing() throws Exception {
+        // 500 rows that each sleep 10ms: the run is long enough for the loop to reach a
+        // boundary and read the flag, which is the whole point of a cooperative stop.
+        StringBuilder file = new StringBuilder("name,qty\n");
+        for (int i = 0; i < 500; i++) {
+            file.append("slow-").append(i).append(",1\n");
+        }
+        String token = tokenOf(upload("/items/slow-import", file.toString()));
+        HttpResponse<String> accepted = confirm("/items/slow-import", token, true);
+        String transferId = transferOf(accepted.body());
+
+        HttpResponse<String> cancelled = send(HttpRequest.newBuilder(
+                uri("/items/slow-import/" + transferId + "/cancel"))
+                .header("Cookie", cookie)
+                .header("X-CSRF-Token", csrf)
+                .header("HX-Request", "true")
+                .POST(HttpRequest.BodyPublishers.ofString(""))
+                .build());
+        // The answer is the state NOW, not the state it is about to reach: the loop decides
+        // when, at its next row boundary.
+        assertThat(cancelled.statusCode()).isEqualTo(200);
+        assertThat(cancelled.body()).contains("data-hc-job");
+
+        String card = awaitTerminalCard("/items/slow-import", transferId);
+        assertThat(card).contains("data-state=\"cancelled\"").doesNotContain("hx-trigger=");
+        // An import is one transaction, so a stop before the commit takes everything with it.
+        assertThat(slowCount()).isZero();
+    }
+
+    @Test
     void theJsonContractIsUntouched() throws Exception {
         HttpResponse<String> answer = send(HttpRequest.newBuilder(uri("/items/import"))
                 .header("Cookie", cookie)
@@ -217,6 +305,52 @@ class ImportPageIntegrationTest {
         assertThat(answer.body()).contains("\"token\"").contains("\"rowCount\":1");
     }
 
+    /** The transfer id the card's own DOM id carries. */
+    private static String transferOf(String card) {
+        java.util.regex.Matcher matcher = java.util.regex.Pattern
+                .compile("id=\"tql-job-([^\"]+)\"").matcher(card);
+        assertThat(matcher.find()).as("the card's transfer id").isTrue();
+        return matcher.group(1);
+    }
+
+    private static HttpResponse<String> confirm(String token, boolean htmx) throws Exception {
+        return confirm("/items/import", token, htmx);
+    }
+
+    private static HttpResponse<String> confirm(String path, String token, boolean htmx)
+            throws Exception {
+        HttpRequest.Builder request = HttpRequest.newBuilder(
+                uri(path + "/" + token + "/commit"))
+                .header("Cookie", cookie)
+                .header("Accept", "text/html")
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .POST(HttpRequest.BodyPublishers.ofString("_csrf=" + encode(csrf)
+                        + "&token=" + encode(token)));
+        if (htmx) {
+            request.header("HX-Request", "true").header("X-CSRF-Token", csrf);
+        }
+        return send(request.build());
+    }
+
+    private static String awaitTerminalCard(String transferId) throws Exception {
+        return awaitTerminalCard("/items/import", transferId);
+    }
+
+    /** Polls the card the way the card polls itself, until it stops carrying a trigger. */
+    private static String awaitTerminalCard(String path, String transferId) throws Exception {
+        java.time.Instant deadline = java.time.Instant.now().plusSeconds(60);
+        String body = "";
+        while (java.time.Instant.now().isBefore(deadline)) {
+            body = send(HttpRequest.newBuilder(uri(path + "/" + transferId))
+                    .header("Cookie", cookie).header("HX-Request", "true").build()).body();
+            if (!body.contains("hx-trigger=")) {
+                return body;
+            }
+            Thread.sleep(200);
+        }
+        throw new AssertionError("the card never stopped polling: " + body);
+    }
+
     private static String tokenOf(HttpResponse<String> page) {
         java.util.regex.Matcher matcher = java.util.regex.Pattern
                 .compile("name=\"token\" value=\"([^\"]+)\"").matcher(page.body());
@@ -224,15 +358,19 @@ class ImportPageIntegrationTest {
         return matcher.group(1);
     }
 
-    /** A browser's multipart upload of {@code content} as the page's file field. */
     private static HttpResponse<String> upload(String content) throws Exception {
+        return upload("/items/import", content);
+    }
+
+    /** A browser's multipart upload of {@code content} as the page's file field. */
+    private static HttpResponse<String> upload(String path, String content) throws Exception {
         String body = "--" + BOUNDARY + "\r\n"
                 + "Content-Disposition: form-data; name=\"_csrf\"\r\n\r\n" + csrf + "\r\n"
                 + "--" + BOUNDARY + "\r\n"
                 + "Content-Disposition: form-data; name=\"file\"; filename=\"items.csv\"\r\n"
                 + "Content-Type: text/csv\r\n\r\n" + content + "\r\n"
                 + "--" + BOUNDARY + "--\r\n";
-        return send(HttpRequest.newBuilder(uri("/items/import"))
+        return send(HttpRequest.newBuilder(uri(path))
                 .header("Cookie", cookie)
                 .header("X-CSRF-Token", csrf)
                 .header("Accept", "text/html")
@@ -256,6 +394,16 @@ class ImportPageIntegrationTest {
     private static Connection connect() throws Exception {
         return DriverManager.getConnection(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
                 POSTGRES.getPassword());
+    }
+
+    private static long slowCount() throws Exception {
+        try (Connection connection = connect();
+                Statement statement = connection.createStatement();
+                ResultSet rows = statement.executeQuery(
+                        "select count(*) from items where name like 'slow-%'")) {
+            rows.next();
+            return rows.getLong(1);
+        }
     }
 
     private static long itemCount() throws Exception {
@@ -335,6 +483,10 @@ class ImportPageIntegrationTest {
                     - { name: qty, type: number }
                   onError: skip
                   review: required
+                # The completion signal (docs/csv-import.md decision 6): announced when the
+                # import's transaction commits, not when the confirm's response goes out.
+                emit:
+                  - items.changed
                 response:
                   html:
                     view: items-import
@@ -347,6 +499,56 @@ class ImportPageIntegrationTest {
                 insert into items (name, qty)
                 values ( /* name */ 'sample', cast( /* qty */ '1' as integer) )
                 on conflict (name) do update set qty = excluded.qty
+                ;
+                """);
+
+        // The same import over a deliberately slow row statement, so a cancel has a run to
+        // land in: the stop is cooperative and takes effect at a row boundary.
+        Path slow = Files.createDirectories(home.resolve("web/items/slow-import"));
+        Files.writeString(slow.resolve("slow-import.view.yml"), """
+                version: tesseraql/v1
+                kind: view
+                recipe: import
+                title: Slow import
+                action: /items/slow-import
+                """);
+        Files.writeString(slow.resolve("get.yml"), """
+                version: tesseraql/v1
+                id: items.slowImportPage
+                kind: route
+                recipe: page
+                security:
+                  auth: browser
+                  policy: items.write
+                response:
+                  html:
+                    view: slow-import
+                """);
+        Files.writeString(slow.resolve("post.yml"), """
+                version: tesseraql/v1
+                id: items.slowImport
+                kind: route
+                recipe: file-import
+                security:
+                  auth: browser
+                  policy: items.write
+                import:
+                  format: csv
+                  columns: [name, qty]
+                  onError: skip
+                  review: required
+                response:
+                  html:
+                    view: slow-import
+                steps:
+                  - id: row
+                    sql:
+                      file: slow-item.sql
+                """);
+        Files.writeString(slow.resolve("slow-item.sql"), """
+                insert into items (name, qty)
+                values ( /* name */ 'sample',
+                         (select 1 from (select pg_sleep(0.01)) as paused) )
                 ;
                 """);
         return home;

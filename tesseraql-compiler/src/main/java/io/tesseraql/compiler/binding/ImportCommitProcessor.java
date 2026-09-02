@@ -9,6 +9,8 @@ import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.pipeline.Step;
 import io.tesseraql.pipeline.TesseraqlProperties;
 import java.nio.file.Path;
+import java.util.Locale;
+import java.util.Map;
 
 /**
  * Spends a reviewed import batch (docs/csv-import.md decision 5): the confirm leg of an
@@ -37,16 +39,20 @@ public final class ImportCommitProcessor implements Step {
     private final String onError;
     private final Path appHome;
     private final String defaultLocaleTag;
+    /** The route's {@code emit:} topics, announced when the import's transaction commits. */
+    private final java.util.List<String> emit;
 
     /** The shape before the confirm leg had a page to answer. */
     public ImportCommitProcessor(String routeId, String urlPath, String appName, String format,
             FileReadSpec readSpec, Path rowSqlFile, String onError) {
-        this(routeId, urlPath, appName, format, readSpec, rowSqlFile, onError, null, "en");
+        this(routeId, urlPath, appName, format, readSpec, rowSqlFile, onError, null, "en",
+                java.util.List.of());
     }
 
     public ImportCommitProcessor(String routeId, String urlPath, String appName, String format,
             FileReadSpec readSpec, Path rowSqlFile, String onError, Path appHome,
-            String defaultLocaleTag) {
+            String defaultLocaleTag, java.util.List<String> emit) {
+        this.emit = java.util.List.copyOf(emit);
         this.appHome = appHome;
         this.defaultLocaleTag = defaultLocaleTag;
         this.routeId = routeId;
@@ -87,7 +93,8 @@ public final class ImportCommitProcessor implements Step {
                     // catalog whose answer is thrown away — and the once-per-import promise
                     // would be false on the very leg that repeats the parse.
                     new FileTransferService.ImportRequest(routeId, appName, format, readSpec,
-                            rowSqlFile, onError, null));
+                            rowSqlFile, onError, null)
+                            .announcing(emit, ImportTopics.tenant(exchange)));
         } catch (TqlException refusal) {
             // A refusal that declared human-safe text is one the confirming caller is meant to
             // act on — that is what `details.message` means (docs/csv-import.md decision 5) —
@@ -101,7 +108,7 @@ public final class ImportCommitProcessor implements Step {
             return;
         }
         if (Negotiation.prefersHtml(exchange)) {
-            respondBrowser(exchange, transferId);
+            respondBrowser(exchange, transferId, transfers);
             return;
         }
         FileImportProcessor.respondAccepted(exchange, urlPath, transferId, false);
@@ -143,28 +150,42 @@ public final class ImportCommitProcessor implements Step {
     }
 
     /**
-     * The browser's answer: post/redirect/get to the transfer's own status resource
-     * (docs/csv-import.md decision 6). A plain form post takes the 303; an htmx post takes the
-     * house shape for the same thing, because htmx surfaces a redirect status to the XHR rather
-     * than to the tab, and swapping the target of a redirect into a page region would put
-     * whatever that resource answers inside the import page.
+     * The browser's answer (docs/csv-import.md decision 6). An htmx caller gets <b>202</b> and
+     * the running job card, which then polls itself; a plain form post gets post/redirect/get to
+     * the transfer's own URL, where the same card renders inside the app's chrome.
      *
-     * <p>This is the leg the job card replaces for an htmx caller (slice 5). Until then both
-     * callers land on the same real URL, which is the shape that keeps working afterwards: the
-     * no-JS redirect is unchanged by the card arriving.
+     * <p>Two shapes for one outcome, and deliberately so: htmx surfaces a redirect status to the
+     * XHR rather than to the tab, so a 303 there would swap the redirect's target into a page
+     * region. The card is what replaces the redirect for that caller — and the no-JS leg is
+     * untouched by its arrival, which is the property that made shipping the redirect first
+     * safe.
      */
-    private void respondBrowser(Exchange exchange, String transferId) {
-        String target = io.tesseraql.pipeline.BasePath.url(exchange,
-                urlPath + "/" + transferId);
-        exchange.response().header(io.tesseraql.pipeline.Headers.CONTENT_TYPE,
-                "text/plain; charset=utf-8");
-        exchange.setBody("");
-        if ("true".equals(exchange.request().header("HX-Request"))) {
-            exchange.response().status(200);
-            exchange.response().header("HX-Redirect", target);
+    private void respondBrowser(Exchange exchange, String transferId,
+            FileTransferService transfers) {
+        String target = io.tesseraql.pipeline.BasePath.url(exchange, urlPath + "/" + transferId);
+        if (!"true".equals(exchange.request().header("HX-Request"))) {
+            exchange.response().header(io.tesseraql.pipeline.Headers.CONTENT_TYPE,
+                    "text/plain; charset=utf-8");
+            exchange.setBody("");
+            exchange.response().status(303);
+            exchange.response().header("Location", target);
             return;
         }
-        exchange.response().status(303);
-        exchange.response().header("Location", target);
+        FileTransferService.TransferStatus status = transfers.status(transferId).orElse(null);
+        Locale locale = Locale.forLanguageTag(exchange.getProperty(TesseraqlProperties.LOCALE,
+                defaultLocaleTag, String.class));
+        io.tesseraql.yaml.i18n.MessageCatalog catalog = ImportPages.catalog(appHome);
+        Map<String, Object> card = status == null
+                ? JobCards.tombstone(transferId, catalog, locale)
+                : JobCards.of(status, target, target + "/cancel",
+                        row -> transfers.locate(format, readSpec, row), catalog, locale);
+        exchange.response().header(io.tesseraql.pipeline.Headers.CONTENT_TYPE,
+                "text/html; charset=utf-8");
+        exchange.setBody(ImportPages.render(exchange, appHome, card, locale,
+                "tql/view/job-card"));
+        // 202, not 200: the import was accepted and is running, and the card is how the caller
+        // watches it. This is the one place the framework answers the async-job contract's own
+        // status code, because it is the one place it kicks a job off from a page.
+        exchange.response().status(202);
     }
 }

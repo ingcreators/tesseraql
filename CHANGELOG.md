@@ -8,6 +8,47 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **`tql/view/job-card.html` — an asynchronous transfer watches itself** (docs/csv-import.md
+  slice 5). Confirming a reviewed import from a page answers `202` and a job card: it carries its
+  own `hx-get` and `hx-trigger`, targets itself, swaps `outerHTML`, and **a terminal card carries
+  no trigger** — which is the entire stop condition, rather than a flag the client has to
+  interpret. The cadence is the server's, tight while a small import is likely still running and
+  backed off once it plainly is not, because a client-side backoff would be a second policy for
+  something only this side knows.
+
+  Five states: running, done, failed, cancelled, and expired. The last is why the card exists
+  rather than the JSON — an unknown id is a `404` envelope on the API, which is right there and
+  wrong for a poller, because a card that receives an error keeps polling an error. Staleness is
+  a state, so it answers a `200` tombstone that stops. `GET {path}/{transferId}` is the one
+  endpoint both file recipes mount, so the done state is direction-aware from the start: an
+  import's shows what the database rejected, an export's hands over the file.
+
+  The card lands beside the report, never inside it. The csv-import contract wants the report
+  slot `aria-live`, the async-job contract forbids `aria-live` on a card that re-renders every
+  poll, and both hold only because the commit retargets — which is the one place the two
+  contracts pull against each other, resolved in the markup rather than by picking a winner.
+
+- **`POST {path}/{transferId}/cancel` — a running import can be stopped.** The job repository has
+  held a cooperative stop flag all along and the import's row loop never read it, so a Cancel
+  button would have answered `200` and changed nothing. The loop reads it between rows now. What
+  a stopped import leaves is nothing: an import is one transaction with a savepoint per row, so a
+  stop before the commit takes every applied row with it — and the card says so rather than
+  leaving the author to guess.
+
+- **A running import publishes how far it has got.** The row count and the rejected rows were
+  written by a single update after the loop, so a poller saw `RUNNING` with zero rows for the
+  whole import and then the final number. The counter is flushed on a clock now (not per row,
+  which would cost more than the import). A reviewed import also knows its denominator, because
+  the review already parsed the file: the card reads "12 of 30 rows", and a one-shot import —
+  which discovers its total by reaching the end — counts up without one rather than showing a
+  guess.
+
+- **`emit:` on a file-import route announces the import, not the request.** It used to compile
+  and do nothing. It fires when the import's transaction commits on the background thread, which
+  is the only moment the rows exist: emitting on the request that confirmed it would tell every
+  open page to refetch rows that have not been written yet. A rolled-back import announces
+  nothing.
+
 - **`recipe: import` — a reviewed upload has a face** (docs/csv-import.md slice 4). A
   `file-import` route declaring `import.review: required` can now answer a page instead of only
   JSON, and the page is one short view document:
@@ -225,6 +266,13 @@ All notable changes to TesseraQL are documented here. The format follows
   managed-mode dogfood.
 
 ### Changed
+
+- **`FileTransferService.TransferStatus` carries the row total, and `ImportRequest` carries the
+  topics.** **Breaking** on both records: a status gained `expectedRows` (null when the run
+  discovers its own total), and an import request gained `emit` and `tenantId`, because the run
+  outlives the request that started it and has to carry what it will need to announce itself.
+  The pre-existing constructors still build the older shapes. `tql_file_transfer` gains an
+  `expected_rows` column (operations **V13**, all three vendor variants).
 
 - **`response.html:` on a file-import route is honoured, and refused where it cannot mean
   anything.** It used to lint clean, compile, and be dropped in silence — the silent-tolerance

@@ -554,6 +554,7 @@ the **public rendering contract**:
 | `tql/view/table.html` | `table(tableId, columns, rows)` | the shared datagrid a list renders and a detail's children reuse: sortable headers, row anchors, selection and row-number columns |
 | `tql/view/report.html` | `report(r)` | the outcome report a bulk action or a reviewed upload answers with: a summary, file-level failures, and the rest grouped by reason — every group bounded, and the group list bounded too |
 | `tql/view/import.html` | `view(v)` | the reviewed upload: the kit's file-upload form, the report the parse answered, and the confirm form that commits exactly what was reviewed |
+| `tql/view/job-card.html` | `card(c)` | one asynchronous transfer, self-polling: it carries its own `hx-get` and `hx-trigger`, targets itself, and a terminal card carries no trigger at all |
 
 `v` carries `{id, kind, title, action, csrf, fields[]|columns[], data, errorsTarget}`;
 a field `f` carries `{name, label, widget, required, maxLength, min, max, options,

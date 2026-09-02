@@ -92,6 +92,21 @@ tql:
     fileError: "ファイルを読み取れませんでした: {reason}"
     expires: "この検査結果は {at} に失効します。"
     stale: 確認は再試行できません。ファイルをもう一度アップロードしてください。
+    imported: "{rows} 行を取り込みました（{rejected} 行は取り込めませんでした）。"
+  job:
+    title: ジョブ
+    running: 実行中
+    done: 完了
+    failed: 失敗
+    cancelled: 中止
+    expired: 期限切れ
+    cancel: 中止する
+    download: ダウンロード
+    progress: "{rows} 行"
+    progressOf: "{total} 行中 {rows} 行"
+    failedBody: "何も書き込まれていません。{rejected} 行が拒否されました。"
+    cancelledBody: 完了前に中止したため、何も書き込まれていません。
+    expiredBody: このジョブは参照できなくなりました。
   session:
     expiredTitle: セッションの有効期限が切れました
     expiredBody: 続行するには再度サインインしてください。開始した操作はサインイン後に自動的に完了します。

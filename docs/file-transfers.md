@@ -25,6 +25,15 @@ An uploaded import rides the runtime's request-body bound,
 `tesseraql.http.maxBodyBytes` (default 10 MB; see deployment.md) — a feed larger than that
 needs the bound raised, and the refusal is a 413 naming the key rather than a mystery.
 
+`GET {path}/{transferId}` reports a transfer's state, and answers two ways: JSON for an API
+caller, and a self-polling job card for a browser. The card carries its own polling attributes,
+writes the cadence the server chose, and a terminal card carries no trigger at all — which is
+how the polling stops. An id this runtime does not know is a `404` for the API and a `200`
+tombstone for the card, because a poller that receives an error keeps polling an error.
+`POST {path}/{transferId}/cancel` asks a running import to stop; the request is a flag its row
+loop reads between rows, so the stop lands at a row boundary and leaves nothing written — an
+import is one transaction, and a stop before the commit takes every applied row with it.
+
 Every transfer is also tracked as a batch execution, so imports and exports show up app-scoped
 in the [operations console](ops-console.md). Imports can alternatively be driven by polling a local or SFTP/FTPS
 directory instead of an HTTP upload — see [connectors.md](connectors.md).

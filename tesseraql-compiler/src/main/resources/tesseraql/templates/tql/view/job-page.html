@@ -1,0 +1,12 @@
+<!DOCTYPE html>
+<!-- The job card as a page (docs/csv-import.md decision 6): where a confirm without JavaScript
+     lands. Post/redirect/get needs a real URL to redirect to, and this is it — the same card,
+     inside the app's own chrome, refreshable by hand.
+
+     An htmx poll gets the bare card instead; this wrapper exists only for the address bar. -->
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: shell(#{tql.job.title}, ~{}, ~{}, ~{:: #page-content})}">
+<div id="page-content" class="hc-stack">
+  <th:block th:insert="~{tql/view/job-card :: card(${c})}"/>
+</div>
+</html>

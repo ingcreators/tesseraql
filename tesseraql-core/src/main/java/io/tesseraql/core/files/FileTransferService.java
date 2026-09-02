@@ -31,7 +31,8 @@ public interface FileTransferService {
      *                 against — so a reviewed import's two passes cannot disagree
      */
     record ImportRequest(String routeId, String appName, String format, FileReadSpec readSpec,
-            Path rowSqlFile, String onError, RowContract contract) {
+            Path rowSqlFile, String onError, RowContract contract, List<String> emit,
+            String tenantId) {
 
         /** The shape before an import could hold its rows to a contract. */
         public ImportRequest(String routeId, String appName, String format, FileReadSpec readSpec,
@@ -39,8 +40,22 @@ public interface FileTransferService {
             this(routeId, appName, format, readSpec, rowSqlFile, onError, RowContract.none());
         }
 
+        /** The shape before an import announced its own completion. */
+        public ImportRequest(String routeId, String appName, String format, FileReadSpec readSpec,
+                Path rowSqlFile, String onError, RowContract contract) {
+            this(routeId, appName, format, readSpec, rowSqlFile, onError, contract, List.of(),
+                    null);
+        }
+
         public ImportRequest {
             contract = contract == null ? RowContract.none() : contract;
+            emit = emit == null ? List.of() : List.copyOf(emit);
+        }
+
+        /** This request with the route's live-view topics and the caller's tenant attached. */
+        public ImportRequest announcing(List<String> topics, String tenant) {
+            return new ImportRequest(routeId, appName, format, readSpec, rowSqlFile, onError,
+                    contract, topics, tenant);
         }
     }
 
@@ -133,10 +148,26 @@ public interface FileTransferService {
         }
     }
 
-    /** The transfer state: the execution status plus transfer-specific detail. */
+    /**
+     * The transfer state: the execution status plus transfer-specific detail.
+     *
+     * @param rows         rows written so far — published while the run is still going, not only
+     *                     at the end (docs/csv-import.md decision 6)
+     * @param expectedRows how many rows the run will attempt, when that was knowable before it
+     *                     started; null otherwise, and a progress surface then counts up with no
+     *                     total rather than showing a guessed one
+     */
     record TransferStatus(String transferId, String routeId, String appName, String direction,
-            String status, long rows, List<RowError> errors, String filename,
+            String status, long rows, Long expectedRows, List<RowError> errors, String filename,
             boolean downloaded) {
+
+        /** The shape before a running transfer could say how far through it was. */
+        public TransferStatus(String transferId, String routeId, String appName, String direction,
+                String status, long rows, List<RowError> errors, String filename,
+                boolean downloaded) {
+            this(transferId, routeId, appName, direction, status, rows, null, errors, filename,
+                    downloaded);
+        }
     }
 
     /** A ready file: stream plus response metadata. */
@@ -248,6 +279,17 @@ public interface FileTransferService {
 
     /** The transfer state, or empty when the id is unknown. */
     Optional<TransferStatus> status(String transferId);
+
+    /**
+     * Asks a running transfer to stop (docs/csv-import.md decision 6). Cooperative: the request
+     * is a flag the import's row loop reads between rows, so a stop takes effect at a row
+     * boundary and never mid-statement. Returns false when there was nothing running to stop —
+     * a finished run, or an id nobody knows.
+     *
+     * <p>What a stopped import leaves is nothing: an import is one transaction with a savepoint
+     * per row, so a stop before the commit takes every applied row with it.
+     */
+    boolean cancel(String transferId);
 
     /** The most recent transfers, newest first (for the operations console). */
     List<TransferSummary> recent(int limit);

@@ -899,7 +899,12 @@ public final class TesseraqlRuntime implements AutoCloseable {
             fileTransfers
                     .sqlTimeoutSeconds(io.tesseraql.yaml.config.SqlDefaults
                             .timeoutSeconds(manifest.config()))
-                    .tracer(effectiveTracer);
+                    .tracer(effectiveTracer)
+                    // Looked up lazily: the topic bus is bound further down this boot, and only
+                    // when the application declares topics, so a finished import reads it at
+                    // the moment it has something to announce.
+                    .topicBus(() -> context.lookup(TesseraqlProperties.TOPIC_BUS_BEAN,
+                            io.tesseraql.core.events.TopicBus.class));
             // How long a reviewed upload waits for its confirm (docs/csv-import.md decision 2).
             long reviewTtlMillis = io.tesseraql.core.util.Durations.toMillis(manifest.config()
                     .getString("tesseraql.transfers.reviewTtl").orElse("30m"));
