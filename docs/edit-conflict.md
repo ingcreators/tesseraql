@@ -121,6 +121,24 @@ route's whole rendered statement set. The `sources:` defect fix lives where sour
 compiled, in `RouteCompiler`, and not under a code whose own text says "the route's steps
 declaration is invalid".
 
+**The directive is rendered, not verified, and the reason is the parser's shape.**
+`Sql2WayParser` produces a flat node list, not a grammar: `SqlNode.Scope` carries a name,
+an alias, a boolean and a **source line**, and nothing about which clause it sits in. So
+"declared, but not in the WHERE" is not checkable without a second SQL parser — one that
+would have to handle every vendor's UPDATE syntax with 2-way directives embedded in it, and
+that would cross the line [contract-sql-execution.md](contract-sql-execution.md) drew when
+it made the authored statement the only statement. The framework has never needed clause
+position for a directive anyway: `/*%scope*/ … as boolean` renders into a SELECT list, so
+the same directive is already legal in two clauses.
+
+What the compiler does check is exact, and it is more than it sounds. The directive must be
+present, exactly once across the route's steps, and — inherited free from `parseScope` — it
+must be followed by a parenthesized dummy predicate, or the parse fails. Position falls to
+a lint warning beside decision 10's, in the one layer that reads the SQL text. The residual
+risk is small by construction: `/*%lock*/(1=1)` in a SET list is a syntax error at the
+first execution, so the placements the compiler lets through are the ones the database
+refuses anyway.
+
 The `input:`-field alternative was rejected on ownership, not on typo safety: both homes
 are open-mapped and `@JsonIgnoreProperties(ignoreUnknown = true)`, and `UnknownKeyRules`
 reports a mistyped key under either as `TQL-YAML-1043`. The real difference is what an
@@ -270,6 +288,28 @@ request locale, and adds a **sibling** `details.lock` carrying the column, the f
 and the waiver's field name. A sibling rather than more entries inside `conflict`, because
 the renderer passes the whole conflict map to `MessageCatalog.interpolate` as the hint's
 parameters: a key named like a placeholder would silently rewrite the sentence.
+
+**One sentence channel per refusal, and the renderer already chose it.** `conflict.hint`
+and `details.message` are mutually exclusive in the fragment renderer, with `conflict`
+winning; filling `conflict` therefore *spends* the sentence channel. That is a rule to
+state, not a defect to work around, so the next refusal to reach this renderer does not
+learn it the way csv-import did. **A refusal that fills `conflict` says its why through
+`conflict.hint`; one that does not says it through `details.message`.** The stale write
+fills `conflict`, so its sentence is the hint, and a workflow guard's declared refusal text
+keeps `details.message`.
+
+The other 409s stay where they are, and each for its own reason rather than one. **`4093`
+is retryable, not stale** — a serialization failure is cured by sending the request again,
+so a dialog offering overwrite and reload would be the wrong affordance behind the right
+status. **`4090` and `4091` are constraint violations**, whose right face is a field error;
+they already have a declaration for a human sentence in `errors.constraints:`, and a
+default that speaks the vocabulary of constraints rather than of locks. Adding hints to
+those three is deliberately out of scope, recorded below. **`TQL-WORKFLOW-3201` is a
+defect, not a decision**: its hint key exists in neither message catalog, so today an
+illegal transition renders the literal string `tql.workflow.illegal-transition` to a user.
+That is a missing catalog entry and it is fixed in slice 3, not absorbed into this
+vocabulary — state-as-lock stays the transition's lock, exactly as
+[workflow-surface.md](workflow-surface.md) decision 2 recorded.
 
 The constraint that makes all of this work is not aesthetic, and it binds any design of
 this surface. **The conflict answer must not be produced by a step that lets the chain
@@ -624,6 +664,11 @@ one authored, and the pairing lints keep pointing the authored one at the declar
 
 ## Deliberately not in this design
 
+- **Hints for `TQL-SQL-4090`, `4091` and `4093`.** They render the bare status phrase to a
+  browser today, which is worth fixing — but not here, and not in one motion. The
+  constraint pair already has `errors.constraints:` for a declared sentence, and the
+  serialization failure needs the vocabulary of retrying rather than of staleness.
+- **A second SQL parser** (open question 1). The directive is rendered, not verified.
 - **Inline cell editing, and with it `datagrid-edit-conflict` and `datagrid-edit-errors`.**
   [list-surface.md](list-surface.md) refused them with "forms remain the edit surface", and
   this adopts exactly the half that refusal left alone. The two recipe names are one word
@@ -653,17 +698,17 @@ one authored, and the pairing lints keep pointing the authored one at the declar
 
 ## Open questions
 
-1. How exact can the build-time refusal be? `TransactionalCommandProcessor.validate`
-   receives the YAML binding, and the parsed nodes carry no clause position, so "declared,
-   but not in the WHERE" is not checkable without a real parse. Decide whether the
-   directive is *verified* or merely *rendered*, and say which in the text —
-   *gates slice 1*.
-2. Does the conflict vocabulary absorb `TQL-SQL-4090`, `4091`, `4093` and
-   `TQL-WORKFLOW-3201`, and which channel carries the distinguishing sentence? Today they
-   all render the word "Conflict", three carry no hint at all, and `conflict.hint`
-   suppresses `details.message` in the fragment renderer, so the sentence channel is
-   already spent for anything that fills `conflict` — *gates slice 1*, because it decides
-   the payload before any renderer reads it.
+1. ~~How exact can the build-time refusal be?~~ **Settled 2026-09-02: rendered, not
+   verified.** The compiler checks presence, uniqueness and the parenthesized dummy;
+   position falls to a lint. A second SQL parser would cross the authored-statement line,
+   and a misplaced directive is a syntax error at the first execution anyway. Written into
+   decision 1.
+2. ~~Does the conflict vocabulary absorb the other 409s?~~ **Settled 2026-09-02: no, and
+   the channel rule is now explicit.** A refusal that fills `conflict` says its why through
+   `conflict.hint`; one that does not says it through `details.message`. `4093` is
+   retryable, `4090`/`4091` are constraint violations with their own declaration, and
+   `TQL-WORKFLOW-3201`'s missing catalog entry is a defect fixed in slice 3. Written into
+   decision 5.
 3. What does an `input:` field named for the lock column mean once `lock:` exists — refused,
    or allowed as an ordinary writable column that happens to share the name? Recommended:
    refused on the locked route, because two owners of one column is the disagreement the
