@@ -25,6 +25,15 @@ final class JobRules implements LintRule {
     // A poll trigger says a file arrives; nothing says how to read it or what to write.
     private static final String POLL_JOB_WITHOUT_IMPORT = "TQL-YAML-1055";
 
+    /**
+     * TQL-YAML-1060: a job declares {@code import.review: required} (docs/csv-import.md decision
+     * 1). A review is a person looking at a report and pressing a button; a job has neither the
+     * person nor the session that would own the confirm token, so the key can only mean "this
+     * feed silently stops importing". The shared {@code import:} block is schema-legal on both
+     * document kinds, which is exactly why this has to be a lint rather than a schema rule.
+     */
+    private static final String JOB_IMPORT_CANNOT_REVIEW = "TQL-YAML-1060";
+
     private static final String POLL_HOST_NOT_ALLOWED = "TQL-SEC-4080";
 
     /**
@@ -65,6 +74,13 @@ final class JobRules implements LintRule {
             CalendarRules.lintScheduleCalendar(job, job.definition().trigger().schedule(),
                     calendars, source,
                     findings);
+        }
+        if (job.definition().fileImport() != null
+                && job.definition().fileImport().review() != null) {
+            findings.add(new LintFinding(JOB_IMPORT_CANNOT_REVIEW, ERROR, source,
+                    "Job '" + job.definition().id() + "' declares import.review:, which only a"
+                            + " route can honour: a review is a person confirming a parsed batch,"
+                            + " and a job has no one to confirm it"));
         }
         OverlapSlaRules.lintOverlapAndSla(job, source, findings);
         for (io.tesseraql.yaml.model.PipelineStep step : job.definition().pipeline()) {

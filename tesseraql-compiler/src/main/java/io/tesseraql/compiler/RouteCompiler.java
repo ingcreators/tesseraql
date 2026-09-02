@@ -43,6 +43,7 @@ public final class RouteCompiler {
     private static final TqlErrorCode UNSUPPORTED_RECIPE = new TqlErrorCode(TqlDomain.ROUTE, 3100);
     /** TQL-ROUTE-3101: a query-export route declares an after: hook, which needs file-export. */
     private static final TqlErrorCode INVALID_EXPORT = new TqlErrorCode(TqlDomain.ROUTE, 3101);
+    private static final TqlErrorCode INVALID_REVIEW = new TqlErrorCode(TqlDomain.ROUTE, 3118);
     /** TQL-ROUTE-3112: a non-main command transaction cannot carry main-anchored features. */
     private static final TqlErrorCode MAIN_ANCHORED = new TqlErrorCode(TqlDomain.ROUTE, 3112);
     /** TQL-ROUTE-3116: a prompt-text recipe declares command steps, and prompts/get is a read. */
@@ -1283,6 +1284,26 @@ public final class RouteCompiler {
         Path rowSql = routeFile.source().getParent()
                 .resolve(definition.rowStep().file()).normalize();
 
+        // `review:` accepts one word, the way `comment:` does on a transition. A misspelling
+        // that silently meant "no review" would turn a two-phase import back into a one-shot
+        // one with nothing on screen to say so.
+        if (spec.review() != null && !spec.reviewRequired()) {
+            throw new TqlException(INVALID_REVIEW, "Route '" + routeId
+                    + "' declares import.review: '" + spec.review()
+                    + "'; the only accepted value is 'required'");
+        }
+        // A parked batch is one subject's to commit, and an unauthenticated route has no
+        // subject to be. Left alone this does not fail loudly — it quietly gives every batch
+        // the same empty owner, so anyone could confirm anyone's upload while the code still
+        // looks like it is scoping. The declaration has to be refused where it is written.
+        if (spec.reviewRequired() && (definition.security() == null
+                || definition.security().auth() == null
+                || "public".equals(definition.security().auth()))) {
+            throw new TqlException(INVALID_REVIEW, "Route '" + routeId
+                    + "' declares import.review: required without authentication; a reviewed"
+                    + " batch belongs to the principal who uploaded it, so the route needs a"
+                    + " security.auth: declaration");
+        }
         String served = routeId;
         if (mountRest) {
             mount(context, routeFile.httpMethod(), routeFile.urlPath(), served);
@@ -1292,8 +1313,30 @@ public final class RouteCompiler {
         route.process(new io.tesseraql.compiler.binding.FileImportProcessor(
                 routeId, routeFile.urlPath(), appName, spec.format(),
                 spec.toReadSpec(), formatDeclaration(spec.locale(), "tesseraql.files.locale"),
-                rowSql, spec.effectiveOnError()));
+                rowSql, spec.effectiveOnError(), spec.reviewRequired()));
         mountTransferStatus(context, routeFile, routeId);
+        if (spec.reviewRequired()) {
+            mountImportCommit(context, routeFile, routeId, appName, spec, rowSql);
+        }
+    }
+
+    /**
+     * POST {path}/{batchId}/commit: the confirm leg of a reviewed import
+     * (docs/csv-import.md decision 5). It sits under the parent route's own security, like the
+     * status endpoint, and carries the full common governance because it is a write.
+     */
+    private void mountImportCommit(RuntimeContext context, RouteFile routeFile, String routeId,
+            String appName, io.tesseraql.yaml.model.ImportSpec spec, Path rowSql) {
+        String path = routeFile.urlPath() + "/{batchId}/commit";
+        String pipelineId = routeId + ".commit";
+        if (mountRest) {
+            mount(context, "POST", path, pipelineId);
+        }
+        PipelineBuilder route = pipelines.pipeline(pipelineId);
+        applyCommonGovernance(route, pipelineId, "POST", path, routeFile.definition());
+        route.process(new io.tesseraql.compiler.binding.ImportCommitProcessor(
+                routeId, routeFile.urlPath(), appName, spec.format(), spec.toReadSpec(),
+                rowSql, spec.effectiveOnError()));
     }
 
     /**
@@ -1361,12 +1404,15 @@ public final class RouteCompiler {
 
     /** GET {path}/{transferId}: the shared status endpoint, secured like its parent route. */
     private void mountTransferStatus(RuntimeContext context, RouteFile routeFile, String routeId) {
+        String path = routeFile.urlPath() + "/{transferId}";
         if (mountRest) {
-            mount(context, "GET", routeFile.urlPath() + "/{transferId}", routeId + ".status");
+            mount(context, "GET", path, routeId + ".status");
         }
         PipelineBuilder route = pipelines.pipeline(routeId + ".status");
-        applySecurity(route, routeFile.definition().security(), "GET",
-                routeFile.urlPath() + "/{transferId}");
+        // It applied security and nothing else, so a transfer's state resolved no tenant and its
+        // refusals localized in the default locale while the parent route's did not — the same
+        // gap applyAttachmentGovernance exists to have closed on the attachment routes.
+        applyCommonGovernance(route, routeId + ".status", "GET", path, routeFile.definition());
         route.process(new io.tesseraql.compiler.binding.FileTransferStatusProcessor(
                 routeFile.urlPath()));
     }

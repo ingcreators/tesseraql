@@ -60,8 +60,50 @@ public interface FileTransferService {
         }
     }
 
-    /** One rejected import row. */
-    record RowError(long row, String message) {
+    /**
+     * One rejected import row, from either pass (docs/csv-import.md decision 4): the parse names
+     * the column and the text it could not accept, the write pass has neither and leaves both
+     * null. {@code row} is the table row the reader counted, which the surface turns into the
+     * file line the author sees.
+     */
+    record RowError(long row, String field, String value, String message) {
+
+        /** A rejection with no column to blame — a failing per-row statement. */
+        public static RowError of(long row, String message) {
+            return new RowError(row, null, null, message);
+        }
+    }
+
+    /**
+     * The answer to a reviewed upload (docs/csv-import.md decisions 1 and 3): what the parse
+     * found, and whether anything can be committed.
+     *
+     * <p>{@code committable} is the whole affordance rule in one field — it is true exactly when
+     * a set exists to commit, which under {@code onError: skip} is the clean rows and under
+     * {@code rollback} is every row or none. The caller answers 200 with the token when it is
+     * true and 422 without one when it is false, so the status code and the confirm affordance
+     * can never disagree.
+     *
+     * @param batchId    the confirm token, null when there is nothing to confirm
+     * @param rows       rows the parse read
+     * @param ready      rows that would be written
+     * @param rejected   rows the parse refused (the complete count, not the reported sample)
+     * @param errors     the reported rejections, bounded; {@code rejected} is the true total
+     * @param fileError  the file could not be read at all — a header that does not map, an
+     *                   unreadable upload — in which case no row was ever examined
+     * @param expiresAt  when an uncommitted batch is swept, null when nothing was parked
+     */
+    record ImportReview(String batchId, long rows, long ready, long rejected,
+            List<RowError> errors, String fileError, java.time.Instant expiresAt) {
+
+        public ImportReview {
+            errors = errors == null ? List.of() : List.copyOf(errors);
+        }
+
+        /** Whether a set exists to commit — the confirm affordance and the status code. */
+        public boolean committable() {
+            return batchId != null;
+        }
     }
 
     /** The transfer state: the execution status plus transfer-specific detail. */
@@ -90,6 +132,41 @@ public interface FileTransferService {
      * materialize in memory.
      */
     String startImport(ImportRequest request, java.io.InputStream content);
+
+    /**
+     * Parses and validates the upload without writing anything, parking the batch for a later
+     * commit (docs/csv-import.md decision 1). Synchronous: the answer is the report, so there is
+     * nothing to poll. The spooled bytes and the <em>resolved</em> read spec are parked together,
+     * because the commit is a different request and the spec's locale is resolved per request —
+     * re-parsing under the commit's own resolution would move the rejection set.
+     *
+     * <p>Parking supersedes: the same subject's earlier unclaimed batch for the same route
+     * expires as this one is parked, so a re-upload really does replace the batch rather than
+     * leaving two live tokens.
+     *
+     * @param subject the principal parking the batch; only they may commit it
+     */
+    ImportReview reviewImport(ImportRequest request, String subject, java.io.InputStream content);
+
+    /**
+     * Claims a parked batch and starts its import, returning the transfer id
+     * (docs/csv-import.md decision 5). The claim is a conditional update taken <em>before</em>
+     * the run, so a replayed confirm loses the race rather than importing twice; a batch that is
+     * unknown, expired, claimed, or another subject's is refused.
+     *
+     * <p>The request supplies what the route declares — the per-row statement and the failure
+     * policy — while the read spec comes from the parked batch, so the commit parses exactly
+     * what the review parsed.
+     */
+    String commitImport(String batchId, String subject, ImportRequest request);
+
+    /**
+     * Expires parked batches past their review window: the spooled bytes are deleted and the row
+     * is marked expired, so a late confirm is told the batch expired rather than "unknown".
+     * Always swept, unlike produced export files — a parked batch holds business data the user
+     * never chose to store. Returns the number of batches reclaimed.
+     */
+    int expireReviewBatches(java.time.Instant cutoff);
 
     /** Starts an asynchronous export; returns the transfer id. */
     String startExport(ExportRequest request);

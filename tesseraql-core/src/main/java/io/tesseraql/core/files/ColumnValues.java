@@ -90,8 +90,8 @@ public final class ColumnValues {
                         "Unknown column type '" + column.type() + "'");
             };
         } catch (RuntimeException ex) {
-            throw new IllegalArgumentException("Column '" + column.name() + "': '" + text
-                    + "' is not a valid " + column.type()
+            throw new ColumnValueException(column.name(), text, "Column '" + column.name()
+                    + "': '" + text + "' is not a valid " + column.type()
                     + (column.format() == null ? "" : " (" + column.format() + ")"));
         }
     }

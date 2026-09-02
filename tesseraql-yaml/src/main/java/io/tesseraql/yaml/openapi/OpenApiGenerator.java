@@ -152,8 +152,20 @@ public final class OpenApiGenerator {
     private Map<String, Object> responses(RouteDefinition definition) {
         Map<String, Object> responses = new TreeMap<>();
         switch (definition.recipe() == null ? "" : definition.recipe()) {
-            case "file-import", "file-export" -> responses.put("202", withContent(
-                    "Transfer accepted", "application/json", ref("TransferAccepted")));
+            case "file-import", "file-export" -> {
+                // A reviewed import writes nothing on upload, so it never answers 202 here: the
+                // answer is the report, with a confirm token when a committable set exists and
+                // without one when it does not (docs/csv-import.md decision 1).
+                if (reviewed(definition)) {
+                    responses.put("200", withContent("The validation report, with a confirm token",
+                            "application/json", ref("ImportReview")));
+                    responses.put("422", withContent("The validation report; nothing to import",
+                            "application/json", ref("ImportReview")));
+                } else {
+                    responses.put("202", withContent(
+                            "Transfer accepted", "application/json", ref("TransferAccepted")));
+                }
+            }
             case "query-export" -> responses.put("200", withContent("The exported file",
                     exportContentType(definition), ordered("type", "string", "format", "binary")));
             case "query-html", "page" -> responses.put("200", withContent("OK", "text/html",
@@ -246,6 +258,23 @@ public final class OpenApiGenerator {
         status.put("responses", statusResponses);
         pathItem(paths, route.urlPath() + "/{transferId}").put("get", status);
 
+        if (reviewed(definition)) {
+            Map<String, Object> commit = new LinkedHashMap<>();
+            commit.put("operationId", definition.id() + ".commit");
+            commit.put("summary", "Commit the reviewed batch");
+            commit.put("parameters",
+                    List.of(parameter("batchId", "path", true, Map.of("type", "string"))));
+            security(definition).ifPresent(value -> commit.put("security", value));
+            Map<String, Object> commitResponses = new TreeMap<>();
+            commitResponses.put("202", withContent("The import started", "application/json",
+                    ref("TransferAccepted")));
+            commitResponses.put("409", Map.of("description",
+                    "The token cannot be spent — unknown, expired, replaced by a newer upload,"
+                            + " or already committed. The fix is always a fresh upload."));
+            commit.put("responses", commitResponses);
+            pathItem(paths, route.urlPath() + "/{batchId}/commit").put("post", commit);
+        }
+
         if ("file-export".equals(recipe)) {
             Map<String, Object> file = new LinkedHashMap<>();
             file.put("operationId", definition.id() + ".file");
@@ -260,6 +289,11 @@ public final class OpenApiGenerator {
             file.put("responses", fileResponses);
             pathItem(paths, route.urlPath() + "/{transferId}/file").put("get", file);
         }
+    }
+
+    /** Whether this import parks a batch for confirmation instead of writing on upload. */
+    private static boolean reviewed(RouteDefinition definition) {
+        return definition.fileImport() != null && definition.fileImport().reviewRequired();
     }
 
     private static String exportContentType(RouteDefinition definition) {
@@ -490,7 +524,18 @@ public final class OpenApiGenerator {
         statusProperties.put("downloaded", Map.of("type", "boolean"));
         statusProperties.put("fileUrl", Map.of("type", "string"));
 
+        Map<String, Object> review = new TreeMap<>();
+        review.put("rowCount", Map.of("type", "integer"));
+        review.put("ready", Map.of("type", "integer"));
+        review.put("rejected", Map.of("type", "integer"));
+        review.put("errors", ordered("type", "array", "items", Map.of("type", "object")));
+        review.put("fileError", Map.of("type", "string"));
+        review.put("token", Map.of("type", "string"));
+        review.put("commitUrl", Map.of("type", "string"));
+        review.put("expiresAt", Map.of("type", "string"));
+
         Map<String, Object> schemas = new TreeMap<>();
+        schemas.put("ImportReview", ordered("type", "object", "properties", review));
         schemas.put("TransferAccepted", ordered("type", "object", "properties", accepted));
         schemas.put("TransferStatus", ordered("type", "object", "properties", statusProperties));
         // Referenced field domains become named component schemas (docs/field-domains.md), so

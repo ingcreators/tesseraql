@@ -521,6 +521,15 @@ public final class ErrorResponseRenderer implements Step {
                 case 2844 -> 404; // unknown attachment
                 case 2847 -> 503; // attachment scan could not complete (fail-closed, Phase 30 s3)
                 case 2848 -> 409; // download of an object that did not pass scanning
+                // The reviewed import's refusals (docs/csv-import.md). Every token refusal is
+                // 409 with a re-upload as the fix, and they are deliberately indistinguishable
+                // to the caller: unknown, expired, already spent and someone else's are one
+                // situation from the outside, and answering them apart would tell the holder of
+                // a token that is not theirs which tokens exist.
+                case 2860, 2861, 2862, 2864, 2866, 2867 -> 409;
+                // No code for "nothing in the upload could be imported": that answer is the
+                // report itself with a 422 status, not an error envelope. An envelope would
+                // replace the very thing the caller needs — which rows were refused and why.
                 default -> 500;
             };
             // The IAM refusals are answers to the caller, not faults: a 500 hides the

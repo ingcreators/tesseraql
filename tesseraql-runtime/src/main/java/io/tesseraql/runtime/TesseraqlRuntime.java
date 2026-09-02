@@ -900,8 +900,22 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     .sqlTimeoutSeconds(io.tesseraql.yaml.config.SqlDefaults
                             .timeoutSeconds(manifest.config()))
                     .tracer(effectiveTracer);
+            // How long a reviewed upload waits for its confirm (docs/csv-import.md decision 2).
+            long reviewTtlMillis = io.tesseraql.core.util.Durations.toMillis(manifest.config()
+                    .getString("tesseraql.transfers.reviewTtl").orElse("30m"));
+            fileTransfers.reviewTtlMillis(reviewTtlMillis);
             fileTransfers.ensureSchema();
             context.bind(TesseraqlProperties.FILE_TRANSFER_BEAN, fileTransfers);
+            // Unlike the retention sweep below, this one is not opt-in: a parked batch holds
+            // uploaded business data the user never asked to have stored, so it always expires.
+            try {
+                new ImportReviewSweep(fileTransfers, reviewTtlMillis,
+                        java.time.Clock.systemDefaultZone())
+                        .schedule(Schedules.of(context));
+            } catch (Exception ex) {
+                throw new IllegalStateException(
+                        "Failed to wire the import review sweep: " + ex.getMessage(), ex);
+            }
             // Transfer retention (docs/file-transfers.md): opt-in, because nothing expires by
             // default — the DuckLake stance, retention policy belongs to the app. When set,
             // produced files older than retentionDays are reclaimed on a periodic sweep.

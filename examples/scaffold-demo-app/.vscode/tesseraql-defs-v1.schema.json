@@ -68,6 +68,13 @@
               "skip"
             ],
             "description": "What a failing row does: `rollback` (default) fails the whole import, `skip` records the row and commits the rest. Either way the rejected rows are reported with their row numbers."
+          },
+          "review": {
+            "type": "string",
+            "enum": [
+              "required"
+            ],
+            "description": "`required` splits the import in two (docs/csv-import.md): the upload parses, validates and parks the batch without writing anything, answering a report and a confirm token, and a second request commits exactly what was reviewed. Absent means the one-shot import. Only a route may declare it — a poll-driven import job has nobody to confirm (TQL-YAML-1060)."
           }
         },
         "additionalProperties": false,

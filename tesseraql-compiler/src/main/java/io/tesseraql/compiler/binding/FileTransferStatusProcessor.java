@@ -9,7 +9,6 @@ import io.tesseraql.pipeline.Headers;
 import io.tesseraql.pipeline.Step;
 import io.tesseraql.pipeline.TesseraqlProperties;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 
 /** Renders one transfer's state as JSON (design ch. 28); unknown ids are 404. */
@@ -44,7 +43,7 @@ public final class FileTransferStatusProcessor implements Step {
         // (docs/contract-bugfixes.md track D).
         body.put("rowCount", status.rows());
         if (!status.errors().isEmpty()) {
-            body.put("errors", errorRows(status.errors()));
+            body.put("errors", FileImportProcessor.errorRows(status.errors()));
         }
         if ("EXPORT".equals(status.direction())) {
             body.put("filename", status.filename());
@@ -59,11 +58,4 @@ public final class FileTransferStatusProcessor implements Step {
                 FileImportProcessor.MAPPER.writeValueAsString(body));
     }
 
-    private static List<Map<String, Object>> errorRows(
-            List<FileTransferService.RowError> errors) {
-        return errors.stream()
-                .map(error -> Map.<String, Object>of(
-                        "row", error.row(), "message", String.valueOf(error.message())))
-                .toList();
-    }
 }

@@ -16,8 +16,14 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Accepts an uploaded file body and starts its asynchronous import (design ch. 28): the raw
- * request body is the file content, the response is 202 with the transfer id and status URL.
+ * Accepts an uploaded file body (design ch. 28): the raw request body, or a multipart file part,
+ * is the file content.
+ *
+ * <p>What happens next is the import's own declaration. Without {@code review:} the upload starts
+ * the import and answers 202 with the transfer id and status URL, as it always has. With
+ * {@code review: required} nothing is written: the file is parsed and validated, the batch is
+ * parked, and the answer is the report — 200 with a confirm token when a committable set exists,
+ * 422 without one when it does not (docs/csv-import.md decision 1).
  */
 public final class FileImportProcessor implements Step {
 
@@ -32,9 +38,11 @@ public final class FileImportProcessor implements Step {
     private final String localeDeclaration;
     private final Path rowSqlFile;
     private final String onError;
+    private final boolean review;
 
     public FileImportProcessor(String routeId, String urlPath, String appName, String format,
-            FileReadSpec readSpec, String localeDeclaration, Path rowSqlFile, String onError) {
+            FileReadSpec readSpec, String localeDeclaration, Path rowSqlFile, String onError,
+            boolean review) {
         this.routeId = routeId;
         this.urlPath = urlPath;
         this.appName = appName;
@@ -43,6 +51,7 @@ public final class FileImportProcessor implements Step {
         this.localeDeclaration = localeDeclaration;
         this.rowSqlFile = rowSqlFile;
         this.onError = onError;
+        this.review = review;
     }
 
     @Override
@@ -60,12 +69,78 @@ public final class FileImportProcessor implements Step {
             }
             // The service spools the stream off-heap before returning; large uploads never
             // materialize in memory here (an empty upload fails with the same 400).
-            String transferId = transfers.startImport(new FileTransferService.ImportRequest(
+            FileTransferService.ImportRequest request = new FileTransferService.ImportRequest(
                     routeId, appName, format,
                     readSpec.withLocale(FormatSources.resolve(exchange, localeDeclaration)),
-                    rowSqlFile, onError), content);
-            respondAccepted(exchange, urlPath, transferId, false);
+                    rowSqlFile, onError);
+            if (review) {
+                respondReview(exchange, transfers.reviewImport(request, subject(exchange),
+                        content));
+                return;
+            }
+            respondAccepted(exchange, urlPath, transfers.startImport(request, content), false);
         }
+    }
+
+    /**
+     * The reviewed upload's answer (docs/csv-import.md decision 1): 200 with the report and the
+     * confirm token, or 422 with the report and no token.
+     *
+     * <p>Deliberately not {@code respondAccepted}'s 202 and {@code Location}. Nothing was
+     * accepted for processing — that is the entire point of a review — and a {@code Location}
+     * pointing at the status resource would invite a caller to poll an import that cannot start
+     * without a commit. The status code and the presence of the token are read off one fact, so
+     * they cannot disagree: a token exists exactly when a committable set does.
+     */
+    private void respondReview(Exchange exchange, FileTransferService.ImportReview review)
+            throws Exception {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("rowCount", review.rows());
+        body.put("ready", review.ready());
+        body.put("rejected", review.rejected());
+        if (review.fileError() != null) {
+            body.put("fileError", review.fileError());
+        }
+        if (!review.errors().isEmpty()) {
+            body.put("errors", errorRows(review.errors()));
+        }
+        if (review.committable()) {
+            body.put("token", review.batchId());
+            body.put("commitUrl", io.tesseraql.pipeline.BasePath.url(exchange,
+                    urlPath + "/" + review.batchId() + "/commit"));
+            body.put("expiresAt", String.valueOf(review.expiresAt()));
+        }
+        exchange.response().status(review.committable() ? 200 : 422);
+        exchange.response().header(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
+        exchange.setBody(MAPPER.writeValueAsString(body));
+    }
+
+    /**
+     * A rejection as the wire sees it. {@code field} and {@code value} ride only when the parse
+     * knew them — a failing per-row statement does not — so a caller can tell a value the file
+     * got wrong from a write the database refused.
+     */
+    static java.util.List<Map<String, Object>> errorRows(
+            java.util.List<FileTransferService.RowError> errors) {
+        return errors.stream().map(error -> {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("row", error.row());
+            if (error.field() != null) {
+                row.put("field", error.field());
+            }
+            if (error.value() != null) {
+                row.put("value", error.value());
+            }
+            row.put("message", String.valueOf(error.message()));
+            return row;
+        }).toList();
+    }
+
+    /** The principal parking or spending a batch; a batch is one subject's to commit. */
+    static String subject(Exchange exchange) {
+        io.tesseraql.security.Principal principal = exchange.getProperty(
+                TesseraqlProperties.PRINCIPAL, io.tesseraql.security.Principal.class);
+        return principal == null ? "" : String.valueOf(principal.subject());
     }
 
     /**

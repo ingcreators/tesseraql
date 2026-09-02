@@ -39,7 +39,7 @@ class StatusMappingLedgerTest {
 
     private static final Path REPO = Path.of("..");
 
-    /** Codes numbered {@code 4xxx} whose 500 is the recorded decision. */
+    /** Codes in scope whose 500 is the recorded decision. */
     private static final Set<String> RECORDED = new TreeSet<>(List.of(
             // Lint findings and boot refusals: raised at author/boot time, never through the
             // renderer (calendar/chunk/chain/overlap/heartbeat rules; the reaped-execution
@@ -78,7 +78,57 @@ class StatusMappingLedgerTest {
             // unconfigured-or-failed model endpoint — not the caller's input.
             "TQL-STUDIO-4041", "TQL-STUDIO-4235", "TQL-STUDIO-4242",
             // Raised by the CLI against a local directory; never rides the renderer.
-            "TQL-UPGRADE-4092"));
+            "TQL-UPGRADE-4092",
+            // LD joined this ledger with the csv-import campaign (see inScope below). The
+            // domain's request-time refusals now answer real statuses in the switch; what
+            // follows is everything else in it, and every one of these 500s is a decision.
+            //
+            // The runtime cannot do the job it was asked to do: a format whose codec module is
+            // absent, a schema it could not create, a service the runtime never bound, a PDF
+            // engine or font directory it cannot reach. The declaration is legal and the
+            // deployment is not, which is the server's fault and not the caller's.
+            "TQL-LD-2801", "TQL-LD-2810", "TQL-LD-2821", "TQL-LD-2825", "TQL-LD-2833",
+            "TQL-LD-2834", "TQL-LD-2840",
+            // Poll-driven imports: raised on the connector's own thread against a file nobody
+            // requested, and answered by moving the file rather than by a status.
+            "TQL-LD-2824", "TQL-LD-2849",
+            // Raised inside a running transfer, after its request was already answered 202.
+            // The outcome reaches the caller as a failed transfer with a message, which is what
+            // the status endpoint is for; there is no response left to give a status to.
+            "TQL-LD-2826", "TQL-LD-2850", "TQL-LD-2851", "TQL-LD-2852", "TQL-LD-2853",
+            "TQL-LD-2854", "TQL-LD-2855", "TQL-LD-2856", "TQL-LD-2857", "TQL-LD-2858",
+            "TQL-LD-2859", "TQL-LD-2831",
+            // 2865 (the commit's parse no longer agrees with the review's) is the same shape: it
+            // is decided on the executor, long after the confirm was answered 202, and reaches
+            // the caller as a failed transfer carrying the reason.
+            "TQL-LD-2865",
+            // Build-time and store-side refusals: file-import rejecting an output-only format,
+            // a print template outside the app root, an attachment store's JDBC failure, and a
+            // bucket outside the egress allow-list. None is reached by a request the renderer
+            // is answering.
+            "TQL-LD-2830", "TQL-LD-2832", "TQL-LD-2845", "TQL-LD-2846",
+            // The materialization bound and the export lint warnings: an operator's declared
+            // limit and three author-time findings. A breach of the bound is a server-side
+            // fault by construction — the user-facing over-cap surfaces are the result-cap
+            // work's 200 and 422, which are different codes on purpose.
+            "TQL-LD-0001", "TQL-LD-5310", "TQL-LD-5311", "TQL-LD-5312"));
+
+    /**
+     * Which codes this ledger polices. The {@code 4xxx} band was the original proxy for
+     * "refusal-shaped", and it has a blind spot the csv-import campaign walked into: the file
+     * transfer domain numbers its request-time refusals in the {@code 28xx} band, so an unmapped
+     * one answered "Internal Server Error" with nothing to catch it — the very defect this
+     * ledger exists for, in the one range it could not see. LD joins in full.
+     *
+     * <p>Not widened further on purpose. Most domains outside {@code 4xxx} are lint and boot
+     * families that never reach the renderer at all, and sweeping them in would mean several
+     * hundred recorded entries whose reason is the same sentence — a ledger nobody reads is not
+     * a guard. The general question ("which domains reach the renderer?") stays open; this
+     * closes the one that bit.
+     */
+    private static boolean inScope(TqlDomain domain, int number) {
+        return domain == TqlDomain.LD || (number >= 4000 && number <= 4999);
+    }
 
     @Test
     void everyRefusalNumberedCodeAnswersItsStatusOrIsRecorded() throws IOException {
@@ -93,7 +143,7 @@ class StatusMappingLedgerTest {
                 continue;
             }
             for (Integer number : domain.getValue().keySet()) {
-                if (number < 4000 || number > 4999) {
+                if (!inScope(parsed, number)) {
                     continue;
                 }
                 TqlErrorCode code = new TqlErrorCode(parsed, number);
