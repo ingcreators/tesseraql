@@ -1,7 +1,8 @@
-select id, sku, name, category, stock, reorder_level
-from products
+select p.id, p.sku, p.name, p.category, p.stock, p.reorder_level,
+       (select min(price) from supplier_prices sp where sp.sku = p.sku) as best_price
+from products p
 /*%if q */
-where lower(name) like lower('%' || /* q */ 'mouse' || '%')
-   or lower(sku) = lower(/* q */ 'MS-230')
+where lower(p.name) like lower('%' || /* q */ 'mouse' || '%')
+   or lower(p.sku) = lower(/* q */ 'MS-230')
 /*%end*/
-order by name
+order by p.name

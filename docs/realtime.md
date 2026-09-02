@@ -67,7 +67,9 @@ re-fetch their own view of the data.
 
 ## Semantics and limits
 
-- `emit:` is a `command-json` key (a topic broadcast belongs to a committed write) and
+- `emit:` belongs to a route whose write has a moment to announce — `command-json` at its
+  commit, and `file-import` when the background import's transaction commits, which is
+  later than the response that started it ([csv-import.md](csv-import.md) decision 6) — and
   takes one topic or a list. Topic names are lowercase dot/dash-separated segments —
   `orders.changed`, `stock.low` — checked by lint (`TQL-YAML-1038`/`TQL-YAML-1039`).
 - `refreshOn:` works on **list, detail, and dashboard** views — a list refreshes its

@@ -84,6 +84,7 @@ tql:
     upload: ファイルを検査
     commit: 取り込む
     line: "{number} 行目"
+    row: "{number} 行目"
     sheetRow: "{sheet} の {number} 行目"
     allValid: "{rows} 行を取り込めます。"
     partial: "{rows} 行のうち {ready} 行を取り込めます（{rejected} 行は取り込めません）。"

@@ -38,7 +38,7 @@
           th:action="@{/_tesseraql/deploy}"
           th:hx-post="@{/_tesseraql/deploy}" hx-encoding="multipart/form-data"
           hx-target="#deploy-errors" hx-swap="innerHTML"
-          hx-disabled-elt="find button[type=submit]" hx-indicator="find .hc-spinner"
+          hx-disabled-elt="find button[type=submit]" hx-indicator="#deploy-progress"
           class="hc-stack">
       <input type="hidden" name="_csrf" th:value="${_csrf}">
       <div id="deploy-errors"></div>
@@ -56,7 +56,13 @@
       </label>
       <span class="hc-action">
         <button type="submit" class="hc-button" data-variant="primary">Deploy</button>
-        <span class="hc-spinner htmx-indicator" aria-hidden="true"></span>
+        <!-- A package is megabytes, and a spinner told the operator nothing about how far
+             the upload had got. The kit's installUploadProgress drives this bar from the
+             request's own upload events — it only drives bars whose closest form is the
+             requesting one, which is why it lives inside the form and why the form's
+             hx-indicator points at it (docs/csv-import.md decision 7). -->
+        <progress id="deploy-progress" class="hc-progress htmx-indicator"
+                  data-hc-upload-progress max="100" value="0"></progress>
       </span>
     </form>
   </div>

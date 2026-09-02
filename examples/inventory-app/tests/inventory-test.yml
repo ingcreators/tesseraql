@@ -4,7 +4,7 @@ tests:
     sql:
       file: web/products/products.sql
     expect:
-      rowCount: 4
+      rowCount: 6
 
   - name: the search matches by name or exact sku
     sql:

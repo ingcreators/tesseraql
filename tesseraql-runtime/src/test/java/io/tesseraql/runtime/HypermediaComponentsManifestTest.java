@@ -40,7 +40,8 @@ class HypermediaComponentsManifestTest {
             "installRemoteDialog", // Studio drawers + the lookup search dialog host
             "installCloseDialog", // close-on-success for remote-dialog compositions
             "installSessionExpiry", // the 401 re-login dialog's replay bridge (shell host)
-            "installDirtyGuard"); // the form view's unsaved-changes guard (data-hc-dirty-guard)
+            "installDirtyGuard", // the form view's unsaved-changes guard (data-hc-dirty-guard)
+            "installUploadProgress"); // the import page's and the deploy form's progress bar
 
     /** Custom events the framework listens for / documents. */
     private static final List<String> REQUIRED_EVENTS = List.of(
@@ -56,6 +57,9 @@ class HypermediaComponentsManifestTest {
             "sse-updates", // the live inbox badge (docs/inbox.md)
             "datagrid-bulk-actions", // IAM Admin bulk disable (users list)
             "datagrid-bulk-errors", // the shared outcome report (tql/view/report.html)
+            "csv-import", // the reviewed upload (tql/view/import.html, docs/csv-import.md)
+            "file-upload", // its upload leg — the form, the progress bar, the 413
+            "async-job", // its commit leg — the self-polling card (tql/view/job-card.html)
             "network-retry", // the shell's host follows this client contract
             "reference-lookup", // the lookup: field (docs/reference-lookup.md)
             "remote-dialog", // Studio drawers + the lookup search dialog

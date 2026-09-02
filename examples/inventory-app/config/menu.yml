@@ -5,3 +5,5 @@ items:
     href: /products/dashboard
   - label: New product
     href: /products/new
+  - label: Import prices
+    href: /products/prices/import

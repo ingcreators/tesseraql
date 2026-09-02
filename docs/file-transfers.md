@@ -295,6 +295,59 @@ over it is refused with a `413` naming the key. A workbook is several times the 
 same rows as text, so the same feed reaches that bound sooner as `format: excel` than as
 `format: csv`. An empty upload is rejected (`TQL-LD-2820`).
 
+## Validate before you write: `review: required`
+
+An import can ask before it writes. `import.review: required` splits the upload in two:
+
+```yaml
+import:
+  format: csv
+  columns: [sku, supplier, price]
+  onError: skip
+  review: required
+```
+
+The upload parses and validates the whole file and writes nothing. The answer is a report —
+how many rows are ready, which were rejected and why — plus a confirm token, and a second
+request spends that token to run an ordinary import of exactly what was reviewed. A file with
+nothing importable answers `422` and no token, so the confirm affordance and the status code
+can never disagree.
+
+`onError:` decides what a partly-invalid file offers. Under `skip` the valid rows are a
+committable set, so the report comes with a confirm; under `rollback` (the default) there is
+nothing to commit, so it comes without one. A parked batch is one principal's to confirm, which
+is why the route needs a `security.auth:` declaration, and it expires — `tesseraql.transfers
+.reviewTtl`, thirty minutes by default — after which the answer is to upload again.
+
+On a file-import route `input:` is the **row** contract: what each row must satisfy, not what
+the request must. The same vocabulary a form declares — `required`, the bounds, `pattern`,
+`format:`, `enum`, `codes:` — applies per row, and the report names the line, the column and
+the value it refused.
+
+A reviewed import needs its parked bytes to be readable from the node that serves the confirm.
+The default temp store is node-local, so a multi-node deployment wants
+`tesseraql.temp.store: db` or `blob`.
+
+## The page
+
+A `file-import` route can answer a page as well as JSON. Point `response.html.view` at a
+`recipe: import` view document, and put a `page` route at the same URL to render the empty
+form ([declarative-views.md](declarative-views.md)):
+
+```yaml
+# get.yml — the empty upload form
+recipe: page
+response: { html: { view: prices-import } }
+
+# post.yml — the import, answering the same document
+recipe: file-import
+response: { html: { view: prices-import } }
+```
+
+The page is the file-upload form, the report the parse answered, and the confirm form when
+there is something to confirm. Confirming answers the job card described above. Without
+JavaScript every leg still works: the forms post natively and the server answers whole pages.
+
 The statement runs once per parsed row, all inside one import. What happens to a failing row is
 the `onError:` choice:
 

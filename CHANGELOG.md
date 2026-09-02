@@ -8,6 +8,24 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **The inventory gallery app imports supplier prices** (docs/csv-import.md slice 6, the
+  dogfood). `examples/inventory-app` gains `/products/prices/import`: a reviewed CSV upload with
+  a row contract (`sku` required, `price` a number at or above zero), `onError: skip`, and
+  `emit: [prices.imported]`. The products list declares `refreshOn:` for that topic and shows a
+  best-price column, so a committed import refreshes every open list rather than the tab that
+  pressed the button. The catalogue and the shipped price feed are now about the same SKUs,
+  which they never were: a price for a product nobody sells taught nothing.
+
+- **`emit:` is legal on a `file-import` route.** Slice 5 made it work and left the linter
+  refusing it (`TQL-YAML-1038`) — caught by the dogfood, which is what a dogfood is for. A route
+  may emit when its write has a moment the framework can announce: a command at its commit, an
+  import when its background transaction commits.
+
+- **The operations console's deploy form uses the file-upload recipe.** A package is megabytes
+  and the form showed a spinner, which says a request is in flight and nothing about how far the
+  upload has got. It drives the kit's `installUploadProgress` bar now, which is the same
+  behaviour the import page uses.
+
 - **`tql/view/job-card.html` — an asynchronous transfer watches itself** (docs/csv-import.md
   slice 5). Confirming a reviewed import from a page answers `202` and a job card: it carries its
   own `hx-get` and `hx-trigger`, targets itself, swaps `outerHTML`, and **a terminal card carries

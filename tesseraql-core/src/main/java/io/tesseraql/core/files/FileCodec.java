@@ -34,7 +34,7 @@ public interface FileCodec {
      * a format that does has to say so, which is the point.
      */
     default RowReference locate(FileReadSpec spec, long row) {
-        return new RowReference(null, TabularReader.fileRow(spec, row));
+        return RowReference.line(TabularReader.fileRow(spec, row));
     }
 
     /**

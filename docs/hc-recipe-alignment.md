@@ -48,7 +48,7 @@ any, should grow the rendering?
 | workflow-actions | **Adopt — its own design campaign** | `workflow:` + detail views |
 | reference-lookup | **Adopt — its own design campaign** | `input:` fields |
 | line-items | **Defer**, trigger named | `items.fields:` |
-| async-job | **Designed — [csv-import.md](csv-import.md) decision 6** | the import commit leg |
+| async-job | **Adopted (#1127–#1133)** — [csv-import.md](csv-import.md) | the import commit leg |
 
 ## Already settled
 
@@ -237,7 +237,7 @@ job, and the row records why.
 | unsaved-changes | **Adopted (#1114)** | form views |
 | datagrid-bulk-errors | **Adopted (#1115–#1117)** — [bulk-report.md](bulk-report.md) | `actions:`, `_bulk` routes |
 | edit-conflict | **Adopt — needs its own design slice** | `update` command routes |
-| csv-import | **Designed — [csv-import.md](csv-import.md)** | file transfers |
+| csv-import | **Adopted (#1127–#1133)** — [csv-import.md](csv-import.md) | file transfers |
 | row-detail | Aligned (list-surface decision 11) | `location: back`, `#row-<token>` |
 | datagrid-pager | Aligned (list-surface slice 1) | the in-place pager |
 | datagrid-sort | Aligned (list-surface slice 6, hc-briefs) | `type: sort` |
@@ -257,7 +257,7 @@ job, and the row records why.
 | undo-delete | Defer — needs soft delete + grace period | delete routes |
 | sortable | Defer — first user-ordered list | display-order column |
 | multi-step-form | Defer — first multi-step business form | Studio wizard is hand-built |
-| file-upload | **Designed — [csv-import.md](csv-import.md) decision 7** | the import upload leg |
+| file-upload | **Adopted (#1127–#1133)** — [csv-import.md](csv-import.md) | the import upload leg |
 | lazy-panel | Defer — first deferred-region demand | — |
 | sse-toast | Defer — the inbox + badge is the chosen push surface | — |
 | transfer | Defer — recorded in [reference-lookup.md](reference-lookup.md) | multi-select references |
@@ -403,7 +403,11 @@ per-user-preference store demand, the same trigger `datagrid-prefs` waits on.
 7. ~~datagrid-bulk-errors~~ — designed and shipped ([bulk-report.md](bulk-report.md),
    #1115–#1117); csv-import remains its recorded future consumer.
 8. **edit-conflict**: design-first slice — the declared version column.
-9. ~~csv-import campaign~~ — named and designed ([csv-import.md](csv-import.md));
-   it fired the file-upload and async-job triggers with it, so those two rows are
-   designed rather than deferred.
+9. ~~csv-import campaign~~ — designed and shipped ([csv-import.md](csv-import.md),
+   #1125–#1133). It fired the file-upload and async-job triggers with it, so all three
+   rows are adopted: the reviewed upload is `import.review: required` with an
+   `recipe: import` page, the upload leg is the kit's file-upload form, and the commit
+   leg is the self-polling job card. Three deviations are recorded in that document —
+   the always-asynchronous commit, `emit:`/`refreshOn:` in place of `HX-Trigger`, and
+   the upload form that keeps its selection so a corrected file is one click away.
 10. line-items and the deferred catalog rows wait for their named triggers.
