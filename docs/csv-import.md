@@ -211,16 +211,54 @@ Phase one is the parse. It finds what a file can be wrong about:
 - a declared per-column constraint fails.
 
 That last one is the new expressiveness, and it is not invented: a CSV row is a
-line item that arrived as a file, and `input.items.fields` already declares
-`required`, `min`, `max`, `pattern`, `enum`, `domain:` and `codes:` per element,
-already addresses a violation as `lines[2].qty`, and already renders through the
-field-errors contract. An import column takes the **constraint** half of that
-vocabulary — and only the constraint half. `type:` and `format:` already exist on
-an import column and mean something else there (the parse pattern, and the workbook
-cell format on the export side); redefining them to mean an input type would be two
-vocabularies wearing one name. The constraint keys are refused on an `export:`
-column at lint, because a key that lints clean and does nothing is the defect class
-this codebase keeps sweeping, and `ColumnSpec` is shared by both directions.
+line item that arrived as a file, and the framework already has a language for what
+a field must satisfy. **On a file-import route the row contract is `input:`**, and
+`import.columns:` keeps the job it already had — which cell feeds which bind name:
+
+```yaml
+input:
+  sku: { type: string, required: true, pattern: "[A-Z]{2}-[0-9]{3}" }
+  qty: { type: integer, required: true, min: 1 }
+  supplier: { domain: supplier }
+import:
+  format: csv
+  columns: [sku, qty, supplier]
+  review: required
+```
+
+Every constraint applies to the value it is about, whatever shape the cell arrived in.
+A column's own `type:` is a *parse* instruction and an optional one, so a contract that
+only checked numeric bounds on values a column had already typed would be inert on the
+ordinary form above — a declared rule that lints clean and never runs. `min:` coerces
+for the comparison instead, and a cell that is not a number at all fails the same
+check. The keys an import's row contract does **not** honour are refused where they
+are written (`TQL-YAML-1062`) rather than dropped in silence.
+
+The first draft of this decision put the constraint keys on the column instead, and
+two facts retired it. `type:` and `format:` already exist on an import column and
+mean the parse pattern there, so the column would have carried two vocabularies
+wearing one name — a collision this design had already flagged as a risk and would
+then have had to manage forever. And a column-side constraint would have been a
+second declaration of something the framework declares once: `input:` already merges
+field domains at load time, already resolves `codes:` against a catalog, already
+renders through the field-errors contract, and is already what the request binder
+evaluates. A second spelling of one rule is the drift this campaign keeps refusing.
+
+There is a third gain, and it is the one that decides it. `input:` on a file-import
+route lints clean today and does nothing at all — declared, compiled, silently
+dropped, because the recipe installs no binder. Giving it the meaning it looks like
+it has turns a silent-tolerance shape into the feature, rather than leaving it
+standing beside a new key that does the same job.
+
+An `input:` name that matches no declared column is refused (`TQL-YAML-1061`): a
+contract nothing is held to is worse than no contract. The reverse is fine and
+common — a column may be mapped and unconstrained.
+
+**A poll-driven import gets no row contract, and that is not an oversight.** On a job
+document `input:` already means the run's parameters, and giving one key two meanings
+across two document kinds is exactly the collision this decision just refused on
+`type:`. A row contract for directory feeds needs its own declaration, and its own
+trigger.
 
 **Phase one is not connectionless.** Type parsing, arity and
 `pattern:`/`min:`/`max:`/`required:` need no database. `codes:` and a
@@ -231,6 +269,23 @@ thirty thousand stale codes would be thirty thousand full catalog reloads,
 serialized. So a reviewed import resolves each referenced catalog **once, before the
 row loop**, and validates every row against that snapshot. The report is then honest
 about what it is: a snapshot check, taken at upload.
+
+**And the snapshot is frozen with the batch, because it is a third parse input.**
+Decision 2 freezes the read spec so the commit parses what the review parsed; the
+resolved code sets need the same treatment for the same reason. Re-resolving them at
+commit would let a code retired during the review window move the rejection set,
+which trips the agreement check and refuses the commit with a message blaming the
+file for having changed. So the contract the review built — constraints and resolved
+code sets together — is parked as data beside the read spec, and the commit is held
+to it.
+
+The consequence is worth stating rather than hiding: a code retired inside the review
+window is still imported. Nothing catches it — a catalog's `active` flag is a column
+on its own source table, not a constraint the database enforces, so there is no
+foreign key waiting to refuse the row. That is what a snapshot check *is*, and it is
+the same bargain the whole review phase makes: the author reviewed a report, and the
+import must apply what they reviewed. The defence is the window's length, not a
+backstop, which is one more reason the review TTL is thirty minutes and not a day.
 
 What phase one cannot find is anything only the database knows at write time: a
 foreign key that does not resolve, a unique conflict, a check constraint. Those
@@ -610,10 +665,11 @@ off, not by a report.
    caught that only inspects numbers 4000–4999; this slice adds codes that would
    otherwise answer "Internal Server Error", so it fixes the mapping and records why
    the ledger could not see it.
-2. **Per-column constraints.** The constraint half of the line-item vocabulary on an
-   import column, refused on export columns, with each referenced catalog resolved
-   once before the row loop. This is what makes the report worth reading, and it is
-   separable from the phase that carries it.
+2. **The row contract.** `input:` on a file-import route becomes what each row must
+   satisfy, evaluated as frozen data so the two passes of a reviewed import cannot
+   disagree, with each referenced catalog resolved once before the row loop. This is
+   what makes the report worth reading, and it is separable from the phase that
+   carries it.
 3. **The report, generalized.** `tql/view/report.html`, the lifted render model,
    `href`/`field`/`value` on an entry, file-level entries, groups keyed on
    (code, message) and bounded, the cap owned by the feeder, mapped messages on the

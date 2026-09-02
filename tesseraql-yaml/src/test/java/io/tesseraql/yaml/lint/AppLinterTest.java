@@ -1524,6 +1524,84 @@ class AppLinterTest {
     }
 
     @Test
+    void refusesRowContractKeysARowCannotBeHeldTo(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), "tesseraql:\n  app:\n"
+                + "    name: contract-keys\n");
+        Path route = dir.resolve("web/api/items/import");
+        Files.createDirectories(route);
+        Files.writeString(route.resolve("upsert.sql"), "insert into items values (1)\n");
+        Files.writeString(route.resolve("post.yml"), """
+                version: tesseraql/v1
+                id: items.import
+                kind: route
+                recipe: file-import
+                security:
+                  auth: bearer
+                  policy: items.write
+                input:
+                  qty: { type: integer, min: 1, default: 7 }
+                  note: { type: string, policy: hr.write }
+                import:
+                  format: csv
+                  columns: [qty, note]
+                steps:
+                  - id: row
+                    sql:
+                      file: upsert.sql
+                """);
+
+        List<LintFinding> findings = new AppLinter().lint(dir);
+
+        // default: would fill a cell the file did not send; policy: authorizes a submitter
+        // against one value. Neither has anything to act on when the body is rows.
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-YAML-1062") && f.isError()
+                && f.message().contains("qty") && f.message().contains("default"));
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-YAML-1062") && f.isError()
+                && f.message().contains("note") && f.message().contains("policy"));
+        // min: is a constraint and stays silent.
+        assertThat(findings).noneMatch(f -> f.code().equals("TQL-YAML-1062")
+                && f.message().contains("min"));
+    }
+
+    @Test
+    void refusesAnImportRowContractNamingNoColumn(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), "tesseraql:\n  app:\n"
+                + "    name: contract-lint\n");
+        Path route = dir.resolve("web/api/items/import");
+        Files.createDirectories(route);
+        Files.writeString(route.resolve("upsert.sql"), "insert into items values (1)\n");
+        Files.writeString(route.resolve("post.yml"), """
+                version: tesseraql/v1
+                id: items.import
+                kind: route
+                recipe: file-import
+                security:
+                  auth: bearer
+                  policy: items.write
+                input:
+                  qty: { type: integer, min: 1 }
+                  quantity: { type: integer, min: 1 }
+                import:
+                  format: csv
+                  columns: [name, qty]
+                steps:
+                  - id: row
+                    sql:
+                      file: upsert.sql
+                """);
+
+        List<LintFinding> findings = new AppLinter().lint(dir);
+
+        // `qty` is mapped and constrained; `quantity` is a rule no row would ever be held to.
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-YAML-1061") && f.isError()
+                && f.message().contains("quantity"));
+        assertThat(findings).noneMatch(f -> f.code().equals("TQL-YAML-1061")
+                && f.message().contains("'qty'"));
+    }
+
+    @Test
     void refusesAReviewOnAJobBecauseAJobHasNobodyToConfirmIt(@TempDir Path dir) throws Exception {
         Files.createDirectories(dir.resolve("config"));
         Files.writeString(dir.resolve("config/tesseraql.yml"), "tesseraql:\n  app:\n"

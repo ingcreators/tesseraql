@@ -407,11 +407,14 @@ public final class InputBinder {
                 throw reject(name, "minLength", Map.of("minLength", field.minLength()),
                         "Input '" + name + "' is shorter than minLength " + field.minLength());
             }
-            if (field.pattern() != null && !compiled(field.pattern()).matcher(string).matches()) {
+            if (field.pattern() != null
+                    && !io.tesseraql.core.files.FieldPatterns.compiled(field.pattern())
+                            .matcher(string).matches()) {
                 throw reject(name, "pattern", Map.of("pattern", field.pattern()),
                         "Input '" + name + "' does not match the declared pattern");
             }
-            if (field.hasStringFormat() && !matchesFormat(field.format(), string)) {
+            if (field.hasStringFormat()
+                    && !io.tesseraql.core.files.FieldFormats.matches(field.format(), string)) {
                 throw reject(name, field.format(), Map.of(),
                         "Input '" + name + "' is not a valid " + field.format());
             }
@@ -491,42 +494,6 @@ public final class InputBinder {
             throw reject(name, type, params,
                     "Input '" + name + "' is not a valid " + type + ": " + raw);
         }
-    }
-
-    private static final java.util.concurrent.ConcurrentHashMap<String, java.util.regex.Pattern> PATTERNS = new java.util.concurrent.ConcurrentHashMap<>();
-
-    /** Compiles (and caches) a declared {@code pattern:}; the lint pre-checks the syntax. */
-    private static java.util.regex.Pattern compiled(String pattern) {
-        return PATTERNS.computeIfAbsent(pattern, java.util.regex.Pattern::compile);
-    }
-
-    /**
-     * Pragmatic, JDK-only semantic formats (roadmap Phase 40): {@code email} is
-     * local@domain.tld shaped, {@code uuid} parses via {@link java.util.UUID}, {@code url}
-     * needs an absolute http(s) URI with a host.
-     */
-    static boolean matchesFormat(String format, String value) {
-        return switch (format) {
-            case "email" -> value.matches("[^@\\s]+@[^@\\s]+\\.[^@\\s]+");
-            case "uuid" -> {
-                try {
-                    java.util.UUID.fromString(value);
-                    yield true;
-                } catch (IllegalArgumentException ex) {
-                    yield false;
-                }
-            }
-            case "url" -> {
-                try {
-                    java.net.URI uri = java.net.URI.create(value);
-                    yield ("http".equals(uri.getScheme()) || "https".equals(uri.getScheme()))
-                            && uri.getHost() != null;
-                } catch (IllegalArgumentException ex) {
-                    yield false;
-                }
-            }
-            default -> true;
-        };
     }
 
     /** The conditional-required rejection ({@code requiredWhen}, roadmap Phase 40). */

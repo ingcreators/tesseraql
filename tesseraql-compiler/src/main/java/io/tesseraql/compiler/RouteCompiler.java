@@ -1313,7 +1313,7 @@ public final class RouteCompiler {
         route.process(new io.tesseraql.compiler.binding.FileImportProcessor(
                 routeId, routeFile.urlPath(), appName, spec.format(),
                 spec.toReadSpec(), formatDeclaration(spec.locale(), "tesseraql.files.locale"),
-                rowSql, spec.effectiveOnError(), spec.reviewRequired()));
+                rowSql, spec.effectiveOnError(), spec.reviewRequired(), definition.input()));
         mountTransferStatus(context, routeFile, routeId);
         if (spec.reviewRequired()) {
             mountImportCommit(context, routeFile, routeId, appName, spec, rowSql);

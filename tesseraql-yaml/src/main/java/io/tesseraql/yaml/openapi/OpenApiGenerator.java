@@ -138,7 +138,7 @@ public final class OpenApiGenerator {
             operation.put("parameters", parameters);
         }
         if ("file-import".equals(recipe)) {
-            operation.put("requestBody", uploadBody());
+            operation.put("requestBody", uploadBody(definition));
         } else if (!queryInputs && !definition.input().isEmpty()) {
             operation.put("requestBody", jsonBody(definition));
         }
@@ -336,13 +336,47 @@ public final class OpenApiGenerator {
         return body;
     }
 
+    /** The media type the declared import format arrives as; CSV unless a codec says otherwise. */
+    private static String importContentType(RouteDefinition definition) {
+        String format = definition.fileImport() == null ? null : definition.fileImport().format();
+        return "excel".equals(format)
+                ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                : "text/csv";
+    }
+
     /** The uploaded file for {@code file-import}: a raw body or a multipart {@code file} part. */
-    private static Map<String, Object> uploadBody() {
+    private Map<String, Object> uploadBody(RouteDefinition definition) {
         Map<String, Object> binary = ordered("type", "string", "format", "binary");
         Map<String, Object> content = new TreeMap<>();
         content.put("application/octet-stream", Map.of("schema", binary));
         content.put("multipart/form-data", Map.of("schema",
                 ordered("type", "object", "properties", Map.of("file", binary))));
+        // An import route's `input:` is the contract each ROW must satisfy
+        // (docs/csv-import.md decision 3), so it belongs in the published contract as the
+        // shape of the rows the body carries — not as a JSON body, which is what the file is
+        // not. A caller reading only the binary schema would learn that a file goes here and
+        // nothing about what has to be in it.
+        if (!definition.input().isEmpty()) {
+            Map<String, Object> properties = new TreeMap<>();
+            List<String> required = new ArrayList<>();
+            new TreeMap<>(definition.input()).forEach((name, field) -> {
+                properties.put(name, schemaOrRef(field));
+                if (field.required()) {
+                    required.add(name);
+                }
+            });
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("type", "object");
+            row.put("properties", properties);
+            if (!required.isEmpty()) {
+                row.put("required", required);
+            }
+            // Under the format the import actually declares, never a hard-coded text/csv: an
+            // Excel import advertising that a client may post CSV is the same bug decision 8
+            // names about the upload's accept list, in the published contract.
+            content.put(importContentType(definition), Map.of("schema",
+                    ordered("type", "array", "items", row)));
+        }
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("required", true);
         body.put("content", content);
