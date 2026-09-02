@@ -24,6 +24,7 @@ create table if not exists tql_import_batch (
   spool_id varchar(64),
   spool_uri varchar(1000),
   read_spec_json text,
+  contract_json text,
   report_json text,
   row_count bigint not null default 0,
   ready_count bigint not null default 0,

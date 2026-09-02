@@ -10,6 +10,7 @@ create table tql_import_batch (
   spool_id varchar2(64),
   spool_uri varchar2(1000),
   read_spec_json clob,
+  contract_json clob,
   report_json clob,
   row_count number(19) default 0 not null,
   ready_count number(19) default 0 not null,

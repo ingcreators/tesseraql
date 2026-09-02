@@ -169,6 +169,57 @@ class ImportReviewIntegrationTest {
     }
 
     @Test
+    void aDeclaredRowContractRejectsRowsThatParseButBreakIt() throws Exception {
+        // Every one of these rows types cleanly: the file is not malformed, the data is wrong.
+        // `qty: 0` breaks min, the long name breaks maxLength, the blank breaks required — and
+        // none of it could have been found without the declaration.
+        HttpResponse<String> upload = upload("/api/items/import-checked",
+                "name,qty\nalpha,1\nbeta,0\nlonger-than-eight,2\n,4\n", "importer");
+        assertThat(upload.statusCode()).isEqualTo(200);
+        JsonNode report = MAPPER.readTree(upload.body());
+
+        assertThat(report.get("rowCount").asLong()).isEqualTo(4);
+        assertThat(report.get("ready").asLong()).isEqualTo(1);
+        assertThat(report.get("rejected").asLong()).isEqualTo(3);
+        JsonNode first = report.get("errors").get(0);
+        assertThat(first.get("row").asLong()).isEqualTo(2);
+        assertThat(first.get("field").asText()).isEqualTo("qty");
+        assertThat(first.get("value").asText()).isEqualTo("0");
+        assertThat(first.get("message").asText()).contains("minimum 1");
+
+        JsonNode status = commitAndAwait("/api/items/import-checked",
+                report.get("token").asText(), "importer");
+        assertThat(status.get("status").asText()).isEqualTo("COMPLETED");
+        // Exactly the reviewed row, and the commit re-checked the same contract to get there.
+        assertThat(itemCount()).isEqualTo(1);
+    }
+
+    @Test
+    void aBoundAppliesToAnUntypedColumn() throws Exception {
+        // The column carries no `type:`, so the cell reaches the contract as text. A bound that
+        // only compared values something else had already typed would pass this file in
+        // silence, which is exactly what it used to do.
+        HttpResponse<String> upload = upload("/api/items/import-checked",
+                "name,qty\nalpha,0\n", "importer");
+
+        assertThat(upload.statusCode()).isEqualTo(422);
+        JsonNode report = MAPPER.readTree(upload.body());
+        assertThat(report.get("rejected").asLong()).isEqualTo(1);
+        assertThat(report.get("errors").get(0).get("field").asText()).isEqualTo("qty");
+        assertThat(report.get("errors").get(0).get("message").asText()).contains("minimum 1");
+    }
+
+    @Test
+    void aRouteWithNoRowContractHoldsItsRowsToNothing() throws Exception {
+        // import-lenient declares no input: at all, so a wildly out-of-range value imports.
+        HttpResponse<String> upload = upload("/api/items/import-lenient",
+                "name,qty\nalpha,999999\n", "importer");
+
+        assertThat(upload.statusCode()).isEqualTo(200);
+        assertThat(MAPPER.readTree(upload.body()).get("rejected").asLong()).isZero();
+    }
+
+    @Test
     void theTokenIsSingleShot() throws Exception {
         String token = tokenFor("/api/items/import", "name,qty\nalpha,1\n", "importer");
 
@@ -378,6 +429,16 @@ class ImportReviewIntegrationTest {
         writeImportRoute(home, "web/api/items/import", "items.import", "rollback", true);
         writeImportRoute(home, "web/api/items/import-lenient", "items.importLenient", "skip",
                 true);
+        // The row contract lives in input:, and the column list stays a mapping.
+        // Deliberately the plain untyped column list — the form the documentation shows, and
+        // the one a bound has to work on: a contract that only compared already-typed values
+        // would pass this route's files in silence.
+        writeImportRoute(home, "web/api/items/import-checked", "items.importChecked", "skip",
+                true, """
+                        input:
+                          name: { type: string, required: true, maxLength: 8 }
+                          qty: { type: integer, required: true, min: 1 }
+                        """, "columns: [name, qty]");
         writeImportRoute(home, "web/api/items/import-direct", "items.importDirect", "rollback",
                 false);
         return home;
@@ -385,6 +446,28 @@ class ImportReviewIntegrationTest {
 
     private static void writeImportRoute(Path home, String dir, String id, String onError,
             boolean review) throws IOException {
+        writeImportRoute(home, dir, id, onError, review, "");
+    }
+
+    /**
+     * @param contract the route's {@code input:} block — on an import route that is what each
+     *                 row must satisfy, so a constraint case is a fixture change and not a
+     *                 second recipe
+     */
+    private static void writeImportRoute(Path home, String dir, String id, String onError,
+            boolean review, String contract) throws IOException {
+        writeImportRoute(home, dir, id, onError, review, contract,
+                "columns:\n                    - name\n"
+                        + "                    - { name: qty, type: number }");
+    }
+
+    /**
+     * @param columns the import's column block. The default types {@code qty} because the cases
+     *                written before the row contract need a parse failure to report; a contract
+     *                case passes the plain untyped list instead.
+     */
+    private static void writeImportRoute(Path home, String dir, String id, String onError,
+            boolean review, String contract, String columns) throws IOException {
         Path route = home.resolve(dir);
         Files.createDirectories(route);
         Files.writeString(route.resolve("post.yml"), """
@@ -395,17 +478,16 @@ class ImportReviewIntegrationTest {
                 security:
                   auth: bearer
                   policy: items.write
-                import:
+                %simport:
                   format: csv
-                  columns:
-                    - name
-                    - { name: qty, type: number }
+                  %s
                   onError: %s
                 %ssteps:
                   - id: row
                     sql:
                       file: upsert-item.sql
-                """.formatted(id, onError, review ? "  review: required\n" : ""));
+                """.formatted(id, contract, columns, onError,
+                review ? "  review: required\n" : ""));
         Files.writeString(route.resolve("upsert-item.sql"), """
                 insert into items (name, qty)
                 values ( /* name */ 'sample', cast( /* qty */ '1' as integer) )

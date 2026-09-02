@@ -11,6 +11,7 @@ create table tql_import_batch (
   spool_id varchar(64),
   spool_uri varchar(1000),
   read_spec_json varchar(max),
+  contract_json varchar(max),
   report_json varchar(max),
   row_count bigint not null default 0,
   ready_count bigint not null default 0,

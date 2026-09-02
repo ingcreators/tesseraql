@@ -8,6 +8,49 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **A file-import route's `input:` is what each row must satisfy**
+  (docs/csv-import.md slice 2). On an import route the body is rows, so `input:` describes a
+  row rather than the request, and `import.columns:` keeps the job it had — which cell feeds
+  which bind name. A file therefore reuses the vocabulary a form already declares, field
+  domains and code catalogs included, instead of growing a second one on the column list:
+
+  ```yaml
+  input:
+    sku: { type: string, required: true, pattern: "[A-Z]{2}-[0-9]{3}" }
+    qty: { type: integer, required: true, min: 1 }
+  import:
+    columns: [sku, qty]
+    review: required
+  ```
+
+  This is what makes a validation report worth reading: without it a review only finds what a
+  file can be wrong about on its own — a value that will not parse, a header that does not map
+  — and every rule the business actually has waits for the write. Every constraint applies to
+  the value it is about whatever shape the cell arrived in: a column's own `type:` is a parse
+  instruction and an optional one, so a bound that only compared already-typed values would be
+  inert on the ordinary untyped column list.
+
+  Two lints keep the declaration honest. An `input:` name matching no declared column is refused
+  (`TQL-YAML-1061`), because a contract nothing is held to is worse than no contract — the
+  reverse is fine, and a mapped column may be unconstrained. And the input keys a row cannot be
+  held to (`default:`, `requiredWhen:`, `policy:`, `writable:` — all of them about a request,
+  where here the body is rows) are refused where they are written (`TQL-YAML-1062`) rather than
+  dropped in silence. What a row contract does carry is the constraint half: `required`, the
+  bounds, the lengths, `pattern`, the semantic `format:`, `enum` and `codes`.
+
+  `input:` on a file-import route previously lint-clean and did nothing at all — declared,
+  compiled, silently dropped, because the recipe installs no binder. It now means what it looks
+  like it means.
+
+  Each referenced code catalog is read **once, before the row loop**: the request binder's path
+  reloads a catalog from its source table whenever a value misses, which costs one query per
+  rejection on a form and one per rejected row in a file. The resolved code sets are frozen into
+  the contract and parked with the batch, so a reviewed import's commit is held to the same
+  answer its review was — a code retired during the review window cannot move the rejection set
+  and make the agreement check blame the file. A poll-driven import gets no row contract: on a
+  job document `input:` already means the run's parameters, and one key with two meanings across
+  two document kinds is the collision this decision refused on `type:`.
+
 - **`import.review: required` — an upload that validates and asks before it writes**
   (docs/csv-import.md slice 1, the machinery). A `file-import` route declaring it stops
   importing on upload: it parses the file, validates every typed column, parks the batch,
@@ -124,6 +167,10 @@ All notable changes to TesseraQL are documented here. The format follows
   managed-mode dogfood.
 
 ### Changed
+
+- **One compiled-pattern cache, not two.** A declared `pattern:` is matched through
+  `FieldPatterns` in core now, shared by the request binder and the import row pass. Two caches
+  for one purpose is how two spellings of one rule begin.
 
 - **A rejected import row now names the column and the value it refused.**
   `FileTransferService.RowError` carries `field` and `value` beside the row and the message,

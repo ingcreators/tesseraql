@@ -53,6 +53,12 @@ final class RouteRules implements LintRule {
     static final Set<String> KNOWN_ROUTE_RECIPES = Set.of("query-json", "command-json",
             "query-html", "page", "query-export", "file-import", "file-export", "webhook");
 
+    /** An import's row contract names a column the import does not map. */
+    private static final String IMPORT_INPUT_WITHOUT_COLUMN = "TQL-YAML-1061";
+
+    /** An import's row contract declares a key a row cannot be held to. */
+    private static final String IMPORT_INPUT_KEY_WITHOUT_EFFECT = "TQL-YAML-1062";
+
     /** The {@code {name}} path parameters a URL template declares, in template order. */
     private static List<String> pathParams(String urlPath) {
         List<String> names = new java.util.ArrayList<>();
@@ -144,6 +150,8 @@ final class RouteRules implements LintRule {
                             + " honored on " + String.join(", ", VALIDATING_RECIPES)
                             + ", queue consumers, and MCP tools"));
         }
+        lintImportRowContract(definition, source, findings);
+        lintImportRowContractKeys(definition, source, findings);
         DocumentRules.lintValidation(context, route.source(), definition, source, findings);
         LiveViewRules.lintEmit(definition, source, findings);
         DocumentRules.lintInvalidates(context, definition, source, findings);
@@ -234,5 +242,78 @@ final class RouteRules implements LintRule {
                     "Route '" + definition.id() + "' inputPolicy.readOnlyFieldBehavior must be "
                             + "reject, ignore or warn, not '" + readOnly + "'"));
         }
+    }
+
+    /**
+     * TQL-YAML-1061: an {@code input:} field on a file-import route that names no column the
+     * import declares (docs/csv-import.md decision 3).
+     *
+     * <p>On an import route the body is rows, so {@code input:} is the contract each row is held
+     * to and its names are bind names. One that matches no column is not a smaller contract, it
+     * is a rule that silently never runs — the author reads a declared constraint and the file
+     * is never held to it. Columns left undeclared are fine, and common: a column may be mapped
+     * and unconstrained.
+     */
+    private static void lintImportRowContract(RouteDefinition definition, String source,
+            List<LintFinding> findings) {
+        if (!"file-import".equals(definition.recipe()) || definition.fileImport() == null
+                || definition.input().isEmpty()) {
+            return;
+        }
+        List<io.tesseraql.yaml.model.ColumnSpec> columns = definition.fileImport().columns();
+        if (columns.isEmpty()) {
+            // No columns declared means the header labels are the bind names, so nothing here
+            // can be checked against a list the document does not carry.
+            return;
+        }
+        Set<String> declared = columns.stream()
+                .map(io.tesseraql.yaml.model.ColumnSpec::name)
+                .collect(java.util.stream.Collectors.toSet());
+        definition.input().keySet().stream()
+                .filter(name -> !declared.contains(name))
+                .forEach(name -> findings.add(new LintFinding(IMPORT_INPUT_WITHOUT_COLUMN, ERROR,
+                        source, "input: '" + name + "' names no column this import declares, so"
+                                + " no row would ever be held to it; import.columns: has "
+                                + String.join(", ", declared))));
+    }
+
+    /**
+     * TQL-YAML-1062: an {@code input:} key on a file-import route that a row cannot be held to
+     * (docs/csv-import.md decision 3).
+     *
+     * <p>A row contract carries the constraints — required, the bounds, the lengths, the
+     * pattern, the semantic format, enum and codes. The rest of what an input field can declare
+     * is about a <em>request</em> and has nothing to act on here: {@code default:} would fill a
+     * cell the file did not send, {@code requiredWhen:} reads the request around the field,
+     * {@code policy:} and {@code writable:} authorize a submitter against one value. An author
+     * reading "the row contract is input:" would reasonably expect all of them to apply, so the
+     * ones that cannot are refused where they are written instead of dropped in silence.
+     */
+    private static void lintImportRowContractKeys(RouteDefinition definition, String source,
+            List<LintFinding> findings) {
+        if (!"file-import".equals(definition.recipe())) {
+            return;
+        }
+        definition.input().forEach((name, field) -> {
+            List<String> inert = new java.util.ArrayList<>();
+            if (field.defaultValue() != null) {
+                inert.add("default");
+            }
+            if (field.requiredWhen() != null) {
+                inert.add("requiredWhen");
+            }
+            if (field.policy() != null) {
+                inert.add("policy");
+            }
+            if (field.writable() != null) {
+                inert.add("writable");
+            }
+            if (!inert.isEmpty()) {
+                findings.add(new LintFinding(IMPORT_INPUT_KEY_WITHOUT_EFFECT, ERROR, source,
+                        "input: '" + name + "' declares " + String.join(", ", inert)
+                                + ", which a file-import route's row contract cannot honour —"
+                                + " those keys are about a request, and here the body is rows"));
+            }
+        });
     }
 }

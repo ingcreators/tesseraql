@@ -69,8 +69,12 @@ public final class ImportCommitProcessor implements Step {
         }
         String transferId = transfers.commitImport(batchId,
                 FileImportProcessor.subject(exchange),
+                // No contract built here on purpose: the commit is held to the one parked with
+                // the batch, so resolving the catalogs again would be a query per catalog whose
+                // answer is thrown away — and the once-per-import promise would be false on the
+                // very leg that repeats the parse.
                 new FileTransferService.ImportRequest(routeId, appName, format, readSpec,
-                        rowSqlFile, onError));
+                        rowSqlFile, onError, null));
         FileImportProcessor.respondAccepted(exchange, urlPath, transferId, false);
     }
 }

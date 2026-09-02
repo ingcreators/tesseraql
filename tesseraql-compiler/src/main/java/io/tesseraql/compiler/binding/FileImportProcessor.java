@@ -39,10 +39,11 @@ public final class FileImportProcessor implements Step {
     private final Path rowSqlFile;
     private final String onError;
     private final boolean review;
+    private final Map<String, io.tesseraql.yaml.model.InputField> input;
 
     public FileImportProcessor(String routeId, String urlPath, String appName, String format,
             FileReadSpec readSpec, String localeDeclaration, Path rowSqlFile, String onError,
-            boolean review) {
+            boolean review, Map<String, io.tesseraql.yaml.model.InputField> input) {
         this.routeId = routeId;
         this.urlPath = urlPath;
         this.appName = appName;
@@ -52,6 +53,7 @@ public final class FileImportProcessor implements Step {
         this.rowSqlFile = rowSqlFile;
         this.onError = onError;
         this.review = review;
+        this.input = input == null ? Map.of() : Map.copyOf(input);
     }
 
     @Override
@@ -72,7 +74,7 @@ public final class FileImportProcessor implements Step {
             FileTransferService.ImportRequest request = new FileTransferService.ImportRequest(
                     routeId, appName, format,
                     readSpec.withLocale(FormatSources.resolve(exchange, localeDeclaration)),
-                    rowSqlFile, onError);
+                    rowSqlFile, onError, ImportContracts.of(exchange, input));
             if (review) {
                 respondReview(exchange, transfers.reviewImport(request, subject(exchange),
                         content));

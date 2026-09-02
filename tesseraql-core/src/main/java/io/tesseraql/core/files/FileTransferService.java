@@ -23,9 +23,25 @@ public interface FileTransferService {
     String AFTER_EXTRACT = "extract";
     String AFTER_DOWNLOAD = "download";
 
-    /** An upload to apply: the row statement runs once per parsed row. */
+    /**
+     * An upload to apply: the row statement runs once per parsed row.
+     *
+     * @param contract what each row must satisfy beyond parsing (docs/csv-import.md decision 3),
+     *                 frozen — including the code sets a {@code codes:} column was resolved
+     *                 against — so a reviewed import's two passes cannot disagree
+     */
     record ImportRequest(String routeId, String appName, String format, FileReadSpec readSpec,
-            Path rowSqlFile, String onError) {
+            Path rowSqlFile, String onError, RowContract contract) {
+
+        /** The shape before an import could hold its rows to a contract. */
+        public ImportRequest(String routeId, String appName, String format, FileReadSpec readSpec,
+                Path rowSqlFile, String onError) {
+            this(routeId, appName, format, readSpec, rowSqlFile, onError, RowContract.none());
+        }
+
+        public ImportRequest {
+            contract = contract == null ? RowContract.none() : contract;
+        }
     }
 
     /**

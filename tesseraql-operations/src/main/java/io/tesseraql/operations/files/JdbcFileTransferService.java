@@ -514,6 +514,11 @@ public final class JdbcFileTransferService implements FileTransferService {
                             try {
                                 typed = io.tesseraql.core.files.ColumnValues
                                         .parseRow(request.readSpec(), values);
+                                io.tesseraql.core.files.ColumnValueException violation = request
+                                        .contract().firstViolation(typed);
+                                if (violation != null) {
+                                    throw violation;
+                                }
                             } catch (RuntimeException ex) {
                                 parseRejected.add(rowNumber);
                                 record(errors, rowNumber, ex);
@@ -615,7 +620,8 @@ public final class JdbcFileTransferService implements FileTransferService {
         // leaves bytes on disk that no row points at, and the sweep only walks rows.
         boolean parked = false;
         try {
-            ParseOutcome outcome = parseOnly(codec, request.readSpec(), upload);
+            ParseOutcome outcome = parseOnly(codec, request.readSpec(), request.contract(),
+                    upload);
             // A file the codec could not finish reading has no ready rows, whatever the counter
             // reached before it threw: saying "899 rows ready" beside a refusal would be the
             // status code and the report disagreeing, which is the thing this shape prevents.
@@ -649,7 +655,7 @@ public final class JdbcFileTransferService implements FileTransferService {
      * aspirational: one reader, two policies.
      */
     private ParseOutcome parseOnly(FileCodec codec, io.tesseraql.core.files.FileReadSpec spec,
-            SpoolRef upload) {
+            io.tesseraql.core.files.RowContract contract, SpoolRef upload) {
         List<RowError> errors = new ArrayList<>();
         Set<Long> rejected = new java.util.LinkedHashSet<>();
         long[] rows = {0};
@@ -657,7 +663,15 @@ public final class JdbcFileTransferService implements FileTransferService {
             codec.read(content, spec, (rowNumber, values) -> {
                 rows[0]++;
                 try {
-                    io.tesseraql.core.files.ColumnValues.parseRow(spec, values);
+                    Map<String, Object> typed = io.tesseraql.core.files.ColumnValues
+                            .parseRow(spec, values);
+                    // The declared contract runs on the TYPED row, so `min: 1` compares numbers
+                    // and not the text they arrived as.
+                    io.tesseraql.core.files.ColumnValueException violation = contract
+                            .firstViolation(typed);
+                    if (violation != null) {
+                        throw violation;
+                    }
                 } catch (RuntimeException ex) {
                     rejected.add(rowNumber);
                     record(errors, rowNumber, ex);
@@ -743,7 +757,8 @@ public final class JdbcFileTransferService implements FileTransferService {
         // even though the locale expression would resolve against a different request.
         ImportRequest frozen = new ImportRequest(request.routeId(), request.appName(),
                 request.format(), readSpec(batch.readSpecJson(), request.readSpec()),
-                request.rowSqlFile(), request.onError());
+                request.rowSqlFile(), request.onError(),
+                contract(batch.contractJson(), request.contract()));
         String transferId = launchImport(frozen, codec, upload, batch.rejected());
         linkTransfer(batchId, transferId);
         return transferId;
@@ -770,8 +785,8 @@ public final class JdbcFileTransferService implements FileTransferService {
     // tql_import_batch persistence
 
     private record BatchRow(String routeId, String appName, String subject, String status,
-            String spoolId, String spoolUri, String readSpecJson, long rowCount,
-            Set<Long> rejected, Timestamp claimedAt, Timestamp expiresAt) {
+            String spoolId, String spoolUri, String readSpecJson, String contractJson,
+            long rowCount, Set<Long> rejected, Timestamp claimedAt, Timestamp expiresAt) {
 
         SpoolRef spool() {
             return spoolOf(spoolId, spoolUri);
@@ -823,9 +838,9 @@ public final class JdbcFileTransferService implements FileTransferService {
                 PreparedStatement statement = connection.prepareStatement("""
                         insert into tql_import_batch
                           (batch_id, route_id, app_name, subject, format, spool_id, spool_uri,
-                           read_spec_json, report_json, row_count, ready_count, rejected_count,
-                           status, expires_at, created_at)
-                        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PARKED', ?, ?)""")) {
+                           read_spec_json, contract_json, report_json, row_count, ready_count,
+                           rejected_count, status, expires_at, created_at)
+                        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PARKED', ?, ?)""")) {
             applyTimeout(statement);
             statement.setString(1, batchId);
             statement.setString(2, request.routeId());
@@ -835,13 +850,14 @@ public final class JdbcFileTransferService implements FileTransferService {
             statement.setString(6, upload.id());
             statement.setString(7, upload.uri().toString());
             statement.setString(8, toJson(request.readSpec()));
-            statement.setString(9, toJson(Map.of(
+            statement.setString(9, toJson(request.contract()));
+            statement.setString(10, toJson(Map.of(
                     "errors", outcome.errors(), "rejected", outcome.rejected())));
-            statement.setLong(10, outcome.rows());
-            statement.setLong(11, ready);
-            statement.setLong(12, outcome.rejectedCount());
-            statement.setTimestamp(13, Timestamp.from(expiresAt));
-            statement.setTimestamp(14, Timestamp.from(Instant.now()));
+            statement.setLong(11, outcome.rows());
+            statement.setLong(12, ready);
+            statement.setLong(13, outcome.rejectedCount());
+            statement.setTimestamp(14, Timestamp.from(expiresAt));
+            statement.setTimestamp(15, Timestamp.from(Instant.now()));
             statement.executeUpdate();
         } catch (SQLException ex) {
             throw new TqlException(TRANSFER_ERROR,
@@ -945,8 +961,9 @@ public final class JdbcFileTransferService implements FileTransferService {
         try (Connection connection = dataSource.getConnection();
                 PreparedStatement statement = connection.prepareStatement(
                         "select route_id, app_name, subject, status, spool_id, spool_uri,"
-                                + " read_spec_json, report_json, row_count, claimed_at,"
-                                + " expires_at from tql_import_batch where batch_id = ?")) {
+                                + " read_spec_json, contract_json, report_json, row_count,"
+                                + " claimed_at, expires_at from tql_import_batch"
+                                + " where batch_id = ?")) {
             applyTimeout(statement);
             statement.setString(1, batchId);
             try (ResultSet rs = statement.executeQuery()) {
@@ -956,9 +973,9 @@ public final class JdbcFileTransferService implements FileTransferService {
                 return Optional.of(new BatchRow(rs.getString("route_id"),
                         rs.getString("app_name"), rs.getString("subject"), rs.getString("status"),
                         rs.getString("spool_id"), rs.getString("spool_uri"),
-                        rs.getString("read_spec_json"), rs.getLong("row_count"),
-                        rejectedRows(rs.getString("report_json")), rs.getTimestamp("claimed_at"),
-                        rs.getTimestamp("expires_at")));
+                        rs.getString("read_spec_json"), rs.getString("contract_json"),
+                        rs.getLong("row_count"), rejectedRows(rs.getString("report_json")),
+                        rs.getTimestamp("claimed_at"), rs.getTimestamp("expires_at")));
             }
         } catch (SQLException ex) {
             throw new TqlException(TRANSFER_ERROR,
@@ -982,6 +999,24 @@ public final class JdbcFileTransferService implements FileTransferService {
         } catch (JsonProcessingException ex) {
             throw new TqlException(TRANSFER_ERROR,
                     "Failed to read the import batch report: " + ex.getMessage());
+        }
+    }
+
+    /**
+     * The contract the review held the rows to. Read back rather than rebuilt, because rebuilding
+     * would re-resolve the code catalogs and a code retired since the upload would move the
+     * rejection set — tripping the agreement check with a message blaming the file.
+     */
+    private io.tesseraql.core.files.RowContract contract(String json,
+            io.tesseraql.core.files.RowContract fallback) {
+        if (json == null || json.isBlank()) {
+            return fallback;
+        }
+        try {
+            return mapper.readValue(json, io.tesseraql.core.files.RowContract.class);
+        } catch (JsonProcessingException ex) {
+            throw new TqlException(TRANSFER_ERROR,
+                    "Failed to read the parked row contract: " + ex.getMessage());
         }
     }
 
