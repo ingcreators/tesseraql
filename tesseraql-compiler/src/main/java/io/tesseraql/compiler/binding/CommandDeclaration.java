@@ -14,7 +14,7 @@ import java.util.Map;
  * Everything a command document declares that rides its one transaction: the statements, the
  * rules and decisions checked before them, and the messages published after them.
  *
- * <p>These seven arrived at {@link TransactionalCommandProcessor} as seven positional arguments
+ * <p>These arrived at {@link TransactionalCommandProcessor} as that many positional arguments
  * read one by one off the same {@code RouteDefinition}, which is what {@link #of} does in one
  * place instead. A synthesized workflow transition builds one directly, because its route is not
  * a document anyone wrote.
@@ -28,11 +28,13 @@ import java.util.Map;
  * @param outbox   the transactional outbox declaration, or null
  * @param publish  the domain event published through that outbox, or null
  * @param errors   how a constraint violation is reported, or null for the default
+ * @param lock     the optimistic-lock column this command compares (docs/edit-conflict.md
+ *                 decision 1), or null for an unlocked command
  */
 public record CommandDeclaration(Map<String, Binding> steps,
         Map<String, ValidationRule> validate, Map<String, DecisionUse> decide,
         Map<String, NotifySpec> notifications, OutboxSpec outbox, PublishSpec publish,
-        ErrorsSpec errors) {
+        ErrorsSpec errors, String lock) {
 
     /** An absent map is an empty one, so the processor never has to ask. */
     public CommandDeclaration {
@@ -46,6 +48,7 @@ public record CommandDeclaration(Map<String, Binding> steps,
     public static CommandDeclaration of(RouteDefinition definition) {
         return new CommandDeclaration(definition.steps(), definition.validate(),
                 definition.decide(), definition.notifications(), definition.outbox(),
-                definition.publish(), definition.errors());
+                definition.publish(), definition.errors(),
+                definition.lock() == null ? null : definition.lock().column());
     }
 }

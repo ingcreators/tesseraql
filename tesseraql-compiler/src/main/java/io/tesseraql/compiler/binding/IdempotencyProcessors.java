@@ -167,6 +167,15 @@ public final class IdempotencyProcessors {
      * excluded - {@code _csrf} varies by session, {@code _idempotency} is the key itself
      * (docs/idempotency-key.md decision 2), and {@code _return} varies by the page the user
      * came from without changing what the command does.
+     *
+     * <p>{@code _lock} and {@code _overwrite} are excluded for a sharper reason
+     * (docs/edit-conflict.md decision 6): a deliberate overwrite is the <em>same intent</em> as
+     * the save it replaces — the claim was released when the conflict was thrown — and it differs
+     * from that save in exactly these two fields. Left in the hash, the retry would read as "same
+     * key, different request" and answer 422 for a payload the user cannot clear without
+     * reloading. This covers the browser legs only: {@code requestHash} hashes a non-empty raw
+     * body verbatim, so a JSON caller re-posting with the waiver added under the same key still
+     * mismatches, and the honest answer there is a fresh key.
      */
     private static String formPayload(Exchange exchange) {
         var fields = exchange.request().formFields();
@@ -177,7 +186,9 @@ public final class IdempotencyProcessors {
         fields.entrySet().stream()
                 .filter(field -> !"_csrf".equals(field.getKey())
                         && !"_idempotency".equals(field.getKey())
-                        && !"_return".equals(field.getKey()))
+                        && !"_return".equals(field.getKey())
+                        && !io.tesseraql.core.sql.LockBinding.PARAM.equals(field.getKey())
+                        && !LockBinder.OVERWRITE_FIELD.equals(field.getKey()))
                 .sorted(java.util.Map.Entry.comparingByKey())
                 .forEach(field -> field.getValue().forEach(
                         value -> canonical.append(field.getKey()).append('=').append(value)

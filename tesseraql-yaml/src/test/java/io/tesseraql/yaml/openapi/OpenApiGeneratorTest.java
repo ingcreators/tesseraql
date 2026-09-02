@@ -65,6 +65,47 @@ class OpenApiGeneratorTest {
     }
 
     /**
+     * A locked command route demands one of two framework-owned body keys
+     * (docs/edit-conflict.md decision 4), so the published contract has to name them: a client
+     * generated from a spec that omits them cannot produce a request that passes.
+     */
+    @Test
+    void aLockedRouteDocumentsTheFrameworkOwnedLockFields() {
+        io.tesseraql.yaml.SimpleYamlParser parser = new io.tesseraql.yaml.SimpleYamlParser();
+        Path home = Path.of("/app").toAbsolutePath().normalize();
+        var route = new io.tesseraql.yaml.manifest.RouteFile("post", "/items/{id}/update",
+                home.resolve("web/items/update/post.yml"), parser.parseRoute("""
+                        version: tesseraql/v1
+                        id: items.update
+                        kind: route
+                        recipe: command-json
+                        lock: { column: version, type: integer }
+                        input:
+                          name: { type: string, required: true }
+                        steps:
+                          - id: main
+                            sql:
+                              file: update.sql
+                        """, "update"));
+        AppManifest manifest = new AppManifest(home,
+                new io.tesseraql.yaml.config.AppConfig(java.util.Map.of("tesseraql",
+                        java.util.Map.of("app", java.util.Map.of("name", "test-app"))),
+                        name -> null),
+                java.util.List.of(route), java.util.List.of(), java.util.List.of(),
+                java.util.List.of(), java.util.List.of(), java.util.List.of(),
+                java.util.List.of(), java.util.List.of(), java.util.List.of(),
+                java.util.List.of(), java.util.List.of(), java.util.List.of(),
+                io.tesseraql.yaml.manifest.ManifestIndex.of(java.util.Map.of(), "test"));
+
+        String json = new OpenApiGenerator().toJson(manifest);
+
+        assertThat(json).contains("\"_lock\"").contains("\"_overwrite\"")
+                .contains("sent back unchanged");
+        // Neither is required: the route accepts either one, and that is a runtime rule.
+        assertThat(json).doesNotContain("\"_lock\", \"_overwrite\"");
+    }
+
+    /**
      * An application served under a prefix answers at {@code <base>/api/users}
      * (docs/base-path.md): the generated document says so once, in {@code servers}, and leaves
      * the declared route paths alone.

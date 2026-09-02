@@ -16,7 +16,8 @@ import org.junit.jupiter.api.Timeout;
 class Sql2WayFuzzTest {
 
     private static final String[] TOKENS = {
-            "/*%if a != null */", "/*%for i : xs */", "/*%scope s */", "/*%end*/", "/*%elseif b */",
+            "/*%if a != null */", "/*%for i : xs */", "/*%scope s */", "/*%lock*/", "/*%end*/",
+            "/*%elseif b */",
             "/*%else*/", "/* expr */", "/*# {x} */", "/* ${scope.s}/f */", "select", "from",
             "where",
             "'lit'", "'un", "(1=1)", "?", "/*", "*/", "--", "{", "}", "\n", " ", "()", "1",
@@ -27,6 +28,7 @@ class Sql2WayFuzzTest {
             "select /*# order by {sort} */ * from t",
             "select * from read_parquet(/* ${scope.s}/f.parquet */ 'd.parquet')",
             "select 'a''b' -- don't\nfrom t",
+            "update t set a = /* a */ 1 where id = /* id */ 0 and /*%lock*/ (1=1)",
     };
 
     @Test

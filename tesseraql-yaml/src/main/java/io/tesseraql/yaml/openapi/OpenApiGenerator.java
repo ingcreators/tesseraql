@@ -139,7 +139,8 @@ public final class OpenApiGenerator {
         }
         if ("file-import".equals(recipe)) {
             operation.put("requestBody", uploadBody(definition));
-        } else if (!queryInputs && !definition.input().isEmpty()) {
+        } else if (!queryInputs
+                && (!definition.input().isEmpty() || definition.lock() != null)) {
             operation.put("requestBody", jsonBody(definition));
         }
 
@@ -324,6 +325,19 @@ public final class OpenApiGenerator {
                 required.add(name);
             }
         });
+        // The framework-owned lock fields (docs/edit-conflict.md decision 4): a locked route
+        // demands one of them, so a client generated from a spec that omits them cannot produce
+        // a request that passes. Neither is `required` — the route accepts either one, and the
+        // either/or is enforced at runtime. Neither carries a `type`: the lock is deliberately
+        // type-agnostic, and declaring one here would be a lie about what the route compares.
+        if (definition.lock() != null) {
+            properties.put("_lock", Map.of("description",
+                    "The value of the '" + definition.lock().column() + "' column the caller read,"
+                            + " sent back unchanged. A stale value answers 409 TQL-SQL-4094."));
+            properties.put("_overwrite", Map.of("description",
+                    "Waives the lock comparison for this one request, applying the write over"
+                            + " whatever the row holds now."));
+        }
         Map<String, Object> schema = new LinkedHashMap<>();
         schema.put("type", "object");
         schema.put("properties", properties);

@@ -19,6 +19,10 @@ import java.util.List;
  *   <li>{@code /*%for item : items *}{@code / ... /*%end*}{@code /} — optionally
  *       {@code /*%for item : items separator ',' *}{@code /}; the loop exposes
  *       {@code item_index} (0-based) alongside {@code item}</li>
+ *   <li>{@code /*%lock*}{@code / (1=1)} — the optimistic-lock comparison an
+ *       {@code update} command's WHERE carries; the framework compares the declared column
+ *       against the value the caller sent back, and the statement itself advances it
+ *       (docs/edit-conflict.md)</li>
  *   <li>{@code /*# template *}{@code /} — embedded variable; {@code {placeholder}} references in the
  *       template are interpolated into the SQL text (not bound as {@code ?}), for identifier-position
  *       fragments a bind cannot drive such as a dynamic {@code ORDER BY}. The whole fragment lives in
@@ -116,6 +120,7 @@ public final class Sql2WayParser {
                         case "if" -> nodes.add(parseIf(directive));
                         case "for" -> nodes.add(parseFor(directive));
                         case "scope" -> nodes.add(parseScope(directive));
+                        case "lock" -> nodes.add(parseLock(directive));
                         case "elseif", "else", "end" -> {
                             pendingTerminator = directive;
                             return nodes;
@@ -304,6 +309,26 @@ public final class Sql2WayParser {
         }
         skipParenGroup();
         return new SqlNode.Scope(name, alias, asBoolean, directive.sourceLine());
+    }
+
+    /**
+     * The optimistic-lock comparison site (docs/edit-conflict.md decision 2). It takes no
+     * argument: the column is the route's {@code lock:} declaration, so writing it here too would
+     * be a second copy free to disagree. Like the scope directive it replaces a parenthesized
+     * dummy predicate, which is what keeps the template runnable in a plain SQL tool.
+     */
+    private SqlNode parseLock(Directive directive) {
+        String argument = directive.argument("lock").trim();
+        if (!argument.isEmpty()) {
+            throw error("a lock directive takes no argument ('" + argument + "'); the column comes"
+                    + " from the route's lock: declaration");
+        }
+        if (skipWhitespacePeek() != '(') {
+            throw error("a lock directive must be followed by a parenthesized dummy predicate, "
+                    + "e.g. /*%lock*/ (1=1)");
+        }
+        skipParenGroup();
+        return new SqlNode.Lock(directive.sourceLine());
     }
 
     private Directive requireTerminator(String block) {

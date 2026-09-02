@@ -168,6 +168,11 @@ class ErrorResponseRendererTest {
                 .isEqualTo(400);
         assertThat(ErrorResponseRenderer.httpStatus(new TqlErrorCode(TqlDomain.FIELD, 2002)))
                 .isEqualTo(400);
+        // The locked route reached with neither lock field (docs/edit-conflict.md decision 4).
+        // This assertion is the only guard on it: the FIELD arm answers 400 by default, so
+        // nothing else would catch a regression, and a later reader must not "fix" that arm.
+        assertThat(ErrorResponseRenderer.httpStatus(new TqlErrorCode(TqlDomain.FIELD, 2011)))
+                .isEqualTo(400);
     }
 
     @Test
@@ -279,6 +284,40 @@ class ErrorResponseRendererTest {
     }
 
     @Test
+    void aStaleLockCarriesTheAffordanceBesideTheConflictNeverInsideIt() throws Exception {
+        // docs/edit-conflict.md decision 5: a sibling, because the renderer hands the whole
+        // conflict map to the catalog as the hint interpolation parameters — a key named like
+        // a placeholder inside it would silently rewrite the sentence. Asserted over the parsed
+        // tree rather than the bytes: Map.of iterates in a per-JVM-run order, so a substring
+        // assertion on serialized key order is a flake, not a guard.
+        Exchange exchange = exchangeWith(TqlException
+                .builder(new TqlErrorCode(TqlDomain.SQL, 4094))
+                .details(Map.of(
+                        "conflict", Map.of("step", "main", "expectedRows", 1, "actualRows", 0,
+                                "hint", "tql.conflict.stale"),
+                        "lock", Map.of("column", "version", "field", "_lock",
+                                "overwriteField", "_overwrite")))
+                .build());
+
+        new ErrorResponseRenderer().process(exchange);
+
+        com.fasterxml.jackson.databind.JsonNode error = new com.fasterxml.jackson.databind.ObjectMapper()
+                .readTree(exchange.getBody(String.class)).path("error");
+        assertThat(error.path("code").asText()).isEqualTo("TQL-SQL-4094");
+
+        com.fasterxml.jackson.databind.JsonNode conflict = error.path("details").path("conflict");
+        assertThat(conflict.path("hintKey").asText()).isEqualTo("tql.conflict.stale");
+        // The affordance is a sibling of the conflict, never an entry inside it.
+        assertThat(conflict.fieldNames()).toIterable()
+                .containsExactlyInAnyOrder("step", "expectedRows", "actualRows", "hint", "hintKey");
+
+        com.fasterxml.jackson.databind.JsonNode lock = error.path("details").path("lock");
+        assertThat(lock.path("column").asText()).isEqualTo("version");
+        assertThat(lock.path("field").asText()).isEqualTo("_lock");
+        assertThat(lock.path("overwriteField").asText()).isEqualTo("_overwrite");
+    }
+
+    @Test
     void htmxFragmentCarriesTheFieldCodeAndMessageKey() throws Exception {
         Exchange exchange = exchangeWith(TqlException
                 .builder(new TqlErrorCode(TqlDomain.FIELD, 4220))
@@ -312,6 +351,9 @@ class ErrorResponseRendererTest {
         assertThat(ErrorResponseRenderer.httpStatus(new TqlErrorCode(TqlDomain.SQL, 4091)))
                 .isEqualTo(409);
         assertThat(ErrorResponseRenderer.httpStatus(new TqlErrorCode(TqlDomain.SQL, 4093)))
+                .isEqualTo(409);
+        // The declared lock's stale write (docs/edit-conflict.md decision 5).
+        assertThat(ErrorResponseRenderer.httpStatus(new TqlErrorCode(TqlDomain.SQL, 4094)))
                 .isEqualTo(409);
         assertThat(ErrorResponseRenderer.httpStatus(new TqlErrorCode(TqlDomain.SQL, 4001)))
                 .isEqualTo(400);

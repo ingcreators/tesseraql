@@ -86,6 +86,8 @@ public final class TransactionalCommandProcessor implements Step {
     private static final TqlErrorCode INVALID_STEPS = new TqlErrorCode(TqlDomain.ROUTE, 3102);
     /** TQL-SQL-4092: a row-count expectation failed, reported as an optimistic-lock conflict. */
     private static final TqlErrorCode EXPECT_CONFLICT = new TqlErrorCode(TqlDomain.SQL, 4092);
+    /** TQL-SQL-4094: a declared lock refused a stale write (docs/edit-conflict.md decision 5). */
+    private static final TqlErrorCode LOCK_CONFLICT = new TqlErrorCode(TqlDomain.SQL, 4094);
     /** TQL-FIELD-4220: declarative validation rejected the input (HTTP 422). */
     private static final TqlErrorCode VALIDATION_FAILED = new TqlErrorCode(TqlDomain.FIELD, 4220);
     // Portable constraint-violation codes, mapped to HTTP statuses by ErrorResponseRenderer.
@@ -119,6 +121,8 @@ public final class TransactionalCommandProcessor implements Step {
     private final String appName;
     private final String dialect;
     private final WorkflowBinding workflow;
+    /** The route's declared lock column (docs/edit-conflict.md decision 1), or null. */
+    private final String lock;
     /**
      * The compiled {@code lookup:} references of the command's input fields
      * (docs/reference-lookup.md decision 3), existence-checked on the command's own
@@ -134,7 +138,7 @@ public final class TransactionalCommandProcessor implements Step {
     private record Step(String name, List<SqlNode> nodes, String sourcePath,
             String mode, Map<String, String> params, List<String> keys, Binding.Expect expect,
             String sequence, ExecutionBounds bounds, io.tesseraql.core.expr.Expr when,
-            Map<String, Integer> outTypes) {
+            Map<String, Integer> outTypes, boolean locked) {
 
         boolean isSequence() {
             return sequence != null;
@@ -211,6 +215,7 @@ public final class TransactionalCommandProcessor implements Step {
         if (declared.steps().isEmpty() && workflow == null) {
             throw invalid("a command route needs a steps: declaration");
         }
+        this.lock = declared.lock();
         this.steps = compile(declared.steps(), stepFile, functions);
         this.validation = compileValidation(declared.validate(), stepFile, functions);
         // The one decide: compile (docs/decision-tables.md), shared with the transition
@@ -260,6 +265,7 @@ public final class TransactionalCommandProcessor implements Step {
         Map<String, Binding> bindings = declaredSteps;
         List<Step> compiled = new ArrayList<>();
         java.util.Set<String> seen = new java.util.LinkedHashSet<>();
+        String lockCarrier = null;
         for (Map.Entry<String, Binding> entry : bindings.entrySet()) {
             String name = entry.getKey();
             Binding binding = entry.getValue();
@@ -270,7 +276,7 @@ public final class TransactionalCommandProcessor implements Step {
             if (binding.isSequence()) {
                 compiled.add(new Step(name, null, null, "sequence",
                         binding.params(), List.of(), null, binding.sequence(),
-                        boundsFor(binding), when, Map.of()));
+                        boundsFor(binding), when, Map.of(), false));
             } else {
                 Path file = stepFile.apply(binding.file());
                 // Steps default to update: a command writes.
@@ -284,10 +290,23 @@ public final class TransactionalCommandProcessor implements Step {
                     throw invalid("step '" + name + "': expect/keys need an update statement -"
                             + " declare mode: update");
                 }
-                compiled.add(new Step(name, Sql2WayParser.parse(read(file), functions),
+                List<SqlNode> nodes = Sql2WayParser.parse(read(file), functions);
+                int[] lockCounts = lockCounts(nodes);
+                boolean locked = lockCounts[0] > 0;
+                validateLock(name, mode, binding, lockCounts, lockCarrier);
+                if (locked) {
+                    lockCarrier = name;
+                }
+                // A declared lock implies its expectation (docs/edit-conflict.md decision 1):
+                // exactly one affected row, refused as a conflict. It attaches to the carrier
+                // step alone; every other step of a multi-step command is untouched.
+                Binding.Expect expect = locked
+                        ? new Binding.Expect(1, "conflict")
+                        : binding.expect();
+                compiled.add(new Step(name, nodes,
                         file.toString(), mode,
-                        binding.params(), binding.keys(), binding.expect(), null,
-                        boundsFor(binding), when, outTypes(name, mode, binding)));
+                        binding.params(), binding.keys(), expect, null,
+                        boundsFor(binding), when, outTypes(name, mode, binding), locked));
             }
             seen.add(name);
         }
@@ -341,6 +360,71 @@ public final class TransactionalCommandProcessor implements Step {
         return java.util.Collections.unmodifiableMap(types);
     }
 
+    /**
+     * How many lock directives this statement carries, in total and at the top level.
+     *
+     * <p>The two counts differ only for a directive nested inside a {@code /*%if*}{@code /} or a
+     * {@code /*%for*}{@code /}, and that difference is a refusal (see {@link #validateLock}): a
+     * lock that renders away is a lock that is not there, and the write would then satisfy its
+     * own implied row-count expectation on the author's remaining predicates alone.
+     */
+    private static int[] lockCounts(List<SqlNode> nodes) {
+        int[] counts = {0, 0};
+        SqlNode.walk(nodes, node -> {
+            if (node instanceof SqlNode.Lock) {
+                counts[0]++;
+            }
+        });
+        counts[1] = (int) nodes.stream().filter(SqlNode.Lock.class::isInstance).count();
+        return counts;
+    }
+
+    /**
+     * The two step-shaped lock refusals (docs/edit-conflict.md decision 1). Both read the raw
+     * declaration rather than the compiled step, because the compiled one already carries the
+     * expectation the lock implies — reading that back would refuse every locked route.
+     *
+     * <p>The route-shaped half of the pairing lives in the compiler, which is the only place that
+     * holds the route. Here we can only refuse the direction that is visible from a statement: a
+     * directive on a route that declared no lock at all.
+     */
+    private void validateLock(String name, String mode, Binding binding, int[] counts,
+            String earlierCarrier) {
+        if (counts[0] == 0) {
+            return;
+        }
+        if (!"update".equals(mode)) {
+            // The implied expectation counts affected rows, which a query never has and a call
+            // never answers - so a lock here would refuse every request with a conflict it
+            // cannot explain.
+            throw invalid("step '" + name + "': a lock directive needs an update statement -"
+                    + " declare mode: update");
+        }
+        if (counts[0] != counts[1]) {
+            throw invalid("step '" + name + "': a lock directive inside an /*%if*/ or a /*%for*/"
+                    + " would render away on the branch that omits it, and the write"
+                    + " would then meet its own row-count expectation unlocked — the lock predicate"
+                    + " is not conditional (docs/edit-conflict.md)");
+        }
+        if (counts[0] > 1) {
+            throw invalid("step '" + name + "': " + counts[0] + " lock directives - a route has"
+                    + " exactly one lock");
+        }
+        if (lock == null || lock.isBlank()) {
+            throw invalid("step '" + name + "': a lock directive needs a route-level lock:"
+                    + " declaration naming the column to compare (docs/edit-conflict.md)");
+        }
+        if (binding.expect() != null) {
+            throw invalid("step '" + name + "': expect: cannot be declared beside a lock"
+                    + " directive - lock: implies expect: { rowCount: 1, onMismatch: conflict },"
+                    + " and two statements of one intent can disagree");
+        }
+        if (earlierCarrier != null) {
+            throw invalid("step '" + name + "': a second lock directive - step '" + earlierCarrier
+                    + "' already carries the route's one lock");
+        }
+    }
+
     /** Fail-fast validation of one step declaration (runs at route build time). */
     private void validate(String name, Binding binding, java.util.Set<String> earlier) {
         if (binding.isContract() || binding.isService()) {
@@ -363,6 +447,11 @@ public final class TransactionalCommandProcessor implements Step {
         if (binding.params().containsKey(AUDIT)) {
             throw invalid("step '" + name + "': the bind name 'audit' is reserved for the"
                     + " canonical audit binds");
+        }
+        if (binding.params().containsKey(io.tesseraql.core.sql.LockBinding.PARAM)) {
+            throw invalid("step '" + name + "': the bind name '"
+                    + io.tesseraql.core.sql.LockBinding.PARAM + "' is reserved for the route's"
+                    + " declared lock (docs/edit-conflict.md)");
         }
         if (binding.params().containsKey("out")) {
             throw invalid("step '" + name + "': the bind name 'out' is reserved for a call"
@@ -807,6 +896,13 @@ public final class TransactionalCommandProcessor implements Step {
         // and the audit namespace stays reserved.
         io.tesseraql.core.sql.AmbientBinds.seed(params, evaluation);
         params.put(AUDIT, audit);
+        // The declared lock (docs/edit-conflict.md decision 2), seeded only on the step whose
+        // statement carries the directive. Every other render path seeds nothing, so a stray
+        // directive elsewhere refuses at TQL-SQL-2115 rather than rendering an unlocked write.
+        if (step.locked()) {
+            params.put(io.tesseraql.core.sql.LockBinding.PARAM,
+                    exchange.getProperty(LockBinder.LOCK_PROPERTY));
+        }
         // Row scoping applies to writes, not only reads: a /*%scope … *&#47; in an UPDATE's
         // WHERE is how an approval transition carries its row authority (docs/data-scoping.md).
         BoundSql bound = SqlRenderer.render(step.nodes(), params, scopeResolver(exchange),
@@ -885,16 +981,37 @@ public final class TransactionalCommandProcessor implements Step {
             return;
         }
         boolean conflict = "conflict".equals(step.expect().effectiveOnMismatch());
-        throw TqlException.builder(conflict ? EXPECT_CONFLICT : EXPECT_FAILED)
+        Map<String, Object> details = new LinkedHashMap<>();
+        details.put("conflict", Map.of(
+                "step", step.name(),
+                "expectedRows", step.expect().rowCount(),
+                "actualRows", actual,
+                // A message key: the error renderer localizes it per request locale.
+                "hint", "tql.conflict.stale"));
+        if (step.locked()) {
+            // A sibling of `conflict`, never an entry inside it (docs/edit-conflict.md
+            // decision 5): the renderer hands the whole conflict map to the message catalog as
+            // the hint's interpolation parameters, so a key named like a placeholder would
+            // silently rewrite the sentence.
+            details.put("lock", Map.of(
+                    "column", lock,
+                    "field", io.tesseraql.core.sql.LockBinding.PARAM,
+                    "overwriteField", LockBinder.OVERWRITE_FIELD));
+        }
+        // A declared lock answers its own code, so a client can tell a stale write — which has a
+        // dialog and a waiver — from any other row-count expectation that happened to fail. The
+        // gate is the step, not the route: a multi-step command whose other step declared its own
+        // expect: keeps 4092, or it would offer to waive a predicate that was never the problem.
+        TqlErrorCode code = step.locked()
+                ? LOCK_CONFLICT
+                : (conflict
+                        ? EXPECT_CONFLICT
+                        : EXPECT_FAILED);
+        throw TqlException.builder(code)
                 .message("Step '" + step.name() + "' affected " + actual + " row(s), expected "
                         + step.expect().rowCount())
                 .source(step.sourcePath())
-                .details(Map.of("conflict", Map.of(
-                        "step", step.name(),
-                        "expectedRows", step.expect().rowCount(),
-                        "actualRows", actual,
-                        // A message key: the error renderer localizes it per request locale.
-                        "hint", "tql.conflict.stale")))
+                .details(details)
                 .build();
     }
 

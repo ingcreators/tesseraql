@@ -174,8 +174,8 @@ The bind name `audit` is reserved; declaring it under `params:` fails at route b
 ## Row-count expectations (optimistic locking)
 
 ```yaml
-sources:
-  main:
+steps:
+  - id: main
     sql:
       file: update-status.sql
       mode: update
@@ -187,6 +187,10 @@ sources:
         status: body.status
         version: body.version
 ```
+
+`expect:` is a step key. Declared under `sources:` it is refused at build time
+(`TQL-ROUTE-3120`), because a read acquisition counts no affected rows and the declaration
+would silently do nothing.
 
 ```sql
 update orders

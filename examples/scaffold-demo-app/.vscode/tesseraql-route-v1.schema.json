@@ -117,6 +117,20 @@
       },
       "additionalProperties": true
     },
+    "lock": {
+      "description": "Optimistic locking for this command route: the column whose value the caller must send back unchanged for the write to apply. Written as the bare column (`lock: version`) or as a block naming its type (`lock: { column: version, type: integer }`) - a form value always arrives as a string, so an untyped lock on a numeric column cannot be compared. The framework only compares it, through the lock directive the authored statement carries in its WHERE, and never advances it: the statement's own SET list does that. A stale save is TQL-SQL-4094 (409); a request carrying neither `_lock` nor `_overwrite` is TQL-FIELD-2011 (400).",
+      "oneOf": [
+        { "type": "string" },
+        {
+          "type": "object",
+          "properties": {
+            "column": { "type": "string", "description": "The lock column." },
+            "type": { "type": "string", "description": "The column's type, for coercing the submitted value (integer, string, number, date, datetime)." }
+          },
+          "additionalProperties": true
+        }
+      ]
+    },
     "admission": {
       "type": "object",
       "description": "Admission policy for this route: concurrency, rate limiting, and the execution lane. Documented in productivity.md (admission) and jobs.md (lanes).",
