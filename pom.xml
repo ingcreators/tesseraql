@@ -188,7 +188,7 @@
     <maven.pmd.plugin.version>3.28.0</maven.pmd.plugin.version>
     <!-- The plugin's bundled PMD lags; the analyzer version is pinned here so Java language
          support is chosen deliberately (7.16 is where Java 25 landed). -->
-    <pmd.version>7.26.0</pmd.version>
+    <pmd.version>7.27.0</pmd.version>
 
     <!-- Build plugin versions -->
     <maven.compiler.plugin.version>3.15.0</maven.compiler.plugin.version>
