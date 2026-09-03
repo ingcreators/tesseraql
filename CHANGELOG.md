@@ -4,7 +4,174 @@ All notable changes to TesseraQL are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/).
 
-## Unreleased
+## 0.15.0 - 2026-09-03
+
+Java 25 is the baseline, and the runtime under it is the framework's own. The build targets
+`--release 25`, the enforcer requires `[25,)`, CI runs one JVM instead of two, and every channel
+where TesseraQL supplies the JVM moves with it. Apache Camel left the build entirely — 205 jars
+at the start of that campaign, 153 at the end — and the Spring runtime adapter was deleted, so
+what serves a request is Vert.x and this codebase's own `Exchange`. On the surface above it, the
+declarative document grew the faces an operator needs: a `recipe: list` view is a grid page with
+presets, condition chips, keyset and snapshot pagination and bulk actions; a bulk action answers
+with a report a person can read; an idempotency key finally reaches a browser form, which is
+where a double submit actually happens; and a reviewed CSV import, a reference lookup and a
+declared optimistic lock each became a key the document declares rather than a thing every app
+hand-wires. **Includes many pre-1.0 breaking changes**, recorded in the Changed entries.
+
+### Added
+
+- **The declarative list is an operational grid page** (docs/list-surface.md, ten slices). A
+  `recipe: list` view rendered a card: a search box, a table, and a pager of plain anchors whose
+  hrefs carried `sort`, `dir` and the search term and dropped every other applied condition, so a
+  page click was a full navigation that could land the user somewhere they had not been. It is
+  now one frame whose regions render only when the contract declares them — title, presets,
+  search box, condition chips, status line, selection bar, grid, pager — which is what lets a
+  single template serve both a five-row lookup list and a work queue. Page links keep real hrefs,
+  swap the table region in place and push the URL, and they carry `sort`, `dir`, `size`, the
+  search term and every declared filter, so every page state is still a bookmarkable address.
+
+  Row identity is declared rather than assumed. `key: id`, or `key: [order_id, line_no]`, names
+  the columns that identify a row, and the new core primitive `RowTokens` encodes them as one
+  opaque base64url token — the row's anchor id, its checkbox value, its keyset cursor and its
+  snapshot membership key, whatever the key's arity. Tokens are unsigned and prove nothing: every
+  consumer re-authorizes what it fetches. A null or blank key component is refused at render time
+  (`TQL-VIEW-3322`), because a row without its declared identity is a data defect and not a row
+  to skip quietly. `location:` gains the sentinel `back` on top of it. A list embeds its own
+  current URL as a `_return` field in the links and forms it renders, and the redirect resolves
+  `back` to that field when it passes the app-local gate, to the application root when it does
+  not. A save therefore returns to the filter, sort and page the user acted from, rather than to
+  a literal template's idea of where the list is.
+
+  Every remaining region comes from a key. `filters:` names declared route inputs and renders
+  them as removable condition chips and a GET filter dialog typed from the route's `input:`
+  block; a chip's remove link is the current URL minus that param, so dropping a condition needs
+  no JavaScript. `presets:` declares named param sets rendered as real links beside the title,
+  the active one marked and a "Modified" badge shown when the URL goes beyond it — no storage
+  anywhere, which is why sharing a preset is copying the address bar. `actions:` declares a bulk
+  action as a label and a POST route; declaring one renders the selection column and bar, and
+  the framework decodes the posted `ids` tokens against the acting view's `key:` ahead of the
+  route's own input binding, so a single-column key reaches an endpoint as the bare scalar it
+  already expected. An input declared `type: sort` takes the whole sort set as one param
+  (`?sort=-ship_date,order_no`) validated against its own `columns:` allowlist, and the framework
+  publishes the resulting ORDER BY fragment as the `<name>Sql` sibling for the authored
+  `/*# order by {sort} */` directive to bind — the expansion can never name a column the
+  contract did not declare. A declared `dir` still applies to a bare single column, so existing
+  header links are untouched. `pagination.by` accepts a list, which makes the keyset cursor one
+  row token whose parts the framework publishes as `params.after.<column>` for the author's own
+  tuple predicate. `pagination.strategy: snapshot` freezes a work queue's membership at search
+  time as the tokens the page carries, bounded by `cap:` (default 500), and fetches live state
+  one slice at a time through `params.keys` — so a row that vanished tombstones, an approved row
+  shows approved, and nothing slides between pages.
+
+  The scaffolder stopped refusing composite keys: `TQL-APP-5203` now fires only for a table with
+  no primary key at all, detail routes become nested path segments (`web/<table>/{a}/{b}/`), and
+  the WHERE predicates, unique-rule exclusions, action templates and search tiebreaker each carry
+  every key column. Studio's scaffold gate follows, and its data browser's three key slots became
+  eight. A column `link:` now URL-encodes each substituted value — a key containing `/` or `?`
+  used to break the href it was written into — and `TQL-VIEW-3321` refuses a placeholder that is
+  not one plain column name, which used to render as the empty string at runtime and eject wrong.
+  The other new lints are `TQL-VIEW-3323` and `TQL-VIEW-3324` for a `filters:` entry or a
+  `presets:` param naming an input the route does not declare, `TQL-VIEW-3325` for an `actions:`
+  entry targeting a URL no POST route matches, `TQL-VIEW-3326` for snapshot pagination without a
+  single-column `key:`, and `TQL-YAML-1028`, which pairs `type: sort` with `columns:` in both
+  directions.
+
+  BREAKING (pre-1.0, no migration steps): `tql/view/list.html` is the grid page now, and it is
+  part of the public rendering contract. Its fragment signature is unchanged — `view(v)`, and
+  `table(tableId, columns, rows)` for the `tql/view/table.html` it composes — so an app carrying
+  an L2 override of either keeps rendering, silently without presets, chips, the selection
+  column, row anchors and the in-place pager, and with `TQL-VIEW-3307` satisfied, because that
+  lint checks the signature and cannot check what the file contains. This is exactly the case
+  docs/declarative-views.md has in mind when it says a pattern's composition is recorded as
+  breaking.
+
+- **A bulk action answers with a report a person can read** (docs/bulk-report.md). The `_bulk`
+  endpoint answered its per-key outcome report as JSON to every caller, the browser that had
+  just submitted a grid's native action form included. It has a browser leg now: it parks the
+  failed outcomes under a short-lived handle scoped to the acting principal
+  (`JdbcBulkReportStore`, on the framework datasource, expired rows swept on each write) and
+  redirects to the list carrying that handle. The re-rendered page shows the outcome report
+  above the grid: totals, then the failures grouped by reason — the guard's declared refusal
+  sentence where the transition declared one, and the guard's own id or the `TQL-*` code where
+  it did not — with each group and the group list bounded and each saying what it left out. An
+  expired or foreign handle renders the plain list; the durable record is workflow history. The
+  JSON contract is untouched.
+
+  A report entry reads "Row 12 — PR-1003" and navigates by the row's existing `#row-<token>`
+  anchor, because position is not identity: rows re-sort and pages turn, and a positional link
+  would drift exactly when the report matters most. The number is claimed only where it is
+  authoritative — the posted membership order of a frozen snapshot *is* that snapshot's order —
+  and elsewhere the entry stands on its key alone. A list that declares `actions:` renders the
+  row-number column its report speaks in: absolute on snapshot and offset pages, page-relative
+  on keyset, whose whole point is not counting. Failed rows carry `data-attention="error"` with
+  `aria-describedby` naming their reason group and re-render checked, so pressing the action
+  again applies to exactly the failures.
+
+  The round trip's status names the acting pagination strategy, and the form itself is the
+  discriminator. A snapshot list's form carries its frozen membership, so the answer is **307**
+  and the browser re-posts the intact form to the list's own page leg: the membership, the sort
+  and the filters all survive, and a refresh re-posts the idempotent page fetch rather than the
+  action. A form without membership is an offset or keyset list, whose state lives in its
+  validated `_return` URL, so that leg takes the ordinary **303** — its membership was never
+  frozen, and a fresh GET is the honest re-render. The markup is the shared
+  `tql/view/report.html` pattern that a reviewed upload's validation report fills the same way.
+
+- **A browser form can carry an idempotency key** (docs/idempotency-key.md decisions 4-7).
+  Declaring `idempotency:` on a command has always made a repeated request replay its first
+  answer instead of writing twice, but the key's only transport was the `Idempotency-Key`
+  header — which a form posting without JavaScript cannot set, so the guarantee was reachable
+  only by callers able to set a header. `HtmlResponseRenderer` now mints a fresh UUID into every
+  HTML render's model as `_idempotency`, beside `_csrf`, and `tql/view/form.html` echoes it as a
+  hidden input; the begin step reads the header first and that field second — the precedence the
+  CSRF gate already used — and `required: true` is satisfied by either transport. The value is
+  minted on every HTML render whether or not the route being posted to declares the block, and a
+  route without one simply ignores the field; it also joins `RequestBinder`'s reserved fields, so
+  it never reaches input binding and passes the mass-assignment guard under the default
+  `unknownFields: reject`. The field is the framework's to render: an app carrying an L2 override
+  of `tql/view/form.html` taken before this release renders no key at all, and its post to a
+  route declaring `required: true` is refused with `TQL-FIELD-2007`.
+
+  Replaying now means replaying the answer rather than only its body. `tql_idempotency_record`
+  gains a `response_headers` column (operations **V10**, in all three vendor trees), into which
+  the complete step snapshots an allowlist — `HX-Trigger`, `HX-Redirect`, `HX-Retarget`,
+  `HX-Reswap` and `Location` — that a replay re-emits, so the user who double-clicked still sees
+  the stored toast and a replayed PRG still lands on the receipt page. Everything else, security
+  headers and cache control included, stays the fresh response's business. `RetentionSweeper`
+  also prunes lapsed records on the existing `tql.retention` schedule and reports the count in
+  its result: expiry is already per-record policy, so the sweep needs no duration of its own, and
+  before it a key that was never re-presented lived forever.
+
+### Changed
+
+- **BREAKING: the same key with a different payload is a mismatch, not a race**
+  (docs/idempotency-key.md decision 3). Reachable only now that the mismatch can be detected at
+  all: a repeat carrying a different request answers `TQL-IDEM-4221` (422) — a stale tab or a
+  bug, refused where the request's own refusals render — and `TQL-IDEM-4090` (409) narrows to
+  what it always meant, a second request arriving while the first is still in flight.
+
+### Fixed
+
+- **An idempotency claim outlived the request that never committed** (docs/idempotency-key.md
+  decision 1). The begin step claimed an `IN_PROGRESS` row before request binding, and every
+  non-commit outcome — a `TQL-FIELD-4220` validation failure above all — threw out of the
+  transactional command and skipped the complete step, so the claim survived until its TTL
+  lapsed, which defaults to 24 hours. The corrected resubmit carrying the same key answered
+  `TQL-IDEM-4090` for that whole window, and the only way past it was to mint a fresh key per
+  attempt — which forfeits the guarantee the key exists to give. `IdempotencyStore` gains
+  `release(scope, key)`, which deletes a record only while it is still in progress; the begin
+  step records its claim on the exchange, the complete step clears it after storing, and the
+  pipeline runner's `finally` releases whatever is still held — logging rather than throwing,
+  because a failed release only restores the old behaviour and must not replace the answer the
+  request already earned. The key is spent by the commit, not by the attempt.
+
+- **The request hash could not see a form body** (docs/idempotency-key.md decisions 2 and 3). It
+  covered method, path and body, and a browser form's fields never reach the exchange body — the
+  HTTP edge parses them into `formFields()` — so for every urlencoded or multipart post the hash
+  degenerated to method plus path, and two submissions of one route with entirely different
+  values were indistinguishable. The hash now covers the sorted `name=value` pairs when the body
+  is empty, excluding the framework's own hidden form fields, and folds the authenticated
+  principal's tenant and subject into every hash, so one user's stolen key cannot replay for
+  another.
 
 ### Added
 
@@ -161,9 +328,6 @@ All notable changes to TesseraQL are documented here. The format follows
 
   Rendering a lock directive on a statement nobody armed is **`TQL-SQL-2115`**, never a fallback
   to `(1=1)` — a silently unlocked write is the defect this surface exists to abolish.
-
-  Nothing declares `lock:` yet: the scaffolder and the gallery follow in slice 4, so this slice
-  is purely additive.
 
 - **The inventory gallery app imports supplier prices** (docs/csv-import.md slice 6, the
   dogfood). `examples/inventory-app` gains `/products/prices/import`: a reviewed CSV upload with
@@ -729,10 +893,10 @@ All notable changes to TesseraQL are documented here. The format follows
   legality, guard, task authority, advance, `stamp:`, the scoped command and history are all
   still there — in its own transaction, and the response is a `200` carrying a per-key outcome
   report in the import idiom (`{requested, succeeded, failed, outcomes: [{key, status, code?,
-  guard?}]}`). A refused key does not disturb the others; an all-or-nothing bulk approve is not
-  offered, because a hundred-document rollback on the ninety-seventh guard is not what an inbox
-  user means. `emit:` fires once per key. A typed `TQL-*` refusal becomes that key's outcome
-  while an unclassified failure fails the request. `keys:` is bounded by
+  guard?, message?}]}`). A refused key does not disturb the others; an all-or-nothing bulk
+  approve is not offered, because a hundred-document rollback on the ninety-seventh guard is not
+  what an inbox user means. `emit:` fires once per key. A typed `TQL-*` refusal becomes that
+  key's outcome while an unclassified failure fails the request. `keys:` is bounded by
   `tesseraql.workflow.bulk.maxKeys` (default 100), over which the request is refused whole
   (`TQL-WORKFLOW-3116`). The procurement gallery's `submit_decision` dispatch declares it.
   Closes gap 2 of [process-control-gaps.md](docs/process-control-gaps.md).
@@ -1804,7 +1968,7 @@ All notable changes to TesseraQL are documented here. The format follows
 - **An OAuth or MCP endpoint answers a failure instead of hanging.** Those two surfaces declared no
   error clauses, where every sibling declares two, and the edge left a failure nothing claimed
   unanswered — the caller held an open connection until it timed out. Both now carry the framework
-  envelope, **and the edge answers `TQL-CAMEL-5000` for any failure nothing rendered**, so a future
+  envelope, **and the edge answers `TQL-ROUTE-5000` for any failure nothing rendered**, so a future
   surface that forgets its clauses fails visibly rather than silently.
 
 - **A compiled application route is a pipeline, not a Camel route** (docs/camel-removal.md
@@ -3274,7 +3438,7 @@ All notable changes to TesseraQL are documented here. The format follows
   enforces its own `security:`, runs its `sources:`, and renders the message from a new `text:`
   response arm — so "draft a welcome for customer 4711" can look 4711 up instead of needing a
   tool that pretends to be a prompt. `prompts/get` is a read, so a command step is refused
-  (`TQL-CAMEL-3116`), as is a document with nothing to render (`TQL-CAMEL-3117`).
+  (`TQL-ROUTE-3116`), as is a document with nothing to render (`TQL-ROUTE-3117`).
 - **`response.text:`, for when the rendered text is the answer.** It is `response.file:` without
   `filename:` and `contentType:`, which a message has nowhere to put: the same Thymeleaf TEXT
   rendering against the same kind of model, served as the body rather than as a download.
@@ -3367,7 +3531,7 @@ All notable changes to TesseraQL are documented here. The format follows
 - **A response header that cannot be serialized reports one code.** An HTML response reported
   `TQL-TPL-2001` for it — the template-render code, which happened to be the constant in scope —
   and a JSON response had no such failure to report because it carried no headers. Both now report
-  `TQL-CAMEL-3001`, the response-render code, which is what the failure is: nothing about the
+  `TQL-ROUTE-3001`, the response-render code, which is what the failure is: nothing about the
   template resolved wrongly.
 
 - **The app-wide default response headers reach JSON responses** (docs/route-defaults.md). They
@@ -3626,10 +3790,10 @@ All notable changes to TesseraQL are documented here. The format follows
 - **One error code, one rule.** Nothing stopped two campaigns from allocating the same
   `TQL-*` number to different problems, and nine collisions had shipped — `TQL-LD-2857` meant
   both "two `splitBy:` keys name the same file" and "an export's enrichment failed",
-  `TQL-CAMEL-3114` both "a spooled sibling cannot be enriched from" and "`into:` is not a
+  `TQL-ROUTE-3114` both "a spooled sibling cannot be enriched from" and "`into:` is not a
   result set", `TQL-BATCH-5002` both a failed step and an unreadable chunk input, and the
   generated reference merged each pair into one indistinguishable row. The nine newer rules
-  are renumbered (`TQL-LD-2859`, `TQL-CAMEL-3115`, `TQL-BATCH-5003`, `TQL-FIELD-2007`,
+  are renumbered (`TQL-LD-2859`, `TQL-ROUTE-3115`, `TQL-BATCH-5003`, `TQL-FIELD-2007`,
   `TQL-STUDIO-4242`, `TQL-STUDIO-4243`, `TQL-REPORT-2008`, `TQL-WORKFLOW-3224`,
   `TQL-SQL-2603`), and a build guard now refuses a code declared at two sites unless it is on
   the reviewed list of deliberate shares (a unique violation is one meaning wherever it is

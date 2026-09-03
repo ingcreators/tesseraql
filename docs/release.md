@@ -92,8 +92,8 @@ TesseraQL itself.
 ## Versioning
 
 Semantic versioning. Until 1.0.0, minor releases may change APIs and YAML contracts; such
-changes are called out in `CHANGELOG.md`. The Java policy (21 baseline / 25 compatibility)
-holds for all 1.x releases.
+changes are called out in `CHANGELOG.md`. The Java baseline is 25
+([jvm-baseline.md](jvm-baseline.md)), and 1.x will be declared on it.
 
 ## Publishing to GitHub Packages
 

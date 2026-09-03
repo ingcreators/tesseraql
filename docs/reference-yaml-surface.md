@@ -699,9 +699,9 @@ Schema for TesseraQL declarative view documents (*.view.yml): what a route rende
 | `refreshOn` | string | Refetch this view's refresh region whenever a command emits this topic (docs/realtime.md). List, detail and dashboard views only - not forms. |
 | `workflow` | string | The workflow whose transitions region and lifecycle stepper this page renders (docs/workflow-surface.md): the server shows only the transitions legal for this user on the row's current state. Detail views only; the id must name a declared kind: workflow document. |
 | `key` | any | The result columns that identify one row (docs/declarative-views.md): a column name, or an ordered list for a composite key. Rows gain a stable anchor and an opaque row token; every key column must be present and non-null in each row. List views only. |
-| `filters` | array of any | The grid page's declared filters (docs/declarative-views.md): route inputs rendered as condition chips and a filter dialog. Each entry is an input name, or a name/label mapping. Requires layout: page; list views only. |
-| `presets` | array of [object](#presets) | Named view presets (docs/declarative-views.md): contract-declared param sets the grid page renders as real links - the active one is marked, re-clicking it resets, and no storage is involved. Requires layout: page; list views only. |
-| `actions` | array of [object](#actions) | Bulk actions over the grid page's row selection (docs/declarative-views.md): declaring any renders the selection column and bar. Requires layout: page and key:; list views only. |
+| `filters` | array of any | The grid page's declared filters (docs/declarative-views.md): route inputs rendered as condition chips and a filter dialog. Each entry is an input name, or a name/label mapping. List views only. |
+| `presets` | array of [object](#presets) | Named view presets (docs/declarative-views.md): contract-declared param sets the grid page renders as real links - the active one is marked, re-clicking it resets, and no storage is involved. List views only. |
+| `actions` | array of [object](#actions) | Bulk actions over the grid page's row selection (docs/declarative-views.md): declaring any renders the selection column and bar. Requires key:; list views only. |
 
 ### presets
 
