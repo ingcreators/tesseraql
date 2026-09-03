@@ -147,6 +147,7 @@ public final class RouteCompiler {
         // fragment - both HTML the browser renders like any other - used to arrive with
         // no CSP and no X-Frame-Options at all.
         java.util.Map<String, String> errorHeaders = responseHeaders.headers();
+        java.util.Map<String, String> reloadByRoute = reloadByRoute(manifest);
         // Every pipeline this run builds inherits both clauses, most specific first.
         // The DSL used to arrange that by side effect — an onException declared in a
         // builder's configure() was copied into each route it went on to create — and
@@ -154,10 +155,10 @@ public final class RouteCompiler {
         pipelines = Pipelines.of(context).compiling(java.util.List.of(
                 Pipeline.Handler.catching(TqlException.class,
                         new ErrorResponseRenderer(i18n, onErrorByRoute,
-                                manifest.appHome(), errorHeaders)),
+                                manifest.appHome(), errorHeaders, reloadByRoute)),
                 Pipeline.Handler.catching(Exception.class,
                         new ErrorResponseRenderer(i18n, onErrorByRoute,
-                                manifest.appHome(), errorHeaders))));
+                                manifest.appHome(), errorHeaders, reloadByRoute))));
         for (RouteFile routeFile : manifest.routes()) {
             if (onlyRouteIds == null
                     || onlyRouteIds.contains(routeFile.definition().id())) {
@@ -511,6 +512,26 @@ public final class RouteCompiler {
             route.process(new io.tesseraql.compiler.binding.HttpCacheProcessor(
                     definition.cache()));
         }
+    }
+
+    /**
+     * Where each locked route's conflict answer sends its Reload choice, keyed by route id
+     * (docs/edit-conflict.md decision 6): the route's own declared redirect destination, which is
+     * where a successful save would have gone. A locked route that declares no redirect renders
+     * no Reload link, which is the "omitted rather than guessed" rule the design asks for.
+     */
+    private static java.util.Map<String, String> reloadByRoute(AppManifest manifest) {
+        java.util.Map<String, String> map = new java.util.LinkedHashMap<>();
+        for (RouteFile routeFile : manifest.routes()) {
+            RouteDefinition definition = routeFile.definition();
+            if (definition.lock() == null || definition.response() == null
+                    || definition.response().redirect() == null
+                    || definition.response().redirect().location() == null) {
+                continue;
+            }
+            map.put(definition.id(), definition.response().redirect().location());
+        }
+        return map;
     }
 
     /** Each route's {@code response.onError} steering, keyed by route id (htmx error retarget). */

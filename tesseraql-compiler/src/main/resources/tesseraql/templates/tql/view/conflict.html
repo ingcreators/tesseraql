@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<!-- The conflict as a page (docs/edit-conflict.md decision 9): what a save posted without
+     JavaScript gets when the record moved under it. Before this existed, a native form post that
+     failed fell through to the JSON envelope and the browser showed a raw error body.
+
+     Two choices, not three. The title carries the announcement, because on a fresh navigation
+     nothing changes after load and an assertive live region announces nothing — a reader arrives
+     at the top of a new document, and the title is what they are told. "Keep editing" is not
+     offered: Back restores a form whose lock value is stale, so the next save would refuse
+     forever, and calling that a choice would be a lie about a page you cannot leave except by
+     discarding.
+
+     The submitted values are echoed as hidden inputs so the overwrite carries what the user
+     typed. Echoing a request body is a first for this framework and it is safe for the one
+     reason that matters: the disclosure is to the person who typed it. -->
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: shell(#{tql.conflict.title}, ~{}, ~{}, ~{:: #page-content})}">
+<div id="page-content" class="hc-stack">
+  <div class="hc-alert" data-variant="warning" role="alert">
+    <p class="hc-alert__title" th:text="#{tql.conflict.title}">This record changed</p>
+    <p class="hc-alert__body" th:text="${c.hint}">The record may have been changed.</p>
+  </div>
+  <!-- The overwrite: the caller's own values back, plus the waiver as the button's own submit
+       value. Never a hidden input — the form and the submitter land in one payload, so a hidden
+       waiver would ride every submit rather than the one press that meant it. -->
+  <!-- The action is the address the browser posted to, already carrying the application's
+       prefix, so it is emitted verbatim; the reload link below is app-relative and goes
+       through the link builder like every other link on the page. -->
+  <form method="post" th:action="${c.action}">
+    <input type="hidden" th:each="field : ${c.fields}"
+           th:name="${field.name}" th:value="${field.value}">
+    <span class="hc-action">
+      <button type="submit" class="hc-button" data-variant="primary"
+              th:name="${c.overwriteField}" value="1"
+              th:text="#{tql.conflict.overwrite}">Save mine anyway</button>
+    </span>
+  </form>
+  <a class="hc-button" data-variant="ghost" th:if="${c.reload != null}"
+     th:href="@{${c.reload}}" th:text="#{tql.conflict.reload}">Discard mine and reload</a>
+</div>
+</html>

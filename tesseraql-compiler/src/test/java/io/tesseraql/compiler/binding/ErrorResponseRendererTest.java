@@ -317,6 +317,220 @@ class ErrorResponseRendererTest {
         assertThat(lock.path("overwriteField").asText()).isEqualTo("_overwrite");
     }
 
+    /** A stale-write refusal with the affordance the envelope publishes. */
+    private static TqlException staleLock() {
+        return TqlException.builder(new TqlErrorCode(TqlDomain.SQL, 4094))
+                .details(Map.of(
+                        "conflict", Map.of("step", "main", "expectedRows", 1, "actualRows", 0,
+                                "hint", "tql.conflict.stale"),
+                        "lock", Map.of("column", "version", "field", "_lock",
+                                "overwriteField", "_overwrite")))
+                .build();
+    }
+
+    @Test
+    void aStaleLockRetargetsTheConflictDialogAtTheShellHost() throws Exception {
+        Exchange exchange = exchangeWith(staleLock());
+        exchange.request().header("HX-Request", "true");
+        exchange.request().header("HX-Trigger", "items-edit-form");
+
+        new ErrorResponseRenderer().process(exchange);
+
+        assertThat(exchange.response().status()).isEqualTo(409);
+        assertThat(exchange.response().header("HX-Retarget"))
+                .isEqualTo("[data-tql-conflict-host]");
+        // Explicit, not omitted: htmx keeps the requesting element's swap style otherwise.
+        assertThat(exchange.response().header("HX-Reswap")).isEqualTo("innerHTML");
+        String body = exchange.getBody(String.class);
+        assertThat(body).contains("data-tql-conflict-dialog")
+                .contains("hc-dialog__footer")
+                .contains("<form method=\"dialog\">")
+                .contains("autofocus")
+                .contains("form=\"items-edit-form\"")
+                .contains("name=\"_overwrite\"")
+                // Never the field-errors marker: a borrowed marker would be a lie about what
+                // this fragment is, and the bootstrap gate says so in its own comment.
+                .doesNotContain("data-hc-field-errors");
+    }
+
+    @Test
+    void aConflictWithNoTriggerHeaderOffersNoOverwriteButton() throws Exception {
+        // An honest short answer beats a button pointing at nothing.
+        Exchange exchange = exchangeWith(staleLock());
+        exchange.request().header("HX-Request", "true");
+
+        new ErrorResponseRenderer().process(exchange);
+
+        assertThat(exchange.getBody(String.class)).contains("data-tql-conflict-dialog")
+                .doesNotContain("name=\"_overwrite\"");
+    }
+
+    @Test
+    void anExpectConflictStillRendersTodaysAlert() throws Exception {
+        // 4092 keeps its published meaning: only a DECLARED lock grows the two faces.
+        Exchange exchange = exchangeWith(TqlException
+                .builder(new TqlErrorCode(TqlDomain.SQL, 4092))
+                .details(Map.of("conflict", Map.of("step", "main", "expectedRows", 1,
+                        "actualRows", 0, "hint", "tql.conflict.stale")))
+                .build());
+        exchange.request().header("HX-Request", "true");
+
+        new ErrorResponseRenderer().process(exchange);
+
+        assertThat(exchange.getBody(String.class))
+                .contains("data-error-code=\"TQL-SQL-4092\"")
+                .doesNotContain("data-tql-conflict-dialog");
+    }
+
+    @Test
+    void aNoJsFormPostGetsTheConflictPageInsteadOfJson() throws Exception {
+        // The first HTML answer a failing POST has ever had: before this it fell through to
+        // the JSON envelope and the browser showed a raw error body.
+        Exchange exchange = exchangeWith(staleLock());
+        exchange.request().method("POST");
+        exchange.request().uri("/items/7/update");
+        exchange.request().header("Accept", "text/html");
+        exchange.request().formFields().put("name", List.of("Second item"));
+        exchange.request().formFields().put("_lock", List.of("3"));
+
+        new ErrorResponseRenderer().process(exchange);
+
+        assertThat(exchange.response().status()).isEqualTo(409);
+        assertThat(exchange.response().header("Content-Type")).startsWith("text/html");
+        String body = exchange.getBody(String.class);
+        // The title carries the announcement: on a fresh navigation nothing changes after
+        // load, so an assertive region announces nothing.
+        assertThat(body).contains("<title>").contains("This record changed");
+        assertThat(body).contains("name=\"name\"")
+                .contains("Second item")
+                .contains("name=\"_overwrite\"")
+                // The stale lock is not echoed: the page exists because that value is stale.
+                .doesNotContain("name=\"_lock\"");
+        // The invariant the swap markers rest on: the allowance is a raw substring scan of the
+        // whole body, so no marker may appear in a rendered shell page. This is the only place
+        // in the tree where a full shell render is available to check it.
+        assertThat(body).doesNotContain(ConflictDialog.MARKER)
+                .doesNotContain(SessionExpiredDialog.MARKER)
+                .doesNotContain("data-hc-field-errors")
+                .doesNotContain("data-tql-import-report");
+    }
+
+    @Test
+    void anEchoedValueCannotEscapeItsAttribute() throws Exception {
+        Exchange exchange = exchangeWith(staleLock());
+        exchange.request().method("POST");
+        exchange.request().uri("/items/7/update");
+        exchange.request().header("Accept", "text/html");
+        exchange.request().formFields().put("name", List.of("\"><script>alert(1)</script>"));
+
+        new ErrorResponseRenderer().process(exchange);
+
+        assertThat(exchange.getBody(String.class)).doesNotContain("<script>alert(1)");
+    }
+
+    @Test
+    void aRepeatedFieldEchoesOncePerValue() throws Exception {
+        // The parsed form fields, not the bound body: the binder has already collapsed a
+        // repeated key into a list whose string form is not a value.
+        Exchange exchange = exchangeWith(staleLock());
+        exchange.request().method("POST");
+        exchange.request().uri("/items/7/update");
+        exchange.request().header("Accept", "text/html");
+        exchange.request().formFields().put("tag", List.of("a", "b"));
+
+        new ErrorResponseRenderer().process(exchange);
+
+        String body = exchange.getBody(String.class);
+        assertThat(body).contains("value=\"a\"").contains("value=\"b\"");
+    }
+
+    @Test
+    void theReloadLinkIsTheRoutesOwnDeclaredDestination() throws Exception {
+        Exchange exchange = exchangeWith(staleLock());
+        exchange.request().header("HX-Request", "true");
+        // The id the HTTP edge stamps — NOT the property, which nothing in main ever wrote.
+        exchange.setFromRouteId("items.update");
+        exchange.setProperty(TesseraqlProperties.CONTEXT,
+                Map.of("params", Map.of("id", 7)));
+
+        new ErrorResponseRenderer(io.tesseraql.yaml.i18n.I18nSettings.defaults(), Map.of(), null,
+                Map.of(), Map.of("items.update", "/items/{params.id}")).process(exchange);
+
+        assertThat(exchange.getBody(String.class)).contains("href=\"/items/7\"");
+    }
+
+    @Test
+    void aRouteWithNoDeclaredRedirectOffersNoReloadLink() throws Exception {
+        Exchange exchange = exchangeWith(staleLock());
+        exchange.request().header("HX-Request", "true");
+        exchange.setFromRouteId("items.update");
+
+        new ErrorResponseRenderer().process(exchange);
+
+        assertThat(exchange.getBody(String.class))
+                .doesNotContain("<a class=\"hc-button\"");
+    }
+
+    @Test
+    void onErrorSteeringResolvesTheRouteTheEdgeStamped() throws Exception {
+        // The property was the declared channel and nothing in main ever wrote it, so every
+        // per-route steering was unreachable in a running application.
+        Exchange exchange = exchangeWith(TqlException
+                .builder(new TqlErrorCode(TqlDomain.FIELD, 4220)).build());
+        exchange.request().header("HX-Request", "true");
+        exchange.setFromRouteId("members.create");
+
+        new ErrorResponseRenderer(io.tesseraql.yaml.i18n.I18nSettings.defaults(),
+                Map.of("members.create",
+                        new io.tesseraql.yaml.model.ResponseSpec.OnError("#flash", "outerHTML")))
+                .process(exchange);
+
+        assertThat(exchange.response().header("HX-Retarget")).isEqualTo("#flash");
+    }
+
+    @Test
+    void bothFacesEmitTheApplicationsOwnPrefix() throws Exception {
+        // An application served under a prefix must emit the URLs it also serves
+        // (docs/base-path.md). The page composes the shell, so its stylesheets and scripts ride
+        // on the same variable — without it the 409 page arrives unstyled and its reload link
+        // points outside the application.
+        Beans prefixed = new Beans() {
+            @Override
+            @SuppressWarnings("unchecked")
+            public <T> T lookup(String name, Class<T> type) {
+                return TesseraqlProperties.BASE_PATH_BEAN.equals(name) ? (T) "/shop-a" : null;
+            }
+        };
+        Map<String, String> reload = Map.of("items.update", "/items/{params.id}");
+
+        Exchange dialog = new Exchange(prefixed);
+        dialog.setProperty(TesseraqlProperties.EXCEPTION_CAUGHT, staleLock());
+        dialog.setProperty(TesseraqlProperties.CONTEXT, Map.of("params", Map.of("id", 7)));
+        dialog.setFromRouteId("items.update");
+        dialog.request().header("HX-Request", "true");
+        new ErrorResponseRenderer(io.tesseraql.yaml.i18n.I18nSettings.defaults(), Map.of(), null,
+                Map.of(), reload).process(dialog);
+        assertThat(dialog.getBody(String.class)).contains("href=\"/shop-a/items/7\"");
+
+        Exchange page = new Exchange(prefixed);
+        page.setProperty(TesseraqlProperties.EXCEPTION_CAUGHT, staleLock());
+        page.setProperty(TesseraqlProperties.CONTEXT, Map.of("params", Map.of("id", 7)));
+        page.setFromRouteId("items.update");
+        page.request().method("POST");
+        // The wire URL the browser posted to: already prefixed, and emitted verbatim.
+        page.request().uri("/shop-a/items/7/update");
+        page.request().header("Accept", "text/html");
+        new ErrorResponseRenderer(io.tesseraql.yaml.i18n.I18nSettings.defaults(), Map.of(), null,
+                Map.of(), reload).process(page);
+        String body = page.getBody(String.class);
+        assertThat(body).contains("href=\"/shop-a/items/7\"")
+                // The shell's own assets ride the same variable.
+                .contains("/shop-a/assets/")
+                // ...and the action is not prefixed twice.
+                .contains("action=\"/shop-a/items/7/update\"")
+                .doesNotContain("/shop-a/shop-a/");
+    }
+
     @Test
     void htmxFragmentCarriesTheFieldCodeAndMessageKey() throws Exception {
         Exchange exchange = exchangeWith(TqlException

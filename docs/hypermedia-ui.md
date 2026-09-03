@@ -136,7 +136,7 @@ A session that expires mid-page must not cost the user their work — the kit's
 without a session keeps the classic bounce to `/_tesseraql/login?redirect=…`
 ([authentication.md](authentication.md)). An **htmx** request instead answers 401 with a
 re-login `<dialog>` retargeted at the shell's shared host (`data-hc-remote-dialog-root
-data-hc-session-expiry`, one per page, at body end): `installRemoteDialog` opens it, and
+data-hc-session-expiry data-tql-conflict-host`, one per page, at body end): `installRemoteDialog` opens it, and
 the kit's auto-installed `installSessionExpiry` remembers the interrupted request. The
 server refuses before acting, which is what makes the replay of a mutation safe.
 

@@ -28,6 +28,10 @@ tql:
     stale: >-
       The record may have been changed or deleted by another user; reload it and retry
       the operation.
+    title: This record changed
+    keep: Keep editing
+    reload: Discard mine and reload
+    overwrite: Save mine anyway
   view:
     submit: Save
     empty: No rows
@@ -63,6 +67,9 @@ tql:
     more: "{cap}+ results — keep typing to narrow."
   workflow:
     actions: Actions
+    illegal-transition: >-
+      This action is not available from the document's current state; it may have moved since
+      the page was loaded.
     notNow: Not available in this state.
     assigned: "Assigned to someone else — only the task holder may act."
     confirm: "This finishes the document's lifecycle. Continue?"

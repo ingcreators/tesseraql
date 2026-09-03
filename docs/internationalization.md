@@ -91,7 +91,9 @@ key keeps riding as `messageKey` while `message` carries the resolved text; the 
   framework catalog and overridable per app.
 - Mapped constraint violations fall back to `tql.constraint.<code>` texts (`duplicate`,
   `required`, ...); an `errors.constraints` mapping may declare its own `message:` key.
-- The optimistic-locking conflict hint is the `tql.conflict.stale` key, resolved per locale
+- The optimistic-locking conflict keys are `tql.conflict.*` — `stale` is the hint every
+  refusal carries, and `title`/`keep`/`reload`/`overwrite` are the declared lock's dialog and
+  page. Resolved per locale
   (`hintKey` keeps the key, `hint` the text).
 
 htmx fragments carry the localized text as the item body and the key as `data-message-key`,
