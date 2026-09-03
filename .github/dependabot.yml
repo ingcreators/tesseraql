@@ -38,6 +38,40 @@ updates:
           - minor
           - patch
 
+  # The VS Code extension's build toolchain. Nothing here ships: package.json declares no
+  # `dependencies`, packaging runs `vsce package --no-dependencies`, and .vscodeignore drops
+  # node_modules — so every advisory this manifest raises is development-scope. This entry does
+  # not close those advisories, and adding it earlier would not have closed any of them: each
+  # was transitive under an already-newest @vscode/vsce, and a version update only reaches
+  # direct dependencies. Raising a transitive floor is a hand-run command (SECURITY.md,
+  # "Dependency advisories"). What this entry buys is that the four direct devDependencies stop
+  # drifting unwatched, which is how those floors move on their own.
+  - package-ecosystem: npm
+    directory: /vscode-extension
+    schedule:
+      interval: weekly
+    groups:
+      # Four devDependencies behind one build (tsc, then `vsce package`): upkeep lands as one
+      # pull request, and majors stay individual — a compiler major is the whole toolchain.
+      vscode-extension:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+    ignore:
+      # A floor, not a version to keep current: `engines.vscode: ^1.90.0` is the oldest editor
+      # supported, and @types/vscode must match it or the compiler stops rejecting API that
+      # floor does not have. Raising it is a support decision made in package.json. The gap is
+      # a semver minor, so only a blanket ignore holds it; that suppresses security updates
+      # too, which is acceptable for a declarations-only package that ships no code.
+      - dependency-name: "@types/vscode"
+      # The same argument one axis narrower: `engines.node: >=22`, and both workflows install
+      # Node 22, so the major is the decision and minors inside it are upkeep.
+      - dependency-name: "@types/node"
+        update-types:
+          - version-update:semver-major
+
   - package-ecosystem: github-actions
     directory: /
     schedule:

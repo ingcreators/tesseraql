@@ -28,6 +28,45 @@ Please report vulnerabilities privately via GitHub's private vulnerability repor
 Do not open public issues for security reports. You should receive an initial response
 within a week.
 
+## Dependency advisories
+
+Dependabot's alerts are triaged weekly. An alert against a direct dependency becomes a pull
+request the usual way. An alert against a **transitive** npm dependency — the `docs-site/` and
+`vscode-extension/` trees — regularly cannot, and the run fails with
+`security_update_not_possible`. That has happened repeatedly since 2026-07 (`fast-uri`,
+`undici`, `js-yaml`); those are cleared by hand, and this is how.
+
+**Why the bot cannot do it.** Two reasons, both outside this repository. It resolves the
+advisory against the package's `latest` dist-tag, which for `fast-uri` is a 4.x that `ajv`'s
+declared `fast-uri: "^3.0.1"` forbids. And pinning a transitive target is a silent no-op under
+pnpm (pnpm#12744): the empty `conflicting-dependencies: []` in the failure log is that no-op,
+not a diagnosis.
+
+Neither is a misconfiguration, and neither has a configuration fix. Version updates open pull
+requests for direct dependencies only, and the direct parent is already newest. Nothing in this
+repository prevents the recurrence — expect it again.
+
+**Clearing it.** One command, run in the workspace the alert's manifest path names:
+
+```bash
+cd vscode-extension   # or docs-site
+pnpm --version        # must match packageManager in that directory's package.json
+pnpm update fast-uri --depth Infinity --lockfile-only
+```
+
+The directory is the load-bearing part: pnpm switches to the pinned version only when it runs
+from the package directory, and the pnpm on `PATH` at the repository root is a different one.
+A newer pnpm rewrites the lockfile with peer-dependency suffixes, which CI's
+`pnpm install --frozen-lockfile` then rejects. Target the advisory's first patched version,
+not the tip of the line. Commit the lockfile alone, with no manifest change. Precedents:
+`e421d992c`, `9c491df44`.
+
+**What is at stake.** Both trees are build-time only, and the extension ships nothing from
+either: its `package.json` declares no `dependencies`, packaging runs
+`vsce package --no-dependencies`, and `.vscodeignore` drops `node_modules/**`. That makes the
+fix routine rather than urgent — not optional, because the alert stays open until the floor
+moves.
+
 ## Development secrets
 
 Do not commit secrets.

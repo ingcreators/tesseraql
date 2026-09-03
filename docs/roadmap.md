@@ -1411,9 +1411,11 @@ each, so the phase starts from decisions rather than from a blank page.
 
 ## Continuous tracks
 
-- **Platform maintenance**: weekly Dependabot triage (policy encoded in
-  `.github/dependabot.yml`); Camel LTS-line upgrades; review the JDK baseline at each LTS
-  (the current position is [jvm-baseline.md](jvm-baseline.md)).
+- **Platform maintenance**: weekly Dependabot triage. `.github/dependabot.yml` records which
+  ecosystems are watched and why each pin is deliberate; what to do when an advisory arrives —
+  including the transitive floor Dependabot reports as not possible and cannot raise itself —
+  is [`SECURITY.md`](../SECURITY.md), "Dependency advisories". Review the JDK baseline at each
+  LTS (the current position is [jvm-baseline.md](jvm-baseline.md)).
 - **Documentation**: every phase ships its cookbook entry; the example gallery stays green
   in CI.
 - **Coverage**: every new declarative surface ships its own coverage kind and thresholds.
