@@ -37,7 +37,7 @@ class HypermediaComponentsManifestTest {
             "installDatagrid", // the view compiler's list/table markup (tql/view/table.html)
             "installDatagridActions", // IAM Admin bulk selection bar (users list)
             "installNetworkRetry", // the shell's no-answer Retry host (data-hc-network-retry)
-            "installRemoteDialog", // Studio drawers + the lookup search dialog host
+            "installRemoteDialog", // Studio drawers, the lookup dialog, the conflict dialog
             "installCloseDialog", // close-on-success for remote-dialog compositions
             "installSessionExpiry", // the 401 re-login dialog's replay bridge (shell host)
             "installDirtyGuard", // the form view's unsaved-changes guard (data-hc-dirty-guard)
@@ -65,6 +65,7 @@ class HypermediaComponentsManifestTest {
             "remote-dialog", // Studio drawers + the lookup search dialog
             "live-search", // the lookup dialog's search leg
             "session-expiry", // the 401 re-login dialog (ErrorResponseRenderer + shell host)
+            "edit-conflict", // the declared lock's two faces (docs/edit-conflict.md)
             "unsaved-changes"); // the form view's dirty guard (tql/view/form.html)
 
     /** Named exports the framework imports from the behaviors bundle as an ES module. */

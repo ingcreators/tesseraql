@@ -46,6 +46,13 @@ public final class ErrorResponseRenderer implements Step {
     private final ObjectMapper mapper = io.tesseraql.yaml.JsonMappers.constrained();
     private final I18nSettings i18n;
     private final Map<String, OnError> onErrorByRoute;
+    /**
+     * Where a locked route's conflict answer sends its Reload choice: the route's own
+     * declared redirect destination, keyed by route id (docs/edit-conflict.md decision 6).
+     * Reload goes where a successful save would have gone, which is the one destination the
+     * route already names — and the only one the framework can produce without guessing.
+     */
+    private final Map<String, String> reloadByRoute;
     private final java.nio.file.Path appHome;
     private final Map<String, String> securityHeaders;
 
@@ -60,7 +67,8 @@ public final class ErrorResponseRenderer implements Step {
     /**
      * @param onErrorByRoute per-route {@code response.onError} steering (HX-Retarget/HX-Reswap),
      *                       keyed by route id; the failing route is resolved from
-     *                       {@link Exchange#FAILURE_ROUTE_ID} at error time.
+     *                       {@link TesseraqlProperties#FAILURE_ROUTE_ID}, else the id the HTTP
+     *                       edge stamped, at error time.
      */
     public ErrorResponseRenderer(I18nSettings i18n, Map<String, OnError> onErrorByRoute) {
         this(i18n, onErrorByRoute, null);
@@ -86,6 +94,16 @@ public final class ErrorResponseRenderer implements Step {
      */
     public ErrorResponseRenderer(I18nSettings i18n, Map<String, OnError> onErrorByRoute,
             java.nio.file.Path appHome, Map<String, String> securityHeaders) {
+        this(i18n, onErrorByRoute, appHome, securityHeaders, Map.of());
+    }
+
+    /**
+     * @param reloadByRoute where a locked route's conflict answer sends Reload, keyed by route id
+     */
+    public ErrorResponseRenderer(I18nSettings i18n, Map<String, OnError> onErrorByRoute,
+            java.nio.file.Path appHome, Map<String, String> securityHeaders,
+            Map<String, String> reloadByRoute) {
+        this.reloadByRoute = reloadByRoute == null ? Map.of() : Map.copyOf(reloadByRoute);
         this.i18n = i18n;
         this.onErrorByRoute = onErrorByRoute == null ? Map.of() : Map.copyOf(onErrorByRoute);
         this.appHome = appHome;
@@ -150,6 +168,37 @@ public final class ErrorResponseRenderer implements Step {
                 applySecurityHeaders(exchange);
                 exchange.setBody(SessionExpiredDialog.render(exchange, i18n, tag, methods,
                         null));
+                return;
+            }
+        }
+        // The declared lock's two faces (docs/edit-conflict.md decisions 6 and 9). Both are
+        // gated on the code, so no other refusal changes shape; both return before the generic
+        // htmx arm below, which would otherwise render the field-errors alert instead — and
+        // before applyOnError, because a route's declared retarget would aim the dialog away
+        // from the host the kit opens it in.
+        if (TransactionalCommandProcessor.LOCK_CONFLICT.equals(code)) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> details = error.get("details") instanceof Map<?, ?> raw
+                    ? (Map<String, Object>) raw
+                    : Map.of();
+            String reload = reloadHref(exchange);
+            if ("true".equals(exchange.request().header("HX-Request"))) {
+                exchange.response().header("HX-Retarget", ConflictDialog.HOST);
+                // Explicit, not omitted: htmx keeps the requesting element's swap style, and a
+                // form swapping outerHTML would replace the host itself.
+                exchange.response().header("HX-Reswap", "innerHTML");
+                exchange.response().header(Headers.CONTENT_TYPE, "text/html; charset=utf-8");
+                applySecurityHeaders(exchange);
+                exchange.setBody(ConflictDialog.render(exchange, i18n, tag, details,
+                        exchange.request().header("HX-Trigger"), reload));
+                return;
+            }
+            String accept = exchange.request().header("Accept");
+            if (accept != null && accept.contains("text/html")) {
+                exchange.response().header(Headers.CONTENT_TYPE, "text/html; charset=utf-8");
+                applySecurityHeaders(exchange);
+                exchange.setBody(ConflictPage.render(exchange, appHome, conflictHint(details, tag),
+                        waiverField(details), reload, java.util.Locale.forLanguageTag(tag)));
                 return;
             }
         }
@@ -238,7 +287,7 @@ public final class ErrorResponseRenderer implements Step {
      * instead of the form's own target. Routes without {@code onError} are unaffected.
      */
     private void applyOnError(Exchange exchange) {
-        String routeId = exchange.getProperty(TesseraqlProperties.FAILURE_ROUTE_ID, String.class);
+        String routeId = failingRouteId(exchange);
         OnError onError = routeId == null ? null : onErrorByRoute.get(routeId);
         if (onError == null) {
             return;
@@ -249,6 +298,53 @@ public final class ErrorResponseRenderer implements Step {
         if (onError.reswap() != null && !onError.reswap().isBlank()) {
             exchange.response().header("HX-Reswap", onError.reswap());
         }
+    }
+
+    /**
+     * The refusal's own sentence — already localized by {@link #localizeConflict} — falling back
+     * to the stale-write text when a caller built the details by hand.
+     */
+    private String conflictHint(Map<String, Object> details, String tag) {
+        if (details.get("conflict") instanceof Map<?, ?> conflict && conflict.get("hint") != null) {
+            return String.valueOf(conflict.get("hint"));
+        }
+        String resolved = i18n.catalog().resolve(tag, i18n.defaultTag(), "tql.conflict.stale");
+        return resolved != null ? resolved : "";
+    }
+
+    /** The waiver's field name, as the envelope published it. */
+    private static String waiverField(Map<String, Object> details) {
+        if (details.get("lock") instanceof Map<?, ?> lock && lock.get("overwriteField") != null) {
+            return String.valueOf(lock.get("overwriteField"));
+        }
+        return LockBinder.OVERWRITE_FIELD;
+    }
+
+    /**
+     * Where Reload goes: the failing route's own declared redirect destination, interpolated
+     * against the request it is refusing. That is where a successful save would have landed, and
+     * it is the one address the framework holds without guessing — a {@code Referer} and htmx's
+     * {@code HX-Current-URL} are both absolute URLs, which the app-local gate cannot take.
+     */
+    private String reloadHref(Exchange exchange) {
+        // Null-guarded before the lookup: an immutable map refuses a null key outright, and a
+        // framework endpoint's exchange carries no route id at all.
+        String routeId = failingRouteId(exchange);
+        String declared = routeId == null ? null : reloadByRoute.get(routeId);
+        return declared == null ? null : RedirectRenderer.resolveLocation(exchange, declared);
+    }
+
+    /**
+     * The route the failure came from.
+     *
+     * <p>{@code FAILURE_ROUTE_ID} was the declared channel and nothing ever wrote it, so every
+     * per-route steering below was unreachable in a running application; the id the HTTP edge
+     * stamps on every exchange is the one that is actually there. The property stays first, so a
+     * caller that does set it still wins.
+     */
+    private static String failingRouteId(Exchange exchange) {
+        String declared = exchange.getProperty(TesseraqlProperties.FAILURE_ROUTE_ID, String.class);
+        return declared != null ? declared : exchange.getFromRouteId();
     }
 
     /** Localizes the field-error entries in place: {@code messageKey} + resolved {@code message}. */

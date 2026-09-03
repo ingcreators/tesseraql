@@ -45,18 +45,30 @@ public final class RedirectRenderer implements Step {
 
     @Override
     public void process(Exchange exchange) {
-        if (BACK.equals(redirect.location())) {
+        negotiate(exchange, redirect.effectiveStatus(),
+                resolveLocation(exchange, redirect.location()));
+    }
+
+    /**
+     * A declared redirect location, resolved against this request: the {@code back} sentinel
+     * through the app-local gate, otherwise its {@code {expression}} placeholders interpolated
+     * from the execution context.
+     *
+     * <p>Extracted so the conflict answer's Reload choice lands where a successful save would
+     * have (docs/edit-conflict.md decision 6) — one resolution rather than two that drift the
+     * first time anyone touches encoding or the sentinel.
+     */
+    static String resolveLocation(Exchange exchange, String declaredLocation) {
+        if (BACK.equals(declaredLocation)) {
             String declared = exchange.request().param("_return");
-            negotiate(exchange, redirect.effectiveStatus(),
-                    io.tesseraql.core.http.BasePaths.isLocal(declared) ? declared : "/");
-            return;
+            return io.tesseraql.core.http.BasePaths.isLocal(declared) ? declared : "/";
         }
         @SuppressWarnings("unchecked")
         Map<String, Object> context = exchange.getProperty(TesseraqlProperties.CONTEXT, Map.of(),
                 Map.class);
         EvaluationContext evaluation = new EvaluationContext(context);
 
-        Matcher matcher = PLACEHOLDER.matcher(redirect.location());
+        Matcher matcher = PLACEHOLDER.matcher(declaredLocation);
         StringBuilder location = new StringBuilder();
         while (matcher.find()) {
             Object value = evaluation.resolve(Arrays.asList(matcher.group(1).split("\\.")));
@@ -65,8 +77,7 @@ public final class RedirectRenderer implements Step {
             matcher.appendReplacement(location, Matcher.quoteReplacement(encoded));
         }
         matcher.appendTail(location);
-
-        negotiate(exchange, redirect.effectiveStatus(), location.toString());
+        return location.toString();
     }
 
     /**

@@ -451,10 +451,13 @@ honest short answer rather than a button pointing at nothing.
 **Reload goes where a successful save would have gone.** A locked command route already
 declares that destination — its own `response.redirect.location`, `/items/{path.id}` on the
 scaffolded update — and the renderer interpolates it against the request it is refusing.
-The delivery mechanism exists: `ErrorResponseRenderer` already takes a per-route map keyed
-by route id and resolves the failing route from the exchange at error time, which is how a
-route's declared `onError` steering reaches it. The lock's column and this destination ride
-the same map.
+The delivery mechanism half existed. `ErrorResponseRenderer` already takes a per-route map
+keyed by route id, but the property it resolved that id from was **written nowhere**, so the
+`onError` steering it serves had never fired in a running application. Slice 3 falls back to
+the id the HTTP edge stamps on every exchange, which fixes that steering as a side effect and
+is what makes the reload destination reachable at all. The destination rides its own map: the
+column is already in `details.lock`, and decision 8 forbids rendering anything else from the
+row.
 
 That source is better than the two headers a reviewer reaches for first, and the reason is
 not taste. `Referer` and `HX-Current-URL` are both absolute URLs, so neither can be handed
@@ -468,10 +471,13 @@ Three details the surface owes and the markup above carries. The dismissal is
 destructive choice must never be the one a reflex Enter commits. The retarget rides with
 `HX-Reswap: innerHTML`, because htmx keeps the requesting element's swap style unless it is
 overridden, and an app form or an L2 override using `outerHTML` would otherwise replace the
-host itself and destroy the mount for every later dialog. And the Reload link is a real
-navigation from a page whose form is still `data-dirty`, so the browser's own leave-page
-prompt fires on top of the modal — which is honest, because that link really does discard
-typed work, and is why the link says so.
+host itself and destroy the mount for every later dialog. And the conflict's swap is the one
+allowance that stays an *error*: the other four clear htmx's error flag so a field-errors
+alert lands quietly, but doing that here would tell the kit's unsaved-changes guard the save
+succeeded, and it would re-baseline a form whose work is still unsent. Nothing about a
+refused save is clean, so the page stays dirty — and the Reload link, a real navigation away
+from it, gets the browser's own leave-page prompt on top of the modal. That is honest: the
+link really does discard typed work, which is why it says so.
 
 "Keep editing" is the dialog's own `<form method="dialog">`, plus Escape and the backdrop.
 It is a **dismissal**, not a third server choice, and the design counts two choices for

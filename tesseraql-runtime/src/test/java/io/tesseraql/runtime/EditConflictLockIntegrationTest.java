@@ -170,6 +170,53 @@ class EditConflictLockIntegrationTest {
         assertThat(error.path("details").has("lock")).isFalse();
     }
 
+    @Test
+    @Order(8)
+    void anHtmxSaveGetsTheConflictDialogRetargetedAtTheShellHost() throws Exception {
+        HttpResponse<String> stale = postForm("/api/items/formUpdate",
+                "id=2&name=htmx+edit&_lock=999",
+                Map.of("HX-Request", "true", "HX-Trigger", "items-edit-form",
+                        "Accept", "text/html"));
+
+        assertThat(stale.statusCode()).as(stale::body).isEqualTo(409);
+        assertThat(stale.headers().firstValue("HX-Retarget"))
+                .contains("[data-tql-conflict-host]");
+        assertThat(stale.headers().firstValue("HX-Reswap")).contains("innerHTML");
+        assertThat(stale.body()).contains("data-tql-conflict-dialog")
+                .contains("form=\"items-edit-form\"")
+                .contains("name=\"_overwrite\"")
+                // Reload goes where a successful save would have gone.
+                .contains("href=\"/api/items/2\"");
+    }
+
+    @Test
+    @Order(9)
+    void aSaveWithoutJavaScriptGetsAPageInsteadOfARawEnvelope() throws Exception {
+        HttpResponse<String> stale = postForm("/api/items/formUpdate",
+                "id=2&name=plain+edit&_lock=999", Map.of("Accept", "text/html"));
+
+        assertThat(stale.statusCode()).as(stale::body).isEqualTo(409);
+        assertThat(stale.headers().firstValue("Content-Type").orElse(""))
+                .startsWith("text/html");
+        assertThat(stale.body()).contains("<title>")
+                .contains("name=\"name\"").contains("plain edit")
+                .contains("name=\"_overwrite\"")
+                // The same destination the dialog face offers.
+                .contains("href=\"/api/items/2\"")
+                .doesNotContain("name=\"_lock\"");
+    }
+
+    @Test
+    @Order(10)
+    void theOverwriteThatPageOffersLands() throws Exception {
+        HttpResponse<String> waived = postForm("/api/items/formUpdate",
+                "id=2&name=plain+edit&_overwrite=1", Map.of("Accept", "text/html"));
+
+        // The route redirects on success, so a browser leg answers 303 rather than 200.
+        assertThat(waived.statusCode()).as(waived::body).isIn(200, 303);
+        assertThat(nameOf(2)).isEqualTo("plain edit");
+    }
+
     private static HttpResponse<String> postJson(String path, String body, String key)
             throws Exception {
         return HttpClient.newHttpClient().send(
@@ -183,12 +230,18 @@ class EditConflictLockIntegrationTest {
     }
 
     private static HttpResponse<String> postForm(String path, String body) throws Exception {
-        return HttpClient.newHttpClient().send(
-                HttpRequest.newBuilder(URI.create("http://localhost:" + runtime.port() + path))
-                        .header("Authorization", "Bearer " + token())
-                        .header("Content-Type", "application/x-www-form-urlencoded")
-                        .POST(HttpRequest.BodyPublishers.ofString(body))
-                        .build(),
+        return postForm(path, body, Map.of());
+    }
+
+    private static HttpResponse<String> postForm(String path, String body,
+            Map<String, String> headers) throws Exception {
+        HttpRequest.Builder request = HttpRequest
+                .newBuilder(URI.create("http://localhost:" + runtime.port() + path))
+                .header("Authorization", "Bearer " + token())
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .POST(HttpRequest.BodyPublishers.ofString(body));
+        headers.forEach(request::header);
+        return HttpClient.newHttpClient().send(request.build(),
                 HttpResponse.BodyHandlers.ofString());
     }
 
@@ -294,6 +347,40 @@ class EditConflictLockIntegrationTest {
                       affected: steps.main.affectedRows
                 """);
         Files.writeString(updateDir.resolve("update.sql"), """
+                update items
+                   set name = /* name */ 'x',
+                       version = version + 1
+                 where id = /* id */ 0
+                   and /*%lock*/ (1=1)
+                """);
+
+        // A locked route that declares a redirect, so the conflict answer's Reload choice has a
+        // destination — it goes where a successful save would have gone.
+        Path formDir = home.resolve("web/api/items/formUpdate");
+        Files.createDirectories(formDir);
+        Files.writeString(formDir.resolve("post.yml"), """
+                version: tesseraql/v1
+                id: items.formUpdate
+                kind: route
+                recipe: command-json
+                security:
+                  auth: bearer
+                lock: { column: version, type: integer }
+                input:
+                  id: { type: integer, required: true }
+                  name: { type: string, required: true }
+                steps:
+                  - id: main
+                    sql:
+                      file: update.sql
+                      params:
+                        id: params.id
+                        name: params.name
+                response:
+                  redirect:
+                    location: /api/items/{params.id}
+                """);
+        Files.writeString(formDir.resolve("update.sql"), """
                 update items
                    set name = /* name */ 'x',
                        version = version + 1

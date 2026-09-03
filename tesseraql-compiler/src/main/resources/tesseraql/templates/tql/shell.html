@@ -213,8 +213,12 @@
      page's swap targets — the same stance as the network-retry host above.
      data-hc-session-expiry arms the kit's replay bridge (docs/hypermedia-ui.md "Session
      expiry"): a 401 retargets the re-login dialog here, and the interrupted request replays
-     after hc:sessionrenewed. -->
-<div data-hc-remote-dialog-root data-hc-session-expiry></div>
+     after hc:sessionrenewed. data-tql-conflict-host is the third: a stale save's 409 retargets
+     its dialog here (docs/edit-conflict.md decision 6). All three live on ONE element because
+     the kit opens a swapped dialog only when its target also matches data-hc-remote-dialog-root;
+     the extra attributes exist so a retarget names this host and not Studio's in-card ones,
+     which sit earlier in document order. -->
+<div data-hc-remote-dialog-root data-hc-session-expiry data-tql-conflict-host></div>
 </body>
 </html>
 <!-- Public 4-arg API (back-compat): app-authored and scaffolder-generated shells call this. It

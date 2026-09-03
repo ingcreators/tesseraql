@@ -87,7 +87,7 @@ public final class TransactionalCommandProcessor implements Step {
     /** TQL-SQL-4092: a row-count expectation failed, reported as an optimistic-lock conflict. */
     private static final TqlErrorCode EXPECT_CONFLICT = new TqlErrorCode(TqlDomain.SQL, 4092);
     /** TQL-SQL-4094: a declared lock refused a stale write (docs/edit-conflict.md decision 5). */
-    private static final TqlErrorCode LOCK_CONFLICT = new TqlErrorCode(TqlDomain.SQL, 4094);
+    static final TqlErrorCode LOCK_CONFLICT = new TqlErrorCode(TqlDomain.SQL, 4094);
     /** TQL-FIELD-4220: declarative validation rejected the input (HTTP 422). */
     private static final TqlErrorCode VALIDATION_FAILED = new TqlErrorCode(TqlDomain.FIELD, 4220);
     // Portable constraint-violation codes, mapped to HTTP statuses by ErrorResponseRenderer.

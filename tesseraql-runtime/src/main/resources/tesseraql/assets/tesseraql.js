@@ -107,18 +107,32 @@ registerCodeLanguage("tql-sql", (text) => {
 // (docs/csv-import.md decision 7): the 422 a file with nothing importable answers and the 409 a
 // spent token answers are both states the author has to read, and both arrive as refusals by
 // status. The over-cap 413 rides the field-errors marker instead — it refuses any request body,
-// not only an upload. The allowance is gated per fragment kind precisely so each kind states
-// itself; borrowing another kind's marker to get past the gate would be a lie about what the
-// fragment is.
+// not only an upload. The fifth is the conflict dialog a stale save answers with
+// (docs/edit-conflict.md decision 6) — its marker is deliberately NOT a prefix of the shell's
+// host attribute, because this test is a raw substring scan of the whole body and a marker the
+// shell itself carries would open the gate for every 4xx response that renders a page. The
+// allowance is gated per fragment kind precisely so each kind states itself; borrowing another
+// kind's marker to get past the gate would be a lie about what the fragment is.
 document.body.addEventListener("htmx:beforeSwap", (event) => {
     const status = event.detail.xhr.status;
-    if (status >= 400 && status < 500
-            && (event.detail.serverResponse.includes("data-hc-field-errors")
-                || event.detail.serverResponse.includes("data-hc-lookup")
-                || event.detail.serverResponse.includes("data-tql-session-expired")
-                || event.detail.serverResponse.includes("data-tql-import-report"))) {
+    if (status < 400 || status >= 500) {
+        return;
+    }
+    const body = event.detail.serverResponse;
+    if (body.includes("data-hc-field-errors")
+            || body.includes("data-hc-lookup")
+            || body.includes("data-tql-session-expired")
+            || body.includes("data-tql-import-report")) {
         event.detail.shouldSwap = true;
         event.detail.isError = false;
+        return;
+    }
+    // The conflict dialog swaps but stays an error, which the other four do not. Clearing
+    // isError tells htmx the request succeeded, and the kit's unsaved-changes guard takes that
+    // as its cue to re-baseline the form — so a save the server refused would leave the page
+    // looking saved, with the user's work still unsent. Nothing about a refused save is clean.
+    if (body.includes("data-tql-conflict-dialog")) {
+        event.detail.shouldSwap = true;
     }
 });
 

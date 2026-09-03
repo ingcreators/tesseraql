@@ -8,6 +8,45 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **The conflict has two faces** (docs/edit-conflict.md slice 3). A stale save now answers with
+  something a person can act on. An htmx caller gets a `<dialog>` retargeted at a third attribute
+  on the shell's one remote-dialog host, offering two choices: keep editing (the dialog's own
+  dismissal, and the `autofocus` one, because `showModal()` focuses the first focusable child and
+  the destructive choice must never be what a reflex Enter commits), or reload the record. The
+  overwrite is a **submit button for the page's own form**, associated by the HTML `form`
+  attribute and carrying its waiver as its own submit value — which is what keeps the user's
+  typed values out of the fragment entirely, lets the kit's dirty guard clean on success, and
+  makes the waiver single-shot, because a submit button's value travels only when that button
+  submits.
+
+  **A save posted without JavaScript gets a page**, and that is the first HTML answer a failing
+  POST has ever had here: the custom-error-page branch is gated on a predicate that refuses every
+  non-GET, so a native form post that failed used to fall through to the JSON envelope and show
+  the browser a raw error body. The page echoes the caller's own submitted values as hidden
+  inputs so the overwrite carries what they typed — safe for the one reason that matters, that
+  the disclosure is to the person who typed it — and carries the announcement in its title,
+  because on a fresh navigation nothing changes after load and an assertive region announces
+  nothing. Two choices there too: Back would restore a form whose lock value is stale, so calling
+  it a third would be a lie about a page you cannot leave except by discarding.
+
+  Reload goes where a successful save would have gone: the route's own declared redirect
+  destination, interpolated against the request being refused. A route that declares none renders
+  no reload link rather than a guess. `Referer` and htmx's `HX-Current-URL` are both absolute
+  URLs, which the app-local gate cannot take.
+
+  The bootstrap's swap allowance gains a fifth marker, deliberately not a prefix of the host
+  attribute: the allowance is a raw substring scan of the response body, so a marker the shell
+  itself carries would open the gate for every 4xx page. It is also the one allowance that
+  swaps while staying an **error** — the other four clear htmx's error flag so an alert lands
+  quietly, and doing that here would tell the unsaved-changes guard the save succeeded, leaving
+  a page that looks saved with the user's work still unsent.
+
+- **An illegal workflow transition says why.** `tql.workflow.illegal-transition` was raised by the
+  transition executor and existed in neither bundled catalog, so the only other refusal reaching
+  the hint localizer rendered the literal message key to the user. Both catalogs gain it, and a
+  new guard holds the two bundled catalogs to the same key set — nothing did before, and the
+  fallback hides the drift by resolving a Japanese reader's missing key to English.
+
 - **The declared lock reaches the form** (docs/edit-conflict.md slice 2, the read side). A form
   view whose `action:` route declares `lock:` renders the record's lock value as a fourth
   framework-owned hidden field, beside `_csrf`, `_idempotency` and `_return`. The value is a
@@ -471,6 +510,13 @@ All notable changes to TesseraQL are documented here. The format follows
   joins it there.
 
 ### Fixed
+
+- **A route's `response.onError` steering actually applies.** The failing route was resolved from
+  an exchange property that **nothing in the framework ever wrote**, so the documented
+  HX-Retarget/HX-Reswap steering had never fired in a running application; it now falls back to
+  the route id the HTTP edge stamps on every request. No shipped app declares `response.onError`,
+  so nothing changes for anyone today — but the feature was documented and inert, and the
+  conflict dialog's reload destination needed the same resolution to work at all.
 
 - **`expect:` and `keys:` under `sources:` are refused instead of silently ignored**
   (`TQL-ROUTE-3120`). One `binding` schema definition serves both `steps:` and `sources:`, so
