@@ -32,6 +32,11 @@ jobs:
           distribution: temurin
           java-version: '25'
           cache: maven
+          # Stated, not inherited: v6 turned signature verification on by default, and this JDK
+          # compiles the jars published to GitHub Packages. A value this load-bearing should not
+          # move because Dependabot landed a pin. The tag path cannot be rehearsed, which is an
+          # argument for stating the value here, not for switching it off.
+          verify-signature: true
           # Writes a settings.xml mapping the 'github' server (parent distributionManagement) to
           # the workflow token, so `mvn deploy` can upload to GitHub Packages.
           server-id: github
@@ -106,6 +111,8 @@ jobs:
           distribution: temurin
           java-version: '25'
           cache: maven
+          # Stated, not inherited (as above): this JDK builds the Maven Central artifacts.
+          verify-signature: true
 
       - name: Import the release signing key
         if: steps.creds.outputs.present == 'true'

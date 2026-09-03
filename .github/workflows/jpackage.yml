@@ -46,6 +46,19 @@ jobs:
           distribution: temurin
           java-version: '25'
           cache: maven
+          # Stated, not inherited: v6 turned signature verification on by default, and this is the
+          # job where that matters most — jpackage jlinks a runtime FROM this JDK into the app
+          # image attached to the release, so these bytes reach users through Homebrew and Scoop.
+          # WinSW is pinned by checksum further down for the same reason. On a mismatch it throws.
+          verify-signature: true
+          # v6 also caches the JDK itself wherever `cache` is set, and this matrix is the only
+          # setup-java step in the repo that would ever use it: every ubuntu and windows job
+          # resolves Temurin 25 from the runner's tool-cache, and only the macOS leg downloads.
+          # That download is seconds against a 121 MiB entry the post-job step spends seconds
+          # uploading, into a repo cache already past its 10 GB quota — so the entry is evicted
+          # before the next jpackage run can read it, and the only thing it can displace is the
+          # maven cache the build does reuse.
+          cache-jdk: false
 
       - name: Build the fat jar
         run: ./mvnw -B -ntp -pl tesseraql-cli -am -Pdist -DskipTests package
@@ -200,6 +213,8 @@ jobs:
           distribution: temurin
           java-version: '25'
           cache: maven
+          # Stated, not inherited (as above): this runtime is bundled into the host image too.
+          verify-signature: true
 
       - name: Build the host fat jar
         shell: bash
