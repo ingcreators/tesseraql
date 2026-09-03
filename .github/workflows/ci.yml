@@ -33,6 +33,11 @@ jobs:
           distribution: temurin
           java-version: ${{ matrix.java }}
           cache: maven
+          # Stated, not inherited: v6 turned signature verification on by default, so leaving it
+          # implicit hands the choice to whichever pin Dependabot lands next. Verified is the value
+          # wanted at every site — a downloaded JDK is a build input, held the way jpackage.yml
+          # holds WinSW by checksum. On a mismatch the action throws, which is the point.
+          verify-signature: true
 
       - name: Verify
         run: ./mvnw -B -ntp verify
@@ -61,6 +66,8 @@ jobs:
           distribution: temurin
           java-version: '25'
           cache: maven
+          # Stated, not inherited (as above): a default that flipped on can flip off again.
+          verify-signature: true
 
       # Two invocations so upstream reactor modules build without running their suites here:
       # -am with the test goal would run every upstream module's tests on this runner too.
@@ -88,6 +95,8 @@ jobs:
           distribution: temurin
           java-version: '25'
           cache: maven
+          # Stated, not inherited (as above): a default that flipped on can flip off again.
+          verify-signature: true
 
       - name: Build the CLI distribution
         run: ./mvnw -B -ntp -pl tesseraql-cli -am -Pdist -DskipTests package

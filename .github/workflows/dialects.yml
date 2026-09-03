@@ -29,6 +29,11 @@ jobs:
           distribution: temurin
           java-version: '25'
           cache: maven
+          # Stated, not inherited: v6 turned signature verification on by default. The same value
+          # runs at all eight setup-java sites, so the paths that can be rehearsed rehearse exactly
+          # what the tag run does; a per-workflow split would leave the unrehearsable path as the
+          # only one taking an untried branch. On a mismatch the action throws.
+          verify-signature: true
 
       - name: Install the reactor (tests deferred to the suites)
         run: ./mvnw -B -ntp -DskipTests install
