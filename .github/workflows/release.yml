@@ -38,10 +38,15 @@ jobs:
           # argument for stating the value here, not for switching it off.
           verify-signature: true
           # Writes a settings.xml mapping the 'github' server (parent distributionManagement) to
-          # the workflow token, so `mvn deploy` can upload to GitHub Packages.
+          # the workflow token, so `mvn deploy` can upload to GitHub Packages. The values are
+          # environment variable NAMES, resolved as ${env.*} by the deploy step below.
+          # v6 renamed these inputs; `server-username`/`server-password` still work as wired
+          # deprecated aliases, but once those are dropped the inputs fall back to the names
+          # GITHUB_ACTOR/GITHUB_TOKEN, which this job never exports — so the deploy would 401
+          # at tag time, the one path no pull request can rehearse.
           server-id: github
-          server-username: MAVEN_USERNAME
-          server-password: MAVEN_PASSWORD
+          server-username-env-var: MAVEN_USERNAME
+          server-password-env-var: MAVEN_PASSWORD
 
       - name: Verify
         run: ./mvnw -B -ntp clean verify
