@@ -278,7 +278,21 @@ server-side:
 | `codes: <catalog>` | `select` over the catalog's active codes |
 | `lookup:` | the reference lookup field: code entry + hidden id + search dialog |
 | `required: true` | `required` attribute + the label convention |
-| `writable: false`, `_csrf` | never rendered |
+| `writable: false` | never rendered |
+
+Four hidden fields are the framework's rather than the form's: `_csrf`; `_idempotency`,
+minted per HTML render and always emitted (a route with no `idempotency:` block ignores it);
+`_return` when a list handed one over; and `_lock` when the action route declares `lock:`
+([transactional-writes.md](transactional-writes.md#the-declared-lock)). None of them is an
+`input:` field, none can be selected or overridden by `fields:`, and all four are reserved, so
+they never reach input binding or the mass-assignment guard.
+
+`_lock` carries the record's own lock value, read from the row the form rendered from — so the
+read must project the lock column. A row that carries no such column, or a null one, refuses
+the render with `TQL-VIEW-3330` rather than dropping the field: a locked form that quietly lost
+its lock would save unlocked, with nothing on the page to say so. A view declaring a read
+policy for the lock column is refused at build for the same reason, because a masked value
+would reach the form and never match.
 
 Adding a field to the command's `input:` block adds it to the form with **zero view
 edits**; the HTML constraint attributes can never disagree with the server-side
@@ -549,14 +563,14 @@ the **public rendering contract**:
 | fragment | signature | renders |
 | --- | --- | --- |
 | `tql/view/list.html` | `view(v)` | an `hc-datagrid` table: columns × rows, row links |
-| `tql/view/form.html` | `view(v)` | the card (title, header slot, not-found state) around the blessed mutating-form recipe: `hx-post` to `action`, `_csrf`, inline field-errors target, `hx-disabled-elt` + spinner, no-JS fallback post |
+| `tql/view/form.html` | `view(v)` | the card (title, header slot, not-found state) around the blessed mutating-form recipe: `hx-post` to `action`, the framework hidden fields (`_csrf`, `_idempotency`, `_return`, `_lock`), inline field-errors target, `hx-disabled-elt` + spinner, no-JS fallback post |
 | `tql/view/field.html` | `field(f)` | one labelled field; dispatches to `tql/view/field-<widget>.html` when that fragment resolves, else renders the generic input |
 | `tql/view/table.html` | `table(tableId, columns, rows)` | the shared datagrid a list renders and a detail's children reuse: sortable headers, row anchors, selection and row-number columns |
 | `tql/view/report.html` | `report(r)` | the outcome report a bulk action or a reviewed upload answers with: a summary, file-level failures, and the rest grouped by reason — every group bounded, and the group list bounded too |
 | `tql/view/import.html` | `view(v)` | the reviewed upload: the kit's file-upload form, the report the parse answered, and the confirm form that commits exactly what was reviewed |
 | `tql/view/job-card.html` | `card(c)` | one asynchronous transfer, self-polling: it carries its own `hx-get` and `hx-trigger`, targets itself, and a terminal card carries no trigger at all |
 
-`v` carries `{id, kind, title, action, csrf, fields[]|columns[], data, errorsTarget}`;
+`v` carries `{id, kind, title, action, csrf, lock, fields[]|columns[], data, errorsTarget}`;
 a field `f` carries `{name, label, widget, required, maxLength, min, max, options,
 value, error}`. These shapes and the fragment signatures are **public API**: versioned
 with the YAML schema, annotated under the framework's stability contract, and every
@@ -592,7 +606,10 @@ as a hand-written template today.
   `columns:`/`fields:` explicitly first; a dashboard's chart panels need `x:` and
   `series:`/`y:`, its table panels explicit `columns:`, and a sparkline's `data-max`
   is dropped (no static equivalent — pin one in the template). Filled slots inline as
-  static fragment inserts. The view document stays on disk for reference. A view
+  static fragment inserts. The view document stays on disk for reference. An ejected form
+  emits the same four framework hidden fields, but it has no view model left to check them
+  against: an unprojected lock column renders empty, and the save then fails at the write
+  rather than at the render. A view
   referenced by more than one route refuses to eject (`TQL-VIEW-3316`) — flipping one
   route would silently fork rendering for the others; copy the document under a new id
   and point the route at the copy first. In Studio, the same action
@@ -625,7 +642,7 @@ a view-backed board list + detail (`examples/user-admin-app/web/users/board`).
   id"). Locale-aware value formatting composes with [declarative
   validation](declarative-validation.md) and [pagination](pagination.md).
 - **Security**: a view renders inside its route's existing auth/policy/CSRF; the form
-  fragment emits the `_csrf` field per the recipe; no new endpoints appear. **HTML
+  fragment emits the framework hidden fields per the recipe; no new endpoints appear. **HTML
   output masking** (docs/view-composition.md wave 3b): a column's or detail field's
   explicit `domain:` reference carries the domain's `classification`/`mask` into
   rendering — applied with the same `FieldPolicyApplier` (and the same resolution

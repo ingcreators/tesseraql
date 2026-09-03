@@ -36,8 +36,8 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  * succeeds over the no-JS path (a plain form post with the hidden {@code _csrf} field, redirecting
  * via {@code Location}), an update succeeds over the htmx path (the {@code X-CSRF-Token} header,
  * redirecting via {@code HX-Redirect}), a missing token is rejected with {@code 403}, a stale
- * version answers {@code 409 Conflict} (Phase 18 optimistic locking), a duplicate name maps to the
- * scaffolded field-errors fragment, and a delete removes the row.
+ * lock value answers {@code 409 Conflict} with the conflict dialog (docs/edit-conflict.md), a
+ * duplicate name maps to the scaffolded field-errors fragment, and a delete removes the row.
  */
 @Testcontainers
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
@@ -151,11 +151,18 @@ class ScaffoldedCrudIntegrationTest {
     @Test
     @Order(4)
     void htmxUpdateRedirectsViaHxRedirectAndOptimisticLockingHolds() throws Exception {
-        // The edit page renders the row with its version for the optimistic-locking flow.
+        // The lock is the framework's field now, rendered from the row the page read. Both forms
+        // on the page carry it: the edit form from the form pattern, the confirmed delete from
+        // the scaffolded fragment, because each posts to a route with its own lock:.
         HttpResponse<String> edit = get("/items/2", cookie);
         assertThat(edit.statusCode()).isEqualTo(200);
         assertThat(edit.body()).contains("value=\"Second item\"")
-                .contains("name=\"version\" value=\"1\"");
+                .contains("name=\"_lock\" value=\"1\"")
+                .contains("id=\"items-edit-form\"")
+                .doesNotContain("name=\"version\"");
+        // Twice, not once: the form pattern renders one for the edit form, and the scaffolded
+        // delete fragment renders its own off v.lock. Each form carries its own route's lock.
+        assertThat(edit.body().split("name=\"_lock\"", -1)).hasSize(3);
 
         // htmx path: HX-Request + the X-CSRF-Token header → 204 + HX-Redirect (no Location swap).
         HttpResponse<String> updated = post("/items/2/update", cookie, csrf, null, Map.of(
@@ -165,16 +172,32 @@ class ScaffoldedCrudIntegrationTest {
                 "due_date", "2026-07-02",
                 "active", "false",
                 "note", "Edited over the htmx path",
-                "version", "1"));
+                "_lock", "1"));
         assertThat(updated.statusCode()).as(updated::body).isEqualTo(204);
         assertThat(updated.headers().firstValue("HX-Redirect")).contains("/items/2");
         assertThat(updated.headers().firstValue("Location")).isEmpty();
 
-        // Replaying the stale version is the Phase 18 conflict, not a silent lost update.
+        // Replaying the stale lock is the conflict, not a silent lost update - and to an htmx
+        // caller it arrives as the dialog, retargeted out of the form to the shell's host.
+        // HX-Trigger is the edit form's own id, which is what lets the dialog offer an overwrite
+        // button associated with that form rather than one pointing at nothing.
         HttpResponse<String> stale = post("/items/2/update", cookie, csrf, null, Map.of(
-                "name", "Stale write", "quantity", "9", "active", "true", "version", "1"));
+                "name", "Stale write", "quantity", "9", "active", "true", "_lock", "1"),
+                "items-edit-form");
         assertThat(stale.statusCode()).as(stale::body).isEqualTo(409);
-        assertThat(stale.body()).contains("TQL-SQL-4092");
+        assertThat(stale.body()).contains("data-tql-conflict-dialog")
+                .contains("form=\"items-edit-form\"")
+                .contains("name=\"_overwrite\"")
+                // Reload goes where a successful save would have: the route's own redirect.
+                .contains("href=\"/items/2\"");
+        assertThat(stale.headers().firstValue("HX-Retarget"))
+                .contains("[data-tql-conflict-host]");
+
+        // The waiver applies the write over whatever the row holds now, once.
+        HttpResponse<String> overwritten = post("/items/2/update", cookie, csrf, null, Map.of(
+                "name", "Overwritten", "quantity", "9", "active", "true",
+                "_lock", "1", "_overwrite", "1"));
+        assertThat(overwritten.statusCode()).as(overwritten::body).isEqualTo(204);
 
         // A duplicate name is now caught pre-write by the scaffolded shared rule
         // (docs/validation-rule-sets.md): a friendly 422 field error instead of the
@@ -185,12 +208,33 @@ class ScaffoldedCrudIntegrationTest {
         assertThat(duplicate.body()).contains("data-hc-field-errors")
                 .contains("data-field=\"name\"");
 
-        // Delete with the bumped version, then the fragment no longer lists the row.
+        // The delete posts the lock the confirmed-delete fragment rendered, not a literal: the
+        // fragment reads v.lock off the view model, and an empty one would 400 here.
+        String deleteForm = get("/items/2", cookie).body();
+        deleteForm = deleteForm.substring(deleteForm.indexOf("id=\"items-delete-form\""));
+        assertThat(lockValue(deleteForm)).isEqualTo("3");
         HttpResponse<String> deleted = post("/items/2/delete", cookie, csrf, null,
-                Map.of("version", "2"));
+                Map.of("_lock", lockValue(deleteForm)));
         assertThat(deleted.statusCode()).as(deleted::body).isEqualTo(204);
         assertThat(deleted.headers().firstValue("HX-Redirect")).contains("/items");
-        assertThat(get("/items", cookie).body()).doesNotContain("Second item");
+        // Named for what the row actually holds by now: asserting the name it carried three
+        // writes ago would pass on a delete that deleted nothing.
+        assertThat(get("/items", cookie).body()).doesNotContain("Overwritten");
+        // The detail page renders its not-found state rather than 404ing, and the edit form -
+        // the one that carried a lock value - is gone with the row. The footer slot still
+        // mounts, which is how the scaffolded page has always behaved for a missing row.
+        String gone = get("/items/2", cookie).body();
+        assertThat(gone).contains("hc-empty__title").doesNotContain("id=\"items-edit-form\"");
+        assertThat(lockValue(gone)).isEmpty();
+    }
+
+    /** The first rendered {@code _lock} value in the given markup. */
+    private static String lockValue(String markup) {
+        java.util.regex.Matcher field = java.util.regex.Pattern
+                .compile("name=\"_lock\"[^>]*value=\"([^\"]*)\"")
+                .matcher(markup);
+        assertThat(field.find()).as("no _lock field in the markup").isTrue();
+        return field.group(1);
     }
 
     private static HttpResponse<String> get(String path, String sessionCookie) throws Exception {
@@ -210,6 +254,12 @@ class ScaffoldedCrudIntegrationTest {
      */
     private static HttpResponse<String> post(String path, String sessionCookie, String csrfHeader,
             String csrfField, Map<String, String> fields) throws Exception {
+        return post(path, sessionCookie, csrfHeader, csrfField, fields, null);
+    }
+
+    /** The same, with the {@code HX-Trigger} header a real htmx form submit carries. */
+    private static HttpResponse<String> post(String path, String sessionCookie, String csrfHeader,
+            String csrfField, Map<String, String> fields, String trigger) throws Exception {
         Map<String, String> body = new java.util.LinkedHashMap<>(fields);
         if (csrfField != null) {
             body.put("_csrf", csrfField);
@@ -225,6 +275,9 @@ class ScaffoldedCrudIntegrationTest {
                 .POST(HttpRequest.BodyPublishers.ofString(encoded));
         if (csrfHeader != null) {
             request.header("X-CSRF-Token", csrfHeader).header("HX-Request", "true");
+        }
+        if (trigger != null) {
+            request.header("HX-Trigger", trigger);
         }
         return HttpClient.newHttpClient().send(request.build(),
                 HttpResponse.BodyHandlers.ofString());

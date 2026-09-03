@@ -113,8 +113,19 @@ public final class ValidationRules {
         if (sqlText == null) {
             return false;
         }
-        String head = stripLeadingCommentsAndWhitespace(sqlText).toLowerCase(Locale.ROOT);
+        String head = statementBody(sqlText).toLowerCase(Locale.ROOT);
         return head.startsWith("select") || head.startsWith("with");
+    }
+
+    /**
+     * The statement past its leading whitespace and comments — the text whose first keyword is
+     * the verb. Shared with lint, which tested the raw text and so read every generated file's
+     * own {@code -- tesseraql-scaffold-checksum:} header as the statement: its verb test answered
+     * no for every file this framework writes, and a clause keyword in that header read as a
+     * clause.
+     */
+    public static String statementBody(String sqlText) {
+        return sqlText == null ? "" : stripLeadingCommentsAndWhitespace(sqlText);
     }
 
     /**

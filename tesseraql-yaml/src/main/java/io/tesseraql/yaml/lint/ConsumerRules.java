@@ -106,7 +106,7 @@ final class ConsumerRules implements LintRule {
         // so the embedded-variable injection guard (TQL-SQL-2109) applies here, not just on routes.
         DocumentRules.lintEmbeddedVariables(context, consumer.source(), definition, source,
                 findings);
-        DocumentRules.lintOptimisticLocking(context, consumer.source(), definition, source,
+        DocumentRules.lintOptimisticLocking(context, consumer.source(), definition, false, source,
                 findings);
         DocumentRules.lintTenantPredicate(context, config, consumer.source(), definition, source,
                 findings);

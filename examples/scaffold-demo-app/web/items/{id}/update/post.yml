@@ -1,9 +1,10 @@
-# tesseraql-scaffold-checksum: sha256:9d34758ce129dab0237b7b2def9d72127806ce5f347da758e38e5c628be72db3
-# Scaffolded update command for the items table: optimistic locking turns a stale edit into 409 Conflict.
+# tesseraql-scaffold-checksum: sha256:4d35ed97d6b91c194d6e5f7a7682eab8f330a9ca91ccb872c4e0a12641909155
+# Scaffolded update command for the items table: a declared lock turns a stale edit into 409 Conflict.
 version: tesseraql/v1
 id: items.update
 kind: route
 recipe: command-json
+lock: { column: version, type: integer }
 
 input:
   id:
@@ -24,9 +25,6 @@ input:
     required: true
   note:
     domain: items.note
-  version:
-    domain: items.version
-    required: true
 
 inputPolicy:
   unknownFields: reject
@@ -47,9 +45,6 @@ steps:
     sql:
       file: update.sql
       mode: update
-      expect:
-        rowCount: 1
-        onMismatch: conflict
       params:
         id: params.id
         name: params.name
@@ -58,7 +53,6 @@ steps:
         due_date: params.due_date
         active: params.active
         note: params.note
-        version: params.version
 
 response:
   redirect:

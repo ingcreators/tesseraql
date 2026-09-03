@@ -59,7 +59,9 @@ scope posture, and how the `data-scope` [coverage kind](#coverage-kinds) is earn
 - **`sql`** — runs a 2-way SQL file. A query's result rows are the case's rows; a write file
   (`UPDATE`/`INSERT`/`DELETE`) is just as valid a target — its affected-row count is asserted
   with `expect.updateCount`, and `verify:` read-backs observe the write (see
-  [Testing write routes](#testing-write-routes)). Every `sql` case runs inside a transaction
+  [Testing write routes](#testing-write-routes)). One write shape is out of reach: a statement
+  carrying `/*%lock*/` cannot be a `sql` case target, because the lock value is seeded from a
+  request and a suite has none — such a write is proven through its HTTP surface instead. Every `sql` case runs inside a transaction
   the runner always rolls back, so a test run never commits anything to the database.
 - **`contract`** — runs a named identity contract (for example
   `identity.find-roles-by-user-id`) against the configured realm; its rows are the case's rows.

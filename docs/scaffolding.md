@@ -88,10 +88,13 @@ Conventions are applied when the table opts in:
   columns become required form fields instead. A composite key scaffolds as nested path
   segments (`/order_lines/{order_id}/{line_no}`), with every by-key statement and-joining
   the columns. Only a table without any primary key fails fast (`TQL-APP-5203`).
-- **Optimistic locking** — a numeric `version` column emits the
-  [transactional-writes.md](transactional-writes.md) pairing: a version predicate in the
-  UPDATE/DELETE plus `expect: { rowCount: 1, onMismatch: conflict }`, so a stale edit answers
-  `409 Conflict`. Without the column, neither half is emitted.
+- **Optimistic locking** — a numeric `version` column is declared on the update and delete
+  routes as `lock: { column: version, type: integer }`, and their statements carry
+  `/*%lock*/ (1=1)` in the `WHERE` while still advancing the column themselves
+  ([transactional-writes.md](transactional-writes.md#the-declared-lock)). Both forms on the
+  edit page render the framework's `_lock` field, and a stale edit answers `409 Conflict`
+  with the conflict dialog ([hypermedia-ui.md](hypermedia-ui.md#edit-conflict)). Without the
+  column, nothing is emitted.
 - **Audit columns** — `created_by` / `created_at` / `updated_by` / `updated_at` are stamped
   from the canonical `audit.user` / `audit.now` binds, explicit in the SQL.
 - **Constraint mapping** — each single-column unique index becomes an
@@ -121,9 +124,9 @@ The pages compose the framework `tql/shell` layout; navigation comes from the sk
   enforced by `TQL-SQL-2109`), defaulting to the primary key / ascending.
 - **The create and edit forms follow the mutating-form recipe**
   ([hypermedia-ui.md](hypermedia-ui.md#mutating-forms)): an htmx post mirroring
-  `method`/`action`, inline field errors on a failed write (a `422` validation error, a `409`
-  optimistic-locking conflict, or a `409` constraint violation distributes to the offending
-  input), `HX-Redirect` on success for the htmx caller and a plain `303 Location` with no
+  `method`/`action`, inline field errors on a failed write (a `422` validation error or a `409`
+  constraint violation distributes to the offending input; a stale edit opens the conflict
+  dialog instead), `HX-Redirect` on success for the htmx caller and a plain `303 Location` with no
   JavaScript.
 - **The edit page's delete is the confirmed-destructive variant** — `data-hc-confirm` gates
   the submit and the form fires on `hc:confirmed`
@@ -182,7 +185,8 @@ the files themselves.
 `tesseraql new scaffold-demo` plus `tesseraql scaffold crud --table items` — not a byte of
 hand editing — and CI keeps it that way: it regenerates the app and asserts the committed
 tree is byte-identical, lints it, runs its suites at full branch coverage, and drives the
-full CRUD flow over HTTP, including the stale-edit `409` (`TQL-SQL-4092`).
+full CRUD flow over HTTP. That flow includes the stale-edit `409` (`TQL-SQL-4094`) and the
+conflict dialog it answers with.
 
 ## Error codes
 

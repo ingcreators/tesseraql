@@ -121,28 +121,48 @@ class CrudScaffolderTest {
                 .contains("/* unit_price */ 1");
     }
 
+    /**
+     * The version column is declared, not hand-wired (docs/edit-conflict.md decision 10): one
+     * route-level key on each command, and a directive in each statement's WHERE. The five
+     * halves the generator used to write — the input, the bind, the expectation, the edit view's
+     * hidden field and the delete fragment's — are asserted absent here and in the two view
+     * tests below, because each of them would still compile and quietly do the wrong thing.
+     */
     @Test
-    void updatePairsTheVersionPredicateWithTheRowCountExpectation() {
+    void bothCommandsDeclareTheirLockAndCarryItsDirective() {
         List<ScaffoldedFile> files = scaffolder.scaffold(items());
 
         RouteDefinition update = parser.parseRoute(
                 content(files, "web/items/{id}/update/post.yml"), "post.yml");
+        assertThat(update.lock().column()).isEqualTo("version");
+        // The block form, always: a form value arrives as a string, and an untyped lock would
+        // send "3" to a comparison against a bigint column.
+        assertThat(update.lock().type()).isEqualTo("integer");
         Binding statement = update.steps().get("main");
-        assertThat(statement.expect().rowCount()).isEqualTo(1);
-        assertThat(statement.expect().effectiveOnMismatch()).isEqualTo("conflict");
+        // No expectation: lock: implies { rowCount: 1, onMismatch: conflict }, and declaring
+        // both beside one directive is refused at route build time.
+        assertThat(statement.expect()).isNull();
         // Binds read the coerced params.* view: raw body/path values are strings (Phase 22).
-        assertThat(statement.params()).containsEntry("version", "params.version")
-                .containsEntry("id", "params.id");
+        assertThat(statement.params()).containsEntry("id", "params.id")
+                .doesNotContainKey("version");
         assertThat(update.input().get("id").domain()).isEqualTo("items.id");
-        assertThat(update.input().get("version").required()).isTrue();
+        // An input: field named for the lock column is refused at build — one column, one owner.
+        assertThat(update.input()).doesNotContainKey("version");
 
         String sql = content(files, "web/items/{id}/update/update.sql");
         assertThat(sql).contains("version = version + 1")
                 .contains("updated_by = /* audit.user */ 'someone'")
-                .contains("and version = /* version */ 1");
+                .contains("and /*%lock*/ (1=1)")
+                .doesNotContain("/* version */");
 
-        String delete = content(files, "web/items/{id}/delete/delete.sql");
-        assertThat(delete).contains("and version = /* version */ 1");
+        RouteDefinition delete = parser.parseRoute(
+                content(files, "web/items/{id}/delete/post.yml"), "post.yml");
+        assertThat(delete.lock().column()).isEqualTo("version");
+        assertThat(delete.steps().get("main").expect()).isNull();
+        assertThat(delete.input()).doesNotContainKey("version");
+        assertThat(content(files, "web/items/{id}/delete/delete.sql"))
+                .contains("and /*%lock*/ (1=1)")
+                .doesNotContain("/* version */");
     }
 
     @Test
@@ -173,12 +193,15 @@ class CrudScaffolderTest {
                 .contains("/*# order by t.{sort} {dir}, t.id */")
                 .doesNotContain("limit")
                 .doesNotContain("/*%if sort");
-        // The edit view derives its fields from the update route; version rides hidden and the
-        // confirmed delete mounts in the footer slot.
+        // The edit view derives its fields from the update route and says nothing about the
+        // lock: the form pattern renders _lock for any action route that declares one, the way
+        // it already renders _csrf.
         assertThat(content(files, "web/items/{id}/edit.view.yml"))
                 .contains("recipe: form")
                 .contains("action: /items/{id}/update")
-                .contains("- name: version\n    widget: hidden")
+                // The envelope's own `version: tesseraql/v1` is the only version here.
+                .doesNotContain("- name: version")
+                .doesNotContain("widget: hidden")
                 .contains("footer: ../frags.html::confirm-delete");
     }
 
@@ -194,7 +217,8 @@ class CrudScaffolderTest {
                 .contains("header: ../frags.html::back-link");
 
         // The confirmed delete lives in the shared frags file, mounted by the edit view's
-        // footer slot; it posts the current row's id/version off the view model.
+        // footer slot. It is a second form on the page, posting to a route with its own lock:,
+        // so it carries its own _lock — off v.lock, which is what the view read from the row.
         assertThat(content(files, "web/items/frags.html"))
                 .contains("th:fragment=\"confirm-delete\"")
                 // A link expression, so a scaffolded page keeps working under a base path
@@ -202,7 +226,7 @@ class CrudScaffolderTest {
                 .contains("hx-post=@{|/items/${v.row['id']}/delete|}")
                 .contains("hx-trigger=\"hc:confirmed\"")
                 .contains("data-hc-confirm=\"Delete this record?\"")
-                .contains("name=\"version\" th:value=\"${v.row['version']}\"")
+                .contains("name=\"_lock\" th:value=\"${v.lock}\"")
                 .contains("<input type=\"hidden\" name=\"_csrf\" th:value=\"${_csrf}\">")
                 .contains("th:fragment=\"new-link\"")
                 .contains("th:fragment=\"back-link\"");
@@ -352,7 +376,9 @@ class CrudScaffolderTest {
                 .contains("maxLength: 200")
                 .contains("items.due_date:")
                 .contains("format: yyyy-MM-dd")
-                .contains("items.version:")
+                // No domain for the lock column: no route declares it as an input, and the
+                // reference sweep below would fail on an unreferenced entry.
+                .doesNotContain("items.version:")
                 // The constraint catalog moved here from the per-route errors blocks.
                 .contains("constraints:")
                 .contains("uq_items_name:")
@@ -408,12 +434,15 @@ class CrudScaffolderTest {
         assertThat(create.input()).containsKey("code");
         assertThat(create.response().redirect().location()).isEqualTo("/codes/{params.code}");
 
-        // No version column: no locking predicate, no expectation (lint pairing TQL-SQL-2105).
+        // No version column: no lock declaration and no directive, so the route is unlocked and
+        // the pairing heuristic (TQL-SQL-2104/2105) is the only thing watching it.
         RouteDefinition update = parser.parseRoute(
                 content(files, "web/codes/{code}/update/post.yml"), "post.yml");
+        assertThat(update.lock()).isNull();
         assertThat(update.steps().get("main").expect()).isNull();
         assertThat(content(files, "web/codes/{code}/update/update.sql"))
-                .doesNotContain("version");
+                .doesNotContain("version")
+                .doesNotContain("%lock");
 
         // No character data column: no live-search filter (no q input, no search: key),
         // though the headers still sort (the ORDER BY allowlists the data columns).

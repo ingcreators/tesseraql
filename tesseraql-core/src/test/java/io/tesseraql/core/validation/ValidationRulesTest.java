@@ -166,4 +166,24 @@ class ValidationRulesTest {
         assertThat(ValidationRules.isSelect("update users set status = 'X'")).isFalse();
         assertThat(ValidationRules.isSelect(null)).isFalse();
     }
+
+    /**
+     * The same strip, for what lint reads. The scaffolded shape is the regression: every
+     * generated file opens with its own checksum line, and the optimistic-locking nudges had
+     * therefore never once reached a statement this framework wrote.
+     */
+    @Test
+    void statementBodyDropsLeadingComments() {
+        assertThat(ValidationRules.statementBody("update t set a = 1"))
+                .isEqualTo("update t set a = 1");
+        assertThat(ValidationRules.statementBody("""
+                -- tesseraql-scaffold-checksum: sha256:abc
+                -- Scaffolded update for the items table.
+                update items set a = 1""")).isEqualTo("update items set a = 1");
+        assertThat(ValidationRules.statementBody("/* header */ UPDATE t SET a = 1"))
+                .isEqualTo("UPDATE t SET a = 1");
+        // An unterminated comment leaves nothing behind rather than looping or throwing.
+        assertThat(ValidationRules.statementBody("/* never closed")).isEmpty();
+        assertThat(ValidationRules.statementBody(null)).isEmpty();
+    }
 }

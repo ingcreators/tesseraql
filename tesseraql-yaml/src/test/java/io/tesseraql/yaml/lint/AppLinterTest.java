@@ -1688,11 +1688,12 @@ class AppLinterTest {
                       file: bump.sql
                       mode: update
                       expect:
-                        rows: 1
+                        rowCount: 1
                 """, "update orders set status = /* s */'X' where id = /* id */1\n");
 
         assertThat(new AppLinter().lint(dir))
-                .anyMatch(f -> f.code().equals("TQL-SQL-2104") && !f.isError());
+                .anyMatch(f -> f.code().equals("TQL-SQL-2104") && !f.isError()
+                        && f.message().contains("expect.rowCount"));
     }
 
     @Test
@@ -1706,7 +1707,9 @@ class AppLinterTest {
                 """, "update orders set v = v + 1 where id = /* id */1 and version = /* v */1\n");
 
         assertThat(new AppLinter().lint(dir))
-                .anyMatch(f -> f.code().equals("TQL-SQL-2105") && !f.isError());
+                .anyMatch(f -> f.code().equals("TQL-SQL-2105") && !f.isError()
+                // The spelling the reader copies out of the message.
+                        && f.message().contains("expect: { rowCount: 1 }"));
     }
 
     @Test
@@ -1718,11 +1721,265 @@ class AppLinterTest {
                       file: bump.sql
                       mode: update
                       expect:
-                        rows: 1
+                        rowCount: 1
                 """, "update orders set v = v + 1 where id = /* id */1 and version = /* v */1\n");
 
         assertThat(new AppLinter().lint(dir))
                 .noneMatch(f -> f.code().equals("TQL-SQL-2104") || f.code().equals("TQL-SQL-2105"));
+    }
+
+    /**
+     * The heuristic's own blind spot, open since Phase 18: it tested the raw text for a leading
+     * `update`, and every file this framework generates opens with its own checksum line. So the
+     * nudge had never once reached a scaffolded statement — the shape it exists for.
+     */
+    @Test
+    void nudgesAnUpdateStandingBehindItsScaffoldChecksumComment(@TempDir Path dir)
+            throws Exception {
+        writeCommandRoute(dir, """
+                steps:
+                  - id: bump
+                    sql:
+                      file: bump.sql
+                      mode: update
+                      expect:
+                        rowCount: 1
+                """, """
+                -- tesseraql-scaffold-checksum: sha256:abc
+                -- Scaffolded update for the orders table.
+                update orders set status = /* s */'X' where id = /* id */1
+                """);
+
+        assertThat(new AppLinter().lint(dir))
+                .anyMatch(f -> f.code().equals("TQL-SQL-2104") && !f.isError());
+    }
+
+    /**
+     * On the step that carries the directive the pairing question is already answered by the
+     * compiler, so the heuristic stands down. Without this the scaffolder's own output — which
+     * has a version predicate and, by construction, no expect: — would warn on every app it
+     * generates.
+     */
+    @Test
+    void quietOnTheStepCarryingADeclaredLock(@TempDir Path dir) throws Exception {
+        writeCommandRoute(dir, """
+                lock: version
+                steps:
+                  - id: main
+                    sql:
+                      file: bump.sql
+                      mode: update
+                """, "-- tesseraql-scaffold-checksum: sha256:abc\n"
+                + "-- Scaffolded update for the orders table.\n"
+                + "update orders set name = /* n */'x',"
+                + " version = version + 1"
+                + " where id = /* id */1 and /*%lock*/ (1=1)\n");
+
+        assertThat(new AppLinter().lint(dir))
+                .noneMatch(f -> f.code().startsWith("TQL-SQL-210")
+                        || f.code().equals("TQL-SQL-2116") || f.code().equals("TQL-SQL-2117"));
+    }
+
+    /**
+     * A lock the statement never advances compiles, renders, matches every time and is silently
+     * last-write-wins — the exact defect the declaration exists to abolish, reintroduced by a
+     * declaration that looks correct. Only the lint sees the SET list.
+     */
+    @Test
+    void warnsWhenADeclaredLockIsNeverAdvanced(@TempDir Path dir) throws Exception {
+        writeCommandRoute(dir, """
+                lock: version
+                steps:
+                  - id: main
+                    sql:
+                      file: bump.sql
+                      mode: update
+                """, "-- tesseraql-scaffold-checksum: sha256:abc\n"
+                + "-- Scaffolded update for the orders table.\n"
+                + "update orders set name = /* n */'x'"
+                + " where id = /* id */1 and /*%lock*/ (1=1)\n");
+
+        assertThat(new AppLinter().lint(dir))
+                .anyMatch(f -> f.code().equals("TQL-SQL-2116") && !f.isError()
+                        && f.message().contains("version"));
+    }
+
+    /** A DELETE locks without advancing anything: the scaffolded delete leg must stay quiet. */
+    @Test
+    void quietOnALockedDeleteWhichHasNoSetList(@TempDir Path dir) throws Exception {
+        writeCommandRoute(dir, """
+                lock: version
+                steps:
+                  - id: main
+                    sql:
+                      file: bump.sql
+                      mode: update
+                """, "delete from orders where id = /* id */1 and /*%lock*/ (1=1)\n");
+
+        assertThat(new AppLinter().lint(dir))
+                .noneMatch(f -> f.code().equals("TQL-SQL-2116"));
+    }
+
+    /**
+     * A subquery in the SET list carries a WHERE of its own. Reading the first one as the
+     * statement's own would cut the SET list short and report a correct statement as never
+     * advancing its column — a warning on a statement the author got right.
+     */
+    @Test
+    void quietWhenTheSetListItselfCarriesASubqueryWithAWhere(@TempDir Path dir) throws Exception {
+        writeCommandRoute(dir, """
+                lock: version
+                steps:
+                  - id: main
+                    sql:
+                      file: bump.sql
+                      mode: update
+                """, "update orders"
+                + " set name = (select n from names where id = /* id */1),"
+                + " version = version + 1"
+                + " where id = /* id */1 and /*%lock*/ (1=1)\n");
+
+        assertThat(new AppLinter().lint(dir))
+                .noneMatch(f -> f.code().equals("TQL-SQL-2116")
+                        || f.code().equals("TQL-SQL-2117"));
+    }
+
+    /**
+     * A MERGE is a legal carrier — the step's mode is constrained, never its verb — and it has no
+     * WHERE clause at all: its lock belongs in an `on (…)` or a `when matched and …`. Reading a
+     * missing WHERE as proof of misplacement would nag a correct statement forever.
+     */
+    @Test
+    void quietOnALockedMergeWhichHasNoWhereClause(@TempDir Path dir) throws Exception {
+        writeCommandRoute(dir, """
+                lock: version
+                steps:
+                  - id: main
+                    sql:
+                      file: bump.sql
+                      mode: update
+                """, "merge into orders t"
+                + " using (select /* id */'ORD-1' as id from dual) s on (t.id = s.id)"
+                + " when matched and /*%lock*/ (1=1)"
+                + " then update set status = /* s */'X', version = version + 1\n");
+
+        assertThat(new AppLinter().lint(dir))
+                .noneMatch(f -> f.code().equals("TQL-SQL-2116")
+                        || f.code().equals("TQL-SQL-2117"));
+    }
+
+    /**
+     * A lock: block that forgot its column: names nothing, so 2116 has nothing to report. The
+     * guess the undeclared heuristic uses must not leak into a finding as if it were declared —
+     * it would send the author looking for a column their app does not have.
+     */
+    @Test
+    void quietWhenTheLockBlockNamesNoColumn(@TempDir Path dir) throws Exception {
+        writeCommandRoute(dir, """
+                lock:
+                  type: integer
+                steps:
+                  - id: main
+                    sql:
+                      file: bump.sql
+                      mode: update
+                """, "update orders set name = /* n */'x', rev = rev + 1"
+                + " where id = /* id */1 and /*%lock*/ (1=1)\n");
+
+        assertThat(new AppLinter().lint(dir))
+                .noneMatch(f -> f.code().equals("TQL-SQL-2116"));
+    }
+
+    /**
+     * The nudge follows the write to every surface, but `lock:` is honoured by an HTTP command
+     * route alone — offering it to a tool or a consumer would send the author into a hard
+     * TQL-ROUTE-3119 at route build.
+     */
+    @Test
+    void theLockSuggestionIsOfferedOnlyWhereALockCouldBeDeclared(@TempDir Path dir)
+            throws Exception {
+        String update = "update orders set v = v + 1 where id = /* id */1 and version = /* v */1\n";
+        writeCommandRoute(dir, """
+                steps:
+                  - id: main
+                    sql:
+                      file: bump.sql
+                      mode: update
+                """, update);
+        Files.createDirectories(dir.resolve("mcp"));
+        Files.writeString(dir.resolve("mcp/bump.sql"), update);
+        Files.writeString(dir.resolve("mcp/bump.yml"), """
+                version: tesseraql/v1
+                id: orders.bump
+                kind: tool
+                recipe: command-json
+                steps:
+                  - id: main
+                    sql:
+                      file: bump.sql
+                      mode: update
+                """);
+
+        List<LintFinding> findings = new AppLinter().lint(dir);
+        assertThat(findings).filteredOn(f -> f.code().equals("TQL-SQL-2105")
+                && f.source().contains("bump.yml"))
+                .isNotEmpty()
+                .allSatisfy(f -> assertThat(f.message()).contains("expect: { rowCount: 1 }")
+                        .doesNotContain("lock:"));
+        assertThat(findings).filteredOn(f -> f.code().equals("TQL-SQL-2105")
+                && f.source().contains("post.yml"))
+                .isNotEmpty()
+                .allSatisfy(f -> assertThat(f.message()).contains("or declare lock: version"));
+    }
+
+    /**
+     * Clause position is the one thing decision 1 leaves to a lint, because the compiler holds a
+     * parse with no clause positions. The SET list here does assign the column, which is what
+     * proves the two warnings are independent.
+     */
+    @Test
+    void warnsWhenTheLockDirectiveIsNotInTheWhere(@TempDir Path dir) throws Exception {
+        writeCommandRoute(dir, """
+                lock: version
+                steps:
+                  - id: main
+                    sql:
+                      file: bump.sql
+                      mode: update
+                """, "update orders set version = /*%lock*/ (1=1) where id = /* id */1\n");
+
+        List<LintFinding> findings = new AppLinter().lint(dir);
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-SQL-2117") && !f.isError());
+        assertThat(findings).noneMatch(f -> f.code().equals("TQL-SQL-2116"));
+    }
+
+    /**
+     * The heuristic reads the declared column, not the word "version" — and it keeps running on
+     * the steps of a locked command that carry no directive, which is why the suppression is per
+     * carrier step rather than per route.
+     */
+    @Test
+    void theHeuristicFollowsTheDeclaredColumnOnUncarriedSteps(@TempDir Path dir) throws Exception {
+        writeCommandRoute(dir, """
+                lock: rev
+                steps:
+                  - id: main
+                    sql:
+                      file: bump.sql
+                      mode: update
+                  - id: audit
+                    sql:
+                      file: audit.sql
+                      mode: update
+                """, "update orders set name = /* n */'x', rev = rev + 1"
+                + " where id = /* id */1 and /*%lock*/ (1=1)\n");
+        Files.writeString(dir.resolve("web/api/orders/audit.sql"),
+                "update orders_audit set note = /* n */'x'"
+                        + " where id = /* id */1 and rev = /* rev */1\n");
+
+        assertThat(new AppLinter().lint(dir))
+                .anyMatch(f -> f.code().equals("TQL-SQL-2105") && !f.isError()
+                        && f.message().contains("rev"));
     }
 
     /**
