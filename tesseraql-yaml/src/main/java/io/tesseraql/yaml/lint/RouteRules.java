@@ -140,7 +140,8 @@ final class RouteRules implements LintRule {
                         "Query '" + name + "' references a missing SQL file: " + query.file()));
             }
         });
-        DocumentRules.lintOptimisticLocking(context, route.source(), definition, source, findings);
+        DocumentRules.lintOptimisticLocking(context, route.source(), definition, true, source,
+                findings);
         // Whether the recipe honors validate: at all is a route-level question; the rules'
         // shape is checked the same way wherever they are declared.
         if (!definition.validate().isEmpty() && definition.recipe() != null

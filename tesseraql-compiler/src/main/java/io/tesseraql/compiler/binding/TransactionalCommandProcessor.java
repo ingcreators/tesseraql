@@ -438,7 +438,7 @@ public final class TransactionalCommandProcessor implements Step {
             throw invalid("step '" + name + "': keys/expect do not apply to a sequence step");
         }
         if (binding.expect() != null && binding.expect().rowCount() == null) {
-            throw invalid("step '" + name + "': expect.rows is required");
+            throw invalid("step '" + name + "': expect.rowCount is required");
         }
         if (binding.expect() != null
                 && !List.of("conflict", "error").contains(binding.expect().effectiveOnMismatch())) {

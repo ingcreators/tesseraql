@@ -23,8 +23,10 @@ import java.util.Optional;
  * <li>an auto-generated single primary key is captured via {@code keys:} and drives the
  * post/redirect/get flow; non-generated key columns become required form fields — a composite
  * key scaffolds as nested path segments (docs/list-surface.md decision 4),</li>
- * <li>a numeric {@code version} column pairs an optimistic-locking predicate with
- * {@code expect: rowCount: 1} so a stale edit answers {@code 409 Conflict},</li>
+ * <li>a numeric {@code version} column becomes a route-level {@code lock:} on the update and
+ * delete commands, so a stale edit answers {@code 409 Conflict} and the conflict dialog
+ * (docs/edit-conflict.md); the generated statement advances the column, the framework only
+ * compares it,</li>
  * <li>{@code created_by/created_at/updated_by/updated_at} columns are stamped from the canonical
  * {@code audit.*} binds,</li>
  * <li>single-column unique indexes map to field-level constraint errors.</li>
@@ -94,6 +96,21 @@ public final class CrudScaffolder {
                   X-Frame-Options: DENY
                   Referrer-Policy: no-referrer
             """;
+
+    /**
+     * The route-level {@code lock:} block for a table carrying a version column, or nothing
+     * (docs/edit-conflict.md decision 1). Always the block form, never the bare column: a form
+     * value arrives as a string, and an untyped lock would send {@code "3"} to a comparison
+     * against an integer column. The type is stated here rather than referenced from a domain,
+     * because an {@code input:} field named for the lock column is refused at route build time —
+     * the lock is the framework's value, not one of the application's inputs.
+     */
+    private static String lockBlock(TableSchema table) {
+        return table.versionColumn()
+                .map(column -> "lock: { column: " + Names.columnName(column) + ", type: "
+                        + column.inputType() + " }\n")
+                .orElse("");
+    }
 
     /**
      * The per-route security header block, or nothing when the app's declared
@@ -442,8 +459,12 @@ public final class CrudScaffolder {
 
     /** Slot fragments the scaffolded views pull in (customization ladder L1). */
     private static String fragsFile(TableSchema table, Names names) {
-        String deleteVersion = table.versionColumn().isPresent()
-                ? "  <input type=\"hidden\" name=\"version\" th:value=\"${v.row['version']}\">\n"
+        // The delete form is a second form on the page, posting to a route with its own lock:,
+        // so it carries its own _lock rather than borrowing the edit form's. The value is the
+        // same: both routes lock on the same column, and v.lock is what the view read off the
+        // row it rendered (docs/edit-conflict.md decisions 3 and 10).
+        String deleteLock = table.versionColumn().isPresent()
+                ? "  <input type=\"hidden\" name=\"_lock\" th:value=\"${v.lock}\">\n"
                 : "";
         return """
                 <!-- Scaffolded slot fragments for the %s pages: the list's New button, the form
@@ -470,7 +491,7 @@ public final class CrudScaffolder {
                 .formatted(names.table(), names.url(), names.url(), names.title(),
                         names.entity(), names.url(), names.rowKeyPath(), names.url(),
                         names.rowKeyPath(),
-                        names.entity(), names.entity(), deleteVersion);
+                        names.entity(), names.entity(), deleteLock);
     }
 
     private String newRoute(Names names) {
@@ -675,7 +696,11 @@ public final class CrudScaffolder {
         return sql.toString();
     }
 
-    /** The edit form view: fields derive from the update route, version rides hidden. */
+    /**
+     * The edit form view: fields derive from the update route. Nothing here mentions the lock —
+     * the form pattern renders {@code _lock} for any action route that declares one, the way it
+     * already renders {@code _csrf} (docs/edit-conflict.md decision 4).
+     */
     private static String editView(TableSchema table, Names names) {
         StringBuilder yml = new StringBuilder();
         yml.append("""
@@ -692,9 +717,6 @@ public final class CrudScaffolder {
                 """.formatted(names.table(), names.entity(), names.url(), names.keyPath()));
         for (TableSchema.Column column : table.dataColumns()) {
             yml.append("  - name: ").append(Names.field(column)).append('\n');
-        }
-        if (table.versionColumn().isPresent()) {
-            yml.append("  - name: version\n    widget: hidden\n");
         }
         yml.append("""
                 slots:
@@ -713,10 +735,10 @@ public final class CrudScaffolder {
                 id: %s.update
                 kind: route
                 recipe: command-json
-
                 """.formatted(names.table(),
-                locked ? ": optimistic locking turns a stale edit into 409 Conflict" : "",
+                locked ? ": a declared lock turns a stale edit into 409 Conflict" : "",
                 names.entity()));
+        route.append(lockBlock(table)).append('\n');
         // The key arrives as path parameters; declaring each as an input coerces it to the key
         // column's type, like every other bind (raw path/body values are strings). Assigned key
         // columns are already form columns; only generated ones need declaring here.
@@ -727,7 +749,6 @@ public final class CrudScaffolder {
             }
         }
         inputs.addAll(formColumns(table, names));
-        table.versionColumn().ifPresent(inputs::add);
         route.append(inputBlock(names, inputs));
         route.append("""
 
@@ -748,9 +769,8 @@ public final class CrudScaffolder {
                       file: update.sql
                       mode: update
                 """);
-        if (locked) {
-            route.append("      expect:\n        rowCount: 1\n        onMismatch: conflict\n");
-        }
+        // No expect: block — lock: implies expect: { rowCount: 1, onMismatch: conflict }, and
+        // declaring both beside one lock directive is refused at route build time.
         route.append("      params:\n").append(keyParams(names, "        "));
         for (TableSchema.Column column : formColumns(table, names)) {
             // An assigned key is a form column too, and it is already bound above — writing it
@@ -760,9 +780,6 @@ public final class CrudScaffolder {
             }
             route.append("        ").append(Names.field(column)).append(": params.")
                     .append(Names.field(column)).append('\n');
-        }
-        if (locked) {
-            route.append("        version: params.version\n");
         }
         route.append("""
 
@@ -781,7 +798,8 @@ public final class CrudScaffolder {
         StringBuilder sql = new StringBuilder();
         sql.append("-- Scaffolded update for the ").append(names.table()).append(" table")
                 .append(locked
-                        ? ": the version predicate pairs with expect.rows (Phase 18)."
+                        ? ": the SET list advances the version, the lock directive compares it"
+                                + " (docs/edit-conflict.md)."
                         : ".")
                 .append('\n');
         sql.append("update ").append(names.table()).append("\nset\n");
@@ -805,7 +823,10 @@ public final class CrudScaffolder {
         }
         sql.append("where\n").append(keyWhere(names, ""));
         if (locked) {
-            sql.append("  and version = /* version */ 1\n");
+            // The directive renders the route's declared lock predicate; the (1=1) beside it is
+            // the dummy that keeps the file runnable in a plain SQL tool, as every 2-way
+            // directive carries one.
+            sql.append("  and /*%lock*/ (1=1)\n");
         }
         return sql.toString();
     }
@@ -814,17 +835,16 @@ public final class CrudScaffolder {
         boolean locked = table.versionColumn().isPresent();
         StringBuilder route = new StringBuilder();
         route.append("""
-                # Scaffolded delete command for the %s table.
+                # Scaffolded delete command for the %s table%s.
                 version: tesseraql/v1
                 id: %s.delete
                 kind: route
                 recipe: command-json
-                """.formatted(names.table(), names.entity()));
-        route.append('\n');
-        List<TableSchema.Column> inputs = new ArrayList<>();
-        inputs.addAll(names.pks());
-        table.versionColumn().ifPresent(inputs::add);
-        route.append(inputBlock(names, inputs));
+                """.formatted(names.table(),
+                locked ? ": its own declared lock refuses a stale delete" : "",
+                names.entity()));
+        route.append(lockBlock(table)).append('\n');
+        route.append(inputBlock(names, new ArrayList<>(names.pks())));
         route.append("""
 
                 inputPolicy:
@@ -841,13 +861,9 @@ public final class CrudScaffolder {
                       file: delete.sql
                       mode: update
                 """);
-        if (locked) {
-            route.append("      expect:\n        rowCount: 1\n        onMismatch: conflict\n");
-        }
+        // mode: update is the write shape rather than the SQL verb: a DELETE reports affected
+        // rows the same way, which is what the lock's implied expectation reads.
         route.append("      params:\n").append(keyParams(names, "        "));
-        if (locked) {
-            route.append("        version: params.version\n");
-        }
         route.append("""
 
                 response:
@@ -864,7 +880,7 @@ public final class CrudScaffolder {
         sql.append("delete from ").append(names.table()).append("\nwhere\n")
                 .append(keyWhere(names, ""));
         if (table.versionColumn().isPresent()) {
-            sql.append("  and version = /* version */ 1\n");
+            sql.append("  and /*%lock*/ (1=1)\n");
         }
         return sql.toString();
     }
@@ -1148,9 +1164,10 @@ public final class CrudScaffolder {
 
                 domains:
                 """.formatted(names.table(), names.table()));
+        // No domain for the version column: no route declares it as an input any more, and the
+        // lock: block states the one thing the framework needs from it — its type.
         java.util.LinkedHashSet<TableSchema.Column> columns = new java.util.LinkedHashSet<>();
         columns.addAll(names.pks());
-        table.versionColumn().ifPresent(columns::add);
         columns.addAll(table.dataColumns());
         for (TableSchema.Column column : columns) {
             yml.append("  ").append(names.table()).append('.').append(Names.field(column))

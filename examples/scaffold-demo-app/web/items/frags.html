@@ -1,4 +1,4 @@
-<!-- tesseraql-scaffold-checksum: sha256:aa42fb6a31ec9f5b529d24df38a206cc350abef7db6cb9533e624d122aa5e436 -->
+<!-- tesseraql-scaffold-checksum: sha256:14752ec1219b22b9f7000745d77dd7b5c8b6549772414b23c394911be5944908 -->
 <!-- Scaffolded slot fragments for the items pages: the list's New button, the form
      pages' back link, and the confirmed delete the edit view mounts in its footer
      slot (docs/declarative-views.md, docs/hypermedia-ui.md). -->
@@ -11,7 +11,7 @@
       hx-disabled-elt="find button[type=submit]" hx-indicator="find .hc-spinner">
   <input type="hidden" name="_csrf" th:value="${_csrf}">
   <div id="items-delete-form-errors"></div>
-  <input type="hidden" name="version" th:value="${v.row['version']}">
+  <input type="hidden" name="_lock" th:value="${v.lock}">
   <span class="hc-action">
     <button type="submit" class="hc-button" data-variant="error"
             data-hc-confirm="Delete this record?" data-hc-confirm-title="Confirm delete"

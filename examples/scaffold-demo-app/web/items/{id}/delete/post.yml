@@ -1,16 +1,14 @@
-# tesseraql-scaffold-checksum: sha256:fec0aa09c036c640010c7fb6e665ad52c61cb952c61e410a490b229f1d49f47c
-# Scaffolded delete command for the items table.
+# tesseraql-scaffold-checksum: sha256:0ebf2675eeb8b91c798a2cc059fb90b80507da4ddbde4bdef29c68e32bad8172
+# Scaffolded delete command for the items table: its own declared lock refuses a stale delete.
 version: tesseraql/v1
 id: items.delete
 kind: route
 recipe: command-json
+lock: { column: version, type: integer }
 
 input:
   id:
     domain: items.id
-    required: true
-  version:
-    domain: items.version
     required: true
 
 inputPolicy:
@@ -24,12 +22,8 @@ steps:
     sql:
       file: delete.sql
       mode: update
-      expect:
-        rowCount: 1
-        onMismatch: conflict
       params:
         id: params.id
-        version: params.version
 
 response:
   redirect:

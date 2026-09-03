@@ -236,7 +236,7 @@ job, and the row records why.
 | session-expiry | **Adopted (#1113)** | shell + browser auth |
 | unsaved-changes | **Adopted (#1114)** | form views |
 | datagrid-bulk-errors | **Adopted (#1115–#1117)** — [bulk-report.md](bulk-report.md) | `actions:`, `_bulk` routes |
-| edit-conflict | **Designed** — [edit-conflict.md](edit-conflict.md) | `update` command routes |
+| edit-conflict | **Adopted (#1134–#1139)** — [edit-conflict.md](edit-conflict.md) | `update` command routes |
 | csv-import | **Adopted (#1127–#1133)** — [csv-import.md](csv-import.md) | file transfers |
 | row-detail | Aligned (list-surface decision 11) | `location: back`, `#row-<token>` |
 | datagrid-pager | Aligned (list-surface slice 1) | the in-place pager |
@@ -339,8 +339,17 @@ report region on the grid page, fed by the outcome report the endpoint already
 produces. The atomic branch stays out of scope until an invariant-shaped bulk action
 exists; recording that TesseraQL bulk is best-effort per key is part of the slice.
 
-## edit-conflict — designed, and the lock was already there
+## edit-conflict — adopted, and the lock was already there
 
+> **Adopted (#1134–#1139), 2026-09-03.** Four slices: the declaration and its refusals, the
+> read side and the form's fourth hidden field, the two faces of the 409, and the scaffolder
+> with the gallery regenerated. Three live defects went with them — a no-JS form post that
+> failed rendered raw JSON, `expect:` under `sources:` validated and did nothing, and
+> `response.onError` steering had never fired in a running application. The design's own
+> "Recorded deviations" section is where this row's divergences from the upstream contract are
+> kept — the overwrite is a waiver rather than a fresh-version retry, and no theirs/yours diff
+> is rendered, among others.
+>
 > **Designed: [edit-conflict.md](edit-conflict.md)** (2026-09-02). The assessment below
 > was right that the framework's only lock is the workflow engine's, and wrong about what
 > that leaves: the scaffolder has hand-wired a complete optimistic lock for years, so a
@@ -414,12 +423,13 @@ per-user-preference store demand, the same trigger `datagrid-prefs` waits on.
 6. ~~unsaved-changes slice~~ — shipped (#1114).
 7. ~~datagrid-bulk-errors~~ — designed and shipped ([bulk-report.md](bulk-report.md),
    #1115–#1117); csv-import remains its recorded future consumer.
-8. **edit-conflict**: designed ([edit-conflict.md](edit-conflict.md)) — the declared
-   version column is `lock:`, a route-level declaration of a column the framework compares
-   and the author's own statement advances. Four slices, unshipped; the dogfood is a
-   regeneration rather than a new app, because the gallery's one edit form
-   (`scaffold-demo-app`'s `items.edit`) has carried the whole hand-wired lock since Phase 18
-   and is the design's worked example throughout.
+8. ~~edit-conflict~~ — designed and shipped ([edit-conflict.md](edit-conflict.md),
+   #1134–#1139). The declared version column is `lock:`, a route-level declaration of a
+   column the framework compares and the author's own statement advances. The dogfood was a
+   regeneration rather than a new app: the gallery's one edit form (`scaffold-demo-app`'s
+   `items.edit`) had carried the whole hand-wired lock since Phase 18, so the committed diff
+   over its view, both command routes, both statements, the delete fragment and their
+   checksums is what proves the generator.
 9. ~~csv-import campaign~~ — designed and shipped ([csv-import.md](csv-import.md),
    #1125–#1133). It fired the file-upload and async-job triggers with it, so all three
    rows are adopted: the reviewed upload is `import.review: required` with an

@@ -1,4 +1,4 @@
-# tesseraql-scaffold-checksum: sha256:4696d8a3bdb8803cbf1fa5385f0b191437982df0623fbf9aef192f366f061cf5
+# tesseraql-scaffold-checksum: sha256:097cd1e5bc7a6b7a5ebf1a2d3004877df9c1748d1f9e646f0458bf2f1bc0fec3
 # Scaffolded field domains for the items table (tesseraql scaffold crud --table items):
 # every route's input: references these, so the DDL-derived knowledge lives once
 # (docs/field-domains.md). Route-operational keys (required) stay in the routes.
@@ -6,8 +6,6 @@ version: tesseraql/v1
 
 domains:
   items.id:
-    type: integer
-  items.version:
     type: integer
   items.name:
     type: string

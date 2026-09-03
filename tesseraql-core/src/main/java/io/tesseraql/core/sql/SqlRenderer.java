@@ -191,8 +191,10 @@ public final class SqlRenderer {
     private void renderLock(SqlNode.Lock node) {
         if (lock == null) {
             throw TqlException.builder(UNSEEDED_LOCK)
-                    .message("A lock directive rendered with no lock value seeded; it expands only"
-                            + " on a route that declares lock: (docs/edit-conflict.md)")
+                    .message("A lock directive rendered with no lock value seeded. The value"
+                            + " is seeded from the request by the command pipeline, so a locked"
+                            + " statement cannot render outside one — a declarative test suite"
+                            + " cannot drive it (docs/edit-conflict.md)")
                     .build();
         }
         if (lock.waived()) {

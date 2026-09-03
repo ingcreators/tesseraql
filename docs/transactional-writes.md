@@ -171,7 +171,85 @@ values (/* orderNo */1, /* customerId */1, 'PLACED', 1,
 
 The bind name `audit` is reserved; declaring it under `params:` fails at route build time.
 
-## Row-count expectations (optimistic locking)
+## The declared lock
+
+A command route names the column that guards its write, and the framework compares it:
+
+```yaml
+version: tesseraql/v1
+id: items.update
+kind: route
+recipe: command-json
+lock: { column: version, type: integer }
+input:
+  id:   { domain: items.id, required: true }
+  name: { domain: items.name, required: true }
+steps:
+  - id: main
+    sql:
+      file: update.sql
+      mode: update
+      params: { id: params.id, name: params.name }
+```
+
+The statement marks where that comparison belongs, and keeps advancing the column itself:
+
+```sql
+update items
+   set name = /* name */'',
+       version = version + 1
+ where id = /* id */0
+   and /*%lock*/ (1=1)
+```
+
+`/*%lock*/ (1=1)` renders as `and (version = ?)`, bound to the value the caller sent back, and
+reads as `(1=1)` in a plain SQL tool. The framework never writes the SET list, so the column
+can be a counter the statement bumps, a timestamp it stamps, or a value the database maintains
+— the comparison is the same either way. The directive must appear exactly once across the
+route's steps, and never inside `/*%if*/` or `/*%for*/`: a lock that can render away is not a
+lock.
+
+`lock:` implies `expect: { rowCount: 1, onMismatch: conflict }` on the step whose statement
+carries the directive. Declaring both on that step is refused, and so is a `lock:` no statement
+carries (`TQL-ROUTE-3119`). Every other step of a multi-step command is untouched.
+
+The value travels as `_lock`, a framework-owned request field. A browser form carries the
+hidden input the form pattern renders ([declarative-views.md](declarative-views.md)); an API
+caller sends it in the body, and both `_lock` and `_overwrite` are emitted into OpenAPI as part
+of what the route accepts. It never reaches `input:` binding, so no `writable:`, policy or mask
+can drop it — and an `input:` field named for the lock column is refused, because one column
+cannot have two owners.
+
+**The declared type is a bound, not a hint.** Every form value arrives as a string, so an
+untyped lock on a numeric column would compare `"3"` against an integer. `integer`, `number`,
+`string` and `date` survive the round trip through a hidden field; `datetime` is refused at
+build, because a rendered row carries an ISO instant and the input coercion reads a
+space-separated pattern back. The bare form `lock: version` is the opaque one, compared exactly
+as it arrived.
+
+A stale save rolls the transaction back and answers `409 Conflict` (`TQL-SQL-4094`), with a
+`details.lock` sibling naming the column and the two fields:
+
+```json
+{"error": {"code": "TQL-SQL-4094", "message": "Conflict",
+  "details": {"conflict": {"step": "main", "expectedRows": 1, "actualRows": 0,
+      "hintKey": "tql.conflict.stale",
+      "hint": "The record may have been changed or deleted by another user; reload it and retry the operation"},
+    "lock": {"column": "version", "field": "_lock", "overwriteField": "_overwrite"}}}}
+```
+
+`_overwrite` waives the comparison for one request: the directive renders as `(1=1)` and every
+other predicate still stands, so a waived save against a deleted row — or one the caller's
+scope excludes — refuses again. It is a waiver, never a re-read: the framework does not fetch
+the contested row and renders nothing from it. A request carrying neither field answers `400`
+(`TQL-FIELD-2011`). Browsers get the two choices as a dialog and as a full page
+([hypermedia-ui.md](hypermedia-ui.md#edit-conflict)).
+
+## Row-count expectations
+
+`expect:` is the hand-authored form of the same guard, and it stays legal. It counts affected
+rows and does not know why a count was wrong, so the version predicate and its bind are the
+author's to write and to keep paired.
 
 ```yaml
 steps:
@@ -215,9 +293,15 @@ route answers `409 Conflict` (`TQL-SQL-4092`) with a usable hint:
 The hint resolves through the message catalog with the request locale
 ([internationalization.md](internationalization.md)); `hintKey` keeps the stable key.
 
-Lint keeps the two halves paired: an UPDATE with `expect.rowCount` but no version-column
-predicate warns `TQL-SQL-2104`; a version predicate without `expect.rowCount` warns
-`TQL-SQL-2105`.
+Lint keeps the two halves paired on any step that does not carry a lock directive: an
+UPDATE with `expect.rowCount` but no version-column predicate warns `TQL-SQL-2104`; a version
+predicate without `expect.rowCount` warns `TQL-SQL-2105`. On a route that declares `lock:` they
+run against the declared column, because the other steps of a multi-step command write as
+unguarded as any. On the carrying step the compiler has already answered the pairing question,
+and two warnings it cannot answer take over. A
+lock column the SET list never advances (`TQL-SQL-2116`) matches on every save, which is
+silently last-write-wins; a `/*%lock*/` outside the statement's `WHERE` (`TQL-SQL-2117`) is not
+a predicate at all.
 
 ## Constraint-violation mapping
 
@@ -306,11 +390,17 @@ with the same key can commit. Only a stored success replays.
 | Code | Status | Meaning |
 | --- | --- | --- |
 | `TQL-SQL-4092` | 409 | row-count expectation failed (`onMismatch: conflict`) |
+| `TQL-SQL-4094` | 409 | a declared `lock:` refused a stale write |
+| `TQL-FIELD-2011` | 400 | a locked route reached with neither `_lock` nor `_overwrite` |
+| `TQL-SQL-2115` | 500 | a lock directive rendered with no lock value seeded |
 | `TQL-SQL-2602` | 500 | row-count expectation failed (`onMismatch: error`) |
 | `TQL-SQL-2610` | 500 | document-sequence allocation failed |
 | `TQL-SQL-2611` | 500 | sequence step without a configured allocator |
 | `TQL-ROUTE-3102` | — | invalid steps declaration (route build time) |
+| `TQL-ROUTE-3119` | — | invalid `lock:` declaration (route build time) |
+| `TQL-ROUTE-3120` | — | `expect:` or `keys:` under `sources:` (route build time) |
 | `TQL-SQL-2104` / `2105` | — | lint: optimistic-locking pairing nudges |
+| `TQL-SQL-2116` / `2117` | — | lint: a lock the statement never advances / a `/*%lock*/` outside the `WHERE` |
 | `TQL-FIELD-2009` | — | lint: a command step declares `enrich:`, which has no rows to fold into |
 
 ## Next

@@ -117,7 +117,8 @@ final class ToolRules implements LintRule {
         DocumentRules.lintEmbeddedVariables(context, tool.source(), definition, source, findings);
         // A tool writes with the same bindings a command route does; the write-safety
         // and isolation nudges apply to it identically (docs/silent-tolerance.md K-e).
-        DocumentRules.lintOptimisticLocking(context, tool.source(), definition, source, findings);
+        DocumentRules.lintOptimisticLocking(context, tool.source(), definition, false, source,
+                findings);
         DocumentRules.lintTenantPredicate(context, config, tool.source(), definition, source,
                 findings);
     }

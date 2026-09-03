@@ -69,14 +69,14 @@ class TransactionalCommandProcessorTest {
     }
 
     @Test
-    void rejectsExpectWithoutRows() throws Exception {
+    void rejectsExpectWithoutRowCount() throws Exception {
         Map<String, Binding> steps = Map.of("header", new Binding(sql("header.sql"), null,
                 "update", null, null, null, null, null, null,
                 new Binding.Expect(null, "conflict"), null, null, null));
 
         assertThatThrownBy(() -> processor(steps))
                 .isInstanceOf(TqlException.class)
-                .hasMessageContaining("expect.rows is required");
+                .hasMessageContaining("expect.rowCount is required");
     }
 
     @Test

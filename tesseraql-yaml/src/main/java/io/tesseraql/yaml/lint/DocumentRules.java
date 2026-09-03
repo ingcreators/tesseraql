@@ -8,6 +8,7 @@ import io.tesseraql.yaml.config.AppConfig;
 import io.tesseraql.yaml.manifest.RouteFile;
 import io.tesseraql.yaml.model.Binding;
 import io.tesseraql.yaml.model.InputField;
+import io.tesseraql.yaml.model.LockSpec;
 import io.tesseraql.yaml.model.RouteDefinition;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -37,6 +38,12 @@ final class DocumentRules {
     private static final String UPDATE_WITHOUT_VERSION_PREDICATE = "TQL-SQL-2104";
 
     private static final String VERSION_PREDICATE_WITHOUT_EXPECT = "TQL-SQL-2105";
+
+    // A declared lock whose own statement never assigns the column: a lock that never fires.
+    private static final String LOCK_NEVER_ADVANCED = "TQL-SQL-2116";
+
+    // A lock directive outside the statement's WHERE (docs/edit-conflict.md decision 1).
+    private static final String LOCK_DIRECTIVE_OUTSIDE_WHERE = "TQL-SQL-2117";
 
     private static final String INVALID_VALIDATION_RULE = "TQL-FIELD-2003";
 
@@ -227,20 +234,63 @@ final class DocumentRules {
             "queue-consume");
 
     /**
-     * Nudges version-column predicates on command UPDATEs (roadmap Phase 18): a row-count
-     * expectation without a version predicate only detects "row vanished", not concurrent
-     * edits; a version predicate without an expectation silently affects zero rows.
+     * The lock directive as the parser accepts it. The 2-way parser trims a directive's content,
+     * so the keyword may be spaced away from its delimiters and a plain indexOf would miss it.
+     * Used only to locate the offset — whether a statement carries one at all is answered by the
+     * parsed nodes, which no string literal can fool.
+     */
+    private static final Pattern LOCK_DIRECTIVE = Pattern.compile("/\\*%\\s*lock\\s*\\*/");
+
+    /** The column the pairing heuristic looks for when the route declares no lock. */
+    private static final String GUESSED_LOCK_COLUMN = "version";
+
+    /** {@code where} at a word boundary: the cheapest honest answer to "which clause". */
+    private static final Pattern WHERE_KEYWORD = Pattern.compile("\\bwhere\\b");
+
+    /**
+     * The optimistic-locking warnings, in two families the statement itself chooses between
+     * (docs/edit-conflict.md decision 10).
+     *
+     * <p>On the step that carries the route's lock directive, the pairing question is already
+     * answered: {@code lock:} implies its expectation, declaring {@code expect:} beside the
+     * directive is refused, and a conditional directive is refused — so {@code TQL-SQL-2104} and
+     * {@code TQL-SQL-2105} would only restate a build refusal. What the compiler cannot answer is
+     * anything about the SQL <em>text</em>, because it holds a flat node list with no clause
+     * positions. Two questions therefore live here and nowhere else: does the SET list advance
+     * the column, and is the directive in the WHERE.
+     *
+     * <p>Every other step keeps the Phase 18 heuristic — a row-count expectation without a
+     * version predicate only detects "row vanished", not concurrent edits; a version predicate
+     * without an expectation silently affects zero rows — and on a route that declares a lock it
+     * runs against the declared column rather than the guess. Suppressing per carrier step
+     * rather than per route is deliberate: a multi-step command has one locked step and its
+     * other writes are as unguarded as any.
      *
      * <p>Takes the document's path rather than a {@link RouteFile}, so an MCP tool and a queue
      * consumer — which write with the same bindings and had the check skipped entirely — are
      * held to it too (docs/silent-tolerance.md K-e).
      */
     static void lintOptimisticLocking(LintContext context, Path documentSource,
-            RouteDefinition definition,
+            RouteDefinition definition, boolean httpRoute,
             String source, List<LintFinding> findings) {
         if (!WRITE_RECIPES.contains(definition.recipe())) {
             return;
         }
+        // Un-normalized by design: a block that omits column: reaches here with a null one, and
+        // there is then no declared column to name in a finding.
+        LockSpec lock = definition.lock();
+        String declared = lock == null || lock.column() == null || lock.column().isBlank()
+                ? null
+                : lock.column().toLowerCase(java.util.Locale.ROOT);
+        String column = declared == null ? GUESSED_LOCK_COLUMN : declared;
+        // Only an HTTP command route mounts the step that reads the lock off a request, so
+        // suggesting lock: to an MCP tool or a queue consumer would send its author into
+        // TQL-ROUTE-3119. Nor is it advice on a route that already has its one lock.
+        String alsoLock = httpRoute && lock == null
+                ? ", or declare lock: " + column + " (docs/edit-conflict.md)"
+                : "";
+        Pattern columnWord = Pattern.compile("\\b" + Pattern.quote(column) + "\\b");
+        Pattern columnAssigned = Pattern.compile("\\b" + Pattern.quote(column) + "\\s*=");
         java.util.Map<String, io.tesseraql.yaml.model.Binding> bindings = new java.util.LinkedHashMap<>(
                 definition.steps());
         if (definition.main() != null) {
@@ -258,22 +308,101 @@ final class DocumentRules {
             if (text == null) {
                 return;
             }
-            String sql = text.toLowerCase();
-            boolean isUpdate = sql.stripLeading().startsWith("update");
-            boolean versionPredicate = sql.contains("version");
+            // The statement past its leading comments, for the same reason the verb test needs
+            // them gone: every generated file opens with a header, and a clause keyword there is
+            // not a clause. Offsets below are all within this text, never the raw file's.
+            String sql = io.tesseraql.core.validation.ValidationRules.statementBody(text)
+                    .toLowerCase(java.util.Locale.ROOT);
+            boolean isUpdate = sql.startsWith("update");
+            List<SqlNode> nodes = context.sqlNodes(file);
+            if (nodes != null && carriesLock(nodes)) {
+                lintDeclaredLock(name, declared, columnAssigned, sql, isUpdate, source, findings);
+                return;
+            }
+            boolean versionPredicate = columnWord.matcher(sql).find();
             if (isUpdate && binding.expect() != null && !versionPredicate) {
                 findings.add(new LintFinding(UPDATE_WITHOUT_VERSION_PREDICATE, WARNING, source,
-                        "Step '" + name + "': UPDATE declares expect.rows but has no"
-                                + " version-column predicate; a concurrent edit is only detected"
-                                + " when the row vanishes - add `and version = ...`"));
+                        "Step '" + name + "': UPDATE declares expect.rowCount but has no " + column
+                                + "-column predicate; a concurrent edit is only detected"
+                                + " when the row vanishes - add `and " + column + " = ...`"
+                                + alsoLock));
             }
             if (isUpdate && binding.expect() == null && versionPredicate) {
                 findings.add(new LintFinding(VERSION_PREDICATE_WITHOUT_EXPECT, WARNING, source,
-                        "Step '" + name + "': UPDATE has a version predicate but no expect.rows;"
-                                + " a stale edit silently affects zero rows - declare"
-                                + " expect: { rows: 1 }"));
+                        "Step '" + name + "': UPDATE has a " + column + " predicate but no"
+                                + " expect.rowCount; a stale edit silently affects zero rows -"
+                                + " declare expect: { rowCount: 1 }" + alsoLock));
             }
         });
+    }
+
+    /** The last {@code where} keyword starting before {@code limit}, or -1 if there is none. */
+    private static int lastWhereBefore(String sql, int limit) {
+        Matcher where = WHERE_KEYWORD.matcher(sql);
+        int last = -1;
+        while (where.find() && where.start() < limit) {
+            last = where.start();
+        }
+        return last;
+    }
+
+    /** Whether any of this statement's nodes is the lock directive, nested ones included. */
+    private static boolean carriesLock(List<SqlNode> nodes) {
+        boolean[] found = {false};
+        SqlNode.walk(nodes, node -> {
+            if (node instanceof SqlNode.Lock) {
+                found[0] = true;
+            }
+        });
+        return found[0];
+    }
+
+    /**
+     * The two warnings only this layer can raise, on the step that carries the directive.
+     *
+     * <p>Both are warnings rather than refusals because both have a legitimate shape they cannot
+     * tell apart from the defect: a column the database advances itself (a trigger, a vendor
+     * rowversion) is a lock nothing in the statement assigns, and the clause test is a text scan
+     * over a statement the framework deliberately does not parse twice.
+     */
+    private static void lintDeclaredLock(String name, String column,
+            Pattern columnAssigned, String sql, boolean isUpdate, String source,
+            List<LintFinding> findings) {
+        // Only an UPDATE and a DELETE have a WHERE clause this scan can reason about. A MERGE
+        // is a legal carrier — validateLock constrains the step's mode, never the verb — and its
+        // lock belongs in an `on (…)` or a `when matched and …`, so judging its clause position
+        // from a WHERE keyword would nag a correct statement forever.
+        if (!isUpdate && !sql.startsWith("delete")) {
+            return;
+        }
+        Matcher directive = LOCK_DIRECTIVE.matcher(sql);
+        int lockAt = directive.find() ? directive.start() : -1;
+        // The LAST where before the directive, not the first: a subquery in the SET list has a
+        // where of its own, and taking that one would cut the SET list short and then report a
+        // correct statement as never advancing its column.
+        int whereAt = lastWhereBefore(sql, lockAt < 0 ? sql.length() : lockAt);
+        if (lockAt >= 0 && whereAt < 0) {
+            findings.add(new LintFinding(LOCK_DIRECTIVE_OUTSIDE_WHERE, WARNING, source,
+                    "Step '" + name + "': the lock directive is not in the statement's WHERE -"
+                            + " it renders a predicate, so a lock anywhere else is a syntax error"
+                            + " the database raises the first time the statement runs"));
+        }
+        if (!isUpdate || column == null || lockAt < 0) {
+            // A DELETE locks without advancing anything, which is correct: the row is gone. A
+            // lock: block that names no column has nothing to look for. And a directive the node
+            // walk saw but this text scan cannot locate is one we decline to judge.
+            return;
+        }
+        // Only what precedes the statement's own WHERE can be a SET-list assignment, and the
+        // lock predicate cannot contribute a false match: the directive carries no column name.
+        String setList = sql.substring(0, whereAt < 0 ? lockAt : whereAt);
+        if (!columnAssigned.matcher(setList).find()) {
+            findings.add(new LintFinding(LOCK_NEVER_ADVANCED, WARNING, source,
+                    "Step '" + name + "': lock: names '" + column + "' but this UPDATE's SET list"
+                            + " never assigns it, so the lock compares a value that never moves"
+                            + " and every stale save is accepted - advance it (" + column + " = "
+                            + column + " + 1), unless the database advances it for you"));
+        }
     }
 
     /**

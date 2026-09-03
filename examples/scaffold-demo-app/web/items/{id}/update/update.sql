@@ -1,5 +1,5 @@
--- tesseraql-scaffold-checksum: sha256:5370a3af3b152e964ea471c95c51cec7ab252b96944c6b4b3c7459c2b488a199
--- Scaffolded update for the items table: the version predicate pairs with expect.rows (Phase 18).
+-- tesseraql-scaffold-checksum: sha256:c600ec88574eeef9091cc154d823d76f5bf87079d1817c69287ffbb186f2a554
+-- Scaffolded update for the items table: the SET list advances the version, the lock directive compares it (docs/edit-conflict.md).
 update items
 set
   name = /* name */ 'sample',
@@ -13,4 +13,4 @@ set
   updated_at = /* audit.now */ '2026-01-01 00:00:00'
 where
   id = /* id */ 1
-  and version = /* version */ 1
+  and /*%lock*/ (1=1)

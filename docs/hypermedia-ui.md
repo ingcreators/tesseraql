@@ -91,10 +91,12 @@ for the duration, which is the double-submit protection:
 shape is in [declarative-validation.md](declarative-validation.md); conflict hints in
 [transactional-writes.md](transactional-writes.md)). The wiring is already in place:
 
-- htmx 2 leaves error responses unswapped by default; the framework bootstrap swaps any
-  4xx response that carries `data-hc-field-errors` — 422 validation, 409 optimistic-locking
-  conflict, and 400 constraint fragments all surface inline. 5xx keeps htmx's default
-  handling.
+- htmx 2 leaves error responses unswapped by default; the framework bootstrap swaps a 4xx
+  response carrying one of the fragment markers, and each kind states its own. The
+  field-errors marker covers 422 validation, 400 constraint fragments and the 409 of a
+  hand-authored `expect:` (`TQL-SQL-4092`), whose conflict hint renders as the alert body. A
+  declared lock's 409 (`TQL-SQL-4094`) is not an inline alert — it opens the dialog below.
+  5xx keeps htmx's default handling.
 - The kit's `installFieldErrors` behavior distributes each `hc-alert__error` next to the
   input whose `name` matches its `data-field`, sets `aria-invalid`/`aria-describedby`, and
   focuses the first invalid control. Inputs composed as `hc-field` stanzas get the error
@@ -256,11 +258,15 @@ redirects on success, while degrading to a plain form post with no JavaScript:
 ```
 
 - **Keep `method`/`action` alongside `hx-post`.** Without JavaScript the form submits
-  natively: the server re-renders the page with the field-errors fragment inline, or
-  redirects. The double-submit guard and spinner are htmx enhancements that simply don't run.
+  natively, and a successful save still redirects. A failure is the honest gap: only the
+  declared lock's conflict answers HTML on a native post, and every other 4xx falls through
+  to the JSON envelope. The double-submit guard and spinner are htmx enhancements that
+  simply don't run.
 - **Failure (4xx)** swaps the field-errors fragment into the in-form container (the bootstrap
   already allows the swap, see above). Because the container is inside the form,
-  `installFieldErrors` distributes items to the inputs.
+  `installFieldErrors` distributes items to the inputs. The declared lock's conflict is
+  retargeted out of the form to the shell's dialog host, the way the session-expiry `401`
+  above is.
 - **Success** branches on the `HX-Request` header (the framework's redirect renderer does this
   automatically): an htmx caller gets `204` + `HX-Redirect` and htmx navigates with a full
   `window.location` (post/redirect/get intact); a no-JS caller gets the plain `303 Location`.
@@ -285,6 +291,70 @@ the form's own save deliberately does **not** clean the state — a draft is not
 the same line the kit's autosave recipe draws. And the baseline compares canonical wire
 values (`FormData`), so display regrouping by `installFormat` is never "dirty". A
 hand-written console form opts in with the same single attribute.
+
+## Edit conflict
+
+A command route that declares `lock:` gets the kit's `edit-conflict` contract from that one key
+([transactional-writes.md](transactional-writes.md#the-declared-lock)). The form the framework
+renders carries the record's lock value as a hidden `_lock`; when the record moved underneath
+it, the save answers `409` (`TQL-SQL-4094`) with a `<dialog>` rather than an inline alert:
+
+```html
+<dialog class="hc-dialog" data-tql-conflict-dialog aria-labelledby="tql-conflict-title">
+  <div class="hc-dialog__header">
+    <h2 class="hc-dialog__title" id="tql-conflict-title">This record changed</h2>
+  </div>
+  <div class="hc-dialog__body">
+    <p>The record may have been changed or deleted by another user; reload it and retry
+       the operation.</p>
+  </div>
+  <div class="hc-dialog__footer">
+    <form method="dialog">
+      <button class="hc-button" data-variant="ghost" autofocus>Keep editing</button>
+    </form>
+    <a class="hc-button" data-variant="ghost" href="/items/7">Discard mine and reload</a>
+    <button class="hc-button" data-variant="primary" type="submit"
+            form="items-edit-form" name="_overwrite" value="1">Save mine anyway</button>
+  </div>
+</dialog>
+```
+
+The response carries `HX-Retarget: [data-tql-conflict-host]` and `HX-Reswap: innerHTML`, so it
+lands in the shell's shared dialog host and `installRemoteDialog` opens it. The reswap is
+explicit rather than omitted: htmx otherwise keeps the requesting element's own swap style, and
+a form swapping `outerHTML` would replace the host itself.
+
+**Overwrite is the page's own form submitting.** The button is associated by the HTML `form`
+attribute — the id comes from the request's `HX-Trigger` header — and it carries the waiver as
+its own submit value. Nothing is copied out of the form, so nothing can be stale, and the kit's
+dirty guard still cleans on success because the request is the guarded form's own. A submit
+button's value travels only when that button submits, which is what makes the waiver
+single-shot: the form's own Save button still sends the stale `_lock` and still refuses. A
+request with no `HX-Trigger` renders the dialog without that button, rather than one pointing
+at nothing.
+
+**Reload goes where a successful save would have gone** — the route's declared
+`response.redirect.location`, interpolated against the request being refused; a route declaring
+none renders no link. "Keep editing" is the dialog's own dismissal, and it is the `autofocus`
+one: `showModal()` focuses the first focusable child, and the destructive choice must never be
+what a reflex Enter commits.
+
+This conflict is the one allowed swap that stays an **error**. The other markers clear htmx's
+error flag so an alert lands quietly; doing that here would tell the unsaved-changes guard the
+save succeeded, and the page would look saved with the work still unsent. So the form stays
+dirty, and the reload link — a real navigation away from it — draws the browser's own
+leave-page prompt on top of the modal. That is honest: the link really does discard what was
+typed, which is what it says.
+
+Without JavaScript the same `409` answers a full page through the shell, with the caller's
+submitted values echoed as hidden inputs and the same two choices. The announcement rides the
+page title, because a fresh navigation changes nothing after load and an assertive live region
+announces nothing. Back is not offered as a third choice: it restores a form whose lock value
+is already stale.
+
+Neither face renders the other operator's values or name. The answer states that the record
+moved; the transaction is already rolled back, and a framework-issued read of the contested row
+would carry no scope predicate and no masking.
 
 ## Bulk actions
 
@@ -514,7 +584,9 @@ Drop `templates/errors/<status>.html` (or the catch-all `templates/errors/error.
 the app and a top-level browser GET that fails renders it, with `status`, `error.code`,
 `error.message`, and any structured `error.details` in the model. htmx swaps keep the inline error fragment and API clients keep
 the JSON envelope; with no template, every caller gets the JSON envelope. A broken error
-template never masks the original failure — the response falls back to JSON.
+template never masks the original failure — the response falls back to JSON. The branch is a
+top-level GET by construction, so a failing form post keeps the JSON envelope: the declared
+lock's conflict page is the only HTML answer a failing post has.
 
 ## Next
 

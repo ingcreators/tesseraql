@@ -203,6 +203,10 @@ route fails with `TQL-SQL-2112` instead of binding null. Only the whole namespac
 is an error: a seeded `principal.tenantId` that is genuinely null stays null, because that is a
 fact about the principal rather than the absence of one.
 
+Two lints guard the principal namespace: a `principal.*` bind on a route that never carries an
+authenticated principal is an error (`TQL-SEC-4136`), and a `params:` entry that merely renames
+an ambient field draws a nudge toward the ambient spelling (`TQL-SEC-4137`).
+
 ## The scope directive
 
 `/*%scope name */ (1=1)` marks where a row-level access predicate belongs. In a plain tool the
@@ -211,9 +215,14 @@ parenthesized dummy reads as `(1=1)`; at runtime the named scope — declared on
 qualify the column in a join and `as boolean` to render a per-row flag instead of a filter.
 The full model, examples, and its lint rules are in [data-scoping.md](data-scoping.md).
 
-Two lints guard the principal namespace: a `principal.*` bind on a route that never carries an
-authenticated principal is an error (`TQL-SEC-4136`), and a `params:` entry that merely renames
-an ambient field draws a nudge toward the ambient spelling (`TQL-SEC-4137`).
+## The lock directive
+
+`/*%lock*/ (1=1)` marks where a command route's optimistic-lock predicate belongs. In a plain
+tool the parenthesized dummy reads as `(1=1)`; at runtime it expands to an equality against the
+column the route declared under `lock:`, bound to the value the caller sent back. The route
+names the column, so the statement never repeats it, and the statement's own SET list is what
+advances it. The full model is in
+[transactional-writes.md](transactional-writes.md#the-declared-lock).
 
 ## Staying tool-runnable
 
@@ -221,7 +230,7 @@ A few rules keep every file executable as-is:
 
 - **Every `/* … */` block comment is a directive.** Use `--` line comments for remarks.
 - **Every bind carries a dummy** so the raw statement has a value in that position; a scope
-  directive carries a parenthesized dummy predicate.
+  or lock directive carries a parenthesized dummy predicate.
 - **Loop separators live in the directive**, never as trailing text between fragments.
 - **Don't author `LIMIT`/`FETCH` on a paginated route** — the framework appends the dialect's
   pagination clause at execution time, and `TQL-YAML-1018` warns when the file carries its own
@@ -239,6 +248,8 @@ statically:
 | `TQL-SQL-2103` | a route, step, or validation rule references a missing SQL file |
 | `TQL-SQL-2104` | an UPDATE declares `expect.rowCount` but has no version-column predicate (optimistic locking half-wired) |
 | `TQL-SQL-2105` | an UPDATE has a version predicate but no `expect.rowCount` (a stale edit would silently affect zero rows) |
+| `TQL-SQL-2116` | a route declares `lock:` but the UPDATE's SET list never assigns the column, so the lock matches every save |
+| `TQL-SQL-2117` | a `/*%lock*/` directive is not in the statement's `WHERE` |
 | `TQL-SQL-2109` | an embedded variable interpolates request input that is not `enum`-constrained |
 | `TQL-YAML-1018` | a paginated route's SQL carries its own `LIMIT`/`FETCH` |
 | `TQL-SCOPE-3011` / `3013` | a scope directive names an undeclared scope / an invalid `on` alias ([data-scoping.md](data-scoping.md)) |

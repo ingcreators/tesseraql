@@ -1,5 +1,39 @@
 # Edit conflict — the declared lock, and the two choices it earns
 
+> **Status: complete.** Four slices shipped 2026-09-03, from the design at #1134/#1135.
+>
+> **Slice 4 (the scaffolder, and the gallery regenerated) shipped as #1139.**
+> `CrudScaffolder` emits `lock: { column: version, type: integer }` and `/*%lock*/ (1=1)`, and
+> the five hand-wired halves are gone: the `version:` input on both command routes, its bind,
+> the `expect:` block, the edit view's hidden `version` field and the delete fragment's hidden
+> input. The demo app is regenerated rather than extended, so the committed diff and its
+> checksums are the generator's proof. The lints follow decision 10 — the two heuristics stand
+> down on the step that carries the directive, `TQL-SQL-2116` catches a lock the statement
+> never advances, `TQL-SQL-2117` catches a directive outside the `WHERE`, and the framework
+> stops telling authors to write `expect.rows`. The heuristic was itself broken: `isUpdate`
+> tested the raw text, so it had never once fired on a file this framework generates. The docs
+> land in [transactional-writes.md](transactional-writes.md),
+> [declarative-views.md](declarative-views.md) and [hypermedia-ui.md](hypermedia-ui.md), with
+> [scaffolding.md](scaffolding.md) and [two-way-sql.md](two-way-sql.md) corrected alongside.
+>
+> **Slice 3 (the two faces) shipped as #1138.** The dialog on the shell's third host attribute,
+> the no-JS 409 page, the fifth beforeSwap marker — the one that swaps while staying an error —
+> and `tql.conflict.*` in both catalogs. `tql.workflow.illegal-transition` rode along, and a
+> new guard holds the two bundled catalogs to one key set. Fixed alongside:
+> `response.onError` steering resolved the failing route from an exchange property nothing ever
+> wrote, so it had never fired.
+>
+> **Slice 2 (the read side and the form) shipped as #1137.** `v.lock` off the action route, the
+> fourth framework-owned hidden field, and `TQL-VIEW-3330` when the rendered row cannot supply
+> the value. Review added three refusals: a `datetime` lock at build, a value with no textual
+> form at render, and a read policy on the lock column at build. Open question 3 settled as a
+> refusal, and `ViewEjector` caught up on all four framework fields.
+>
+> **Slice 1 (the declaration and the refusal) shipped as #1136.** Route-level `lock:`, the
+> `/*%lock*/` directive and its renderer, the two reserved fields and the step that consumes
+> and coerces them, `TQL-SQL-4094` and `TQL-FIELD-2011`, the build refusals in their two homes,
+> and the `sources:`-inert fix (`TQL-ROUTE-3120`).
+>
 > **Design, written 2026-09-02, measured against main at #1133.** The `edit-conflict`
 > adopt from the catalog ledger ([hc-recipe-alignment.md](hc-recipe-alignment.md)), item 8
 > in its recommended order and the one row the ledger sent away for its own design slice.
@@ -600,7 +634,8 @@ what they always were: how the scaffolder guesses which column to declare. The g
 stays integer-only because it must also write the advance; a hand-authored route may lock
 on any equality-comparable column, because the framework only compares.
 
-Its output changes. The update and delete routes emit `lock: version` and `/*%lock*/(1=1)`,
+Its output changes. The update and delete routes emit
+`lock: { column: version, type: integer }` and `/*%lock*/ (1=1)`,
 and stop emitting the `version:` input, the `version: params.version` bind, the `expect:`
 block, the edit view's `- name: version / widget: hidden` entry and the delete fragment's
 hand-written hidden input. The delete leg is covered by the same declaration because it is
@@ -658,8 +693,10 @@ the boot refusal and the scaffolded SQL comment all say `rows` today.
    both catalogs. `tql.workflow.illegal-transition` rides along: it is raised by the
    transition executor and exists in neither catalog, so the only other refusal that
    reaches the hint localizer renders a raw message key to a user today.
-4. **The scaffolder, and the gallery regenerated.** `CrudScaffolder` emits `lock: version`
-   and `/*%lock*/(1=1)` and drops the five hand-wired halves. The gallery's one edit form
+4. **The scaffolder, and the gallery regenerated.** `CrudScaffolder` emits
+   `lock: { column: version, type: integer }` — the typed form, because slice 2 made the
+   declared type a build-enforced bound and an untyped lock would compare the string a form
+   posted — and `/*%lock*/ (1=1)`, and drops the five hand-wired halves. The gallery's one edit form
    is not new: `examples/scaffold-demo-app`'s `items.edit` has shipped the whole hand-wired
    lock since Phase 18, and it is this design's worked example throughout. So the dogfood
    is a **regeneration**, not an addition — the demo app is held byte-for-byte by the
@@ -732,6 +769,17 @@ one authored, and the pairing lints keep pointing the authored one at the declar
 - **No region-granular htmx choreography.** The conflict answer is a dialog and a redirect,
   the same stance [workflow-surface.md](workflow-surface.md) decision 3 took.
 
+## Not in this design, and worth its own slice
+
+A statement carrying `/*%lock*/` cannot be a declarative-suite `sql` case: the runner renders
+with the case's plain YAML map, and only the command pipeline builds the `LockBinding` the
+directive needs, so an unseeded render refuses at `TQL-SQL-2115`. The generated suite only ever
+exercised the reads, so slice 4 broke no shipped suite — but it made every scaffolded app's
+update and delete statements unreachable from `tesseraql test`, and the gap is recorded in
+[testing.md](testing.md) rather than closed here. Closing it means a case-level key that builds a
+lock the way `principal:` builds a scope context, which is a change to the suite runner and
+belongs to it.
+
 ## Deliberately not in this design
 
 - **Hints for `TQL-SQL-4090`, `4091` and `4093`.** They render the bare status phrase to a
@@ -784,6 +832,8 @@ one authored, and the pairing lints keep pointing the authored one at the declar
    design avoids, and a form derives its fields from `input:`, so the page would render a
    writable control for the column beside the framework's own hidden field. Route-shaped,
    because the check needs only the route's own declaration.
-4. Does the scaffolder's delete leg keep its hand-written slot fragment, or does the
-   confirmed delete become a declared affordance? Only the generator can rewrite that
-   fragment, and it is the second locked form on one page — *gates slice 4*.
+4. ~~Does the scaffolder's delete leg keep its hand-written slot fragment?~~ **Settled
+   2026-09-03 with slice 4: it keeps it**, and the generator emits its `_lock` field from
+   `v.lock`. The confirmed delete is a second locked form on one page, and each form carries
+   its own route's lock — the fragment is generated markup, so the generator owns that field
+   exactly as the form pattern owns its own.

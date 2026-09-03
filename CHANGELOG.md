@@ -8,6 +8,34 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **The scaffolder declares the lock it used to hand-wire** (docs/edit-conflict.md slice 4).
+  `tesseraql scaffold crud` emits `lock: { column: version, type: integer }` on the update and
+  delete routes and `/*%lock*/ (1=1)` in each statement's `WHERE`, and stops emitting the five
+  halves that used to carry the same intent by hand: the `version:` input on both commands, its
+  `params:` bind, the `expect: { rowCount: 1, onMismatch: conflict }` block, the edit view's
+  `- name: version / widget: hidden` entry, and the delete slot fragment's hidden `version`
+  input. The update statement still advances the column itself — the framework only ever
+  compares. The delete leg is covered by its own `lock:` and its fragment carries its own
+  `_lock`, read from `v.lock`: each form on the page carries its own route's lock rather than
+  sharing one page-level field. The `version` column loses its generated domain entry, because
+  no route declares it as an input any more and the `lock:` block states the one thing the
+  framework needs from it — its type. `examples/scaffold-demo-app` is regenerated accordingly,
+  and its integration test now proves the whole story against the gallery: a save, the refusal,
+  the dialog with its overwrite button, the waiver, and the delete. One thing a regenerated app
+  loses: a statement carrying `/*%lock*/` cannot be a declarative-suite `sql` case, because the
+  lock value is seeded from a request and a suite has none. The scaffolded suite only ever
+  exercised the reads, so no generated suite breaks — but an author who was driving the update
+  statement from a case proves it through the HTTP surface from now on.
+
+- **Two lint warnings only the SQL text can raise** (docs/edit-conflict.md decision 10).
+  `TQL-SQL-2116` fires when a route declares `lock:` and the UPDATE's SET list never assigns the
+  column — the lock then compares a value that never moves, matches on every save, and is
+  silently last-write-wins, which is the exact defect the declaration exists to abolish.
+  `TQL-SQL-2117` fires when the directive is not in the statement's `WHERE`. Both are warnings,
+  because a column the database advances itself is legitimate and the clause test is a text
+  scan over a statement the framework deliberately does not parse twice. The compiler answers
+  neither question: it holds a flat node list with no clause positions.
+
 - **The conflict has two faces** (docs/edit-conflict.md slice 3). A stale save now answers with
   something a person can act on. An htmx caller gets a `<dialog>` retargeted at a third attribute
   on the shell's one remote-dialog host, offering two choices: keep editing (the dialog's own
@@ -414,6 +442,11 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **The framework stops telling authors to write `expect.rows`.** The key is `rowCount`, and
+  has been since the vocabulary cleanup; three refusal and warning messages plus one generated
+  SQL comment still named a key that does not exist, so an author who followed the message got
+  an unknown-key warning and the same refusal again. Message text only — no behaviour changes.
+
 - **An ejected form carries all four framework fields.** `ViewEjector` emitted `_csrf` alone, so
   every ejected form had already drifted away from `_idempotency` and `_return`; it now emits
   those two and, for a locked action route, `_lock`. An ejected page has no view binding, so it
@@ -510,6 +543,15 @@ All notable changes to TesseraQL are documented here. The format follows
   joins it there.
 
 ### Fixed
+
+- **The optimistic-locking nudge had never fired on a generated file.** `TQL-SQL-2104` and
+  `TQL-SQL-2105` tested the raw SQL text for a leading `update`, and every file this framework
+  writes opens with its own `-- tesseraql-scaffold-checksum:` line — so the one shape the
+  warnings exist for was the one shape they could not see. The verb test now skips leading
+  comments, sharing `ValidationRules`' strip with the SELECT check beside it. The two warnings
+  also stand down on the step that carries a lock directive, where the compiler has already
+  answered the pairing question, and elsewhere they name the route's declared lock column
+  rather than the literal word `version`.
 
 - **A route's `response.onError` steering actually applies.** The failing route was resolved from
   an exchange property that **nothing in the framework ever wrote**, so the documented

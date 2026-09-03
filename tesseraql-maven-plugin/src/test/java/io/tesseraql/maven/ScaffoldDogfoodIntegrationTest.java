@@ -119,6 +119,10 @@ class ScaffoldDogfoodIntegrationTest {
         assertThat(findings).noneMatch(LintFinding::isError);
         // The skeleton defines the app.read/app.write policies the scaffolds reference.
         assertThat(findings).noneMatch(finding -> finding.code().equals("TQL-SEC-4030"));
+        // The optimistic-locking warnings are warnings, so the errors-only sweep above cannot
+        // see them: a nag on the framework's own generated output would be permanent and
+        // invisible. This is the only place the lints meet real generator bytes.
+        assertThat(findings).noneMatch(finding -> finding.code().startsWith("TQL-SQL-21"));
 
         AppTestRunner.RunResult result = new AppTestRunner()
                 .run(EXAMPLE, dataSource, RealmConfig.managed("local", "main"), reportDir);
