@@ -163,7 +163,7 @@
     <hypermedia-editor-kit.version>0.2.0</hypermedia-editor-kit.version>
     <observablehq-plot.version>0.6.10</observablehq-plot.version>
     <webjars-locator.version>1.1.4</webjars-locator.version>
-    <flyway.version>13.3.0</flyway.version>
+    <flyway.version>13.4.0</flyway.version>
     <commons-csv.version>1.14.1</commons-csv.version>
     <jxls.version>3.1.0</jxls.version>
     <fastexcel.version>0.20.2</fastexcel.version>
