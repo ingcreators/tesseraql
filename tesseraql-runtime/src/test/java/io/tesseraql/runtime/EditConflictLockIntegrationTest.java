@@ -43,7 +43,6 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 @TestMethodOrder(OrderAnnotation.class)
 class EditConflictLockIntegrationTest {
 
-    @SuppressWarnings("resource") // Testcontainers closes it (docs/build.md).
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
