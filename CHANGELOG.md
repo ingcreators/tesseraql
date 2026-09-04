@@ -6,6 +6,29 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ## Unreleased
 
+### Changed
+
+- **A finished execution keeps the verdict it reached first, in both directions.** The reaper was
+  already conditional on the row still being `RUNNING`; the reverse was not, so a run that
+  finished after its execution was reaped turned `FAILED` back into `COMPLETED`. `finishExecution`
+  now carries the same predicate, and a write that changes no row is logged at DEBUG naming
+  whether the row reached an outcome first or is gone.
+
+  For a file transfer the verdict moved *into* the transaction that produces it. Its rows, its
+  counts and its outcome now commit together through a conditional update on the transfer's own
+  connection, so a transfer that loses the race rolls back instead of committing under someone
+  else's verdict — reading the status before committing could not do this, because a plain read
+  takes no lock, MySQL's default isolation serves it from a snapshot, and the verdict was still
+  written afterwards on another connection. An async export records its produced file in the same
+  transaction and discards the file when it loses, rather than leaving bytes no sweep can see. An
+  inline export step cannot fuse the two, because its connection belongs to the caller's
+  extraction datasource; it makes the file reference and the verdict atomic with each other on the
+  framework pool instead, and raises rather than reporting an export nothing recorded.
+
+  Two consequences worth stating. A reaped export whose file exists stays undownloadable, because
+  a download serves only a `COMPLETED` execution — previously the late completion rescued it. And
+  work after a successful commit can no longer rewrite the count or the outcome.
+
 ### Fixed
 
 - **A poll source's listed file names are the server's, and are now checked.** A remote poll

@@ -14,12 +14,16 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import javax.sql.DataSource;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * JDBC-backed batch execution repository (design ch. 26.3). Persists job and step executions to
  * {@code TQL_JOB_EXECUTION} and {@code TQL_STEP_EXECUTION}.
  */
 public final class JobRepository {
+
+    private static final Logger LOG = LoggerFactory.getLogger(JobRepository.class);
 
     /** TQL-BATCH-5001: the job repository could not read or write the job/execution tables. */
     private static final TqlErrorCode REPO_ERROR = new TqlErrorCode(TqlDomain.BATCH, 5001);
@@ -431,17 +435,68 @@ public final class JobRepository {
         return updated > 0;
     }
 
+    private static final String FINISH_SQL = """
+            update tql_job_execution
+            set status = ?, end_time = ?, exit_message = ?
+            where job_execution_id = ? and status = ?""";
+
+    /**
+     * Writes a terminal outcome, and only over a row that is still RUNNING.
+     *
+     * <p>The predicate is the one {@link #markReaped} and {@code requestCancel} already carry, and
+     * it makes the rule symmetric: <strong>the first outcome written wins, in either direction</strong>.
+     * The reaper was documented as never overwriting a verdict a run reached itself; the reverse
+     * was unguarded, so a run finishing after its execution was reaped turned FAILED back into
+     * COMPLETED. Cancellation is unaffected: {@code requestCancel} writes only
+     * {@code cancel_requested} and leaves the row RUNNING, so the cooperative stop that follows
+     * still matches.
+     */
     private void finishExecution(String executionId, JobStatus status, String message) {
-        execute("""
-                update tql_job_execution
-                set status = ?, end_time = ?, exit_message = ?
-                where job_execution_id = ?""",
-                ps -> {
-                    ps.setString(1, status.name());
-                    ps.setTimestamp(2, Timestamp.from(Instant.now()));
-                    ps.setString(3, message);
-                    ps.setString(4, executionId);
-                });
+        int updated = update(FINISH_SQL, ps -> bindFinish(ps, executionId, status, message));
+        if (updated == 0 && LOG.isDebugEnabled()) {
+            // Two causes, and they are worth telling apart: the row reached an outcome first, or
+            // it is gone (RetentionSweeper deletes finished executions). The extra read only runs
+            // on this path, and only when DEBUG is on.
+            LOG.debug("Execution {} was not finished as {}: {}", executionId, status,
+                    findExecution(executionId)
+                            .map(found -> "it is no longer RUNNING (now " + found.status() + ")")
+                            .orElse("no such execution"));
+        }
+    }
+
+    /**
+     * Writes a terminal outcome on the caller's own connection, without committing, and reports
+     * whether it won.
+     *
+     * <p>For work whose result is in a transaction, the verdict belongs <em>in</em> that
+     * transaction. Reading the status before the commit is check-then-act: a plain read takes no
+     * lock under READ COMMITTED and is served from a stale snapshot under MySQL's REPEATABLE READ
+     * default, and the verdict would still be written afterwards from a different connection. As
+     * a conditional UPDATE on the caller's connection it is a compare-and-set instead — a
+     * concurrent reap either blocks on the row and then finds a status that is no longer RUNNING,
+     * or wins and leaves this caller to roll its work back.
+     *
+     * <p>The cost to know about: this holds a row lock on the execution until the caller commits,
+     * so a heartbeat tick covering that id waits for the commit — and the pulse is one statement
+     * on one thread, so every live execution's pulse waits with it. One commit against a liveness
+     * window many intervals wide.
+     */
+    public boolean completeExecution(Connection connection, String executionId) {
+        try (PreparedStatement ps = connection.prepareStatement(FINISH_SQL)) {
+            bindFinish(ps, executionId, JobStatus.COMPLETED, null);
+            return ps.executeUpdate() > 0;
+        } catch (SQLException ex) {
+            throw error("Failed to finish execution " + executionId, ex);
+        }
+    }
+
+    private static void bindFinish(PreparedStatement ps, String executionId, JobStatus status,
+            String message) throws SQLException {
+        ps.setString(1, status.name());
+        ps.setTimestamp(2, Timestamp.from(Instant.now()));
+        ps.setString(3, message);
+        ps.setString(4, executionId);
+        ps.setString(5, JobStatus.RUNNING.name());
     }
 
     public String startStep(String executionId, String stepId) {

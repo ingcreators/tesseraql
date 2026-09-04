@@ -221,6 +221,68 @@ class JobOwnershipIntegrationTest {
         assertThat(finished.exitMessage()).isNull();
     }
 
+    /**
+     * And the reverse, which was unguarded: a run that finishes after it was reaped does not take
+     * the reaper's verdict back.
+     *
+     * <p>The rule is symmetric — the first outcome written wins, in either direction. Without it a
+     * reaped transfer's {@code completeExecution} turned FAILED into COMPLETED, so a row could
+     * report success for work whose node had gone away.
+     */
+    @Test
+    void aReapedRunKeepsItsVerdictWhenTheRunLaterCompletes() throws Exception {
+        JobRepository repository = repository("node-late");
+        String executionId = repository.startExecution("late.job", "app", "cron", null);
+        ageHeartbeat(executionId, Duration.ofHours(2));
+        assertThat(repository.reapAbandoned("late.job", Duration.ofMinutes(5)))
+                .containsExactly(executionId);
+
+        repository.completeExecution(executionId);
+
+        JobExecution finished = repository.findExecution(executionId).orElseThrow();
+        assertThat(finished.status().name()).isEqualTo("FAILED");
+        assertThat(finished.exitMessage()).contains("TQL-BATCH-4212");
+    }
+
+    /**
+     * The primitive the transfer paths commit through: a compare-and-set on the caller's own
+     * connection.
+     *
+     * <p>A transfer's rows and its verdict have to land together, and reading the status before
+     * the commit cannot do that — a plain read takes no lock, MySQL's default isolation serves it
+     * from a snapshot, and the verdict would still be written afterwards on another connection. As
+     * a conditional update inside the work's transaction it either wins, and commits with the
+     * rows, or loses, and the work rolls back. This case drives both outcomes without a clock.
+     */
+    @Test
+    void finishingOnTheCallersConnectionIsACompareAndSet() throws Exception {
+        JobRepository repository = repository("node-cas");
+        String mine = repository.startExecution("cas.mine", "app", "manual", null);
+        String taken = repository.startExecution("cas.taken", "app", "manual", null);
+
+        // Somebody else reached an outcome first, from another connection entirely.
+        ageHeartbeat(taken, Duration.ofHours(2));
+        assertThat(repository.reapAbandoned("cas.taken", Duration.ofMinutes(5)))
+                .containsExactly(taken);
+
+        try (Connection connection = dataSource().getConnection()) {
+            connection.setAutoCommit(false);
+
+            assertThat(repository.completeExecution(connection, taken)).isFalse();
+            assertThat(repository.completeExecution(connection, mine)).isTrue();
+
+            // Won, but uncommitted: the outcome is not a fact until the caller's transaction is.
+            assertThat(repository.findExecution(mine).orElseThrow().status().name())
+                    .isEqualTo("RUNNING");
+            connection.commit();
+        }
+
+        assertThat(repository.findExecution(mine).orElseThrow().status().name())
+                .isEqualTo("COMPLETED");
+        assertThat(repository.findExecution(taken).orElseThrow().status().name())
+                .isEqualTo("FAILED");
+    }
+
     /** Two replicas of one image on one host must not share an identity. */
     @Test
     void aDerivedNodeIdIsUsedWhenNoneIsConfigured() {
