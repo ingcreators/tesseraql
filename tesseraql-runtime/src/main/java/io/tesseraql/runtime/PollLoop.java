@@ -142,6 +142,12 @@ final class PollLoop implements RuntimeContext.Service {
     private void cycle() throws Exception {
         List<PollSource.PolledFile> candidates = new ArrayList<>();
         for (PollSource.PolledFile file : source.list()) {
+            if (!plainName(file.name())) {
+                LOG.log(System.Logger.Level.WARNING, "Poll source for job " + jobId
+                        + " listed a file under a name that is not a plain file name; skipping: "
+                        + file.name());
+                continue;
+            }
             if (include == null || include.matches(Path.of(file.name()))) {
                 candidates.add(file);
             }
@@ -169,6 +175,27 @@ final class PollLoop implements RuntimeContext.Service {
             }
             consume(file);
         }
+    }
+
+    /**
+     * Whether a listed name is a plain file name, and so safe to resolve against the work
+     * directory and to hand back to the source for an archive rename.
+     *
+     * <p>Every other input to this loop is author-declared and guarded where it is read; a listed
+     * name is the one input the <em>server</em> chooses. The SFTP client verifies server identity
+     * only when a {@code knownHostsFile} is configured (docs/poll-connector-hardening.md), so an
+     * impersonated partner is inside the accepted threat model — and a listing entry of
+     * {@code ../../../config/application.yml} was an arbitrary file write wherever the runtime
+     * user can write. The {@code include:} glob was never a control here: a glob's {@code *} does
+     * not cross a separator, so declaring one masked the hole rather than closing it.
+     *
+     * <p>Exact rather than blunt: a partner's legitimate {@code report..csv} still imports, and
+     * only a separator, a NUL, an empty name or a bare {@code .}/{@code ..} is refused.
+     */
+    private static boolean plainName(String name) {
+        return name != null && !name.isBlank()
+                && name.indexOf('/') < 0 && name.indexOf('\\') < 0 && name.indexOf('\0') < 0
+                && !".".equals(name) && !"..".equals(name);
     }
 
     private void consume(PollSource.PolledFile file) {

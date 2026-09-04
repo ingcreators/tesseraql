@@ -161,8 +161,34 @@ class PollLoopTest {
         assertThat(claimed.get(0)).startsWith("orders.csv-");
     }
 
+    /**
+     * A file the source lists under a name that is not a plain file name is skipped, not imported.
+     *
+     * <p>The name is the server's, on a remote transport whose identity is verified only when a
+     * {@code knownHostsFile} is declared, so it is the one input to this loop an attacker chooses.
+     * The rule lives here, with the transport-independent rules, rather than in one client.
+     */
+    @Test
+    void aListedNameThatIsNotAPlainNameIsSkipped() throws Exception {
+        HostileSource source = new HostileSource();
+        List<String> imported = new CopyOnWriteArrayList<>();
+
+        start(source, record(imported), null);
+
+        await(() -> imported.size() == 1);
+        // The two hostile entries are refused before the glob, before the stability re-read, and
+        // before the fetch that would have written them; the cycle keeps going past them.
+        assertThat(source.fetched).containsExactly("orders.csv");
+        assertThat(source.archived).containsExactly("orders.csv");
+        assertThat(imported).containsExactly("orders.csv:name,qty\nplain,1\n");
+    }
+
     private void start(Step importer, String include) throws Exception {
-        loop = new PollLoop("orders.intake", "local", new LocalPollSource(inbound), importer,
+        start(new LocalPollSource(inbound), importer, include);
+    }
+
+    private void start(PollSource source, Step importer, String include) throws Exception {
+        loop = new PollLoop("orders.intake", "local", source, importer,
                 context, include, ".done", ".error", 200, null, status);
         loop.start();
     }
@@ -184,6 +210,45 @@ class PollLoopTest {
             Thread.sleep(100);
         }
         assertThat(condition.getAsBoolean()).isTrue();
+    }
+
+    /** A source that lists what a hostile or impersonated server would, beside a legitimate file. */
+    private final class HostileSource implements PollSource {
+
+        private final List<String> fetched = new CopyOnWriteArrayList<>();
+        private final List<String> archived = new CopyOnWriteArrayList<>();
+
+        @Override
+        public List<PolledFile> list() {
+            return List.of(
+                    new PolledFile("../../../config/application.yml", 8, 1_000L),
+                    new PolledFile("sub/nested.csv", 8, 1_000L),
+                    new PolledFile("orders.csv", 8, 1_000L));
+        }
+
+        @Override
+        public Optional<PolledFile> stat(String name) {
+            return Optional.of(new PolledFile(name, 8, 1_000L));
+        }
+
+        @Override
+        public Fetched fetch(PolledFile file) throws IOException {
+            fetched.add(file.name());
+            Path target = inbound.resolve("fetched-" + file.name());
+            Files.createDirectories(target.getParent());
+            Files.writeString(target, "name,qty\nplain,1\n");
+            return new Fetched(target, true);
+        }
+
+        @Override
+        public void archive(PolledFile file, String directory) {
+            archived.add(file.name());
+        }
+
+        @Override
+        public void close() {
+            // Nothing held.
+        }
     }
 
     /** A source whose single file grows on every stat, so it is never stable. */
