@@ -44,9 +44,17 @@ class FileTransferIntegrationTest {
 
     static TesseraqlRuntime runtime;
     static Path appHome;
+    /** Vert.x's own default spool, resolved against the working directory this fork was started in. */
+    static Path transportDefaultSpool;
 
     @BeforeAll
     static void start() throws Exception {
+        // Resolved from the recorded working directory rather than a bare relative path: surefire's
+        // working directory is not pinned by the build, and a workspace that ran this suite before
+        // the spool moved still has the directory on disk. Removing it first is what makes the
+        // assertion below a statement about this run.
+        transportDefaultSpool = Path.of(System.getProperty("user.dir")).resolve("file-uploads");
+        deleteRecursively(transportDefaultSpool);
         appHome = prepareAppHome();
         runtime = TesseraqlRuntime.start(appHome, 0);
     }
@@ -187,6 +195,12 @@ class FileTransferIntegrationTest {
         assertThat(status.get("status").asText()).isEqualTo("COMPLETED");
         assertThat(status.get("rowCount").asLong()).isEqualTo(1);
         assertThat(itemCount("multi")).isEqualTo(1);
+
+        // Where the part spooled while the request was in flight. The directory is created at
+        // boot, so it exists whether or not this test ran first; what the upload proves is that
+        // nothing fell back to the transport's working-directory default.
+        assertThat(appHome.resolve("work/tmp/tesseraql/uploads")).isDirectory();
+        assertThat(transportDefaultSpool).doesNotExist();
     }
 
     @Test

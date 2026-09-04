@@ -1243,7 +1243,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     appHome, manifest.config(), dataSource, tenantDataSources, dataSources::get);
             TesseraqlHttpServer httpServer = new TesseraqlHttpServer(context, "0.0.0.0", port,
                     sharedTransport, standaloneTransportOptions,
-                    maxBodyBytes(manifest.config()));
+                    new HttpEdgeSettings(maxBodyBytes(manifest.config()),
+                            tempScratch.resolve("uploads")));
             context.addService(httpServer);
             new RouteCompiler().appName(appName)
                     .functions(modules.functions()).compile(context, manifest);

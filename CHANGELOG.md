@@ -18,6 +18,16 @@ All notable changes to TesseraQL are documented here. The format follows
   now skipped rather than scanned for quotes, and a dummy group that reaches end of input is
   `TQL-SQL-2102` instead of a silent stop.
 
+- **An upload spools in the application's work directory, not in whatever directory the process
+  was started from.** The body handler was left with Vert.x's `file-uploads` default, which
+  resolves against the process working directory — and the handler creates it for every
+  url-encoded form post, not only for multipart. So `tesseraql dev` wrote the spool into the
+  application checkout, and a deployment whose working directory is not writable by the runtime
+  user failed every form post, sign-in included, before a route ran. Parts now spool under
+  `work/tmp/tesseraql/uploads`, beside the temp store's scratch, and the directory is created at
+  boot so an unwritable location fails the boot instead of each request. `RouteEdge` hands a
+  route the same `Part`, at an absolute path rather than a relative one.
+
 ## 0.15.0 - 2026-09-03
 
 Java 25 is the baseline, and the runtime under it is the framework's own. The build targets

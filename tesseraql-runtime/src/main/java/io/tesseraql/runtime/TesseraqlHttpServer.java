@@ -36,7 +36,7 @@ final class TesseraqlHttpServer implements RuntimeContext.Service {
     private final int port;
     private final Vertx shared;
     private final VertxOptions options;
-    private final long maxBodyBytes;
+    private final HttpEdgeSettings settings;
     private Vertx vertx;
     private Vertx created;
     private HttpServer server;
@@ -55,13 +55,13 @@ final class TesseraqlHttpServer implements RuntimeContext.Service {
      * @param options what to build one from when standalone; null falls back to defaults
      */
     TesseraqlHttpServer(RuntimeContext runtimeContext, String host, int port, Vertx shared,
-            VertxOptions options, long maxBodyBytes) {
+            VertxOptions options, HttpEdgeSettings settings) {
         this.runtimeContext = runtimeContext;
         this.host = host;
         this.port = port;
         this.shared = shared;
         this.options = options;
-        this.maxBodyBytes = maxBodyBytes;
+        this.settings = settings;
     }
 
     @Override
@@ -78,8 +78,12 @@ final class TesseraqlHttpServer implements RuntimeContext.Service {
         runtimeContext.bind(io.tesseraql.pipeline.TesseraqlProperties.VERTX_BEAN, vertx);
         Router router = Router.router(vertx);
         runtimeContext.bind(HttpEdgeBeans.ROUTER, router);
+        // Created once, here, rather than by the body handler on the first form post: an
+        // unwritable location then fails the boot with the path in the message, instead of
+        // failing every form post at request time with the router's untyped 500.
+        java.nio.file.Files.createDirectories(settings.uploadsDirectory());
         runtimeContext.bind(HttpEdgeBeans.BODY_HANDLER,
-                HttpEdgeBeans.newBodyHandler(maxBodyBytes));
+                HttpEdgeBeans.newBodyHandler(settings));
         server = vertx.createHttpServer(new HttpServerOptions())
                 .requestHandler(router);
         server.listen(port, host).toCompletionStage().toCompletableFuture()
