@@ -82,6 +82,18 @@ class ScopeDirectiveTest {
     }
 
     @Test
+    void anEmptyStringInTheScopeDummyDoesNotSwallowThePredicate() {
+        // The scope dummy is a parenthesized group like a list bind's, so it shares the scanner
+        // that used to eat its own closing quote on an empty literal and run to end of input.
+        String sql = "select * from t o where /*%scope s on o */ (x = '') and active = 1";
+        ScopeResolver resolver = resolver("(o.dept = /* dept */ 'z')", Map.of("dept", "D1"));
+
+        BoundSql bound = SqlRenderer.render(Sql2WayParser.parse(sql), Map.of(), resolver, Map.of());
+
+        assertThat(bound.sql()).isEqualTo("select * from t o where (o.dept = ?) and active = 1");
+    }
+
+    @Test
     void renderingAScopeWithoutAResolverFailsLoudly() {
         List<SqlNode> nodes = Sql2WayParser.parse("where /*%scope s */ (1=1)");
         assertThatThrownBy(() -> SqlRenderer.render(nodes, Map.of()))
