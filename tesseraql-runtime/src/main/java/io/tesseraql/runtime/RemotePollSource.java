@@ -40,10 +40,20 @@ final class RemotePollSource implements PollSource {
         return files.stat(name);
     }
 
+    /**
+     * Downloads the file to the job's work directory.
+     *
+     * <p>The name is the remote server's, so the target is confined rather than resolved: the poll
+     * loop already refuses a listed name that is not a plain one, and this is the same rule at the
+     * mechanism, so the class is safe whichever caller drives it.
+     */
     @Override
     public Fetched fetch(PolledFile file) throws IOException {
         Files.createDirectories(workDirectory);
-        Path target = workDirectory.resolve(file.name());
+        Path target = io.tesseraql.core.files.ConfinedPath.under(workDirectory)
+                .resolve(file.name())
+                .orElseThrow(() -> new IOException("Polled file name '" + file.name()
+                        + "' escapes the work directory"));
         files.download(file.name(), target);
         return new Fetched(target, true);
     }

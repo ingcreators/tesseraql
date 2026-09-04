@@ -36,7 +36,7 @@ unauthenticated, cleartext transfer that no lint mentions.
 | Content encrypted in transit | n/a | yes | yes (was **no**) |
 | Server identity verified | n/a | only with `knownHostsFile` | yes, required (was **never**) |
 | Path / host allow-list enforced | yes, required (was **no**) | yes | yes |
-| Path governance (root anchoring, traversal) | yes (was **none**) | n/a (remote) | n/a (remote) |
+| Path governance (root anchoring, traversal) | yes (was **none**) | yes: a listed name must be a plain name | yes: a listed name must be a plain name |
 | Binary-safe | yes | yes | yes (was **ASCII mode**) |
 | Works behind NAT | n/a | yes | yes (was **active mode**) |
 | Credential kinds | n/a | password only | password only |
@@ -294,6 +294,23 @@ absolute-vs-home-relative rule, and the CHANGELOG names the behavior change per 
   that needs different trust is talking to a different partner and should say so in the connector
   config.
 - **Retrying the poll on transport failure beyond Camel's own consumer behavior.**
+
+## Confirmed after the fact
+
+**The "n/a (remote)" row was wrong, 2026-09-04.** The matrix read path governance as a question
+about the declared `path:`, which a remote server does resolve for itself. It said nothing about
+the file **names** the server lists under that path — and those went straight into
+`workDirectory.resolve(name)` for the download and back to the server for the archive rename. The
+SFTP client sets `StrictHostKeyChecking` to `no` without a `knownHostsFile`, and this document
+already records server identity as verified only with one, so an impersonated partner is inside
+the accepted threat model. A listing entry of `../../../config/application.yml` was an arbitrary
+file write wherever the runtime user can write.
+
+Two layers now answer it. The poll loop refuses a listed name that is not a plain file name,
+where the transport-independent rules live, so the rule cannot hold for SFTP and not for FTPS.
+`RemotePollSource` confines the download target under the job's work directory as well, so the
+class holds whichever caller drives it. The refusal is exact — a separator, a NUL, an empty name,
+a bare `.` or `..` — so a partner's legitimate `report..csv` still imports.
 
 ## Open questions
 

@@ -366,6 +366,11 @@ climb out. Without a root the job is refused, and lint says so first (`TQL-SEC-4
 not only about reading: the poll consumer **moves** what it ingests, so an unanchored path can
 relocate a live directory's contents into `.done`.
 
+The `path:` is yours; the **file names under it are the server's**. A source that lists a file
+under anything but a plain file name — one carrying a separator, an empty name, or a bare `.` or
+`..` — is skipped with a warning, on every transport. `include:` was never a control here: a
+glob's `*` does not cross a separator, so declaring one hid such a name rather than refusing it.
+
 ### One file, one replica
 
 Every poll source carries a write-stability check, so a file still being written is not read

@@ -8,6 +8,16 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A poll source's listed file names are the server's, and are now checked.** A remote poll
+  source downloaded to `workDirectory.resolve(name)` and archived under the same name, with no
+  check, so a hostile or impersonated SFTP/FTPS server could list `../../../config/application.yml`
+  and have the poll cycle write its content there. The SFTP client verifies server identity only
+  when a `knownHostsFile` is declared, so that server is inside the recorded threat model. A listed
+  name must now be a plain file name — anything carrying a separator or a NUL, an empty name, or a
+  bare `.` or `..` is skipped with a warning — and a remote download target is confined to the
+  job's work directory as well. `include:` was never a control here: a glob's `*` does not cross a
+  separator, so declaring one hid such a name rather than refusing it.
+
 - **A `''` or `""` inside a parenthesized dummy no longer swallows the rest of the statement.**
   The paren-group scanner consumed the opening quote before handing the run to the quote scanner,
   which consumed it again, so an empty literal ate its own closing quote and the scan ran to the
