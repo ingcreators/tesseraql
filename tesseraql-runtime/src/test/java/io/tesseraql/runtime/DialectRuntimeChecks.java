@@ -201,6 +201,21 @@ final class DialectRuntimeChecks {
         assertThat(repository.findRunning("dialect.owned", java.time.Duration.ofMinutes(5)))
                 .extracting(io.tesseraql.operations.batch.JobExecution::id)
                 .contains(executionId);
+
+        // The sweep indexes (V14): re-running ensureSchema is what proves the DDL is idempotent on
+        // this vendor, which is the property the script's header promises and which nothing else
+        // exercises — a boot applies it exactly once.
+        repository.ensureSchema();
+
+        // The transfer sweep's own read shape, which the per-job reads above never touch: an
+        // app-scoped IN list against trigger_type. Its point on Oracle and SQL Server is that the
+        // statement runs at all; the reaping rule itself is asserted per-PR on PostgreSQL.
+        String transferId = repository.startExecution("dialect.import", "dialect-app", "import",
+                null);
+        assertThat(repository.reapAbandonedTransfers(java.util.Set.of("dialect-app"),
+                java.time.Duration.ofMinutes(5))).isEmpty();
+        assertThat(repository.findExecution(transferId).orElseThrow().status().name())
+                .isEqualTo("RUNNING");
     }
 
     /**

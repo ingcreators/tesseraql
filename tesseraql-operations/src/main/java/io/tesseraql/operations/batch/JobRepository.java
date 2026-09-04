@@ -115,6 +115,12 @@ public final class JobRepository {
             // quietly losing the ownership it is supposed to record.
             io.tesseraql.core.util.SqlScripts.applyForVendor(dataSource, JobRepository.class,
                     "/tesseraql/db/migration/operations/V8__execution_owner.sql");
+            // The sweep indexes (V14): both reapers read this table on a timer on every node, and
+            // it had only its primary key. Listed here for the same reason V8 is — a deployment
+            // that gets its schema from the bootstrap rather than Flyway must not be the one left
+            // scanning. Idempotent through the tolerated duplicate-index errors.
+            io.tesseraql.core.util.SqlScripts.applyForVendor(dataSource, JobRepository.class,
+                    "/tesseraql/db/migration/operations/V14__job_execution_indexes.sql");
         } catch (SQLException ex) {
             throw error("Failed to create batch repository schema", ex);
         }
@@ -414,6 +420,74 @@ public final class JobRepository {
         }
         return reaped;
     }
+
+    /**
+     * The same sweep for file transfers, which have no job id to be swept under
+     * (docs/file-transfers.md).
+     *
+     * <p>A transfer is recorded as an execution, but one started from a {@code file-import} or
+     * {@code file-export} route is keyed by the route id — never a declared job — so the per-job
+     * sweep beside this one never looked at it, and a node killed mid-transfer left a RUNNING row
+     * forever. Scoping by job id is not available here, so ownership is scoped by application
+     * instead, which is the same guarantee one axis over: a neighbouring runtime's rows in a shared
+     * operations database are left alone.
+     *
+     * <p>Every served application is passed, not just the host's own name. A mounted app's jobs
+     * fold into the host's job list and are swept already, but its transfers carry the mounted
+     * name — scoping to one name would reap the host's abandoned transfers and leave a mounted
+     * app's running forever, which is the defect this method exists to close.
+     *
+     * <p>{@code trigger_type} is the discriminator because it is exact: those two literals are
+     * written by the transfer service and by nothing else.
+     */
+    public List<String> reapAbandonedTransfers(java.util.Collection<String> appNames,
+            java.time.Duration livenessWindow) {
+        if (appNames.isEmpty()) {
+            return List.of();
+        }
+        Instant now = Instant.now();
+        List<String> reaped = new ArrayList<>();
+        for (JobExecution execution : findRunningTransfers(appNames)) {
+            if (execution.ownerAlive(now, livenessWindow)) {
+                continue;
+            }
+            if (markReaped(execution, livenessWindow)) {
+                reaped.add(execution.id());
+            }
+        }
+        return reaped;
+    }
+
+    /** The running transfers of the given applications, newest first. */
+    private List<JobExecution> findRunningTransfers(java.util.Collection<String> appNames) {
+        String places = String.join(", ", java.util.Collections.nCopies(appNames.size(), "?"));
+        List<JobExecution> executions = new ArrayList<>();
+        try (Connection connection = dataSource.getConnection();
+                PreparedStatement ps = connection.prepareStatement(
+                        "select * from tql_job_execution where app_name in (" + places + ")"
+                                + " and status = ? and trigger_type in (?, ?)"
+                                + " order by start_time desc")) {
+            int index = 1;
+            for (String appName : appNames) {
+                ps.setString(index++, appName);
+            }
+            ps.setString(index++, JobStatus.RUNNING.name());
+            ps.setString(index++, TRANSFER_IMPORT);
+            ps.setString(index, TRANSFER_EXPORT);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    executions.add(readExecution(rs));
+                }
+            }
+        } catch (SQLException ex) {
+            throw error("Failed to read running transfers", ex);
+        }
+        return executions;
+    }
+
+    /** The trigger types {@code JdbcFileTransferService} stamps, and nothing else does. */
+    private static final String TRANSFER_IMPORT = "import";
+    private static final String TRANSFER_EXPORT = "export";
 
     /** True when this call is the one that finished the row. */
     private boolean markReaped(JobExecution execution, java.time.Duration livenessWindow) {
