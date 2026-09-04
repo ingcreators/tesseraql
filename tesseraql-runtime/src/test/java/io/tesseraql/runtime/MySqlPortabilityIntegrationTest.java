@@ -115,6 +115,11 @@ class MySqlPortabilityIntegrationTest {
         DialectRuntimeChecks.catalogVersionTableApplies(mysqlDataSource());
     }
 
+    @Test
+    void documentSequencesSeedAndAllocateOnThisDialect() throws Exception {
+        DialectRuntimeChecks.documentSequenceRoundTrip(mysqlDataSource());
+    }
+
     private static javax.sql.DataSource mysqlDataSource() {
         com.mysql.cj.jdbc.MysqlDataSource dataSource = new com.mysql.cj.jdbc.MysqlDataSource();
         dataSource.setUrl(MYSQL.getJdbcUrl());

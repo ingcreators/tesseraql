@@ -109,6 +109,11 @@ class SqlServerPortabilityIntegrationTest {
     }
 
     @Test
+    void documentSequencesSeedAndAllocateOnThisDialect() throws Exception {
+        DialectRuntimeChecks.documentSequenceRoundTrip(dataSource());
+    }
+
+    @Test
     void fileTransfersRoundTripOnThisDialect() throws Exception {
         DialectRuntimeChecks.fileTransferRoundTrip(runtime, "sqlserver-demo");
     }

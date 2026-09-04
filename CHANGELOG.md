@@ -28,6 +28,17 @@ All notable changes to TesseraQL are documented here. The format follows
   boot so an unwritable location fails the boot instead of each request. `RouteEdge` hands a
   route the same `Part`, at an absolute path rather than a relative one.
 
+- **Document sequences on Oracle and SQL Server.** The first allocation of any sequence name
+  failed on both drivers with `TQL-SQL-2610`, on its success path: the seed released its savepoint
+  in a `finally`, `releaseSavepoint` is a `SQLFeatureNotSupportedException` there, and a `finally`
+  that throws discards the value the method was returning. It no longer releases — the commit does
+  that on every dialect, which is the rule `JdbcEventChannelStore` has stated since the same defect
+  was fixed one store over in 0.5.0. The gated portability suites now seed a sequence, race a
+  second connection for it, and prove the loser's transaction survives its own savepoint rollback;
+  a new `SavepointLedgerTest` names every main source that opens a savepoint and refuses any
+  release outside the one site that catches the refusal. `MAX_ATTEMPTS` drops to 2, which is what
+  the comment beside it already claimed.
+
 ## 0.15.0 - 2026-09-03
 
 Java 25 is the baseline, and the runtime under it is the framework's own. The build targets

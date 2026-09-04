@@ -32,8 +32,13 @@ public final class JdbcDocumentSequences implements DocumentSequences {
 
     /** TQL-SQL-2610: a document sequence number could not be allocated from its table. */
     private static final TqlErrorCode ALLOCATION_ERROR = new TqlErrorCode(TqlDomain.SQL, 2610);
-    /** Two attempts suffice: a lost seed race is retried once against the committed row. */
-    private static final int MAX_ATTEMPTS = 3;
+    /**
+     * Two attempts, and the second cannot miss: the loser of a seed race retries the allocating
+     * {@code UPDATE}, which is a locking read of the winner's committed row under every isolation
+     * level this framework runs on. A third attempt could only help if the row were deleted
+     * between the two, and nothing deletes a sequence row.
+     */
+    private static final int MAX_ATTEMPTS = 2;
 
     private final List<SqlNode> increment = parse("increment.sql");
     private final List<SqlNode> current = parse("current.sql");
@@ -63,8 +68,17 @@ public final class JdbcDocumentSequences implements DocumentSequences {
                     return allocated;
                 }
                 // First use: seed the sequence, allocating 1. The seed runs under a savepoint so
-                // a lost race (unique violation) does not abort the surrounding transaction;
-                // the loser retries the UPDATE against the winner's committed row.
+                // a lost race (unique violation) does not abort the surrounding transaction
+                // (PostgreSQL aborts one on any error); the loser retries the UPDATE against the
+                // winner's committed row.
+                //
+                // The savepoint is never explicitly released — the commit that follows releases it
+                // implicitly on every dialect, whereas releaseSavepoint is a
+                // SQLFeatureNotSupportedException on the Oracle and SQL Server drivers. It used to
+                // be released in a finally, and a finally that throws discards the return above it,
+                // so on those two dialects the first allocation of any sequence name failed on its
+                // success path. JdbcEventChannelStore.recordDedup states the same rule; the 0.5.0
+                // fix there is this one, one store over.
                 Savepoint savepoint = connection.setSavepoint();
                 try {
                     execute(connection, seed, name);
@@ -74,8 +88,6 @@ public final class JdbcDocumentSequences implements DocumentSequences {
                     if (!SqlErrors.isUniqueViolation(ex)) {
                         throw ex;
                     }
-                } finally {
-                    connection.releaseSavepoint(savepoint);
                 }
             }
             throw error("Sequence '" + name + "' could not be allocated after "

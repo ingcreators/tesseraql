@@ -90,8 +90,10 @@ coverage:
 
 ## Dialect integration tests
 
-PostgreSQL and MySQL integration tests run on every `./mvnw verify`. The Oracle and SQL Server
-plan-guard tests use large container images and are opt-in:
+PostgreSQL and MySQL integration tests run on every `./mvnw verify`. The runtime portability run
+covers the framework migrations, the stores whose SQL differs per vendor (the outbox, the job
+claim, run ownership, the event channel, document sequences), the identity pack and a served
+route. The Oracle and SQL Server plan-guard tests use large container images and are opt-in:
 
 ```bash
 # Query Plan Guard against real Oracle / SQL Server
