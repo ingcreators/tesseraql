@@ -79,7 +79,10 @@ class ExportStreamingProfileIntegrationTest {
         jobs.ensureSchema();
         Path spoolDir = Files.createTempDirectory("export-streaming-spool");
         JdbcFileTransferService transfers = new JdbcFileTransferService(jobs,
-                new FileTempStore(spoolDir), dataSource, FileCodecs.of(new CsvFileCodec()));
+                new io.tesseraql.operations.batch.ExecutionHeartbeats(jobs,
+                        java.time.Duration.ofSeconds(30)),
+                new FileTempStore(spoolDir), dataSource, FileCodecs.of(new CsvFileCodec()),
+                io.tesseraql.core.expr.ExpressionFunctions.processDefault());
         transfers.ensureSchema();
 
         FileTransferService.InlineResult result = transfers.exportInline(

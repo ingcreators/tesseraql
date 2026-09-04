@@ -57,26 +57,11 @@ public final class JobExecutor {
     private final io.tesseraql.core.expr.ExpressionFunctions functions;
 
     /**
-     * Drives the heartbeat of every run this process owns
-     * (docs/audit-hardening.md Decision 6).
-     *
-     * <p>A clock, not a set of boundaries. Writing the pulse where the cooperative stop already
-     * polls — step and chunk-commit boundaries — looks free and is wrong: the cadence would be
-     * bounded by step duration, so a job whose long step is a single non-chunk statement emits
-     * nothing for its whole runtime and a reaper reading that silence kills a live run.
-     *
-     * <p>One daemon thread for the process. A run that hangs holds a scheduled task, not a
-     * thread.
+     * The pulse every run this process owns is judged against
+     * (docs/audit-hardening.md Decision 6). Shared with the transfer service, because a file
+     * transfer is an execution like any other and is read against the same window.
      */
-    private final java.util.concurrent.ScheduledExecutorService heartbeats = java.util.concurrent.Executors
-            .newSingleThreadScheduledExecutor(runnable -> {
-                Thread thread = new Thread(runnable, "tesseraql-job-heartbeat");
-                thread.setDaemon(true);
-                return thread;
-            });
-
-    /** How often a running execution reports; see {@link #heartbeatInterval}. */
-    private java.time.Duration heartbeatInterval = java.time.Duration.ofSeconds(30);
+    private final ExecutionHeartbeats heartbeats;
 
     /**
      * The executions this process is running right now — what a drain has to ask to stop.
@@ -120,49 +105,22 @@ public final class JobExecutor {
                 java.io.InputStream content);
     }
 
-    public JobExecutor(JobRepository repository, TempStore tempStore) {
-        this(repository, tempStore, io.tesseraql.core.diag.NoopSqlExecutionLog.INSTANCE);
-    }
-
-    public JobExecutor(JobRepository repository, TempStore tempStore,
-            io.tesseraql.core.diag.SqlExecutionLog slowSqlLog) {
-        this(repository, tempStore, slowSqlLog, io.tesseraql.core.telemetry.NoopTracer.INSTANCE);
-    }
-
-    public JobExecutor(JobRepository repository, TempStore tempStore,
-            io.tesseraql.core.diag.SqlExecutionLog slowSqlLog,
-            io.tesseraql.core.telemetry.Tracer tracer) {
-        this(repository, tempStore, slowSqlLog, tracer,
-                io.tesseraql.core.expr.ExpressionFunctions.processDefault());
-    }
-
     /**
-     * As {@link #JobExecutor(JobRepository, TempStore,
-     * io.tesseraql.core.diag.SqlExecutionLog, io.tesseraql.core.telemetry.Tracer)}, resolving
-     * custom calls in step SQL against {@code functions}.
+     * One constructor, and the heartbeat is an argument to it rather than a setter: a wiring site
+     * that forgot to call the setter produced runs that never reported, which is the failure a
+     * reaper reads as a dead owner. Custom calls in step SQL resolve against {@code functions}.
      */
     public JobExecutor(JobRepository repository, TempStore tempStore,
+            ExecutionHeartbeats heartbeats,
             io.tesseraql.core.diag.SqlExecutionLog slowSqlLog,
             io.tesseraql.core.telemetry.Tracer tracer,
             io.tesseraql.core.expr.ExpressionFunctions functions) {
         this.repository = repository;
         this.tempStore = tempStore;
+        this.heartbeats = heartbeats;
         this.slowSqlLog = slowSqlLog;
         this.tracer = tracer;
         this.functions = functions;
-    }
-
-    /**
-     * How often a run this process owns writes its heartbeat.
-     *
-     * <p>Paired with the liveness window the reaper reads: a window shorter than this interval
-     * would reap runs that are alive, which lint refuses as TQL-BATCH-4211.
-     */
-    public JobExecutor heartbeatInterval(java.time.Duration interval) {
-        if (interval != null && !interval.isZero() && !interval.isNegative()) {
-            this.heartbeatInterval = interval;
-        }
-        return this;
     }
 
     /**
@@ -199,11 +157,6 @@ public final class JobExecutor {
                         ex.getMessage());
             }
         }
-    }
-
-    /** Stops the heartbeat thread; the runtime calls this on shutdown. */
-    public void close() {
-        heartbeats.shutdownNow();
     }
 
     /**
@@ -394,20 +347,7 @@ public final class JobExecutor {
             jobSpan.attribute("tenant", tenant.id());
         }
         io.tesseraql.core.telemetry.SpanContext jobContext = jobSpan.context();
-        java.util.concurrent.ScheduledFuture<?> pulse = heartbeats.scheduleAtFixedRate(
-                () -> {
-                    try {
-                        repository.heartbeat(executionId);
-                    } catch (RuntimeException ex) {
-                        // A missed pulse is not a reason to fail the run it is reporting on. The
-                        // reaper's window is many intervals wide precisely so a transient database
-                        // blip does not read as a dead owner.
-                        LOG.debug("Heartbeat for execution {} failed: {}", executionId,
-                                ex.getMessage());
-                    }
-                },
-                heartbeatInterval.toMillis(), heartbeatInterval.toMillis(),
-                java.util.concurrent.TimeUnit.MILLISECONDS);
+        ExecutionHeartbeats.Pulse pulse = heartbeats.start(executionId);
         try {
             boolean stopped = false;
             for (PipelineStep step : job.effectiveSteps()) {
@@ -449,7 +389,7 @@ public final class JobExecutor {
         } finally {
             ownedExecutions.remove(executionId);
             drainRequested.remove(executionId);
-            pulse.cancel(false);
+            pulse.close();
             jobSpan.end();
         }
         return metered(repository.findExecution(executionId).orElseThrow());
