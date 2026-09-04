@@ -132,6 +132,54 @@ final class DialectRuntimeChecks {
     }
 
     /**
+     * Seeding and allocating a document sequence on this vendor (roadmap Phase 18).
+     *
+     * <p>The seed path fences its insert with a savepoint, and a savepoint is the one JDBC
+     * construct whose lifecycle is not portable: Oracle and SQL Server refuse
+     * {@code releaseSavepoint} outright. Releasing it in a {@code finally} therefore discarded
+     * the value the seed had just allocated, so the <em>success</em> path of a first allocation
+     * failed on both — and no suite ever allocated a sequence, which is why it went unseen. This
+     * check is that suite. The same defect, in the same shape, was fixed in 0.5.0 for the queue
+     * dedup insert one store over.
+     *
+     * <p>The interleaving is made likely, not required: whether the loser runs before or after
+     * the winner commits, it must come back with 2, because the allocating {@code UPDATE} is a
+     * locking read either way.
+     */
+    static void documentSequenceRoundTrip(javax.sql.DataSource dataSource) throws Exception {
+        io.tesseraql.operations.sequence.JdbcDocumentSequences sequences = new io.tesseraql.operations.sequence.JdbcDocumentSequences(
+                dataSource);
+        sequences.ensureSchema();
+        String name = "dialect-seq-" + java.util.UUID.randomUUID();
+
+        try (java.sql.Connection winner = dataSource.getConnection();
+                java.sql.Connection loser = dataSource.getConnection()) {
+            winner.setAutoCommit(false);
+            loser.setAutoCommit(false);
+
+            // The seed path: this is the line that threw on Oracle and SQL Server.
+            assertThat(sequences.next(winner, name)).isEqualTo(1L);
+
+            java.util.concurrent.ExecutorService racer = java.util.concurrent.Executors
+                    .newSingleThreadExecutor();
+            try {
+                java.util.concurrent.Future<Long> contested = racer
+                        .submit(() -> sequences.next(loser, name));
+                Thread.sleep(250);
+                winner.commit();
+                assertThat(contested.get(60, java.util.concurrent.TimeUnit.SECONDS)).isEqualTo(2L);
+            } finally {
+                racer.shutdownNow();
+            }
+
+            // The point of the savepoint: the loser's transaction survived its own rollback and
+            // can still allocate. On PostgreSQL an unfenced unique violation would have aborted it.
+            assertThat(sequences.next(loser, name)).isEqualTo(3L);
+            loser.commit();
+        }
+    }
+
+    /**
      * Run ownership and the heartbeat on this vendor (docs/audit-hardening.md Decision 6).
      *
      * <p>V8 adds two columns, and a column add is exactly the migration shape that has a different
