@@ -4,6 +4,20 @@ All notable changes to TesseraQL are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Fixed
+
+- **A `''` or `""` inside a parenthesized dummy no longer swallows the rest of the statement.**
+  The paren-group scanner consumed the opening quote before handing the run to the quote scanner,
+  which consumed it again, so an empty literal ate its own closing quote and the scan ran to the
+  next quote in the file or to end of input — with the group still open and no error raised.
+  `where code in /* codes */ ('') and active = 1` rendered as `where code in (?, ?)`, dropping
+  every predicate after the dummy, a tenant or soft-delete guard among them; the `/*%scope*/` and
+  `/*%lock*/` dummies share the scanner and shared the defect. A `--` remark inside the group is
+  now skipped rather than scanned for quotes, and a dummy group that reaches end of input is
+  `TQL-SQL-2102` instead of a silent stop.
+
 ## 0.15.0 - 2026-09-03
 
 Java 25 is the baseline, and the runtime under it is the framework's own. The build targets

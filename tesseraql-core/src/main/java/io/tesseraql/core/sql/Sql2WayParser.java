@@ -400,7 +400,7 @@ public final class Sql2WayParser {
         }
         char c = source.charAt(pos);
         if (c == '\'' || c == '"') {
-            skipQuoted(c);
+            skipQuoted();
         } else if (Character.isDigit(c) || c == '+' || c == '-' || c == '.') {
             while (pos < length && (Character.isDigit(source.charAt(pos))
                     || ".+-eE".indexOf(source.charAt(pos)) >= 0)) {
@@ -413,25 +413,52 @@ public final class Sql2WayParser {
         }
     }
 
+    /**
+     * Skips the parenthesized dummy that follows a list bind, a {@code /*%scope*}{@code /} or a
+     * {@code /*%lock*}{@code /}. {@code pos} is on the opening {@code (}: every caller checks that
+     * with {@link #skipWhitespacePeek()} first.
+     *
+     * <p>The loop peeks before it consumes, because {@link #skipQuoted()} expects {@code pos} on
+     * the opening quote. Consuming the quote here and handing the run over made that scanner read
+     * the <em>next</em> character as the opener, so an empty literal ate its own closing quote and
+     * ran to the following quote in the file or to end of input — leaving the group open and
+     * returning without a word. A {@code --} remark is skipped for the same reason: the apostrophe
+     * in {@code (1, 2 -- don't\n)} is that mis-scan one comment over.
+     */
     private void skipParenGroup() {
-        int depth = 0;
-        do {
-            char c = consume();
-            if (c == '(') {
-                depth++;
-            } else if (c == ')') {
-                depth--;
-            } else if (c == '\'' || c == '"') {
-                skipQuoted(c);
+        int opened = line;
+        int groupDepth = 0;
+        while (pos < length) {
+            char c = source.charAt(pos);
+            if (c == '\'' || c == '"') {
+                skipQuoted();
+                continue;
             }
-        } while (depth > 0 && pos < length);
+            if (c == '-' && pos + 1 < length && source.charAt(pos + 1) == '-') {
+                while (pos < length && source.charAt(pos) != '\n') {
+                    consume();
+                }
+                continue;
+            }
+            consume();
+            if (c == '(') {
+                groupDepth++;
+            } else if (c == ')' && --groupDepth == 0) {
+                return;
+            }
+        }
+        throw error("Unterminated dummy value group opened on line " + opened);
     }
 
-    private void skipQuoted(char quote) {
-        consume(); // opening quote
+    /**
+     * Skips one quoted run. {@code pos} is on the opening quote, which this method consumes along
+     * with the run it opens; a doubled SQL escape ({@code 'it''s'}) is skipped as two adjacent
+     * runs, which lands in the same place.
+     */
+    private void skipQuoted() {
+        char quote = consume();
         while (pos < length) {
-            char c = consume();
-            if (c == quote) {
+            if (consume() == quote) {
                 return;
             }
         }
