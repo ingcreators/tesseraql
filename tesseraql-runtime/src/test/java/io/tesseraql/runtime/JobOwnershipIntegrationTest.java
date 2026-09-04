@@ -12,6 +12,7 @@ import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.postgresql.ds.PGSimpleDataSource;
 import org.testcontainers.junit.jupiter.Container;
@@ -281,6 +282,62 @@ class JobOwnershipIntegrationTest {
                 .isEqualTo("COMPLETED");
         assertThat(repository.findExecution(taken).orElseThrow().status().name())
                 .isEqualTo("FAILED");
+    }
+
+    /**
+     * A transfer has no job id, so it is swept per application — and only per application.
+     *
+     * <p>A transfer started from a {@code file-import} route is keyed by the route id, which is
+     * never in the declared-job list the sweep beside this one iterates, so a node killed
+     * mid-transfer left a RUNNING row nothing would ever finish. The four rows here are the whole
+     * rule: the abandoned transfer of a served app is reaped; a declared job's run is not, because
+     * that is the per-job sweep's business; another application's transfer is not, because the
+     * operations tables may be shared; and a transfer still reporting is not.
+     */
+    @Test
+    void anAbandonedTransferIsReapedWithoutBeingADeclaredJob() throws Exception {
+        JobRepository repository = repository("node-transfers");
+        String abandoned = repository.startExecution("orders.import", "app", "import", null);
+        String jobRun = repository.startExecution("nightly.job", "app", "schedule", null);
+        String foreign = repository.startExecution("orders.import", "other", "import", null);
+        String live = repository.startExecution("items.export", "app", "export", null);
+        for (String stale : List.of(abandoned, jobRun, foreign)) {
+            ageHeartbeat(stale, Duration.ofHours(2));
+        }
+
+        assertThat(repository.reapAbandonedTransfers(Set.of("app"), Duration.ofMinutes(5)))
+                .containsExactly(abandoned);
+
+        assertThat(repository.findExecution(abandoned).orElseThrow().status().name())
+                .isEqualTo("FAILED");
+        assertThat(repository.findExecution(abandoned).orElseThrow().exitMessage())
+                .contains("TQL-BATCH-4212");
+        assertThat(repository.findExecution(jobRun).orElseThrow().status().name())
+                .isEqualTo("RUNNING");
+        assertThat(repository.findExecution(foreign).orElseThrow().status().name())
+                .isEqualTo("RUNNING");
+        assertThat(repository.findExecution(live).orElseThrow().status().name())
+                .isEqualTo("RUNNING");
+    }
+
+    /**
+     * Mounted applications are swept too, which is the whole reason the sweep takes a set.
+     *
+     * <p>A mounted app's jobs fold into the host's job list and are already swept; its transfers
+     * carry the mounted name. Scoping to the host's own name would have reaped the host's
+     * abandoned transfers and left a mounted app's running forever.
+     */
+    @Test
+    void aMountedApplicationsTransferIsSweptWithItsHosts() throws Exception {
+        JobRepository repository = repository("node-mounted");
+        String host = repository.startExecution("orders.import", "host-app", "import", null);
+        String mounted = repository.startExecution("account.export", "account", "export", null);
+        ageHeartbeat(host, Duration.ofHours(2));
+        ageHeartbeat(mounted, Duration.ofHours(2));
+
+        assertThat(repository.reapAbandonedTransfers(Set.of("host-app", "account"),
+                Duration.ofMinutes(5)))
+                .containsExactlyInAnyOrder(host, mounted);
     }
 
     /** Two replicas of one image on one host must not share an identity. */

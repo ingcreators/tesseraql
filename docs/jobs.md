@@ -666,6 +666,12 @@ The reaper never overwrites a verdict a run reached itself: the marking is condi
 still being `RUNNING`, so a run that finished between the sweep's read and its write keeps its own
 outcome, and two nodes sweeping at once produce one write and one winner.
 
+A file transfer is reaped on the same rule, but **per application** rather than per declared job:
+one started from a `file-import` or `file-export` route is keyed by the route id, so there is no
+job to sweep it under. Every application the runtime serves is swept, mounted ones included, and
+the reaper is scheduled whether or not the application declares any jobs — an app whose only
+long-running work is transfer routes is the one that needs it most.
+
 The rule holds in both directions — **the first outcome written wins**. A run that finishes after
 its execution was reaped does not take the reaper's verdict back either. Where the work is a
 transaction, as a file transfer's is, that outcome is written *inside* it: the transfer's rows,

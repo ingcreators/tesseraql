@@ -38,9 +38,11 @@ Every transfer is also tracked as a batch execution, so imports and exports show
 in the [operations console](ops-console.md). Being an execution, a running transfer writes the
 same heartbeat a run does, and is read against the same
 `tesseraql.batch.heartbeat.livenessWindow` ([jobs](jobs.md#who-owns-a-run)) — so a long import is
-judged by whether it is still reporting, not by how long it has taken. Imports can alternatively
-be driven by polling a local or SFTP/FTPS directory instead of an HTTP upload — see
-[connectors.md](connectors.md).
+judged by whether it is still reporting, not by how long it has taken. A transfer whose node is
+lost stops reporting, and the reaper finishes it with the abandoned-run reason rather than leaving
+it shown as in progress forever. That sweep is per application, because a transfer started by a
+route has no job id to be swept under. Imports can alternatively be driven by polling a local or
+SFTP/FTPS directory instead of an HTTP upload — see [connectors.md](connectors.md).
 
 ## Synchronous download: query-export
 

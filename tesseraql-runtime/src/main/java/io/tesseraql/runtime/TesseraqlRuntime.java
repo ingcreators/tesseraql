@@ -1526,16 +1526,18 @@ public final class TesseraqlRuntime implements AutoCloseable {
             // The reaper (docs/audit-hardening.md Decision 6, slice 9): a RUNNING row whose owner
             // stopped reporting is finished with a reason of its own, so the console stops showing
             // a run that ended when its node did.
-            if (!jobs.isEmpty()) {
-                new JobReaperSweep(jobRepository,
-                        List.copyOf(jobs.keySet()),
-                        io.tesseraql.core.util.Durations.parse(manifest.config()
-                                .getString("tesseraql.batch.heartbeat.livenessWindow")
-                                .orElse("5m")),
-                        io.tesseraql.core.util.Durations.toMillis(manifest.config()
-                                .getString("tesseraql.batch.reaperInterval").orElse("60s")))
-                        .schedule(Schedules.of(context));
-            }
+            // Scheduled whether or not this application declares jobs: an app whose only
+            // long-running work is HTTP file-import and file-export routes has an empty job list
+            // and is the one that needs the sweep most.
+            new JobReaperSweep(jobRepository,
+                    List.copyOf(jobs.keySet()),
+                    servedApps,
+                    io.tesseraql.core.util.Durations.parse(manifest.config()
+                            .getString("tesseraql.batch.heartbeat.livenessWindow")
+                            .orElse("5m")),
+                    io.tesseraql.core.util.Durations.toMillis(manifest.config()
+                            .getString("tesseraql.batch.reaperInterval").orElse("60s")))
+                    .schedule(Schedules.of(context));
             // Approval-workflow deadline sweeper (roadmap Phase 28 slice 3): a cluster-safe timer
             // escalates overdue tasks, so exactly one node sweeps per interval.
             if (workflowSweeper != null) {

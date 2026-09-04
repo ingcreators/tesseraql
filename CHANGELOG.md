@@ -6,6 +6,17 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ## Unreleased
 
+### Fixed
+
+- **An abandoned file transfer is reaped, not left RUNNING forever.** The reaper swept declared job
+  ids, and a transfer started from a `file-import` or `file-export` route is keyed by the route id,
+  so a node killed mid-transfer left a row the console showed as in progress indefinitely. A
+  runtime that declared no jobs at all scheduled no reaper, which is exactly the shape of an app
+  whose only long-running work is transfer routes. Transfers are now swept per application — every
+  application the runtime serves, so a mounted app's transfers are covered like its jobs — and the
+  reaper runs whether or not jobs are declared. `tql_job_execution` gains the two indexes it never
+  had: both sweeps read it on a timer on every node and both were table scans.
+
 ### Changed
 
 - **A finished execution keeps the verdict it reached first, in both directions.** The reaper was
