@@ -289,7 +289,8 @@ on conflict (name) do update set qty = excluded.qty
 
 The uploaded file is the `POST` body — either the raw file content, or `multipart/form-data`
 (a part named `file` is preferred, otherwise the first file part). The upload spools to disk
-before the request returns, so arbitrarily large files never sit in memory — but it does ride
+before the request returns — under `work/tmp/tesseraql/uploads`, the same work directory the
+temp store uses — so arbitrarily large files never sit in memory. It does ride
 the runtime's request-body bound, `tesseraql.http.maxBodyBytes` (10 MB by default), and a file
 over it is refused with a `413` naming the key. A workbook is several times the bytes of the
 same rows as text, so the same feed reaches that bound sooner as `format: excel` than as

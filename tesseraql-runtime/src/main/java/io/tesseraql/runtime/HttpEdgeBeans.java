@@ -49,13 +49,21 @@ final class HttpEdgeBeans {
      * borrowed bound nothing declared (docs/camel-removal.md's defect class). The number is the
      * framework's now: {@code tesseraql.http.maxBodyBytes}, documented, with {@code -1} the
      * visible opt-out.
+     *
+     * <p>The uploads directory is the one setting that stayed the transport's. Vert.x resolves its
+     * {@code file-uploads} default against the process working directory, and it creates that
+     * directory for every url-encoded form post, not only for multipart — so a runtime started
+     * from an unwritable directory could not answer a sign-in form, and {@code tesseraql dev} wrote
+     * the spool into the application checkout. It is now the application's own work directory,
+     * beside the temp store's scratch.
      */
-    static BodyHandler newBodyHandler(long maxBodyBytes) {
+    static BodyHandler newBodyHandler(HttpEdgeSettings settings) {
         return BodyHandler.create()
                 .setHandleFileUploads(true)
                 .setDeleteUploadedFilesOnEnd(true)
                 .setMergeFormAttributes(true)
                 .setPreallocateBodyBuffer(true)
-                .setBodyLimit(maxBodyBytes);
+                .setUploadsDirectory(settings.uploadsDirectory().toString())
+                .setBodyLimit(settings.maxBodyBytes());
     }
 }

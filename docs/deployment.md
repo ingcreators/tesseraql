@@ -360,6 +360,11 @@ tesseraql:
   `work/tmp/tesseraql`; keep session affinity at the load balancer, or point the directory
   at a shared filesystem if you already run one.
 
+Whichever store is chosen, an in-flight upload spools under `work/tmp/tesseraql/uploads`
+before any of it applies: a request body is on disk before the route runs. The runtime creates
+that directory at boot, so an application home the process cannot write to fails the boot
+rather than every form post.
+
 ## Framework datasource
 
 Ambient framework state — sessions, credential tokens, replay guards, OIDC flow state,
