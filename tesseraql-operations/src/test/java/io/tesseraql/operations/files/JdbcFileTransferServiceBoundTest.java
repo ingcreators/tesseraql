@@ -25,8 +25,10 @@ class JdbcFileTransferServiceBoundTest {
     @Test
     void boundsTheBookkeepingStatements() {
         FakeJdbc jdbc = new FakeJdbc();
-        JdbcFileTransferService service = new JdbcFileTransferService(null, null,
-                jdbc.dataSource(), null).sqlTimeoutSeconds(7);
+        // Collaborators this case never reaches stay null, the heartbeat among them: recent() is
+        // a bookkeeping read, so no pulse is started and none would be written.
+        JdbcFileTransferService service = new JdbcFileTransferService(null, null, null,
+                jdbc.dataSource(), null, null).sqlTimeoutSeconds(7);
 
         service.recent(5);
 

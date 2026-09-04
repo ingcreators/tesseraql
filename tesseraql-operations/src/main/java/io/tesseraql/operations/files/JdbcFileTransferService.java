@@ -21,6 +21,7 @@ import io.tesseraql.core.sql.BoundSql;
 import io.tesseraql.core.sql.Sql2WayParser;
 import io.tesseraql.core.sql.SqlNode;
 import io.tesseraql.core.sql.SqlRenderer;
+import io.tesseraql.operations.batch.ExecutionHeartbeats;
 import io.tesseraql.operations.batch.JobRepository;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -89,6 +90,8 @@ public final class JdbcFileTransferService implements FileTransferService {
     private static final String EXPIRED = "EXPIRED";
 
     private final JobRepository jobs;
+    /** The pulse a running transfer writes, shared with the job executor's runs. */
+    private final io.tesseraql.operations.batch.ExecutionHeartbeats heartbeats;
     private final TempStore tempStore;
     private final DataSource dataSource;
     private final FileCodecs codecs;
@@ -102,19 +105,18 @@ public final class JdbcFileTransferService implements FileTransferService {
     private io.tesseraql.core.telemetry.Tracer tracer = io.tesseraql.core.telemetry.NoopTracer.INSTANCE;
     private java.util.function.Supplier<io.tesseraql.core.events.TopicBus> topicBus;
 
-    public JdbcFileTransferService(JobRepository jobs, TempStore tempStore, DataSource dataSource,
-            FileCodecs codecs) {
-        this(jobs, tempStore, dataSource, codecs,
-                io.tesseraql.core.expr.ExpressionFunctions.processDefault());
-    }
-
     /**
-     * As {@link #JdbcFileTransferService(JobRepository, TempStore, DataSource, FileCodecs)},
-     * resolving custom calls in transfer SQL against {@code functions}.
+     * One constructor, and the heartbeat is an argument rather than a setter: a transfer is
+     * recorded as a job execution and read against the same liveness window a run is, so a wiring
+     * site that could omit the pulse is a wiring site that can produce transfers the reaper calls
+     * abandoned while they run. Custom calls in transfer SQL resolve against {@code functions}.
      */
-    public JdbcFileTransferService(JobRepository jobs, TempStore tempStore, DataSource dataSource,
-            FileCodecs codecs, io.tesseraql.core.expr.ExpressionFunctions functions) {
+    public JdbcFileTransferService(JobRepository jobs,
+            io.tesseraql.operations.batch.ExecutionHeartbeats heartbeats, TempStore tempStore,
+            DataSource dataSource, FileCodecs codecs,
+            io.tesseraql.core.expr.ExpressionFunctions functions) {
         this.jobs = jobs;
+        this.heartbeats = heartbeats;
         this.tempStore = tempStore;
         this.dataSource = dataSource;
         this.codecs = codecs;
@@ -304,7 +306,12 @@ public final class JdbcFileTransferService implements FileTransferService {
         // The runExport shape, synchronous: extraction and follow-up commit together on the
         // caller's datasource; bookkeeping lands in the shared tables so the ops transfers
         // page and the download endpoint see a step-produced file like any other.
-        try (Connection connection = extraction.getConnection()) {
+        //
+        // Synchronous does not mean short. This opens its own pulse because it does not pass
+        // through guarded(), and an inline export of a large extraction outlives the liveness
+        // window as readily as an async one.
+        try (ExecutionHeartbeats.Pulse _ = heartbeats.start(transferId);
+                Connection connection = extraction.getConnection()) {
             boolean autoCommit = connection.getAutoCommit();
             connection.setAutoCommit(false);
             List<SpooledRows> spools = new ArrayList<>();
@@ -488,10 +495,17 @@ public final class JdbcFileTransferService implements FileTransferService {
         executor.shutdown();
     }
 
-    /** No failure may leave a transfer RUNNING forever: anything escaping fails the execution. */
+    /**
+     * No failure may leave a transfer RUNNING forever: anything escaping fails the execution.
+     *
+     * <p>The pulse opens here, around the whole submitted body, because a transfer is an execution
+     * and is read against the same liveness window a run is. It did not report at all, so any
+     * import outliving that window was treated as abandoned — the file reported failed and moved
+     * to {@code .error} while its rows committed anyway.
+     */
     private Runnable guarded(String transferId, Runnable work) {
         return () -> {
-            try {
+            try (ExecutionHeartbeats.Pulse _ = heartbeats.start(transferId)) {
                 work.run();
             } catch (Throwable ex) {
                 LOG.warn("File transfer {} failed: {}", transferId, ex.toString());

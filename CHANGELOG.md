@@ -18,6 +18,18 @@ All notable changes to TesseraQL are documented here. The format follows
   job's work directory as well. `include:` was never a control here: a glob's `*` does not cross a
   separator, so declaring one hid such a name rather than refusing it.
 
+- **A running file transfer reports on the same clock a run does.** A transfer is recorded as a
+  job execution, but it never wrote the heartbeat every execution is read against — so any import
+  or export outliving `tesseraql.batch.heartbeat.livenessWindow` (five minutes by default) was
+  treated as abandoned. A polled file was reported failed and moved to `.error` while its rows
+  committed anyway, and an operator re-dropping it imported it twice. Runs and transfers now share
+  one `ExecutionHeartbeats` clock, which writes every live execution in a single statement per
+  interval rather than taking a connection each: transfers run on an unbounded virtual-thread
+  executor, so a pulse per execution would have queued behind the very work it reports on.
+  `JobExecutor.heartbeatInterval` and `JobExecutor.close()` are gone in its favour, and both
+  `JobExecutor` and `JdbcFileTransferService` now take the clock as a constructor argument, so no
+  wiring site can produce executions that never report.
+
 - **A `''` or `""` inside a parenthesized dummy no longer swallows the rest of the statement.**
   The paren-group scanner consumed the opening quote before handing the run to the quote scanner,
   which consumed it again, so an empty literal ate its own closing quote and the scan ran to the

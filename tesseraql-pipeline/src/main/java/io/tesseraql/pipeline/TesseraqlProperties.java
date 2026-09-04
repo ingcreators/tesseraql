@@ -155,6 +155,12 @@ public final class TesseraqlProperties {
     public static final String DOCUMENT_SEQUENCES_BEAN = "tesseraqlDocumentSequences";
     /** The asynchronous file import/export service (design ch. 28). */
     public static final String FILE_TRANSFER_BEAN = "tesseraqlFileTransfers";
+    /**
+     * The pulse every running execution — a job run or a file transfer — is judged against
+     * (docs/audit-hardening.md Decision 6). Bound because it is closed on the shutdown path,
+     * after the work that reports on it has stopped being accepted.
+     */
+    public static final String EXECUTION_HEARTBEATS_BEAN = "tesseraqlExecutionHeartbeats";
     /** The durable object store backing attachments (file default, roadmap Phase 30). */
     public static final String BLOB_STORE_BEAN = "tesseraqlBlobStore";
     /** The managed attachment-metadata store, bound in {@code managed} mode (roadmap Phase 30). */

@@ -634,6 +634,11 @@ blip costs a pulse rather than a run. A window no wider than the interval is ref
 A run with no heartbeat at all — a row written before this existed — reads as **alive**, on
 purpose: the alternative is killing a run that an older process is still executing.
 
+A file import or export is an execution like any other and writes the same pulse, so the same
+window applies to it. One clock serves the whole process: every live execution is written by a
+single statement per interval, whatever the concurrency, so the pulse never queues behind the work
+it reports on.
+
 The shutdown drain is declared rather than inherited:
 
 ```yaml

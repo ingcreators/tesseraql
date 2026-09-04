@@ -35,8 +35,12 @@ loop reads between rows, so the stop lands at a row boundary and leaves nothing 
 import is one transaction, and a stop before the commit takes every applied row with it.
 
 Every transfer is also tracked as a batch execution, so imports and exports show up app-scoped
-in the [operations console](ops-console.md). Imports can alternatively be driven by polling a local or SFTP/FTPS
-directory instead of an HTTP upload — see [connectors.md](connectors.md).
+in the [operations console](ops-console.md). Being an execution, a running transfer writes the
+same heartbeat a run does, and is read against the same
+`tesseraql.batch.heartbeat.livenessWindow` ([jobs](jobs.md#who-owns-a-run)) — so a long import is
+judged by whether it is still reporting, not by how long it has taken. Imports can alternatively
+be driven by polling a local or SFTP/FTPS directory instead of an HTTP upload — see
+[connectors.md](connectors.md).
 
 ## Synchronous download: query-export
 

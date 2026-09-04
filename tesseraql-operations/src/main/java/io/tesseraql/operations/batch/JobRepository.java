@@ -54,10 +54,33 @@ public final class JobRepository {
      * avoid (docs/jobs.md).
      */
     public void heartbeat(String executionId) {
-        execute("update tql_job_execution set heartbeat_at = ? where job_execution_id = ?",
+        heartbeat(List.of(executionId));
+    }
+
+    /**
+     * Records that this node is still running every execution in {@code executionIds}, in one
+     * statement.
+     *
+     * <p>One statement rather than one per execution, because the pulse is written by a single
+     * thread against the pool the running work itself draws from. Transfers run on an unbounded
+     * virtual-thread executor, so asking for a connection per execution would queue the pulse
+     * behind the very work it reports on and time out — silencing every live execution at exactly
+     * the load where a reaper then kills them.
+     */
+    public void heartbeat(java.util.Collection<String> executionIds) {
+        if (executionIds.isEmpty()) {
+            return;
+        }
+        String placeholders = String.join(", ", java.util.Collections.nCopies(
+                executionIds.size(), "?"));
+        execute("update tql_job_execution set heartbeat_at = ? where job_execution_id in ("
+                + placeholders + ")",
                 ps -> {
                     ps.setTimestamp(1, Timestamp.from(Instant.now()));
-                    ps.setString(2, executionId);
+                    int index = 2;
+                    for (String executionId : executionIds) {
+                        ps.setString(index++, executionId);
+                    }
                 });
     }
 

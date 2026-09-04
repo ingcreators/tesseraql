@@ -889,8 +889,16 @@ public final class TesseraqlRuntime implements AutoCloseable {
             context.bind(TesseraqlProperties.DOCUMENT_SEQUENCES_BEAN, documentSequences);
             // Asynchronous file imports/exports (design ch. 28); codecs arrive via ServiceLoader, so
             // adding the optional tesseraql-excel module to the classpath is the whole install.
-            io.tesseraql.operations.files.JdbcFileTransferService fileTransfers = new io.tesseraql.operations.files.JdbcFileTransferService(
+            // One clock for the process, shared by runs and transfers: both are executions, and
+            // both are read against tesseraql.batch.heartbeat.livenessWindow. Bound so the
+            // shutdown path can find it after the transfer executor has stopped accepting work.
+            io.tesseraql.operations.batch.ExecutionHeartbeats executionHeartbeats = new io.tesseraql.operations.batch.ExecutionHeartbeats(
                     jobRepository,
+                    io.tesseraql.core.util.Durations.parse(manifest.config()
+                            .getString("tesseraql.batch.heartbeat.interval").orElse("30s")));
+            context.bind(TesseraqlProperties.EXECUTION_HEARTBEATS_BEAN, executionHeartbeats);
+            io.tesseraql.operations.files.JdbcFileTransferService fileTransfers = new io.tesseraql.operations.files.JdbcFileTransferService(
+                    jobRepository, executionHeartbeats,
                     tempStore, dataSource,
                     io.tesseraql.core.files.FileCodecs.discover(modules.loader()),
                     modules.functions());
@@ -1001,12 +1009,11 @@ public final class TesseraqlRuntime implements AutoCloseable {
             @SuppressWarnings("resource") // holds nothing between deliveries; closed with the runtime
             FilePushService filePush = new FilePushService(
                     io.tesseraql.yaml.connectors.FileConnectors.push(manifest.config()), appHome);
-            JobExecutor jobExecutor = new JobExecutor(jobRepository, tempStore, slowSqlLog, tracer,
-                    modules.functions())
-                    // A running job says so on a clock, and overlap: skip believes a previous run
-                    // only while its owner keeps saying it (docs/audit-hardening.md Decision 6).
-                    .heartbeatInterval(io.tesseraql.core.util.Durations.parse(manifest.config()
-                            .getString("tesseraql.batch.heartbeat.interval").orElse("30s")))
+            // A running job says so on a clock, and overlap: skip believes a previous run only
+            // while its owner keeps saying it (docs/audit-hardening.md Decision 6). The clock is
+            // the shared one built above, so a transfer reports on it too.
+            JobExecutor jobExecutor = new JobExecutor(jobRepository, tempStore, executionHeartbeats,
+                    slowSqlLog, tracer, modules.functions())
                     .livenessWindow(io.tesseraql.core.util.Durations.parse(manifest.config()
                             .getString("tesseraql.batch.heartbeat.livenessWindow").orElse("5m")))
                     // Every finished run counts on the exposition (docs/jobs.md "Observing
@@ -2266,9 +2273,6 @@ public final class TesseraqlRuntime implements AutoCloseable {
             // and metric produced while the drain finished its in-flight requests — the one window
             // the drain exists to make visible. The transfer executor is the same shape: shutting
             // it down first rejects a transfer a draining route submits.
-            // The heartbeat thread outlives the drain for the same reason the tracer does: a run
-            // still finishing during the drain is still a run that must say so.
-            closeQuietly(jobExecutor::close);
             closeQuietly(pinningSource);
             closeQuietly(otelSdk);
             io.tesseraql.operations.files.JdbcFileTransferService fileTransfers = runtimeContext
@@ -2278,6 +2282,13 @@ public final class TesseraqlRuntime implements AutoCloseable {
             if (fileTransfers != null) {
                 fileTransfers.close();
             }
+            // The heartbeat thread outlives the drain for the same reason the tracer does: an
+            // execution still finishing during the drain is still one that must say so. It closes
+            // after the transfer service, not with the job executor, because that close is
+            // executor.shutdown() and does not await — stopping the pulse first would silence
+            // route transfers that are still running.
+            closeQuietly(runtimeContext.lookup(TesseraqlProperties.EXECUTION_HEARTBEATS_BEAN,
+                    io.tesseraql.operations.batch.ExecutionHeartbeats.class));
             try {
                 executionLanes.close();
             } finally {

@@ -76,6 +76,59 @@ class JobOwnershipIntegrationTest {
         assertThat(repository.findRunning("wedged.job", Duration.ofMinutes(5))).isEmpty();
     }
 
+    /**
+     * The clock every running execution reports on, and what stops it.
+     *
+     * <p>Both halves matter. Two executions pulsing together is the shape a burst of transfers
+     * has, and they are written by one statement per tick rather than one connection each — a
+     * pulse that queued behind the work it reports on would silence every live execution at
+     * exactly the load where the reaper then kills them. Closing a pulse has to stop the writing,
+     * or a finished row keeps looking alive and {@code overlap: skip} never lets the next firing
+     * through.
+     */
+    @Test
+    void everyRegisteredExecutionKeepsBeatingUntilItsPulseCloses() throws Exception {
+        JobRepository repository = repository("node-pulse");
+        String running = repository.startExecution("pulse.a", "app", "manual", null);
+        String finishing = repository.startExecution("pulse.b", "app", "manual", null);
+
+        try (io.tesseraql.operations.batch.ExecutionHeartbeats heartbeats = new io.tesseraql.operations.batch.ExecutionHeartbeats(
+                repository,
+                Duration.ofMillis(100))) {
+            io.tesseraql.operations.batch.ExecutionHeartbeats.Pulse first = heartbeats
+                    .start(running);
+            io.tesseraql.operations.batch.ExecutionHeartbeats.Pulse second = heartbeats
+                    .start(finishing);
+
+            Instant runningBefore = heartbeatAt(repository, running);
+            Instant finishingBefore = heartbeatAt(repository, finishing);
+            Thread.sleep(1_000);
+
+            // Both advanced, from one statement per tick.
+            assertThat(heartbeatAt(repository, running)).isAfter(runningBefore);
+            Instant finishingAfter = heartbeatAt(repository, finishing);
+            assertThat(finishingAfter).isAfter(finishingBefore);
+
+            second.close();
+            // A tick that had already read the live set when close() returned may still be
+            // writing, so the last value is taken after that one can have landed — comparing
+            // against a value read before the close would be a race, not an assertion.
+            Thread.sleep(500);
+            Instant finishingAtRest = heartbeatAt(repository, finishing);
+            Instant runningAtClose = heartbeatAt(repository, running);
+            Thread.sleep(1_000);
+
+            // The closed one stopped; the open one did not.
+            assertThat(heartbeatAt(repository, finishing)).isEqualTo(finishingAtRest);
+            assertThat(heartbeatAt(repository, running)).isAfter(runningAtClose);
+            first.close();
+        }
+    }
+
+    private static Instant heartbeatAt(JobRepository repository, String executionId) {
+        return repository.findExecution(executionId).orElseThrow().heartbeatAt();
+    }
+
     /** A live run still blocks: the window is many heartbeat intervals wide for exactly this. */
     @Test
     void aRunStillBeatingKeepsBlockingOverlappingFirings() {

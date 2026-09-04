@@ -398,8 +398,17 @@ final class JobCommand implements Callable<Integer> {
         // export: steps write through the same transfer machinery `serve` wires
         // (docs/analytics-experience.md track 3), so a CLI-run job records the same
         // execution + transfer rows and the console download works either way.
+        // One clock for this process too, so a CLI-run job and a CLI-run export step pulse like a
+        // served one. The JVM exits with the command, which is what closes it.
+        @SuppressWarnings("resource") // owned for the life of the process, which ends here
+        io.tesseraql.operations.batch.ExecutionHeartbeats heartbeats = new io.tesseraql.operations.batch.ExecutionHeartbeats(
+                repository,
+                io.tesseraql.core.util.Durations.parse(manifest.config()
+                        .getString("tesseraql.batch.heartbeat.interval").orElse("30s")));
         io.tesseraql.operations.files.JdbcFileTransferService transfers = new io.tesseraql.operations.files.JdbcFileTransferService(
-                repository, tempStore, main, io.tesseraql.core.files.FileCodecs.discover());
+                repository, heartbeats, tempStore, main,
+                io.tesseraql.core.files.FileCodecs.discover(),
+                io.tesseraql.core.expr.ExpressionFunctions.processDefault());
         transfers.sqlTimeoutSeconds(
                 io.tesseraql.yaml.config.SqlDefaults.timeoutSeconds(manifest.config()));
         transfers.ensureSchema();
@@ -408,7 +417,10 @@ final class JobCommand implements Callable<Integer> {
         @SuppressWarnings("resource") // owned for the life of the process, which ends here
         io.tesseraql.runtime.FilePushService filePush = new io.tesseraql.runtime.FilePushService(
                 io.tesseraql.yaml.connectors.FileConnectors.push(manifest.config()), app);
-        JobExecutor executor = new JobExecutor(repository, tempStore)
+        JobExecutor executor = new JobExecutor(repository, tempStore, heartbeats,
+                io.tesseraql.core.diag.NoopSqlExecutionLog.INSTANCE,
+                io.tesseraql.core.telemetry.NoopTracer.INSTANCE,
+                io.tesseraql.core.expr.ExpressionFunctions.processDefault())
                 .sqlTimeoutSeconds(
                         io.tesseraql.yaml.config.SqlDefaults.timeoutSeconds(manifest.config()))
                 // notify: steps enqueue on the durable outbox; the serving runtime delivers.
