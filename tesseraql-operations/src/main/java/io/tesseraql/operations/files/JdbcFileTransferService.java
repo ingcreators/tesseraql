@@ -339,8 +339,13 @@ public final class JdbcFileTransferService implements FileTransferService {
                     executeUpdate(connection, request.afterExtract());
                 }
                 connection.commit();
-                recordSpool(transferId, writer.toRef(), rows);
-                jobs.completeExecution(transferId);
+                // The one site that cannot fuse its verdict into the work's transaction: this
+                // connection belongs to the caller's extraction datasource, which for a step
+                // declaring its own `datasource:` is a database with no tql_job_execution in it.
+                // So the reference and the verdict are made atomic with each other on the
+                // framework pool, and the extraction's commit stays separate — a best effort,
+                // stated rather than pretended.
+                recordSpoolAndComplete(transferId, writer.toRef(), rows);
                 return new InlineResult(transferId, filename, rows);
             } catch (Exception ex) {
                 connection.rollback();
@@ -527,6 +532,9 @@ public final class JdbcFileTransferService implements FileTransferService {
         // behaving exactly as declared, under a message blaming the file for having changed.
         Set<Long> parseRejected = new java.util.LinkedHashSet<>();
         long[] applied = {0};
+        // Whether the rows and their verdict are on disk together. Past that point nothing may
+        // rewrite either: the count is true and the outcome is settled.
+        boolean committed = false;
         // The observation clock, shared by the progress flush and the stop poll: both ask a
         // question of the database, so both ask it on an interval rather than per row. One
         // clock, because they are the same boundary — "between rows, occasionally".
@@ -615,17 +623,28 @@ public final class JdbcFileTransferService implements FileTransferService {
                         && ON_ERROR_ROLLBACK.equals(request.onError());
                 if (rollbackAll) {
                     connection.rollback();
-                } else {
-                    connection.commit();
-                }
-                recordRows(transferId, rollbackAll ? 0 : applied[0], errors);
-                if (errors.isEmpty()) {
-                    jobs.completeExecution(transferId);
-                } else if (rollbackAll) {
+                    recordRows(transferId, 0, errors);
                     jobs.failExecution(transferId, errors.size()
                             + " row(s) rejected; import rolled back");
                 } else {
-                    jobs.completeExecution(transferId);
+                    // The counts and the verdict ride the transaction that wrote the rows they
+                    // describe. Reading the status before the commit would not do: a plain read
+                    // takes no lock, and the verdict would still be written afterwards on another
+                    // connection — so a reap landing in that window left rows committed under a
+                    // FAILED execution, which is a card that says "Nothing was written" over data
+                    // that was. As a conditional update in this transaction it is a
+                    // compare-and-set: losing it means someone else already wrote this row's
+                    // outcome, and the honest answer is to keep nothing.
+                    recordRows(connection, transferId, applied[0], errors);
+                    if (!jobs.completeExecution(connection, transferId)) {
+                        connection.rollback();
+                        recordRows(transferId, 0, errors);
+                        LOG.warn("File import {} was finished elsewhere while it ran;"
+                                + " nothing was written", transferId);
+                        return;
+                    }
+                    connection.commit();
+                    committed = true;
                 }
                 // The completion signal (docs/csv-import.md decision 6). It fires here rather
                 // than on the request that confirmed the import, because the request returns
@@ -642,8 +661,15 @@ public final class JdbcFileTransferService implements FileTransferService {
         } catch (Exception ex) {
             span.recordError(ex);
             LOG.warn("File import {} failed: {}", transferId, ex.getMessage());
-            recordRows(transferId, 0, errors);
-            jobs.failExecution(transferId, ex.getMessage());
+            if (committed) {
+                // The rows and the verdict are already committed together. Whatever failed after
+                // that — the completion signal, a span — must not overwrite the count with zero
+                // and cannot take the outcome back; the conditional finish would refuse it anyway.
+                LOG.warn("File import {} completed; the work after the commit failed", transferId);
+            } else {
+                recordRows(transferId, 0, errors);
+                jobs.failExecution(transferId, ex.getMessage());
+            }
         } finally {
             span.end();
         }
@@ -1179,9 +1205,21 @@ public final class JdbcFileTransferService implements FileTransferService {
                     executeUpdate(connection,
                             SqlRenderer.render(parse(request.afterSqlFile()), request.params()));
                 }
+                // The spool reference and the verdict join the after-extract statement's
+                // transaction, so the produced file becomes reachable exactly when the export is
+                // recorded as done. Writing the reference after the commit left a window where a
+                // reap in between made the bytes unreachable — download() serves only a COMPLETED
+                // execution — and the expiry sweep collects only spools whose uri it can see, so
+                // the file would have sat there forever.
+                recordSpool(connection, transferId, writer.toRef(), rows);
+                if (!jobs.completeExecution(connection, transferId)) {
+                    connection.rollback();
+                    tempStore.delete(writer.toRef());
+                    LOG.warn("File export {} was finished elsewhere while it ran; the produced"
+                            + " file was discarded", transferId);
+                    return;
+                }
                 connection.commit();
-                recordSpool(transferId, writer.toRef(), rows);
-                jobs.completeExecution(transferId);
                 span.attribute("rowCount", rows);
             } catch (Exception ex) {
                 connection.rollback();
@@ -1415,8 +1453,44 @@ public final class JdbcFileTransferService implements FileTransferService {
                 });
     }
 
-    private void recordSpool(String transferId, SpoolRef ref, long rows) {
-        update("update tql_file_transfer set spool_uri = ?, row_count = ? where transfer_id = ?",
+    /**
+     * Records the produced file and finishes the execution in one framework-pool transaction, for
+     * the inline export whose own connection is the caller's extraction datasource.
+     *
+     * <p>Losing the finish throws, because this method's caller returns a result a batch step
+     * reads: a hollow return would report a successful export of a file nothing recorded. The
+     * bytes go with it — nothing points at them, and the expiry sweep collects only spools whose
+     * uri it can see.
+     */
+    private void recordSpoolAndComplete(String transferId, SpoolRef ref, long rows) {
+        try (Connection connection = dataSource.getConnection()) {
+            boolean autoCommit = connection.getAutoCommit();
+            connection.setAutoCommit(false);
+            try {
+                recordSpool(connection, transferId, ref, rows);
+                if (!jobs.completeExecution(connection, transferId)) {
+                    connection.rollback();
+                    tempStore.delete(ref);
+                    throw new TqlException(TRANSFER_ERROR, "Export step " + transferId
+                            + " was finished elsewhere while it ran; the produced file was"
+                            + " discarded");
+                }
+                connection.commit();
+            } catch (SQLException | RuntimeException ex) {
+                connection.rollback();
+                throw ex;
+            } finally {
+                connection.setAutoCommit(autoCommit);
+            }
+        } catch (SQLException ex) {
+            throw new TqlException(TRANSFER_ERROR,
+                    "Failed to record the exported file: " + ex.getMessage());
+        }
+    }
+
+    private void recordSpool(Connection connection, String transferId, SpoolRef ref, long rows) {
+        update(connection,
+                "update tql_file_transfer set spool_uri = ?, row_count = ? where transfer_id = ?",
                 statement -> {
                     statement.setString(1, ref.uri().toString());
                     statement.setLong(2, rows);
@@ -1425,12 +1499,22 @@ public final class JdbcFileTransferService implements FileTransferService {
     }
 
     private void recordRows(String transferId, long rows, List<RowError> errors) {
-        update("update tql_file_transfer set row_count = ?, error_json = ? where transfer_id = ?",
-                statement -> {
-                    statement.setLong(1, rows);
-                    statement.setString(2, toJson(errors));
-                    statement.setString(3, transferId);
-                });
+        update(ROWS_SQL, statement -> bindRows(statement, transferId, rows, errors));
+    }
+
+    /** The counts, in the transaction that wrote the rows they count. */
+    private void recordRows(Connection connection, String transferId, long rows,
+            List<RowError> errors) {
+        update(connection, ROWS_SQL, statement -> bindRows(statement, transferId, rows, errors));
+    }
+
+    private static final String ROWS_SQL = "update tql_file_transfer set row_count = ?, error_json = ? where transfer_id = ?";
+
+    private void bindRows(PreparedStatement statement, String transferId, long rows,
+            List<RowError> errors) throws SQLException {
+        statement.setLong(1, rows);
+        statement.setString(2, toJson(errors));
+        statement.setString(3, transferId);
     }
 
     /** Atomically marks the first download; true only for the winning call. */
@@ -1487,8 +1571,20 @@ public final class JdbcFileTransferService implements FileTransferService {
     }
 
     private void update(String sql, SqlBindings bindings) {
-        try (Connection connection = dataSource.getConnection();
-                PreparedStatement statement = connection.prepareStatement(sql)) {
+        try (Connection connection = dataSource.getConnection()) {
+            update(connection, sql, bindings);
+        } catch (SQLException ex) {
+            throw new TqlException(TRANSFER_ERROR,
+                    "Failed to update file transfer: " + ex.getMessage());
+        }
+    }
+
+    /**
+     * The same update on the caller's connection, so a bookkeeping write can join the transaction
+     * that produced what it describes rather than landing beside it.
+     */
+    private void update(Connection connection, String sql, SqlBindings bindings) {
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
             applyTimeout(statement);
             bindings.bind(statement);
             statement.executeUpdate();

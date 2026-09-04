@@ -666,6 +666,13 @@ The reaper never overwrites a verdict a run reached itself: the marking is condi
 still being `RUNNING`, so a run that finished between the sweep's read and its write keeps its own
 outcome, and two nodes sweeping at once produce one write and one winner.
 
+The rule holds in both directions — **the first outcome written wins**. A run that finishes after
+its execution was reaped does not take the reaper's verdict back either. Where the work is a
+transaction, as a file transfer's is, that outcome is written *inside* it: the transfer's rows,
+its counts and its verdict commit together, so losing the race means the work rolls back rather
+than landing under someone else's verdict. Cancellation is unaffected, because asking a run to
+stop sets a flag and leaves the row `RUNNING`.
+
 ## Stopping a run
 
 What an operator needs is not a kill switch but a stop button that tells the truth. A
