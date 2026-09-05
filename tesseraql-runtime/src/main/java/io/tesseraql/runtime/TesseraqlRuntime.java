@@ -393,6 +393,56 @@ public final class TesseraqlRuntime implements AutoCloseable {
     }
 
     /**
+     * How many fields one form body may carry: {@code tesseraql.http.maxFormFields}, default
+     * 10,000, {@code -1} the visible opt-out (docs/http-edge-robustness.md decision 5).
+     *
+     * <p>The count is the one dimension {@code maxBodyBytes} cannot bound — a 10 MB urlencoded
+     * body of empty pairs is millions of decoder objects — so it earns a key of its own. Vert.x's
+     * inherited 256 refused any snapshot list past roughly 250 rows, and the largest legal
+     * decision table Studio can render cannot be saved under it either.
+     *
+     * <p>The number is what it says: the count above which a form body is treated as hostile,
+     * not a model of any page. That is roughly nineteen times the largest page this framework
+     * renders and two orders of magnitude below what an unbounded count would admit inside the
+     * body bound. A route's own {@code pagination.cap} stays the refusal an honest page may
+     * meet, answered 422 with {@code TQL-FIELD-4222}; a deployment where this bound fires first
+     * is misconfigured, and {@link HttpEdgeDefaultsTest} keeps the framework's own numbers apart.
+     */
+    private static int maxFormFields(AppConfig config) {
+        String declared = config.getString("tesseraql.http.maxFormFields")
+                .map(String::trim).orElse(null);
+        if (declared == null) {
+            return 10_000;
+        }
+        if ("-1".equals(declared)) {
+            return -1;
+        }
+        return (int) io.tesseraql.core.util.Sizes.parsePositiveBytes(declared,
+                "tesseraql.http.maxFormFields");
+    }
+
+    /**
+     * The largest single form field, derived rather than declared: one transport delivery above
+     * {@code maxBodyBytes} (docs/http-edge-robustness.md decision 4).
+     *
+     * <p>It gets no key of its own on purpose. {@code maxBodyBytes} already bounds these exact
+     * bytes, and a second, smaller bound on them is the defect this closes rather than a setting
+     * anyone should have to reconcile. The headroom exists so the two bounds cannot race: below
+     * it the decoder's untyped 400 beats the body limit's documented 413.
+     *
+     * <p>Under the {@code -1} body-limit opt-out the ceiling has no limit to track, so it takes
+     * the framework's own default body size. Opting the wire bound out delegates it to an edge
+     * proxy; it does not delegate the decoder's memory bound, which nothing in front of the
+     * runtime can enforce.
+     */
+    private static int formCeiling(long maxBodyBytes) {
+        if (maxBodyBytes < 0) {
+            return 10 * 1024 * 1024;
+        }
+        return (int) Math.min(maxBodyBytes + 65_536L, Integer.MAX_VALUE);
+    }
+
+    /**
      * A declared thread count: absent, or a positive integer.
      *
      * <p>A thread pool sized from a typo is worse than one left at its default, because the
@@ -1283,7 +1333,9 @@ public final class TesseraqlRuntime implements AutoCloseable {
             TesseraqlHttpServer httpServer = new TesseraqlHttpServer(context, "0.0.0.0", port,
                     sharedTransport, standaloneTransportOptions,
                     new HttpEdgeSettings(maxBodyBytes(manifest.config()),
-                            tempScratch.resolve("uploads")));
+                            tempScratch.resolve("uploads"),
+                            maxFormFields(manifest.config()),
+                            formCeiling(maxBodyBytes(manifest.config()))));
             context.addService(httpServer);
             new RouteCompiler().appName(appName)
                     .functions(modules.functions()).compile(context, manifest);

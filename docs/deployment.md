@@ -117,6 +117,7 @@ that decide how much work the runtime does at once.
 | `tesseraql.http.maxInFlight` | `workerThreads x 4` | Requests other than event streams, held at once before refusing |
 | `tesseraql.http.maxEventStreams` | same as `maxInFlight` | Event streams held open at once before refusing |
 | `tesseraql.http.maxBodyBytes` | 10 MB | Largest request body, uploads included; takes units (`25MB`); `-1` removes the bound |
+| `tesseraql.http.maxFormFields` | 10,000 | Fields one form body may carry; `-1` removes the bound |
 
 **Beyond `maxInFlight` the runtime answers 503 with `Retry-After`**, immediately, rather than
 adding the request to a queue with no bound. Four times the worker count leaves room for the
@@ -135,6 +136,19 @@ route from a refused stream cannot tell which number to raise.
 the upload so the refusal actually arrives (an unread stream leaves the client stuck writing).
 The one number covers JSON bodies and streamed file uploads alike, so a deployment taking large
 imports raises it — and `-1` removes the bound where an edge proxy already enforces one.
+
+**A single form field is bounded by `maxBodyBytes` too, not by a second, smaller number.** The
+transport's own per-field ceiling is derived from it rather than configured, and deliberately
+sits one delivery above it: two bounds on the same bytes race, and the decoder wins that race
+with an untyped 400 where the body limit answers a drained 413. Opting the body bound out with
+`-1` does not opt out the decoder's memory bound, which nothing in front of the runtime can
+enforce; the ceiling then takes the framework's own default body size.
+
+**`maxFormFields` is transport safety, not a page size.** The count is the one dimension
+`maxBodyBytes` cannot bound — a 10 MB body of empty pairs is millions of decoder objects — so it
+has a number of its own, set where a form body stops being a page and starts being an attack. A
+route's own `pagination.cap` remains the refusal an honest page meets, answered 422 with
+`TQL-FIELD-4222`; a deployment where this bound fires first is misconfigured.
 
 ### The front door's share of each member
 
