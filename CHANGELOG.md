@@ -8,6 +8,17 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A dot segment no longer walks past the in-flight bound.** The HTTP admission gate exempts the
+  health and asset mounts, and it tested the request target as transmitted while vertx-web routes
+  on the normalized path — dot segments removed, unreserved escapes decoded. The two readings
+  disagreed in both directions: `GET /_tesseraql/health/../../api/orders` satisfied the carve-out
+  and was then routed to `/api/orders`, taking no permit at all, so the runtime-wide bound on
+  requests in flight could be avoided by spelling any path through an exempt prefix; and a
+  percent-encoded spelling of the health mount reached the health route while paying a permit it
+  should never have been charged. The gate now reads the path the router matched. A request whose
+  path cannot be normalized — an invalid escape such as `/%zz` — is charged a permit rather than
+  exempted, and is answered 400 as before.
+
 - **An abandoned file transfer is reaped, not left RUNNING forever.** The reaper swept declared job
   ids, and a transfer started from a `file-import` or `file-export` route is keyed by the route id,
   so a node killed mid-transfer left a row the console showed as in progress indefinitely. A

@@ -113,9 +113,100 @@ class HttpAdmissionIntegrationTest {
         }
     }
 
+    /**
+     * A dot segment does not buy a request its way past the gate.
+     *
+     * <p>The gate exempts the health and asset mounts, and it read the target as transmitted while
+     * vertx-web routes on the normalized path. {@code /_tesseraql/health/../../api/nap} therefore
+     * satisfied the carve-out and was then routed to {@code /api/nap}: the whole in-flight bound
+     * was one dot segment away from not existing.
+     *
+     * <p>Driven over a raw socket on purpose. {@link java.net.http.HttpClient} normalizes a
+     * request target before it leaves, so the same case built on it would send {@code /api/nap}
+     * and pass against the defect.
+     */
+    @Test
+    void aDotSegmentPastAnExemptMountStillSpendsAPermit() throws Exception {
+        List<CompletableFuture<HttpResponse<String>>> saturating = List.of(
+                CompletableFuture.supplyAsync(() -> get("/api/nap")),
+                CompletableFuture.supplyAsync(() -> get("/api/nap")));
+        awaitInFlight();
+
+        String pastHealth = raw("/_tesseraql/health/../../api/nap");
+        String pastAssets = raw("/assets/../api/nap");
+
+        assertThat(pastHealth).contains("503").contains("TQL-RATE-4293");
+        assertThat(pastAssets).contains("503").contains("TQL-RATE-4293");
+        for (CompletableFuture<HttpResponse<String>> request : saturating) {
+            assertThat(request.get().statusCode()).isEqualTo(200);
+        }
+    }
+
+    /**
+     * The carve-out follows the router, so a spelling the router accepts is exempt too.
+     *
+     * <p>{@code %68} is an unreserved escape: vertx-web decodes it before matching, so this
+     * request reaches the health route. Testing the transmitted target instead refused it while
+     * the runtime was busy — the carve-out and the routing disagreed in both directions.
+     */
+    @Test
+    void aPercentEncodedSpellingOfTheHealthMountIsStillExempt() throws Exception {
+        List<CompletableFuture<HttpResponse<String>>> saturating = List.of(
+                CompletableFuture.supplyAsync(() -> get("/api/nap")),
+                CompletableFuture.supplyAsync(() -> get("/api/nap")));
+        awaitInFlight();
+
+        String health = raw("/_tesseraql/%68ealth/live");
+
+        assertThat(health).contains("200").contains("UP");
+        for (CompletableFuture<HttpResponse<String>> request : saturating) {
+            assertThat(request.get().statusCode()).isEqualTo(200);
+        }
+    }
+
+    /**
+     * A Unicode route is charged one permit, not two.
+     *
+     * <p>{@code UnicodePaths} reroutes such a request in its decoded form and routing restarts
+     * from the first handler, so the gate's position behind it is what keeps the encoded spelling
+     * and the decoded one from each taking a permit. One nap holds one of the two permits here;
+     * a double charge would need both and answer 503.
+     */
+    @Test
+    void aUnicodeRouteIsChargedOnePermit() throws Exception {
+        CompletableFuture<HttpResponse<String>> saturating = CompletableFuture
+                .supplyAsync(() -> get("/api/nap"));
+        awaitInFlight();
+
+        HttpResponse<String> unicode = get("/%E5%8F%97%E6%B3%A8");
+
+        assertThat(unicode.statusCode()).isEqualTo(200);
+        assertThat(saturating.get().statusCode()).isEqualTo(200);
+    }
+
     /** Both saturating requests have taken their permits before the assertion runs. */
     private static void awaitInFlight() throws InterruptedException {
         Thread.sleep(700);
+    }
+
+    /**
+     * Sends {@code target} exactly as written and returns the status line, headers and body.
+     *
+     * <p>The JDK client rewrites a target carrying dot segments before it reaches the wire, which
+     * is the whole property under test here.
+     */
+    private static String raw(String target) {
+        try (java.net.Socket socket = new java.net.Socket("localhost", runtime.port())) {
+            socket.setSoTimeout(30_000);
+            socket.getOutputStream().write(("GET " + target + " HTTP/1.1\r\n"
+                    + "Host: localhost\r\nConnection: close\r\n\r\n")
+                    .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            socket.getOutputStream().flush();
+            return new String(socket.getInputStream().readAllBytes(),
+                    java.nio.charset.StandardCharsets.UTF_8);
+        } catch (IOException failure) {
+            throw new IllegalStateException(failure);
+        }
     }
 
     private static HttpResponse<String> get(String path) {
@@ -171,6 +262,29 @@ class HttpAdmissionIntegrationTest {
                       data: main.rows
                 """);
         Files.writeString(nap.resolve("nap.sql"), "select pg_sleep(3) as nap\n");
+
+        // A Unicode route path, so UnicodePaths reroutes the request and routing restarts: the
+        // gate must charge the decoded spelling once, not the encoded one as well.
+        Path juchu = target.resolve("web/受注");
+        Files.createDirectories(juchu);
+        Files.writeString(juchu.resolve("get.yml"), """
+                version: tesseraql/v1
+                id: 受注一覧
+                kind: route
+                recipe: query-json
+                security:
+                  auth: public
+                sources:
+                  main:
+                    sql:
+                      file: 受注.sql
+                      mode: query
+                response:
+                  json:
+                    body:
+                      data: main.rows
+                """);
+        Files.writeString(juchu.resolve("受注.sql"), "select 1 as 受注番号\n");
         return target;
     }
 }
