@@ -1,7 +1,11 @@
 package io.tesseraql.identity;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowableOfType;
 
+import io.tesseraql.core.error.TqlDomain;
+import io.tesseraql.core.error.TqlErrorCode;
+import io.tesseraql.core.error.TqlException;
 import io.tesseraql.security.Principal;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -190,6 +194,59 @@ class IdentityServiceIntegrationTest {
                 }
             }
         }
+    }
+
+    /**
+     * The bound refuses, and — the load-bearing half — the refusal is NOT mistaken for a contract
+     * that is not installed. {@code featureUnavailable} answers true for every IAM execution
+     * failure, and fourteen callers degrade to an empty answer on that: an empty constraint set
+     * finds no conflict, and absent role conditions are an unnarrowed grant. So a read too large to
+     * materialize would have WIDENED a permission set rather than refusing it. Asserted against the
+     * exception actually thrown, not a synthetic one.
+     *
+     * <p>A fresh service, never the shared one: the setters mutate rather than copy, so lowering
+     * the bound on the class's static instance would leak into every sibling test.
+     */
+    @Test
+    void aReadPastTheBoundRefusesAndIsNotMistakenForAMissingContract() {
+        DataSource dataSource = dataSource();
+        IdentityService bounded = new IdentityService(name -> dataSource).resultMaxRows(1);
+        RealmConfig realm = RealmConfig.managed("local", "main");
+
+        TqlException refusal = catchThrowableOfType(TqlException.class,
+                () -> bounded.execute(realm, IdentityContracts.LIST_ROLES, Map.of()));
+
+        assertThat(refusal)
+                .as("a contract read past the identity bound must refuse, not materialize")
+                .isNotNull();
+        assertThat(refusal.code()).isEqualTo(new TqlErrorCode(TqlDomain.LD, 1));
+        assertThat(IdentityService.featureUnavailable(refusal)).isFalse();
+    }
+
+    /** Under the bound, nothing about the read changes. */
+    @Test
+    void aReadWithinTheBoundIsUnaffected() {
+        DataSource dataSource = dataSource();
+        IdentityService bounded = new IdentityService(name -> dataSource).resultMaxRows(10);
+        RealmConfig realm = RealmConfig.managed("local", "main");
+
+        assertThat(bounded.execute(realm, IdentityContracts.LIST_ROLES, Map.of()))
+                .hasSize(2)
+                .extracting(row -> row.get("role_code"))
+                .containsExactly("SALES_ROLE", "USER_READ");
+    }
+
+    /**
+     * The default is uncapped, so wiring the bound is a deliberate act rather than something a
+     * construction site inherits by accident.
+     */
+    @Test
+    void anUnwiredServiceReadsUnbounded() {
+        DataSource dataSource = dataSource();
+        IdentityService unwired = new IdentityService(name -> dataSource);
+        RealmConfig realm = RealmConfig.managed("local", "main");
+
+        assertThat(unwired.execute(realm, IdentityContracts.LIST_ROLES, Map.of())).hasSize(2);
     }
 
     private static DataSource dataSource() {
