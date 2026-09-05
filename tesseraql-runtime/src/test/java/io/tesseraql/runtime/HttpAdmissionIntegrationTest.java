@@ -216,9 +216,76 @@ class HttpAdmissionIntegrationTest {
         // assertion that the permits were released rather than leaked.
     }
 
+    /**
+     * A browser meeting a busy runtime gets a page, not a JSON document painted as one.
+     *
+     * <p>The gate answers before any route exists, so it had only the framework's error
+     * envelope to write — and a top-level navigation, or the snapshot pager's native form post,
+     * rendered `{"error":{"code":"TQL-RATE-4293",…}}` as the whole document.
+     */
+    @Test
+    void aBrowserGetsTheCapacityRefusalAsAPage() throws Exception {
+        List<CompletableFuture<HttpResponse<String>>> saturating = List.of(
+                CompletableFuture.supplyAsync(() -> get("/api/nap")),
+                CompletableFuture.supplyAsync(() -> get("/api/nap")));
+        awaitInFlight();
+
+        String refused = rawWithAccept("/api/quick",
+                "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
+
+        assertThat(refused).contains("503");
+        assertThat(refused).contains("text/html");
+        assertThat(refused).contains("The service is busy");
+        assertThat(refused).contains("TQL-RATE-4293");
+        for (CompletableFuture<HttpResponse<String>> request : saturating) {
+            assertThat(request.get().statusCode()).isEqualTo(200);
+        }
+    }
+
+    /**
+     * Every other caller keeps the envelope, byte for byte.
+     *
+     * <p>The regression pin: an API client's contract is the JSON envelope, and an htmx request
+     * keeps today's no-swap deliberately — the bootstrap's allowance is 4xx, and widening it to
+     * 5xx would end an async job card's poll and re-baseline an unsaved form.
+     */
+    @Test
+    void everyOtherCallerKeepsTheJsonEnvelope() throws Exception {
+        List<CompletableFuture<HttpResponse<String>>> saturating = List.of(
+                CompletableFuture.supplyAsync(() -> get("/api/nap")),
+                CompletableFuture.supplyAsync(() -> get("/api/nap")));
+        awaitInFlight();
+
+        HttpResponse<String> api = get("/api/quick");
+        String htmx = rawWithAccept("/api/quick", "*/*");
+
+        assertThat(api.statusCode()).isEqualTo(503);
+        assertThat(api.body()).startsWith("{").contains("TQL-RATE-4293");
+        assertThat(htmx).contains("application/json").doesNotContain("<html");
+        for (CompletableFuture<HttpResponse<String>> request : saturating) {
+            assertThat(request.get().statusCode()).isEqualTo(200);
+        }
+    }
+
     /** Both saturating requests have taken their permits before the assertion runs. */
     private static void awaitInFlight() throws InterruptedException {
         Thread.sleep(700);
+    }
+
+    /** The same raw send, with an Accept header the negotiation reads. */
+    private static String rawWithAccept(String target, String accept) {
+        try (java.net.Socket socket = new java.net.Socket("localhost", runtime.port())) {
+            socket.setSoTimeout(30_000);
+            socket.getOutputStream().write(("GET " + target + " HTTP/1.1\r\n"
+                    + "Host: localhost\r\nAccept: " + accept
+                    + "\r\nConnection: close\r\n\r\n")
+                    .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            socket.getOutputStream().flush();
+            return new String(socket.getInputStream().readAllBytes(),
+                    java.nio.charset.StandardCharsets.UTF_8);
+        } catch (IOException failure) {
+            throw new IllegalStateException(failure);
+        }
     }
 
     /**
