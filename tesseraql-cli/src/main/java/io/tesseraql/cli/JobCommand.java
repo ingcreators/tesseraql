@@ -399,8 +399,9 @@ final class JobCommand implements Callable<Integer> {
         // (docs/analytics-experience.md track 3), so a CLI-run job records the same
         // execution + transfer rows and the console download works either way.
         // One clock for this process too, so a CLI-run job and a CLI-run export step pulse like a
-        // served one. The JVM exits with the command, which is what closes it.
-        @SuppressWarnings("resource") // owned for the life of the process, which ends here
+        // served one. The JVM exits with the command, which is what closes it. No
+        // @SuppressWarnings("resource") here, unlike the push service: the clock is handed to a
+        // collaborator, which is where leak analysis stops, so there would be nothing to suppress.
         io.tesseraql.operations.batch.ExecutionHeartbeats heartbeats = new io.tesseraql.operations.batch.ExecutionHeartbeats(
                 repository,
                 io.tesseraql.core.util.Durations.parse(manifest.config()
