@@ -32,6 +32,12 @@ import java.util.List;
  *
  * <p>Every {@code /* ... *}{@code /} block comment is treated as a directive (Doma-style 2-way SQL
  * convention). Use {@code --} line comments for non-directive remarks.
+ *
+ * <p>Four things are opaque to that rule, so what they contain is content rather than syntax: a
+ * {@code --} line comment, a {@code '...'} string literal, and a {@code "..."} or
+ * {@code `...`} quoted identifier. A {@code /*}, an apostrophe or a {@code --} inside any of them
+ * is text. {@code [} is <em>not</em> opaque — in DuckDB and PostgreSQL it is list and array
+ * syntax, not quoting (docs/two-way-sql-parser.md decision 5).
  */
 public final class Sql2WayParser {
 
@@ -98,7 +104,8 @@ public final class Sql2WayParser {
         pendingTerminator = null;
 
         while (pos < length) {
-            if (pos + 1 < length && source.charAt(pos) == '-' && source.charAt(pos + 1) == '-') {
+            char c = source.charAt(pos);
+            if (c == '-' && pos + 1 < length && source.charAt(pos + 1) == '-') {
                 // A -- line comment is opaque non-directive text (the documented convention);
                 // an apostrophe inside one (-- don't ...) must not open a string literal.
                 while (pos < length && source.charAt(pos) != '\n') {
@@ -106,10 +113,16 @@ public final class Sql2WayParser {
                 }
                 continue;
             }
-            if (pos < length && source.charAt(pos) == '\'') {
-                // A quoted SQL string is opaque: a /* inside it (a glob like 's3://x/**', a LIKE
-                // pattern) is content, not a directive. '' stays the escape for a literal quote.
-                consumeStringLiteral(text);
+            if (c == '\'' || c == '"' || c == '`') {
+                // A quoted run is opaque whichever delimiter opens it: a /* inside it (a glob
+                // like 's3://x/**', a LIKE pattern, an alias written "a/*b") is content and not
+                // a directive, and a -- inside it is not a line comment. Backticks join because
+                // MySQL is a supported dialect and `order` is its idiomatic quoting.
+                //
+                // '[' deliberately does not: in DuckDB and PostgreSQL it is list and array
+                // syntax, so reading it as SQL Server bracket quoting would swallow a directive
+                // written inside an array constructor (docs/two-way-sql-parser.md decision 5).
+                consumeQuotedRun(text, c);
                 continue;
             }
             if (peekCommentStart()) {
@@ -346,21 +359,28 @@ public final class Sql2WayParser {
         }
     }
 
-    /** Consumes a complete {@code '...'} literal (with {@code ''} escapes) into {@code text}. */
-    private void consumeStringLiteral(StringBuilder text) {
+    /**
+     * Consumes one complete quoted run into {@code text} — a {@code '...'} string literal, or a
+     * {@code "..."} or {@code `...`} quoted identifier. {@code pos} is on the opening delimiter,
+     * a doubled delimiter is the only escape, and end of input is an error: the one contract
+     * every quote scanner in this parser holds (docs/two-way-sql-parser.md decision 1).
+     */
+    private void consumeQuotedRun(StringBuilder text, char quote) {
         text.append(consume());
         while (pos < length) {
             char c = consume();
             text.append(c);
-            if (c == '\'') {
-                if (pos < length && source.charAt(pos) == '\'') {
+            if (c == quote) {
+                if (pos < length && source.charAt(pos) == quote) {
                     text.append(consume());
                     continue;
                 }
                 return;
             }
         }
-        throw error("Unterminated string literal");
+        throw error(quote == '\''
+                ? "Unterminated string literal"
+                : "Unterminated quoted identifier");
     }
 
     private boolean peekCommentStart() {

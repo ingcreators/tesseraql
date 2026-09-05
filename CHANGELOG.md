@@ -41,6 +41,18 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A quoted identifier is opaque to the 2-way SQL lexer.** Only `'…'` was, so a `"…"` or
+  `` `…` `` identifier was scanned for directives and quotes. The worst case was silent:
+  `select "a--b" from t where id = /* id */ 1` matched the `--` inside the identifier as a line
+  comment, swallowed the rest of the line, and rendered unchanged — the bind site deleted and the
+  dummy literal `1` reaching the database, where a soft-delete or tenant guard written that way is
+  evaluated against its own placeholder. The two loud cases were misleading rather than dangerous:
+  `select x as "Owner's name" from t` failed with `TQL-SQL-2102` naming an unterminated string
+  literal that does not exist, and `select "a/*b" from t` opened a bind directive inside the
+  identifier. Backticks join for MySQL, a doubled delimiter is the escape, and an unterminated
+  quoted identifier is now its own `TQL-SQL-2102` message. `[` deliberately stays plain text,
+  because in DuckDB and PostgreSQL it is list and array syntax rather than quoting.
+
 - **The row bound reaches a route's contract read.** `tesseraql.resultMaterialization.maxRows` is a
   route-level budget that a contract binding never passed through, so an admin page backed by a
   contract materialized whatever the store returned. The gap is closed by construction rather than
