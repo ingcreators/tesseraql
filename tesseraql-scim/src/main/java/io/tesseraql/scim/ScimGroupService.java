@@ -104,8 +104,9 @@ public final class ScimGroupService {
                 for (String value : values) {
                     addMember(connection, id, value);
                 }
-                Map<String, Object> row = statements.queryOne(connection, "scim.groups.findById",
-                        contract.findByIdSql(), Map.of("id", id));
+                Map<String, Object> row = statements.read(connection, "scim.groups.findById",
+                        SqlRenderer.render(contract.findByIdSql(), Map.of("id", id)),
+                        statements.firstRow());
                 if (row == null) {
                     throw new ScimException(500, null, "Group vanished after create: " + id);
                 }
@@ -184,8 +185,9 @@ public final class ScimGroupService {
                     throw new ScimException(404, null, "Group not found: " + id);
                 }
                 reconcileMembers(connection, id, group.members());
-                Map<String, Object> row = statements.queryOne(connection, "scim.groups.findById",
-                        contract.findByIdSql(), Map.of("id", id));
+                Map<String, Object> row = statements.read(connection, "scim.groups.findById",
+                        SqlRenderer.render(contract.findByIdSql(), Map.of("id", id)),
+                        statements.firstRow());
                 if (row == null) {
                     throw new ScimException(404, null, "Group not found: " + id);
                 }
@@ -257,8 +259,10 @@ public final class ScimGroupService {
 
     private List<ScimGroup.Member> members(Connection connection, String groupId)
             throws SQLException {
-        return statements.query(connection, "scim.groups.listMembers", contract.listMembersSql(),
-                Map.of("groupId", groupId)).stream().map(ScimGroupMapper::memberFromRow).toList();
+        return statements.read(connection, "scim.groups.listMembers",
+                SqlRenderer.render(contract.listMembersSql(), Map.of("groupId", groupId)),
+                statements.rows())
+                .stream().map(ScimGroupMapper::memberFromRow).toList();
     }
 
     private List<ScimGroup.Member> members(String groupId) {
