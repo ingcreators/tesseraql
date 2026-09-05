@@ -57,8 +57,6 @@ public final class SuiteCoverage {
     }
 
     private static String stripIdentityPrefix(String contract) {
-        return contract.startsWith("identity.")
-                ? contract.substring("identity.".length())
-                : contract;
+        return io.tesseraql.identity.IdentityContracts.unqualify(contract);
     }
 }

@@ -2141,9 +2141,16 @@ public final class RouteCompiler {
             return new io.tesseraql.pipeline.service.ServiceStep("call", binding.service(),
                     resultKey);
         }
+        // Both arms build the SAME step, and that is the whole point. This branch used to
+        // return four arguments early, before the six execution parameters below were computed,
+        // so every axis the framework gained had to be carried across it by hand: the statement
+        // timeout, tracing and pagination each arrived as a separate retrofit, and the row bound
+        // never arrived at all. There is no contract arm left for the next one to be dropped in.
         if (binding.isContract()) {
-            return new io.tesseraql.pipeline.iam.IamStep("contract", binding.contract(),
-                    binding.effectiveMode(), resultKey);
+            return new io.tesseraql.pipeline.sql.SqlStep(
+                    new io.tesseraql.pipeline.iam.ContractSqlSource(binding.contract()),
+                    binding.effectiveMode(), resultKey, effectiveMaxRows(binding),
+                    effectiveTimeoutSeconds(binding), effectiveOnOverflow(binding), null);
         }
         String datasource = bindingDatasource(binding, routeDatasource);
         Path sqlPath = sourceDir.resolve(binding.file()).normalize();

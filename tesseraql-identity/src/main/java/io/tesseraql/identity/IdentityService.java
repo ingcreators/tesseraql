@@ -115,48 +115,8 @@ public final class IdentityService {
     /** Executes a contract and returns the rows with their contract-defined aliases. */
     public List<Map<String, Object>> execute(RealmConfig realm, String contract,
             Map<String, Object> params) {
-        return execute(realm, contract, params, -1L, 0L);
-    }
-
-    /**
-     * The same, returning at most {@code limit} rows from {@code offset}
-     * (docs/http-edge-robustness.md decision 5's follow-up); a negative limit reads everything.
-     *
-     * <p>The admin directories read through contracts rather than through {@code sql:}, so they
-     * never met the framework's own pagination — which is applied by the SQL step, one layer
-     * these do not pass through. Every one of them rendered its whole table, and the user
-     * directory's bulk form posted one checkbox per row of {@code tql_users}.
-     *
-     * <p>The clause is the dialect's, from the same helper the SQL step uses, so a contract
-     * paginates on Oracle and SQL Server the way it does on PostgreSQL. It appends to the
-     * resolved contract, which every list contract already ends with an {@code order by} —
-     * required by those two vendors and necessary for a stable page anywhere.
-     */
-    public List<Map<String, Object>> execute(RealmConfig realm, String contract,
-            Map<String, Object> params, long limit, long offset) {
-        String sql = new ContractResolver(realm, dialect).resolve(contract);
-        Map<String, Object> bound = params;
-        if (limit >= 0) {
-            io.tesseraql.core.dialect.Pagination.Clause clause = io.tesseraql.core.dialect.Pagination
-                    .clause(
-                            io.tesseraql.core.dialect.Dialect.fromId(dialect)
-                                    .orElse(io.tesseraql.core.dialect.Dialect.POSTGRES),
-                            limit, offset);
-            // Named binds rather than positional: the contract's own statement is 2-way SQL and
-            // is rendered through the same binder, so the clause states its parameters the way
-            // every other statement in this framework does.
-            java.util.List<String> names = new java.util.ArrayList<>();
-            Map<String, Object> withPage = new java.util.LinkedHashMap<>(params);
-            int index = 0;
-            for (Object value : clause.parameters()) {
-                String pageParam = "tqlPage" + index++;
-                withPage.put(pageParam, value);
-                names.add(pageParam);
-            }
-            sql = stripTerminator(sql) + "\n" + named(clause.sql(), names);
-            bound = withPage;
-        }
-        return read(realm, contract, sql, bound, resultMaxRows);
+        return read(realm, contract, new ContractResolver(realm, dialect).resolve(contract),
+                params, resultMaxRows);
     }
 
     /**
@@ -207,35 +167,21 @@ public final class IdentityService {
         };
     }
 
-    /** The clause's {@code ?} placeholders rewritten as the 2-way SQL binds the resolver reads. */
-    private static String named(String clause, List<String> names) {
-        StringBuilder out = new StringBuilder();
-        int next = 0;
-        for (int i = 0; i < clause.length(); i++) {
-            char c = clause.charAt(i);
-            if (c == '?' && next < names.size()) {
-                out.append("/* ").append(names.get(next++)).append(" */ 0");
-            } else {
-                out.append(c);
-            }
-        }
-        return out.toString();
-    }
-
-    /** The resolved contract without its optional terminator, so a clause can append. */
-    private static String stripTerminator(String sql) {
-        String trimmed = sql.stripTrailing();
-        return trimmed.endsWith(";") ? trimmed.substring(0, trimmed.length() - 1) : trimmed;
-    }
-
     /**
-     * Executes a write contract (update/insert/delete), returning the affected row count. Rejected
-     * with {@link #READ_ONLY} when the realm's user management capability is not readWrite
-     * (design ch. 10.7.3).
+     * Refuses a write the realm's capabilities do not allow, before anything is written.
+     *
+     * <p>Two capabilities, two gates (docs/application-roles.md structural decision 6): a
+     * role-management write answers to roleManagement, everything else to userManagement. A sql
+     * realm defaults to read-only, so this is what stops a bundled admin page writing to a
+     * deployment's own database.
+     *
+     * <p>Named, rather than inlined in {@link #executeUpdate}, because a route now reaches contract
+     * SQL through the shared SQL step instead of through this class. The gate had been unskippable
+     * by being the first thing the only write method did; it is now a call site, and this is where
+     * both callers meet it. It does NOT close the hole where a write-set contract is declared under
+     * a read mode - no lint constrains a binding's mode - which is filed rather than claimed.
      */
-    public int executeUpdate(RealmConfig realm, String contract, Map<String, Object> params) {
-        // Two capabilities, two gates (docs/application-roles.md structural decision 6): a
-        // role-management write answers to roleManagement, everything else to userManagement.
+    public void requireWritable(RealmConfig realm, String contract) {
         if (IdentityContracts.roleManagementContracts().contains(contract)) {
             if (!realm.capabilities().roleWriteAllowed()) {
                 throw new TqlException(ROLE_READ_ONLY, "Realm '" + realm.id()
@@ -245,6 +191,15 @@ public final class IdentityService {
             throw new TqlException(READ_ONLY,
                     "Realm '" + realm.id() + "' does not allow write contract '" + contract + "'");
         }
+    }
+
+    /**
+     * Executes a write contract (update/insert/delete), returning the affected row count. Rejected
+     * with {@link #READ_ONLY} when the realm's user management capability is not readWrite
+     * (design ch. 10.7.3).
+     */
+    public int executeUpdate(RealmConfig realm, String contract, Map<String, Object> params) {
+        requireWritable(realm, contract);
         String sql = new ContractResolver(realm, dialect).resolve(contract);
         try {
             return statements(realm).update(contract, sql, params);

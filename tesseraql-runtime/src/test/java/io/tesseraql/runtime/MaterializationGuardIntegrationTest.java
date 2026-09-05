@@ -70,6 +70,24 @@ class MaterializationGuardIntegrationTest {
                 .isEqualTo("TQL-LD-0001");
     }
 
+    /**
+     * The row bound reaches a contract read, which it never did.
+     *
+     * <p>A contract compiled to its own step taking four constructor arguments where the SQL step
+     * took nine, and {@code effectiveMaxRows} was one of the five it never received — so
+     * {@code tesseraql.resultMaterialization.maxRows} did not apply to a contract read at all.
+     * This asserts the contract arm now answers exactly as its {@code sql:} sibling does one test
+     * up, because after the branch collapsed there is one step serving both.
+     */
+    @Test
+    void anOverBudgetContractReadIsRejectedLikeItsSqlSibling() throws Exception {
+        HttpResponse<String> response = get("/api/contract-users"); // 3 identity rows, maxRows 2
+
+        assertThat(response.statusCode()).isEqualTo(500);
+        assertThat(MAPPER.readTree(response.body()).path("error").path("code").asText())
+                .isEqualTo("TQL-LD-0001");
+    }
+
     @Test
     void withinBudgetQuerySucceeds() throws Exception {
         HttpResponse<String> response = get("/api/users?limit=1"); // 1 row, within maxRows
@@ -92,6 +110,19 @@ class MaterializationGuardIntegrationTest {
             statement.execute("truncate table users restart identity");
             statement.execute("insert into users (name, status) values "
                     + "('a','ACTIVE'),('b','ACTIVE'),('c','ACTIVE')");
+            // The identity store the contract arm reads, past the same budget. The example app
+            // declares a managed realm but ships no identity migrations, so the standard schema
+            // is applied here the way the identity suites apply it.
+            for (String ddl : io.tesseraql.identity.DefaultIdentityPack.schema("postgres")
+                    .split(";")) {
+                if (!ddl.isBlank()) {
+                    statement.execute(ddl);
+                }
+            }
+            statement.execute("insert into tql_users (user_id, login_id, display_name, status)"
+                    + " values ('m1','m-one','One','ACTIVE'),('m2','m-two','Two','ACTIVE'),"
+                    + "('m3','m-three','Three','ACTIVE')"
+                    + " on conflict (user_id) do nothing");
         }
     }
 
@@ -113,6 +144,31 @@ class MaterializationGuardIntegrationTest {
                     password: %s
                 """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
                 POSTGRES.getPassword()));
+        // A contract-backed sibling of /api/users, so the two arms differ only in where their
+        // statement comes from. Written here rather than shipped in the example, because its
+        // whole purpose is to be read under a deliberately tiny budget.
+        Path contractRoute = target.resolve("web/api/contract-users");
+        Files.createDirectories(contractRoute);
+        Files.writeString(contractRoute.resolve("get.yml"), """
+                version: tesseraql/v1
+                id: users.contract.search
+                kind: route
+                recipe: query-json
+
+                security:
+                  policy: users.read
+
+                sources:
+                  main:
+                    contract:
+                      name: identity.list-users
+
+                response:
+                  json:
+                    status: 200
+                    body:
+                      data: main.rows
+                """);
         // Tighten the global materialization budget (block is under the tesseraql: root).
         Files.writeString(target.resolve("config/tesseraql.yml"), """
 

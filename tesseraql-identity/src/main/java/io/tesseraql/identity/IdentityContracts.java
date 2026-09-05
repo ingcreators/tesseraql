@@ -7,6 +7,20 @@ package io.tesseraql.identity;
  */
 public final class IdentityContracts {
 
+    /**
+     * A contract's file name, without the {@code identity.} qualifier a binding writes.
+     *
+     * <p>{@code contract: {name: identity.list-users}} names the pack's {@code list-users.sql}. The
+     * strip was open-coded in four places — the route step, the declarative suite's case runner, its
+     * coverage report and its cross-reference index — which is three more than one convention
+     * deserves.
+     */
+    public static String unqualify(String contract) {
+        return contract != null && contract.startsWith("identity.")
+                ? contract.substring("identity.".length())
+                : contract;
+    }
+
     public static final String FIND_USER_BY_LOGIN = "find-user-by-login";
     public static final String FIND_USER_BY_ID = "find-user-by-id";
     public static final String CREATE_USER = "create-user";
