@@ -164,6 +164,28 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **A contract read returns ISO-8601 strings for JDBC temporals, where it returned the driver's
+  own object.** `SqlStatement` had two row readers. The capped one every route and command read
+  goes through passed each value through `ResultRows`, converting `java.sql.Timestamp`, `Date` and
+  `Time` to ISO-8601; the uncapped one behind `query` — the reader every identity contract read and
+  both SCIM services use — returned `resultSet.getObject` untouched. The two agreed about labels
+  and disagreed about values, so one store answered the same column two ways depending on which
+  reader asked.
+
+  This is visible wherever a template prints an identity temporal directly, and seven shipped ones
+  do: the grant-history table renders `${h.occurred_at}`, and six pack contracts select temporals
+  into their results — `list-grant-history`, `list-access-requests`, `list-access-reviews`,
+  `list-role-eligibility`, `list-review-items` and `list-role-assignments-by-user-id`. Those pages
+  rendered whatever `toString()` a driver's temporal happened to have; they now render the same
+  ISO-8601 form the rest of the framework does. Anything comparing such a value as an object rather
+  than as a string sees the change.
+
+  `ResultRows`' own javadoc claimed every JDBC row reader already asked it. That was true of labels
+  and false of values, and the claim is now replaced by the rule it should have stated: a reader
+  that hands rows straight to a response binding asks here for both halves, and the batch and
+  enrichment readers deliberately do not, because a later step binds their rows and an ISO-8601
+  string is not a timestamp.
+
 - **A row-cap refusal can no longer be declared a checked exception.**
   `SqlStatement.RowOverflow.onRowPastCap()` declared `throws SQLException`, so an implementation
   written to the signature would refuse an over-large read by throwing one. `SqlStatementException`

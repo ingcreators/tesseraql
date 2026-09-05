@@ -12,8 +12,20 @@ package io.tesseraql.core.dialect;
  * driver's temporal happens to have on the other. A response binding written against one path
  * broke on the other, and nothing said why.
  *
- * <p>All the JDBC row readers ask here now — routes, commands, and the batch executor's
- * query/spool/chunk readers — so there is one answer to change.
+ * <p>The policy, stated as a rule rather than as a count of who follows it: a reader that hands
+ * rows straight to a response binding asks here for BOTH halves. The route reader, the command
+ * readers, the contract reader behind {@code SqlStatement.query} and the workflow transition
+ * reader all do, so one store answers the same column the same way whichever path read it.
+ *
+ * <p>Two deliberate departures, each with the same reason — the rows are consumed by a later step
+ * that binds them, and an ISO-8601 string is not a timestamp. The batch executor's step, keyset
+ * and chunk readers keep values typed (docs/sql-execution-shapes.md structural decision 1), and so
+ * does the enrichment reader, whose columns are composed into rows a writer binds. Both ask here
+ * for the label and answer the value themselves.
+ *
+ * <p>Said plainly because a sweeping claim stood here and was false: this class does not know its
+ * callers and cannot enforce the rule. Readers outside the framework's own row paths — the
+ * reference lookup's, the declarative suite's and Studio's — do not ask here at all.
  */
 public final class ResultRows {
 
