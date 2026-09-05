@@ -521,8 +521,7 @@ public class SqlStep implements Step {
         try {
             boolean[] truncated = new boolean[1];
             List<Map<String, Object>> rows = statements.read(sqlPath, bound,
-                    io.tesseraql.core.sql.SqlStatement.cappedRows(dialect, maxRows,
-                            overflow(truncated)));
+                    statements.rows(maxRows, overflow(truncated)));
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("rows", rows);
             result.put("rowCount", rows.size());

@@ -1,7 +1,6 @@
 package io.tesseraql.core.sql;
 
 import io.tesseraql.core.dialect.Dialect;
-import io.tesseraql.core.dialect.Labels;
 import io.tesseraql.core.telemetry.NoopTracer;
 import io.tesseraql.core.telemetry.Span;
 import io.tesseraql.core.telemetry.Tracer;
@@ -403,28 +402,13 @@ public final class SqlStatement {
     }
 
     /**
-     * The uncapped read behind {@link #query(Connection, String, String, Map)}: rows shaped the
-     * way {@link #cappedRows(String, int, RowOverflow)} shapes them — the label under this
-     * statement's own policy, the value through
-     * {@link io.tesseraql.core.dialect.ResultRows#value(Object)} so a JDBC temporal arrives as an
-     * ISO-8601 string rather than as whatever {@code toString()} a driver's temporal happens to
-     * have. The two readers agreed about labels and disagreed about values, which meant one store
-     * answered a contract read and a route read differently for the same column.
+     * The uncapped read behind {@link #query(Connection, String, String, Map)}. It shares
+     * {@link #materialize(ResultSet, int, RowOverflow)} with the capped readers, so the two cannot
+     * drift again: they disagreed about values once, and one store answered a contract read and a
+     * route read differently for the same column.
      */
     private List<Map<String, Object>> readRows(ResultSet resultSet) throws SQLException {
-        ResultSetMetaData metaData = resultSet.getMetaData();
-        int columns = metaData.getColumnCount();
-        List<Map<String, Object>> rows = new ArrayList<>();
-        while (resultSet.next()) {
-            Map<String, Object> row = new LinkedHashMap<>();
-            for (int col = 1; col <= columns; col++) {
-                String label = metaData.getColumnLabel(col);
-                row.put(rawLabels ? label : Labels.normalize(dialect, label),
-                        io.tesseraql.core.dialect.ResultRows.value(resultSet.getObject(col)));
-            }
-            rows.add(row);
-        }
-        return rows;
+        return materialize(resultSet, -1, UNCAPPED);
     }
 
     /** A caller-owned read over the statement's open {@link ResultSet} — spooling, capping,
@@ -443,7 +427,7 @@ public final class SqlStatement {
 
     /**
      * The caller's answer to the first row past a capped read's cap
-     * ({@link #cappedRows(String, int, RowOverflow)}): return to truncate the read — the caller
+     * ({@link #rows(int, RowOverflow)}): return to truncate the read — the caller
      * has already said so, e.g. with a warn log — or throw its refusal.
      *
      * <p>The refusal is unchecked, and this method declares no {@code throws} so that it cannot
@@ -460,35 +444,75 @@ public final class SqlStatement {
     }
 
     /**
-     * A capped, materializing read: rows shaped the way every route and command read shapes them
-     * — labels normalized under {@code dialect}, JDBC temporals as ISO-8601 strings
-     * ({@link io.tesseraql.core.dialect.ResultRows}) — up to {@code maxRows} rows ({@code -1} is
-     * uncapped), the row past the cap answered by {@code onOverflow}. Stamps the row count on the
-     * statement's span.
+     * The row past the cap of an uncapped read — unreachable, because {@code -1} never reaches a
+     * cap. Named rather than spelled as an empty lambda at each site, so an uncapped read reads as
+     * a decision instead of an omission.
      */
-    public static SpannedReader<List<Map<String, Object>>> cappedRows(String dialect, int maxRows,
-            RowOverflow onOverflow) {
+    private static final RowOverflow UNCAPPED = () -> {
+    };
+
+    /**
+     * A capped, materializing read, shaped by THIS statement: labels under its own label policy —
+     * normalized for its dialect, or the driver's own when it was built {@link #rawLabels()} — and
+     * values through {@link io.tesseraql.core.dialect.ResultRows#value(Object)}, so a JDBC temporal
+     * is an ISO-8601 string. Up to {@code maxRows} rows ({@code -1} is uncapped), the row past the
+     * cap answered by {@code onOverflow}. Stamps the row count on the statement's span.
+     *
+     * <p>It reads the statement's own dialect rather than taking one, because the two could
+     * disagree; and it is an instance member rather than a static factory because a static one
+     * cannot see {@code rawLabels}, which is why the executors that declare that policy could
+     * never use the capped read at all and materialized without a bound instead.
+     */
+    public SpannedReader<List<Map<String, Object>>> rows(int maxRows, RowOverflow onOverflow) {
         return (resultSet, span) -> {
-            ResultSetMetaData metaData = resultSet.getMetaData();
-            int columns = metaData.getColumnCount();
-            List<Map<String, Object>> rows = new ArrayList<>();
-            while (resultSet.next()) {
-                if (maxRows >= 0 && rows.size() >= maxRows) {
-                    onOverflow.onRowPastCap();
-                    break;
-                }
-                Map<String, Object> row = new LinkedHashMap<>();
-                for (int col = 1; col <= columns; col++) {
-                    row.put(io.tesseraql.core.dialect.ResultRows.label(dialect,
-                            metaData.getColumnLabel(col)),
-                            io.tesseraql.core.dialect.ResultRows.value(
-                                    resultSet.getObject(col)));
-                }
-                rows.add(row);
-            }
+            List<Map<String, Object>> rows = materialize(resultSet, maxRows, onOverflow);
             span.attribute("rowCount", rows.size());
             return rows;
         };
+    }
+
+    /**
+     * As {@link #rows(int, RowOverflow)} with no cap — for a read whose size the caller has
+     * already bounded, or has deliberately chosen not to.
+     */
+    public SpannedReader<List<Map<String, Object>>> rows() {
+        return rows(-1, UNCAPPED);
+    }
+
+    /**
+     * The first row, or {@code null} when the statement returns none — and it stops there rather
+     * than materializing the rest to discard it.
+     */
+    public SpannedReader<Map<String, Object>> firstRow() {
+        return (resultSet, span) -> {
+            List<Map<String, Object>> rows = materialize(resultSet, 1, UNCAPPED);
+            span.attribute("rowCount", rows.size());
+            return rows.isEmpty() ? null : rows.get(0);
+        };
+    }
+
+    /** The one row-shaping loop every read in this class goes through. */
+    private List<Map<String, Object>> materialize(ResultSet resultSet, int maxRows,
+            RowOverflow onOverflow) throws SQLException {
+        ResultSetMetaData metaData = resultSet.getMetaData();
+        int columns = metaData.getColumnCount();
+        List<Map<String, Object>> rows = new ArrayList<>();
+        while (resultSet.next()) {
+            if (maxRows >= 0 && rows.size() >= maxRows) {
+                onOverflow.onRowPastCap();
+                break;
+            }
+            Map<String, Object> row = new LinkedHashMap<>();
+            for (int col = 1; col <= columns; col++) {
+                String label = metaData.getColumnLabel(col);
+                row.put(rawLabels
+                        ? label
+                        : io.tesseraql.core.dialect.ResultRows.label(dialect, label),
+                        io.tesseraql.core.dialect.ResultRows.value(resultSet.getObject(col)));
+            }
+            rows.add(row);
+        }
+        return rows;
     }
 
     /**

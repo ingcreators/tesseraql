@@ -312,9 +312,10 @@ class SqlStatementTest {
         BoundSql bound = SqlRenderer.render(SELECT, Map.of("id", "u1"));
         List<String> overflowed = new ArrayList<>();
 
-        List<Map<String, Object>> rows = SqlStatement.onCallerConnections()
+        SqlStatement statements = SqlStatement.onCallerConnections();
+        List<Map<String, Object>> rows = statements
                 .read(database.dataSource().getConnection(), "web/api/users.sql", bound,
-                        SqlStatement.cappedRows(null, 0, () -> overflowed.add("asked")));
+                        statements.rows(0, () -> overflowed.add("asked")));
 
         assertThat(rows).isEmpty();
         assertThat(overflowed).containsExactly("asked");
@@ -345,6 +346,62 @@ class SqlStatementTest {
     }
 
     /**
+     * The capped read used to be a static factory taking a dialect, so it could not see the
+     * statement's {@code rawLabels} policy and always folded. An executor that declares raw labels
+     * — SCIM does, deliberately — therefore could not use a capped read at all, and materialized
+     * without a bound instead. The reader is the statement's own now, so the policy survives the
+     * cap.
+     */
+    @Test
+    void aCappedReadKeepsTheDriversLabelsWhenTheStatementDeclaredRawOnes() throws Exception {
+        FakeDatabase database = new FakeDatabase(List.of("USER_ID"), List.of("u1"));
+        BoundSql bound = SqlRenderer.render(SELECT, Map.of("id", "u1"));
+        SqlStatement statements = SqlStatement.onCallerConnections()
+                .dialect("oracle")
+                .rawLabels();
+
+        List<Map<String, Object>> rows = statements.read(
+                database.dataSource().getConnection(), "scim.users.findById", bound,
+                statements.rows(5, () -> {
+                    throw new IllegalStateException("not reached");
+                }));
+
+        assertThat(rows).singleElement()
+                .satisfies(row -> assertThat(row).containsOnlyKeys("USER_ID"));
+    }
+
+    /** Without that policy the same read folds, exactly as every route read does on Oracle. */
+    @Test
+    void aCappedReadStillFoldsWhenTheStatementDidNot() throws Exception {
+        FakeDatabase database = new FakeDatabase(List.of("USER_ID"), List.of("u1"));
+        BoundSql bound = SqlRenderer.render(SELECT, Map.of("id", "u1"));
+        SqlStatement statements = SqlStatement.onCallerConnections().dialect("oracle");
+
+        List<Map<String, Object>> rows = statements.read(
+                database.dataSource().getConnection(), "web/api/users.sql", bound,
+                statements.rows(5, () -> {
+                    throw new IllegalStateException("not reached");
+                }));
+
+        assertThat(rows).singleElement()
+                .satisfies(row -> assertThat(row).containsOnlyKeys("user_id"));
+    }
+
+    /** The first-row read stops at one row rather than materializing the rest to discard it. */
+    @Test
+    void theFirstRowReadStopsAtTheFirstRow() throws Exception {
+        FakeDatabase database = new FakeDatabase(List.of("name"), List.of("Anne"));
+        BoundSql bound = SqlRenderer.render(SELECT, Map.of("id", "u1"));
+        SqlStatement statements = SqlStatement.onCallerConnections();
+
+        Map<String, Object> row = statements.read(
+                database.dataSource().getConnection(), "scim.groups.findById", bound,
+                statements.firstRow());
+
+        assertThat(row).containsEntry("name", "Anne");
+    }
+
+    /**
      * A row-cap refusal has to reach the caller as itself. {@code SqlStatementException} extends
      * {@code SQLException}, so a refusal declared checked arrives in a caller's
      * {@code catch (SQLException)} wearing the same clothes as the database refusing the
@@ -364,9 +421,10 @@ class SqlStatementTest {
         FakeDatabase database = new FakeDatabase(List.of("name"), List.of("Anne"));
         BoundSql bound = SqlRenderer.render(SELECT, Map.of("id", "u1"));
 
-        assertThatThrownBy(() -> SqlStatement.onCallerConnections()
+        SqlStatement statements = SqlStatement.onCallerConnections();
+        assertThatThrownBy(() -> statements
                 .read(database.dataSource().getConnection(), "web/api/users.sql", bound,
-                        SqlStatement.cappedRows(null, 0, () -> {
+                        statements.rows(0, () -> {
                             throw new IllegalStateException("exceeds maxRows");
                         })))
                 .isInstanceOf(IllegalStateException.class)

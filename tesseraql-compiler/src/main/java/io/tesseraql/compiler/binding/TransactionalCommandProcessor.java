@@ -814,8 +814,7 @@ public final class TransactionalCommandProcessor implements Step {
         BoundSql bound = SqlRenderer.render(workflow.assignNodes(), params,
                 scopeResolver(exchange), context);
         List<Map<String, Object>> rows = statements.read(connection, "workflow.assign", bound,
-                io.tesseraql.core.sql.SqlStatement.cappedRows(dialect,
-                        defaultBounds == null ? -1 : defaultBounds.maxRows(),
+                statements.rows(defaultBounds == null ? -1 : defaultBounds.maxRows(),
                         overflow("Workflow assign", null, defaultBounds)));
         // The opened task's deadline (roadmap Phase 28 slice 3): the to state's `within`, if any.
         Instant dueAt = workflow.dueWithinMillis() == null
@@ -923,8 +922,7 @@ public final class TransactionalCommandProcessor implements Step {
             result.put("out", stepStatements.call(connection, sqlId, bound, step.outTypes()));
         } else if ("query".equals(step.mode())) {
             List<Map<String, Object>> rows = stepStatements.read(connection, sqlId, bound,
-                    io.tesseraql.core.sql.SqlStatement.cappedRows(dialect,
-                            step.bounds().maxRows(),
+                    stepStatements.rows(step.bounds().maxRows(),
                             overflow("Step '" + step.name() + "'", step.sourcePath(),
                                     step.bounds())));
             result.put("rows", rows);
