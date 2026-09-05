@@ -202,6 +202,15 @@ final class StackRelay {
     private static final io.tesseraql.core.error.TqlErrorCode MEMBER_AT_CAPACITY = new io.tesseraql.core.error.TqlErrorCode(
             io.tesseraql.core.error.TqlDomain.RATE, 4294);
 
+    /**
+     * TQL-RATE-4296: the front door already has this member's share of event-stream forwards
+     * open (HTTP 503). A stream holds its forward for as long as the browser keeps the page,
+     * so counting it against 4294's share meant a member's live users consumed its whole front
+     * door while the member itself was idle.
+     */
+    private static final io.tesseraql.core.error.TqlErrorCode MEMBER_STREAMS_AT_CAPACITY = new io.tesseraql.core.error.TqlErrorCode(
+            io.tesseraql.core.error.TqlDomain.RATE, 4296);
+
     /** The surface's key in the per-app proxy lookups; {@code #} is outside every legal name. */
     private static final String SURFACE = "#portal";
 
@@ -272,8 +281,22 @@ final class StackRelay {
      */
     private volatile int maxConcurrentPerMember = 10;
 
+    /**
+     * How many event-stream forwards one member may hold open, beside its request share.
+     *
+     * <p>A forwarded response holds its permit until it ends, and an event stream does not end
+     * while the page is open. The relay could not tell one from the other, so a member's live
+     * users spent its whole forwarding share: with the subject cap at four streams, roughly
+     * three signed-in users saturated a member's front door and every ordinary request to it was
+     * answered 503 while the member sat idle.
+     */
+    private volatile int maxStreamsPerMember = 40;
+
     /** One permit set per member, created on first forward to it. */
     private final Map<String, java.util.concurrent.Semaphore> memberPermits = new ConcurrentHashMap<>();
+
+    /** The same, for stream forwards; separate maps rather than a pair, for the same reason. */
+    private final Map<String, java.util.concurrent.Semaphore> streamPermits = new ConcurrentHashMap<>();
 
     StackRelay(HttpClient client, Map<String, InstalledApp> appsByName,
             ToIntFunction<String> portOf) {
@@ -316,6 +339,41 @@ final class StackRelay {
     }
 
     /**
+     * Whether this forward is an event stream, decided by the path the member mounts it at.
+     *
+     * <p><b>Not by {@code Accept: text/event-stream}</b>, which the campaign proposed. A member
+     * serves MCP over Streamable HTTP at {@code <basePath>/_tesseraql/mcp}, and this
+     * repository's own MCP client sends {@code Accept: application/json, text/event-stream} on
+     * synchronous tool calls that are not streams — so a header test would bill the whole MCP
+     * surface to the stream share. And a header is the caller's to set, which would let a client
+     * choose which of two budgets its slow requests spend; the half that starves would be live
+     * updates.
+     *
+     * <p>The comparison is on the request target as transmitted, while the member's own router
+     * matches its normalized form. A percent-encoded or dot-segmented spelling of a stream mount
+     * therefore falls into the request share — which is the fail-safe direction, and is exactly
+     * what every such request does today.
+     */
+    private static boolean isStreamForward(String rawPath, InstalledApp member) {
+        if (member == null) {
+            return false;
+        }
+        String base = member.basePath() == null ? "" : member.basePath();
+        return mountedAt(rawPath, base + "/_tesseraql/events")
+                || mountedAt(rawPath, base + "/_tesseraql/ui/copilot/stream");
+    }
+
+    /** Exact, or exact with one trailing slash: the member routes both to the same handler. */
+    private static boolean mountedAt(String rawPath, String mount) {
+        if (rawPath.equals(mount)) {
+            return true;
+        }
+        int query = rawPath.indexOf('?');
+        String path = query < 0 ? rawPath : rawPath.substring(0, query);
+        return path.equals(mount) || path.equals(mount + "/");
+    }
+
+    /**
      * Starts the ordered stop: readiness flips to 503 so a balancer stops sending new traffic,
      * while everything that still arrives is served in full.
      */
@@ -330,6 +388,16 @@ final class StackRelay {
      */
     StackRelay maxConcurrentPerMember(int forwards) {
         this.maxConcurrentPerMember = Math.max(1, forwards);
+        return this;
+    }
+
+    /**
+     * Sets how many event-stream forwards one member may hold open, beside its request share.
+     * The outbound client's pool is sized to the sum, so an admitted stream never queues in the
+     * transport behind the requests it was separated from.
+     */
+    StackRelay maxStreamsPerMember(int streams) {
+        this.maxStreamsPerMember = Math.max(1, streams);
         return this;
     }
 
@@ -493,12 +561,23 @@ final class StackRelay {
             // backend has stalled can hold only its own share of the front door. The gateway's
             // own health answered above, before this: a stack that cannot say "that member is
             // busy" is one an orchestrator removes for the silence.
-            java.util.concurrent.Semaphore permits = memberPermits.computeIfAbsent(appName,
-                    name -> new java.util.concurrent.Semaphore(maxConcurrentPerMember));
+            boolean stream = isStreamForward(rawPath, entryOf.apply(appName));
+            java.util.concurrent.Semaphore permits = stream
+                    ? streamPermits.computeIfAbsent(appName,
+                            name -> new java.util.concurrent.Semaphore(maxStreamsPerMember))
+                    : memberPermits.computeIfAbsent(appName,
+                            name -> new java.util.concurrent.Semaphore(maxConcurrentPerMember));
             if (!permits.tryAcquire()) {
-                request.response().putHeader("Retry-After", "1");
-                respond(request, 503, MEMBER_AT_CAPACITY,
-                        "The member is at its forwarding capacity; retry later");
+                // A stream is told to wait longer: what it is waiting for is another stream
+                // ending, not a query finishing. The header is honest for an API client and is
+                // read by no browser client — an EventSource retries on its own timer.
+                request.response().putHeader("Retry-After", stream ? "5" : "1");
+                respond(request, 503,
+                        stream ? MEMBER_STREAMS_AT_CAPACITY : MEMBER_AT_CAPACITY,
+                        stream
+                                ? "The member is at its event-stream forwarding capacity;"
+                                        + " retry later"
+                                : "The member is at its forwarding capacity; retry later");
                 return;
             }
             held.set(permits);

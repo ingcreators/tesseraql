@@ -18,6 +18,9 @@ All notable changes to TesseraQL are documented here. The format follows
   direction before the transport closes it, defaulting to 300, with `-1` the visible opt-out. The
   same number bounds the gateway's front door.
 
+- **`tesseraql.gateway.maxStreamsPerMember`** — how many event-stream forwards the front door
+  holds open to one member, defaulting to four times its request share.
+
 ### Fixed
 
 - **An aborted download no longer costs the runtime an admission permit, permanently.** A
@@ -68,6 +71,21 @@ All notable changes to TesseraQL are documented here. The format follows
   self-termination. Two new guards keep this from recurring silently: a ledger naming the files
   allowed to build server options, and a test pinning the inherited constants this edge's design
   depends on, so a Vert.x release that moves one is red on its own dependency bump.
+
+- **A member's live users no longer consume its whole share of the front door.** Under
+  `tesseraql host` a forwarded response holds its permit until it ends, and an event stream does
+  not end while the page is open — and the relay could not tell one from the other. With the
+  per-subject stream cap at four, roughly three signed-in users saturated a member's forwarding
+  share, and every ordinary request to that member was answered 503 while the member itself was
+  idle. Streams now have a share of their own, refused beyond it with `TQL-RATE-4296`.
+
+  A stream is recognised by the path the member mounts it at. `Accept: text/event-stream` was
+  considered and rejected: a member serves MCP over the same endpoint shape and this
+  repository's own MCP client sends that header on synchronous calls that are not streams, so
+  the whole MCP surface would have been billed to the stream share — and a header is the
+  caller's to set, which would let a client choose which budget its slow requests spend. The
+  outbound client is sized to the sum of both shares, so an admitted stream never queues in the
+  transport behind the requests it was separated from.
 
 - **An open live page no longer stands in the budget every other route is refused from.** An
   event stream holds its connection for up to fifteen minutes, and the admission gate charged it
