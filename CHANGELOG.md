@@ -6,7 +6,23 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ## Unreleased
 
+### Added
+
+- **`tesseraql.http.maxEventStreams`** — how many event streams the runtime holds open at once,
+  defaulting to the same number as `tesseraql.http.maxInFlight`.
+
 ### Fixed
+
+- **An open live page no longer stands in the budget every other route is refused from.** An
+  event stream holds its connection for up to fifteen minutes, and the admission gate charged it
+  to `tesseraql.http.maxInFlight` like a request that answers in milliseconds. Roughly forty open
+  tabs therefore made the runtime answer 503 to sign-in and to every business route while the
+  worker pool and the database sat idle. Streams are now admitted from their own budget, refused
+  beyond it with `TQL-RATE-4295` and a longer `Retry-After` — a separate code, because a monitor
+  that cannot tell a refused route from a refused stream cannot tell which number to raise. They
+  are bounded rather than exempted: every connection attempt spawns a virtual thread and reads
+  the session store before the live registry can refuse it, and the Studio copilot's stream has
+  no registry cap at all.
 
 - **A dot segment no longer walks past the in-flight bound.** The HTTP admission gate exempts the
   health and asset mounts, and it tested the request target as transmitted while vertx-web routes

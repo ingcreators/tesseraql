@@ -37,6 +37,9 @@ public final class SseRoutes {
 
     private static final Logger LOG = LoggerFactory.getLogger(SseRoutes.class);
 
+    /** The registry holding every mount this class has registered. */
+    static final String MOUNTS = "tesseraqlSseMounts";
+
     private SseRoutes() {
     }
 
@@ -77,8 +80,34 @@ public final class SseRoutes {
         io.vertx.ext.web.Router router = HttpEdgeBeans.router(runtimeContext);
         String mounted = io.tesseraql.pipeline.BasePath
                 .of(runtimeContext.beans()) + path;
+        mounts(runtimeContext).add(mounted);
         router.route(HttpMethod.GET, mounted)
                 .handler(ctx -> serve(runtimeContext, ctx, mounted, handler));
+    }
+
+    /**
+     * The set of mounted SSE paths, created on demand and shared with the admission gate
+     * (docs/http-edge-robustness.md decision 2).
+     *
+     * <p>A stream holds its connection for as long as fifteen minutes, so it cannot be admitted
+     * from the same budget as a request that answers in milliseconds — and the gate can only
+     * charge it separately if it knows which paths are streams. Published from the one method
+     * that registers them rather than listed anywhere: both endpoints funnel through
+     * {@code register}, so a third one cannot appear without joining this set.
+     *
+     * <p>Copy-on-write and read per request, not copied at install time. The gate installs
+     * before the SSE endpoints run, so the set is empty when it is looked up and filled
+     * afterwards; a snapshot taken at install would bill every stream to the request budget.
+     */
+    @SuppressWarnings("unchecked")
+    static java.util.Set<String> mounts(RuntimeContext runtimeContext) {
+        java.util.Set<String> existing = runtimeContext.lookup(MOUNTS, java.util.Set.class);
+        if (existing != null) {
+            return existing;
+        }
+        java.util.Set<String> created = new java.util.concurrent.CopyOnWriteArraySet<>();
+        runtimeContext.bind(MOUNTS, created);
+        return created;
     }
 
     private static void serve(RuntimeContext runtimeContext,

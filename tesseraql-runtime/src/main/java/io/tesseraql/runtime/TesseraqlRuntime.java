@@ -341,6 +341,31 @@ public final class TesseraqlRuntime implements AutoCloseable {
     }
 
     /**
+     * How many event streams may stand open at once: {@code tesseraql.http.maxEventStreams},
+     * defaulting to the same number as {@code maxInFlight} (docs/http-edge-robustness.md
+     * decision 2).
+     *
+     * <p>A stream is admitted from its own budget because it holds a connection for as long as
+     * fifteen minutes; charging it to {@code maxInFlight} meant a handful of open live pages
+     * standing permanently in the number every ordinary route is refused from.
+     *
+     * <p>Defaulting to {@code maxInFlight}'s number rather than deriving from
+     * {@code tesseraql.live.maxTotal} is deliberate. That registry is built only when an inbox
+     * channel is configured or a route declares {@code emit:}, so in a portal or copilot-only
+     * runtime the key governs nothing present; its value is parsed with a bare
+     * {@code Integer.parseInt}, so reading it here would turn a today-inert typo into a boot
+     * failure carrying {@code NumberFormatException}; and an outer gate equal to that inner cap
+     * would refuse first, making the registry's own refusal less reachable rather than more.
+     * Matching {@code maxInFlight} keeps today's effective stream ceiling exactly where it is,
+     * so this change moves only whose permits a stream spends.
+     */
+    private static int maxEventStreams(AppConfig config) {
+        return threadCount("tesseraql.http.maxEventStreams",
+                config.getString("tesseraql.http.maxEventStreams"))
+                .orElseGet(() -> maxInFlight(config));
+    }
+
+    /**
      * The request-body ceiling: {@code tesseraql.http.maxBodyBytes}, default 10 MB, {@code -1}
      * the visible opt-out, units accepted ({@code 25MB}) like every other byte-size key. It
      * covers buffered bodies and streamed uploads alike, so a deployment taking large file
@@ -1903,7 +1928,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
             // The runtime-wide in-flight bound (docs/http-threading.md decision 3). Installed here
             // because the platform router does not exist until the HTTP server service has
             // started, and ordered ahead of every route registered before it.
-            HttpAdmission.install(context, maxInFlight(manifest.config()));
+            HttpAdmission.install(context, maxInFlight(manifest.config()),
+                    maxEventStreams(manifest.config()));
             // The over-limit refusal must not leave a mid-upload client wedged
             // (docs/http-edge.md; the body limit trips while the client is still writing).
             HttpBodyLimit.install(context, maxBodyBytes(manifest.config()));

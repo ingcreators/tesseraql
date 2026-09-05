@@ -101,7 +101,13 @@ Hikari's release notes, and that raising one without the other is visible as a d
 **Background work shares these pools.** Jobs, file transfers and SSE streams borrow from the
 same datasources outside the worker pool, so a runaway job competes with the web path. That
 is deliberate — it makes the contention observable as latency rather than hiding it in a
-second pool — and bounding it is decision 3's job, not a second set of numbers.
+second pool — and bounding it is decision 3's job.
+
+That last clause once read "not a second set of numbers", and event streams are the exception
+it did not survive. A stream is not background work borrowing a connection for a moment: it
+reads the session store at connect and again on every heartbeat, for up to fifteen minutes, and
+it holds an admission permit throughout. Decision 3 therefore bounds how many may stand open,
+under a number of its own.
 
 ### 3. The HTTP edge admits or refuses, and never queues without a bound
 
@@ -113,6 +119,7 @@ place in an invisible queue.
 | Key | Default |
 | --- | --- |
 | `tesseraql.http.maxInFlight` | `workerThreads × 4` |
+| `tesseraql.http.maxEventStreams` | same as `maxInFlight` |
 
 Four times the worker count leaves room for the ordinary burst that a queue exists to absorb,
 while keeping the queue a number an operator can see and reason about instead of "however
@@ -120,6 +127,21 @@ much heap it takes".
 
 **Health and readiness are exempt.** They are checked before the permit, so the gate itself
 never refuses the one surface whose whole purpose is to be answerable when nothing else is.
+
+**An event stream is bounded separately, not exempted.** A stream occupies no worker but does
+occupy a connection for as long as fifteen minutes, so counting it as a request meant a handful
+of open live pages stood permanently in the number every other route is refused from. It is not
+exempted the way an asset is: every connection attempt spawns a virtual thread and reads the
+session store before the live registry can refuse it, and the Studio copilot's stream has no
+registry cap at all. Beyond `maxEventStreams` the answer is 503 with `TQL-RATE-4295`. The
+default matches `maxInFlight`, which leaves today's effective stream ceiling exactly where it
+was and changes only whose permits a stream spends.
+
+**The gate keys on the path the router matched**, not on the target as transmitted. vertx-web
+matches on the normalized path, so testing the raw one let `/_tesseraql/health/../../api/orders`
+satisfy the health carve-out and then reach a business route with no permit at all. It is also
+what makes the stream budget honest: a budget selected by raw string would let a caller pick
+which budget to land in by spelling a mount differently.
 
 **Exempt from admission was not exempt from the worker pool, and now it is.** Recorded in two
 parts because it took two. The first draft of this decision claimed more than the gate delivered:
