@@ -296,4 +296,7 @@ export const EXCLUDED = [
   // The declared lock: the edit-conflict contract for update command routes,
   // designed 2026-09-02.
   'edit-conflict.md',
+  // The HTTP edge: what it admits, what it bounds and what it answers, designed 2026-09-05
+  // after a refutation review measured every claim against the shipped Vert.x jars.
+  'http-edge-robustness.md',
 ];
