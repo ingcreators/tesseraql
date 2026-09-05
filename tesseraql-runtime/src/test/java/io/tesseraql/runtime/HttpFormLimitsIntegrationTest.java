@@ -224,28 +224,42 @@ class HttpFormLimitsIntegrationTest {
             out.flush();
             // Written in transport-sized deliveries and flushed between them, because whether
             // the decoder or the body handler sees the crossing first is the property here.
+            //
+            // A write that fails is an EXPECTED end of an over-limit upload, not a failure of
+            // the case: the server answers 413 and stops reading while the client is still
+            // sending, so the client's next write meets a closed pipe. Whether that happens
+            // before the last byte leaves depends on the machine, which is why treating it as
+            // an outcome made this a flake — it passed locally and failed on CI. The answer is
+            // already on the wire either way, so the write stops and the read happens anyway.
             int chunk = 8192;
             for (int i = 0; i < payload.length; i += chunk) {
                 int size = Math.min(chunk, payload.length - i);
-                if (chunked) {
-                    out.write((Integer.toHexString(size) + "\r\n")
-                            .getBytes(StandardCharsets.US_ASCII));
-                    out.write(payload, i, size);
-                    out.write("\r\n".getBytes(StandardCharsets.US_ASCII));
-                } else {
-                    out.write(payload, i, size);
+                try {
+                    if (chunked) {
+                        out.write((Integer.toHexString(size) + "\r\n")
+                                .getBytes(StandardCharsets.US_ASCII));
+                        out.write(payload, i, size);
+                        out.write("\r\n".getBytes(StandardCharsets.US_ASCII));
+                    } else {
+                        out.write(payload, i, size);
+                    }
+                    out.flush();
+                } catch (java.net.SocketException refusedMidWrite) {
+                    return read(socket);
                 }
-                out.flush();
             }
             if (chunked) {
-                out.write("0\r\n\r\n".getBytes(StandardCharsets.US_ASCII));
-                out.flush();
+                try {
+                    out.write("0\r\n\r\n".getBytes(StandardCharsets.US_ASCII));
+                    out.flush();
+                } catch (java.net.SocketException refusedMidWrite) {
+                    return read(socket);
+                }
             }
             return read(socket);
-        } catch (java.net.SocketException refusedMidWrite) {
-            // A server that closes the connection while we are still writing is a refusal too,
-            // and the status line it already sent is what matters.
-            return "SOCKET " + refusedMidWrite.getMessage();
+        } catch (java.net.SocketException beforeAnyAnswer) {
+            // Only a failure with nothing readable behind it reaches here.
+            return "SOCKET " + beforeAnyAnswer.getMessage();
         }
     }
 
