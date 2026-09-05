@@ -1985,6 +1985,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
             // The over-limit refusal must not leave a mid-upload client wedged
             // (docs/http-edge.md; the body limit trips while the client is still writing).
             HttpBodyLimit.install(context, maxBodyBytes(manifest.config()));
+            HttpBadRequest.install(context, maxFormFields(manifest.config()));
             sseEndpoints.forEach(Runnable::run);
             LOG.info("TesseraQL runtime started on port {} for app {}", boundPort, appHome);
             return new TesseraqlRuntime(context, dataSources, boundPort, jobRepository, jobExecutor,

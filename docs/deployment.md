@@ -150,6 +150,12 @@ has a number of its own, set where a form body stops being a page and starts bei
 route's own `pagination.cap` remains the refusal an honest page meets, answered 422 with
 `TQL-FIELD-4222`; a deployment where this bound fires first is misconfigured.
 
+**A form the decoder refuses says which bound it crossed**, as `TQL-FIELD-2012` at 400 — and as a
+renderable fragment when the caller is htmx. That is the boundary worth knowing: below the
+transport count a caller meets the route's own 422, above it the transport's 400. Requests the
+transport refuses for reasons of its own, such as a missing `Host` header, keep the transport's
+own answer rather than being described as form problems.
+
 ### The front door's share of each member
 
 Under `tesseraql host`, requests reach a member through the gateway, which applies its own bound

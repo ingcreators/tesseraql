@@ -161,7 +161,27 @@ class HttpFormLimitsIntegrationTest {
     void aBodyTheDecoderCanNeverParseIsStillRefused() throws Exception {
         String answer = post("x".repeat(5_000).getBytes(StandardCharsets.US_ASCII), true);
 
-        assertThat(answer).startsWith("HTTP/1.1 4");
+        assertThat(answer).startsWith("HTTP/1.1 400");
+        // And the refusal is typed, end to end through the runtime. Before the router gained a
+        // 400 handler this was a body of literally "Bad Request" with a stack trace in the log.
+        assertThat(answer).contains("TQL-FIELD-2012");
+    }
+
+    /**
+     * The same refusal reaches an htmx caller as a fragment it can show.
+     *
+     * <p>The bootstrap declines to swap a 4xx whose body carries no allowance marker, so without
+     * this the page renders nothing at all — the asymmetry the 413 already avoided.
+     */
+    @Test
+    void anHtmxCallerGetsTheRefusalAsAFragment() throws Exception {
+        String answer = post("x".repeat(5_000).getBytes(StandardCharsets.US_ASCII), true,
+                "HX-Request: true\r\n");
+
+        assertThat(answer).startsWith("HTTP/1.1 400");
+        assertThat(answer).contains("text/html");
+        assertThat(answer).contains("data-hc-field-errors");
+        assertThat(answer).contains("TQL-FIELD-2012");
     }
 
     /** What the command route recorded: proof the whole field arrived, not just that it was let in. */
@@ -184,12 +204,18 @@ class HttpFormLimitsIntegrationTest {
     }
 
     private static String post(byte[] payload, boolean chunked) throws Exception {
+        return post(payload, chunked, "");
+    }
+
+    private static String post(byte[] payload, boolean chunked, String extraHeaders)
+            throws Exception {
         try (Socket socket = new Socket("localhost", runtime.port())) {
             socket.setSoTimeout(60_000);
             OutputStream out = socket.getOutputStream();
             StringBuilder head = new StringBuilder("POST /api/echo HTTP/1.1\r\n"
                     + "Host: localhost\r\n"
-                    + "Content-Type: application/x-www-form-urlencoded\r\n");
+                    + "Content-Type: application/x-www-form-urlencoded\r\n"
+                    + extraHeaders);
             head.append(chunked
                     ? "Transfer-Encoding: chunked\r\n"
                     : "Content-Length: " + payload.length + "\r\n");
