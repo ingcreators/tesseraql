@@ -1,6 +1,7 @@
 package io.tesseraql.scim;
 
 import io.tesseraql.core.dialect.SqlErrors;
+import io.tesseraql.core.sql.SqlRenderer;
 import io.tesseraql.core.sql.SqlStatement;
 import java.sql.Connection;
 import java.sql.SQLException;
@@ -278,12 +279,14 @@ public final class ScimGroupService {
      */
     private Map<String, Object> queryOne(String name, String sql, Map<String, Object> params)
             throws SQLException {
-        return statements.queryOne("scim.groups." + name, sql, params);
+        return statements.read("scim.groups." + name, SqlRenderer.render(sql, params),
+                statements.firstRow());
     }
 
     private List<Map<String, Object>> queryAll(String name, String sql, Map<String, Object> params)
             throws SQLException {
-        return statements.query("scim.groups." + name, sql, params);
+        return statements.read("scim.groups." + name, SqlRenderer.render(sql, params),
+                statements.rows());
     }
 
     private static String string(Object value) {

@@ -1,6 +1,7 @@
 package io.tesseraql.scim;
 
 import io.tesseraql.core.dialect.SqlErrors;
+import io.tesseraql.core.sql.SqlRenderer;
 import io.tesseraql.core.sql.SqlStatement;
 import java.sql.SQLException;
 import java.util.List;
@@ -192,12 +193,14 @@ public final class ScimUserService {
      */
     private Map<String, Object> queryOne(String name, String sql, Map<String, Object> params)
             throws SQLException {
-        return statements.queryOne("scim.users." + name, sql, params);
+        return statements.read("scim.users." + name, SqlRenderer.render(sql, params),
+                statements.firstRow());
     }
 
     private List<Map<String, Object>> queryAll(String name, String sql, Map<String, Object> params)
             throws SQLException {
-        return statements.query("scim.users." + name, sql, params);
+        return statements.read("scim.users." + name, SqlRenderer.render(sql, params),
+                statements.rows());
     }
 
     private static String string(Object value) {
