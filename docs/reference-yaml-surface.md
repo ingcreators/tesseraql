@@ -166,6 +166,8 @@ The contract arm: a statement the identity schema owns, called by name. It reads
 | `mode` | string | How the contract runs and what it binds, exactly as it means on the `sql` arm. |
 | `params` | map of string | Each bind name to the bindable path supplying its value, such as `path.id`, `params.unit` or `principal.claim.tenant_id`. |
 | `expect` | [object](#stepscontractexpect) | The row count this statement must affect, and what happens when it does not — the declarative optimistic-locking check on an update or delete. |
+| `materialize` | [object](#stepscontractmaterialize) | Bounds on how much of the result is held in memory. Declared here so a contract that legitimately returns more than the app-wide budget says so on the binding, rather than an application raising the budget for every route, command and export at once. |
+| `timeoutSeconds` | integer ≥ 0 | Per-binding SQL statement timeout override; 0 disables. Default: tesseraql.sql.timeoutSeconds, else 30s. |
 
 ##### steps.contract.expect
 
@@ -175,6 +177,15 @@ The row count this statement must affect, and what happens when it does not — 
 | --- | --- | --- |
 | `rowCount` | integer | The exact number of rows the statement must affect (rows is a list of records everywhere else). |
 | `onMismatch` | string | `conflict` (the default) answers 409, so a stale edit is refused honestly; `error` answers 500. |
+
+##### steps.contract.materialize
+
+Bounds on how much of the result is held in memory. Declared here so a contract that legitimately returns more than the app-wide budget says so on the binding, rather than an application raising the budget for every route, command and export at once.
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `maxRows` | integer | Largest number of rows materialized. Default: `tesseraql.resultMaterialization.maxRows`. |
+| `onOverflow` | string | `fail` (the default) refuses a result past `maxRows`; `warn` truncates it and logs. |
 
 #### steps.service
 
@@ -573,6 +584,8 @@ The contract arm: a statement the identity schema owns, called by name. It reads
 | `mode` | string | How the contract runs and what it binds, exactly as it means on the `sql` arm. |
 | `params` | map of string | Each bind name to the bindable path supplying its value, such as `path.id`, `params.unit` or `principal.claim.tenant_id`. |
 | `expect` | [object](#pipelinecontractexpect) | The row count this statement must affect, and what happens when it does not — the declarative optimistic-locking check on an update or delete. |
+| `materialize` | [object](#pipelinecontractmaterialize) | Bounds on how much of the result is held in memory. Declared here so a contract that legitimately returns more than the app-wide budget says so on the binding, rather than an application raising the budget for every route, command and export at once. |
+| `timeoutSeconds` | integer ≥ 0 | Per-binding SQL statement timeout override; 0 disables. Default: tesseraql.sql.timeoutSeconds, else 30s. |
 
 ##### pipeline.contract.expect
 
@@ -582,6 +595,15 @@ The row count this statement must affect, and what happens when it does not — 
 | --- | --- | --- |
 | `rowCount` | integer | The exact number of rows the statement must affect (rows is a list of records everywhere else). |
 | `onMismatch` | string | `conflict` (the default) answers 409, so a stale edit is refused honestly; `error` answers 500. |
+
+##### pipeline.contract.materialize
+
+Bounds on how much of the result is held in memory. Declared here so a contract that legitimately returns more than the app-wide budget says so on the binding, rather than an application raising the budget for every route, command and export at once.
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `maxRows` | integer | Largest number of rows materialized. Default: `tesseraql.resultMaterialization.maxRows`. |
+| `onOverflow` | string | `fail` (the default) refuses a result past `maxRows`; `warn` truncates it and logs. |
 
 #### pipeline.service
 
@@ -1031,6 +1053,8 @@ The contract arm: a statement the identity schema owns, called by name. It reads
 | `mode` | string | How the contract runs and what it binds, exactly as it means on the `sql` arm. |
 | `params` | map of string | Each bind name to the bindable path supplying its value, such as `path.id`, `params.unit` or `principal.claim.tenant_id`. |
 | `expect` | [object](#bindingcontractexpect) | The row count this statement must affect, and what happens when it does not — the declarative optimistic-locking check on an update or delete. |
+| `materialize` | [object](#bindingcontractmaterialize) | Bounds on how much of the result is held in memory. Declared here so a contract that legitimately returns more than the app-wide budget says so on the binding, rather than an application raising the budget for every route, command and export at once. |
+| `timeoutSeconds` | integer ≥ 0 | Per-binding SQL statement timeout override; 0 disables. Default: tesseraql.sql.timeoutSeconds, else 30s. |
 
 ##### binding.contract.expect
 
@@ -1040,6 +1064,15 @@ The row count this statement must affect, and what happens when it does not — 
 | --- | --- | --- |
 | `rowCount` | integer | The exact number of rows the statement must affect (rows is a list of records everywhere else). |
 | `onMismatch` | string | `conflict` (the default) answers 409, so a stale edit is refused honestly; `error` answers 500. |
+
+##### binding.contract.materialize
+
+Bounds on how much of the result is held in memory. Declared here so a contract that legitimately returns more than the app-wide budget says so on the binding, rather than an application raising the budget for every route, command and export at once.
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `maxRows` | integer | Largest number of rows materialized. Default: `tesseraql.resultMaterialization.maxRows`. |
+| `onOverflow` | string | `fail` (the default) refuses a result past `maxRows`; `warn` truncates it and logs. |
 
 #### binding.service
 
