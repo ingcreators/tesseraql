@@ -436,9 +436,18 @@ public final class SqlStatement {
      * The caller's answer to the first row past a capped read's cap
      * ({@link #cappedRows(String, int, RowOverflow)}): return to truncate the read — the caller
      * has already said so, e.g. with a warn log — or throw its refusal.
+     *
+     * <p>The refusal is unchecked, and this method declares no {@code throws} so that it cannot
+     * be anything else. A refusal thrown as a {@link SQLException} is classified into a
+     * {@link SqlStatementException} — itself a {@code SQLException} — and is then
+     * indistinguishable, in a caller's {@code catch (SQLException)}, from the database refusing
+     * the statement. One caller reads that catch as "this feature is not installed" and degrades
+     * to an empty answer, so a read too large to materialize would widen a permission set
+     * instead of refusing it. {@link #read(Connection, String, BoundSql, SpannedReader)} rethrows
+     * a {@code RuntimeException} unchanged, which is the arm a refusal travels on.
      */
     public interface RowOverflow {
-        void onRowPastCap() throws SQLException;
+        void onRowPastCap();
     }
 
     /**

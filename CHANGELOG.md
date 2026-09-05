@@ -164,6 +164,18 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **A row-cap refusal can no longer be declared a checked exception.**
+  `SqlStatement.RowOverflow.onRowPastCap()` declared `throws SQLException`, so an implementation
+  written to the signature would refuse an over-large read by throwing one. `SqlStatementException`
+  extends `SQLException`, so that refusal arrived in a caller's `catch (SQLException)` wearing the
+  same clothes as the database refusing the statement — and the identity service answers that catch
+  by treating the contract as not installed, degrading to an empty answer. A separation-of-duties
+  constraint set that was too large to materialize would then have been read as no constraints at
+  all, and a conditioned grant as an unnarrowed one: a read too large to show would have widened a
+  permission set instead of refusing it. The method now declares no `throws`, so the unsafe shape is
+  not merely discouraged, it is unwritable. Every implementation in the tree already threw
+  unchecked.
+
 - **The IAM admin user directory is paged.** It reads through an identity contract rather than
   through `sql:`, and the framework applies pagination in the SQL step — one layer a contract
   source never passed through. So the directory rendered its entire table, and its bulk form
