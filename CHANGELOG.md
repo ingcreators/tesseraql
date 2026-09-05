@@ -14,7 +14,26 @@ All notable changes to TesseraQL are documented here. The format follows
 - **`tesseraql.http.maxFormFields`** — how many fields one form body may carry, defaulting to
   10,000, with `-1` the visible opt-out.
 
+- **`tesseraql.http.idleTimeoutSeconds`** — how long a connection may carry no traffic in either
+  direction before the transport closes it, defaulting to 300, with `-1` the visible opt-out. The
+  same number bounds the gateway's front door.
+
 ### Fixed
+
+- **An aborted download no longer costs the runtime an admission permit, permanently.** A
+  streamed response is written a chunk at a time and the route waits for each, and the admission
+  permit was released only from the routing context's end handler. That handler does not fire
+  when a streamed response's connection is *closed* rather than ended — measured against this
+  runtime's own write shape — so every client that walked away mid-download took one permit with
+  it and never gave it back. Enough of them closed the runtime to everyone, and nothing in the
+  logs said why. The permit is now released by whichever signal arrives first, exactly once.
+
+  Beside it, a peer that reads a response head and then stops reading is now cut:
+  `tesseraql.http.idleTimeoutSeconds` bounds a connection carrying no traffic, at both a
+  runtime's own port and the gateway's front door. The bound is at the transport on purpose. A
+  per-chunk deadline was measured first and rejected: it frees the thread while leaving the
+  permit and the socket held, because the connection's own close queues behind the stalled write
+  and never completes. Both halves are required — reverting either one leaves the permit held.
 
 - **A form the decoder refuses now says which bound it crossed.** The router owned exactly one
   status — the body limit's 413 — and every other router-level 400 fell to the transport's

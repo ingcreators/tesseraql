@@ -77,7 +77,27 @@ final class StackRelay {
      * {@link #outboundOptions(boolean)}.
      */
     static HttpServerOptions frontOptions(int port, boolean http2) {
-        return new HttpServerOptions().setPort(port).setHttp2ClearTextEnabled(http2);
+        return frontOptions(port, http2, -1);
+    }
+
+    /**
+     * The same, with the connection idle bound the runtime declares for its own port
+     * (docs/http-edge-robustness.md decision 8).
+     *
+     * <p>Under the shipped image the socket a client connects to is this one, not a member's, so
+     * a stalled peer reclaimed at a member's server would still hold a connection here. The
+     * number is the same key read from the stack's own settings: one bound, both doors.
+     *
+     * @param idleTimeoutSeconds seconds of silence before the transport closes the connection;
+     *                           zero or less leaves the transport's own default, which is none
+     */
+    static HttpServerOptions frontOptions(int port, boolean http2, int idleTimeoutSeconds) {
+        HttpServerOptions options = new HttpServerOptions()
+                .setPort(port).setHttp2ClearTextEnabled(http2);
+        if (idleTimeoutSeconds > 0) {
+            options.setIdleTimeout(idleTimeoutSeconds);
+        }
+        return options;
     }
 
     /**

@@ -119,9 +119,13 @@ final class TesseraqlHttpServer implements RuntimeContext.Service {
      * what it exists to refuse, and it is the decoder's only self-termination.
      */
     static HttpServerOptions serverOptions(HttpEdgeSettings settings) {
-        return new HttpServerOptions()
+        HttpServerOptions options = new HttpServerOptions()
                 .setMaxFormFields(settings.maxFormFields())
                 .setMaxFormAttributeSize(settings.maxFormAttributeSize());
+        if (settings.idleTimeoutSeconds() > 0) {
+            options.setIdleTimeout(settings.idleTimeoutSeconds());
+        }
+        return options;
     }
 
     /**
