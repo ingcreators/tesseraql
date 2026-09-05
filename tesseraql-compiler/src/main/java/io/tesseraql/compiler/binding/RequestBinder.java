@@ -259,7 +259,16 @@ public final class RequestBinder implements Step {
             Map<String, Object> parsed = mapper.readValue(raw, Map.class);
             return parsed == null ? Map.of() : parsed;
         } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
-            throw new TqlException(FIELD_REJECTED, "Request body is not valid JSON");
+            // The sentence travels in details, not in the message: ErrorResponseRenderer replaces
+            // an envelope's message with the localized status phrase, so a message-only throw
+            // answered "Bad Request" and rendered an alert with an empty body. And the wording is
+            // "must be a JSON object" rather than "is not valid JSON", which was false for `[]`,
+            // `123` and `"abc"` — all valid JSON, refused because they are not objects.
+            throw TqlException.builder(FIELD_REJECTED)
+                    .message("The request body must be a JSON object")
+                    .details(java.util.Map.of("message",
+                            "The request body must be a JSON object"))
+                    .build();
         }
     }
 

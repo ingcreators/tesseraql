@@ -530,7 +530,7 @@ Lint reports statically what would otherwise fail at route build time:
 | `TQL-FIELD-2003` | — | invalid validation rule declaration (build/lint time) |
 | `TQL-YAML-1003` | — | lint: `validate:` on a non-command recipe |
 | `TQL-YAML-1027` | — | lint: invalid `items.fields:` element contract |
-| `TQL-FIELD-2002` | 400 | an element's undeclared or non-writable field |
+| `TQL-FIELD-2002` | 400 | a body that is not a JSON object, or an element's undeclared or non-writable field |
 
 ## Next
 

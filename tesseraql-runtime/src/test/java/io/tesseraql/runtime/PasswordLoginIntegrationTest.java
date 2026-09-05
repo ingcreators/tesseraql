@@ -142,6 +142,46 @@ class PasswordLoginIntegrationTest {
         assertThat(login.statusCode()).isEqualTo(401);
     }
 
+    /**
+     * A body the endpoint cannot read is the caller's mistake, not the server's
+     * (docs/http-edge-robustness.md decision 10).
+     *
+     * <p>{@code parseBody} ended in a bare {@code readValue}, and the login pipelines catch
+     * every exception through the error renderer, so a {@code JsonProcessingException} became
+     * {@code TQL-ROUTE-5000} at 500 — a false server error in the envelope, in the audit row and
+     * in the error rate, at eleven endpoints sharing that helper.
+     *
+     * <p>The sentence is asserted in {@code details}, never in the envelope's {@code message}:
+     * the renderer replaces that with the localized status phrase, so a message-only throw
+     * answers "Bad Request" and renders an alert with an empty body.
+     */
+    @Test
+    void aMalformedJsonBodyIsTheCallersFaultNotAServerError() throws Exception {
+        HttpResponse<String> truncated = post("/_tesseraql/login", "{\"loginId\"");
+
+        assertThat(truncated.statusCode()).isEqualTo(400);
+        assertThat(truncated.body()).contains("TQL-FIELD-2002");
+        assertThat(truncated.body()).contains("The request body must be a JSON object");
+    }
+
+    /** Valid JSON that is not an object: the old wording called this "not valid JSON". */
+    @Test
+    void aJsonArrayIsRefusedAsNotAnObject() throws Exception {
+        HttpResponse<String> array = post("/_tesseraql/login", "[]");
+
+        assertThat(array.statusCode()).isEqualTo(400);
+        assertThat(array.body()).contains("TQL-FIELD-2002");
+    }
+
+    /** The literal null parses to a null map, which every caller then dereferenced. */
+    @Test
+    void aNullBodyIsRefusedRatherThanDereferenced() throws Exception {
+        HttpResponse<String> nothing = post("/_tesseraql/login", "null");
+
+        assertThat(nothing.statusCode()).isNotEqualTo(500);
+        assertThat(nothing.body()).doesNotContain("TQL-ROUTE-5000");
+    }
+
     private static HttpResponse<String> post(String path, String json) throws Exception {
         return HttpClient.newHttpClient().send(
                 HttpRequest.newBuilder(URI.create("http://localhost:" + runtime.port() + path))

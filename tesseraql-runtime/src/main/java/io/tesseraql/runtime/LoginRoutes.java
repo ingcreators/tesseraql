@@ -38,6 +38,9 @@ final class LoginRoutes {
 
     private static final String LOGIN_PATH = "/_tesseraql/login";
 
+    private static final io.tesseraql.core.error.TqlErrorCode BAD_REQUEST_BODY = new io.tesseraql.core.error.TqlErrorCode(
+            io.tesseraql.core.error.TqlDomain.FIELD, 2002);
+
     private static final ObjectMapper mapper = io.tesseraql.yaml.JsonMappers.constrained();
     private final PasswordAuthenticator authenticator;
     private final RealmConfig realm;
@@ -433,6 +436,20 @@ final class LoginRoutes {
         if (raw == null || raw.isBlank()) {
             return Map.of();
         }
-        return mapper.readValue(raw, Map.class);
+        try {
+            Map<String, Object> parsed = mapper.readValue(raw, Map.class);
+            // A body of the literal `null` parses to null, and every caller here dereferences
+            // the map — so without this the caller's own mistake arrived as a NullPointerException
+            // and left as an internal server error, exactly like the parse failure below.
+            return parsed == null ? Map.of() : parsed;
+        } catch (com.fasterxml.jackson.core.JsonProcessingException notJson) {
+            // The sentence travels in details, not in the message: ErrorResponseRenderer replaces
+            // an envelope's message with the localized status phrase, so a message-only throw
+            // answers "Bad Request" and renders an alert with an empty body.
+            throw io.tesseraql.core.error.TqlException.builder(BAD_REQUEST_BODY)
+                    .message("The request body must be a JSON object")
+                    .details(Map.of("message", "The request body must be a JSON object"))
+                    .build();
+        }
     }
 }
