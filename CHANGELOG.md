@@ -11,7 +11,31 @@ All notable changes to TesseraQL are documented here. The format follows
 - **`tesseraql.http.maxEventStreams`** — how many event streams the runtime holds open at once,
   defaulting to the same number as `tesseraql.http.maxInFlight`.
 
+- **`tesseraql.http.maxFormFields`** — how many fields one form body may carry, defaulting to
+  10,000, with `-1` the visible opt-out.
+
 ### Fixed
+
+- **A long textarea and a large list page stop being refused by a bound nothing declared.** The
+  runtime built its HTTP server from a bare options object, so all three of Vert.x's
+  form-decoding defaults were in force. A form field over 8 KB — about 2,700 characters of
+  Japanese — was refused with a bare `400` whose body read
+  `java.io.IOException: Size exceed allowed maximum capacity`, while
+  `tesseraql.http.maxBodyBytes`, the bound this framework publishes for exactly those bytes,
+  never got to speak. A form with more than 256 fields met the same wall: any snapshot list past
+  roughly 250 rows posts one hidden membership field per row inside one form, on a surface that
+  ships with a default cap of 500, and the largest decision table Studio can render could not be
+  saved either.
+
+  The per-field ceiling is now derived from `maxBodyBytes` and sits one transport delivery above
+  it. The headroom is load-bearing rather than tidy: the transport offers every chunk to the
+  decoder before the body handler counts it, so two bounds set to the same number are a race the
+  decoder wins — measured, an over-limit chunked body answered `400` with equal bounds and the
+  documented `413` with 64 KB of headroom. `maxFormBufferedBytes` is deliberately left alone; it
+  bounds the undecoded remainder rather than a field, and it is the decoder's only
+  self-termination. Two new guards keep this from recurring silently: a ledger naming the files
+  allowed to build server options, and a test pinning the inherited constants this edge's design
+  depends on, so a Vert.x release that moves one is red on its own dependency bump.
 
 - **An open live page no longer stands in the budget every other route is refused from.** An
   event stream holds its connection for up to fifteen minutes, and the admission gate charged it

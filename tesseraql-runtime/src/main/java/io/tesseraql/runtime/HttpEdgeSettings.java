@@ -11,11 +11,18 @@ import java.nio.file.Path;
  * silently has cost something (docs/camel-removal.md's defect class), so the ones it declares are
  * declared in one place.
  *
- * @param maxBodyBytes      the request-body ceiling, covering buffered bodies and streamed
- *                          uploads alike; {@code -1} is the visible opt-out
- * @param uploadsDirectory  where a multipart part or a form body spools while the request is in
- *                          flight; created at boot, and under the application's own work
- *                          directory rather than wherever the process happened to start
+ * @param maxBodyBytes         the request-body ceiling, covering buffered bodies and streamed
+ *                             uploads alike; {@code -1} is the visible opt-out
+ * @param uploadsDirectory     where a multipart part or a form body spools while the request is
+ *                             in flight; created at boot, and under the application's own work
+ *                             directory rather than wherever the process happened to start
+ * @param maxFormFields        how many fields one form body may carry before the decoder
+ *                             refuses it; an allocation bound on an anonymous body, not a model
+ *                             of any page ({@code -1} disables it)
+ * @param maxFormAttributeSize the largest single form field, sized one transport delivery above
+ *                             {@code maxBodyBytes} so the body limit's 413 always wins the race
+ *                             against the decoder's 400
  */
-record HttpEdgeSettings(long maxBodyBytes, Path uploadsDirectory) {
+record HttpEdgeSettings(long maxBodyBytes, Path uploadsDirectory, int maxFormFields,
+        int maxFormAttributeSize) {
 }

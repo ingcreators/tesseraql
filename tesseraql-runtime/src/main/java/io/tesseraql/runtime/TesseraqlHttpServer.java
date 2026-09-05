@@ -85,12 +85,43 @@ final class TesseraqlHttpServer implements RuntimeContext.Service {
         prepareUploadsDirectory(settings.uploadsDirectory());
         runtimeContext.bind(HttpEdgeBeans.BODY_HANDLER,
                 HttpEdgeBeans.newBodyHandler(settings));
-        server = vertx.createHttpServer(new HttpServerOptions())
+        server = vertx.createHttpServer(serverOptions(settings))
                 .requestHandler(router);
         server.listen(port, host).toCompletionStage().toCompletableFuture()
                 .get(BIND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
         boundPort = server.actualPort();
         LOG.info("HTTP server listening on {}:{}", host, boundPort);
+    }
+
+    /**
+     * The server options this runtime declares, rather than the ones it would inherit
+     * (docs/http-edge-robustness.md decisions 4 and 5).
+     *
+     * <p>Two of Vert.x's three form-decoding defaults move. {@code maxFormAttributeSize} was
+     * 8192 bytes, so a textarea of about 2,700 characters of Japanese was refused with a bare
+     * {@code 400} whose body read {@code java.io.IOException: Size exceed allowed maximum
+     * capacity}, while {@code tesseraql.http.maxBodyBytes} — the bound this framework publishes
+     * for exactly those bytes — never got to speak. {@code maxFormFields} was 256.
+     *
+     * <p>The attribute ceiling sits one transport delivery <em>above</em> the body limit rather
+     * than at it. Two bounds on the same bytes are a race the decoder wins: measured against
+     * this jar, with both set to a 1 MB body limit an over-limit chunked body answered 400,
+     * and with 64 KB of headroom the same body answered 413. An HTTP/1.1 chunk is capped at
+     * 8192 bytes and an h2 frame at 16 KB, so the headroom guarantees the body handler's
+     * counter is crossed on a strictly earlier chunk and the documented 413 wins by
+     * construction.
+     *
+     * <p>{@code maxFormBufferedBytes} is deliberately left at Vert.x's 1024. It bounds the
+     * <em>undecoded remainder</em>, not a field: measured, a 5,000,000-byte value posted in 610
+     * flushed 8 KB chunks decodes to 200 with the correct length while that bound stays at its
+     * default, because the decoder drains the remainder into the attribute on every parse. It
+     * grows only for input nothing can parse at all — a field name with no {@code =} — which is
+     * what it exists to refuse, and it is the decoder's only self-termination.
+     */
+    static HttpServerOptions serverOptions(HttpEdgeSettings settings) {
+        return new HttpServerOptions()
+                .setMaxFormFields(settings.maxFormFields())
+                .setMaxFormAttributeSize(settings.maxFormAttributeSize());
     }
 
     /**
