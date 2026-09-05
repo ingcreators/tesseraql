@@ -106,6 +106,89 @@ class IamAdminIntegrationTest {
         assertThat(response.body()).contains("/_tesseraql/admin/users/u1");
     }
 
+    /**
+     * The directory is paged, not rendered whole.
+     *
+     * <p>It reads through an identity contract rather than through {@code sql:}, and the
+     * framework applies pagination in the SQL step — one layer a contract source never passed
+     * through. So every admin directory rendered its entire table, and this one's bulk form
+     * posted one checkbox per row of {@code tql_users}: it broke at the transport's form-field
+     * count long before anyone thought about the page.
+     *
+     * <p>Seeded past one page so the grid must actually cut, with the size declared small enough
+     * that the fixture stays cheap.
+     */
+    @Test
+    void theUserDirectoryIsPagedRatherThanRenderedWhole() throws Exception {
+        seedManyUsers(60);
+        try {
+            String first = get("/_tesseraql/admin/users?size=5", true).body();
+
+            // Five rows, not sixty: one checkbox per rendered row, and no more.
+            assertThat(countOccurrences(first, "name=\"ids\"")).isEqualTo(5);
+            assertThat(first).contains("hc-pagination").contains("Next");
+
+            String second = get("/_tesseraql/admin/users?size=5&page=2", true).body();
+
+            assertThat(countOccurrences(second, "name=\"ids\"")).isEqualTo(5);
+            assertThat(second).contains("Page 2").contains("Prev");
+            // A second page is a different page: the two do not overlap.
+            assertThat(firstLoginOn(second)).isNotEqualTo(firstLoginOn(first));
+        } finally {
+            removeManyUsers();
+        }
+    }
+
+    /** The filter still narrows, and a narrowed result that fits one page shows no pager. */
+    @Test
+    void pagingComposesWithTheFilter() throws Exception {
+        seedManyUsers(60);
+        try {
+            String filtered = get("/_tesseraql/admin/users?q=bulk-000&size=5", true).body();
+
+            assertThat(countOccurrences(filtered, "name=\"ids\"")).isEqualTo(1);
+            assertThat(filtered).doesNotContain("hc-pagination");
+        } finally {
+            removeManyUsers();
+        }
+    }
+
+    private static String firstLoginOn(String html) {
+        java.util.regex.Matcher row = java.util.regex.Pattern
+                .compile(">(bulk-\\d+)<").matcher(html);
+        return row.find() ? row.group(1) : "";
+    }
+
+    private static int countOccurrences(String haystack, String needle) {
+        int count = 0;
+        for (int at = haystack.indexOf(needle); at >= 0; at = haystack.indexOf(needle,
+                at + needle.length())) {
+            count++;
+        }
+        return count;
+    }
+
+    private static void seedManyUsers(int howMany) throws Exception {
+        try (Connection connection = DriverManager.getConnection(
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+                Statement statement = connection.createStatement()) {
+            for (int i = 0; i < howMany; i++) {
+                String id = String.format("bulk-%03d", i);
+                statement.execute("insert into tql_users"
+                        + " (user_id, login_id, display_name, status) values ('" + id + "','"
+                        + id + "','" + id + "','ACTIVE')");
+            }
+        }
+    }
+
+    private static void removeManyUsers() throws Exception {
+        try (Connection connection = DriverManager.getConnection(
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+                Statement statement = connection.createStatement()) {
+            statement.execute("delete from tql_users where user_id like 'bulk-%'");
+        }
+    }
+
     /** Slice 5: the list narrows server-side by login/display-name/email contains. */
     @Test
     void usersListFiltersByLoginNameOrEmail() throws Exception {

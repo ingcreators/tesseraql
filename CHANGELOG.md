@@ -164,6 +164,19 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **The IAM admin user directory is paged.** It reads through an identity contract rather than
+  through `sql:`, and the framework applies pagination in the SQL step — one layer a contract
+  source never passed through. So the directory rendered its entire table, and its bulk form
+  posted one checkbox per row of `tql_users`: it broke at the transport's form-field count long
+  before anyone thought about the page. Declarative pagination now reaches a contract source the
+  way it reaches a statement, with the dialect's own clause from the same helper the SQL step
+  uses, so it pages on Oracle and SQL Server as it does on PostgreSQL.
+
+  Paged rather than capped: a directory is the one admin surface that grows without bound, so a
+  cap is a ceiling a deployment eventually hits and cannot see past. The cost, stated rather than
+  hidden: **select-all now selects this page**, not the whole directory. The `q:` search already
+  narrows the set and is what a large directory was using in practice.
+
 - **A finished execution keeps the verdict it reached first, in both directions.** The reaper was
   already conditional on the row still being `RUNNING`; the reverse was not, so a run that
   finished after its execution was reaped turned `FAILED` back into `COMPLETED`. `finishExecution`

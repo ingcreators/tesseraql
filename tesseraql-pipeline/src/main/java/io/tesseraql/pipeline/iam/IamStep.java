@@ -50,19 +50,50 @@ public class IamStep implements Step {
                 TesseraqlProperties.SQL_PARAMS, Map.of(), Map.class);
 
         Map<String, Object> result = new LinkedHashMap<>();
+        Map<String, Object> context = exchange.getProperty(TesseraqlProperties.CONTEXT, Map.class);
+        // Declarative pagination reaches a contract the way it reaches a statement. It did not
+        // before: the framework applies it in the SQL step, one layer a contract source never
+        // passes through, so every admin directory rendered its whole table and the user
+        // directory's bulk form posted one checkbox per row of tql_users.
+        io.tesseraql.pipeline.PageRequest page = exchange.getProperty(TesseraqlProperties.PAGE,
+                io.tesseraql.pipeline.PageRequest.class);
+        boolean paged = page != null && !"update".equals(mode) && "main".equals(resultKey);
         if ("update".equals(mode)) {
             result.put("affectedRows", identity.executeUpdate(realm, contractName(), params));
+        } else if (paged) {
+            // One extra row answers hasNext without a second query, exactly as the SQL step does.
+            List<Map<String, Object>> rows = new java.util.ArrayList<>(identity.execute(realm,
+                    contractName(), params, page.size() + 1L, page.offset()));
+            boolean hasNext = rows.size() > page.size();
+            if (hasNext) {
+                rows = new java.util.ArrayList<>(rows.subList(0, page.size()));
+            }
+            result.put("rows", rows);
+            result.put("rowCount", rows.size());
+            if (context != null) {
+                context.put("page", pageInfo(page, hasNext));
+            }
         } else {
             List<Map<String, Object>> rows = identity.execute(realm, contractName(), params);
             result.put("rows", rows);
             result.put("rowCount", rows.size());
         }
 
-        Map<String, Object> context = exchange.getProperty(TesseraqlProperties.CONTEXT, Map.class);
         if (context != null) {
             io.tesseraql.pipeline.ContextResults.put(context, resultKey, result);
         }
         exchange.setBody(result);
+    }
+
+    /** The metadata a pager renders from, in the shape the SQL step already publishes. */
+    private static Map<String, Object> pageInfo(io.tesseraql.pipeline.PageRequest page,
+            boolean hasNext) {
+        Map<String, Object> info = new LinkedHashMap<>();
+        info.put("number", page.number());
+        info.put("size", page.size());
+        info.put("hasNext", hasNext);
+        info.put("hasPrev", page.number() > 1);
+        return info;
     }
 
     /** Strips a leading {@code identity.} qualifier to get the contract file name. */
