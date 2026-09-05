@@ -356,14 +356,21 @@ tesseraql:
   (`tesseraql.object-storage.provider`, e.g. S3 via the opt-in `tesseraql-s3` module,
   bucket named by `tesseraql.temp.bucket`): shared across nodes and right for heavy export
   volumes. With the local `file` provider this is still node-local — the boot warns.
-- **`file`** — the default and the pre-cluster behavior: node-local under
-  `work/tmp/tesseraql`; keep session affinity at the load balancer, or point the directory
-  at a shared filesystem if you already run one.
+- **`file`** — the default and the pre-cluster behavior: node-local under `tmp/tesseraql`
+  inside the work directory; keep session affinity at the load balancer, or point the
+  directory at a shared filesystem if you already run one.
 
-Whichever store is chosen, an in-flight upload spools under `work/tmp/tesseraql/uploads`
-before any of it applies: a request body is on disk before the route runs. The runtime creates
-that directory at boot, so an application home the process cannot write to fails the boot
-rather than every form post.
+Whichever store is chosen, an in-flight upload spools into `tmp/tesseraql/uploads` inside the
+work directory before any of it applies: a request body is on disk before the route runs. Both
+paths resolve through `tesseraql.app.work`, so relocating the work tree moves the temp store and
+the upload spool together.
+
+The runtime creates the upload directory at startup and writes a probe file into it. If either
+fails, the boot fails with `TQL-YAML-1113` naming the directory. That is deliberate: every
+url-encoded and multipart POST spools through it, sign-in included, so a runtime that cannot
+write there can answer no form at all. Under `tesseraql host` this stops the whole stack, not
+one member. The upload subtree stays node-local even where the `file` store points at shared
+storage, because every form post stats it from the event loop.
 
 ## Framework datasource
 

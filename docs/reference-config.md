@@ -20,7 +20,7 @@ Keys are declared in `config/application.yml` and `config/tesseraql.yml`, overri
 | `tesseraql.app.name` | [AppInstaller.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-operations/src/main/java/io/tesseraql/operations/app/AppInstaller.java), [ApplicationName.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/app/ApplicationName.java), [ApplicationNameRules.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/ApplicationNameRules.java), +2 more | [deployment](deployment.md), [hosting](hosting.md) |
 | `tesseraql.app.requires.framework` | [AppInstaller.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-operations/src/main/java/io/tesseraql/operations/app/AppInstaller.java) | — |
 | `tesseraql.app.version` | [AppDirectory.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-operations/src/main/java/io/tesseraql/operations/app/AppDirectory.java), [AppInstaller.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-operations/src/main/java/io/tesseraql/operations/app/AppInstaller.java), [AppMcpServer.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/AppMcpServer.java), +1 more | — |
-| `tesseraql.app.work` | [WorkHome.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/config/WorkHome.java) | — |
+| `tesseraql.app.work` | [WorkHome.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/config/WorkHome.java) | [deployment](deployment.md), [file-transfers](file-transfers.md) |
 
 ## tesseraql.apps
 

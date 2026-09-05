@@ -31,6 +31,10 @@ final class TesseraqlHttpServer implements RuntimeContext.Service {
 
     private static final long BIND_TIMEOUT_SECONDS = 30;
 
+    /** TQL-YAML-1113: the request-body spool directory exists but cannot be written to. */
+    private static final io.tesseraql.core.error.TqlErrorCode UPLOADS_NOT_WRITABLE = new io.tesseraql.core.error.TqlErrorCode(
+            io.tesseraql.core.error.TqlDomain.YAML, 1113);
+
     private final RuntimeContext runtimeContext;
     private final String host;
     private final int port;
@@ -78,10 +82,7 @@ final class TesseraqlHttpServer implements RuntimeContext.Service {
         runtimeContext.bind(io.tesseraql.pipeline.TesseraqlProperties.VERTX_BEAN, vertx);
         Router router = Router.router(vertx);
         runtimeContext.bind(HttpEdgeBeans.ROUTER, router);
-        // Created once, here, rather than by the body handler on the first form post: an
-        // unwritable location then fails the boot with the path in the message, instead of
-        // failing every form post at request time with the router's untyped 500.
-        java.nio.file.Files.createDirectories(settings.uploadsDirectory());
+        prepareUploadsDirectory(settings.uploadsDirectory());
         runtimeContext.bind(HttpEdgeBeans.BODY_HANDLER,
                 HttpEdgeBeans.newBodyHandler(settings));
         server = vertx.createHttpServer(new HttpServerOptions())
@@ -90,6 +91,44 @@ final class TesseraqlHttpServer implements RuntimeContext.Service {
                 .get(BIND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
         boundPort = server.actualPort();
         LOG.info("HTTP server listening on {}:{}", host, boundPort);
+    }
+
+    /**
+     * Creates the request-body spool and proves it can be written to, before the server binds.
+     *
+     * <p>Created once here rather than by the body handler on the first form post, because
+     * vertx-web creates its uploads directory for every url-encoded post and not only for
+     * multipart: an unwritable location failed every form the runtime served, sign-in included,
+     * with the router's untyped 500 and no line naming the directory.
+     *
+     * <p>Present is not the same as writable, which is why the probe exists rather than the
+     * {@code createDirectories} call alone. On an existing directory that the process cannot
+     * write, {@code createDirectories} returns normally on JDK 25 and the failure surfaces only
+     * at request time; and where the leaf is missing under an unwritable parent, the exception
+     * names neither the leaf nor the subsystem. One deployment produces exactly that state — a
+     * work tree left root-owned by a single {@code --user root} run, or a host bind mount over
+     * the volume — and it is the state this guarantee exists for.
+     *
+     * <p>The refusal is a boot failure on purpose. Under {@code tesseraql host} that closes every
+     * member already started and aborts the stack, which is a heavier consequence than a failing
+     * form and is stated in docs/http-edge-robustness.md decision 7: an edge that cannot spool a
+     * request body cannot answer a sign-in, so a runtime serving with it broken is a runtime
+     * pretending.
+     */
+    static void prepareUploadsDirectory(java.nio.file.Path uploads) {
+        java.nio.file.Path probe = uploads.resolve(".tesseraql-write-probe");
+        try {
+            java.nio.file.Files.createDirectories(uploads);
+            java.nio.file.Files.deleteIfExists(probe);
+            java.nio.file.Files.createFile(probe);
+            java.nio.file.Files.delete(probe);
+        } catch (java.io.IOException unwritable) {
+            throw new io.tesseraql.core.error.TqlException(UPLOADS_NOT_WRITABLE,
+                    "The request-body spool directory " + uploads + " is not writable: "
+                            + unwritable + ". Every form post spools through it, so the runtime"
+                            + " would answer none. Set tesseraql.app.work to a writable location"
+                            + " or grant the runtime user write access to this directory.");
+        }
     }
 
     /**

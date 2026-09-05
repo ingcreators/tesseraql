@@ -567,7 +567,14 @@ public final class TesseraqlRuntime implements AutoCloseable {
             // the download), or blob (the configured object store, for heavy volumes).
             String tempStoreKind = manifest.config().getString("tesseraql.temp.store")
                     .orElse("file");
-            java.nio.file.Path tempScratch = appHome.resolve("work/tmp/tesseraql");
+            // Through WorkHome rather than by spelling the conventional layout against the app
+            // home: tesseraql.app.work is "honored everywhere or nowhere" by that class's own
+            // contract, and this line was one of the places it was not. It matters more since
+            // #1149 gave the same tree the request-body upload spool and made creating it a boot
+            // precondition — a relocation key that moves the temp store but not the spool moves
+            // half a subsystem. WorkHomeLedgerTest holds the rest of that class.
+            java.nio.file.Path tempScratch = io.tesseraql.yaml.config.WorkHome
+                    .resolve(appHome, manifest.config()).resolve("tmp/tesseraql");
             io.tesseraql.core.spool.TempStore tempStore = switch (tempStoreKind) {
                 case "file" -> new io.tesseraql.core.spool.FileTempStore(tempScratch);
                 case "db" -> {
