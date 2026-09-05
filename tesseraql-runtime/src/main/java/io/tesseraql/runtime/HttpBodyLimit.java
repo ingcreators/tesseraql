@@ -175,16 +175,13 @@ final class HttpBodyLimit {
      * the import surface's own marker — this handler refuses any over-cap body, not only an
      * upload, and a fragment that named itself a report would be lying to whatever posted.
      *
-     * <p>English and route-free, because a pre-route handler has neither a negotiated locale nor
-     * a route to read one from. What it honestly knows is the bound it enforced and the key that
-     * sets it, so that is what it says.
+     * <p>The markup itself lives in {@link ErrorFragments}, shared with the form decoder's 400:
+     * both are pre-route refusals answering an htmx request, and two copies of a markup contract
+     * is how they drift apart.
      */
     private static String overLimitFragment(long maxBodyBytes) {
-        return "<div class=\"hc-alert\" data-variant=\"error\" role=\"alert\""
-                + " data-hc-field-errors data-error-code=\"" + BODY_TOO_LARGE + "\">"
-                + "<p class=\"hc-alert__title\">That request is too large.</p>"
-                + "<p class=\"hc-alert__body\">The limit is " + maxBodyBytes
-                + " bytes (tesseraql.http.maxBodyBytes).</p></div>";
+        return ErrorFragments.fieldErrors(BODY_TOO_LARGE, "That request is too large.",
+                "The limit is " + maxBodyBytes + " bytes (tesseraql.http.maxBodyBytes).");
     }
 
     /** The request's declared {@code Content-Length}, or {@code -1} when absent or malformed. */

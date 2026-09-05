@@ -16,6 +16,19 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A form the decoder refuses now says which bound it crossed.** The router owned exactly one
+  status — the body limit's 413 — and every other router-level 400 fell to the transport's
+  default: a body of literally `Bad Request`, and `Unhandled exception in router` with a stack
+  trace per attempt. Form-decoder refusals land there, so a caller who posted too many fields, an
+  over-size field, or a body that is not a form got no code, no sentence, and nothing a page
+  could render. They now answer `TQL-FIELD-2012` with the bound named, and an htmx caller gets
+  the field-errors fragment the 413 already answered with. Four decoder failures are named
+  separately, because they mean different things: the buffered bound says no field delimiter was
+  found rather than claiming the body was too large. Requests the transport refuses for reasons
+  of its own — a missing `Host` header, a path it cannot normalize — keep the transport's own
+  answer rather than being described as form problems, and are logged instead, since registering
+  a handler in that slot takes them away from the transport's own error log.
+
 - **A long textarea and a large list page stop being refused by a bound nothing declared.** The
   runtime built its HTTP server from a bare options object, so all three of Vert.x's
   form-decoding defaults were in force. A form field over 8 KB — about 2,700 characters of
