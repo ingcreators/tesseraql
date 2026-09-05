@@ -107,14 +107,15 @@ member's declared timeout, or the platform's SIGKILL cuts the drain short.
 
 Every HTTP request runs on the **worker pool**: route processing is blocking work, and the
 platform HTTP layer hands each exchange to a pool of platform threads. The pool size is
-therefore this runtime's ceiling on concurrent route execution, and it is one of two numbers
+therefore this runtime's ceiling on concurrent route execution, and it is one of the numbers
 that decide how much work the runtime does at once.
 
 | Key | Default | What it sizes |
 | --- | --- | --- |
 | `tesseraql.http.workerThreads` | 10 | Concurrent route executions |
 | `tesseraql.http.eventLoopThreads` | `2 x cores` | Connection I/O; blocking work never runs here |
-| `tesseraql.http.maxInFlight` | `workerThreads x 4` | Requests held at once before refusing |
+| `tesseraql.http.maxInFlight` | `workerThreads x 4` | Requests other than event streams, held at once before refusing |
+| `tesseraql.http.maxEventStreams` | same as `maxInFlight` | Event streams held open at once before refusing |
 | `tesseraql.http.maxBodyBytes` | 10 MB | Largest request body, uploads included; takes units (`25MB`); `-1` removes the bound |
 
 **Beyond `maxInFlight` the runtime answers 503 with `Retry-After`**, immediately, rather than
@@ -122,6 +123,13 @@ adding the request to a queue with no bound. Four times the worker count leaves 
 ordinary burst a queue exists to absorb while keeping the queue a number you can see. A caller
 that gets this refusal should retry; a monitor that sees it should read it as "this runtime is
 at capacity", which is `TQL-RATE-4293`.
+
+**Event streams are counted separately, under `maxEventStreams`.** A stream holds its connection
+for up to fifteen minutes, so counting it as a request meant a handful of open live pages stood
+permanently in the number every other route is refused from. Beyond this bound the answer is 503
+with `TQL-RATE-4295` and a longer `Retry-After`, because what a stream waits for is another
+stream ending. The two codes are different on purpose: a monitor that cannot tell a refused
+route from a refused stream cannot tell which number to raise.
 
 **Beyond `maxBodyBytes` the runtime answers 413 with `TQL-SEC-4150`**, draining what remains of
 the upload so the refusal actually arrives (an unread stream leaves the client stuck writing).

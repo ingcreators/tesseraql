@@ -56,7 +56,9 @@ re-fetch their own view of the data.
   with `TQL-RATE-5030` as a 503 before the stream opens. A full registry never ends someone
   else's live view, and the page still works without live refresh until a reload finds a
   free slot. Signals coalesce per topic, and idle `ping` frames keep intermediaries from
-  severing quiet streams.
+  severing quiet streams. A connection bound sits outside both: the HTTP edge admits event
+  streams under `tesseraql.http.maxEventStreams`, so the registry's own caps are reached only
+  where that number is the larger of the two ([deployment](deployment.md#request-threads)).
 - **The refetch carries the live client state**: the typed search term and the current
   sort ride along, read from the DOM (the search box swaps the region without navigating,
   so the render-time URL can be stale) — and because the search box sits outside the
