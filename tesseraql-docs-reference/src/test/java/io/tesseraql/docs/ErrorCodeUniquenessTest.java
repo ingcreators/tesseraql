@@ -57,8 +57,13 @@ class ErrorCodeUniquenessTest {
             Map.entry("SQL-4002", "a check constraint violation, mapped per execution surface"),
             Map.entry("SQL-4093", "a serialization failure or deadlock; retryable"),
             Map.entry("FIELD-2001", "invalid input against the declared shape - HTTP 400"),
-            Map.entry("FIELD-2002", "the mass-assignment guard refused a request field -"
-                    + " unknown or non-writable - at the top level or inside an array element"),
+            // Two rules, one meaning: a request body the framework will not accept. The
+            // recorded sentence named only the second, and was already stale before the
+            // authentication endpoints became a third raise site - RequestBinder has raised it
+            // for an unreadable body since that catch was added.
+            Map.entry("FIELD-2002", "a request body the framework will not accept - one that is"
+                    + " not a JSON object, or a field the mass-assignment guard refuses as"
+                    + " unknown or non-writable, at the top level or inside an array element"),
             Map.entry("LD-2841", "an upload carried no content"),
             Map.entry("LD-2820", "an import request carried no file body"),
             Map.entry("SEC-4011", "authentication required or failed - HTTP 401"),
