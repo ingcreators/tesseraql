@@ -320,6 +320,21 @@ class SqlStatementTest {
         assertThat(overflowed).containsExactly("asked");
     }
 
+    /**
+     * A row-cap refusal has to reach the caller as itself. {@code SqlStatementException} extends
+     * {@code SQLException}, so a refusal declared checked arrives in a caller's
+     * {@code catch (SQLException)} wearing the same clothes as the database refusing the
+     * statement — and identity's reads answer that catch by degrading to an empty permission set.
+     * The interface therefore declares no {@code throws}: the unsafe shape is not written down
+     * anywhere to be copied, it is unwritable.
+     */
+    @Test
+    void aRowCapRefusalCannotBeDeclaredChecked() throws NoSuchMethodException {
+        Method onRowPastCap = SqlStatement.RowOverflow.class.getMethod("onRowPastCap");
+
+        assertThat(onRowPastCap.getExceptionTypes()).isEmpty();
+    }
+
     @Test
     void cappedRowsPropagatesTheCallersRefusal() {
         FakeDatabase database = new FakeDatabase(List.of("name"), List.of("Anne"));
