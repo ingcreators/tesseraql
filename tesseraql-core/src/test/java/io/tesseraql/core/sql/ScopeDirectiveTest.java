@@ -81,6 +81,41 @@ class ScopeDirectiveTest {
         assertThat(Sql2WayParser.parse("where /*%scope org on 顧客 */ (1=1)")).isNotEmpty();
     }
 
+    /** The only {@link SqlNode.Scope} in {@code sql}, so a case can assert on its parts. */
+    private static SqlNode.Scope onlyScope(String sql) {
+        return (SqlNode.Scope) Sql2WayParser.parse(sql).stream()
+                .filter(SqlNode.Scope.class::isInstance).findFirst().orElseThrow();
+    }
+
+    @Test
+    void aScopeAliasMayFollowANewline() {
+        SqlNode.Scope scope = onlyScope("where /*%scope s\non o */ (1=1)");
+
+        assertThat(scope.name()).isEqualTo("s");
+        assertThat(scope.alias()).isEqualTo("o");
+    }
+
+    @Test
+    void aScopeFlagMayFollowANewline() {
+        // The silent half of the single-space split: an `as boolean` the scanner does not see
+        // leaves asBoolean false, so a SELECT-list masking flag degrades to a WHERE predicate
+        // with no diagnostic (docs/two-way-sql-parser.md decision 7).
+        SqlNode.Scope scope = onlyScope("select /*%scope s\nas boolean */ (1=1) as f from t");
+
+        assertThat(scope.name()).isEqualTo("s");
+        assertThat(scope.asBoolean()).isTrue();
+    }
+
+    @Test
+    void aScopeFlagMayFollowAnAliasAndANewline() {
+        SqlNode.Scope scope = onlyScope(
+                "select /*%scope s on o\nas boolean */ (1=1) as f from t o");
+
+        assertThat(scope.name()).isEqualTo("s");
+        assertThat(scope.alias()).isEqualTo("o");
+        assertThat(scope.asBoolean()).isTrue();
+    }
+
     @Test
     void anEmptyStringInTheScopeDummyDoesNotSwallowThePredicate() {
         // The scope dummy is a parenthesized group like a list bind's, so it shares the scanner

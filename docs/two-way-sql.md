@@ -120,6 +120,15 @@ non-null (a `Boolean` counts as itself), so `q != null && q != ""` is the idioma
 an optional text filter. The `where 1 = 1` anchor keeps the statement valid in both a plain
 tool and every rendered variant.
 
+A directive's keyword ends at the first whitespace, so a long condition may wrap onto the next
+line — `/*%if\n  q != null\n  && q != ""\n*/` is the same directive as the one-line form. The
+sub-keywords read the same way: the `for` directive's `separator`, and the scope directive's
+`on` and `as boolean`.
+
+`else` ends the chain. An `elseif` or a second `else` written after it is `TQL-SQL-2102`,
+because the renderer takes the first branch with no condition and stops — anything after it
+could never run.
+
 Each `if`/`elseif` branch is a coverage branch: test suites report which variants of a
 statement were exercised.
 

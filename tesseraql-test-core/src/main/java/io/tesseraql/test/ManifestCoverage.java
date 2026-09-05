@@ -1,5 +1,6 @@
 package io.tesseraql.test;
 
+import io.tesseraql.core.sql.ScopeArgument;
 import io.tesseraql.coverage.ItemCoverage;
 import io.tesseraql.identity.IdentityContracts;
 import io.tesseraql.test.TestSuite.TestCase;
@@ -250,14 +251,10 @@ public final class ManifestCoverage {
             }
             Matcher matcher = SCOPE_DIRECTIVE.matcher(readQuietly(file));
             while (matcher.find()) {
-                String content = matcher.group(1).trim();
-                // Drop the `as boolean` suffix so a scope-flag directive resolves to its scope name.
-                if (content.endsWith(" as boolean")) {
-                    content = content.substring(0, content.length() - " as boolean".length())
-                            .trim();
-                }
-                int on = content.indexOf(" on ");
-                names.add(on >= 0 ? content.substring(0, on).trim() : content);
+                // ScopeArgument drops the `as boolean` flag and the `on alias` clause, so a
+                // directive written across two lines resolves to the same scope name the parser
+                // and the linter see (docs/two-way-sql-parser.md decision 7).
+                names.add(ScopeArgument.parse(matcher.group(1)).name());
             }
         }
         return names;

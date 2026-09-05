@@ -3,6 +3,7 @@ package io.tesseraql.yaml.lint;
 import static io.tesseraql.yaml.lint.LintFinding.Severity.ERROR;
 import static io.tesseraql.yaml.lint.LintFinding.Severity.WARNING;
 
+import io.tesseraql.core.sql.ScopeArgument;
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.JobFile;
 import io.tesseraql.yaml.manifest.RouteFile;
@@ -207,10 +208,9 @@ final class ScopeRules implements LintRule {
     private static void collectScopedTables(String sql, Set<String> out) {
         Matcher directive = SCOPE_DIRECTIVE.matcher(sql);
         while (directive.find()) {
-            String content = stripAsBoolean(directive.group(1).trim());
-            int on = content.indexOf(" on ");
-            if (on >= 0) {
-                String alias = content.substring(on + " on ".length()).trim();
+            ScopeArgument parsed = ScopeArgument.parse(directive.group(1));
+            String alias = parsed.alias();
+            if (alias != null) {
                 if (SQL_IDENTIFIER.matcher(alias).matches()) {
                     Matcher aliased = Pattern.compile(SCOPED_TABLE_ALIASED.pattern()
                             .replace("ALIAS", Pattern.quote(alias))).matcher(sql);
@@ -336,14 +336,9 @@ final class ScopeRules implements LintRule {
             }
             Matcher matcher = SCOPE_DIRECTIVE.matcher(sql);
             while (matcher.find()) {
-                String content = stripAsBoolean(matcher.group(1).trim());
-                String name = content;
-                String alias = null;
-                int on = content.indexOf(" on ");
-                if (on >= 0) {
-                    name = content.substring(0, on).trim();
-                    alias = content.substring(on + " on ".length()).trim();
-                }
+                ScopeArgument parsed = ScopeArgument.parse(matcher.group(1));
+                String name = parsed.name();
+                String alias = parsed.alias();
                 if (!declared.contains(name)) {
                     findings.add(new LintFinding(UNDECLARED_SCOPE, ERROR, source,
                             "route '" + id + "' references scope '" + name
@@ -380,10 +375,4 @@ final class ScopeRules implements LintRule {
         return files;
     }
 
-    /** Drops the {@code as boolean} suffix so the scope name/alias parse the same as a predicate. */
-    static String stripAsBoolean(String content) {
-        return content.endsWith(" as boolean")
-                ? content.substring(0, content.length() - " as boolean".length()).trim()
-                : content;
-    }
 }
