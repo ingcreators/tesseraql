@@ -86,6 +86,21 @@ All notable changes to TesseraQL are documented here. The format follows
   allowed to build server options, and a test pinning the inherited constants this edge's design
   depends on, so a Vert.x release that moves one is red on its own dependency bump.
 
+- **A browser meeting a busy runtime sees a page, not a JSON document painted as one.** Both
+  capacity refusals — the runtime's admission gate and the gateway's per-member share — answer
+  before any route exists, so the only thing they had to write was the framework's error
+  envelope. A top-level navigation, or a list page's native form post, rendered
+  `{"error":{"code":"TQL-RATE-4293",...}}` as the whole document. A caller whose `Accept` names
+  HTML now gets a small self-contained page carrying the same code; every other caller keeps the
+  envelope byte for byte.
+
+  The page is a fixed string written on the event loop — no template, no route, no worker. The
+  application's own error template is deliberately not consulted, and that is now one stated rule
+  for every pre-route refusal: a handler running ahead of any route holds neither the app home
+  nor a negotiated locale, so rendering an app template there would spend exactly the work the
+  refusal exists to avoid. The htmx swap allowance stays 4xx, also deliberately: widening it to
+  5xx would end an async job card's poll permanently and re-baseline an unsaved form.
+
 - **A member's live users no longer consume its whole share of the front door.** Under
   `tesseraql host` a forwarded response holds its permit until it ends, and an event stream does
   not end while the page is open — and the relay could not tell one from the other. With the

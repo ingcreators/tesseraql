@@ -839,11 +839,19 @@ final class StackRelay {
         if (response.ended()) {
             return;
         }
+        // A browser navigating to a stack whose member is at capacity was handed the JSON
+        // envelope and painted it as the whole document. It gets the same fact as a page; every
+        // other caller keeps the envelope byte for byte.
+        boolean html = ErrorFragments.wantsHtml(request.getHeader("Accept"));
         // The full envelope: this copy had drifted to a message-less {"error":{"code":…}},
         // the one sibling whose answer a client could not read like the others'
         // (docs/duplication-consolidation.md, campaign 3).
         response.setStatusCode(status)
-                .putHeader("Content-Type", "application/json; charset=utf-8")
-                .end(io.tesseraql.core.error.ErrorEnvelope.json(code, message));
+                .putHeader("Content-Type", html
+                        ? "text/html; charset=utf-8"
+                        : "application/json; charset=utf-8")
+                .end(html
+                        ? ErrorFragments.busyPage(code, message)
+                        : io.tesseraql.core.error.ErrorEnvelope.json(code, message));
     }
 }

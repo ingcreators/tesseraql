@@ -269,6 +269,45 @@ class StackRelayTest {
                 .isEqualTo(50);
     }
 
+    /**
+     * A browser meeting a member at capacity gets a page, not a JSON document painted as one.
+     *
+     * <p>The relay answers before any application does, so it had only the framework's error
+     * envelope to write — and a top-level navigation rendered
+     * {@code {"error":{"code":"TQL-RATE-4294",…}}} as the whole document.
+     */
+    @Test
+    void aBrowserGetsTheMemberCapacityRefusalAsAPage() throws Exception {
+        try (OpenForward stream = openStream(streamBoundedBase + "/_tesseraql/events")) {
+            assertThat(stream.status()).isEqualTo(200);
+
+            HttpResponse<String> refused = send(HttpRequest
+                    .newBuilder(URI.create(streamBoundedBase + "/_tesseraql/events"))
+                    .header("Accept", "text/html,application/xhtml+xml")
+                    .timeout(java.time.Duration.ofSeconds(30)));
+
+            assertThat(refused.statusCode()).isEqualTo(503);
+            assertThat(refused.headers().firstValue("Content-Type").orElse(""))
+                    .startsWith("text/html");
+            assertThat(refused.body()).contains("The service is busy").contains("TQL-RATE-4296");
+        }
+    }
+
+    /** Every other caller keeps the envelope, byte for byte — the regression pin. */
+    @Test
+    void everyOtherCallerKeepsTheMemberCapacityEnvelope() throws Exception {
+        try (OpenForward stream = openStream(streamBoundedBase + "/_tesseraql/events")) {
+            assertThat(stream.status()).isEqualTo(200);
+
+            HttpResponse<String> refused = getStreamBounded("/_tesseraql/events");
+
+            assertThat(refused.statusCode()).isEqualTo(503);
+            assertThat(refused.headers().firstValue("Content-Type").orElse(""))
+                    .startsWith("application/json");
+            assertThat(refused.body()).startsWith("{").contains("TQL-RATE-4296");
+        }
+    }
+
     /** One open forward, kept open until closed. */
     private record OpenForward(HttpResponse<java.io.InputStream> response)
             implements

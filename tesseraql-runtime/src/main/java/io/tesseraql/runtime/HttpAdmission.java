@@ -201,6 +201,16 @@ final class HttpAdmission {
                     stream ? "event stream(s)" : "request(s)",
                     stream ? "tesseraql.http.maxEventStreams" : "tesseraql.http.maxInFlight");
         }
+        TqlErrorCode code = stream ? STREAMS_AT_CAPACITY : AT_CAPACITY;
+        String sentence = stream
+                ? "The runtime is at its event-stream capacity"
+                : "The runtime is at capacity";
+        // A browser navigating here, or posting a list page's native form, was handed the JSON
+        // envelope and painted it as the whole document. It gets the same fact as a page; every
+        // other caller keeps the envelope byte for byte, and an htmx request keeps today's
+        // no-swap, because the bootstrap's allowance is 4xx and widening it to 5xx would end an
+        // async job card's poll and re-baseline an unsaved form.
+        boolean html = ErrorFragments.wantsHtml(ctx.request().getHeader("Accept"));
         ctx.response()
                 .setStatusCode(503)
                 // Retryable, and the client should be told rather than left to guess: an
@@ -209,14 +219,14 @@ final class HttpAdmission {
                 // capacity refusal — the thing it is waiting for is another stream ending, not a
                 // query finishing.
                 .putHeader("Retry-After", stream ? "5" : "1")
-                .putHeader("Content-Type", "application/json; charset=utf-8")
+                .putHeader("Content-Type", html
+                        ? "text/html; charset=utf-8"
+                        : "application/json; charset=utf-8")
                 // The code, not a message built from runtime state — the same envelope discipline
                 // the SSE refusal path follows. Two codes, because a monitor that cannot tell a
                 // refused route from a refused stream cannot tell which number to raise.
-                .end(io.tesseraql.core.error.ErrorEnvelope.json(
-                        stream ? STREAMS_AT_CAPACITY : AT_CAPACITY,
-                        stream
-                                ? "The runtime is at its event-stream capacity"
-                                : "The runtime is at capacity"));
+                .end(html
+                        ? ErrorFragments.busyPage(code, sentence)
+                        : io.tesseraql.core.error.ErrorEnvelope.json(code, sentence));
     }
 }

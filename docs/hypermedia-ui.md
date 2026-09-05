@@ -96,7 +96,11 @@ shape is in [declarative-validation.md](declarative-validation.md); conflict hin
   field-errors marker covers 422 validation, 400 constraint fragments and the 409 of a
   hand-authored `expect:` (`TQL-SQL-4092`), whose conflict hint renders as the alert body. A
   declared lock's 409 (`TQL-SQL-4094`) is not an inline alert — it opens the dialog below.
-  5xx keeps htmx's default handling.
+  5xx keeps htmx's default handling, deliberately: widening the allowance would end an async
+  job card's poll and re-baseline an unsaved form, so a busy runtime leaves the page alone. The
+  concrete 5xx a page meets is a capacity refusal — `TQL-RATE-4293`, `TQL-RATE-4294` — which a
+  top-level navigation now receives as a small self-contained page rather than as a JSON
+  document painted whole.
 - The kit's `installFieldErrors` behavior distributes each `hc-alert__error` next to the
   input whose `name` matches its `data-field`, sets `aria-invalid`/`aria-describedby`, and
   focuses the first invalid control. Inputs composed as `hc-field` stanzas get the error
