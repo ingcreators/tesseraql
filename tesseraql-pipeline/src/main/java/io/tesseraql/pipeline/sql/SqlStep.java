@@ -12,7 +12,6 @@ import io.tesseraql.core.spool.SpoolRef;
 import io.tesseraql.core.spool.SpoolWriter;
 import io.tesseraql.core.spool.TempStore;
 import io.tesseraql.core.sql.BoundSql;
-import io.tesseraql.core.sql.ScopeResolver;
 import io.tesseraql.core.sql.Sql2WayParser;
 import io.tesseraql.core.sql.SqlNode;
 import io.tesseraql.core.sql.SqlRenderer;
@@ -20,7 +19,6 @@ import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.pipeline.Headers;
 import io.tesseraql.pipeline.Step;
 import io.tesseraql.pipeline.TesseraqlProperties;
-import io.tesseraql.pipeline.tenant.TenantRouting;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
@@ -60,53 +58,39 @@ public class SqlStep implements Step {
     private static final System.Logger LOG = System.getLogger(SqlStep.class.getName());
 
     private final Map<Path, List<SqlNode>> exportQueryNodes = new java.util.concurrent.ConcurrentHashMap<>();
-    private List<SqlNode> nodes;
 
-    private final String sqlPath;
-    private final String datasource;
+    private final SqlSource source;
     private final String mode;
     private final String resultKey;
     private final int maxRows;
     private final int queryTimeoutSeconds;
     private final String onOverflow;
     private final String filename;
-    private final String dialect;
 
-    /** One SQL execution, with the settings its endpoint URI used to carry. */
-    public SqlStep(String sqlPath, String datasource, String mode, String resultKey, int maxRows,
-            int queryTimeoutSeconds, String onOverflow, String filename, String dialect) {
-        this.sqlPath = sqlPath;
-        this.datasource = datasource == null ? "main" : datasource;
+    /**
+     * One SQL execution, over whatever {@code source} says the statement is.
+     *
+     * <p>There is one constructor because there was one too many. A contract used to compile to a
+     * second step taking four arguments where this took nine, so every execution axis the
+     * framework gained had to be carried across that branch by hand. A source answers where the
+     * statement comes from; everything here applies to it whatever the answer.
+     */
+    public SqlStep(SqlSource source, String mode, String resultKey, int maxRows,
+            int queryTimeoutSeconds, String onOverflow, String filename) {
+        this.source = source;
         this.mode = mode == null ? "query" : mode;
         this.resultKey = resultKey == null ? "main" : resultKey;
         this.maxRows = maxRows;
         this.queryTimeoutSeconds = queryTimeoutSeconds;
         this.onOverflow = onOverflow == null ? "fail" : onOverflow;
         this.filename = filename == null ? "export.csv" : filename;
-        this.dialect = dialect;
-    }
-
-    /**
-     * The parsed statement, read and parsed once.
-     *
-     * <p>A producer parsed it in {@code doStart}, which is the lifecycle a service has and a step
-     * does not. Parsing on first use keeps the property that matters — the file is read once, not
-     * per request — without inventing a lifecycle for it (docs/camel-removal.md decision 2).
-     */
-    private synchronized List<SqlNode> nodes(Exchange exchange) throws Exception {
-        if (nodes == null) {
-            Path file = io.tesseraql.core.dialect.DialectSqlResolver.resolve(
-                    Path.of(sqlPath), dialect);
-            nodes = Sql2WayParser.parse(Files.readString(file), functions(exchange));
-        }
-        return nodes;
     }
 
     /**
      * This runtime's function set, bound beside the tracer and lanes; a hand-built context
      * without the bean falls back to the process default (docs/module-scope.md).
      */
-    private io.tesseraql.core.expr.ExpressionFunctions functions(Exchange exchange) {
+    static io.tesseraql.core.expr.ExpressionFunctions functions(Exchange exchange) {
         io.tesseraql.core.expr.ExpressionFunctions bound = exchange.beans().lookup(
                 TesseraqlProperties.FUNCTIONS_BEAN,
                 io.tesseraql.core.expr.ExpressionFunctions.class);
@@ -123,9 +107,10 @@ public class SqlStep implements Step {
                 TesseraqlProperties.SQL_PARAMS, Map.of(), Map.class);
         Map<String, Object> scopeContext = exchange.getProperty(
                 TesseraqlProperties.CONTEXT, Map.of(), Map.class);
-        BoundSql bound = SqlRenderer.render(nodes(exchange), params, scopeResolver(exchange),
-                scopeContext, filePathResolver(exchange));
-        DataSource dataSource = dataSource(exchange);
+        SqlSource.Statement statement = source.resolve(exchange, mode);
+        BoundSql bound = SqlRenderer.render(statement.nodes(), params, statement.scopes(),
+                scopeContext, statement.files());
+        DataSource dataSource = statement.dataSource();
         // The statement layer, per exchange (docs/contract-sql-execution.md structural
         // decision 1): each statement this step runs — the main query or update, the count
         // wrapper, an export's extraction and its named queries — executes bounded, classified
@@ -133,15 +118,15 @@ public class SqlStep implements Step {
         // looked up per request.
         io.tesseraql.core.sql.SqlStatement statements = io.tesseraql.core.sql.SqlStatement
                 .on(dataSource)
-                .dialect(dialect)
+                .dialect(statement.dialect())
                 .timeoutSeconds(queryTimeoutSeconds)
-                .surface("route")
+                .surface(statement.surface())
                 .tracer(tracer(exchange))
                 .spanParent(exchange.getProperty(TesseraqlProperties.TRACE_CONTEXT,
                         io.tesseraql.core.telemetry.SpanContext.class));
 
         if ("query-export".equals(mode)) {
-            export(exchange, dataSource, statements, bound);
+            export(exchange, dataSource, statements, bound, statement);
             return;
         }
         if (!"query".equals(mode) && !"update".equals(mode)) {
@@ -162,7 +147,7 @@ public class SqlStep implements Step {
                 && MAIN.equals(resultKey);
         Map<String, Object> result;
         if (paged) {
-            result = executeQuery(statements, paginated(bound, page));
+            result = executeQuery(statements, paginated(bound, page, statement), statement);
             List<Map<String, Object>> rows = (List<Map<String, Object>>) result.get("rows");
             boolean hasNext = rows.size() > page.size();
             if (hasNext) {
@@ -191,7 +176,7 @@ public class SqlStep implements Step {
                 }
             }
             if (page.count()) {
-                long total = countAll(statements, bound);
+                long total = countAll(statements, bound, statement);
                 info.put("totalRows", total);
                 info.put("totalPages", Math.max(1,
                         (total + page.size() - 1) / page.size()));
@@ -201,8 +186,8 @@ public class SqlStep implements Step {
             }
         } else {
             result = "update".equals(mode)
-                    ? executeUpdate(statements, bound)
-                    : executeQuery(statements, bound);
+                    ? executeUpdate(statements, bound, statement)
+                    : executeQuery(statements, bound, statement);
         }
 
         String countKey = "update".equals(mode) ? "affectedRows" : "rowCount";
@@ -210,7 +195,7 @@ public class SqlStep implements Step {
         long durationMs = (System.nanoTime() - startNanos) / 1_000_000L;
         long rows = count instanceof Number number ? number.longValue() : 0L;
         slowSqlLog(exchange).record(new io.tesseraql.core.diag.SqlExecution(
-                sqlPath, mode, durationMs, rows, startedAt));
+                statement.id(), mode, durationMs, rows, startedAt));
         if (context != null) {
             io.tesseraql.pipeline.ContextResults.put(context, resultKey, result);
         }
@@ -222,37 +207,6 @@ public class SqlStep implements Step {
                 TesseraqlProperties.TRACER_BEAN,
                 io.tesseraql.core.telemetry.Tracer.class);
         return tracer != null ? tracer : io.tesseraql.core.telemetry.NoopTracer.INSTANCE;
-    }
-
-    /**
-     * The data-scope resolver bound by the runtime (roadmap Phase 29), or a resolver that rejects
-     * any {@code /*%scope%/} directive when none is configured — so a scope directive in an app
-     * without scopes fails loudly rather than silently bypassing scoping.
-     */
-    private ScopeResolver scopeResolver(Exchange exchange) {
-        ScopeResolver resolver = exchange.beans().lookup(TesseraqlProperties.SCOPE_RESOLVER_BEAN,
-                ScopeResolver.class);
-        return resolver != null ? resolver : ScopeResolver.UNSUPPORTED;
-    }
-
-    /**
-     * The file-scope resolver bound by the runtime (docs/duckdb.md), narrowed to this endpoint's
-     * datasource. File placeholders only resolve on a duckdb endpoint — on any other dialect, and
-     * when no resolver is bound, the renderer's reject-any-placeholder default applies, so a
-     * {@code ${scope.*}} outside an analytics datasource fails loudly.
-     */
-    private io.tesseraql.core.sql.FilePathResolver filePathResolver(Exchange exchange) {
-        if (!"duckdb".equals(dialect)) {
-            return io.tesseraql.core.sql.FilePathResolver.UNSUPPORTED;
-        }
-        DatasourceFilePathResolver resolver = exchange.beans().lookup(
-                TesseraqlProperties.FILE_PATH_RESOLVER_BEAN,
-                DatasourceFilePathResolver.class);
-        if (resolver == null) {
-            return io.tesseraql.core.sql.FilePathResolver.UNSUPPORTED;
-        }
-        return (channel, name, suffix, context) -> resolver.resolve(
-                datasource, channel, name, suffix, context);
     }
 
     private io.tesseraql.core.diag.SqlExecutionLog slowSqlLog(Exchange exchange) {
@@ -270,7 +224,8 @@ public class SqlStep implements Step {
      * deleted when the exchange completes.
      */
     private void export(Exchange exchange, DataSource dataSource,
-            io.tesseraql.core.sql.SqlStatement statements, BoundSql bound) {
+            io.tesseraql.core.sql.SqlStatement statements, BoundSql bound,
+            SqlSource.Statement statement) {
         FileCodec codec = exchange.getProperty(TesseraqlProperties.EXPORT_CODEC, FileCodec.class);
         FileWriteSpec spec = exchange.getProperty(TesseraqlProperties.EXPORT_SPEC,
                 FileWriteSpec.class);
@@ -287,7 +242,7 @@ public class SqlStep implements Step {
         // forward-only at the profile's fetch size; the transaction bracket the profile demands
         // stays here, on the connection this method owns.
         io.tesseraql.core.dialect.StreamingProfile profile = io.tesseraql.core.dialect.StreamingProfiles
-                .forDialect(dialect);
+                .forDialect(statement.dialect());
         try (Connection connection = dataSource.getConnection()) {
             boolean previousAutoCommit = connection.getAutoCommit();
             if (profile.autoCommitOff()) {
@@ -297,7 +252,8 @@ public class SqlStep implements Step {
                 SpoolKind kind = "csv".equals(codec.format()) ? SpoolKind.CSV : SpoolKind.BINARY;
                 SpoolWriter writer = tempStore.createWriter(kind);
                 try {
-                    ref = statements.fetchSize(profile.fetchSize()).read(connection, sqlPath,
+                    ref = statements.fetchSize(profile.fetchSize()).read(connection,
+                            statement.id(),
                             bound, (resultSet, span) -> {
                                 // The writer closes before the statement; toRef() is only valid
                                 // after close, so it answers outside this try. The reader's
@@ -310,9 +266,10 @@ public class SqlStep implements Step {
                                                     io.tesseraql.core.files.ExportRowCap.class));
                                     Map<String, Object> values = composedValues(exchange,
                                             connection,
-                                            statements, tempStore, cap, spools);
+                                            statements, tempStore, cap, spools, statement);
                                     io.tesseraql.core.files.ResultSetRows extraction = new io.tesseraql.core.files.ResultSetRows(
-                                            resultSet, dialect, cap, EXECUTION_ERROR);
+                                            resultSet, statement.dialect(), cap,
+                                            EXECUTION_ERROR);
                                     io.tesseraql.core.files.ExportWrite.write(codec, spec,
                                             tempStore,
                                             extraction,
@@ -369,7 +326,8 @@ public class SqlStep implements Step {
                         // The extraction's outcome is already decided; a connection that cannot
                         // reset is the pool's to retire, not a reason to re-report the export.
                         LOG.log(System.Logger.Level.WARNING,
-                                "Could not restore autocommit after export {0}: {1}", sqlPath,
+                                "Could not restore autocommit after export {0}: {1}",
+                                statement.id(),
                                 restore.getMessage());
                     }
                 }
@@ -377,9 +335,9 @@ public class SqlStep implements Step {
         } catch (TqlException ex) {
             throw ex;
         } catch (java.io.UncheckedIOException ex) {
-            throw executionError(ex.getCause());
+            throw executionError(ex.getCause(), statement);
         } catch (Exception ex) {
-            throw executionError(ex);
+            throw executionError(ex, statement);
         } finally {
             spools.forEach(SpooledRows::close);
         }
@@ -387,7 +345,7 @@ public class SqlStep implements Step {
         try {
             exchange.setBody(tempStore.openInput(ref));
         } catch (java.io.IOException ex) {
-            throw executionError(ex);
+            throw executionError(ex, statement);
         }
         exchange.response().status(200);
         boolean split = spec.splitBy() != null && !spec.splitBy().isBlank();
@@ -413,7 +371,8 @@ public class SqlStep implements Step {
     @SuppressWarnings("unchecked")
     private Map<String, Object> composedValues(Exchange exchange, Connection connection,
             io.tesseraql.core.sql.SqlStatement statements, TempStore tempStore,
-            io.tesseraql.core.files.ExportRowCap cap, List<SpooledRows> spools) {
+            io.tesseraql.core.files.ExportRowCap cap, List<SpooledRows> spools,
+            SqlSource.Statement statement) {
         Map<String, Object> resolved = exchange.getProperty(TesseraqlProperties.EXPORT_VALUES,
                 Map.of(), Map.class);
         List<io.tesseraql.core.files.ExportQuery> queries = exchange.getProperty(
@@ -425,7 +384,8 @@ public class SqlStep implements Step {
                 Map.class);
         Map<String, Object> values = new LinkedHashMap<>(resolved);
         for (io.tesseraql.core.files.ExportQuery query : queries) {
-            BoundSql bound = SqlRenderer.render(exportQueryNodes(exchange, query), params);
+            BoundSql bound = SqlRenderer.render(
+                    exportQueryNodes(exchange, query, statement), params);
             try {
                 // Spooled like the extraction, and counted by the same ceiling: a cap that
                 // bounds the subject and lets a named query run unbounded bounds nothing
@@ -435,11 +395,11 @@ public class SqlStep implements Step {
                                 (resultSet, span) -> io.tesseraql.core.files.ExportWrite
                                         .namedResult(tempStore,
                                                 new io.tesseraql.core.files.ResultSetRows(
-                                                        resultSet, dialect, cap,
+                                                        resultSet, statement.dialect(), cap,
                                                         EXECUTION_ERROR),
                                                 spools)));
             } catch (java.sql.SQLException ex) {
-                throw executionError(ex);
+                throw executionError(ex, statement);
             }
         }
         return Map.copyOf(values);
@@ -447,12 +407,12 @@ public class SqlStep implements Step {
 
     /** An export query's parsed SQL, read once per file and kept for this step's lifetime. */
     private List<SqlNode> exportQueryNodes(Exchange exchange,
-            io.tesseraql.core.files.ExportQuery query) {
+            io.tesseraql.core.files.ExportQuery query, SqlSource.Statement statement) {
         return exportQueryNodes.computeIfAbsent(query.sqlFile(), file -> {
             try {
                 return Sql2WayParser.parse(Files.readString(
                         io.tesseraql.core.dialect.DialectSqlResolver.resolve(file,
-                                dialect)),
+                                statement.dialect())),
                         functions(exchange));
             } catch (java.io.IOException ex) {
                 throw new TqlException(EXECUTION_ERROR,
@@ -481,9 +441,11 @@ public class SqlStep implements Step {
     }
 
     /** The bound statement with the dialect's pagination clause (size+1 rows) appended. */
-    private BoundSql paginated(BoundSql bound, io.tesseraql.pipeline.PageRequest page) {
+    private BoundSql paginated(BoundSql bound, io.tesseraql.pipeline.PageRequest page,
+            SqlSource.Statement statement) {
         io.tesseraql.core.dialect.Dialect paginating = io.tesseraql.core.dialect.Dialect
-                .fromId(dialect).orElse(io.tesseraql.core.dialect.Dialect.POSTGRES);
+                .fromId(statement.dialect())
+                .orElse(io.tesseraql.core.dialect.Dialect.POSTGRES);
         io.tesseraql.core.dialect.Pagination.Clause clause = io.tesseraql.core.dialect.Pagination
                 .clause(paginating, page.size() + 1L, page.offset());
         List<io.tesseraql.core.sql.BoundParameter> parameters = new java.util.ArrayList<>(
@@ -502,26 +464,27 @@ public class SqlStep implements Step {
     }
 
     /** The total row count: the rendered query wrapped in {@code select count(*)}. */
-    private long countAll(io.tesseraql.core.sql.SqlStatement statements, BoundSql bound) {
+    private long countAll(io.tesseraql.core.sql.SqlStatement statements, BoundSql bound,
+            SqlSource.Statement statement) {
         BoundSql counting = new BoundSql(
                 "select count(*) as tql_total from (\n" + stripTerminator(bound.sql())
                         + "\n) tql_count",
                 bound.parameters(), bound.sourceMap(), bound.coverageTrace(), bound.variant());
         try {
-            Object total = statements.read(sqlPath, counting,
+            Object total = statements.read(statement.id(), counting,
                     (resultSet, span) -> resultSet.next() ? resultSet.getObject(1) : 0L);
             return total instanceof Number number ? number.longValue() : 0L;
         } catch (java.sql.SQLException ex) {
-            throw executionError(ex);
+            throw executionError(ex, statement);
         }
     }
 
     private Map<String, Object> executeQuery(io.tesseraql.core.sql.SqlStatement statements,
-            BoundSql bound) {
+            BoundSql bound, SqlSource.Statement statement) {
         try {
             boolean[] truncated = new boolean[1];
-            List<Map<String, Object>> rows = statements.read(sqlPath, bound,
-                    statements.rows(maxRows, overflow(truncated)));
+            List<Map<String, Object>> rows = statements.read(statement.id(), bound,
+                    statements.rows(maxRows, overflow(truncated, statement)));
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("rows", rows);
             result.put("rowCount", rows.size());
@@ -533,49 +496,45 @@ public class SqlStep implements Step {
             }
             return result;
         } catch (java.sql.SQLException ex) {
-            throw executionError(ex);
+            throw executionError(ex, statement);
         }
     }
 
     /** The caller's half of the capped read: warn truncates with a log, fail refuses. */
-    private io.tesseraql.core.sql.SqlStatement.RowOverflow overflow(boolean[] truncated) {
+    private io.tesseraql.core.sql.SqlStatement.RowOverflow overflow(boolean[] truncated,
+            SqlSource.Statement statement) {
         return () -> {
             if ("warn".equals(onOverflow)) {
                 truncated[0] = true;
                 LOG.log(System.Logger.Level.WARNING,
                         "Result truncated at maxRows={0} for {1}", maxRows,
-                        sqlPath);
+                        statement.id());
                 return;
             }
             throw TqlException.builder(MATERIALIZATION_OVERFLOW)
                     .message("Result exceeds maxRows=" + maxRows
                             + " (use pagination or query-export)")
-                    .source(sqlPath)
+                    .source(statement.id())
                     .build();
         };
     }
 
     private Map<String, Object> executeUpdate(io.tesseraql.core.sql.SqlStatement statements,
-            BoundSql bound) {
+            BoundSql bound, SqlSource.Statement statement) {
         try {
-            int affected = statements.update(sqlPath, bound);
+            int affected = statements.update(statement.id(), bound);
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("affectedRows", affected);
             return result;
         } catch (java.sql.SQLException ex) {
-            throw executionError(ex);
+            throw executionError(ex, statement);
         }
     }
 
-    /** Resolves the datasource for the exchange; see {@link TenantRouting} for the routing rule. */
-    private DataSource dataSource(Exchange exchange) {
-        return TenantRouting.dataSource(exchange, datasource);
-    }
-
-    private TqlException executionError(Exception ex) {
+    private TqlException executionError(Exception ex, SqlSource.Statement statement) {
         return TqlException.builder(classifyCode(ex))
                 .message("SQL execution failed: " + ex.getMessage())
-                .source(sqlPath)
+                .source(statement.id())
                 .cause(ex)
                 .build();
     }

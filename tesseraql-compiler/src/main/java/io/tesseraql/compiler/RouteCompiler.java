@@ -1408,10 +1408,11 @@ public final class RouteCompiler {
         String exportDatasource = bindingDatasource(definition.main(),
                 definition.effectiveDatasource());
         io.tesseraql.pipeline.sql.SqlStep exportSql = new io.tesseraql.pipeline.sql.SqlStep(
-                sqlPath.toString(), exportDatasource, "query-export", "main",
+                new io.tesseraql.pipeline.sql.FileSqlSource(sqlPath.toString(), exportDatasource,
+                        datasourceDialect(exportDatasource)),
+                "query-export", "main",
                 effectiveMaxRows(definition.main()), effectiveTimeoutSeconds(definition.main()),
-                effectiveOnOverflow(definition.main()), exportFilename(definition, codec),
-                datasourceDialect(exportDatasource));
+                effectiveOnOverflow(definition.main()), exportFilename(definition, codec));
 
         PipelineBuilder route = pipelines.pipeline(routeId);
         applyCommonGovernance(route, routeFile);
@@ -2146,12 +2147,14 @@ public final class RouteCompiler {
         }
         String datasource = bindingDatasource(binding, routeDatasource);
         Path sqlPath = sourceDir.resolve(binding.file()).normalize();
-        // The dialect is the load-bearing setting: the step resolves foo.<dialect>.sql variants
-        // from it, picks the dialect's streaming profile, and folds column labels with it.
-        return new io.tesseraql.pipeline.sql.SqlStep(sqlPath.toString(), datasource,
+        // The dialect is the load-bearing setting: the source resolves foo.<dialect>.sql
+        // variants from it, and the step picks the dialect's streaming profile and folds column
+        // labels with it.
+        return new io.tesseraql.pipeline.sql.SqlStep(
+                new io.tesseraql.pipeline.sql.FileSqlSource(sqlPath.toString(), datasource,
+                        datasourceDialect(datasource)),
                 binding.effectiveMode(), resultKey, effectiveMaxRows(binding),
-                effectiveTimeoutSeconds(binding), effectiveOnOverflow(binding), null,
-                datasourceDialect(datasource));
+                effectiveTimeoutSeconds(binding), effectiveOnOverflow(binding), null);
     }
 
     /** The connector a binding runs on: its own {@code datasource:} when declared, else the route's. */
