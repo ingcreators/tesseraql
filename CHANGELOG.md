@@ -19,6 +19,21 @@ All notable changes to TesseraQL are documented here. The format follows
   path cannot be normalized — an invalid escape such as `/%zz` — is charged a permit rather than
   exempted, and is answered 400 as before.
 
+- **`tesseraql.app.work` moves the upload spool, and the boot proves it is writable.** The temp
+  store's scratch directory — which since #1149 also carries the request-body upload spool, and
+  whose creation is now a boot precondition — spelled the conventional `work/` layout against the
+  application home instead of resolving through the relocation key. A deployment that pointed its
+  work tree at a mounted volume moved half a subsystem and kept spooling request bodies into the
+  application directory. Creating the directory was also only half the guarantee it claimed:
+  `Files.createDirectories` returns normally on an existing directory the process cannot write to,
+  so the very deployment the boot-time creation exists for — a work tree left root-owned by one
+  `--user root` run — still failed at request time with the router's untyped 500 and no line
+  naming the directory. The boot now writes a probe file and refuses with `TQL-YAML-1113` naming
+  the directory and the remedy. Under `tesseraql host` that refusal stops the stack rather than
+  one member, which is stated rather than discovered: an edge that cannot spool a request body
+  cannot answer a sign-in. A new shrink-only ledger records the seven other places that still
+  resolve a `work/` path by hand, so the next one cannot be added silently.
+
 - **An abandoned file transfer is reaped, not left RUNNING forever.** The reaper swept declared job
   ids, and a transfer started from a `file-import` or `file-export` route is keyed by the route id,
   so a node killed mid-transfer left a row the console showed as in progress indefinitely. A

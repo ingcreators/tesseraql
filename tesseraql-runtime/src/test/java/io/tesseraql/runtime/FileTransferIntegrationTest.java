@@ -198,7 +198,9 @@ class FileTransferIntegrationTest {
 
         // Where the part spooled while the request was in flight. The directory is created at
         // boot, so it exists whether or not this test ran first; what the upload proves is that
-        // nothing fell back to the transport's working-directory default.
+        // nothing fell back to the transport's working-directory default. This fixture declares
+        // no tesseraql.app.work, so the conventional layout is the resolved answer; the nested
+        // RelocatedWorkDirectory class is where the key's effect is proven.
         assertThat(appHome.resolve("work/tmp/tesseraql/uploads")).isDirectory();
         assertThat(transportDefaultSpool).doesNotExist();
     }
@@ -713,4 +715,53 @@ class FileTransferIntegrationTest {
         }
     }
 
+    /**
+     * The relocation key moves the spool, not only half of the tree it names.
+     *
+     * <p>{@code WorkHome}'s contract is that {@code tesseraql.app.work} is honored everywhere or
+     * nowhere, and the temp-store scratch — which since #1149 also carries the request-body
+     * upload spool, and whose creation is now a boot precondition — resolved the conventional
+     * layout by hand. A deployment that relocates its work tree onto a mounted volume kept
+     * spooling into the application directory.
+     *
+     * <p>Its own runtime and app home, because the key is read once during boot; the container
+     * is the enclosing class's.
+     */
+    @org.junit.jupiter.api.Nested
+    class RelocatedWorkDirectory {
+
+        @Test
+        void aDeclaredWorkDirectoryMovesTheUploadSpool() throws Exception {
+            Path home = Files.createTempDirectory("tesseraql-relocated-work-it");
+            Path elsewhere = Files.createTempDirectory("tesseraql-relocated-work-target");
+            Files.createDirectories(home.resolve("config"));
+            Files.writeString(home.resolve("config/application.yml"), """
+                    server:
+                      port: 0
+
+                    tesseraql:
+                      app:
+                        name: relocated-work
+                        work: %s
+                      datasources:
+                        main:
+                          jdbcUrl: %s
+                          username: %s
+                          password: %s
+                    """.formatted(elsewhere.toString().replace("\\", "\\\\"),
+                    POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword()));
+
+            TesseraqlRuntime relocated = TesseraqlRuntime.start(home, 0);
+            try {
+                assertThat(elsewhere.resolve("tmp/tesseraql/uploads")).isDirectory();
+                // The conventional layout under the app home is what the hand-rolled
+                // resolution produced, and it is the assertion that fails without the fix.
+                assertThat(home.resolve("work/tmp/tesseraql/uploads")).doesNotExist();
+            } finally {
+                relocated.close();
+                deleteRecursively(home);
+                deleteRecursively(elsewhere);
+            }
+        }
+    }
 }
