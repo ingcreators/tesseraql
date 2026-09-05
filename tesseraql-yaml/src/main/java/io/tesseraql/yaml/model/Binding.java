@@ -113,26 +113,32 @@ public record Binding(String file, String contract, String mode, Map<String, Str
     @com.fasterxml.jackson.annotation.JsonCreator
     static Binding of(
             @com.fasterxml.jackson.annotation.JsonProperty("sql") SqlArm sql,
-            @com.fasterxml.jackson.annotation.JsonProperty("contract") NamedCall contract,
+            @com.fasterxml.jackson.annotation.JsonProperty("contract") ContractCall contract,
             @com.fasterxml.jackson.annotation.JsonProperty("service") NamedCall service,
             @com.fasterxml.jackson.annotation.JsonProperty("http") HttpSourceSpec http,
             @com.fasterxml.jackson.annotation.JsonProperty("sequence") String sequence,
             @com.fasterxml.jackson.annotation.JsonProperty("spool") String spool,
             @com.fasterxml.jackson.annotation.JsonProperty("when") String when,
             @com.fasterxml.jackson.annotation.JsonProperty("enrich") Map<String, EnrichSpec> enrich) {
-        NamedCall call = contract != null ? contract : service;
         return new Binding(
                 sql == null ? null : sql.file(),
                 contract == null ? null : contract.name(),
-                mode(sql, call, http),
-                sql != null ? sql.params() : (call == null ? null : call.params()),
+                mode(sql, contract, service, http),
+                params(sql, contract, service),
                 service == null ? null : service.name(),
                 http,
-                sql == null ? null : sql.materialize(),
+                // The bound a binding declares, from whichever arm can carry one. It came from
+                // the sql arm alone, so materialize: on a contract binding was accepted and
+                // ignored - and the contract path had no bound at all to override.
+                sql != null
+                        ? sql.materialize()
+                        : (contract == null ? null : contract.materialize()),
                 sequence,
                 sql == null ? null : sql.keys(),
-                sql != null ? sql.expect() : (call == null ? null : call.expect()),
-                sql == null ? null : sql.timeoutSeconds(),
+                expect(sql, contract, service),
+                sql != null
+                        ? sql.timeoutSeconds()
+                        : (contract == null ? null : contract.timeoutSeconds()),
                 sql == null ? null : sql.datasource(),
                 spool,
                 when,
@@ -147,14 +153,39 @@ public record Binding(String file, String contract, String mode, Map<String, Str
      * answer, so a reader asks "how does this acquisition deliver its rows" once rather than per
      * mechanism (docs/unified-sources.md decision 19a).
      */
-    private static String mode(SqlArm sql, NamedCall call, HttpSourceSpec http) {
+    private static String mode(SqlArm sql, ContractCall contract, NamedCall service,
+            HttpSourceSpec http) {
         if (sql != null) {
             return sql.mode();
         }
-        if (call != null) {
-            return call.mode();
+        if (contract != null) {
+            return contract.mode();
+        }
+        if (service != null) {
+            return service.mode();
         }
         return http == null ? null : http.mode();
+    }
+
+    private static Map<String, String> params(SqlArm sql, ContractCall contract,
+            NamedCall service) {
+        if (sql != null) {
+            return sql.params();
+        }
+        if (contract != null) {
+            return contract.params();
+        }
+        return service == null ? null : service.params();
+    }
+
+    private static Expect expect(SqlArm sql, ContractCall contract, NamedCall service) {
+        if (sql != null) {
+            return sql.expect();
+        }
+        if (contract != null) {
+            return contract.expect();
+        }
+        return service == null ? null : service.expect();
     }
 
     /**
@@ -207,6 +238,27 @@ public record Binding(String file, String contract, String mode, Map<String, Str
     public record NamedCall(String name, String mode, Map<String, String> params, Expect expect) {
 
         public NamedCall {
+            params = params == null ? Map.of() : Map.copyOf(params);
+        }
+    }
+
+    /**
+     * The {@code contract:} arm: the contract to run, how, and the bounds it runs under.
+     *
+     * <p>A record of its own rather than the {@link NamedCall} the {@code service:} arm uses,
+     * because the two arms compile to different things. A contract compiles to the SQL step and
+     * carries every bound that step honours; a service compiles to a three-argument step with no
+     * bounds concept. Putting {@code materialize:} and {@code timeoutSeconds:} on the shared record
+     * would open them on {@code service:} too, where they would be accepted and ignored — replacing
+     * an unknown-key warning with silence, which is the shape this codebase has swept twice.
+     *
+     * <p>Deliberately no {@code datasource:}: a contract's connector is its realm's, not the
+     * route's.
+     */
+    public record ContractCall(String name, String mode, Map<String, String> params, Expect expect,
+            Materialize materialize, Integer timeoutSeconds) {
+
+        public ContractCall {
             params = params == null ? Map.of() : Map.copyOf(params);
         }
     }

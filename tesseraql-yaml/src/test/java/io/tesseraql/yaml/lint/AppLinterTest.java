@@ -564,6 +564,85 @@ class AppLinterTest {
                 && f.message().contains("securty"));
     }
 
+    /**
+     * Keyset pagination is refused on a contract binding rather than published.
+     *
+     * <p>It was accepted and silently wrong. The page binder mints offset 0 for every keyset
+     * request, and the {@code after} predicate that would advance the cursor lives in the author's
+     * own statement — which a bundled contract does not have. So a {@code next} link would have
+     * advertised an endless chain of identical pages. Offset pagination, the half that works, is
+     * unaffected.
+     */
+    @Test
+    void refusesKeysetPaginationOnAContractBinding(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/application.yml"), "server:\n  port: 0\n");
+        Files.writeString(dir.resolve("config/tesseraql.yml"), "tesseraql:\n  app:\n    name: t\n");
+        Files.createDirectories(dir.resolve("web/api/users"));
+        Files.writeString(dir.resolve("web/api/users/get.yml"), """
+                version: tesseraql/v1
+                id: users.list
+                kind: route
+                recipe: query-json
+                input:
+                  page:
+                    type: integer
+                    required: false
+                pagination:
+                  strategy: keyset
+                  by: user_id
+                  size: 20
+                sources:
+                  main:
+                    contract:
+                      name: identity.list-users
+                response:
+                  json:
+                    body:
+                      data: main.rows
+                """);
+
+        List<LintFinding> findings = new AppLinter().lint(dir);
+
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-YAML-1016") && f.isError()
+                && f.message().contains("keyset")
+                && f.message().contains("contract:"));
+    }
+
+    /** Offset pagination on the same binding is untouched: it is the half a contract can honour. */
+    @Test
+    void allowsOffsetPaginationOnAContractBinding(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/application.yml"), "server:\n  port: 0\n");
+        Files.writeString(dir.resolve("config/tesseraql.yml"), "tesseraql:\n  app:\n    name: t\n");
+        Files.createDirectories(dir.resolve("web/api/users"));
+        Files.writeString(dir.resolve("web/api/users/get.yml"), """
+                version: tesseraql/v1
+                id: users.list
+                kind: route
+                recipe: query-json
+                input:
+                  page:
+                    type: integer
+                    required: false
+                pagination:
+                  strategy: offset
+                  size: 20
+                sources:
+                  main:
+                    contract:
+                      name: identity.list-users
+                response:
+                  json:
+                    body:
+                      data: main.rows
+                """);
+
+        List<LintFinding> findings = new AppLinter().lint(dir);
+
+        assertThat(findings).noneMatch(f -> f.code().equals("TQL-YAML-1016"));
+    }
+
     @Test
     void flagsARenamedTopLevelKeyWithItsReplacement(@TempDir Path dir) throws Exception {
         Files.createDirectories(dir.resolve("config"));

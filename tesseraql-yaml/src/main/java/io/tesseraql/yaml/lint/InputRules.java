@@ -89,6 +89,20 @@ final class InputRules implements LintRule {
                         "page: strategy keyset requires by: (the cursor column, or an ordered"
                                 + " list for a composite cursor)"));
             }
+            // Keyset is refused on a contract binding rather than published, because the
+            // cursor it would advertise cannot be honoured: the `after` predicate lives in the
+            // author's own statement, and a bundled contract has none. The page binder mints
+            // offset 0 for every keyset request, so a `next` link would hand out an endless
+            // chain of identical pages. Offset pagination - the half that works - is unaffected.
+            if (io.tesseraql.yaml.model.PageSpec.KEYSET.equals(page.effectiveStrategy())
+                    && route.definition().main() != null
+                    && route.definition().main().isContract()) {
+                findings.add(new LintFinding(INVALID_PAGE_STRATEGY, ERROR, source,
+                        "page: strategy keyset is not available on a contract: binding - the"
+                                + " after predicate lives in the statement, and a contract's is"
+                                + " the framework's. Use strategy: offset",
+                        context.lineOf(route.source(), "page:"), null));
+            }
             if (page.effectiveBy().stream().anyMatch(column -> column == null
                     || column.isBlank())) {
                 findings.add(new LintFinding(INVALID_PAGE_STRATEGY, ERROR, source,

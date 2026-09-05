@@ -449,7 +449,9 @@
         },
         "columns": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "minItems": 1,
           "description": "The sortable-column allowlist a `type: sort` input validates its keys against; required for that type and legal on no other."
         },
@@ -522,7 +524,11 @@
               "description": "The row column holding the display name the field's hint shows. Presentation only, never submitted."
             }
           },
-          "required": ["source", "code", "label"],
+          "required": [
+            "source",
+            "code",
+            "label"
+          ],
           "additionalProperties": false,
           "description": "The master reference this field holds a key of (docs/reference-lookup.md): direct code entry resolved through a synthesized companion route, existence-checked again at submit. Declarable on a domain, like codes:."
         },
@@ -729,6 +735,26 @@
               },
               "additionalProperties": true,
               "description": "The row count this statement must affect, and what happens when it does not — the declarative optimistic-locking check on an update or delete."
+            },
+            "materialize": {
+              "type": "object",
+              "properties": {
+                "maxRows": {
+                  "type": "integer",
+                  "description": "Largest number of rows materialized. Default: `tesseraql.resultMaterialization.maxRows`."
+                },
+                "onOverflow": {
+                  "type": "string",
+                  "description": "`fail` (the default) refuses a result past `maxRows`; `warn` truncates it and logs."
+                }
+              },
+              "additionalProperties": true,
+              "description": "Bounds on how much of the result is held in memory. Declared here so a contract that legitimately returns more than the app-wide budget says so on the binding, rather than an application raising the budget for every route, command and export at once."
+            },
+            "timeoutSeconds": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Per-binding SQL statement timeout override; 0 disables. Default: tesseraql.sql.timeoutSeconds, else 30s."
             }
           },
           "additionalProperties": true,

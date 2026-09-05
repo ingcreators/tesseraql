@@ -8,6 +8,16 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **`materialize:` and `timeoutSeconds:` are honoured on a `contract:` binding.** They were parsed,
+  accepted and dropped: `Binding.of` read both from the `sql` arm alone. That mattered once a
+  contract read gained a row bound, because without a per-binding override an application whose
+  contract legitimately returns more than the app-wide budget had no lever but raising
+  `tesseraql.resultMaterialization.maxRows` for every route, command and export at once.
+
+  The `contract:` arm is now its own shape rather than the record it shared with `service:`. Putting
+  these keys on the shared record would have opened them on `service:` too, where a binding compiles
+  to a step with no bounds concept — turning an unknown-key warning into silent acceptance.
+
 - **`tesseraql.identity.maxRows`** — how many rows one identity contract read may materialize,
   defaulting to 50,000, with `-1` the visible opt-out. Its own key, never the route's
   `tesseraql.resultMaterialization.maxRows`: that one bounds what a page renders and an operator
@@ -217,6 +227,12 @@ All notable changes to TesseraQL are documented here. The format follows
   and with it go the synthetic `/* tqlPageN */` binds it injected into a realm's own SQL namespace
   with no reservation or collision check.
 ### Changed
+
+- **`pagination: {strategy: keyset}` on a `contract:` binding is refused.** It was accepted and
+  silently wrong: the page binder mints offset 0 for every keyset request, and the `after` predicate
+  that advances a cursor lives in the author's own statement, which a bundled contract does not
+  have. A published `next` link would have handed out an endless chain of identical pages. Offset
+  pagination on a contract binding — the half that works — is unaffected.
 
 - **`SqlStatement.query` and `queryOne` are gone.** Rendered SQL now meets JDBC through one
   materializing loop, reached by the statement's own readers — `rows(maxRows, onOverflow)`,
