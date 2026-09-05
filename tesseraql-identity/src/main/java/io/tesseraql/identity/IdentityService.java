@@ -30,9 +30,18 @@ public final class IdentityService {
     /** The realm's role capability is not readWrite, so role management is refused. */
     public static final TqlErrorCode ROLE_READ_ONLY = new TqlErrorCode(TqlDomain.IAM, 4031);
 
+    // The same code the route-level SQL path raises, and deliberately NOT an IAM code:
+    // featureUnavailable answers true for every IAM execution failure, and its callers degrade to
+    // an empty answer on that - an empty constraint set finds no conflict, and absent role
+    // conditions are an unnarrowed grant. A read too large to materialize must never be mistaken
+    // for a store that is not there.
+    /** TQL-LD-0001: an identity contract read exceeded the configured maxRows. */
+    private static final TqlErrorCode MATERIALIZATION_OVERFLOW = new TqlErrorCode(TqlDomain.LD, 1);
+
     private final Function<String, DataSource> datasources;
     private final String dialect;
     private int sqlTimeoutSeconds = SqlStatement.DEFAULT_TIMEOUT_SECONDS;
+    private int resultMaxRows = -1;
     private io.tesseraql.core.telemetry.Tracer tracer;
 
     public IdentityService(Function<String, DataSource> datasources) {
@@ -68,6 +77,24 @@ public final class IdentityService {
      */
     public IdentityService sqlTimeoutSeconds(int seconds) {
         this.sqlTimeoutSeconds = Math.max(0, seconds);
+        return this;
+    }
+
+    /**
+     * How many rows a contract read may materialize; {@code -1}, the default, is uncapped.
+     *
+     * <p>The identity store's reads had no bound at all. They are not paginated results — they are
+     * whole sets a caller consumes — so this is a runaway stop, not a page size, and it has its own
+     * key rather than sharing the route's: an operator lowering a page-memory knob must not be able
+     * to lock every user out.
+     *
+     * <p>Overflow always REFUSES; there is no warn. A truncated read is the one outcome this class
+     * must never produce, because a short answer here is indistinguishable from a small one — and
+     * {@link SeparationOfDuties} reading fewer constraints finds no conflict, while
+     * {@link RoleConditions} reading fewer conditions returns a wider grant.
+     */
+    public IdentityService resultMaxRows(int maxRows) {
+        this.resultMaxRows = maxRows;
         return this;
     }
 
@@ -124,14 +151,55 @@ public final class IdentityService {
             sql = stripTerminator(sql) + "\n" + named(clause.sql(), names);
             bound = withPage;
         }
+        return read(realm, contract, sql, bound, resultMaxRows);
+    }
+
+    /**
+     * A contract read with NO row bound — for the reads a bound would break rather than protect.
+     *
+     * <p>Every call site is a RECORDED GAP, not an approval, and `ContractReadBoundLedgerTest`
+     * refuses a new one. There is exactly one: {@code resolvePrincipal} reads
+     * {@code FIND_ENABLED_RULE_CONDITIONS} with no user predicate on every managed sign-in, and
+     * its caller rethrows anything that is not a missing contract — so a bound there would turn
+     * ordinary rule growth into an authentication outage for every user at once. The real repair
+     * is that the read is app-wide and unfiltered on a request path, and that is filed as its own
+     * slice rather than papered over with a cap.
+     */
+    private List<Map<String, Object>> executeUnbounded(RealmConfig realm, String contract,
+            Map<String, Object> params) {
+        return read(realm, contract, new ContractResolver(realm, dialect).resolve(contract),
+                params, -1);
+    }
+
+    /** The one bounded read every contract read in this class goes through. */
+    private List<Map<String, Object>> read(RealmConfig realm, String contract, String sql,
+            Map<String, Object> params, int maxRows) {
+        SqlStatement statements = statements(realm);
         try {
-            return statements(realm).query(contract, sql, bound);
+            return statements.read(contract, io.tesseraql.core.sql.SqlRenderer.render(sql, params),
+                    statements.rows(maxRows, refusal(contract, maxRows)));
         } catch (SQLException ex) {
             throw TqlException.builder(EXEC_ERROR)
                     .message("Contract '" + contract + "' failed: " + ex.getMessage())
                     .cause(ex)
                     .build();
         }
+    }
+
+    /**
+     * The refusal for a read past the bound: unchecked, so it travels the
+     * {@code catch (RuntimeException)} arm of the reader and reaches the caller as itself rather
+     * than as a database failure this class would report as a missing feature.
+     */
+    private static SqlStatement.RowOverflow refusal(String contract, int maxRows) {
+        return () -> {
+            throw TqlException.builder(MATERIALIZATION_OVERFLOW)
+                    .message("Identity contract '" + contract + "' returned more than "
+                            + maxRows + " rows (raise tesseraql.identity.maxRows,"
+                            + " or narrow the contract)")
+                    .source(contract)
+                    .build();
+        };
     }
 
     /** The clause's {@code ?} placeholders rewritten as the 2-way SQL binds the resolver reads. */
@@ -227,7 +295,9 @@ public final class IdentityService {
             if (realm.type() == RealmConfig.RealmType.MANAGED
                     && realm.capabilities().roleWriteAllowed()) {
                 java.util.Set<String> produced = RoleRules.evaluate(
-                        execute(realm, IdentityContracts.FIND_ENABLED_RULE_CONDITIONS,
+                        // RECORDED GAP, not an approval: read app-wide with no user predicate on
+                        // every managed sign-in, so a bound here is an outage, not a guard.
+                        executeUnbounded(realm, IdentityContracts.FIND_ENABLED_RULE_CONDITIONS,
                                 Map.of()),
                         attributes, groups, (ancestor, descendant) -> {
                             List<Map<String, Object>> matched = execute(realm,
