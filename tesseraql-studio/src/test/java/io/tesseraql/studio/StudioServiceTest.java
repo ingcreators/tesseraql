@@ -879,6 +879,31 @@ class StudioServiceTest {
                 .extracting(StudioService.AuditEntry::actor).containsExactly("bob");
     }
 
+    /**
+     * A page number past the log answers an empty page, not an exception.
+     *
+     * <p>This route parses {@code page} itself rather than going through the framework's binder,
+     * and sliced in {@code int} arithmetic: {@code (page - 1) * size} wraps negative from page
+     * 42,949,674 upward, so the window became {@code subList(-100, -50)} — which throws for any
+     * log size, including an empty one, and rendered as an internal server error.
+     */
+    @Test
+    void auditPageBeyondTheLogIsEmptyRatherThanAnError(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), "tesseraql:\n  app:\n    name: t\n");
+        StudioService studio = new StudioService(new ManifestLoader().load(dir), false);
+        Path log = dir.resolve("work/studio/audit/audit.jsonl");
+        Files.createDirectories(log.getParent());
+        Files.writeString(log, """
+                {"at":"2026-06-18T10:00:00Z","actor":"carol","action":"apply","target":"web/c.yml"}
+                """);
+
+        assertThat(studio.auditPage(null, null, null, Integer.MAX_VALUE, 50).entries()).isEmpty();
+        assertThat(studio.auditPage(null, null, null, 42_949_674, 50).entries()).isEmpty();
+        // The first page still works, so the widening did not move the ordinary answer.
+        assertThat(studio.auditPage(null, null, null, 1, 50).entries()).hasSize(1);
+    }
+
     @Test
     void createMigrationSupportsRepeatableVendorAndOtherDatasource(@TempDir Path dir)
             throws Exception {

@@ -209,7 +209,9 @@ final class StudioDataService {
     DataPage browse(String datasource, String table, int page, String sortColumn, String sortDir,
             String combinator, List<FilterCond> filters) {
         int safePage = Math.max(0, page);
-        int offset = safePage * PAGE_SIZE;
+        // Clamped rather than multiplied into an overflow: in int arithmetic this product wraps
+        // negative for a large page and reached setMaxRows with a negative row count.
+        int offset = (int) Math.min((long) safePage * PAGE_SIZE, Integer.MAX_VALUE);
         try (Connection connection = dataSource(datasource).getConnection()) {
             readOnly(connection);
             TableRef ref = resolve(connection, table);

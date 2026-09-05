@@ -298,6 +298,46 @@ class OpenApiGeneratorTest {
                 .contains("\"required\" : [ \"name\" ]");
     }
 
+    /**
+     * The published contract states the page ceiling the runtime enforces.
+     *
+     * <p>{@code page} is framework-owned, and its refusal existed only in code: a client
+     * generated from this document could produce a request the runtime refuses, with nothing in
+     * the spec to say why. {@code size} has published its {@code maximum} since it shipped.
+     */
+    @Test
+    void theFrameworkOwnedPageParameterPublishesItsCeiling() {
+        io.tesseraql.yaml.SimpleYamlParser parser = new io.tesseraql.yaml.SimpleYamlParser();
+        Path home = Path.of("/app").toAbsolutePath().normalize();
+        var route = new io.tesseraql.yaml.manifest.RouteFile("get", "/api/board",
+                home.resolve("web/api/board/get.yml"), parser.parseRoute("""
+                        version: tesseraql/v1
+                        id: board.list
+                        kind: route
+                        recipe: query-json
+                        pagination:
+                          size: 20
+                        sources:
+                          main:
+                            sql:
+                              file: board.sql
+                        """, "board"));
+        AppManifest manifest = new AppManifest(home,
+                new io.tesseraql.yaml.config.AppConfig(java.util.Map.of("tesseraql",
+                        java.util.Map.of("app", java.util.Map.of("name", "test-app"))),
+                        name -> null),
+                java.util.List.of(route), java.util.List.of(), java.util.List.of(),
+                java.util.List.of(), java.util.List.of(), java.util.List.of(),
+                java.util.List.of(), java.util.List.of(), java.util.List.of(),
+                java.util.List.of(), java.util.List.of(), java.util.List.of(),
+                io.tesseraql.yaml.manifest.ManifestIndex.of(java.util.Map.of(), "test"));
+
+        String json = new OpenApiGenerator().toJson(manifest);
+
+        assertThat(json).contains("\"name\" : \"page\"");
+        assertThat(json).contains("\"maximum\" : 2147483647");
+    }
+
     @Test
     void outputIsDeterministic() {
         AppManifest manifest = exampleApp();

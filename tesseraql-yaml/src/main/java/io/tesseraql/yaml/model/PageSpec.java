@@ -30,6 +30,28 @@ public record PageSpec(String strategy, Integer size, Integer maxSize, boolean c
     public static final String KEYSET = "keyset";
 
     /**
+     * The largest {@code ?page=} this framework accepts (docs/http-edge-robustness.md
+     * decision 9).
+     *
+     * <p>A page number is framework-owned and was bounded only from below, so everything above 1
+     * flowed into three products: the offset leg's {@code (number - 1) * size} and the snapshot
+     * leg's two slice bounds. Near {@code Long.MAX_VALUE} those wrap — a refused OFFSET rendered
+     * 500 on the offset leg, an {@code IndexOutOfBoundsException} out of {@code subList} on the
+     * snapshot leg — against a contract that promises a field-scoped 400 for a bad value.
+     *
+     * <p>The ceiling is flat rather than derived from the declared size. With
+     * {@code number <= Integer.MAX_VALUE} and {@code size} an {@code int}, the largest product
+     * any of those expressions can form is 4,611,686,011,984,936,962 — comfortably inside
+     * {@code long} — so one constant removes the overflow from every site at once instead of a
+     * divisor re-derived per route.
+     *
+     * <p>Pagination renderers may emit a link one past this at the ceiling, and that is left
+     * unclamped deliberately: the offset leg would need a real row at offset 42,949,672,920 and
+     * the snapshot leg's membership is capped at 500, so no result set can reach it.
+     */
+    public static final long MAX_PAGE = Integer.MAX_VALUE;
+
+    /**
      * The work-queue strategy (docs/list-surface.md decision 10): membership frozen at search
      * time as the row tokens the page carries, row state fetched live per page.
      */

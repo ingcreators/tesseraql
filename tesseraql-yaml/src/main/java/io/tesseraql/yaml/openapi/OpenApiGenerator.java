@@ -114,6 +114,10 @@ public final class OpenApiGenerator {
                 Map<String, Object> pageSchema = new LinkedHashMap<>();
                 pageSchema.put("type", "integer");
                 pageSchema.put("minimum", 1);
+                // The runtime refuses above this, so the published contract says so. A
+                // framework-owned parameter whose refusal exists only in code is a contract the
+                // generator lies about, and openapi.json is a shipped artifact.
+                pageSchema.put("maximum", io.tesseraql.yaml.model.PageSpec.MAX_PAGE);
                 pageSchema.put("default", 1);
                 parameters.add(parameter("page", "query", false, pageSchema));
             }

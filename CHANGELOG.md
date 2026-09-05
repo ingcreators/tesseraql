@@ -20,6 +20,20 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A large page number no longer overflows Studio's audit trail or its data browser.** Both
+  parse `page` themselves rather than going through the framework's binder, and sliced in `int`
+  arithmetic: `(page - 1) * size` wraps negative from page 42,949,674 upward, so the audit
+  trail's window became `subList(-100, -50)` — which throws for any log size, including an empty
+  one, and rendered as an internal server error. The data browser's offset wrapped into
+  `setMaxRows` with a negative row count. Both widen before the multiply.
+
+  The framework's own `?page=` also gains a stated ceiling of `Integer.MAX_VALUE`, and the
+  OpenAPI document publishes it as the `page` parameter's `maximum`, beside the one `size`
+  already published. That is a contract change rather than a behaviour change: measured on a
+  build without the bound, a declarative offset route already refuses every value above that
+  ceiling. What the bound adds is one place where the number is stated, and a published contract
+  that no longer describes a request the runtime would refuse.
+
 - **An aborted download no longer costs the runtime an admission permit, permanently.** A
   streamed response is written a chunk at a time and the route waits for each, and the admission
   permit was released only from the routing context's end handler. That handler does not fire

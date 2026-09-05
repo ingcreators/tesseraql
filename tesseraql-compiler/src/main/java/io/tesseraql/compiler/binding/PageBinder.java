@@ -71,7 +71,8 @@ public final class PageBinder implements Step {
                     new PageRequest(1, size, 0, spec.count(), by));
             return;
         }
-        long number = positiveLong(exchange, "page", 1);
+        long number = positiveLong(exchange, "page", 1,
+                io.tesseraql.yaml.model.PageSpec.MAX_PAGE);
         exchange.setProperty(TesseraqlProperties.PAGE,
                 new PageRequest(number, size, (number - 1) * (long) size, spec.count(), null));
     }
@@ -130,7 +131,8 @@ public final class PageBinder implements Step {
                     + spec.effectiveCap() + " (pagination.cap, docs/list-surface.md"
                     + " decision 10)");
         }
-        long number = positiveLong(exchange, "page", 1);
+        long number = positiveLong(exchange, "page", 1,
+                io.tesseraql.yaml.model.PageSpec.MAX_PAGE);
         int from = (int) Math.min((number - 1) * size, posted.size());
         int to = (int) Math.min(number * size, posted.size());
         List<Object> keys = new java.util.ArrayList<>(to - from);
@@ -177,18 +179,31 @@ public final class PageBinder implements Step {
         if (spec.maxSize() == null) {
             return declared;
         }
-        long requested = positiveLong(exchange, "size", declared);
+        long requested = positiveLong(exchange, "size", declared, Long.MAX_VALUE);
         return (int) Math.min(requested, spec.maxSize().longValue());
     }
 
-    private static long positiveLong(Exchange exchange, String name, long fallback) {
+    /**
+     * A declared page or size: absent, or an integer within its bounds.
+     *
+     * <p>{@code max} is what stops the arithmetic downstream from wrapping. The two {@code page}
+     * call sites pass {@link io.tesseraql.yaml.model.PageSpec#MAX_PAGE}; the {@code size} call
+     * site passes {@code Long.MAX_VALUE} deliberately, because it is already clamped by
+     * {@code Math.min} against a declared {@code maxSize} the contract publishes — a page-shaped
+     * bound there would silently refuse a large {@code ?size=} that is harmless today.
+     *
+     * <p>The refusal reuses {@code reject}, adding no new message literal: the reference
+     * generator joins at most two meanings per code and this one's cell is already at that cap,
+     * so a bespoke sentence would displace a published one.
+     */
+    private static long positiveLong(Exchange exchange, String name, long fallback, long max) {
         String raw = exchange.request().param(name);
         if (raw == null || raw.isBlank()) {
             return fallback;
         }
         try {
             long value = Long.parseLong(raw.trim());
-            if (value < 1) {
+            if (value < 1 || value > max) {
                 throw reject(name, raw);
             }
             return value;
