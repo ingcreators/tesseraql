@@ -9,7 +9,7 @@
 </th:block>
 <div id="page-content" class="hc-stack">
 <div th:if="${available == 0}" class="hc-alert" data-variant="warning" role="status">
-  <p class="hc-alert__title">This realm keeps no grant history.</p>
+  <p class="hc-alert__title" th:text="${title}">This realm keeps no grant history.</p>
   <p th:text="${reason}">reason</p>
 </div>
 <section class="hc-card" th:if="${available == 1}">

@@ -31,6 +31,22 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A grant trail too large to show says so, instead of failing the page.** The trail is the one
+  identity read that meets the new row bound in normal operation: its contract's own header says no
+  parameter means the whole store, and the store is append-only. Bounded without this, the audit
+  page answered 500 with nothing an operator could do from the page.
+
+  It now renders the same warning panel a realm without the history contract gets, with its own
+  words — narrow the trail with a user or application filter, or raise `tesseraql.identity.maxRows`.
+  The panel's title moved into the model, because the two states are opposite faults and were
+  sharing one hard-coded sentence: a realm that keeps *no* history and a trail too large to show
+  would both have read "This realm keeps no grant history."
+
+  Deliberately not fixed by admitting the refusal into `featureUnavailable`. That predicate is
+  consulted by every degrading caller in the identity module, so a row-cap refusal reported there as
+  an absent feature would make a truncated separation-of-duties read find no conflict. The surface
+  that can say "too large" asks a separate predicate; every other caller keeps refusing.
+
 - **A large page number no longer overflows Studio's audit trail or its data browser.** Both
   parse `page` themselves rather than going through the framework's binder, and sliced in `int`
   arithmetic: `(page - 1) * size` wraps negative from page 42,949,674 upward, so the audit

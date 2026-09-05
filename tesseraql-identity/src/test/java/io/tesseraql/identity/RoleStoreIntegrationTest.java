@@ -222,6 +222,46 @@ class RoleStoreIntegrationTest {
         RoleAdmin.deleteRule(identity, MANAGED, ruleId);
     }
 
+    /**
+     * A trail too large to show says so, instead of failing the page.
+     *
+     * <p>The grant trail is the one identity read that meets the bound in normal operation: its
+     * contract's own header says no parameter means the whole store, and the store is append-only.
+     * Capping it without this would turn a slow audit page into a 500 an operator cannot clear
+     * from the page, because the refusal is not a missing feature and nothing else catches it.
+     *
+     * <p>And it must NOT be answered by widening {@code featureUnavailable}: that method is
+     * consulted by every degrading caller in the module, so admitting this code there would make a
+     * truncated separation-of-duties read find no conflict.
+     */
+    @Test
+    void aTrailTooLargeToShowSaysSoRatherThanFailingThePage() {
+        IdentityService bounded = new IdentityService(name -> dataSource).resultMaxRows(1);
+        GrantHistory.record(identity, MANAGED,
+                GrantHistory.Change.admin("kenji", "u1", GrantHistory.ROLE_GRANTED, "first"));
+        GrantHistory.record(identity, MANAGED,
+                GrantHistory.Change.admin("kenji", "u1", GrantHistory.ROLE_GRANTED, "second"));
+
+        Map<String, Object> model = GrantHistory.historyModel(bounded, MANAGED, null, null);
+
+        assertThat(model)
+                .containsEntry("available", 0)
+                .containsEntry("title", "This trail is too large to show at once.");
+        assertThat((String) model.get("reason")).contains("tesseraql.identity.maxRows");
+    }
+
+    /** The absent-contract panel keeps its own words, which are the opposite problem. */
+    @Test
+    void aRealmWithoutTheContractStillSaysItKeepsNoTrail(
+            @org.junit.jupiter.api.io.TempDir java.nio.file.Path emptyPack) {
+        RealmConfig noHistory = RealmConfig.sql("bare", "main", emptyPack,
+                Capabilities.readWrite());
+
+        assertThat(GrantHistory.historyModel(identity, noHistory, null, null))
+                .containsEntry("available", 0)
+                .containsEntry("title", "This realm keeps no grant history.");
+    }
+
     /** A realm whose pack has no history contract keeps its writes and reports no trail. */
     @Test
     void aRealmWithoutTheHistoryContractDegradesRatherThanFailing(

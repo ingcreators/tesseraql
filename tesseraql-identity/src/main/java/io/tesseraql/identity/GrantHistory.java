@@ -125,6 +125,12 @@ public final class GrantHistory {
         }
     }
 
+    /** There is no trail to show: this realm's pack has no history contract. */
+    private static final String NO_TRAIL = "This realm keeps no grant history.";
+
+    /** There is too much trail to show, which is the opposite problem and must not read alike. */
+    private static final String TRAIL_TOO_LARGE = "This trail is too large to show at once.";
+
     /**
      * The history page's model: the trail newest first, optionally narrowed to one person or
      * one application. A realm without the contract answers unavailable with its reason, the
@@ -134,7 +140,7 @@ public final class GrantHistory {
             String userId, String application) {
         Map<String, Object> model = new LinkedHashMap<>();
         if (identity == null || realm == null) {
-            return unavailable(model, "No identity realm is configured");
+            return unavailable(model, NO_TRAIL, "No identity realm is configured");
         }
         Map<String, Object> params = new LinkedHashMap<>();
         params.put("userId", blankToNull(userId));
@@ -145,19 +151,34 @@ public final class GrantHistory {
                     params));
             model.put("available", 1);
         } catch (TqlException ex) {
+            // The trail is read whole by design - the contract's own header says no parameter
+            // means the whole store, and the store is append-only - so it is the one identity
+            // read that meets the bound in normal operation. Answer it with a page that says so,
+            // not a 500 an operator cannot clear from the page.
+            //
+            // NOT by widening featureUnavailable to admit this code: that method is consulted by
+            // every degrading caller in the module, and an over-large read reported as an absent
+            // feature is how a truncated constraint set finds no conflict.
+            if (IdentityService.readTooLarge(ex)) {
+                return unavailable(model, TRAIL_TOO_LARGE, "Narrow the trail with a user or"
+                        + " application filter, or raise tesseraql.identity.maxRows.");
+            }
             if (!IdentityService.featureUnavailable(ex)) {
                 throw ex;
             }
-            return unavailable(model, ex.getMessage());
+            return unavailable(model, NO_TRAIL, ex.getMessage());
         }
         model.put("userId", blankToNull(userId));
         model.put("application", blankToNull(application));
         return model;
     }
 
-    private static Map<String, Object> unavailable(Map<String, Object> model, String reason) {
+    /** The panel cannot show a trail, and says which of the two reasons it is. */
+    private static Map<String, Object> unavailable(Map<String, Object> model, String title,
+            String reason) {
         model.put("rows", List.of());
         model.put("available", 0);
+        model.put("title", title);
         model.put("reason", reason);
         return model;
     }

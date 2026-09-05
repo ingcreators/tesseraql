@@ -403,6 +403,20 @@ public final class IdentityService {
     }
 
     /**
+     * Whether {@code ex} is a read refused for being larger than the identity bound.
+     *
+     * <p>Deliberately a SEPARATE predicate from {@link #featureUnavailable(TqlException)}, and the
+     * separation is the point. A caller that degrades on an absent feature must not degrade on a
+     * refusal: an absent contract means there is nothing to show, while a refusal means there is
+     * too much to show, and answering the second with an empty result is how a governance read
+     * silently widens a permission set. A surface that can say "too large" says so with this;
+     * every other caller keeps refusing.
+     */
+    public static boolean readTooLarge(TqlException ex) {
+        return MATERIALIZATION_OVERFLOW.equals(ex.code());
+    }
+
+    /**
      * Whether a failed <em>read</em> means the store simply does not have this feature
      * installed, rather than that something went wrong (docs/access-governance.md).
      *
