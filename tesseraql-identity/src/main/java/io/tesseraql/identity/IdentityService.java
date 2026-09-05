@@ -98,6 +98,11 @@ public final class IdentityService {
         return this;
     }
 
+    /** The row bound this service's reads run under; {@code -1} is uncapped. */
+    public int resultMaxRows() {
+        return resultMaxRows;
+    }
+
     /**
      * The tracer every contract statement spans through (docs/contract-sql-execution.md
      * structural decision 5): a slow sign-in stops being an unexplained gap in its trace.

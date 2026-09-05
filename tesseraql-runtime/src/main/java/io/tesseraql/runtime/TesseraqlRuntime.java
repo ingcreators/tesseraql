@@ -45,6 +45,22 @@ public final class TesseraqlRuntime implements AutoCloseable {
     /** TQL-YAML-1112: a declared HTTP thread count that is not a positive integer. */
     private static final io.tesseraql.core.error.TqlErrorCode BAD_THREAD_COUNT = new io.tesseraql.core.error.TqlErrorCode(
             io.tesseraql.core.error.TqlDomain.YAML, 1112);
+    /** TQL-YAML-1114: a declared identity row bound that is not a positive integer or -1. */
+    private static final io.tesseraql.core.error.TqlErrorCode BAD_IDENTITY_BOUND = new io.tesseraql.core.error.TqlErrorCode(
+            io.tesseraql.core.error.TqlDomain.YAML, 1114);
+
+    /**
+     * How many rows an identity contract read may materialize when nothing is declared.
+     *
+     * <p>Not the route key's 10,000, deliberately. An identity read is a whole set a caller
+     * consumes, not a page a reader scrolls, so this is a runaway stop rather than a page size —
+     * and the one read that decides how large a legitimate set can get is on the sign-in path.
+     * {@code find-role-grants-by-user-id} is a role-by-permission cross product unioned over direct
+     * and group grants, and a refusal there escapes {@code resolvePrincipal}, so a number tight
+     * enough to matter would lock out the most heavily granted administrator first — the one
+     * account able to raise it again.
+     */
+    private static final int DEFAULT_IDENTITY_MAX_ROWS = 50_000;
 
     /** The declared drain bound, in milliseconds; Long.MAX_VALUE when forceOnTimeout is off. */
     static final String SHUTDOWN_TIMEOUT_BEAN = "tesseraqlShutdownTimeoutMillis";
@@ -2254,7 +2270,44 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 // A sign-in's contract runs under the same bound a page's query does
                 // (docs/contract-sql-execution.md structural decision 3): it ran unbounded,
                 // holding a pooled connection, on the one path nobody can work around.
-                .sqlTimeoutSeconds(io.tesseraql.yaml.config.SqlDefaults.timeoutSeconds(config));
+                .sqlTimeoutSeconds(io.tesseraql.yaml.config.SqlDefaults.timeoutSeconds(config))
+                .resultMaxRows(identityMaxRows(config));
+    }
+
+    /**
+     * How many rows an identity contract read may materialize:
+     * {@code tesseraql.identity.maxRows}, default 50,000, {@code -1} the visible opt-out.
+     *
+     * <p>Its own key, never the route's {@code tesseraql.resultMaterialization.maxRows}. That one
+     * bounds what a page renders and an operator lowers it to protect page memory; this one bounds
+     * what the identity store hands Java, and every managed sign-in reads through it. Sharing the
+     * key would let a page-memory decision lock every user out.
+     *
+     * <p>A typo refuses at boot rather than falling back, for the reason {@link #threadCount} gives
+     * for a thread pool: a bound sized from a typo is worse than one left at its default, because
+     * the runtime starts and only the read that needed the bound finds out. {@code 0} refuses too —
+     * a bound of zero materializes nothing, which would turn "forgot" into "opted out".
+     */
+    static int identityMaxRows(AppConfig config) {
+        String declared = config.getString("tesseraql.identity.maxRows")
+                .map(String::trim)
+                .orElse(null);
+        if (declared == null) {
+            return DEFAULT_IDENTITY_MAX_ROWS;
+        }
+        int value;
+        try {
+            value = Integer.parseInt(declared);
+        } catch (NumberFormatException notANumber) {
+            throw new io.tesseraql.core.error.TqlException(BAD_IDENTITY_BOUND,
+                    "tesseraql.identity.maxRows must be a positive integer or -1, got '"
+                            + declared + "'");
+        }
+        if (value == 0 || value < -1) {
+            throw new io.tesseraql.core.error.TqlException(BAD_IDENTITY_BOUND,
+                    "tesseraql.identity.maxRows must be a positive integer or -1, got " + value);
+        }
+        return value;
     }
 
     /** The configured dialect for the main datasource, or inferred from its JDBC URL (design ch. 42). */

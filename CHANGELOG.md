@@ -8,6 +8,14 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **`tesseraql.identity.maxRows`** — how many rows one identity contract read may materialize,
+  defaulting to 50,000, with `-1` the visible opt-out. Its own key, never the route's
+  `tesseraql.resultMaterialization.maxRows`: that one bounds what a page renders and an operator
+  lowers it to protect page memory, while this one bounds what the identity store hands Java on
+  every managed sign-in. Sharing the key would let a page-memory decision lock every user out. A
+  value that is not a positive integer or `-1` refuses at boot rather than falling back, because a
+  bound sized from a typo starts the runtime and only the read that needed it finds out.
+
 - **`tesseraql.http.maxEventStreams`** — how many event streams the runtime holds open at once,
   defaulting to the same number as `tesseraql.http.maxInFlight`.
 
@@ -163,6 +171,26 @@ All notable changes to TesseraQL are documented here. The format follows
   had: both sweeps read it on a timer on every node and both were table scans.
 
 ### Changed
+
+- **Identity contract reads are bounded.** They had no row bound at all: sign-in, principal
+  resolution, role and access administration, invitations, recovery, the account app and the 51
+  `iam.*` providers all materialized whatever the store returned. A read past the bound now refuses
+  with `TQL-LD-0001`.
+
+  The refusal is deliberately not an IAM code. `IdentityService.featureUnavailable` answers true for
+  every IAM execution failure, and callers across the module degrade to an empty answer on it — an
+  empty separation-of-duties constraint set finds no conflict, and absent role conditions are an
+  unnarrowed grant. Had the refusal worn an IAM code, a read too large to materialize would have
+  widened a permission set instead of refusing it. There is also no `warn`: a truncated governance
+  read is indistinguishable from a small one, so refusal is the only outcome.
+
+  One read is exempt and recorded as a gap rather than an approval: `resolvePrincipal` reads the
+  enabled assignment rules app-wide with no user predicate on every managed sign-in, so a bound
+  there would turn ordinary rule growth into an authentication outage for every user at once. The
+  underlying defect — an unfiltered app-wide read on a request path — is filed on its own.
+
+  The bound reaches the identity service the runtime binds. A service built by the CLI, the Maven
+  goal, `tql test` or Studio has no application config to read a bound from and stays uncapped.
 
 - **A capped read is the statement's own, and honours the label policy that statement declared.**
   `SqlStatement.cappedRows(String dialect, int maxRows, RowOverflow)` was a static factory, so it
