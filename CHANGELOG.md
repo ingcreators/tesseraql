@@ -164,6 +164,22 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **A capped read is the statement's own, and honours the label policy that statement declared.**
+  `SqlStatement.cappedRows(String dialect, int maxRows, RowOverflow)` was a static factory, so it
+  could not see the `rawLabels` policy of the statement it was reading for and always folded labels
+  under the dialect it was handed. An executor that declares raw labels — SCIM does, deliberately —
+  therefore could not use a capped read at all, and materialized its results with no bound instead.
+  That was not an oversight; the reader's shape forced it.
+
+  It is replaced by instance readers on the statement itself: `rows(maxRows, onOverflow)`, an
+  uncapped `rows()`, and a `firstRow()` that stops at the first row rather than materializing the
+  rest to discard it. All three read the statement's own dialect and label policy, and all three
+  share one row-shaping loop with the uncapped reader behind `query`, so the two cannot drift apart
+  again the way they did over temporals.
+
+  The static `cappedRows` is removed with no shim. Every in-tree caller already passed the dialect
+  its statement was built with, so the swap is behaviour-preserving at each one.
+
 - **An identity realm resolves its dialect from its own connector, not from `main`'s.** A realm
   names its connector with `tesseraql.identity.realms.<id>.datasource`, and that connector need not
   be `main` — but the runtime could only resolve `main`'s dialect, so a realm anywhere else ran
