@@ -301,4 +301,7 @@ export const EXCLUDED = [
   // The HTTP edge: what it admits, what it bounds and what it answers, designed 2026-09-05
   // after a refutation review measured every claim against the shipped Vert.x jars.
   'http-edge-robustness.md',
+  // The 2-way SQL parser's three lexical layers and the identifier contract they share,
+  // designed 2026-09-05; its first slice shipped ahead of it as #1148.
+  'two-way-sql-parser.md',
 ];
