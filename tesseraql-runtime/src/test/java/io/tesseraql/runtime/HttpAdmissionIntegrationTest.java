@@ -337,6 +337,20 @@ class HttpAdmissionIntegrationTest {
         return streams;
     }
 
+    /**
+     * Reads the opening frame off {@code body} and leaves the stream open.
+     *
+     * <p>Byte by byte off the raw stream rather than through a {@code BufferedReader}: that
+     * wrapper is a Closeable nothing may ever close, because closing it closes the response body
+     * and hands the permit back — the permit these cases are holding on purpose.
+     */
+    private static void readOpeningFrame(java.io.InputStream body) throws IOException {
+        int read = body.read();
+        while (read != -1 && read != '\n') {
+            read = body.read();
+        }
+    }
+
     /** A handful of open SSE connections, closed together. */
     static final class OpenStreams implements AutoCloseable {
 
@@ -355,8 +369,7 @@ class HttpAdmissionIntegrationTest {
                     .isEqualTo(200);
             // Read the opening retry: frame, so the connection is established — and the permit
             // taken — before the assertion that depends on it runs.
-            new java.io.BufferedReader(new java.io.InputStreamReader(response.body(),
-                    java.nio.charset.StandardCharsets.UTF_8)).readLine();
+            readOpeningFrame(response.body());
             responses.add(response);
         }
 
@@ -602,8 +615,9 @@ class HttpAdmissionIntegrationTest {
                                 .header("Cookie", cookie).build(),
                         HttpResponse.BodyHandlers.ofInputStream());
                 assertThat(first.statusCode()).isEqualTo(200);
-                new java.io.BufferedReader(new java.io.InputStreamReader(first.body(),
-                        java.nio.charset.StandardCharsets.UTF_8)).readLine();
+                // The one permit this budget has is held from here to the close below, which is
+                // what the refusal in between is measuring.
+                readOpeningFrame(first.body());
 
                 HttpResponse<String> second = HttpClient.newHttpClient().send(
                         HttpRequest.newBuilder(URI.create("http://localhost:" + declared.port()

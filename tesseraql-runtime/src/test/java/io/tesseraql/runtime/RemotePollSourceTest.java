@@ -29,33 +29,37 @@ class RemotePollSourceTest {
 
     @Test
     void aNameThatEscapesTheWorkDirectoryIsRefused() {
-        RemotePollSource source = new RemotePollSource(new WritingFiles(), work.resolve("job"));
-
-        assertThatThrownBy(() -> source.fetch(new PollSource.PolledFile("../escape.csv", 3, 1L)))
-                .isInstanceOf(IOException.class)
-                .hasMessageContaining("escapes the work directory");
-        assertThat(work.resolve("escape.csv")).doesNotExist();
+        try (RemotePollSource source = new RemotePollSource(new WritingFiles(),
+                work.resolve("job"))) {
+            assertThatThrownBy(() -> source.fetch(
+                    new PollSource.PolledFile("../escape.csv", 3, 1L)))
+                    .isInstanceOf(IOException.class)
+                    .hasMessageContaining("escapes the work directory");
+            assertThat(work.resolve("escape.csv")).doesNotExist();
+        }
     }
 
     @Test
     void anAbsoluteNameIsRefused() {
-        RemotePollSource source = new RemotePollSource(new WritingFiles(), work.resolve("job"));
-
-        assertThatThrownBy(() -> source.fetch(
-                new PollSource.PolledFile("/etc/tesseraql-owned", 3, 1L)))
-                .isInstanceOf(IOException.class)
-                .hasMessageContaining("escapes the work directory");
+        try (RemotePollSource source = new RemotePollSource(new WritingFiles(),
+                work.resolve("job"))) {
+            assertThatThrownBy(() -> source.fetch(
+                    new PollSource.PolledFile("/etc/tesseraql-owned", 3, 1L)))
+                    .isInstanceOf(IOException.class)
+                    .hasMessageContaining("escapes the work directory");
+        }
     }
 
     @Test
     void aPlainNameDownloadsIntoTheWorkDirectory() throws IOException {
         Path jobWork = work.resolve("job");
-        RemotePollSource source = new RemotePollSource(new WritingFiles(), jobWork);
+        try (RemotePollSource source = new RemotePollSource(new WritingFiles(), jobWork)) {
+            PollSource.Fetched fetched = source.fetch(
+                    new PollSource.PolledFile("orders.csv", 3, 1L));
 
-        PollSource.Fetched fetched = source.fetch(new PollSource.PolledFile("orders.csv", 3, 1L));
-
-        assertThat(fetched.path()).isEqualTo(jobWork.resolve("orders.csv"));
-        assertThat(Files.readString(fetched.path())).isEqualTo("ok\n");
+            assertThat(fetched.path()).isEqualTo(jobWork.resolve("orders.csv"));
+            assertThat(Files.readString(fetched.path())).isEqualTo("ok\n");
+        }
     }
 
     /** A transport that actually writes, so a target outside the directory would leave a file. */
