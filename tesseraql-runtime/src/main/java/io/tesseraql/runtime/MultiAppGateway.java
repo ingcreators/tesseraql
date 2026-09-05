@@ -154,8 +154,8 @@ public final class MultiAppGateway implements AutoCloseable {
                 host::entry, host::ingressStrip,
                 settings.trustedProxies(), this::targetPort, host::surfacePort, rootTarget)
                 .maxConcurrentPerMember(perMember);
-        this.server = vertx.createHttpServer(
-                StackRelay.frontOptions(frontPort, settings.http2()));
+        this.server = vertx.createHttpServer(StackRelay.frontOptions(frontPort,
+                settings.http2(), idleTimeoutSeconds(stackSettings)));
         server.requestHandler(relay::handle);
         try {
             this.port = server.listen()
@@ -324,6 +324,37 @@ public final class MultiAppGateway implements AutoCloseable {
                     }
                 })
                 .orElse(0);
+    }
+
+    /**
+     * The front door's connection idle bound (docs/http-edge-robustness.md decision 8).
+     *
+     * <p>The same key a runtime reads for its own port, read here from the stack's settings,
+     * because under the shipped image this is the socket a client actually connects to — a
+     * stalled peer reclaimed at a member's server would still hold a connection at the front.
+     * One bound, both doors, and no second key with a near-identical name.
+     *
+     * <p>This is not {@code readIdleTimeoutSeconds}, which is off by default and bounds a
+     * <em>forwarded response</em> that has gone quiet: a member legitimately takes as long as its
+     * slowest query. This bounds a client connection carrying no traffic at all, where 300
+     * seconds clears every interval this stack declares for itself.
+     */
+    private static int idleTimeoutSeconds(
+            io.tesseraql.operations.app.StackSettings stackSettings) {
+        if (stackSettings == null) {
+            return 300;
+        }
+        return stackSettings.config().getString("tesseraql.http.idleTimeoutSeconds")
+                .map(declared -> {
+                    try {
+                        return Integer.parseInt(declared.trim());
+                    } catch (NumberFormatException notANumber) {
+                        LOG.warn("tesseraql.http.idleTimeoutSeconds is not a number: {}."
+                                + " Using 300.", declared);
+                        return 300;
+                    }
+                })
+                .orElse(300);
     }
 
     public int port() {

@@ -443,6 +443,46 @@ public final class TesseraqlRuntime implements AutoCloseable {
     }
 
     /**
+     * How long a connection may carry no traffic before the transport closes it:
+     * {@code tesseraql.http.idleTimeoutSeconds}, default 300, {@code -1} the visible opt-out
+     * (docs/http-edge-robustness.md decision 8).
+     *
+     * <p>Both write loops in this runtime wait on the previous chunk before reading the next, and
+     * that wait had no deadline. A peer that reads a response head and then stops reading parked
+     * a virtual thread indefinitely — and for a route it parked the admission permit with it,
+     * since that is released from the routing context's end handler. Enough stalled sockets
+     * closed the runtime to everyone else.
+     *
+     * <p>The bound is at the transport rather than on the chunk, and the difference is not
+     * stylistic. Measured against this jar: with a per-chunk deadline the write loop exits but
+     * the connection close is a graceful shutdown that queues an empty buffer behind the stalled
+     * chunk, so ten seconds later no close, end or exception handler had fired and the socket was
+     * still open — the thread comes back and the permit and the socket leak. With an idle timeout
+     * the transport closes the channel directly, and both the response and connection close
+     * handlers fire. One instrument reclaims all three.
+     *
+     * <p>Default 300 rather than off. Every silent interval this runtime declares fits well
+     * inside it — a statement is bounded at 30 seconds, a live stream heartbeats every 25, and
+     * Studio's copilot bounds each model call at 60 — and a key that has to be discovered before
+     * it protects anything protects nobody. It is deliberately five times the largest of those
+     * rather than twice: being too generous holds a stalled socket longer, being too tight cuts
+     * somebody's legitimately long report, and only one of those two is a correctness failure. An
+     * application that removes its statement bound raises this key or sets {@code -1}.
+     */
+    private static int idleTimeoutSeconds(AppConfig config) {
+        String declared = config.getString("tesseraql.http.idleTimeoutSeconds")
+                .map(String::trim).orElse(null);
+        if (declared == null) {
+            return 300;
+        }
+        if ("-1".equals(declared)) {
+            return -1;
+        }
+        return (int) io.tesseraql.core.util.Sizes.parsePositiveBytes(declared,
+                "tesseraql.http.idleTimeoutSeconds");
+    }
+
+    /**
      * A declared thread count: absent, or a positive integer.
      *
      * <p>A thread pool sized from a typo is worse than one left at its default, because the
@@ -1335,7 +1375,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     new HttpEdgeSettings(maxBodyBytes(manifest.config()),
                             tempScratch.resolve("uploads"),
                             maxFormFields(manifest.config()),
-                            formCeiling(maxBodyBytes(manifest.config()))));
+                            formCeiling(maxBodyBytes(manifest.config())),
+                            idleTimeoutSeconds(manifest.config())));
             context.addService(httpServer);
             new RouteCompiler().appName(appName)
                     .functions(modules.functions()).compile(context, manifest);

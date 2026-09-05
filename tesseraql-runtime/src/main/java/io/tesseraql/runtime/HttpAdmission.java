@@ -116,12 +116,38 @@ final class HttpAdmission {
             refuse(ctx, stream);
             return;
         }
-        // Fires on completion and on failure alike; a permit released only on the happy path is a
-        // permit the runtime loses every time something goes wrong, which is when it has least to
-        // spare. It releases the budget that was taken, not whichever one a second reading of the
-        // path would choose.
-        ctx.addEndHandler(ended -> budget.release());
+        // Two signals, released exactly once, because neither one covers the other.
+        //
+        // The end handler fires on completion and on failure alike; a permit released only on the
+        // happy path is a permit the runtime loses every time something goes wrong, which is when
+        // it has least to spare. It releases the budget that was taken, not whichever one a
+        // second reading of the path would choose.
+        //
+        // But it does NOT fire for a streamed response whose connection is closed rather than
+        // ended — measured against vertx-web 5.1.6 with this runtime's own write shape, where the
+        // route's write loop issues each chunk through runOnContext from a virtual thread. The
+        // response's own close handler fires, the write loop leaves, and the routing context is
+        // never disposed, so the permit was held for the life of the process. Every aborted
+        // download leaked one. The connection's close handler does fire there, so it is the
+        // second signal.
+        java.util.concurrent.atomic.AtomicBoolean released = new java.util.concurrent.atomic.AtomicBoolean();
+        ctx.addEndHandler(ended -> release(budget, released));
+        ctx.request().connection().closeHandler(closed -> release(budget, released));
         ctx.next();
+    }
+
+    /**
+     * Gives the permit back, once, whichever signal arrives first.
+     *
+     * <p>Both can arrive for one request — an ordinary response ends and its keep-alive
+     * connection closes later — and a semaphore released twice for one acquisition invents
+     * capacity that was never there.
+     */
+    private static void release(Semaphore budget,
+            java.util.concurrent.atomic.AtomicBoolean released) {
+        if (released.compareAndSet(false, true)) {
+            budget.release();
+        }
     }
 
     /**

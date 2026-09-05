@@ -22,7 +22,9 @@ import java.nio.file.Path;
  * @param maxFormAttributeSize the largest single form field, sized one transport delivery above
  *                             {@code maxBodyBytes} so the body limit's 413 always wins the race
  *                             against the decoder's 400
+ * @param idleTimeoutSeconds   how long a connection may carry no traffic in either direction
+ *                             before the transport closes it; {@code -1} is the visible opt-out
  */
 record HttpEdgeSettings(long maxBodyBytes, Path uploadsDirectory, int maxFormFields,
-        int maxFormAttributeSize) {
+        int maxFormAttributeSize, int idleTimeoutSeconds) {
 }

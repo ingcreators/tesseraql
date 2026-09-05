@@ -118,6 +118,7 @@ that decide how much work the runtime does at once.
 | `tesseraql.http.maxEventStreams` | same as `maxInFlight` | Event streams held open at once before refusing |
 | `tesseraql.http.maxBodyBytes` | 10 MB | Largest request body, uploads included; takes units (`25MB`); `-1` removes the bound |
 | `tesseraql.http.maxFormFields` | 10,000 | Fields one form body may carry; `-1` removes the bound |
+| `tesseraql.http.idleTimeoutSeconds` | 300 | Silence on a connection before the transport closes it; `-1` removes the bound |
 
 **Beyond `maxInFlight` the runtime answers 503 with `Retry-After`**, immediately, rather than
 adding the request to a queue with no bound. Four times the worker count leaves room for the
@@ -149,6 +150,19 @@ enforce; the ceiling then takes the framework's own default body size.
 has a number of its own, set where a form body stops being a page and starts being an attack. A
 route's own `pagination.cap` remains the refusal an honest page meets, answered 422 with
 `TQL-FIELD-4222`; a deployment where this bound fires first is misconfigured.
+
+**A connection carrying no traffic is closed after `idleTimeoutSeconds`.** A response is written
+one chunk at a time and the route waits for each, so a peer that reads a response head and then
+stops reading held a thread, a connection and an admission permit for as long as it liked. The
+bound is at the transport rather than on the chunk, because only the transport's own close
+reclaims all three.
+
+The bound is all-idle, not write-only, so it also closes a connection whose route has read its
+request and written nothing for the interval. 300 seconds clears every silent interval this
+runtime declares: a statement is bounded at 30 seconds by default, and a live stream heartbeats
+every 25. An application that removes its statement bound raises this key or sets `-1`. Under
+`tesseraql host` the same number bounds the front door, which is the socket a client actually
+connects to.
 
 **A form the decoder refuses says which bound it crossed**, as `TQL-FIELD-2012` at 400 — and as a
 renderable fragment when the caller is htmx. That is the boundary worth knowing: below the

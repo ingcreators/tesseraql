@@ -59,15 +59,37 @@ class HttpEdgeDefaultsTest {
     @Test
     void theRuntimeDeclaresItsOwnFormBounds() {
         HttpEdgeSettings settings = new HttpEdgeSettings(1_048_576L, Path.of("uploads"),
-                4096, 1_048_576 + 65_536);
+                4096, 1_048_576 + 65_536, 90);
 
         HttpServerOptions options = TesseraqlHttpServer.serverOptions(settings);
 
         assertThat(options.getMaxFormFields()).isEqualTo(4096);
         assertThat(options.getMaxFormAttributeSize()).isEqualTo(1_048_576 + 65_536);
+        // Read back rather than diffed against the default: DEFAULT_IDLE_TIMEOUT is 0, so a
+        // declared value would be invisible to any comparison against a fresh options object
+        // while being a decision all the same.
+        assertThat(options.getIdleTimeout()).isEqualTo(90);
         // Left inherited, and the assertion says so rather than leaving it unstated.
         assertThat(options.getMaxFormBufferedBytes())
                 .isEqualTo(HttpServerOptions.DEFAULT_MAX_FORM_BUFFERED_SIZE);
+    }
+
+    /** The opt-out leaves the transport's own default, which is no bound at all. */
+    @Test
+    void theIdleBoundCanBeOptedOut() {
+        HttpEdgeSettings off = new HttpEdgeSettings(1_048_576L, Path.of("uploads"),
+                4096, 1_048_576 + 65_536, -1);
+
+        assertThat(TesseraqlHttpServer.serverOptions(off).getIdleTimeout())
+                .isEqualTo(TCPSSLOptions.DEFAULT_IDLE_TIMEOUT);
+    }
+
+    /** The front door carries the same bound: under the shipped image it is the client's socket. */
+    @Test
+    void theGatewayFrontDoorCarriesTheSameBound() {
+        assertThat(StackRelay.frontOptions(0, false, 120).getIdleTimeout()).isEqualTo(120);
+        assertThat(StackRelay.frontOptions(0, false, -1).getIdleTimeout())
+                .isEqualTo(TCPSSLOptions.DEFAULT_IDLE_TIMEOUT);
     }
 
     /**
