@@ -20,6 +20,10 @@ input:
     type: string
     required: false
 
+pagination:
+  size: 50
+  maxSize: 200
+
 sources:
   main:
     contract:
@@ -40,3 +44,4 @@ response:
       bulk: params.bulk
       selected: params.selected
       q: params.q
+      page: page

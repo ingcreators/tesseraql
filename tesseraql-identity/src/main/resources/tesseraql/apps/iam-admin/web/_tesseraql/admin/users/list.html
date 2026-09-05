@@ -106,6 +106,24 @@
       </div>
     </div>
   </form>
+  <!-- The directory is paged rather than rendered whole. It is the one admin surface that grows
+       without bound, so a single grid was always going to run out: the bulk form posted one
+       checkbox per row of tql_users, which the transport refused past its form-field count.
+       Paged rather than capped because a cap is a ceiling a growing deployment eventually hits
+       and cannot see past. The cost, stated: select-all selects this page. -->
+  <nav class="hc-pagination" aria-label="Pagination"
+       th:if="${page != null and (page['hasPrev'] == true or page['hasNext'] == true)}">
+    <a th:if="${page['hasPrev'] == true}" class="hc-pagination__item"
+       th:href="@{/_tesseraql/admin/users(q=${q},page=${page['number'] - 1})}">&lsaquo; Prev</a>
+    <span th:unless="${page['hasPrev'] == true}" class="hc-pagination__item"
+          aria-disabled="true">&lsaquo; Prev</span>
+    <span class="hc-pagination__item" aria-current="page"
+          th:text="|Page ${page['number']}|">Page 1</span>
+    <a th:if="${page['hasNext'] == true}" class="hc-pagination__item"
+       th:href="@{/_tesseraql/admin/users(q=${q},page=${page['number'] + 1})}">Next &rsaquo;</a>
+    <span th:unless="${page['hasNext'] == true}" class="hc-pagination__item"
+          aria-disabled="true">Next &rsaquo;</span>
+  </nav>
   </div>
 </section>
 </div>
