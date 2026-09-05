@@ -59,6 +59,12 @@ final class HttpAdmission {
      *
      * <p>Called from the same post-start hook the SSE endpoints use: the router is created when
      * the HTTP server service starts, so there is nothing to register on before that.
+     *
+     * <p>Registered after {@link UnicodePaths}, which shares this order value and is separated
+     * from it by registration index alone. That ordering is load-bearing: a Unicode path is
+     * rerouted in its decoded form, routing restarts from the first handler, and this gate then
+     * reads the decoded path once. Registering ahead of it would charge a permit against the
+     * percent-encoded spelling and again against the decoded one.
      */
     static void install(RuntimeContext runtimeContext, int maxInFlight) {
         io.vertx.ext.web.Router router = HttpEdgeBeans.router(runtimeContext);
@@ -71,8 +77,8 @@ final class HttpAdmission {
     }
 
     private void admit(io.vertx.ext.web.RoutingContext ctx) {
-        String path = ctx.request().path();
-        if (path.startsWith(healthPrefix) || path.startsWith(assetPrefix)) {
+        String path = matchedPath(ctx);
+        if (path != null && (path.startsWith(healthPrefix) || path.startsWith(assetPrefix))) {
             ctx.next();
             return;
         }
@@ -85,6 +91,33 @@ final class HttpAdmission {
         // spare.
         ctx.addEndHandler(ended -> permits.release());
         ctx.next();
+    }
+
+    /**
+     * The path the router will match this request on, which is not the path the client sent.
+     *
+     * <p>vertx-web matches routes on {@code RoutingContext.normalizedPath()} — dot segments
+     * removed, unreserved escapes decoded — and this gate tested {@code request().path()}, the
+     * target as transmitted. The two readings disagreed in both directions. A request could
+     * satisfy a carve-out and then be routed somewhere else entirely:
+     * {@code GET /_tesseraql/health/../../api/orders} took no permit and reached
+     * {@code /api/orders}, so the bound this gate exists to hold was one dot segment away from
+     * not existing. And a spelling the router accepts for an exempt mount, such as
+     * {@code /_tesseraql/%68ealth}, was charged a permit it should never have paid.
+     *
+     * <p>Returns null when the path cannot be normalized — vertx-web raises
+     * {@code IllegalArgumentException} on an invalid escape such as {@code /%zz}. That request
+     * matches no route either, since every route's own match normalizes the same way, so it is
+     * answered 400 without reaching an application. It is charged a permit rather than exempted:
+     * a request this gate cannot classify is not a request it should wave through, and the permit
+     * returns with the 400.
+     */
+    private static String matchedPath(io.vertx.ext.web.RoutingContext ctx) {
+        try {
+            return ctx.normalizedPath();
+        } catch (IllegalArgumentException unnormalizable) {
+            return null;
+        }
     }
 
     private void refuse(io.vertx.ext.web.RoutingContext ctx) {
