@@ -402,6 +402,15 @@ public final class SqlStatement {
         return values;
     }
 
+    /**
+     * The uncapped read behind {@link #query(Connection, String, String, Map)}: rows shaped the
+     * way {@link #cappedRows(String, int, RowOverflow)} shapes them — the label under this
+     * statement's own policy, the value through
+     * {@link io.tesseraql.core.dialect.ResultRows#value(Object)} so a JDBC temporal arrives as an
+     * ISO-8601 string rather than as whatever {@code toString()} a driver's temporal happens to
+     * have. The two readers agreed about labels and disagreed about values, which meant one store
+     * answered a contract read and a route read differently for the same column.
+     */
     private List<Map<String, Object>> readRows(ResultSet resultSet) throws SQLException {
         ResultSetMetaData metaData = resultSet.getMetaData();
         int columns = metaData.getColumnCount();
@@ -411,7 +420,7 @@ public final class SqlStatement {
             for (int col = 1; col <= columns; col++) {
                 String label = metaData.getColumnLabel(col);
                 row.put(rawLabels ? label : Labels.normalize(dialect, label),
-                        resultSet.getObject(col));
+                        io.tesseraql.core.dialect.ResultRows.value(resultSet.getObject(col)));
             }
             rows.add(row);
         }

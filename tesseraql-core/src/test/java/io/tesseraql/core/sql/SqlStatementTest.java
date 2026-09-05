@@ -321,6 +321,30 @@ class SqlStatementTest {
     }
 
     /**
+     * The two readers agreed about labels and disagreed about values: the capped reader passed
+     * every value through {@code ResultRows}, and the uncapped one behind {@code query} returned
+     * the driver's object. So one store answered the same timestamp column two ways depending on
+     * which reader asked, and seven shipped templates render an identity temporal directly.
+     *
+     * <p>The fixture builds its {@code Timestamp} from a fixed {@code Instant} rather than from
+     * {@code Timestamp.valueOf}: {@code ResultRows.value} renders UTC, so a wall-clock literal
+     * would make this assertion depend on the machine's zone.
+     */
+    @Test
+    void queryShapesItsTemporalsLikeTheCappedReaderDoes() throws SqlStatementException {
+        java.sql.Timestamp occurred = java.sql.Timestamp
+                .from(java.time.Instant.parse("2026-09-05T14:30:00Z"));
+        FakeDatabase database = new FakeDatabase(List.of("occurred_at"), List.of(occurred));
+
+        List<Map<String, Object>> rows = SqlStatement.on(database.dataSource())
+                .query("identity.list-grant-history", SELECT, Map.of("id", "u1"));
+
+        assertThat(rows).singleElement()
+                .extracting(row -> row.get("occurred_at"))
+                .isEqualTo("2026-09-05T14:30:00Z");
+    }
+
+    /**
      * A row-cap refusal has to reach the caller as itself. {@code SqlStatementException} extends
      * {@code SQLException}, so a refusal declared checked arrives in a caller's
      * {@code catch (SQLException)} wearing the same clothes as the database refusing the
