@@ -46,6 +46,19 @@ public final class IdentityService {
     }
 
     /**
+     * The vendor this realm's contracts resolve, fold and paginate under — its own connector's,
+     * not necessarily {@code main}'s.
+     *
+     * <p>Exposed so a route that runs the same contract reads the value from here rather than
+     * resolving one of its own. One realm answering to two dialects would select two different
+     * {@code <contract>.<dialect>.sql} variants and fold one store's labels two ways on a single
+     * page.
+     */
+    public String dialect() {
+        return dialect;
+    }
+
+    /**
      * The bound every contract statement runs under, in seconds; {@code 0} leaves it unset
      * (docs/contract-sql-execution.md structural decision 3).
      *

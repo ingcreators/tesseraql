@@ -1727,16 +1727,10 @@ public final class TesseraqlRuntime implements AutoCloseable {
                         .meter(effectiveMeter), backstop).schedule(Schedules.of(context));
             }
 
-            IdentityService identity = new IdentityService(
-                    name -> context.lookup(name,
-                            javax.sql.DataSource.class),
-                    datasourceDialect(manifest.config()))
-                    // A sign-in's contract now runs under the same bound a page's query does
-                    // (docs/contract-sql-execution.md structural decision 3): it ran unbounded,
-                    // holding a pooled connection, on the one path nobody can work around.
-                    .sqlTimeoutSeconds(io.tesseraql.yaml.config.SqlDefaults
-                            .timeoutSeconds(manifest.config()));
+            // The realm is built FIRST so the service can run under the realm's own vendor.
             RealmConfig realm = IdentityConfigFactory.defaultRealm(manifest.config(), appHome);
+            IdentityService identity = identityService(manifest.config(), realm,
+                    name -> context.lookup(name, javax.sql.DataSource.class));
             context.bind(TesseraqlProperties.IDENTITY_SERVICE_BEAN, identity);
             context.bind(TesseraqlProperties.IDENTITY_REALM_BEAN, realm);
             // Declared application roles converge into the store at boot
@@ -2245,9 +2239,38 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 def.reminders().escalated(), functions);
     }
 
+    /**
+     * The identity service a boot binds, under the realm's OWN connector's vendor.
+     *
+     * <p>A realm's connector is {@code tesseraql.identity.realms.<id>.datasource} and need not be
+     * {@code main}, but the runtime could only answer for {@code main} — so a realm elsewhere
+     * selected the wrong {@code <contract>.<dialect>.sql} variant, folded its labels under the
+     * wrong vendor, and appended the wrong vendor's pagination clause. Extracted from the boot
+     * path so that wiring is assertable rather than restated in a test.
+     */
+    static IdentityService identityService(AppConfig config, RealmConfig realm,
+            java.util.function.Function<String, javax.sql.DataSource> datasources) {
+        return new IdentityService(datasources, datasourceDialect(config, realm.datasource()))
+                // A sign-in's contract runs under the same bound a page's query does
+                // (docs/contract-sql-execution.md structural decision 3): it ran unbounded,
+                // holding a pooled connection, on the one path nobody can work around.
+                .sqlTimeoutSeconds(io.tesseraql.yaml.config.SqlDefaults.timeoutSeconds(config));
+    }
+
     /** The configured dialect for the main datasource, or inferred from its JDBC URL (design ch. 42). */
     static String datasourceDialect(AppConfig config) {
-        String prefix = "tesseraql.datasources.main.";
+        return datasourceDialect(config, "main");
+    }
+
+    /**
+     * As {@link #datasourceDialect(AppConfig)} for a named connector — the declared
+     * {@code tesseraql.datasources.<name>.dialect}, else inferred from that connector's JDBC URL.
+     * The compiler has resolved a named connector this way since Phase 53
+     * ({@code RouteCompiler.datasourceDialect(String)}); the runtime could only answer for
+     * {@code main}, which is why an identity realm on its own connector ran under main's vendor.
+     */
+    static String datasourceDialect(AppConfig config, String datasource) {
+        String prefix = "tesseraql.datasources." + datasource + ".";
         return config.getString(prefix + "dialect")
                 .orElseGet(() -> io.tesseraql.core.dialect.Dialect
                         .fromJdbcUrl(config.getString(prefix + "jdbcUrl")

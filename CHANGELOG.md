@@ -164,6 +164,23 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **An identity realm resolves its dialect from its own connector, not from `main`'s.** A realm
+  names its connector with `tesseraql.identity.realms.<id>.datasource`, and that connector need not
+  be `main` — but the runtime could only resolve `main`'s dialect, so a realm anywhere else ran
+  under the wrong vendor in three ways at once. It selected the wrong `<contract>.<dialect>.sql`
+  variant, and all six variant contracts in the pack are upsert-shaped writes
+  (`seed-admin-user`, `ensure-role`, `ensure-permission`, `assign-user-role`,
+  `assign-role-permission`, `upsert-declared-role`). It folded column labels under the wrong
+  vendor. And since pagination reached contracts, it appended the wrong vendor's clause.
+
+  A deployment whose realm sits on a non-`main` connector therefore changes behaviour: it now runs
+  the correct variant, and under Oracle `Labels.normalize` folds keys that previously arrived
+  unfolded, so model keys in templates change case. A realm on `main` — the default when nothing is
+  configured — sees nothing.
+
+  The compiler has resolved a named connector this way since Phase 53; only the runtime was
+  limited to `main`.
+
 - **A contract read returns ISO-8601 strings for JDBC temporals, where it returned the driver's
   own object.** `SqlStatement` had two row readers. The capped one every route and command read
   goes through passed each value through `ResultRows`, converting `java.sql.Timestamp`, `Date` and
