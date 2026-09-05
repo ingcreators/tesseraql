@@ -175,6 +175,19 @@ class DeclarativeViewIntegrationTest {
         // size caps at maxSize; garbage pages are field-scoped rejections.
         assertThat(get("/board/paged?page=0").statusCode()).isEqualTo(400);
         assertThat(get("/board/paged?page=x").statusCode()).isEqualTo(400);
+        // The page ceiling, pinned rather than fixed here. Measured on a build with the
+        // binder's bound removed, this route already answers 400 for every value above
+        // Integer.MAX_VALUE — so these are pins on behaviour that already holds, not a
+        // regression test for the bound. What the bound adds is that the ceiling is stated in
+        // one place and published in the OpenAPI contract, and that the two Studio routes
+        // which parse `page` themselves stop overflowing (see StudioServiceTest).
+        assertThat(get("/board/paged?page=2147483648").statusCode()).isEqualTo(400);
+        assertThat(get("/board/paged?page=9223372036854775807").statusCode()).isEqualTo(400);
+        // And the ceiling itself is admitted: the bound refuses above it, not at it.
+        assertThat(get("/board/paged?page=2147483647").statusCode()).isEqualTo(200);
+        assertThat(get("/board/paged?page=2147483648").statusCode()).isEqualTo(400);
+        // And the ceiling itself is admitted: the bound refuses above it, not at it.
+        assertThat(get("/board/paged?page=2147483647").statusCode()).isEqualTo(200);
     }
 
     @Test

@@ -82,8 +82,12 @@ final class AuditTrail {
         Comparator<AuditEntry> cmp = comparator(state.key());
         all.sort(state.descending() ? cmp.reversed() : cmp);
         int total = all.size();
-        int from = Math.min((p - 1) * size, total);
-        int to = Math.min(from + size, total);
+        // Widened to long before the multiply: this route parses its own page number rather
+        // than going through PageBinder, and in int arithmetic (p - 1) * size wraps negative
+        // from page 42,949,674 upward. At ?page=2147483647 the window became subList(-100, -50),
+        // which throws for any log size including an empty one, rendered as an internal error.
+        int from = (int) Math.min((long) (p - 1) * size, total);
+        int to = (int) Math.min((long) from + size, total);
         return new AuditPage(List.copyOf(all.subList(from, to)), p, size, total);
     }
 
