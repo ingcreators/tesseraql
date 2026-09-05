@@ -266,6 +266,8 @@ export const EXCLUDED = [
   'contract-sql-execution.md',
   // The last readers adopt the primitive; JDBC batching and stored calls, 2026-08-23.
   'sql-execution-shapes.md',
+  // Where a route's SQL comes from vs how it executes; the identity row bound, 2026-09-05.
+  'contract-source-seam.md',
   // Which library owns the socket and which thread a request pipeline runs on, 2026-08-20.
   'http-edge.md',
   // Taking Camel out of the build entirely: pipelines, schedules, connectors, 2026-08-21.

@@ -4667,6 +4667,8 @@ accepted — which the generated YAML surface reference had been publishing to r
 
 ### Documentation
 
+- **`docs/contract-source-seam.md`** records the seam and the campaign that built it.
+
 - **[hosting.md](docs/hosting.md)**: running several applications on one machine — the two
   modes of `tesseraql host`, what the install root holds, and what runtime isolation does and
   does not promise. The mechanism had no user page at all.
