@@ -62,6 +62,9 @@ class StackRelayTest {
     /** A front bounded to two forwards per member, for the capacity refusal. */
     private static HttpServer boundedFront;
     private static String boundedBase;
+    /** The same, bounded to one stream forward, so the stream share can be saturated. */
+    private static HttpServer streamBoundedFront;
+    private static String streamBoundedBase;
     /** The same relay with cleartext HTTP/2 on, at both ends together. */
     private static HttpClient h2Client;
     private static HttpServer h2Front;
@@ -106,10 +109,21 @@ class StackRelayTest {
         boundedFront.requestHandler(bounded::handle);
         boundedBase = "http://localhost:" + await(boundedFront.listen()).actualPort()
                 + "/" + APP;
+
+        StackRelay streamBounded = new StackRelay(client, CATALOGUE, appId -> originPort)
+                .maxConcurrentPerMember(2)
+                .maxStreamsPerMember(1);
+        streamBoundedFront = vertx.createHttpServer(StackRelay.frontOptions(0, false));
+        streamBoundedFront.requestHandler(streamBounded::handle);
+        streamBoundedBase = "http://localhost:"
+                + await(streamBoundedFront.listen()).actualPort() + "/" + APP;
     }
 
     @AfterAll
     static void stop() throws Exception {
+        if (streamBoundedFront != null) {
+            await(streamBoundedFront.close());
+        }
         if (boundedFront != null) {
             await(boundedFront.close());
         }
@@ -183,6 +197,104 @@ class StackRelayTest {
         // The queue in front of the bound is bounded to the same number, not left unbounded.
         assertThat(StackRelay.outboundPool(7).getMaxWaitQueueSize()).isEqualTo(7);
         assertThat(StackRelay.outboundOptions(true, 7).getHttp2MultiplexingLimit()).isEqualTo(7);
+    }
+
+    /**
+     * A stream forward does not spend the member's request share.
+     *
+     * <p>A forwarded response holds its permit until it ends, and an event stream does not end
+     * while the page is open — so with the relay unable to tell one from the other, a member's
+     * live users consumed its whole front door and every ordinary request to that member was
+     * answered 503 while the member itself was idle.
+     */
+    @Test
+    void anEventStreamForwardDoesNotSpendTheMembersRequestShare() throws Exception {
+        try (OpenForward stream = openStream(streamBoundedBase + "/_tesseraql/events")) {
+            assertThat(stream.status()).isEqualTo(200);
+            // The request share is two, and the stream took none of it.
+            assertThat(getStreamBounded("/echo").statusCode()).isEqualTo(200);
+            assertThat(getStreamBounded("/echo").statusCode()).isEqualTo(200);
+        }
+    }
+
+    /** Beyond the stream share the answer is its own code, and the request share is untouched. */
+    @Test
+    void beyondTheStreamShareAStreamForwardIsRefused() throws Exception {
+        try (OpenForward stream = openStream(streamBoundedBase + "/_tesseraql/events")) {
+            assertThat(stream.status()).isEqualTo(200);
+
+            HttpResponse<String> refused = getStreamBounded("/_tesseraql/events");
+
+            assertThat(refused.statusCode()).isEqualTo(503);
+            assertThat(refused.body()).contains("TQL-RATE-4296");
+            assertThat(refused.headers().firstValue("Retry-After")).contains("5");
+            assertThat(getStreamBounded("/echo").statusCode()).isEqualTo(200);
+        }
+    }
+
+    /**
+     * The discriminator is the path, not {@code Accept} — and this is the regression pin.
+     *
+     * <p>The campaign proposed discriminating on {@code Accept: text/event-stream}. A member
+     * serves MCP over Streamable HTTP, and this repository's own MCP client sends exactly that
+     * header on synchronous tool calls that are not streams, so the whole MCP surface would be
+     * billed to the stream share — and a header is the caller's to set, which would let a client
+     * pick which budget its slow requests spend. This case fails against that design.
+     */
+    @Test
+    void anOrdinaryPathCarryingTheStreamAcceptHeaderSpendsTheRequestShare() throws Exception {
+        try (OpenForward stream = openStream(streamBoundedBase + "/_tesseraql/events")) {
+            assertThat(stream.status()).isEqualTo(200);
+
+            HttpResponse<String> mcpShaped = send(HttpRequest
+                    .newBuilder(URI.create(streamBoundedBase + "/echo"))
+                    .header("Accept", "application/json, text/event-stream")
+                    .timeout(java.time.Duration.ofSeconds(30)));
+
+            // The stream share is exhausted; this is not a stream, so it is answered normally.
+            assertThat(mcpShaped.statusCode()).isEqualTo(200);
+        }
+    }
+
+    /** The outbound client carries both shares at once, so an admitted stream never queues. */
+    @Test
+    void theOutboundClientIsSizedToTheSumOfBothShares() {
+        int sized = MultiAppGateway.outboundSizing(10, 40);
+
+        assertThat(sized).isEqualTo(50);
+        assertThat(StackRelay.outboundPool(sized).getHttp1MaxSize()).isEqualTo(50);
+        assertThat(StackRelay.outboundPool(sized).getHttp2MaxSize()).isEqualTo(50);
+        assertThat(StackRelay.outboundPool(sized).getMaxWaitQueueSize()).isEqualTo(50);
+        assertThat(StackRelay.outboundOptions(true, sized).getHttp2MultiplexingLimit())
+                .isEqualTo(50);
+    }
+
+    /** One open forward, kept open until closed. */
+    private record OpenForward(HttpResponse<java.io.InputStream> response)
+            implements
+                AutoCloseable {
+
+        int status() {
+            return response.statusCode();
+        }
+
+        @Override
+        public void close() throws java.io.IOException {
+            response.body().close();
+        }
+    }
+
+    private static OpenForward openStream(String url) throws Exception {
+        HttpResponse<java.io.InputStream> response = java.net.http.HttpClient.newHttpClient()
+                .send(HttpRequest.newBuilder(URI.create(url))
+                        .timeout(java.time.Duration.ofSeconds(30)).build(),
+                        HttpResponse.BodyHandlers.ofInputStream());
+        return new OpenForward(response);
+    }
+
+    private static HttpResponse<String> getStreamBounded(String path) throws Exception {
+        return send(HttpRequest.newBuilder(URI.create(streamBoundedBase + path))
+                .timeout(java.time.Duration.ofSeconds(30)));
     }
 
     private static HttpResponse<String> getBounded(String path) {
@@ -604,7 +716,11 @@ class StackRelayTest {
 
         HttpServerResponse response = request.response();
         String path = request.path();
-        if (path.endsWith("/sse")) {
+        if (path.endsWith("/_tesseraql/events")) {
+            // A member's event stream: opened and left open, exactly like the real one.
+            response.putHeader("Content-Type", "text/event-stream").setChunked(true);
+            response.write("retry: 1000\n\n");
+        } else if (path.endsWith("/sse")) {
             response.putHeader("Content-Type", "text/event-stream").setChunked(true);
             emit(response, 0);
         } else if (path.endsWith("/slow")) {

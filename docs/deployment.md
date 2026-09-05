@@ -177,8 +177,23 @@ first. It is declared in `tesseraql-stack.yml`:
 
 | Key | Default | What it does |
 | --- | --- | --- |
-| `tesseraql.gateway.maxConcurrentPerMember` | `tesseraql.http.workerThreads` | Forwards in flight to one member |
+| `tesseraql.gateway.maxConcurrentPerMember` | `tesseraql.http.workerThreads` | Non-stream forwards in flight to one member |
+| `tesseraql.gateway.maxStreamsPerMember` | `maxConcurrentPerMember` x 4 | Event-stream forwards held open to one member |
 | `tesseraql.gateway.readIdleTimeoutSeconds` | off | Reclaim a forward whose member has sent nothing for this long |
+
+**Event streams are counted separately here too**, under `maxStreamsPerMember`. A forwarded
+response holds its permit until it ends, and an event stream does not end while the page is
+open. So a member's live users used to consume its whole forwarding share: with the per-subject
+stream cap at four, roughly three signed-in users saturated a member's front door, and every
+ordinary request to it was answered 503 while the member itself was idle. Beyond the stream
+share the answer is `TQL-RATE-4296`.
+
+A stream is recognised by the path the member mounts it at, not by the `Accept` header. A member
+serves MCP over the same endpoint shape and its clients send `Accept: text/event-stream` on
+calls that are not streams, and a header is the caller's to set in any case.
+
+The outbound client is sized to the **sum** of the two shares — fifty by default rather than ten
+— so an admitted stream never queues in the transport behind the requests it was separated from.
 
 Beyond the bound the gateway answers 503 with `Retry-After` and `TQL-RATE-4294` — **for that
 member only**. A member whose database has stalled holds its own permits and nothing else, so

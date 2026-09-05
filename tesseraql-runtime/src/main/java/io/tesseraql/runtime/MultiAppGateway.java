@@ -142,8 +142,15 @@ public final class MultiAppGateway implements AutoCloseable {
         // does a member do. The client is sized to match, so what the relay admits the transport
         // carries rather than queues behind.
         int perMember = maxConcurrentPerMember(stackSettings);
+        int perMemberStreams = maxStreamsPerMember(stackSettings, perMember);
+        // Sized to the SUM of the two shares, because on HTTP/1 one forward pins one pooled
+        // connection: a stream admitted past its own share would otherwise queue in the client,
+        // which is the queue this decision exists to remove. One number for both protocol modes
+        // is kept deliberately — the point of decision 5 is that a protocol flag never decides a
+        // capacity.
+        int outbound = outboundSizing(perMember, perMemberStreams);
         this.client = vertx.createHttpClient(StackRelay.outboundOptions(settings.http2(),
-                perMember, readIdleSeconds(stackSettings)), StackRelay.outboundPool(perMember));
+                outbound, readIdleSeconds(stackSettings)), StackRelay.outboundPool(outbound));
         // Every per-app lookup is the host's live slot state (docs/runtime-replace.md): a
         // replace swaps which runtime, which entry and which strip set answer for a member, and
         // the relay reads all three per request rather than from a start-time copy. Membership
@@ -153,7 +160,8 @@ public final class MultiAppGateway implements AutoCloseable {
                         .collect(java.util.stream.Collectors.toUnmodifiableSet()),
                 host::entry, host::ingressStrip,
                 settings.trustedProxies(), this::targetPort, host::surfacePort, rootTarget)
-                .maxConcurrentPerMember(perMember);
+                .maxConcurrentPerMember(perMember)
+                .maxStreamsPerMember(perMemberStreams);
         this.server = vertx.createHttpServer(StackRelay.frontOptions(frontPort,
                 settings.http2(), idleTimeoutSeconds(stackSettings)));
         server.requestHandler(relay::handle);
@@ -355,6 +363,49 @@ public final class MultiAppGateway implements AutoCloseable {
                     }
                 })
                 .orElse(300);
+    }
+
+    /**
+     * What the outbound client must carry: both per-member shares at once.
+     *
+     * <p>Extracted so it can be asserted. The sizing used to happen inline in a private
+     * constructor no test could reach, so the guard that was said to keep the transport from
+     * becoming the real, invisible bound was in fact only checking the two static helpers
+     * against numbers a test made up.
+     */
+    static int outboundSizing(int perMember, int perMemberStreams) {
+        return Math.max(1, perMember) + Math.max(1, perMemberStreams);
+    }
+
+    /**
+     * How many event-stream forwards one member may hold open
+     * (docs/http-edge-robustness.md decision 3).
+     *
+     * <p>Four times the request share, which is the same shape a runtime derives its own
+     * in-flight bound from its worker count, and lands on the number a member's own gate
+     * admits. The campaign proposed 256 — "the member's own stream budget" — and that is not a
+     * number this door can know: the gateway reads the stack file and cannot see a member's
+     * manifest. It would also be wrong if it could. A member admits forty in flight, so 216 of
+     * 256 stream forwards would be answered by the member one hop later, which is the exact
+     * failure the existing share was introduced to prevent.
+     */
+    private static int maxStreamsPerMember(
+            io.tesseraql.operations.app.StackSettings stackSettings, int perMember) {
+        int derived = perMember * 4;
+        if (stackSettings == null) {
+            return derived;
+        }
+        return stackSettings.config().getString("tesseraql.gateway.maxStreamsPerMember")
+                .map(declared -> {
+                    try {
+                        return Math.max(1, Integer.parseInt(declared.trim()));
+                    } catch (NumberFormatException notANumber) {
+                        LOG.warn("tesseraql.gateway.maxStreamsPerMember is not a number: {}."
+                                + " Using {}.", declared, derived);
+                        return derived;
+                    }
+                })
+                .orElse(derived);
     }
 
     public int port() {
