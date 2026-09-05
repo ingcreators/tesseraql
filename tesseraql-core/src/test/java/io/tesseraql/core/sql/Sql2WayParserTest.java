@@ -64,4 +64,79 @@ class Sql2WayParserTest {
                 .hasMessageContaining("TQL-SQL-2102")
                 .hasMessageContaining("Unterminated dummy value group");
     }
+
+    @Test
+    void aLineCommentMarkerInsideAQuotedIdentifierDoesNotSwallowTheBind() {
+        String sql = "select \"a--b\" from t where id = /* id */ 1";
+
+        BoundSql bound = SqlRenderer.render(sql, Map.of("id", 7));
+
+        assertThat(bound.sql()).isEqualTo("select \"a--b\" from t where id = ?");
+        assertThat(bound.parameters()).extracting(BoundParameter::value).containsExactly(7);
+    }
+
+    @Test
+    void anApostropheInsideAQuotedAliasIsNotAStringLiteral() {
+        String sql = "select x as \"Owner's name\" from t";
+
+        BoundSql bound = SqlRenderer.render(sql, Map.of());
+
+        assertThat(bound.sql()).isEqualTo(sql);
+    }
+
+    @Test
+    void aCommentOpenerInsideAQuotedIdentifierIsNotADirective() {
+        String sql = "select \"a/*b\" from t where id = /* id */ 1";
+
+        BoundSql bound = SqlRenderer.render(sql, Map.of("id", 7));
+
+        assertThat(bound.sql()).isEqualTo("select \"a/*b\" from t where id = ?");
+        assertThat(bound.parameters()).extracting(BoundParameter::value).containsExactly(7);
+    }
+
+    @Test
+    void aDoubledQuoteInsideAQuotedIdentifierIsPartOfIt() {
+        String sql = "select \"a\"\"b\" from t where id = /* id */ 1";
+
+        BoundSql bound = SqlRenderer.render(sql, Map.of("id", 7));
+
+        assertThat(bound.sql()).isEqualTo("select \"a\"\"b\" from t where id = ?");
+    }
+
+    @Test
+    void aBacktickedIdentifierIsOpaque() {
+        String sql = "select `a/*b` from t where id = /* id */ 1";
+
+        BoundSql bound = SqlRenderer.render(sql, Map.of("id", 7));
+
+        assertThat(bound.sql()).isEqualTo("select `a/*b` from t where id = ?");
+    }
+
+    @Test
+    void anUnterminatedQuotedIdentifierIsRejected() {
+        String sql = "select \"abc from t";
+
+        assertThatThrownBy(() -> SqlRenderer.render(sql, Map.of()))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("TQL-SQL-2102")
+                .hasMessageContaining("Unterminated quoted identifier");
+    }
+
+    @Test
+    void aBracketIsPlainTextAndNotQuoting() {
+        String sql = "select unnest([1, 2]) as n from t where id = /* id */ 1";
+
+        BoundSql bound = SqlRenderer.render(sql, Map.of("id", 7));
+
+        assertThat(bound.sql()).isEqualTo("select unnest([1, 2]) as n from t where id = ?");
+    }
+
+    @Test
+    void anApostropheInsideALineCommentIsStillCommentText() {
+        String sql = "select x -- don't\nfrom t where id = /* id */ 1";
+
+        BoundSql bound = SqlRenderer.render(sql, Map.of("id", 7));
+
+        assertThat(bound.sql()).isEqualTo("select x -- don't\nfrom t where id = ?");
+    }
 }

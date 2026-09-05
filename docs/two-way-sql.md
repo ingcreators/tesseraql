@@ -229,6 +229,11 @@ advances it. The full model is in
 A few rules keep every file executable as-is:
 
 - **Every `/* … */` block comment is a directive.** Use `--` line comments for remarks.
+- **Quoted text is content, not syntax.** A `--` line comment, a `'…'` string, and a `"…"` or
+  `` `…` `` quoted identifier are opaque, so a `/*`, an apostrophe or a `--` inside any of them is
+  text. A doubled delimiter is the escape (`"Owner""s"`), and an unterminated one is
+  `TQL-SQL-2102`. `[` is not quoting here — in DuckDB and PostgreSQL it is list and array syntax —
+  so a SQL Server author writes `"Owner's name"` rather than `[Owner's name]`.
 - **Every bind carries a dummy** so the raw statement has a value in that position; a scope
   or lock directive carries a parenthesized dummy predicate.
 - **Loop separators live in the directive**, never as trailing text between fragments.
