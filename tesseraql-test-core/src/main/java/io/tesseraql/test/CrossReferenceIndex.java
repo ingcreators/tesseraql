@@ -170,9 +170,7 @@ public final class CrossReferenceIndex {
 
     /** Strips the {@code identity.} prefix a route binding carries but a contract test case omits. */
     public static String stripIdentityPrefix(String contract) {
-        return contract.startsWith("identity.")
-                ? contract.substring("identity.".length())
-                : contract;
+        return io.tesseraql.identity.IdentityContracts.unqualify(contract);
     }
 
     private static Set<Path> testedSqlPaths(Path appHome, List<TestSuite> suites) {

@@ -31,6 +31,12 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **The row bound reaches a route's contract read.** `tesseraql.resultMaterialization.maxRows` is a
+  route-level budget that a contract binding never passed through, so an admin page backed by a
+  contract materialized whatever the store returned. The gap is closed by construction rather than
+  by a new parameter: there is no contract arm left in the compiler for a future axis to be dropped
+  in.
+
 - **A grant trail too large to show says so, instead of failing the page.** The trail is the one
   identity read that meets the new row bound in normal operation: its contract's own header says no
   parameter means the whole store, and the store is append-only. Bounded without this, the audit
@@ -186,6 +192,30 @@ All notable changes to TesseraQL are documented here. The format follows
   reaper runs whether or not jobs are declared. `tql_job_execution` gains the two indexes it never
   had: both sweeps read it on a timer on every node and both were table scans.
 
+
+- **A route's `contract:` binding is executed by the same step as its `sql:` binding.** A contract
+  compiled to its own step, `IamStep`, which took four constructor arguments where the SQL step took
+  nine. Every execution axis the framework gained therefore had to be carried across that branch by
+  hand: the statement timeout, tracing and declarative pagination each arrived as a separate
+  retrofit, and the row bound never arrived at all.
+
+  Both arms now build one `SqlStep` over a `SqlSource` that answers where the statement came from.
+  So a route contract read is bounded by the materialization budget, publishes `truncated`,
+  classifies its SQL errors, joins the request's trace instead of rooting its own, records into the
+  slow-SQL ring, and paginates through one implementation rather than two.
+
+  What a user sees: a duplicate key on a contract command route answers 409 rather than the 500 it
+  was flattened to; a contract statement appears inside the request's trace; and a contract read
+  past `tesseraql.resultMaterialization.maxRows` refuses where it rendered whole. On the identity
+  service's own reads the flattening stays, so the two arms differ on that axis — recorded, not
+  fixed here.
+
+- **`IamStep` is removed, with `TQL-IAM-2000`.** The code was already unreachable: the compiler
+  hard-coded the one operation it checked. `TQL-IAM-2001` keeps its number on the new
+  `ContractSqlSource`, because a hand-built context can still lack the identity beans.
+  `IdentityService`'s paged read is removed too — one day old, its only caller was the deleted step,
+  and with it go the synthetic `/* tqlPageN */` binds it injected into a realm's own SQL namespace
+  with no reservation or collision check.
 ### Changed
 
 - **`SqlStatement.query` and `queryOne` are gone.** Rendered SQL now meets JDBC through one
