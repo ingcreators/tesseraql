@@ -359,6 +359,18 @@ slice 2 — every declared statement. `observability.md` (or the deployment tele
 documents the `surface` attribute when slice 5 lands. `access-governance.md`'s slice 4b entry
 already points here.
 
+## What this design did not cover, and where it now lives
+
+This design merged every executor of rendered 2-way SQL onto one primitive, and deliberately left
+pagination, tenant routing and scope resolution **above** it, in the callers. That was right, and it
+is also the reason a class of divergence survived it: `IdentityService` and `SqlStep` are both
+callers, so everything the merge left to a caller could still differ between them — and did, four
+times.
+
+The bounds a caller asks the primitive for are therefore a separate axis from the primitive itself.
+That axis is [the contract source seam](contract-source-seam.md), which gives the two callers one
+body rather than merging them again.
+
 ## Deliberately not in this design
 
 - **A bundled managed *User* contract set.** The seam changes make one possible; whether the

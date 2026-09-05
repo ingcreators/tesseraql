@@ -548,7 +548,7 @@ final class ErrorIndex {
             "module-scope.md", "runtime-replace.md", "stack-shells.md",
             "application-roles.md", "studio-shell.md", "module-channel.md",
             "access-governance.md", "http-threading.md", "contract-sql-execution.md",
-            "sql-execution-shapes.md",
+            "sql-execution-shapes.md", "contract-source-seam.md",
             "http-edge.md", "camel-removal.md", "vertx-native.md", "boot-phases.md",
             "duplication-consolidation.md", "process-control-gaps.md", "idempotency-key.md",
             "list-surface.md", "hc-recipe-alignment.md", "workflow-surface.md",

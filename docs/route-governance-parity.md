@@ -274,6 +274,12 @@ Ordered so that each lands independently and the guard arrives before the long t
    The regression test is a `.postgres.sql` variant beside a query-export route's base file —
    the marker row only appears if the URI carries `dialect=`.
 6. **The SQL contract registry and its honesty probes** (guard step 4).
+   **Delivered 2026-09-05 in a narrower form** by [the contract source seam](contract-source-seam.md).
+   Not the declared-axis registry specified above: `DeclaredReadParityIntegrationTest` runs one
+   `sql:` route and one `contract:` route over byte-identical statement text and compares their HTTP
+   responses — temporal shape, row keys, the refusal at a declared bound, warn truncation, page
+   metadata. Matrix 2 never listed the contract path as an executor at all, which is the structural
+   reason four retrofits reached it one at a time.
    **Both non-producer executors are closed as far as wiring can close them.** `JobExecutor` and
    `JdbcFileTransferService` each re-implement execution rather than going through the producer,
    which is why each lost the dialect variant and the query timeout at once — independently, and
