@@ -188,6 +188,18 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **`SqlStatement.query` and `queryOne` are gone.** Rendered SQL now meets JDBC through one
+  materializing loop, reached by the statement's own readers — `rows(maxRows, onOverflow)`,
+  `rows()` and `firstRow()` — each shaped by that statement's dialect and label policy. The two
+  deleted readers rendered internally, which is why every surviving read form takes a `BoundSql`:
+  a caller renders, then reads.
+
+  This is what closes the divergence the campaign started from. There were two row readers that
+  agreed about labels and disagreed about values, so one store answered a contract read and a route
+  read differently for the same column. There is now one loop, and no second reader to drift from.
+
+  Removed with no shim, per the pre-1.0 rule. `update` is untouched.
+
 - **Identity contract reads are bounded.** They had no row bound at all: sign-in, principal
   resolution, role and access administration, invitations, recovery, the account app and the 51
   `iam.*` providers all materialized whatever the store returned. A read past the bound now refuses

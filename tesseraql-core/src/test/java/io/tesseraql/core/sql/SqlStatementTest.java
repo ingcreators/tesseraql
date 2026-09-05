@@ -30,11 +30,25 @@ class SqlStatementTest {
 
     private static final String SELECT = "select name from t where id = /*id*/'x'";
 
+    /** The uncapped read these cases make, spelled through the statement's own reader. */
+    private static List<Map<String, Object>> read(SqlStatement statements, String sqlId)
+            throws SqlStatementException {
+        return statements.read(sqlId, SqlRenderer.render(SELECT, Map.of("id", "u1")),
+                statements.rows());
+    }
+
+    /** The first-row read, likewise. */
+    private static Map<String, Object> readOne(SqlStatement statements, String sqlId)
+            throws SqlStatementException {
+        return statements.read(sqlId, SqlRenderer.render(SELECT, Map.of("id", "u1")),
+                statements.firstRow());
+    }
+
     @Test
     void boundsEveryStatementByTheSameDefaultARouteRunsUnder() throws SqlStatementException {
         FakeDatabase database = new FakeDatabase(List.of("name"), List.of("Anne"));
 
-        SqlStatement.on(database.dataSource()).query("contract", SELECT, Map.of("id", "u1"));
+        read(SqlStatement.on(database.dataSource()), "contract");
 
         assertThat(database.calls).contains("setQueryTimeout(30)");
         assertThat(SqlStatement.DEFAULT_TIMEOUT_SECONDS).isEqualTo(30);
@@ -44,8 +58,8 @@ class SqlStatementTest {
     void bindsTheRenderedParameters() throws SqlStatementException {
         FakeDatabase database = new FakeDatabase(List.of("name"), List.of("Anne"));
 
-        List<Map<String, Object>> rows = SqlStatement.on(database.dataSource())
-                .query("contract", SELECT, Map.of("id", "u1"));
+        List<Map<String, Object>> rows = read(SqlStatement.on(database.dataSource()),
+                "contract");
 
         assertThat(rows).containsExactly(Map.of("name", "Anne"));
         assertThat(database.calls).contains("setObject(1,u1)");
@@ -55,8 +69,7 @@ class SqlStatementTest {
     void anExplicitZeroOptsOutOfTheBound() throws SqlStatementException {
         FakeDatabase database = new FakeDatabase(List.of("name"), List.of("Anne"));
 
-        SqlStatement.on(database.dataSource()).timeoutSeconds(0)
-                .query("contract", SELECT, Map.of("id", "u1"));
+        read(SqlStatement.on(database.dataSource()).timeoutSeconds(0), "contract");
 
         assertThat(database.calls).noneMatch(call -> call.startsWith("setQueryTimeout"));
     }
@@ -77,8 +90,8 @@ class SqlStatementTest {
         FakeDatabase database = new FakeDatabase(List.of(), List.of());
         database.failure = new SQLException("duplicate key value", "23505");
 
-        assertThatThrownBy(() -> SqlStatement.on(database.dataSource())
-                .query("scim.users.create", SELECT, Map.of("id", "u1")))
+        assertThatThrownBy(() -> read(SqlStatement.on(database.dataSource()),
+                "scim.users.create"))
                 .isInstanceOf(SqlStatementException.class)
                 .isInstanceOf(SQLException.class)
                 .hasMessage("duplicate key value")
@@ -110,13 +123,12 @@ class SqlStatementTest {
         FakeDatabase upper = new FakeDatabase(List.of("USER_ID"), List.of("u1"));
         FakeDatabase quoted = new FakeDatabase(List.of("displayName"), List.of("Anne"));
 
-        assertThat(SqlStatement.on(upper.dataSource()).dialect("oracle")
-                .queryOne("contract", SELECT, Map.of("id", "u1")))
+        assertThat(readOne(SqlStatement.on(upper.dataSource()).dialect("oracle"),
+                "contract"))
                 .containsOnlyKeys("user_id");
         // A SCIM contract quotes its camelCase aliases on every dialect, and a quoted alias passes
         // Oracle's folding untouched — which is why an executor with no dialect loses nothing.
-        assertThat(SqlStatement.on(quoted.dataSource())
-                .queryOne("contract", SELECT, Map.of("id", "u1")))
+        assertThat(readOne(SqlStatement.on(quoted.dataSource()), "contract"))
                 .containsOnlyKeys("displayName");
     }
 
@@ -124,8 +136,7 @@ class SqlStatementTest {
     void aReadThatMatchesNothingIsNoRowRatherThanAFailure() throws SqlStatementException {
         FakeDatabase database = new FakeDatabase(List.of("name"), List.of());
 
-        assertThat(SqlStatement.on(database.dataSource())
-                .queryOne("contract", SELECT, Map.of("id", "u1"))).isNull();
+        assertThat(readOne(SqlStatement.on(database.dataSource()), "contract")).isNull();
     }
 
     @Test
@@ -178,8 +189,8 @@ class SqlStatementTest {
 
         // The dialect steers the generated-key branch; the declared label policy stays raw
         // (docs/contract-sql-execution.md structural decision 7).
-        assertThat(SqlStatement.on(upper.dataSource()).dialect("oracle").rawLabels()
-                .queryOne("contract", SELECT, Map.of("id", "u1")))
+        assertThat(readOne(SqlStatement.on(upper.dataSource()).dialect("oracle").rawLabels(),
+                "contract"))
                 .containsOnlyKeys("USER_ID");
     }
 
@@ -233,8 +244,7 @@ class SqlStatementTest {
         io.tesseraql.core.telemetry.RecordingTracer tracer = new io.tesseraql.core.telemetry.RecordingTracer();
         FakeDatabase database = new FakeDatabase(List.of("name"), List.of("Anne"));
 
-        SqlStatement.on(database.dataSource()).tracer(tracer)
-                .query("scim.users.list", SELECT, Map.of("id", "u1"));
+        read(SqlStatement.on(database.dataSource()).tracer(tracer), "scim.users.list");
 
         assertThat(tracer.spans()).hasSize(1);
         io.tesseraql.core.telemetry.RecordingTracer.RecordedSpan span = tracer.spans().get(0);
@@ -332,13 +342,13 @@ class SqlStatementTest {
      * would make this assertion depend on the machine's zone.
      */
     @Test
-    void queryShapesItsTemporalsLikeTheCappedReaderDoes() throws SqlStatementException {
+    void anUncappedReadShapesItsTemporalsLikeACappedOne() throws SqlStatementException {
         java.sql.Timestamp occurred = java.sql.Timestamp
                 .from(java.time.Instant.parse("2026-09-05T14:30:00Z"));
         FakeDatabase database = new FakeDatabase(List.of("occurred_at"), List.of(occurred));
 
-        List<Map<String, Object>> rows = SqlStatement.on(database.dataSource())
-                .query("identity.list-grant-history", SELECT, Map.of("id", "u1"));
+        List<Map<String, Object>> rows = read(SqlStatement.on(database.dataSource()),
+                "identity.list-grant-history");
 
         assertThat(rows).singleElement()
                 .extracting(row -> row.get("occurred_at"))
@@ -463,8 +473,7 @@ class SqlStatementTest {
 
     @Test
     void aCallerConnectionsExecutorRefusesToOpenItsOwn() {
-        assertThatThrownBy(() -> SqlStatement.onCallerConnections()
-                .query("contract", SELECT, Map.of("id", "u1")))
+        assertThatThrownBy(() -> read(SqlStatement.onCallerConnections(), "contract"))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("caller-supplied");
     }

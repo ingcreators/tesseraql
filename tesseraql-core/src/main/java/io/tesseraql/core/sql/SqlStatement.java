@@ -200,49 +200,6 @@ public final class SqlStatement {
     public record WriteResult(int affectedRows, Map<String, Object> keys) {
     }
 
-    /** Executes a read contract and returns its rows, keyed by the contract's own aliases. */
-    public List<Map<String, Object>> query(String contract, String sql,
-            Map<String, Object> params) throws SqlStatementException {
-        try (Connection connection = ownConnections().getConnection()) {
-            return query(connection, contract, sql, params);
-        } catch (SQLException ex) {
-            throw classified(contract, ex);
-        }
-    }
-
-    /** As {@link #query(String, String, Map)}, on the caller's own connection. */
-    public List<Map<String, Object>> query(Connection connection, String contract, String sql,
-            Map<String, Object> params) throws SqlStatementException {
-        BoundSql bound = SqlRenderer.render(sql, params);
-        Span span = started(contract, "query");
-        try (PreparedStatement statement = prepare(connection, bound, List.of());
-                ResultSet resultSet = statement.executeQuery()) {
-            List<Map<String, Object>> rows = readRows(resultSet);
-            span.attribute("rowCount", rows.size());
-            return rows;
-        } catch (SQLException ex) {
-            SqlStatementException named = classified(contract, ex);
-            span.recordError(named);
-            throw named;
-        } finally {
-            span.end();
-        }
-    }
-
-    /** Executes a read contract and returns its first row, or {@code null} when it returns none. */
-    public Map<String, Object> queryOne(String contract, String sql, Map<String, Object> params)
-            throws SqlStatementException {
-        List<Map<String, Object>> rows = query(contract, sql, params);
-        return rows.isEmpty() ? null : rows.get(0);
-    }
-
-    /** As {@link #queryOne(String, String, Map)}, on the caller's own connection. */
-    public Map<String, Object> queryOne(Connection connection, String contract, String sql,
-            Map<String, Object> params) throws SqlStatementException {
-        List<Map<String, Object>> rows = query(connection, contract, sql, params);
-        return rows.isEmpty() ? null : rows.get(0);
-    }
-
     /** Executes a write contract and returns the number of rows it affected. */
     public int update(String contract, String sql, Map<String, Object> params)
             throws SqlStatementException {
@@ -399,16 +356,6 @@ public final class SqlStatement {
             }
         }
         return values;
-    }
-
-    /**
-     * The uncapped read behind {@link #query(Connection, String, String, Map)}. It shares
-     * {@link #materialize(ResultSet, int, RowOverflow)} with the capped readers, so the two cannot
-     * drift again: they disagreed about values once, and one store answered a contract read and a
-     * route read differently for the same column.
-     */
-    private List<Map<String, Object>> readRows(ResultSet resultSet) throws SQLException {
-        return materialize(resultSet, -1, UNCAPPED);
     }
 
     /** A caller-owned read over the statement's open {@link ResultSet} — spooling, capping,
