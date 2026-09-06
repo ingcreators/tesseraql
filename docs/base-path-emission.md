@@ -1,20 +1,32 @@
 # Base-path URL emission
 
-> **Status: in progress.** Eight slices, closing the four findings the 2026-09-04 whole-repo audit
-> filed against base-path emission (F28, F29, F30, F32) plus four more that re-measurement and an
-> adversarial review found around them.
+> **Status: complete.** Eight slices shipped 2026-09-06 (#1199-#1206), closing the four findings
+> the 2026-09-04 whole-repo audit filed against base-path emission (F28, F29, F30, F32) and four
+> more that re-measurement and the review of it found around them.
+>
+> In the order they landed: this design (#1199), the document key as a path segment (#1200), the
+> prefixed crawling guard (#1201), the lookup field's legs (#1202), `_return` at its readers
+> (#1203), the error page's `base` (#1204), the hot-reload prefix (#1205), and the reviewed
+> import (#1206). Slice 6 ran ahead of slice 5 because its red test was already in hand and
+> nothing coupled them.
 >
 > **The plan this document replaces was re-measured against `ecdd5d6c8` and was wrong in
-> seventeen places.** One of them is load-bearing: the plan's reviewer proposed a five-line
-> `ViewBinding.basePath` field as an equivalent alternative to threading an address through, on
-> the grounds of "same behaviour, same unit test". It is not equivalent, and
-> [decision 5](#5--a-return-is-returned-to-base-relative-form-where-it-is-read-back)
-> records why. Read the decisions below, not the plan.
+> seventeen places**, and building it found more. Two corrections are load-bearing enough to
+> restate here. The reviewer's five-line `ViewBinding.basePath` field is not equivalent to
+> threading an address through — but neither was needed, because the fix belongs at the reader
+> and not the emitter at all
+> ([decision 5](#5--a-return-is-returned-to-base-relative-form-where-it-is-read-back)). And the
+> plan's two extra `Templates.render` sites are TEXT-mode renderers, not missed page emissions.
+> Read the decisions below, not the plan.
 >
 > **The premise the whole campaign was ranked under was also wrong, in the project's favour.**
 > [`base-path.md`](base-path.md) presents a base path as something an operator opts into. It has
 > not been optional since 2026-08-17. The next section is that finding, because every priority
 > call in this document follows from it.
+>
+> **What is left is filed, not forgotten**, in
+> [Filed, not fixed](#filed-not-fixed): the ejector's form action and row link, the third
+> `_return` consumer, and a lint whose trigger is inverted with respect to decision 12.
 
 ## A base path is not opt-in, and has not been since 2026-08-17
 

@@ -3,6 +3,19 @@
 Status: **complete 2026-08-10** — every slice shipped; decisions 4, 5, 7 and 8 were settled
 during implementation, which is where the last three came from.
 
+> **Partly superseded 2026-08-17, recorded 2026-09-06.**
+> [`stack-architecture.md`](stack-architecture.md) decision 12 made the shared stack the only
+> deployment shape, deleting both isolated mode and `tesseraql serve` — the gateway-less
+> single-application shape. So **decision 1's standalone premise is dead**: no shipped command
+> serves one application under an operator-chosen prefix, an address is derived as `/<name>` and
+> injected by the host, and a value an application sets for itself is overwritten. Decision 4's
+> "isolated-mode gateway" names a mode that no longer exists.
+>
+> The mechanism this document describes is unchanged and still correct. What changed is who
+> chooses the prefix, and that **every** application now has one — which is why the emission
+> defects in [`base-path-emission.md`](base-path-emission.md) broke the default first-run path
+> rather than an opt-in deployment.
+
 Every URL a TesseraQL application emitted was rooted at `/`, so an application could only be
 served at the root of its origin. That blocked two things: hosting
 several applications on one origin under `/apps/<id>/`
