@@ -223,6 +223,37 @@ class WorkflowSurfaceIntegrationTest {
     }
 
     @Test
+    void aDocumentKeyIsAPathSegmentAndTheRenderedActionReachesTheDocument() throws Exception {
+        // 'D 7' sits in review, so the actor is offered reject. A space in a path segment is
+        // %20: the form encoding '+' addresses a different document, because Vert.x decodes a
+        // path parameter with plus-as-space off.
+        HttpResponse<String> page = get("/docs/D%207", actorCookie);
+        assertThat(page.statusCode()).isEqualTo(200);
+        assertThat(page.body()).contains("/api/docs/D%207/reject")
+                .doesNotContain("/api/docs/D+7/reject");
+
+        // The action the page rendered is the one that reaches the document it displayed —
+        // the half a rendering assertion alone would not catch.
+        HttpResponse<String> post = postForm("/api/docs/D%207/reject",
+                "_csrf=" + actorCsrf, actorCookie);
+        assertThat(post.statusCode()).isEqualTo(303);
+
+        HttpResponse<String> after = get("/docs/D%207", actorCookie);
+        assertThat(after.body()).doesNotContain("/api/docs/D%207/reject");
+    }
+
+    @Test
+    void theTaskQueueLinksADocumentKeyAsAPathSegment() throws Exception {
+        assertThat(postForm("/api/cases/M%204/open", "_csrf=" + actorCsrf, actorCookie)
+                .statusCode()).isEqualTo(303);
+
+        HttpResponse<String> queue = get("/_tesseraql/tasks", actorCookie);
+        assertThat(queue.statusCode()).isEqualTo(200);
+        assertThat(queue.body()).contains("href=\"/cases/M%204\"")
+                .doesNotContain("href=\"/cases/M+4\"");
+    }
+
+    @Test
     void theJsonContractIsUntouchedForApiCallers() throws Exception {
         HttpRequest request = HttpRequest.newBuilder(
                 URI.create("http://localhost:" + runtime.port() + "/api/docs/D-6/submit"))
@@ -263,13 +294,17 @@ class WorkflowSurfaceIntegrationTest {
                 Statement statement = connection.createStatement()) {
             statement.execute("create table docs (id varchar(64) primary key,"
                     + " status varchar(32) not null, amount int not null)");
+            // 'D 7' and 'M 4' carry a space on purpose: a document key is a path segment, and a
+            // segment percent-encodes a space where a form field writes '+'.
             statement.execute("insert into docs (id, status, amount) values"
                     + " ('D-1', 'draft', 100), ('D-2', 'draft', 0), ('D-3', 'review', 50),"
-                    + " ('D-4', 'draft', 10), ('D-5', 'draft', 10), ('D-6', 'draft', 10)");
+                    + " ('D-4', 'draft', 10), ('D-5', 'draft', 10), ('D-6', 'draft', 10),"
+                    + " ('D 7', 'review', 10)");
             statement.execute("create table cases (id varchar(64) primary key,"
                     + " subject varchar(100) not null)");
             statement.execute("insert into cases (id, subject) values ('M-1', 'A case'),"
-                    + " ('M-2', 'Another case'), ('M-3', 'A queued case')");
+                    + " ('M-2', 'Another case'), ('M-3', 'A queued case'),"
+                    + " ('M 4', 'A spaced case')");
         }
     }
 

@@ -63,6 +63,15 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A document key is a path segment, not a form field.** A workflow transition action and a task
+  queue row both built their URL by form-encoding the document key, so a key containing a space
+  rendered as `/docs/PR+1/approve`. A path parameter is not decoded as a form field — Vert.x
+  decodes plus-as-space off — so the button posted at a document that does not exist while the
+  stepper above it showed the right one, and a queue row linked into the same nowhere. Both now
+  percent-encode through `BasePath.encodeSegment`, the rule the activated-role segment already
+  followed. The query-string builders beside them are unchanged and still form-encode, which is
+  correct there; the two are now named apart rather than sharing one helper by accident.
+
 - **A transaction rolls back when its body throws an `Error`.** `SqlStatement.transact`, the
   command processor's step transaction and the workflow delegate all caught a listed set of
   exceptions around their rollback, so an `OutOfMemoryError`, `StackOverflowError`, `LinkageError`

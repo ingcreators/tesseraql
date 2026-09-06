@@ -66,7 +66,12 @@ public final class BasePath {
         return acting == null ? "" : "/_as/" + encodeSegment(acting);
     }
 
-    /** A role code as a path segment: URL-encoded, with the form-encoding {@code +} corrected. */
+    /**
+     * A value as a path segment: URL-encoded, with the form-encoding {@code +} corrected to
+     * {@code %20}. The one rule for every segment the framework builds from data — an activated
+     * role code, a workflow document key — because a path parameter is not decoded as a form
+     * field, so a {@code +} here addresses a different resource rather than the same one.
+     */
     public static String encodeSegment(String value) {
         return java.net.URLEncoder.encode(value, java.nio.charset.StandardCharsets.UTF_8)
                 .replace("+", "%20");
