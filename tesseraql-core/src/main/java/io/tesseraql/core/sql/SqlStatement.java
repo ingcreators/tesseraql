@@ -41,8 +41,6 @@ import javax.sql.DataSource;
  */
 public final class SqlStatement {
 
-    private static final System.Logger LOG = System.getLogger(SqlStatement.class.getName());
-
     /**
      * The statement timeout applied when a caller declares none — the same default of 30 seconds
      * {@code tesseraql.sql.timeoutSeconds} carries, so an unwired caller is bounded rather than
@@ -251,32 +249,7 @@ public final class SqlStatement {
     public <T> T transact(String contract, TransactionalBody<T> body)
             throws SqlStatementException {
         try (Connection connection = ownConnections().getConnection()) {
-            boolean previous = connection.getAutoCommit();
-            connection.setAutoCommit(false);
-            try {
-                T result = body.run(connection);
-                connection.commit();
-                return result;
-            } catch (SQLException | RuntimeException ex) {
-                try {
-                    connection.rollback();
-                } catch (SQLException rollback) {
-                    ex.addSuppressed(rollback);
-                }
-                throw ex;
-            } finally {
-                try {
-                    connection.setAutoCommit(previous);
-                } catch (SQLException restore) {
-                    // The transaction is already committed or rolled back; a restore that
-                    // fails here would otherwise replace that outcome with a failure the
-                    // caller acts on — a committed SCIM create re-reported as a 500 invites
-                    // the retry that duplicates it. The pool retires the sick connection.
-                    LOG.log(System.Logger.Level.WARNING,
-                            "Could not restore autocommit after transaction {0}: {1}", contract,
-                            restore.getMessage());
-                }
-            }
+            return Transactions.call(connection, contract, body::run);
         } catch (SQLException ex) {
             throw classified(contract, ex);
         }

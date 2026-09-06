@@ -60,10 +60,8 @@ public final class WorkflowDelegateProcessor implements Step {
         }
         DataSource dataSource = io.tesseraql.pipeline.tenant.TenantRouting
                 .dataSource(exchange, datasourceName);
-        try (Connection connection = dataSource.getConnection()) {
-            boolean previousAutoCommit = connection.getAutoCommit();
-            connection.setAutoCommit(false);
-            try {
+        try (Connection jdbc = dataSource.getConnection()) {
+            io.tesseraql.core.sql.Transactions.run(jdbc, "workflow.delegate", connection -> {
                 if (!taskStore.canAct(connection, docType, docId, subject, groups)) {
                     throw new TqlException(NOT_ASSIGNED, "Workflow '" + workflowId
                             + "': only the assignee may delegate this task");
@@ -77,15 +75,14 @@ public final class WorkflowDelegateProcessor implements Step {
                                 tenantOf(exchange), to);
                 taskStore.reassignOpenTasks(connection, docType, docId, resolved.assignee(),
                         resolved.delegatedFrom());
-                connection.commit();
-            } catch (RuntimeException | SQLException ex) {
-                connection.rollback();
-                throw ex instanceof TqlException tql
-                        ? tql
-                        : new TqlException(TX_ERROR, "Delegation failed: " + ex.getMessage(), ex);
-            } finally {
-                connection.setAutoCommit(previousAutoCommit);
-            }
+            });
+        } catch (RuntimeException | SQLException ex) {
+            // The primitive rolled back already, with a failed rollback suppressed rather than
+            // replacing the failure that matters, and it restored autocommit without throwing.
+            // An Error passes through untouched, which is why this catch stays narrow.
+            throw ex instanceof TqlException tql
+                    ? tql
+                    : new TqlException(TX_ERROR, "Delegation failed: " + ex.getMessage(), ex);
         }
         exchange.setBody(Map.of("ok", true));
     }

@@ -63,6 +63,20 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A transaction rolls back when its body throws an `Error`.** `SqlStatement.transact`, the
+  command processor's step transaction and the workflow delegate all caught a listed set of
+  exceptions around their rollback, so an `OutOfMemoryError`, `StackOverflowError`, `LinkageError`
+  or `AssertionError` from the body skipped the rollback and reached the `finally` — where
+  restoring autocommit **commits the open transaction**, per the `Connection.setAutoCommit`
+  contract and what pgjdbc and Connector/J both do. Half a SCIM group create or a workflow sweep
+  landed while the caller was told it failed, and was then duplicated by the retry.
+
+  The bracket is now one primitive, `Transactions`, which rolls back on any `Throwable` and
+  rethrows an `Error` exactly as it arrived — so no caller needs a widened catch of its own, and
+  the rule that an `Error` is never dressed as a coded, catchable, retryable failure lives in one
+  place. Its body type carries one further checked exception, because several of the bodies it
+  replaces read a spooled file inside their transaction.
+
 - **The write-scope security lint sees a table whose name carries a combining mark.**
   `TQL-SEC-4100` warns when an application scopes a table's reads with `/*%scope … */` but writes to
   it without one. Its table-name patterns are hand-inlined character classes that stopped at

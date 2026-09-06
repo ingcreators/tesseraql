@@ -686,7 +686,12 @@ public final class TransactionalCommandProcessor implements Step {
                     context.put("publish", Map.of("eventId", eventId));
                 }
                 connection.commit();
-            } catch (RuntimeException | SQLException ex) {
+            } catch (Throwable ex) {
+                // Everything, not a listed set: the autocommit restore below COMMITS an open
+                // transaction, so a handler that catches less commits the work it was told to
+                // abandon (docs/two-way-sql-parser.md decision 17). The body cannot move onto
+                // Transactions.run yet — it captures mutable locals — so the rule is written out
+                // here, and asTqlException owns the Error half for every caller.
                 try {
                     connection.rollback();
                 } catch (SQLException rollback) {
@@ -1013,8 +1018,18 @@ public final class TransactionalCommandProcessor implements Step {
                 .build();
     }
 
-    /** Classifies a failure, applying the route's declared constraint-to-field mapping. */
-    private TqlException asTqlException(Exception ex) {
+    /**
+     * Classifies a failure, applying the route's declared constraint-to-field mapping.
+     *
+     * <p>It takes a {@code Throwable} and rethrows an {@code Error} unchanged as its first act, so
+     * the rule "an Error is never dressed as a coded, catchable, retryable command failure" lives
+     * in one method rather than at every handler that calls it. Dressing one invites a retry of an
+     * {@code OutOfMemoryError}.
+     */
+    private TqlException asTqlException(Throwable ex) {
+        if (ex instanceof Error error) {
+            throw error;
+        }
         if (ex instanceof TqlException tql) {
             return tql;
         }
