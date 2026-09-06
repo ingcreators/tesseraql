@@ -40,7 +40,13 @@ class HttpBadRequestTest {
     static void start() throws Exception {
         vertx = Vertx.vertx();
         Router router = Router.router(vertx);
-        router.route().handler(BodyHandler.create().setMergeFormAttributes(true));
+        // create(false) — no upload handling. Every case here posts urlencoded, and the
+        // default BodyHandler creates cwd/file-uploads on the urlencoded branch too, before any
+        // relocation. That directory is outside target/, so `clean` never removes it, and this
+        // module runs surefire with forkCount=1C and reuseForks=true — concurrent forks share
+        // tesseraql-runtime/ as their working directory, where FileTransferIntegrationTest
+        // asserts the directory does NOT exist. One test's side effect, another test's failure.
+        router.route().handler(BodyHandler.create(false).setMergeFormAttributes(true));
         router.post("/f").handler(ctx -> ctx.response().end("ok"));
         router.get("/g").handler(ctx -> ctx.response().end("ok"));
         // The handler under test, wired the way HttpBadRequest.install wires it. Installing it
@@ -52,6 +58,12 @@ class HttpBadRequestTest {
                 .requestHandler(router).listen(0)
                 .toCompletionStage().toCompletableFuture().get(30, TimeUnit.SECONDS);
         port = server.actualPort();
+    }
+
+    /** The side effect this class must not have; see the handler wiring above. */
+    @AfterAll
+    static void leavesNoUploadDirectoryBehind() {
+        assertThat(java.nio.file.Path.of("file-uploads")).doesNotExist();
     }
 
     @AfterAll
