@@ -349,6 +349,9 @@ Recorded as they were hit, so the next slice does not re-learn them.
 
 ## Recorded deviations
 
+**Closed in slice 5, as planned.** The reviewed-import surface joined the fixture with the slice
+that fixed it. The original note follows.
+
 **The reviewed-import surface joins the fixture in slice 5, not slice 3.** The slice list above
 says the harness declares all four surfaces. Three of them are pure GET renders and crawl
 directly; the import review page is not reachable without a multipart upload, a single-shot

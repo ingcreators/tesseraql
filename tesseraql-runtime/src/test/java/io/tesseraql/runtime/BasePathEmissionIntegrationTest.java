@@ -75,7 +75,8 @@ class BasePathEmissionIntegrationTest {
         // step that is a no-op on an unhosted boot, and the reason a fixture copied from a
         // plain-boot test answers 403 on every page until the principal carries the grant.
         String sid = sessions.create(new Principal("user-1", "user-1", "User", null,
-                List.of(), List.of("USER"), List.of("tql.app.use.base-path-emission-app"),
+                List.of(), List.of("USER", "IMPORTER"),
+                List.of("tql.app.use.base-path-emission-app"),
                 Map.of()), SessionStore.ClientInfo.NONE);
         cookie = sessions.cookieName() + "=" + sid;
         csrf = sessions.session(sid).csrfToken();
@@ -269,6 +270,72 @@ class BasePathEmissionIntegrationTest {
     }
 
     /**
+     * The reviewed import's two pages. Neither is reachable without an upload, which is why they
+     * arrive with the slice that fixes them rather than with the crawl: the review page is what a
+     * multipart POST answers, and the job page is where its no-JS confirm redirects.
+     */
+    @Test
+    void aReviewedImportConfirmsAndReportsUnderTheApplicationsPrefix() throws Exception {
+        HttpResponse<String> review = upload("/items/import", "name,qty\nalpha,1\n");
+        assertThat(review.statusCode()).as(review.body()).isEqualTo(200);
+
+        // The confirm target is built as a wire URL and rendered through the link builder, so
+        // the prefix must not appear twice.
+        Matcher action = Pattern.compile("action=\"([^\"]*/commit)\"").matcher(review.body());
+        assertThat(action.find()).as("the review page offers a confirm form").isTrue();
+        assertThat(action.group(1)).startsWith(PREFIX + "/items/import/")
+                .doesNotStartWith(PREFIX + PREFIX);
+
+        // The no-JS confirm redirects to the job page — a full page, so it composes the shell
+        // and needs the same base every other page publishes.
+        Matcher token = Pattern.compile("name=\"token\"[^>]*value=\"([^\"]+)\"")
+                .matcher(review.body());
+        assertThat(token.find()).as("the review page carries its single-shot token").isTrue();
+        // Accept: text/html is what makes this the browser's no-JS leg rather than the API's —
+        // without it the confirm answers 202 with a JSON job handle and never redirects.
+        HttpResponse<String> confirmed = CLIENT.send(HttpRequest.newBuilder(
+                URI.create("http://localhost:" + runtime.port() + PREFIX
+                        + "/items/import/" + token.group(1) + "/commit"))
+                .header("Cookie", cookie)
+                .header("Accept", "text/html")
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .POST(HttpRequest.BodyPublishers.ofString(
+                        "_csrf=" + csrf + "&token=" + token.group(1)))
+                .build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(confirmed.statusCode()).isEqualTo(303);
+        String jobPage = confirmed.headers().firstValue("Location").orElseThrow();
+        assertThat(jobPage).startsWith(PREFIX + "/items/import/")
+                .doesNotStartWith(PREFIX + PREFIX);
+
+        HttpResponse<String> page = CLIENT.send(
+                HttpRequest.newBuilder(URI.create("http://localhost:" + runtime.port() + jobPage))
+                        .header("Cookie", cookie).header("Accept", "text/html").build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertThat(page.statusCode()).isEqualTo(200);
+        assertThat(page.body()).contains(PREFIX + "/assets/_tesseraql/tesseraql.css")
+                .doesNotContain("href=\"/assets/_tesseraql/tesseraql.css\"");
+    }
+
+    /** A browser's multipart upload of {@code content} as the page's file field. */
+    private static HttpResponse<String> upload(String path, String content) throws Exception {
+        String boundary = "----tqlBasePathBoundary";
+        String body = "--" + boundary + "\r\n"
+                + "Content-Disposition: form-data; name=\"_csrf\"\r\n\r\n" + csrf + "\r\n"
+                + "--" + boundary + "\r\n"
+                + "Content-Disposition: form-data; name=\"file\"; filename=\"items.csv\"\r\n"
+                + "Content-Type: text/csv\r\n\r\n" + content + "\r\n"
+                + "--" + boundary + "--\r\n";
+        return CLIENT.send(HttpRequest.newBuilder(URI.create(
+                "http://localhost:" + runtime.port() + PREFIX + path))
+                .header("Cookie", cookie)
+                .header("X-CSRF-Token", csrf)
+                .header("Accept", "text/html")
+                .header("Content-Type", "multipart/form-data; boundary=" + boundary)
+                .POST(HttpRequest.BodyPublishers.ofString(body))
+                .build(), HttpResponse.BodyHandlers.ofString());
+    }
+
+    /**
      * The ledger shrinks and never grows. An entry that has stopped being emitted unprefixed is
      * a fix that landed without deleting its line, which would leave the guard permanently
      * excusing a URL that is now correct.
@@ -365,6 +432,8 @@ class BasePathEmissionIntegrationTest {
             statement.execute("create table docs (id varchar(64) primary key,"
                     + " status varchar(32) not null)");
             statement.execute("insert into docs (id, status) values ('D-1', 'draft')");
+            statement.execute("create table items (name varchar(100) primary key,"
+                    + " qty integer not null)");
             statement.execute("create table things (id int primary key,"
                     + " name varchar(100) not null)");
             statement.execute("insert into things (id, name) values"
@@ -405,6 +474,9 @@ class BasePathEmissionIntegrationTest {
                       wf.act:
                         anyOf:
                           - role: USER
+                      items.write:
+                        anyOf:
+                          - role: IMPORTER
                 """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
                 POSTGRES.getPassword()));
 
@@ -501,6 +573,57 @@ class BasePathEmissionIntegrationTest {
         write(home, "web/orders/new/create.sql", """
                 insert into orders (customer_id, note)
                 values (/* customer_id */'cus-x', /* note */'a note')
+                """);
+
+        // Surface 4: a reviewed CSV import. Its review page and its job page are the two
+        // remaining emission defects, and neither is reachable without an upload.
+        write(home, "web/items/import/items-import.view.yml", """
+                version: tesseraql/v1
+                kind: view
+                recipe: import
+                title: Import items
+                action: /items/import
+                """);
+        write(home, "web/items/import/get.yml", """
+                version: tesseraql/v1
+                id: items.importPage
+                kind: route
+                recipe: page
+                security:
+                  auth: browser
+                  policy: items.write
+                response:
+                  html:
+                    view: items-import
+                """);
+        write(home, "web/items/import/post.yml", """
+                version: tesseraql/v1
+                id: items.import
+                kind: route
+                recipe: file-import
+                security:
+                  auth: browser
+                  policy: items.write
+                import:
+                  format: csv
+                  columns:
+                    - name
+                    - { name: qty, type: number }
+                  onError: skip
+                  review: required
+                response:
+                  html:
+                    view: items-import
+                steps:
+                  - id: row
+                    sql:
+                      file: upsert-item.sql
+                """);
+        write(home, "web/items/import/upsert-item.sql", """
+                insert into items (name, qty)
+                values ( /* name */ 'sample', cast( /* qty */ '1' as integer) )
+                on conflict (name) do update set qty = excluded.qty
+                ;
                 """);
 
         // A custom error page, which composes links like any other page.
