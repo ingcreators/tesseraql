@@ -63,6 +63,19 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **The write-scope security lint sees a table whose name carries a combining mark.**
+  `TQL-SEC-4100` warns when an application scopes a table's reads with `/*%scope … */` but writes to
+  it without one. Its table-name patterns are hand-inlined character classes that stopped at
+  `\p{Mn}`/`\p{Mc}`, so an abugida or decomposed table name failed the match and never entered the
+  governed set — the guard simply did not fire, which is the silent-skip mode the Unicode campaign
+  exists to abolish. Worse, two such names sharing a first letter truncated to the *same* key, so an
+  ungoverned write on one drew a warning naming the other.
+
+  The dot stays inside the class rather than composing the identifier constant: a dotted
+  composition picks the wrong segment out of a three-part name, so `update cat.sch.orders` would
+  key the lint on the schema. These patterns read SQL text, where a marked name is already legal,
+  so they are independent of the declared-name contract.
+
 - **The embedded-variable injection lint sees every SQL file a document declares, not only
   `sources: main:`.** `TQL-SQL-2109` requires a `{placeholder}` that resolves to request input to be
   `enum`-constrained, because an embedded variable interpolates into SQL text rather than binding a
