@@ -748,7 +748,11 @@ public final class ViewBinding {
                     t.put("reason", message(catalog, locale, "tql.workflow.notNow",
                             "Not available in this state."));
                 }
-                t.put("action", workflowBasePath + "/" + encode(docId) + "/" + id);
+                // A path segment, not a form field: the key is percent-encoded, because Vert.x
+                // decodes a path parameter with plus-as-space off and the transition would
+                // otherwise post at a document that does not exist.
+                t.put("action", workflowBasePath + "/"
+                        + io.tesseraql.pipeline.BasePath.encodeSegment(docId) + "/" + id);
                 if (Boolean.TRUE.equals(fact.get("terminal"))) {
                     t.put("confirm", message(catalog, locale, "tql.workflow.confirm",
                             "This finishes the document's lifecycle. Continue?"));
@@ -1534,6 +1538,11 @@ public final class ViewBinding {
         return state.isEmpty() ? pagePath : pagePath + "?" + state.substring(1);
     }
 
+    /**
+     * A <em>query</em> value: form encoding, which is what every caller here builds. A path
+     * segment is not this — it is {@code BasePath.encodeSegment}, because the two disagree on a
+     * space and a path parameter is not decoded as a form field.
+     */
     private static String encode(String value) {
         return java.net.URLEncoder.encode(value, java.nio.charset.StandardCharsets.UTF_8);
     }

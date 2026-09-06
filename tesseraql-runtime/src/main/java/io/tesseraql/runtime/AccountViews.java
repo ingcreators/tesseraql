@@ -332,11 +332,15 @@ final class AccountViews {
                     row.put("delegatedFrom",
                             task.delegatedFrom() == null ? "" : task.delegatedFrom());
                     String pattern = detailPaths.get(task.docType());
+                    // The key substitutes into a path segment of the detail pattern, so it is
+                    // percent-encoded rather than form-encoded — the same rule the transition
+                    // action follows, and the reason a queue row reaches the document it names.
                     row.put("href", pattern == null
                             ? ""
                             : pattern.replaceFirst("\\{[^}]+\\}",
-                                    java.net.URLEncoder.encode(task.docId(),
-                                            java.nio.charset.StandardCharsets.UTF_8)));
+                                    java.util.regex.Matcher.quoteReplacement(
+                                            io.tesseraql.pipeline.BasePath
+                                                    .encodeSegment(task.docId()))));
                     rows.add(row);
                 }
             } catch (java.sql.SQLException ex) {
