@@ -15,16 +15,40 @@ import java.util.regex.Pattern;
  * <p>The pattern doubles as the injection defense: identifiers are never quoted, so the
  * character class is what keeps a "name" from being a fragment. Unicode letters and digits
  * cannot close a quote, open a comment, or terminate a statement, which is why widening from
- * ASCII preserves the property the old patterns enforced. Nothing here bounds length — the
- * engines count bytes, their limits differ, and their own errors are authoritative.
+ * ASCII preserves the property the old patterns enforced. Combining marks extend that argument
+ * rather than weakening it, and it is measured rather than assumed: of the 2488 code points in
+ * {@code \p{Mn}} and {@code \p{Mc}}, none is ASCII, none normalizes under any form to an ASCII
+ * non-alphanumeric, and none case-maps to one. Nothing here bounds length — the engines count
+ * bytes, their limits differ, and their own errors are authoritative.
+ *
+ * <p>The class is deliberately narrower than the 2-way bind lexer, which is
+ * {@code Character.isJavaIdentifierPart}: the lexer also admits {@code $} and connector
+ * punctuation, and {@code $} opens dollar-quoting in PostgreSQL. The lexer is not the
+ * specification; this is.
  */
 public final class SqlIdentifiers {
 
     /**
-     * Regex source for one identifier — a Unicode letter or underscore, then Unicode
-     * letters, digits, or underscores — for embedding in larger patterns.
+     * The characters a name may carry after its first: Unicode letters, combining marks,
+     * digits and underscore.
+     *
+     * <p>The marks are what every abugida requires and what decomposed (NFD) text produces for
+     * a script that has a composed form — the form macOS emits. A call site that needs a variant
+     * of the class composes this rather than writing its own; the copies were the whole defect
+     * (docs/two-way-sql-parser.md decision 11).
      */
-    public static final String IDENTIFIER = "[\\p{L}_][\\p{L}\\p{N}_]*";
+    public static final String PART = "[\\p{L}\\p{Mn}\\p{Mc}\\p{N}_]";
+
+    /**
+     * Regex source for one identifier — a Unicode letter or underscore, then letters,
+     * combining marks, digits, or underscores — for embedding in larger patterns.
+     *
+     * <p>A mark may not <em>start</em> a name: every real name begins with a letter, and a
+     * leading combining mark is a rendering trick. {@code \p{Me}} (enclosing marks) is excluded
+     * as display-only, and {@code \p{Cf}} (ZWJ, ZWNJ) because an invisible character in a name
+     * that lands unquoted in SQL text is a spoofing surface.
+     */
+    public static final String IDENTIFIER = "[\\p{L}_]" + PART + "*";
 
     /** Regex source for an optionally schema-qualified identifier ({@code name} or {@code schema.name}). */
     public static final String DOTTED = IDENTIFIER + "(?:\\." + IDENTIFIER + ")?";

@@ -242,6 +242,19 @@ class AppLinterScopeTest {
     }
 
     @Test
+    void anAliasIsNotAPrefixOfALongerMarkedAlias(@TempDir Path dir) throws Exception {
+        // The trailing alias guard is a lookahead and not \\b precisely so an alias ends where the
+        // name ends. It did not terminate at a combining mark, so a short alias could match inside
+        // a longer one — and until the contract admitted marks the branch was unreachable, because
+        // a marked alias was refused upstream by the gate (docs/two-way-sql-parser.md decision 14).
+        writeScope(dir);
+        writeRoute(dir, "select * from ग्राहक गी where /*%scope orders_scope on गी */ (1=1)\n");
+        writeCommandRoute(dir, "update ग्राहक set n = 1 where id = /* id */ 1\n");
+
+        assertThat(writeScopeCodes(new AppLinter().lint(dir))).containsExactly("TQL-SEC-4100");
+    }
+
+    @Test
     void whenWithNoRecognizedPredicateIsAnError(@TempDir Path dir) throws Exception {
         Files.createDirectories(dir.resolve("scope"));
         // `roles:` is a typo for `role:`; the unknown key deserializes away, leaving an empty

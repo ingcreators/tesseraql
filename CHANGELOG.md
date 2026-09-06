@@ -301,6 +301,34 @@ All notable changes to TesseraQL are documented here. The format follows
   with no reservation or collision check.
 ### Changed
 
+- **The identifier contract admits combining marks.** `[\p{L}_][\p{L}\p{N}_]*` excluded `\p{M}`,
+  which every abugida requires and which decomposed (NFD) text produces for any script that has a
+  composed form — so `ग्राहक`, `مُحَمَّد` and a `Việt` or `が` pasted from macOS were refused by the
+  `lock:`, decision, calendar, workflow-stamp and scope-alias gates, while the 2-way bind lexer had
+  accepted all of them all along.
+
+  The `{name}` path-parameter extractor is built from the same class, and its failure was not the
+  silent one the finding described: `/customers/{ग्राहक}` **failed the boot**, because the name
+  travelled to the router unrewritten and Vert.x refuses `:ग्राहक` outright. The genuinely silent
+  case is a decomposed name with an ASCII prefix, which mounts and is truncated to that prefix — the
+  route then answers a different URL and the declared bind is never populated. A new invariant test
+  holds every name the contract admits to what the router will carry, so a future widening cannot
+  re-open the same seam.
+
+  `\p{Mn}` and `\p{Mc}` are in; a leading mark, `\p{Me}` and the invisible format characters are
+  out. The injection argument extends and is measured rather than asserted: of all 2488 marks, none
+  is ASCII, none normalizes to an ASCII non-alphanumeric, and none case-maps to one. A new ledger
+  test refuses a sixth hand-written copy of the class.
+
+- **A declared name and a bind name that differ only by normalization form are a build error
+  (`TQL-SQL-2121`).** Nothing normalizes a name, deliberately: no database does either, so a name
+  spelled consistently works and a name spelled two ways never matches — and normalizing at a
+  compile boundary would make a column genuinely declared in decomposed form unreachable. That
+  leaves one place where the two spellings meet, a `params:` key in the YAML against the
+  `/* … */` bind in the SQL, joined by exact string equality with a null bind and no diagnostic.
+  Until the contract widened, that pair was protected by accident, because the decomposed half was
+  refused outright; this replaces the accident with a refusal that says what is wrong.
+
 - **An empty list bound under `not in` is refused instead of silently hiding every row.** The
   renderer never saw the operator, so an empty collection always rendered `(null)` — correct for
   `in`, which then matches nothing, and exactly inverted for `not in`, where `x not in (null)` is

@@ -302,6 +302,30 @@ class AppLinterTest {
     }
 
     @Test
+    void aNameSpelledInTwoNormalizationFormsIsReported(@TempDir Path dir) throws Exception {
+        // The contract admits a decomposed name and never normalizes one, so this pair silently
+        // binds null: two files, plausibly two editors on two operating systems, joined by exact
+        // string equality (docs/two-way-sql-parser.md decision 12).
+        String nfc = "Việt";
+        String nfd = java.text.Normalizer.normalize(nfc, java.text.Normalizer.Form.NFD);
+        writeListRoute(dir, "select 1 from t where c = /* " + nfd + " */ 'x'\n",
+                nfc + ": query.q");
+
+        assertThat(new AppLinter().lint(dir)).anyMatch(f -> f.code().equals("TQL-SQL-2121")
+                && f.isError() && f.message().contains("normalization"));
+    }
+
+    @Test
+    void aNameSpelledOneWayIsClean(@TempDir Path dir) throws Exception {
+        String nfd = java.text.Normalizer.normalize("Việt", java.text.Normalizer.Form.NFD);
+        writeListRoute(dir, "select 1 from t where c = /* " + nfd + " */ 'x'\n",
+                nfd + ": query.q");
+
+        assertThat(new AppLinter().lint(dir))
+                .noneMatch(f -> f.code().equals("TQL-SQL-2121"));
+    }
+
+    @Test
     void aHyphenatedParamsKeyIsReported(@TempDir Path dir) throws Exception {
         // A params: key is a bind name, and a bind name is an expression the directive parses:
         // `order-id` reads as the subtraction `order - id`, both operands unbound, so the site

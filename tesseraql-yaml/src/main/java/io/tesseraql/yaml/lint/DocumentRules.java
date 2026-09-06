@@ -41,6 +41,9 @@ final class DocumentRules {
     // A params: key that is not an identifier, and therefore not a bind name.
     private static final String NON_IDENTIFIER_BIND_NAME = "TQL-SQL-2120";
 
+    // A declared name and a bind name that are one name in two normalization forms.
+    private static final String NORMALIZATION_TWIN = "TQL-SQL-2121";
+
     private static final String SHARED_SCHEMA_WITHOUT_TENANT_PREDICATE = "TQL-TENANT-3001";
 
     private static final String UPDATE_WITHOUT_VERSION_PREDICATE = "TQL-SQL-2104";
@@ -304,6 +307,58 @@ final class DocumentRules {
                 }
             }
         }
+    }
+
+    /**
+     * A declared name and a bind name that differ only by Unicode normalization form.
+     *
+     * <p>The contract admits a decomposed name and deliberately does not normalize one: no database
+     * normalizes either, so a name spelled consistently works and a name spelled two ways never
+     * matches — and normalizing at a compile boundary would make a column genuinely declared in
+     * decomposed form unreachable. The framework's rule is that the column name <em>is</em> the
+     * name, and a conversion layer is the one thing it promises there is none of.
+     *
+     * <p>That leaves one place where the two spellings meet: a {@code params:} key in the YAML
+     * against the {@code /* … *}{@code /} bind in the SQL. Two files, plausibly two editors on two
+     * operating systems, joined by exact string equality with a null bind and no diagnostic on a
+     * mismatch. Until the contract widened, that pair was protected by accident — the decomposed
+     * half was refused outright. This replaces the accident with a build-time refusal
+     * (docs/two-way-sql-parser.md decision 12).
+     */
+    static void lintNormalizationTwins(LintContext context, Path documentSource,
+            RouteDefinition definition, String source, List<LintFinding> findings) {
+        Set<String> declared = new LinkedHashSet<>();
+        LintSupport.documentBindParams(definition).forEach(slot -> declared.addAll(
+                slot.params().keySet()));
+        if (declared.isEmpty()) {
+            return;
+        }
+        Set<String> bound = LintSupport.ambientBinds(context, documentSource, definition,
+                expression -> true);
+        for (String bind : bound) {
+            String root = bind.contains(".") ? bind.substring(0, bind.indexOf('.')) : bind;
+            if (declared.contains(root)) {
+                continue;
+            }
+            for (String name : declared) {
+                if (sameAfterNormalization(name, root)) {
+                    findings.add(new LintFinding(NORMALIZATION_TWIN, ERROR, source,
+                            "the bind /* " + bind
+                                    + " */ and the declared name '" + name
+                                    + "' are the same name written in two Unicode normalization forms, so they never match and the bind resolves to null on every request — spell both the same way, and prefer the composed (NFC) form"));
+                    break;
+                }
+            }
+        }
+    }
+
+    /** Whether two names are one name spelled in different normalization forms. */
+    private static boolean sameAfterNormalization(String left, String right) {
+        if (left.equals(right)) {
+            return false;
+        }
+        return java.text.Normalizer.normalize(left, java.text.Normalizer.Form.NFC)
+                .equals(java.text.Normalizer.normalize(right, java.text.Normalizer.Form.NFC));
     }
 
     /** The input name a {@code sql.params} source binds from a request, or {@code null} otherwise. */
