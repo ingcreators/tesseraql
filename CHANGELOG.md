@@ -63,6 +63,12 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A custom error page resolves its links against the application.** `templates/errors/<status>.html`
+  rendered with only `status` and `error` in its model, so the link builder had nothing to resolve
+  against and every URL on the page came out origin-rooted: the page arrived unstyled, and in a
+  stack its links pointed at a different member's address. It now publishes `base` the way the
+  conflict page already did.
+
 - **A `location: back` redirect returns to the page that sent it, under a base path.** The
   `_return` target is handed out as a wire URL and posted back as one, and the framework's one
   redirect prefixes whatever it is given — so a saved row bounced to `/shop/shop/things?page=2`,

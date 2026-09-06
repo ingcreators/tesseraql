@@ -246,6 +246,29 @@ class BasePathEmissionIntegrationTest {
     }
 
     /**
+     * A custom error page is a page: it composes the same links every other page does, so it
+     * needs the same {@code base} to resolve them against. Without it the page arrives unstyled
+     * and every link on it points outside the application — in a stack, at another member.
+     */
+    @Test
+    void aCustomErrorPageResolvesItsLinksAgainstTheApplication() throws Exception {
+        // A mounted route that refuses its input: an unmatched path never reaches the
+        // application's renderer at all, so it would prove nothing about a custom page.
+        HttpResponse<String> refused = CLIENT.send(
+                HttpRequest.newBuilder(URI.create("http://localhost:" + runtime.port()
+                        + PREFIX + "/things/not-a-number/edit"))
+                        .header("Cookie", cookie)
+                        .header("Accept", "text/html")
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+
+        assertThat(refused.statusCode()).isEqualTo(400);
+        assertThat(refused.body()).contains("data-error-page")
+                .contains(PREFIX + "/assets/_tesseraql/tesseraql.css")
+                .doesNotContain("\"/assets/_tesseraql/tesseraql.css\"");
+    }
+
+    /**
      * The ledger shrinks and never grows. An entry that has stopped being emitted unprefixed is
      * a fix that landed without deleting its line, which would leave the guard permanently
      * excusing a URL that is now correct.
@@ -478,6 +501,15 @@ class BasePathEmissionIntegrationTest {
         write(home, "web/orders/new/create.sql", """
                 insert into orders (customer_id, note)
                 values (/* customer_id */'cus-x', /* note */'a note')
+                """);
+
+        // A custom error page, which composes links like any other page.
+        write(home, "templates/errors/error.html", """
+                <!DOCTYPE html>
+                <html><head>
+                  <link rel="stylesheet" th:href="@{/assets/_tesseraql/tesseraql.css}">
+                </head>
+                <body data-error-page><h1 th:text="${status}">Error</h1></body></html>
                 """);
 
         // Surface 2: a workflow detail region. Its _return is the wire page path.
