@@ -115,6 +115,15 @@ class BasePathEmissionIntegrationTest {
             "/orders/new/_lookup/customer_id",
             "/orders/new/_lookup/customer_id/dialog");
 
+    /**
+     * Pinned to HTTP/1.1 on purpose. This crawl fetches what the pages link, which includes
+     * multi-megabyte WebJar assets, and the JDK client loses HTTP/2 frame sync on those — it
+     * reads the body as a header and reports a frame type that does not exist. The protocol is
+     * not what this test is about, so it does not negotiate one.
+     */
+    private static final HttpClient CLIENT = HttpClient.newBuilder()
+            .version(HttpClient.Version.HTTP_1_1).build();
+
     /** The fixture's pages, each declaring one of the surfaces the audit found broken. */
     private static final List<String> PAGES = List.of(
             "/orders/new", "/docs/D-1", "/things?page=2",
@@ -200,7 +209,7 @@ class BasePathEmissionIntegrationTest {
                 }
                 int fragment = target.indexOf('#');
                 String fetch = fragment < 0 ? target : target.substring(0, fragment);
-                int status = HttpClient.newHttpClient().send(
+                int status = CLIENT.send(
                         HttpRequest.newBuilder(URI.create(
                                 "http://localhost:" + runtime.port() + fetch))
                                 .header("Cookie", cookie).build(),
@@ -279,7 +288,7 @@ class BasePathEmissionIntegrationTest {
     }
 
     private static HttpResponse<String> get(String path) throws Exception {
-        return HttpClient.newHttpClient().send(
+        return CLIENT.send(
                 HttpRequest.newBuilder(URI.create(
                         "http://localhost:" + runtime.port() + PREFIX + path))
                         .header("Cookie", cookie).build(),

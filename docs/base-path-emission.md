@@ -283,6 +283,22 @@ exist.
 `ViewEjectorTest` changes its expected output, deliberately, and pages ejected before this campaign
 keep the URLs they were given. They are the author's from the moment they are written.
 
+## Traps this campaign hit
+
+Recorded as they were hit, so the next slice does not re-learn them.
+
+1. **A hosted member fences every route behind `tql.app.use.<member>`.** `AuthStep.fence` is a
+   no-op when the stack-member bean is absent, which is every unhosted boot — so a fixture copied
+   from a plain-boot test compiles, boots, serves, and answers 403 on every page.
+2. **A crawl that fetches WebJar assets must not negotiate HTTP/2.** The JDK client loses frame
+   sync on a multi-megabyte static body and reports a frame type that does not exist; the guard
+   pins HTTP/1.1 rather than re-running until it passes. The same signature has been seen before
+   in this repository against a WebJar asset, so it is the client and the payload size, not the
+   surface under test.
+3. **`clean` does not remove `tesseraql-runtime/file-uploads`.** It sits outside `target/`, and
+   `FileTransferIntegrationTest` asserts it does not exist — so one stale directory fails a full
+   verify on a change that did not create it.
+
 ## Recorded deviations
 
 **The reviewed-import surface joins the fixture in slice 5, not slice 3.** The slice list above
