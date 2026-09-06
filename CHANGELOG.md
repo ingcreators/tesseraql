@@ -8,6 +8,19 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **A `params:` key that is not a bind name is a build error (`TQL-SQL-2120`).**
+  `params: { order-id: query.order-id }` with the matching `/* order-id */` bind linted clean and
+  ran forever with a null bind: the directive expression grammar reads `order-id` as the
+  subtraction `order - id`, and both operands are unbound. Every `params:` map whose keys become
+  bind names is checked — under a source, a step, an enrichment, a validation rule and an export's
+  `after:`, on a route, a queue consumer and an MCP tool alike, and on a `contract:` binding, whose
+  params are the bind names of the statement the framework ships. A `service:` binding is excluded:
+  its params are the bean's argument names, not bind names.
+
+  A lint rather than a JSON Schema constraint, for a measured reason — the build has no JSON Schema
+  validator at all, so the schemas are editor-only and a constraint written there would be advice
+  rather than a gate.
+
 - **A list bound under `not in` with nothing guarding its emptiness is a build error
   (`TQL-SQL-2119`).** The renderer refuses an empty one at request time, but a route that can reach
   that refusal is defective before it ever serves a request, and the author is the one who can fix

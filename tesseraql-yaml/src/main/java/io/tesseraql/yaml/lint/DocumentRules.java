@@ -3,6 +3,7 @@ package io.tesseraql.yaml.lint;
 import static io.tesseraql.yaml.lint.LintFinding.Severity.ERROR;
 import static io.tesseraql.yaml.lint.LintFinding.Severity.WARNING;
 
+import io.tesseraql.core.sql.SqlIdentifiers;
 import io.tesseraql.core.sql.SqlNode;
 import io.tesseraql.yaml.config.AppConfig;
 import io.tesseraql.yaml.manifest.RouteFile;
@@ -36,6 +37,9 @@ final class DocumentRules {
     // A list bound under NOT IN with nothing guarding its emptiness: the build-time twin of the
     // renderer's refusal, so a defective template never reaches a request.
     private static final String NEGATED_IN_LIST_UNGUARDED = "TQL-SQL-2119";
+
+    // A params: key that is not an identifier, and therefore not a bind name.
+    private static final String NON_IDENTIFIER_BIND_NAME = "TQL-SQL-2120";
 
     private static final String SHARED_SCHEMA_WITHOUT_TENANT_PREDICATE = "TQL-TENANT-3001";
 
@@ -217,10 +221,12 @@ final class DocumentRules {
                 case SqlNode.ListBind bind -> {
                     if (bind.negated() && !guardedBy(guards, bind.expressionSource())) {
                         findings.add(new LintFinding(NEGATED_IN_LIST_UNGUARDED, ERROR, source,
-                                "'" + bind.expressionSource() + "' is bound under NOT IN and"
-                                        + " nothing guards it against being empty; an empty list"
-                                        + " renders not in (null), which hides every row instead"
-                                        + " of none — wrap the site in /*%if !"
+                                // One literal per sentence, broken only where a value goes: the
+                                // error index inserts an ellipsis at every gap between two
+                                // literals, so a line-wrapped message reads as a truncation in
+                                // docs/reference-error-codes.md.
+                                "'" + bind.expressionSource()
+                                        + "' is bound under NOT IN with nothing guarding it against being empty, and an empty list hides every row instead of none — wrap the site in /*%if !"
                                         + bind.expressionSource() + ".empty */ … /*%end*/"));
                     }
                 }
@@ -271,6 +277,33 @@ final class DocumentRules {
             at = condition.indexOf(root, at + 1);
         }
         return false;
+    }
+
+    /**
+     * A {@code params:} key is a bind name, and a bind name is an expression the {@code /* … *}
+     * {@code /} directive parses.
+     *
+     * <p>Nothing checked its shape, so {@code params: { order-id: query.order-id }} with a matching
+     * {@code /* order-id *}{@code /} bind linted clean and ran forever with a null bind: the
+     * expression grammar reads {@code order-id} as the subtraction {@code order - id}, and both
+     * operands are unbound (docs/two-way-sql-parser.md decision 16).
+     *
+     * <p>A lint and not a JSON Schema constraint, for a measured reason: the build has no JSON
+     * Schema validator at all — the schemas are editor-only, so a constraint written there would
+     * be advice rather than a gate.
+     */
+    static void lintBindNames(RouteDefinition definition, String source,
+            List<LintFinding> findings) {
+        for (LintSupport.DocumentBindParams slot : LintSupport.documentBindParams(definition)) {
+            for (String key : slot.params().keySet()) {
+                if (!SqlIdentifiers.isIdentifier(key)) {
+                    findings.add(new LintFinding(NON_IDENTIFIER_BIND_NAME, ERROR, source,
+                            "params: key '" + key
+                                    + "' is not a bind name — a bind name is an identifier, because the 2-way SQL bind it names is an expression the directive parses, so this one binds null on every request; declared under "
+                                    + slot.slot()));
+                }
+            }
+        }
     }
 
     /** The input name a {@code sql.params} source binds from a request, or {@code null} otherwise. */

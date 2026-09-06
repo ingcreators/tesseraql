@@ -186,6 +186,7 @@ final class RouteRules implements LintRule {
         DocumentRules.lintDatasource(context, config, route.source(), definition, source, findings);
         DocumentRules.lintEmbeddedVariables(context, route.source(), definition, source, findings);
         DocumentRules.lintNegatedInLists(context, route.source(), definition, source, findings);
+        DocumentRules.lintBindNames(definition, source, findings);
         if (definition.security() != null && definition.security().policy() != null) {
             // A policy that resolves an atom from the route's own path must resolve on this
             // route (docs/access-governance.md structural decision 7). The compiler refuses the

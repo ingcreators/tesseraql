@@ -257,6 +257,11 @@ class AppLinterTest {
 
     /** A query route whose main SQL is {@code sql}, for the negated-list cases. */
     private static void writeListRoute(Path dir, String sql) throws Exception {
+        writeListRoute(dir, sql, "hidden: query.hidden");
+    }
+
+    /** The same, with the {@code params:} entry the case needs. */
+    private static void writeListRoute(Path dir, String sql, String param) throws Exception {
         Files.createDirectories(dir.resolve("config"));
         Files.writeString(dir.resolve("config/tesseraql.yml"), """
                 tesseraql:
@@ -288,12 +293,74 @@ class AppLinterTest {
                       file: search.sql
                       mode: query
                       params:
-                        hidden: query.hidden
+                        %s
                 response:
                   json:
                     body:
                       rows: main.rows
+                """.formatted(param));
+    }
+
+    @Test
+    void aHyphenatedParamsKeyIsReported(@TempDir Path dir) throws Exception {
+        // A params: key is a bind name, and a bind name is an expression the directive parses:
+        // `order-id` reads as the subtraction `order - id`, both operands unbound, so the site
+        // binds null on every request and nothing says so (docs/two-way-sql-parser.md decision 16).
+        writeListRoute(dir, "select 1 from items where id = /* order-id */ 1\n",
+                "order-id: query.q");
+
+        assertThat(new AppLinter().lint(dir)).anyMatch(f -> f.code().equals("TQL-SQL-2120")
+                && f.isError() && f.message().contains("order-id"));
+    }
+
+    @Test
+    void aUnicodeParamsKeyIsClean(@TempDir Path dir) throws Exception {
+        writeListRoute(dir, "select 1 from items where 顧客名 = /* 顧客名 */ 'x'\n",
+                "顧客名: query.q");
+
+        assertThat(new AppLinter().lint(dir))
+                .noneMatch(f -> f.code().equals("TQL-SQL-2120"));
+    }
+
+    @Test
+    void aParamsKeyOnAContractBindingIsChecked(@TempDir Path dir) throws Exception {
+        // A contract binding carries no SQL file of its own, so a walk that gates on file() skips
+        // it — but its params ARE the bind names of the contract's statement.
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), """
+                tesseraql:
+                  app:
+                    name: t
+                  security:
+                    policies:
+                      app.write:
+                        anyOf:
+                          - role: WRITE
                 """);
+        Files.createDirectories(dir.resolve("web/users"));
+        Files.writeString(dir.resolve("web/users/post.yml"), """
+                version: tesseraql/v1
+                id: users.disable
+                kind: route
+                recipe: command-json
+                security:
+                  auth: browser
+                  policy: app.write
+                steps:
+                  - id: main
+                    contract:
+                      name: identity.disable-user
+                      mode: update
+                      params:
+                        user-id: path.id
+                response:
+                  json:
+                    body:
+                      ok: true
+                """);
+
+        assertThat(new AppLinter().lint(dir)).anyMatch(f -> f.code().equals("TQL-SQL-2120")
+                && f.message().contains("user-id"));
     }
 
     @Test
