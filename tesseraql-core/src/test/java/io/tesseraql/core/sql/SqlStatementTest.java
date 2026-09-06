@@ -209,6 +209,22 @@ class SqlStatementTest {
     }
 
     @Test
+    void anErrorFromTheBodyRollsBackAndNeverCommits() {
+        // The catch listed SQLException and RuntimeException, so an Error reached the finally with
+        // the transaction still open — and restoring autocommit COMMITS an open transaction, per
+        // the Connection.setAutoCommit contract (docs/two-way-sql-parser.md decision 17).
+        FakeDatabase database = new FakeDatabase(List.of(), List.of());
+        SqlStatement statements = SqlStatement.on(database.dataSource());
+
+        assertThatThrownBy(() -> statements.transact("scim.groups.create", connection -> {
+            throw new AssertionError("boom");
+        })).isInstanceOf(AssertionError.class).hasMessage("boom");
+
+        assertThat(database.calls).contains("rollback");
+        assertThat(database.calls).doesNotContain("commit");
+    }
+
+    @Test
     void aFailureInsideTheTransactionRollsItBackAndKeepsItsStatementsName() {
         FakeDatabase database = new FakeDatabase(List.of(), List.of());
         database.failure = new SQLException("value too long", "22001");

@@ -395,6 +395,16 @@ proven with javac. And `SqlStatementTest`'s `FakeDatabase` answers `false` for `
 `setAutoCommit(true)` is never recorded and an ordering assertion written against it compares -1
 with -1.
 
+Two more the implementation found, which no amount of reading would have:
+
+- **A value form and a void form of one name are ambiguous** for a lambda whose body is a statement
+  expression, and this repository compiles with `-Werror`. The pair is named apart — `call` returns,
+  `run` does not — the way `Callable` and `Runnable` are.
+- **A body that captures a mutable local cannot become a lambda.** The command processor's step
+  transaction does, over about a hundred and sixty lines, so it keeps its own bracket with the rule
+  written out and `asTqlException` widened to own the `Error` half. Moving that body onto the
+  primitive is a restructuring with its own review, not a line of a sweep — filed, not done.
+
 ### 18 — `RowTokens`' words move, not its check
 
 `encode` refuses `null` or empty, while the class javadoc, the `@throws` clause and the thrown
