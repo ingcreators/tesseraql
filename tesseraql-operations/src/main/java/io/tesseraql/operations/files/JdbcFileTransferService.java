@@ -347,7 +347,10 @@ public final class JdbcFileTransferService implements FileTransferService {
                 // stated rather than pretended.
                 recordSpoolAndComplete(transferId, writer.toRef(), rows);
                 return new InlineResult(transferId, filename, rows);
-            } catch (Exception ex) {
+            } catch (Throwable ex) {
+                // Everything, not Exception: restoring autocommit below COMMITS an open
+                // transaction (docs/two-way-sql-parser.md decision 17). These bodies return a
+                // value from inside the transaction, so they keep their own bracket.
                 connection.rollback();
                 throw ex;
             } finally {
@@ -654,6 +657,20 @@ public final class JdbcFileTransferService implements FileTransferService {
                 if (!rollbackAll) {
                     emit(request);
                 }
+            } catch (Throwable failure) {
+                // The bracket had no catch at all, so ANY failure — not only an Error — reached
+                // the restore below, and restoring autocommit COMMITS an open transaction. A
+                // partial import landed under a FAILED verdict, which is the one outcome the
+                // compare-and-set above exists to prevent (docs/two-way-sql-parser.md decision
+                // 17). Rolling back is a no-op once the commit above has run.
+                if (!committed) {
+                    try {
+                        connection.rollback();
+                    } catch (SQLException rollback) {
+                        failure.addSuppressed(rollback);
+                    }
+                }
+                throw failure;
             } finally {
                 connection.setAutoCommit(autoCommit);
             }
@@ -1221,7 +1238,10 @@ public final class JdbcFileTransferService implements FileTransferService {
                 }
                 connection.commit();
                 span.attribute("rowCount", rows);
-            } catch (Exception ex) {
+            } catch (Throwable ex) {
+                // Everything, not Exception: restoring autocommit below COMMITS an open
+                // transaction (docs/two-way-sql-parser.md decision 17). These bodies return a
+                // value from inside the transaction, so they keep their own bracket.
                 connection.rollback();
                 throw ex;
             } finally {
@@ -1476,7 +1496,10 @@ public final class JdbcFileTransferService implements FileTransferService {
                             + " discarded");
                 }
                 connection.commit();
-            } catch (SQLException | RuntimeException ex) {
+            } catch (Throwable ex) {
+                // Everything, not a listed set: restoring autocommit below COMMITS an open
+                // transaction, so an Error here would record a file the caller was told was
+                // discarded (docs/two-way-sql-parser.md decision 17).
                 connection.rollback();
                 throw ex;
             } finally {

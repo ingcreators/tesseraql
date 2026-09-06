@@ -307,9 +307,13 @@ public class SqlStep implements Step {
                 if (profile.autoCommitOff()) {
                     connection.commit();
                 }
-            } catch (Exception failed) {
+            } catch (Throwable failed) {
                 // A failed extraction must not commit, and a cleanup that also fails must not
-                // replace the failure that matters.
+                // replace the failure that matters. Everything, not Exception: restoring
+                // autocommit below COMMITS an open transaction, so an Error would commit the
+                // extraction it was told to abandon (docs/two-way-sql-parser.md decision 17).
+                // The dialect gate stays: a profile that never took autocommit off has no
+                // transaction to roll back.
                 if (profile.autoCommitOff()) {
                     try {
                         connection.rollback();

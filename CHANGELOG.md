@@ -77,6 +77,15 @@ All notable changes to TesseraQL are documented here. The format follows
   place. Its body type carries one further checked exception, because several of the bodies it
   replaces read a spooled file inside their transaction.
 
+  Every one of the fourteen owners is now either a caller of it or writes the rule out, and a
+  ledger test refuses a fifteenth. The worst was not an `Error` case at all: the CSV/Excel import
+  had **no catch clause**, so any failure whatsoever reached its bare `finally` and committed a
+  partial import under a FAILED verdict — the one outcome its own compare-and-set exists to
+  prevent. The event channel, the outbox claim and the org-unit closure rebuild move onto the
+  primitive; the session rotation, the file transfers, the export step and the command processor
+  keep their own bracket because they return from inside the transaction, choose their own commit
+  point, or capture a mutable local, and each now rolls back on any `Throwable`.
+
 - **The write-scope security lint sees a table whose name carries a combining mark.**
   `TQL-SEC-4100` warns when an application scopes a table's reads with `/*%scope … */` but writes to
   it without one. Its table-name patterns are hand-inlined character classes that stopped at
