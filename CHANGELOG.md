@@ -86,6 +86,15 @@ All notable changes to TesseraQL are documented here. The format follows
   keep their own bracket because they return from inside the transaction, choose their own commit
   point, or capture a mutable local, and each now rolls back on any `Throwable`.
 
+- **`RowTokens` documents what it does.** The class javadoc, the `@throws` clause and the refusal
+  message all said a null, absent or **blank** key component has no token, while the check refused
+  only an empty one — so a whitespace-only value got a token the contract said did not exist, and
+  `TQL-VIEW-3322` and the cookbook repeated the same wrong rule. The words move, not the check: a
+  whitespace-only key is data that round-trips byte-identically, `decode` could not enforce the
+  stricter rule symmetrically, and `SqlStep` reads the refusal as its "the keyset page ends"
+  signal — so tightening it would refuse a real key and move a pagination boundary. The contract is
+  now a test rather than prose.
+
 - **The write-scope security lint sees a table whose name carries a combining mark.**
   `TQL-SEC-4100` warns when an application scopes a table's reads with `/*%scope … */` but writes to
   it without one. Its table-name patterns are hand-inlined character classes that stopped at

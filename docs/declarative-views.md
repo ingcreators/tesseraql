@@ -678,7 +678,7 @@ Lint family **`TQL-VIEW-33xx`**:
 | 3318 | an embedded view embeds views itself — embedding depth is 1 |
 | 3319 | `response.html.model` declares a reserved view-model name (`v`, `views`) |
 | 3321 | a column `link:` placeholder is not one plain column name — dotted or malformed placeholders render empty at runtime and eject wrong |
-| 3322 | a declared `key:` column is null, absent or blank in a result row — a row without its declared identity is a data defect |
+| 3322 | a declared `key:` column is null, absent or empty in a result row — a row without its declared identity is a data defect |
 | 3323 | a `filters:` entry names an input the route does not declare |
 | 3324 | a `presets:` param names an input the route does not declare (framework `sort`/`dir`/`size` excepted) |
 | 3325 | an `actions:` entry targets a URL that matches no POST route |
