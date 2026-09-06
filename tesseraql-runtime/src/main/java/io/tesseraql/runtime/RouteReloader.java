@@ -124,7 +124,14 @@ public final class RouteReloader {
         // Tolerant load: an unparseable route document is a per-route failure like a compile
         // error, not a reason to abort — only app.yml/config problems still fail the load.
         List<ManifestLoader.BrokenRoute> broken = new ArrayList<>();
-        AppManifest reloaded = new ManifestLoader().load(appHome, broken, functions);
+        // The address is the host's and lives only in memory (docs/base-path-emission.md
+        // decision 9): the disk copy never carried it, so re-reading loses it and every route
+        // this reload compiles would emit origin-rooted URLs while the edge still serves the
+        // prefix. base-path.md puts per-request prefixes out of scope — the prefix is fixed for
+        // a runtime's lifetime, and a save is not a new lifetime.
+        AppManifest reloaded = TesseraqlRuntime.withBasePath(
+                new ManifestLoader().load(appHome, broken, functions),
+                current.config().getString("tesseraql.http.basePath").orElse(null));
         // The structural guard spans every hosted app (startup parity): a new route colliding
         // with another app's endpoint aborts the reload with the conflict named.
         SystemApps.requireNoRouteConflicts(reloaded, mountedApps);

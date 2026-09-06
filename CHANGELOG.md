@@ -63,6 +63,15 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A hot reload keeps the address the runtime is served under.** A reload re-reads the manifest
+  from disk, and the disk copy has never carried the application's prefix — the host injects it in
+  memory at start. So after any watched save, every route the reload compiled emitted origin-rooted
+  URLs while the edge still served the prefix: `tesseraql dev --watch`, the loop the framework asks
+  people to work in, broke its own pages on the first edit. The reloader re-applies the host's
+  address through the same method the start path uses. `base-path.md` already put per-request
+  prefixes out of scope — the prefix is fixed for a runtime's lifetime, and a save is not a new
+  lifetime.
+
 - **A custom error page resolves its links against the application.** `templates/errors/<status>.html`
   rendered with only `status` and `error` in its model, so the link builder had nothing to resolve
   against and every URL on the page came out origin-rooted: the page arrived unstyled, and in a
