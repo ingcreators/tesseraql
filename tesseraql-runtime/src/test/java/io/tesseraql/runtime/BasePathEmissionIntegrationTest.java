@@ -1,5 +1,6 @@
 package io.tesseraql.runtime;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.tesseraql.pipeline.TesseraqlProperties;
@@ -7,6 +8,7 @@ import io.tesseraql.security.Principal;
 import io.tesseraql.security.session.SessionStore;
 import java.io.IOException;
 import java.net.URI;
+import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -336,6 +338,27 @@ class BasePathEmissionIntegrationTest {
     }
 
     /**
+     * The third consumer that reads {@code _return} off the request. Like the other two it hands
+     * the value to something that prefixes what it is given, so the value has to go back to
+     * base-relative form first — but this one parks a report and appends its handle on the way,
+     * which is why it needed a grid page rather than a one-line change.
+     */
+    @Test
+    void aBulkActionReturnsToTheGridThatSentIt() throws Exception {
+        // The grid page emits the bulk endpoint through the link builder already.
+        assertThat(body("/docs")).contains("formaction=\"" + PREFIX + "/api/docs/_bulk/submit\"");
+
+        HttpResponse<String> redirect = postForm("/api/docs/_bulk/submit",
+                "_csrf=" + csrf + "&_return=" + URLEncoder.encode(PREFIX + "/docs", UTF_8)
+                        + "&ids=D-1");
+
+        assertThat(redirect.statusCode()).isEqualTo(303);
+        assertThat(redirect.headers().firstValue("Location").orElseThrow())
+                .startsWith(PREFIX + "/docs?")
+                .doesNotStartWith(PREFIX + PREFIX);
+    }
+
+    /**
      * The ledger shrinks and never grows. An entry that has stopped being emitted unprefixed is
      * a fix that landed without deleting its line, which would leave the guard permanently
      * excusing a URL that is now correct.
@@ -575,6 +598,39 @@ class BasePathEmissionIntegrationTest {
                 values (/* customer_id */'cus-x', /* note */'a note')
                 """);
 
+        // Surface 5: the grid page's bulk action. Its round trip reads _return off the request
+        // and hands it to a renderer that prefixes what it is given — the third consumer.
+        write(home, "web/docs/get.yml", """
+                version: tesseraql/v1
+                id: docs.list
+                kind: route
+                recipe: query-html
+                security: { policy: wf.act }
+                sources:
+                  main:
+                    sql:
+                      file: list.sql
+                      mode: query
+                response:
+                  html:
+                    view: docs.list
+                """);
+        write(home, "web/docs/list.sql", "select id, status from docs order by id\n;\n");
+        write(home, "web/docs/list.view.yml", """
+                version: tesseraql/v1
+                id: docs.list
+                kind: view
+                recipe: list
+                key: id
+                title: Documents
+                columns:
+                  - { name: id, label: "#" }
+                  - { name: status }
+                actions:
+                  - label: Submit
+                    action: /api/docs/_bulk/submit
+                """);
+
         // Surface 4: a reviewed CSV import. Its review page and its job page are the two
         // remaining emission defects, and neither is reachable without an upload.
         write(home, "web/items/import/items-import.view.yml", """
@@ -652,6 +708,7 @@ class BasePathEmissionIntegrationTest {
                   - id: submit
                     from: draft
                     to: done
+                    bulk: true
                     command: { file: touch.sql }
                 """);
         write(home, "workflow/touch.sql", """

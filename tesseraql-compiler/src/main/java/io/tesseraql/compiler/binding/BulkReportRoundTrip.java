@@ -69,7 +69,12 @@ public final class BulkReportRoundTrip {
                 return;
             }
             exchange.setProperty(BROWSER, Boolean.TRUE);
-            exchange.setProperty(RETURN_TO, returnTo.get(0));
+            // Base-relative from here on (docs/base-path.md decision 7): the grid handed this out
+            // as a wire URL and posted it back as one, and the response leg appends the report
+            // handle and then prefixes the whole thing. Without this the browser is sent to
+            // /<app>/<app>/… — the third consumer of this value to have made the same mistake.
+            exchange.setProperty(RETURN_TO,
+                    io.tesseraql.pipeline.BasePath.relative(exchange, returnTo.get(0)));
             List<String> membership = form.get("keys");
             if (membership != null && !membership.isEmpty()) {
                 exchange.setProperty(MEMBERSHIP, List.copyOf(membership));
