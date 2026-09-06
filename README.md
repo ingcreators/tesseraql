@@ -68,7 +68,7 @@ and serve the example (the `-Pdist` archive bundles the opt-in pdf/excel codecs 
 ./mvnw -B -ntp -DskipTests -pl tesseraql-cli -am -Pdist package
 ( cd tesseraql-cli/target && unzip -q tesseraql-cli-*-dist.zip )
 tesseraql-cli/target/tesseraql-*/bin/tesseraql dev \
-  --app examples/user-admin-app --modules tesseraql-cli/target/tesseraql-*/modules
+  --stack examples --app-name user-admin-app
 ```
 
 `GET /api/users` is a `bearer`-authenticated route, so mint a dev JWT (HS256, the

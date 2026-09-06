@@ -34,7 +34,7 @@ final class EmbeddedDbStatus {
             StringBuilder out = new StringBuilder();
             out.append("Embedded PostgreSQL data directory: ").append(dataDir).append('\n');
             if (state == State.UNINITIALIZED) {
-                out.append("  Status: not initialized — the first `serve --embedded-db ")
+                out.append("  Status: not initialized — the first `dev --embedded-db ")
                         .append(dataDir).append("` creates it at PostgreSQL ")
                         .append(defaultVersion)
                         .append(" (major ").append(defaultMajor).append(").");
@@ -43,17 +43,17 @@ final class EmbeddedDbStatus {
             String onDisk = onDiskMajor.orElse("?");
             out.append("  On-disk PostgreSQL major: ").append(onDisk).append('\n');
             out.append("  Pinned binary version:    ")
-                    .append(pinnedVersion.orElse("none (legacy — pinned on next serve)"))
+                    .append(pinnedVersion.orElse("none (legacy — pinned on next dev run)"))
                     .append('\n');
             out.append("  CLI default version:      ").append(defaultVersion).append(" (major ")
                     .append(defaultMajor).append(")\n");
             if (state == State.UP_TO_DATE) {
-                out.append("  Status: up to date — `serve --embedded-db ").append(dataDir)
+                out.append("  Status: up to date — `dev --embedded-db ").append(dataDir)
                         .append("` runs PostgreSQL ").append(pinnedVersion.orElse(defaultVersion))
                         .append('.');
                 if (legacyUnpinned) {
-                    out.append("\n  Note: this directory predates version pinning; the next serve "
-                            + "records its version.");
+                    out.append("\n  Note: this directory predates version pinning; the next dev "
+                            + "run records its version.");
                 }
                 return out.toString();
             }
@@ -69,17 +69,17 @@ final class EmbeddedDbStatus {
                     A cross-major move needs your own PostgreSQL client tools (this build ships
                     server-only binaries — pg_dumpall/psql are not bundled). Recommended procedure:
 
-                      # 1. Back up the directory (stop any running serve first).
+                      # 1. Back up the directory (stop any running dev first).
                       cp -a %1$s %1$s.bak
 
                       # 2. Start the current version on a fixed port; dump from another shell.
-                      tesseraql serve --app <app> --embedded-db %1$s \\
+                      tesseraql dev --app-name <app> --embedded-db %1$s \\
                           --embedded-db-version %2$s --embedded-db-port 5433
                       pg_dumpall -h localhost -p 5433 -U postgres > %1$s.dump.sql   # then Ctrl+C
 
                       # 3. Move the old data aside; start a fresh directory at the new version.
                       mv %1$s %1$s.old
-                      tesseraql serve --app <app> --embedded-db %1$s \\
+                      tesseraql dev --app-name <app> --embedded-db %1$s \\
                           --embedded-db-version %3$s --embedded-db-port 5433
 
                       # 4. Restore, verify, then clean up.
