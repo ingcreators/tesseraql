@@ -8,7 +8,7 @@
 > seventeen places.** One of them is load-bearing: the plan's reviewer proposed a five-line
 > `ViewBinding.basePath` field as an equivalent alternative to threading an address through, on
 > the grounds of "same behaviour, same unit test". It is not equivalent, and
-> [decision 5](#5--a-return-is-corrected-at-the-emitter-and-the-correction-rides-into-embed)
+> [decision 5](#5--a-return-is-returned-to-base-relative-form-where-it-is-read-back)
 > records why. Read the decisions below, not the plan.
 >
 > **The premise the whole campaign was ranked under was also wrong, in the project's favour.**
@@ -78,7 +78,7 @@ re-measuring the plan and by the review of that re-measurement.
 | # | Where | What happens |
 | --- | --- | --- |
 | F28 | `field.html:34/:40/:48`, `lookup-dialog.html:16/:19/:35` | The lookup field's four legs emit `${f.lookup.resolve}` raw. The value is base-relative by construction — `ViewBinding:643-644` builds it from the same `action` that `form.html:27-28` wraps in `@{}` — so under a prefix the code input, the search button, the dialog and every pick row address the origin while the form's own submit still works. Nothing errors; the field simply never resolves. |
-| F29 | `ViewBinding` `_return` | `_return` is emitted as a wire URL and four consumers prefix it again. |
+| F29 | `_return` consumers | `_return` is handed out as a wire URL, and the three places that read it back off the request pass it to the redirect helper, which prefixes what it is given. Measured: `/shop/shop/things?page=2`. The plan counted four consumers; there are three. |
 | F30 | The import job page | Publishes no `base`, so the link builder has nothing to read and the no-JS confirm lands unstyled. |
 | F32 | `ViewBinding:751` | A document key is form-encoded into a path segment by a plain `URLEncoder`, so a key with a space renders `/docs/PR+1/approve`. Vert.x decodes plus-as-space **off**, so the transition posts at a document that does not exist while the stepper above it shows the right one. |
 | — | `ViewEjector:489-521` | The ejector hand-writes the same three lookup legs as root-absolute string literals. A template fix cannot reach them, and ejection is a one-way door: the author owns the output forever. |
@@ -170,7 +170,7 @@ application declares no prefix of its own. Under decision 12 no application decl
 application gets one, so the lint is silent precisely where it is now needed. Its condition becomes
 unconditional. This is a lint over an application's own markup and it stays a warning.
 
-### 5 — A `_return` is corrected at the emitter, and the correction rides into `embed(...)`
+### 5 — A `_return` is returned to base-relative form where it is read back
 
 The plan's reviewer proposed giving `ViewBinding` a `basePath` field with a setter, defaulting to
 `""`, set at the three `RouteCompiler` construction sites — "same behaviour, same unit test, no
@@ -182,10 +182,27 @@ They reach the emitter carrying the host's page path. A field set only at the co
 construction sites is empty on every one of them, so the change ships green, with its unit test
 passing, while every embedded list inside a detail or dashboard page still emits a wire `_return`.
 
-Whichever shape carries the address, it must propagate into `embed(...)`. The three hidden-input
-legs (`list.html:73`, `form.html:39`, `detail.html:42`) and the ejector's own two sites are part of
-the same slice, because a fix verified only at the emitter passes while a form round-trip still
-doubles.
+**Amended when the slice was built: the fix is at the reader, not the emitter, and neither shape
+is needed.** Both this decision and the reviewer's alternative assumed `_return` had to be *emitted*
+base-relative, which is what dragged in the `embed(...)` propagation problem. Measuring the
+consumers settled it differently.
+
+`RedirectRenderer.negotiate` states its own contract — "the location is base-relative and acquires
+the application's prefix here… the one place the prefix has to go." So a caller handing it a wire
+URL is the defect, and `_return` is read straight off the request. `BasePaths.relative` exists for
+exactly this, and says so: "for the places that read a path back off the request and hand it to
+something that will prefix it again, such as the login page's `next` target." The login target
+already makes this move; `_return` did not.
+
+So `_return` stays a wire URL end to end — emitted wire, echoed wire by the hidden input, posted
+back wire — and each consumer returns it to base-relative form before the redirect helper. That is
+one line per consumer, needs no `embed(...)` propagation, no `PageAddress` record and no
+`ViewBinding` field, and is robust to an emission point that ever produces a base-relative value,
+because `relative` leaves a URL that does not carry the prefix alone.
+
+There are **three** such consumers, not the four the plan counted: `RedirectRenderer.resolveLocation`,
+`WorkflowTransitionRenderer`, and `BulkReportRoundTrip`, which builds its `Location` from the same
+wire value.
 
 ### 6 — An ejected page is a one-way door, so the ejector emits through the same rule
 
@@ -259,7 +276,7 @@ slice 3 introduces, so they are branched **sequentially**, never in parallel.
 | 3 | A prefixed boot crawls what it emits | M | the guard |
 | 4 | The lookup field's legs go through the link builder, ejector included | S | F28 |
 | 5 | The job page publishes `base`, and the card and confirm stop doubling | M | F30 |
-| 6 | `_return` is emitted base-relative, at the emitter and into `embed` | M | F29 |
+| 6 | `_return` is returned to base-relative form where it is read back | S | F29 |
 | 7 | A custom error page publishes `base` | S | — |
 | 8 | A hot-reloaded member keeps its injected prefix | M | — |
 
@@ -284,6 +301,13 @@ exist.
 keep the URLs they were given. They are the author's from the moment they are written.
 
 ## Filed, not fixed
+
+- **`BulkReportRoundTrip` doubles the prefix on its `Location` too.** It is the third consumer that
+  reads `_return` off the request and hands it to `BasePath.url` (`:126`), so it takes the same
+  one-line correction as the other two. It is filed rather than ridden along because reaching it
+  needs a bulk-report route in the prefixed fixture — a `report:` declaration and an `actions:`
+  block — and a behaviour change here ships with a test that is red today or it does not ship. The
+  two consumers this campaign could reach that way are fixed; this one is a slice with a fixture.
 
 - **The ejector's other URLs are still root-absolute literals.** Fixing F28's three lookup legs
   put the rest in plain view: `ViewEjector` writes the form's `action` and `hx-post` as literal

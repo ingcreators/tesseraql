@@ -220,6 +220,32 @@ class BasePathEmissionIntegrationTest {
     }
 
     /**
+     * The other half of "exactly once", on the way back. A {@code _return} is handed out as a
+     * wire URL and posted back as one, so whatever reads it off the request must return it to
+     * base-relative form before the redirect helper — the one place the prefix goes — adds the
+     * prefix again. Asserting the emitted value alone would not catch this: the round trip is
+     * where the second prefix appears.
+     */
+    @Test
+    void aReturnTargetIsPrefixedOnceOnTheWayBack() throws Exception {
+        HttpResponse<String> post = postForm("/things/3/update",
+                "name=Gamma&_csrf=" + csrf + "&_return=%2Fshop%2Fthings%3Fpage%3D2");
+
+        assertThat(post.statusCode()).isEqualTo(303);
+        assertThat(post.headers().firstValue("Location")).hasValue(PREFIX + "/things?page=2");
+    }
+
+    /** The same rule through the workflow transition's own redirect. */
+    @Test
+    void aWorkflowTransitionReturnsToThePageThatSentIt() throws Exception {
+        HttpResponse<String> post = postForm("/api/docs/D-1/submit",
+                "_csrf=" + csrf + "&_return=%2Fshop%2Fdocs%2FD-1");
+
+        assertThat(post.statusCode()).isEqualTo(303);
+        assertThat(post.headers().firstValue("Location")).hasValue(PREFIX + "/docs/D-1");
+    }
+
+    /**
      * The ledger shrinks and never grows. An entry that has stopped being emitted unprefixed is
      * a fix that landed without deleting its line, which would leave the guard permanently
      * excusing a URL that is now correct.
@@ -289,6 +315,17 @@ class BasePathEmissionIntegrationTest {
                 HttpRequest.newBuilder(URI.create(
                         "http://localhost:" + runtime.port() + PREFIX + path))
                         .header("Cookie", cookie).build(),
+                HttpResponse.BodyHandlers.ofString());
+    }
+
+    private static HttpResponse<String> postForm(String path, String body) throws Exception {
+        return CLIENT.send(
+                HttpRequest.newBuilder(URI.create(
+                        "http://localhost:" + runtime.port() + PREFIX + path))
+                        .header("Cookie", cookie)
+                        .header("Content-Type", "application/x-www-form-urlencoded")
+                        .POST(HttpRequest.BodyPublishers.ofString(body))
+                        .build(),
                 HttpResponse.BodyHandlers.ofString());
     }
 
