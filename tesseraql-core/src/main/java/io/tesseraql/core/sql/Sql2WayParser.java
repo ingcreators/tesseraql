@@ -142,6 +142,7 @@ public final class Sql2WayParser {
             }
             if (peekCommentStart()) {
                 flushText(nodes, text, textStartLine);
+                int commentStart = pos;
                 Directive directive = readComment();
                 if (directive.control()) {
                     switch (directive.keyword()) {
@@ -158,7 +159,7 @@ public final class Sql2WayParser {
                 } else if (directive.embedded()) {
                     nodes.add(parseEmbedded(directive));
                 } else {
-                    nodes.add(parseBind(directive));
+                    nodes.add(parseBind(directive, commentStart));
                 }
                 textStartLine = line;
             } else {
@@ -167,6 +168,58 @@ public final class Sql2WayParser {
         }
         flushText(nodes, text, textStartLine);
         return nodes;
+    }
+
+    /**
+     * Whether the list bind opening at {@code commentStart} sits under {@code NOT IN}. The
+     * renderer is handed the list and never the operator, and an empty list renders {@code (null)}
+     * — right under {@code IN} and exactly inverted under {@code NOT IN}
+     * (docs/two-way-sql-parser.md decision 9).
+     *
+     * <p>It scans backwards over the raw source rather than the buffered text, because the text
+     * buffer is empty when the previous node was a directive. A {@code not} whose preceding
+     * character is an identifier part is part of a longer word ({@code is_not}) and not the
+     * operator. A {@code NOT IN} split across a directive boundary is not detected; that is a
+     * recorded deviation, not an oversight.
+     */
+    private boolean precededByNotIn(int commentStart) {
+        int at = skipBackWhitespace(commentStart - 1);
+        at = matchBack(at, "in");
+        if (at == NO_MATCH) {
+            return false;
+        }
+        int beforeIn = skipBackWhitespace(at);
+        if (beforeIn == at) {
+            return false; // `in` must be a word of its own
+        }
+        at = matchBack(beforeIn, "not");
+        if (at == NO_MATCH) {
+            return false;
+        }
+        return at < 0 || !Character.isJavaIdentifierPart(source.charAt(at));
+    }
+
+    private static final int NO_MATCH = Integer.MIN_VALUE;
+
+    /** The index of the last non-whitespace character at or before {@code from}. */
+    private int skipBackWhitespace(int from) {
+        int at = from;
+        while (at >= 0 && Character.isWhitespace(source.charAt(at))) {
+            at--;
+        }
+        return at;
+    }
+
+    /**
+     * If {@code word} ends at {@code at} (case-insensitively), the index just before it;
+     * {@link #NO_MATCH} otherwise.
+     */
+    private int matchBack(int at, String word) {
+        int start = at - word.length() + 1;
+        if (start < 0) {
+            return NO_MATCH;
+        }
+        return source.substring(start, at + 1).equalsIgnoreCase(word) ? start - 1 : NO_MATCH;
     }
 
     private SqlNode parseEmbedded(Directive directive) {
@@ -179,7 +232,7 @@ public final class Sql2WayParser {
         return new SqlNode.Embedded(template, directive.sourceLine());
     }
 
-    private SqlNode parseBind(Directive directive) {
+    private SqlNode parseBind(Directive directive, int commentStart) {
         if (directive.content().trim().startsWith("${")) {
             return parseFilePath(directive);
         }
@@ -193,7 +246,7 @@ public final class Sql2WayParser {
         boolean list = skipWhitespacePeek() == '(';
         SqlNode node = list
                 ? new SqlNode.ListBind(expr, ExpressionParser.parse(expr, functions),
-                        directive.sourceLine())
+                        precededByNotIn(commentStart), directive.sourceLine())
                 : new SqlNode.Bind(expr, ExpressionParser.parse(expr, functions),
                         directive.sourceLine());
         skipDummy(list, expr);

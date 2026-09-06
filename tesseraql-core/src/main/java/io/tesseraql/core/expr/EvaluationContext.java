@@ -34,10 +34,27 @@ public final class EvaluationContext {
             return null;
         }
         Object current = root.get(path.get(0));
-        for (int i = 1; i < path.size() && current != null; i++) {
+        for (int i = 1; i < path.size(); i++) {
+            if (current == null) {
+                // Everything after a missing segment is missing too — except a virtual property,
+                // which has an honest answer about absence. `!ids.empty` is the guard the
+                // framework tells authors to write around a list bind, and an unselected optional
+                // multi-select is never bound at all: answering null there made the guard true
+                // and let it fail open on the one case it exists for.
+                return i == path.size() - 1 ? absentProperty(path.get(i)) : null;
+            }
             current = property(current, path.get(i));
         }
         return current;
+    }
+
+    /** What a virtual property answers about a value that is not there. */
+    private static Object absentProperty(String name) {
+        return switch (name) {
+            case "empty" -> Boolean.TRUE;
+            case "size", "length" -> 0;
+            default -> null;
+        };
     }
 
     private static Object property(Object target, String name) {
@@ -77,6 +94,11 @@ public final class EvaluationContext {
                 }
                 if (target instanceof CharSequence s) {
                     return s.isEmpty();
+                }
+                if (target.getClass().isArray()) {
+                    // `size` had this arm and `empty` did not, so the two disagreed about the
+                    // same value and the shorter guard was the one that failed open.
+                    return java.lang.reflect.Array.getLength(target) == 0;
                 }
             }
             default -> {

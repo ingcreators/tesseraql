@@ -668,6 +668,13 @@ public final class ErrorResponseRenderer implements Step {
                 // unique / foreign-key / row-count expectation / serialization conflict, and the
                 // declared lock's stale write (docs/edit-conflict.md decision 5)
                 case 4090, 4091, 4092, 4093, 4094 -> 409;
+                // An empty list bound under NOT IN. 500 and not a 4xx, written out rather than
+                // left to the default: the request is ordinary — clearing a multi-select — and
+                // the template is what is defective, because its author did not guard the site.
+                // The build-time lint for an unguarded negated list is the real fix, so this
+                // should be unreachable in an app that lints (docs/two-way-sql-parser.md
+                // decision 10).
+                case 2118 -> 500;
                 default -> 500;
             };
             case TENANT, APP -> switch (code.number()) {
