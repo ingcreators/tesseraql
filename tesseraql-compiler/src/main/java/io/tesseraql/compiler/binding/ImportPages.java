@@ -64,6 +64,12 @@ final class ImportPages {
         if (csrf != null) {
             model.put("_csrf", csrf);
         }
+        // Both shapes resolve their own URLs against this: the page composes the shell, whose
+        // stylesheet and script links need it, and the bare card carries a Cancel form of its
+        // own. Rendered here rather than by a view binding, so nothing else publishes it.
+        model.put(io.tesseraql.yaml.template.BasePathLinkBuilder.BASE_PATH_VARIABLE,
+                io.tesseraql.pipeline.BasePath.of(exchange.beans())
+                        + io.tesseraql.pipeline.BasePath.activationSegment(exchange));
         Path root = appHome == null ? Path.of(".") : appHome;
         // The card is selected out of its file, the page is rendered whole. A fragment file
         // carries a doctype and its own documentation above the fragment, and a swap that

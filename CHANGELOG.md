@@ -63,6 +63,15 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A reviewed import confirms and reports under the application's prefix.** The review page's
+  confirm form was built as a wire URL and then rendered through the link builder, so it posted at
+  `/<app>/<app>/…/commit` — an address nothing serves, on the one leg that exists for people
+  without JavaScript. And the job page it redirects to published no `base` at all, so it arrived
+  unstyled with every link pointing outside the application. The confirm target is now
+  base-relative, like every other value a page resolves through the link builder, while the JSON
+  leg's `commitUrl` stays a wire URL because an API client needs one. The job card and job page
+  publish `base` the way every other framework-rendered page does.
+
 - **A hot reload keeps the address the runtime is served under.** A reload re-reads the manifest
   from disk, and the disk copy has never carried the application's prefix — the host injects it in
   memory at start. So after any watched save, every route the reload compiled emitted origin-rooted

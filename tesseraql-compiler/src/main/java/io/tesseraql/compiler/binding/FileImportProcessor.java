@@ -165,9 +165,12 @@ public final class FileImportProcessor implements Step {
      */
     private void respondReviewPage(Exchange exchange, FileTransferService.ImportReview review,
             FileTransferService transfers, FileReadSpec spec) throws Exception {
+        // Base-relative, unlike the JSON leg's commitUrl above: this one is rendered through the
+        // link builder (tql/view/import.html wraps it in @{...}), which is where a page's URL
+        // acquires the prefix. Handing it a wire URL prefixes it twice, and the confirm form
+        // then posts at an address nothing serves.
         String commitUrl = review.committable()
-                ? io.tesseraql.pipeline.BasePath.url(exchange,
-                        urlPath + "/" + review.batchId() + "/commit")
+                ? urlPath + "/" + review.batchId() + "/commit"
                 : null;
         new ImportContext(review, row -> transfers.locate(format, spec, row), commitUrl)
                 .publish(exchange);
