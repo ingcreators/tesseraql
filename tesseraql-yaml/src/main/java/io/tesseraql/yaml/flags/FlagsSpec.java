@@ -7,6 +7,7 @@ import com.fasterxml.jackson.dataformat.yaml.YAMLGenerator;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
+import io.tesseraql.core.util.OrderedCopies;
 import io.tesseraql.yaml.SimpleYamlParser;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -49,7 +50,7 @@ public final class FlagsSpec {
     private final Map<String, Object> values;
 
     private FlagsSpec(Map<String, Object> values) {
-        this.values = Map.copyOf(values);
+        this.values = OrderedCopies.map(values);
     }
 
     /** The empty flag set (an app with no {@code config/flags.yml}). */

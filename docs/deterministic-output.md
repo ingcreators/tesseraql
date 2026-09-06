@@ -8,6 +8,12 @@
 > against `a8c34e6f7` after the base-path emission campaign moved several of its cited lines. The
 > corrections are recorded in [What the plan got wrong](#what-the-plan-got-wrong). Read the
 > decisions below, not the plan.
+>
+> **And re-measure this document too.** Slice 2 re-measured it against `e441b971f` and corrected
+> five of its six decisions — including its own guard for the signed documents, which as specified
+> was green half the time. Each correction is recorded inside the decision it belongs to. A slice
+> that inherits a count or a line number from here without re-measuring it will inherit a wrong
+> one.
 
 ## The class of defect
 
@@ -34,7 +40,7 @@ worked this out for `steps:` and did not carry it one line up to `input:`.
 | An outbound query string | A partner logs a different URL for the same call. |
 | A persisted outbox payload and a webhook body | Two identical events serialize to different bytes. |
 | `config/flags.yml` | Studio rewrites the author's committed file with every key reshuffled when a flag is toggled. |
-| **`SbomGenerator`** | `:47-48` builds a four-entry `Map.of` into the CycloneDX metadata, under a javadoc at `:40` that says "ordered by purl **for reproducibility**". |
+| **`SbomGenerator`** | Three salted `Map.of` calls reach the CycloneDX document — the metadata component at `:48`, and a hash object built once per file component at `:55` and once per library component at `:73-74` — under a javadoc at `:40` that says "ordered by purl **for reproducibility**". |
 | **`ReleaseEvidence`** | `:29` builds `Map.of("name", …, "version", …)` into the evidence document, under a javadoc at `:17` that says "The document is **deterministic** … so it is **reproducible and signable**" — and the build then Ed25519-signs those bytes. |
 
 The last two are the worst instances and neither the audit's finder nor the plan names them. A
@@ -54,16 +60,33 @@ it takes **two** methods rather than one:
 - `map(Map)` — insertion-ordered and **null-rejecting**, matching `Map.copyOf`'s contract.
 - an explicitly named null-permitting variant, for the sites that need it.
 
-The second method is not a convenience. `Map.copyOf`'s `NullPointerException` is today's **only**
-load-time guard for a null value in a model map: `SimpleYamlParser` catches it and turns it into a
-clean per-file schema error, and `ManifestLoader` dereferences without checking. A one-method
-`OrderedCopies` that tolerated nulls would silently delete that guard at every model site it swept
-— an ordering change that quietly converts a named schema error into a raw
+The second method is not a convenience. `Map.copyOf`'s `NullPointerException` is the load-time
+guard for a null value in a model map, and `ManifestLoader` dereferences without checking. A
+one-method `OrderedCopies` that tolerated nulls would silently delete that guard at every model
+site it swept — an ordering change that quietly converts a named schema error into a raw
 `NullPointerException` much later.
 
-The null-tolerant client set is **four** sites, not the three the plan implies. Each already
-hand-rolls `Collections.unmodifiableMap(new LinkedHashMap<>(…))` precisely because it tolerates
-nulls, and each keeps its reason in a comment when it moves.
+Slice 2 re-measured how that guard actually works, and three things it assumed are not true.
+`SimpleYamlParser` does not catch the `NullPointerException`: it has no `NullPointerException`
+catch at all, only a broad `catch (IOException | RuntimeException)` repeated at twelve sites, whose
+own javadoc names Jackson failures and SnakeYAML limits and never a null value. The guard is real
+but undocumented and unowned — nothing warns whoever narrows that catch — and **no test pins it**;
+the parser's fuzz test provably cannot reach it, because its token set contains no map-valued key
+and its seed is fixed. It is also not the *only* such guard: `ResponseHeaderDefaults` hand-writes
+one that raises `TQL-SEC-4135`, and that one *is* pinned by a test. Finally, one site is outside
+the laundering entirely: `FlagsSpec` builds its map outside every parser `try`, so a flag authored
+with no value throws a raw `NullPointerException` out of `FlagsSpec.load` rather than a coded
+error. Filed, not fixed — `OrderedCopies.map` names the offending key in the message, which makes
+that raw failure diagnosable without changing what is thrown.
+
+The null-tolerant client set is **three** sites that record their reason in a comment
+(`ScopeResolver`, `Principal`, `TransitionSpec`), not the four claimed here or the three the plan
+implies — the fourth, `TestSuite`, tolerates nulls with no comment at all, and its null-tolerance
+is inferable only from a data flow two files away. Each of the three already hand-rolls
+`Collections.unmodifiableMap(new LinkedHashMap<>(…))` precisely because it tolerates nulls, and
+each keeps its reason in a comment when it moves. Two further candidates named in passing during
+the survey are not clients: `DocViews` builds a `LinkedHashMap` rather than copying one, and
+`JoinKeys` copies a `List`.
 
 ### 2 — The ledger is the guard; a behavioural order test is not
 
@@ -79,25 +102,81 @@ its actual key names before its pull request opens** — the salt is a rotation 
 slot cycle, not a uniform shuffle, so a small map can agree with insertion order on most boots and
 a five-key assertion can pass by luck.
 
+Slice 2 measured the rule that makes this checkable rather than merely prudent. A map's slot layout
+is a pure function of `String.hashCode` and the argument order; the salt chooses only a starting
+slot and a direction. So an `n`-entry map has **exactly `2n`** reachable iteration orders for
+`n >= 3` — measured 8 at `n = 4`, 12 at `n = 6`, 14 at `n = 7` — and exactly 2 at `n = 2`, where the
+declared order therefore comes up on about half of all boots whatever the key names are.
+
+The consequence is that redness is **binary per key set**, not probabilistic in general. Either the
+declared order is one of the `2n` reachable orders, or it is not. If it is, the assertion passes on
+a sizeable fraction of boots — measured between 10% and 35% for the three-key sets checked, against
+the 17% a uniform model would predict, because the reachable orders are not equiprobable. If it is
+not, the assertion fails on every boot.
+
+So a slice does not sample its test's redness, it *chooses key names that make it red*, and records
+that it enumerated all `2n` orders and the declared one is absent. Slice 2's six flag names do
+exactly that: twelve reachable orders, the authored one not among them.
+
 ### 3 — The scanner strips comments before it matches
 
-Four of the forty-three files in scope match the census pattern **only inside a comment** — a
-comment saying that this site deliberately avoids `copyOf`. Two consequences, and both are traps:
+Some of the files in scope match the census pattern **only inside a comment** — a comment saying
+that this site deliberately avoids `copyOf`. Two consequences, and both are traps:
 
 - Slice 7 deletes those comments, so a whole-file matcher moves the census under the very pull
   request that writes the ledger.
 - A future author who writes the *correct* explanatory comment gets a red build for it.
 
 So the scanner lexes out comments first and matches code only. This is the same shape as the
-`ErrorIndex` trap the 2-way SQL parser campaign recorded, arriving from the other direction.
+`ErrorIndex` trap the 2-way SQL parser campaign recorded, arriving from the other direction — and
+that trap is still live at HEAD rather than historical. `ErrorIndex` lexes comments for the meaning
+column, but `collect` adds provenance unconditionally. So a `TQL-*` code named in a comment in a
+new file still lands that file on the generated page and forces a regeneration.
+
+Slice 2 re-measured the count and it is **three, not four**, and only under a matcher that drops
+the trailing parenthesis (`McpServer`, `ReportDoc`, `LintContext`). Under the census pattern as
+this document writes it — with the parenthesis, the way all fourteen existing ledger tests write
+theirs — the comment-only count is zero, because `InputField` and `TransitionSpec` both match in
+code via a zero-argument `Map.of()`. That is not a reason to drop the decision: nine further files
+carry the name in *both* code and comments, so a whole-file matcher still moves under slice 7.
+
+It does mean the scope numbers in this document cannot be inherited. "Forty-three files in scope,
+not thirty-nine" is not one rule measured twice — it is one fifteen-package scope measured with two
+different regexes, and the plan's regex reaches 39 only by adding `Collectors.toMap(` and
+`Collectors.toSet(` and dropping `Map.of` entirely, none of which this document mentions. The
+stated pattern and the stated count are mutually inconsistent: the stated pattern matches 95 files
+in those packages and 249 across the tree. **Slice 7 decides the pattern first and derives its own
+count** — including whether `Set.of` belongs in it, which neither this document nor the plan
+considers, though `ErrorIndex` holds a ninety-element `Set.of` that is returned to a caller.
 
 ### 4 — The signed documents get their own slice
 
-`SbomGenerator` and `ReleaseEvidence` are not swept with the model classes. Their literals are
-nested inside document builders, the ledger's regex cannot see them structurally, and their
-correctness claim is stronger than everyone else's — their javadoc promises it and the build signs
-it. They land as one slice with a byte-for-byte reproducibility assertion: generate twice in
-separate JVMs, compare the bytes.
+`SbomGenerator` and `ReleaseEvidence` are not swept with the model classes, and their correctness
+claim is stronger than everyone else's — their javadoc promises it and the build signs it. They
+land as one slice.
+
+Slice 2 re-measured the rest of this decision and three parts of it are wrong.
+
+**The reason is wrong.** The ledger's regex is not what misses them: both files are outside the
+ledger's package scope entirely (`yaml/sbom` and `yaml/release` are not among the packages it
+walks), so it would not see them however well its regex matched. The conclusion — a separate slice
+— survives; the justification does not.
+
+**The site is wrong, and there are more of them.** `SbomGenerator:47-48` is not "a four-entry
+`Map.of`". It is a *one*-entry outer `Map.of` wrapping a *three*-entry inner one, and a one-entry
+`Map.of` is an `ImmutableCollections.Map1` with no table and no salt — it cannot vary at all. Only
+the inner map varies. Two salted sites this document names nowhere matter more: `:55` builds a
+two-entry hash object once per **file** component and `:73-74` builds one once per **library**
+component, so between them they vary far more of the document than the single metadata block. The
+two `Map.of` calls at `:78` are both one-entry and are exemptions, not conversions.
+
+**The guard is wrong, and it is the sharpest instance of the trap decision 2 exists to prevent.**
+"Generate twice in separate JVMs, compare the bytes" is itself a lucky test. `ReleaseEvidence`'s
+only salted site is one two-key map, so two fresh JVMs emit identical bytes about **half** the
+time: the guard as specified is red on roughly one run in two, and green on the other. For
+`SbomGenerator` it is red on about five runs in six. Slice 8 must state its assertion analytically
+— every salted map enumerated, every reachable order accounted for — or run enough boots to make
+the failure probability negligible and say how many. Two is not enough.
 
 ### 5 — `ResponseHeaders` is the emission point, not `ResponseSpec`
 
@@ -105,12 +184,25 @@ A declared response header block is re-copied where it is emitted, so converting
 alone changes nothing observable and the slice's own promised test would fail after the fix. The
 conversion belongs at the emission point, and the test asserts on the wire.
 
+Slice 2 re-measured this and there is not one emission point but **three salting layers**.
+`ResponseSpec` is masked by `ResponseHeaders`, and `ResponseHeaders` is in turn fed a salted
+app-wide default map by `ResponseHeaderDefaults` — plus a fourth path through
+`ErrorResponseRenderer` for the error response. A slice that converts `ResponseHeaders` alone is
+still red on any route that inherits app-wide headers, which is the same "fix one layer, prove
+nothing" failure this decision was written to avoid, one layer further up. Note also that
+`ResponseHeaders`'s second `Map.copyOf`, over the compiled guards, is order-irrelevant — the
+guards are only ever read by key — so it is an exemption, not a conversion.
+
+This decision leaves the response-header conversion owned by no slice. Whoever takes it takes all
+three layers.
+
 ### 6 — This campaign owns `project.build.outputTimestamp`
 
 F74 is double-owned: the plan's campaign map assigns it to the release campaign and its slice list
 files it here. It lands here, and the claimed ordering dependency on pinning the lifecycle plugins
-is dropped — that dependency was measured false, and nothing has ever shipped for it
-(`git log -S 'outputTimestamp'` is empty across the whole history). A reproducible jar is worth
+is dropped — that dependency was measured false, and nothing has ever shipped for it (no `pom.xml`
+in the tree contains the string; `git log -S 'outputTimestamp'` now returns exactly one commit, the
+one that added this sentence). A reproducible jar is worth
 little while the documents inside it are not reproducible, which is the other reason it belongs
 beside decision 4 rather than in a release campaign that is parked.
 
@@ -121,7 +213,7 @@ Each is one pull request, branched from fresh `origin/main`.
 | # | Slice | Size | Closes |
 | --- | --- | --- | --- |
 | 1 | This design document, registered in both internal-doc lists | S | — |
-| 2 | `OrderedCopies`, its two methods, and the first conversion | M | F27 |
+| 2 | `OrderedCopies`, its two methods, and `config/flags.yml` keeps the author's key order | M | F27 |
 | 3 | A route's `input:` keeps its declared order | M | F27 |
 | 4 | The model's remaining maps keep their declared order | M | F27 |
 | 5 | An MCP tool answers in authored step order | S | F27 |
@@ -151,7 +243,13 @@ identity can change *null* behaviour, which is what decision 1 exists to prevent
    list in the test is a decision the ledger slice makes.
 2. **`Set.copyOf`.** The same salt applies. It is in scope for the ledger and out of scope for the
    conversions above, because no shipped output iterates one — that should be re-measured before
-   slice 7 rather than assumed.
+   slice 7 rather than assumed. **Slice 2 re-measured the premise and it is false.** `LintContext`
+   already carries a shipped comment saying the opposite in as many words — "Not `Set.copyOf`: the
+   declaration order feeds finding messages, and `copyOf` randomizes it" — so a set's iteration
+   order does reach output today, and the site that proves it has already been hand-fixed. The
+   question stays open, but it is now "which sets, and does `OrderedCopies` grow a third method",
+   not "does this happen". Slice 2 deliberately did not grow that method: the decision is slice 7's
+   and building ahead of it is how a shipped slice gets reverted.
 
 ## What the plan got wrong
 

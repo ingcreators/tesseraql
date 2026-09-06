@@ -62,6 +62,20 @@ class FlagsSpecTest {
         assertThat(yaml).doesNotStartWith("---");
     }
 
+    @Test
+    void loadKeepsTheAuthoredFlagOrder(@TempDir Path appHome) throws Exception {
+        // Six names chosen by measurement, not by taste: their salted iteration has exactly
+        // twelve reachable orders and the authored one is not among them, so this assertion was
+        // red on every boot before OrderedCopies rather than red on a lucky fraction of them
+        // (docs/deterministic-output.md, decision 2).
+        writeFlags(appHome, "flags:\n  betaCheckout: true\n  maxItems: 10\n"
+                + "  bannerText: Hello\n  newSearch: false\n  exportCsv: true\n"
+                + "  darkMode: false\n");
+
+        assertThat(FlagsSpec.load(appHome).values().keySet()).containsExactly("betaCheckout",
+                "maxItems", "bannerText", "newSearch", "exportCsv", "darkMode");
+    }
+
     private static void writeFlags(Path appHome, String yaml) throws Exception {
         Files.createDirectories(appHome.resolve("config"));
         Files.writeString(appHome.resolve("config/flags.yml"), yaml);
