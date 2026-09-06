@@ -495,14 +495,14 @@ public final class ViewEjector {
                 .append("\" type=\"text\" name=\"").append(field.lookup().code())
                 .append("\"").append(field.required() ? " required" : "")
                 .append(" aria-describedby=\"").append(id).append("-hint\"\n"
-                        + "                 hx-get=\"")
+                        + "                 th:attr=\"hx-get=@{")
                 .append(resolve)
-                .append("\" hx-trigger=\"change\" hx-target=\"closest [data-hc-lookup]\""
+                .append("}\" hx-trigger=\"change\" hx-target=\"closest [data-hc-lookup]\""
                         + " hx-swap=\"outerHTML\">\n"
                         + "          <button class=\"hc-button\" type=\"button\""
                         + " aria-haspopup=\"dialog\""
-                        + " th:attr=\"aria-label=#{tql.lookup.search}\" hx-get=\"")
-                .append(resolve).append("/dialog\""
+                        + " th:attr=\"aria-label=#{tql.lookup.search},hx-get=@{")
+                .append(resolve).append("/dialog}\""
                         + " hx-target=\"[data-hc-remote-dialog-root]\""
                         + " hx-swap=\"innerHTML\">🔍</button>\n"
                         + "        </div>\n"
@@ -514,8 +514,8 @@ public final class ViewEjector {
                 .append("\" th:value=\"${").append(prefill).append("}\"\n"
                         + "               th:attr=\"hx-get=${")
                 .append(prefill)
-                .append(" != null && ").append(prefill).append(" != ''} ? '")
-                .append(resolve).append("'\" hx-trigger=\"load\""
+                .append(" != null && ").append(prefill).append(" != ''} ? @{")
+                .append(resolve).append("}\" hx-trigger=\"load\""
                         + " hx-target=\"closest [data-hc-lookup]\" hx-swap=\"outerHTML\""
                         + " hx-include=\"this\">\n");
     }

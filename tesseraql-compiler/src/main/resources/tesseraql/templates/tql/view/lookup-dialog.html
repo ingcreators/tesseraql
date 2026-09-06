@@ -13,10 +13,10 @@
     <h2 class="hc-dialog__title" th:id="|lookup-title-${d.field}|" th:text="${d.title}">
       Select</h2>
     <form role="search" method="get" th:if="${d.searchParam != null}"
-          th:action="${d.dialogUrl}" data-hc-close-dialog-on-success="false">
+          th:action="@{${d.dialogUrl}}" data-hc-close-dialog-on-success="false">
       <input class="hc-input" type="search" th:name="${d.searchParam}" th:value="${d.q}"
              th:placeholder="#{tql.lookup.placeholder}"
-             th:attr="aria-label=#{tql.lookup.search},hx-get=${d.resultsUrl},hx-target=|#lookup-results-${d.field}|"
+             th:attr="aria-label=#{tql.lookup.search},hx-get=@{${d.resultsUrl}},hx-target=|#lookup-results-${d.field}|"
              hx-trigger="input changed delay:300ms, search" hx-swap="innerHTML"
              hx-sync="closest form:replace">
     </form>
@@ -32,7 +32,7 @@
 <th:block th:fragment="results(d)">
   <li th:each="r : ${d.rows}">
     <button class="hc-menu__item" type="button"
-            th:attr="hx-get=${r.pick},hx-target=${d.target}" hx-swap="outerHTML"
+            th:attr="hx-get=@{${r.pick}},hx-target=${d.target}" hx-swap="outerHTML"
             th:text="|${r.code} — ${r.label}|">C-1041 — Acme Trading K.K.</button>
   </li>
   <li th:if="${d.rows.isEmpty()}"><p class="hc-field__hint"

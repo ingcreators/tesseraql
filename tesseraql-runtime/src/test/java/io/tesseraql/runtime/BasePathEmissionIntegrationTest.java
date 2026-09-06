@@ -110,10 +110,7 @@ class BasePathEmissionIntegrationTest {
      * The ledger only shrinks: {@link #theUnprefixedLedgerOnlyShrinks()} fails when an entry
      * stops being emitted unprefixed, so a fix cannot land without clearing its line here.
      */
-    private static final List<String> KNOWN_UNPREFIXED = List.of(
-            // F28, slice 4 — the lookup field's legs bypass the link builder.
-            "/orders/new/_lookup/customer_id",
-            "/orders/new/_lookup/customer_id/dialog");
+    private static final List<String> KNOWN_UNPREFIXED = List.of();
 
     /**
      * Pinned to HTTP/1.1 on purpose. This crawl fetches what the pages link, which includes
