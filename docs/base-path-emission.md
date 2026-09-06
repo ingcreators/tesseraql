@@ -336,7 +336,14 @@ Recorded as they were hit, so the next slice does not re-learn them.
    pins HTTP/1.1 rather than re-running until it passes. The same signature has been seen before
    in this repository against a WebJar asset, so it is the client and the payload size, not the
    surface under test.
-3. **`clean` does not remove `tesseraql-runtime/file-uploads`.** It sits outside `target/`, and
+3. **A second javadoc orphans the first, and `-Werror` stops the build.** Adding a paragraph to
+   an already-documented method by writing a new comment block above it produces "documentation
+   comment is not attached to any declaration" — the Java-25 doclint failure this repository has
+   hit before. Merge into the existing block.
+4. **A stale surefire report reads as a result.** When a compile failure stops the run, the
+   previous run's `.txt` is still on disk and still says what it said, so a failing build looks
+   like a failing test. Check the build's own output, or delete the report first.
+5. **`clean` does not remove `tesseraql-runtime/file-uploads`.** It sits outside `target/`, and
    `FileTransferIntegrationTest` asserts it does not exist — so one stale directory fails a full
    verify on a change that did not create it.
 

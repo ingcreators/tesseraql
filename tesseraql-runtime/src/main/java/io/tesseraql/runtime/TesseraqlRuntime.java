@@ -532,8 +532,12 @@ public final class TesseraqlRuntime implements AutoCloseable {
      * normalises away — so treating it as absent would leave an application whose own
      * configuration names a prefix serving that prefix while the gateway forwards it the root's
      * paths, and every request would 404.
+     *
+     * <p>Package-visible because a hot reload re-reads the manifest from disk, where this value
+     * has never been — the host injects it in memory at start — so the reloader re-applies it
+     * through this one method rather than a second copy of the rule.
      */
-    private static AppManifest withBasePath(AppManifest manifest, String basePath) {
+    static AppManifest withBasePath(AppManifest manifest, String basePath) {
         if (basePath == null) {
             return manifest;
         }
