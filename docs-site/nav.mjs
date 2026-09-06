@@ -307,4 +307,6 @@ export const EXCLUDED = [
   // Which emitted URLs carry the application prefix and which are wire URLs already,
   // designed 2026-09-06 after re-measurement found a base path is no longer opt-in.
   'base-path-emission.md',
+  // Salted map iteration reaching generated, persisted and signed output, designed 2026-09-06.
+  'deterministic-output.md',
 ];
