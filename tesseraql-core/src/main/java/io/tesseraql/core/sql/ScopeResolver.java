@@ -3,8 +3,7 @@ package io.tesseraql.core.sql;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
-import java.util.Collections;
-import java.util.LinkedHashMap;
+import io.tesseraql.core.util.OrderedCopies;
 import java.util.List;
 import java.util.Map;
 
@@ -47,11 +46,9 @@ public interface ScopeResolver {
     record Resolved(List<SqlNode> nodes, Map<String, Object> bindings) {
         public Resolved {
             nodes = List.copyOf(nodes);
-            // Bind values may legitimately be null (e.g. an absent principal claim), so this cannot
-            // use Map.copyOf, which rejects null values.
-            bindings = bindings == null
-                    ? Map.of()
-                    : Collections.unmodifiableMap(new LinkedHashMap<>(bindings));
+            // Bind values may legitimately be null (e.g. an absent principal claim), so this
+            // names the null-permitting copy rather than OrderedCopies.map.
+            bindings = bindings == null ? Map.of() : OrderedCopies.mapAllowingNulls(bindings);
         }
     }
 }

@@ -3192,6 +3192,35 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void togglingAFlagLeavesTheAuthorsOwnKeyOrderAlone() throws Exception {
+        // The file is the author's, committed beside the app. Studio reads it, adds one key and
+        // writes the whole document back, so a salted read order rewrote every line of a file
+        // nobody asked it to touch. These six names are not arbitrary: their salted iteration has
+        // twelve reachable orders and the authored one is not among them, so this assertion
+        // failed on every boot before OrderedCopies (docs/deterministic-output.md, decision 2).
+        Path flags = appHome.resolve("config/flags.yml");
+        try {
+            Files.writeString(flags, "flags:\n  betaCheckout: true\n  maxItems: 10\n"
+                    + "  bannerText: Hello\n  newSearch: false\n  exportCsv: true\n"
+                    + "  darkMode: false\n");
+
+            assertThat(postForm("/_tesseraql/studio/user-admin/ui/flags/set",
+                    "name=auditVerbose&type=boolean&value=true").statusCode()).isEqualTo(303);
+
+            // Every authored key still in its authored place, the new one appended.
+            assertThat(Files.readString(flags).lines()
+                    .map(String::strip)
+                    .filter(line -> line.contains(":"))
+                    .map(line -> line.substring(0, line.indexOf(':')))
+                    .toList())
+                    .containsExactly("flags", "betaCheckout", "maxItems", "bannerText",
+                            "newSearch", "exportCsv", "darkMode", "auditVerbose");
+        } finally {
+            Files.deleteIfExists(flags);
+        }
+    }
+
+    @Test
     void uiFlagsEditorTogglesABooleanFlag() throws Exception {
         Path flags = appHome.resolve("config/flags.yml");
         try {

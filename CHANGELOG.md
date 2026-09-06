@@ -63,6 +63,14 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **Toggling a feature flag no longer reshuffles `config/flags.yml`.** Studio reads the file, adds
+  one key and writes the whole document back, and the read went through `Map.copyOf`, whose
+  iteration order is derived from a per-JVM salt. So every flag toggle rewrote every line of a
+  file the author committed, in an order that differed on each boot. The read now goes through a
+  new `OrderedCopies`, whose two copies — one rejecting null values as `Map.copyOf` does, one
+  permitting them where a site carries them deliberately — iterate in the order the entries were
+  declared. First conversion of the deterministic-output campaign (docs/deterministic-output.md).
+
 - **A bulk action returns to the grid that sent it, under a base path.** The grid's `_return` is
   handed out as a wire URL and posted back as one, and the round trip appends the parked report's
   handle and then prefixes the whole thing — so a bulk approve bounced to `/<app>/<app>/…`, which
