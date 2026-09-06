@@ -73,6 +73,77 @@ class SqlRendererTest {
     }
 
     @Test
+    void emptyNotInListIsRefused() {
+        // `(null)` matches no rows under IN, which is right, and is UNKNOWN for every row under
+        // NOT IN, which hides them all — an exclusion filter with nothing to exclude returning an
+        // empty page (docs/two-way-sql-parser.md decision 9).
+        String sql = "select * from t where id not in /* codes */ (1) and active = 1";
+
+        assertThatThrownBy(() -> SqlRenderer.render(sql, Map.of("codes", List.of())))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("TQL-SQL-2118")
+                .hasMessageContaining("excludes every row");
+    }
+
+    @Test
+    void anAbsentListUnderNotInIsRefused() {
+        // The headline case: an unselected optional multi-select is not bound at all, so the
+        // list is absent rather than empty. `toList` maps both to no elements.
+        String sql = "select * from t where id not in /* codes */ (1) and active = 1";
+
+        assertThatThrownBy(() -> SqlRenderer.render(sql, Map.of()))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("TQL-SQL-2118");
+    }
+
+    @Test
+    void nonEmptyNotInListExpandsNormally() {
+        String sql = "select * from t where id not in /* codes */ (1) and active = 1";
+
+        BoundSql bound = SqlRenderer.render(sql, Map.of("codes", List.of(1, 2)));
+
+        assertThat(bound.sql()).isEqualTo("select * from t where id not in (?, ?) and active = 1");
+    }
+
+    @Test
+    void notInAcrossANewlineIsStillDetected() {
+        // The operator is found by scanning back over the raw source, so the whitespace between
+        // `not` and `in` is whatever the author wrote.
+        String sql = "select * from t where id not\n  in /* codes */ (1)";
+
+        assertThatThrownBy(() -> SqlRenderer.render(sql, Map.of("codes", List.of())))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("TQL-SQL-2118");
+    }
+
+    @Test
+    void aColumnEndingInNotIsNotTheOperator() {
+        // `is_not` ends in `not`, and the character before it is an identifier part, so the
+        // backwards scan must not read it as the operator.
+        String sql = "select * from t where is_not in /* codes */ (1)";
+
+        assertThat(SqlRenderer.render(sql, Map.of("codes", List.of())).sql())
+                .isEqualTo("select * from t where is_not in (null)");
+    }
+
+    @Test
+    void theGuardIdiomTheRefusalNamesActuallyGuards() {
+        // The message tells the author to write `/*%if !codes.empty */`. It has to hold on all
+        // four shapes a list bind meets, or the framework refuses and then gives advice that
+        // does not lift the refusal.
+        String sql = "select * from t where active = 1"
+                + " /*%if !codes.empty */ and id not in /* codes */ (1) /*%end*/";
+
+        assertThat(SqlRenderer.render(sql, Map.of()).sql()).doesNotContain("not in");
+        assertThat(SqlRenderer.render(sql, Map.of("codes", List.of())).sql())
+                .doesNotContain("not in");
+        assertThat(SqlRenderer.render(sql, Map.of("codes", new int[0])).sql())
+                .doesNotContain("not in");
+        assertThat(SqlRenderer.render(sql, Map.of("codes", List.of(1, 2))).sql())
+                .contains("and id not in (?, ?)");
+    }
+
+    @Test
     void forLoopRepeatsBody() {
         String sql = "/*%for id : ids */ /* id */ 0 /*%end*/";
         BoundSql bound = SqlRenderer.render(sql, Map.of("ids", List.of(1, 2)));

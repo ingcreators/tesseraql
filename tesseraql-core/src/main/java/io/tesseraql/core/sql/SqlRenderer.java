@@ -28,6 +28,8 @@ public final class SqlRenderer {
     private static final TqlErrorCode UNSEEDED_AMBIENT = new TqlErrorCode(TqlDomain.SQL, 2112);
     /** TQL-SQL-2115: a lock directive rendered on a statement with no lock value seeded. */
     private static final TqlErrorCode UNSEEDED_LOCK = new TqlErrorCode(TqlDomain.SQL, 2115);
+    /** TQL-SQL-2118: an empty list was bound under NOT IN, where {@code (null)} hides every row. */
+    private static final TqlErrorCode EMPTY_NEGATED_LIST = new TqlErrorCode(TqlDomain.SQL, 2118);
     /** TQL-DECISION-4722: a decision.* bind names a decision the route never evaluated. */
     private static final TqlErrorCode UNSEEDED_DECISION = new TqlErrorCode(TqlDomain.DECISION,
             4722);
@@ -364,6 +366,14 @@ public final class SqlRenderer {
         List<Object> elements = toList(value, listBind.expressionSource(), listBind.sourceLine());
         coverage.coverLine(listBind.sourceLine());
         if (elements.isEmpty()) {
+            if (listBind.negated()) {
+                throw TqlException.builder(EMPTY_NEGATED_LIST)
+                        .message("An empty list under NOT IN renders `not in (null)`, which"
+                                + " excludes every row instead of none. Guard the site:"
+                                + " /*%if !" + listBind.expressionSource() + ".empty */ … /*%end*/")
+                        .line(listBind.sourceLine())
+                        .build();
+            }
             // An empty IN list is invalid SQL; (null) yields a predicate that matches no rows.
             mapToSource("(null)", listBind.sourceLine());
             return;

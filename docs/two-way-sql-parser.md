@@ -497,6 +497,20 @@ Permanent exceptions and known gaps, not approvals.
    `{order_id}`; Vert.x 5.1.6 accepts `:order_id` and even `:2fast`. Harmless — a stand-in is
    minted where none was needed — but the stated reason is wrong.
 
+## Traps this campaign hit
+
+Recorded as they were hit, so the next slice does not re-learn them.
+
+1. **Naming a code that does not exist yet mints a row in the generated reference.** `ErrorIndex`
+   scans comments as well as message literals, so a comment in `ErrorResponseRenderer` reading
+   "TQL-SQL-2119 refuses that route at build time" produced a reference row for `TQL-SQL-2119`
+   with an em-dash meaning and `ErrorResponseRenderer.java` as its provenance — a code the
+   framework cannot raise, documented as if it could. Describe a code that has not shipped; do not
+   spell it.
+2. **A slice that changes a record's shape needs a `clean` before its build is believable**, and a
+   slice rebased onto another slice of the same campaign needs the full verify run again — both
+   parser slices edited the same file in different regions and merged without a textual conflict.
+
 ## Filed, not fixed
 
 - **A `/*%if*/`-guarded site cannot be exercised as a declarative-suite `sql` case.** An empty

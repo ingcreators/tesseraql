@@ -266,6 +266,27 @@ All notable changes to TesseraQL are documented here. The format follows
   with no reservation or collision check.
 ### Changed
 
+- **An empty list bound under `not in` is refused instead of silently hiding every row.** The
+  renderer never saw the operator, so an empty collection always rendered `(null)` — correct for
+  `in`, which then matches nothing, and exactly inverted for `not in`, where `x not in (null)` is
+  unknown for every row. An unselected "hide these statuses" multi-select, or an empty
+  `principal.roles` under a `not in`, returned an empty page and told nobody.
+
+  There is no constant list that makes `not in` true for every row: `(null) or 1=1` turns the whole
+  WHERE into a tautology because `or` binds looser than `and`, and the `select … where 1=0`
+  subquery form needs `FROM DUAL` on Oracle. So the site is refused at render time with
+  `TQL-SQL-2118`, which answers 500 — the template is what is defective — and names the guard to
+  write. `in` with an empty list still renders `(null)`.
+
+- **A virtual `empty` answers for a value that is not there, and for an array.** It covered only a
+  Collection, a Map and a CharSequence, and path resolution stopped at the first missing segment,
+  so `ids.empty` was null when `ids` was absent and `!ids.empty` was therefore **true**. That is
+  the guard the framework tells authors to write around a list bind, failing open on exactly the
+  case it exists for: an unselected optional `type: array` input is never put into the bound map,
+  so it binds nothing rather than an empty list. `empty` now answers true for an absent value and
+  reads the length of an array, and `size`/`length` answer 0 for an absent value — the asymmetry
+  with `size`, which already had an array arm, was the bug.
+
 - **`else` ends an if-chain.** An `elseif` or a second `else` written after the `else` parsed,
   shipped, and was silently unreachable: `SqlRenderer` takes the first branch with no condition and
   stops. The coverage report could not tell it apart from a well-formed chain either, because only

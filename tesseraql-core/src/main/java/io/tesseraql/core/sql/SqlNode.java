@@ -43,8 +43,15 @@ public sealed interface SqlNode {
     /**
      * An IN-list bind site: {@code /* expr *}{@code / (...)}. The value of {@code expression} must
      * be a collection or array; it expands to {@code (?, ?, ...)} with one parameter per element.
+     *
+     * <p>{@code negated} records whether the site sits under {@code NOT IN}, which the renderer
+     * cannot see for itself: it is handed the list and never the operator. An empty list renders
+     * {@code (null)}, which matches no rows under {@code IN} and is UNKNOWN for every row under
+     * {@code NOT IN} — the exact inverse, and silent (docs/two-way-sql-parser.md decision 9).
      */
-    record ListBind(String expressionSource, Expr expression, int sourceLine) implements SqlNode {
+    record ListBind(String expressionSource, Expr expression, boolean negated, int sourceLine)
+            implements
+                SqlNode {
     }
 
     /**

@@ -103,6 +103,20 @@ With `ids = [10, 20, 30]` this renders `id in (?, ?, ?)`. An empty collection re
 `in (null)` — valid SQL that matches no rows — and a non-collection value fails with
 `TQL-SQL-2001`.
 
+A list bound under `not in` may **not** be empty. `x not in (null)` is UNKNOWN for every row, so
+it hides them all where an empty exclusion should hide none — an unselected "exclude these
+statuses" filter returning an empty page. There is no constant list that makes `not in` true for
+every row, so the site is refused at render time with `TQL-SQL-2118`. Guard it with the emptiness
+of its own list:
+
+```sql
+select * from t where active = 1
+/*%if !hidden.empty */ and status not in /* hidden */ ('x') /*%end*/
+```
+
+`hidden.empty` is true when the list is empty **and** when it was never bound at all, which is
+what an unselected optional multi-select sends.
+
 ## Conditional blocks
 
 `/*%if expr */ … /*%end*/` includes its fragment only when the condition holds, with optional

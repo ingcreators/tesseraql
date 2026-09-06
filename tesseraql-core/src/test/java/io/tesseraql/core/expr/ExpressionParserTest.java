@@ -55,6 +55,26 @@ class ExpressionParserTest {
     }
 
     @Test
+    void anAbsentValueIsEmptyAndHasNoSize() {
+        // `!ids.empty` is the guard the framework tells authors to write around a list bind, and
+        // an unselected optional multi-select binds nothing at all — InputBinder never puts an
+        // absent optional array into the map. Answering null there made `!ids.empty` true and the
+        // guard fail open on exactly the case it exists for.
+        assertThat(evalBool("ids.empty", Map.of())).isTrue();
+        assertThat(evalBool("!ids.empty", Map.of())).isFalse();
+        assertThat(eval("ids.size", Map.of())).isEqualTo(0);
+        assertThat(evalBool("ids.size > 0", Map.of())).isFalse();
+    }
+
+    @Test
+    void anArrayIsEmptyTheSameWayACollectionIs() {
+        // `size` had an array arm and `empty` did not, so the two disagreed about the same value.
+        assertThat(evalBool("ids.empty", Map.of("ids", new int[0]))).isTrue();
+        assertThat(evalBool("ids.empty", Map.of("ids", new String[]{"a"}))).isFalse();
+        assertThat(eval("ids.size", Map.of("ids", new int[0]))).isEqualTo(0);
+    }
+
+    @Test
     void literals() {
         assertThat(eval("true", Map.of())).isEqualTo(Boolean.TRUE);
         assertThat(eval("null", Map.of())).isNull();
