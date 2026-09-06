@@ -74,6 +74,64 @@ final class LintSupport {
         return slots;
     }
 
+    /**
+     * One {@code params:} map whose keys are 2-way SQL bind names.
+     *
+     * @param slot   a dotted label naming where it hangs, for a finding's message
+     * @param params bind name to source expression, never null
+     */
+    record DocumentBindParams(String slot, Map<String, String> params) {
+    }
+
+    /**
+     * Every {@code params:} map of a document whose keys become bind names in a 2-way SQL
+     * statement.
+     *
+     * <p>Deliberately not the same set as {@link #documentSql}: a {@code contract:} binding carries
+     * no SQL file of its own — the statement ships with the framework — but its params are that
+     * statement's bind names all the same, so a walk gated on {@code file()} would skip exactly
+     * the arm the gallery uses. A {@code service:} binding is the other way round: its params are
+     * the bean's argument names and not bind names at all, an exclusion {@code AmbientPrincipalRules}
+     * already records.
+     */
+    static List<DocumentBindParams> documentBindParams(RouteDefinition definition) {
+        List<DocumentBindParams> slots = new ArrayList<>();
+        definition.sources().forEach((name, binding) -> addBindParams(slots,
+                "sources." + name, binding));
+        definition.steps().forEach((name, binding) -> addBindParams(slots,
+                "steps." + name, binding));
+        definition.validate().forEach((name, rule) -> {
+            if (rule.file() != null && rule.params() != null) {
+                slots.add(new DocumentBindParams("validate." + name, rule.params()));
+            }
+        });
+        if (definition.fileExport() != null && definition.fileExport().after() != null
+                && definition.fileExport().after().sql() != null
+                && definition.fileExport().after().sql().file() != null
+                && definition.fileExport().after().sql().params() != null) {
+            slots.add(new DocumentBindParams("export.after",
+                    definition.fileExport().after().sql().params()));
+        }
+        return slots;
+    }
+
+    private static void addBindParams(List<DocumentBindParams> slots, String slot,
+            Binding binding) {
+        if ((binding.isSql() || binding.isContract()) && binding.params() != null) {
+            slots.add(new DocumentBindParams(slot, binding.params()));
+        }
+        if (binding.enrich() == null) {
+            return;
+        }
+        binding.enrich().forEach((name, enrich) -> {
+            if (enrich.sql() != null && enrich.sql().file() != null
+                    && enrich.sql().params() != null) {
+                slots.add(new DocumentBindParams(slot + ".enrich." + name,
+                        enrich.sql().params()));
+            }
+        });
+    }
+
     /** A binding's own SQL file, then every enrichment reference hanging off it. */
     private static void addBinding(List<DocumentSql> slots, Path dir, String slot,
             Binding binding) {

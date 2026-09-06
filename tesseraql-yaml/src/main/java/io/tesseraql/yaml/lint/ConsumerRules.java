@@ -107,6 +107,7 @@ final class ConsumerRules implements LintRule {
         DocumentRules.lintEmbeddedVariables(context, consumer.source(), definition, source,
                 findings);
         DocumentRules.lintNegatedInLists(context, consumer.source(), definition, source, findings);
+        DocumentRules.lintBindNames(definition, source, findings);
         DocumentRules.lintOptimisticLocking(context, consumer.source(), definition, false, source,
                 findings);
         DocumentRules.lintTenantPredicate(context, config, consumer.source(), definition, source,

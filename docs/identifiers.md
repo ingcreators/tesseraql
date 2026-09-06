@@ -22,6 +22,11 @@ every other script. It excludes anything that could read as SQL syntax: spaces,
 quotes, dashes, semicolons, comment markers. Identifiers land in generated SQL
 verbatim and unquoted, and this character class is what makes that safe.
 
+A `params:` key is a bind name, so it is an identifier too, and the linter reports one that is
+not with `TQL-SQL-2120`. The rule is not pedantry: a bind name is an expression the directive
+parses, so `params: { order-id: query.order-id }` with a matching `/* order-id */` bind reads as
+the subtraction `order - id`, binds null on every request, and says nothing.
+
 A complete Japanese example ships in the gallery: `examples/juchu-kanri-app` defines
 the `受注` table, routes at `/受注` and `/受注/{受注番号}`, a `送料区分` decision, and
 a suite that exercises them with Japanese parameter names.

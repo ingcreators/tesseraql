@@ -510,6 +510,17 @@ Recorded as they were hit, so the next slice does not re-learn them.
 2. **A slice that changes a record's shape needs a `clean` before its build is believable**, and a
    slice rebased onto another slice of the same campaign needs the full verify run again — both
    parser slices edited the same file in different regions and merged without a textual conflict.
+3. **A line-wrapped lint message reads as a truncation in the generated reference.** `ErrorIndex`
+   builds the Meaning column from the `+`-concatenated literal chain of the raising statement and
+   inserts an ellipsis at *every* gap between two literals — including a gap that exists only
+   because the source line was wrapped at 100 columns. `TQL-SQL-2119` first shipped as "is bound
+   under NOT IN and… nothing guards it…", three ellipses that stand for nothing. Author a lint
+   message as one literal per sentence, broken only where a value is interpolated; the formatter
+   cannot split a string literal, so a long line is the correct shape here. The same artifact is
+   visible in `TQL-SQL-2109`'s row, which predates this campaign.
+4. **A javadoc above a lint-code constant becomes a second Meaning entry.** The existing
+   `DocumentRules` idiom — a `//` line comment above the constant — is the one the index cannot
+   see. Follow it.
 
 ## Filed, not fixed
 
