@@ -259,6 +259,23 @@ All notable changes to TesseraQL are documented here. The format follows
   stops. The coverage report could not tell it apart from a well-formed chain either, because only
   an evaluated branch enters the branch denominator. Both are now `TQL-SQL-2102`, naming why the
   branch can never run.
+- **The 2-way SQL dummy value is one grammar, and a malformed one is refused.** The dummy scanner
+  stopped at the first quote with no notion of the `''` escape, consumed only identifier characters
+  of a bare word, and returned silently at end of input — so `/* name */ 'O''Brien'` rendered
+  `?'Brien'`, `/* name */ N'山田'` rendered `?'山田'`, `/* d */ DATE '2024-01-01'` rendered
+  `? '2024-01-01'`, `/* d */ now()` rendered `?()` and `/* b */ 0x1F` rendered `?x1F`. Each one
+  reached the database as text the author never wrote, with no TQL code and no source line.
+
+  Two of the failures were not cosmetic. An unterminated dummy did not merely parse: it consumed
+  the rest of the statement to end of input, so `where q = /* q */ 'oops` dropped every predicate
+  after it — the same silent truncation the paren-group scanner had. And a bind site with no dummy
+  at all took the next SQL keyword as its dummy, so `select /* a */, /* b */ from t` rendered
+  `select ?, ? t`.
+
+  A dummy is now a quoted run with doubling escapes, a number, a bare word, a prefixed or typed
+  literal, or a single call; an unterminated dummy or a bind site with no dummy is `TQL-SQL-2102`.
+  The expression is diagnosed first, so a malformed bind expression still reports itself rather
+  than the missing dummy.
 
 - **`pagination: {strategy: keyset}` on a `contract:` binding is refused.** It was accepted and
   silently wrong: the page binder mints offset 0 for every keyset request, and the `after` predicate

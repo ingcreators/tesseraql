@@ -46,15 +46,20 @@ app runs against that database vendor, so a dialect-specific rewrite stays a per
 
 ## Bind values
 
-`/* name */ dummy` marks a bind site. The dummy may be a quoted string, a number, or a bare
-word; it exists only so the file runs in a plain tool and is never sent to the database. At
-runtime the site becomes a single `?` parameter:
+`/* name */ dummy` marks a bind site. The dummy exists only so the file runs in a plain tool and
+is never sent to the database; at runtime the site becomes a single `?` parameter:
 
 ```sql
 insert into products (sku, name, stock, reorder_level)
 values (/* sku */ 'XX-0', /* name */ 'Example',
         /* stock */ 0, coalesce(/* reorder_level */ 10, 10))
 ```
+
+A dummy is one of: a quoted string (`''` escapes a literal quote inside it), a number, a bare
+word, a prefixed literal such as `N'山田'`, a standard typed literal such as `DATE '2024-01-01'`,
+or a single call such as `now()`. A bind site must have one — without it the scanner has no
+boundary and takes the next SQL keyword instead — and an unterminated dummy is `TQL-SQL-2102`
+rather than a scan that runs to end of file.
 
 The names available to bind are the ones the route declares under `params:`, each mapped to a
 dotted source path:

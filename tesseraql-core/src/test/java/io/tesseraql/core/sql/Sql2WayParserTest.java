@@ -114,6 +114,101 @@ class Sql2WayParserTest {
     }
 
     @Test
+    void anUnterminatedDummyDoesNotSwallowTheStatement() {
+        // The scalar half of the same fail-open #1148 closed for the paren group: skipQuoted
+        // returned silently at end of input, so everything after the opening quote — a tenant
+        // guard among it — was scanned away as part of the dummy.
+        String sql = "select * from t\nwhere q = /* q */ 'oops\nand tenant_id = 7";
+
+        assertThatThrownBy(() -> SqlRenderer.render(sql, Map.of("q", "x")))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("TQL-SQL-2102")
+                .hasMessageContaining("Unterminated dummy value");
+    }
+
+    @Test
+    void anEscapedQuoteInsideADummyIsPartOfIt() {
+        String sql = "select * from t where name = /* name */ 'O''Brien'";
+
+        assertThat(SqlRenderer.render(sql, Map.of("name", "x")).sql())
+                .isEqualTo("select * from t where name = ?");
+    }
+
+    @Test
+    void aCharsetPrefixedLiteralIsOneDummy() {
+        String sql = "select * from t where name = /* name */ N'山田'";
+
+        assertThat(SqlRenderer.render(sql, Map.of("name", "x")).sql())
+                .isEqualTo("select * from t where name = ?");
+    }
+
+    @Test
+    void aTypedLiteralIsOneDummy() {
+        String sql = "select * from t where d = /* d */ DATE '2024-01-01'";
+
+        assertThat(SqlRenderer.render(sql, Map.of("d", "x")).sql())
+                .isEqualTo("select * from t where d = ?");
+    }
+
+    @Test
+    void aCallDummyIsOneDummy() {
+        String sql = "select * from t where at = /* at */ now()";
+
+        assertThat(SqlRenderer.render(sql, Map.of("at", "x")).sql())
+                .isEqualTo("select * from t where at = ?");
+    }
+
+    @Test
+    void aHexNumberIsOneDummy() {
+        String sql = "select * from t where b = /* b */ 0x1F";
+
+        assertThat(SqlRenderer.render(sql, Map.of("b", 1)).sql())
+                .isEqualTo("select * from t where b = ?");
+    }
+
+    @Test
+    void anExponentIsPartOfTheNumber() {
+        String sql = "select * from t where r = /* r */ -1.5e-3";
+
+        assertThat(SqlRenderer.render(sql, Map.of("r", 1)).sql())
+                .isEqualTo("select * from t where r = ?");
+    }
+
+    @Test
+    void aQuotedWordAfterANonTypeDummyIsLeftAlone() {
+        // The type-keyword whitelist boundary: `x` is not a type, so the quoted run beside it is
+        // an alias the statement keeps, not part of the dummy.
+        String sql = "select /* x */ x 'alias' from t";
+
+        assertThat(SqlRenderer.render(sql, Map.of("x", 1)).sql())
+                .isEqualTo("select ? 'alias' from t");
+    }
+
+    @Test
+    void aBindWithNoDummyIsRejected() {
+        // Not cosmetic: the bare-word scanner eats the next keyword as the dummy, so this
+        // rendered `select ?, ? t` today — a statement the author never wrote.
+        String sql = "select /* a */, /* b */ from t";
+
+        assertThatThrownBy(() -> SqlRenderer.render(sql, Map.of("a", 1, "b", 2)))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("TQL-SQL-2102")
+                .hasMessageContaining("must be followed by a dummy value");
+    }
+
+    @Test
+    void aMalformedExpressionIsDiagnosedBeforeTheMissingDummy() {
+        // Studio's SQL builder emits `insert into <t> (/* TODO: columns */)` as an
+        // author-fills-this-in placeholder. The expression is the wrong half to complain about
+        // twice, so the expression diagnostic still outranks the dummy refusal.
+        String sql = "insert into t (/* TODO: columns */)";
+
+        assertThatThrownBy(() -> SqlRenderer.render(sql, Map.of()))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("TQL-SQL-2101");
+    }
+
+    @Test
     void aLineCommentMarkerInsideAQuotedIdentifierDoesNotSwallowTheBind() {
         String sql = "select \"a--b\" from t where id = /* id */ 1";
 
