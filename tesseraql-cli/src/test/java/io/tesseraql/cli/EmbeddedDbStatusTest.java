@@ -48,6 +48,23 @@ class EmbeddedDbStatusTest {
                 .contains(dir + ".bak");
     }
 
+    /**
+     * The procedure is meant to be pasted, so every verb and flag in it has to exist. It named
+     * {@code serve}, deleted in 0.15.0, with an {@code --app} that {@code dev} does not declare —
+     * so following the recovery instructions verbatim failed twice on the first command.
+     */
+    @Test
+    void everyCommandTheProcedurePrintsIsOneTheCliStillHas(@TempDir Path dir) throws Exception {
+        initializedDir(dir, "17");
+        EmbeddedPostgresDataDir.writePinnedVersion(dir, "17.10.0");
+
+        String rendered = EmbeddedDbStatus.of(dir, "18.4.0").render();
+
+        assertThat(rendered).contains("tesseraql dev --app-name <app> --embedded-db")
+                .doesNotContain("tesseraql serve")
+                .doesNotContain("--app <app>");
+    }
+
     @Test
     void legacyUnpinnedDirectoryIsFlagged(@TempDir Path dir) throws Exception {
         initializedDir(dir, "17");
