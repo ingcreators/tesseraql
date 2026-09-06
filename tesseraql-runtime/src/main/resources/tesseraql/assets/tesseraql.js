@@ -33,7 +33,10 @@ registerCodeLanguage("tql-sql", (text) => {
             tokens.push({ text: text.slice(plainStart, end) });
         }
     };
-    const isWord = (ch) => /[\p{L}\p{N}_]/u.test(ch);
+    // The identifier contract, kept in step with SqlIdentifiers.PART by hand: this file
+    // ships to the browser and cannot read a Java constant, so it is the one copy the
+    // re-inline guard allows (docs/two-way-sql-parser.md decision 13).
+    const isWord = (ch) => /[\p{L}\p{Mn}\p{Mc}\p{N}_]/u.test(ch);
     while (i < n) {
         const c = text[i];
         const next = i + 1 < n ? text[i + 1] : "";

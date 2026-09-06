@@ -54,9 +54,13 @@ final class ViewRules implements LintRule {
     private static final java.util.regex.Pattern LINK_PLACEHOLDER = java.util.regex.Pattern
             .compile("\\{([^}]*)}");
 
-    /** What a placeholder must be: one plain column name, the shape the ejector rewrites. */
+    /**
+     * What a placeholder must be: one plain column name, the shape the ejector rewrites. It asks
+     * the contract rather than carrying a copy — a copy is how the write-scope lint went blind to
+     * exactly the names the contract admits (docs/two-way-sql-parser.md decision 13).
+     */
     private static final java.util.regex.Pattern PLAIN_COLUMN = java.util.regex.Pattern
-            .compile("[\\p{L}_][\\p{L}\\p{N}_]*");
+            .compile(io.tesseraql.core.sql.SqlIdentifiers.IDENTIFIER);
 
     @Override
     public void lint(LintContext context, AppManifest manifest,

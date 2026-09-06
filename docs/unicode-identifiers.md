@@ -81,9 +81,14 @@ why this is fixable as a bounded campaign.
 One definition, one authority class, used by every validator and extractor:
 
 ```
-identifier     := [\p{L}_] [\p{L}\p{N}_]*
+identifier     := [\p{L}_] [\p{L}\p{Mn}\p{Mc}\p{N}_]*
 dotted pair    := identifier ( "." identifier )?     (where dotted forms are legal today)
 ```
+
+The combining marks arrived later, in docs/two-way-sql-parser.md decision 11: every abugida
+requires one, and decomposed (NFD) text produces one for any script that has a composed form —
+the form macOS emits. A mark may not *start* a name, `\p{Me}` is excluded as display-only, and
+`\p{Cf}` because an invisible character in a name that lands unquoted is a spoofing surface.
 
 A new `io.tesseraql.core.sql.SqlIdentifiers` (same "both paths ask here now, so
 there is one answer to change" pattern as `ResultRows`/`Labels`) owns the pattern,
@@ -95,7 +100,9 @@ character classes.
 patterns are documented in-code as the reason identifiers may land verbatim in SQL
 text (`DecisionSets`: "Identifiers land verbatim in the generated statement";
 `Calendars`: same). Widening to `\p{L}\p{N}_` **preserves** that property: Unicode
-letters and digits cannot close a quote, open a comment, or terminate a statement.
+letters and digits cannot close a quote, open a comment, or terminate a statement, and so
+does admitting combining marks — measured over all 2488 of them, none is ASCII, none normalizes
+under any form to an ASCII non-alphanumeric, and none case-maps to one.
 Therefore identifiers stay unquoted everywhere, `DialectCapabilities.identifierQuote`
 stays a declared-but-unread capability (recorded here as deliberate), and no quoting
 machinery is added. The one exception is Postgres `NOTIFY`/`LISTEN` channel names,

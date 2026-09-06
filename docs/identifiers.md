@@ -10,15 +10,18 @@ one string.
 ## What counts as an identifier
 
 A table, column, alias, or field name is one Unicode letter or underscore followed by
-Unicode letters, digits, or underscores:
+Unicode letters, combining marks, digits, or underscores:
 
 ```
-identifier      = [letter or _] [letter, digit, or _]*
+identifier      = [letter or _] [letter, combining mark, digit, or _]*
 qualified name  = identifier [ "." identifier ]
 ```
 
 That includes Japanese — `受注`, `顧客名`, `受注番号` are names like any other — and
-every other script. It excludes anything that could read as SQL syntax: spaces,
+every other script: the marks are what an abugida needs, so `ग्राहक` and `มุ่งมั่น` are names too.
+A name typed in decomposed (NFC vs NFD) form is the same kind of name, and nothing normalizes it —
+no database does either, so a name spelled one way works and a name spelled two ways never matches.
+The linter reports that pair as `TQL-SQL-2121` rather than letting it bind null. It excludes anything that could read as SQL syntax: spaces,
 quotes, dashes, semicolons, comment markers. Identifiers land in generated SQL
 verbatim and unquoted, and this character class is what makes that safe.
 
