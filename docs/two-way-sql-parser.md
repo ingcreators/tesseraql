@@ -1,15 +1,29 @@
 # The 2-way SQL parser and the identifier contract
 
-> **Status: design.** Written 2026-09-05 and measured against main at `d620bc1ae`, from the
-> remediation plan for the 2026-09-04 whole-repo audit (findings F17-F26).
+> **Status: complete.** Thirteen slices shipped 2026-09-05 to 2026-09-06, closing every finding
+> the 2026-09-04 whole-repo audit filed against the parser and the identifier contract (F17-F26).
+>
+> **The parser slices**, in the order they landed rather than the order the plan gave: the
+> paren-group dummy (#1148, ahead of this document), this design (#1185), quoted-identifier opacity
+> (#1186), the directive grammar and `else` ending the chain (#1187), the dummy grammar with the
+> fuzz sentinel (#1188).
+>
+> **The lint slices**: one enumeration of a document's SQL, and the injection lint widened onto it
+> (#1189); the `NOT IN` refusal and the `empty` fix (#1190); its build-time twin (#1191); the
+> `params:` bind-name rule (#1192); the write-scope lint's three defects (#1193).
+>
+> **The contract and the transaction**: combining marks, the copies composed, the re-inline ledger
+> and the normalization lint (#1194); the `Transactions` primitive (#1195); every owner swept onto
+> it or writing the rule out, with a ledger (#1197); and `RowTokens`' words (#1196).
 >
 > **Slice 1 shipped before this document, as #1148.** The `('')`-swallows-the-statement defect
 > (F17) was a three-line fail-open in the framework's most load-bearing primitive, it depended on
 > nothing written here, and its reviewer said to order it ahead of the design. It did. This
 > document records that decision retroactively and builds on the `skipParenGroup` that shipped.
 >
-> **The plan this document replaces was re-measured against `d620bc1ae` and was wrong in eleven
-> places.** Read the decisions below, not the plan. The measured corrections are recorded in
+> **The plan this document replaces was re-measured against `d620bc1ae` and was wrong in fifteen
+> places**, four of which would have produced a red build or a broken generated artifact. Read the
+> decisions below, not the plan. The measured corrections are recorded in
 > [What the plan got wrong](#what-the-plan-got-wrong) so that nobody re-derives them from a stale
 > document.
 
@@ -562,7 +576,9 @@ Recorded as they were hit, so the next slice does not re-learn them.
 ## What the plan got wrong
 
 Recorded because the plan was measured by many agents against the audit commit and was still wrong
-in eleven places, four of which would have produced a red build or a broken document.
+in fifteen places, four of which would have produced a red build or a broken generated artifact.
+The last four were found while the slices were being written, which is why re-measuring per slice
+earned its cost twice over.
 
 - **Its first slice had already shipped.** F17 landed as #1148 the same day the audit was written.
 - **`## Unreleased` already exists**, created by #1148. Following the plan literally adds a second
@@ -589,3 +605,13 @@ in eleven places, four of which would have produced a red build or a broken docu
 - **F20's recommended guard idiom is fail-open on F20's own headline scenario.**
 - **F18's inventory was wrong in four of seven entries**, and the real count is fourteen sites, not
   thirteen.
+- **F18's whole prescription dissolves.** "Widen the catch to `Throwable` at three sites and add an
+  `Error` fast path at each" is unnecessary once a primitive owns the rollback — and the shape it
+  specified does not compile, because `instanceof` does not narrow on its negative side.
+- **The `ScopeRules` fix is not a composition.** Replacing the inline class with a dotted constant
+  picks the wrong segment out of `cat.sch.orders`, so the security lint would key on a schema.
+- **The `ScopeRules` defects do not depend on the contract at all.** The plan filed them as a
+  consequence of widening it; they reproduce and are fixed with the contract untouched, because
+  those patterns match SQL text rather than a declared name.
+- **The `TQL-SQL-2109` iteration the reviewer specified as new work already existed** in
+  `LintSupport.ambientBinds` — and was still missing two slots the reviewer's own list omits.
