@@ -206,7 +206,7 @@ public final class ErrorResponseRenderer implements Step {
         // templates/errors/<status>.html (else errors/error.html) when the app provides one —
         // htmx swaps keep the inline fragment and API clients keep the JSON envelope.
         if (appHome != null && status != 401 && wantsHtmlLoginRedirect(exchange)) {
-            String page = errorPage(status, error, tag);
+            String page = errorPage(exchange, status, error, tag);
             if (page != null) {
                 exchange.response().header(Headers.CONTENT_TYPE, "text/html; charset=utf-8");
                 applySecurityHeaders(exchange);
@@ -422,13 +422,20 @@ public final class ErrorResponseRenderer implements Step {
     }
 
     /** The rendered custom error page, or null when the app ships none for this status. */
-    private String errorPage(int status, Map<String, Object> error, String tag) {
+    private String errorPage(Exchange exchange, int status, Map<String, Object> error,
+            String tag) {
         for (String name : new String[]{
                 "templates/errors/" + status + ".html", "templates/errors/error.html"}) {
             if (java.nio.file.Files.isRegularFile(appHome.resolve(name))) {
                 Map<String, Object> model = new LinkedHashMap<>();
                 model.put("status", status);
                 model.put("error", error);
+                // An error page is a page: it resolves its own URLs against this, exactly as the
+                // conflict page does. Without it the page arrives unstyled and every link on it
+                // points outside the application — in a stack, at a different member's address.
+                model.put(io.tesseraql.yaml.template.BasePathLinkBuilder.BASE_PATH_VARIABLE,
+                        io.tesseraql.pipeline.BasePath.of(exchange.beans())
+                                + io.tesseraql.pipeline.BasePath.activationSegment(exchange));
                 try {
                     return Templates.render(appHome, name, model,
                             java.util.Locale.forLanguageTag(tag));

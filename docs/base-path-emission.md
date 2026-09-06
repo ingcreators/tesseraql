@@ -309,6 +309,12 @@ keep the URLs they were given. They are the author's from the moment they are wr
   block — and a behaviour change here ships with a test that is red today or it does not ship. The
   two consumers this campaign could reach that way are fixed; this one is a slice with a fixture.
 
+- **The plan's two extra `Templates.render` sites are not defects.** It names
+  `FileResponseRenderer` and `TextResponseRenderer` as base-publishing sites the sweep misses.
+  Both render in Thymeleaf **TEXT** mode — a generated config file or export, and an MCP
+  `prompts/get` message — so neither composes a shell or emits a page URL. Publishing `base` there
+  would be inert. Measured, not swept.
+
 - **The ejector's other URLs are still root-absolute literals.** Fixing F28's three lookup legs
   put the rest in plain view: `ViewEjector` writes the form's `action` and `hx-post` as literal
   strings, and a list row's link as a bare literal substitution. Under a prefix an ejected page's
