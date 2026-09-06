@@ -63,6 +63,16 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A reference-lookup field works under a base path.** The `lookup:` field's four legs — the code
+  input, the search button, the dialog's own search form and every pick row — emitted their URLs
+  without passing through the link builder, so under a prefix they addressed the origin while the
+  enclosing form's action, built from the very same value, was prefixed correctly. Nothing errored:
+  the field simply never resolved, and the feature shipped in 0.15.0 did not work in any stack
+  deployment. All six emissions now go through `@{...}`, in the first paint and in the fragment
+  re-render alike — both already published the prefix into their model, and only the templates
+  never read it. `ViewEjector` writes the same three legs as a link expression too, because an
+  ejected page is the author's from the moment it is written and no later template fix can reach it.
+
 - **A document key is a path segment, not a form field.** A workflow transition action and a task
   queue row both built their URL by form-encoding the document key, so a key containing a space
   rendered as `/docs/PR+1/approve`. A path parameter is not decoded as a form field — Vert.x

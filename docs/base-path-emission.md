@@ -283,6 +283,17 @@ exist.
 `ViewEjectorTest` changes its expected output, deliberately, and pages ejected before this campaign
 keep the URLs they were given. They are the author's from the moment they are written.
 
+## Filed, not fixed
+
+- **The ejector's other URLs are still root-absolute literals.** Fixing F28's three lookup legs
+  put the rest in plain view: `ViewEjector` writes the form's `action` and `hx-post` as literal
+  strings, and a list row's link as a bare literal substitution. Under a prefix an ejected page's
+  lookup now resolves and its submit still posts at the origin. It is the same rule and the same
+  file — three one-line changes — but it is a different subject from the lookup field, and the row
+  link needs a decision about `{id}` inside a link expression that the lookup legs do not (their
+  path is fixed at eject time). It is a slice, not a rider. The ejector already writes `@{}` for
+  its two asset URLs, so the idiom is established in the file.
+
 ## Traps this campaign hit
 
 Recorded as they were hit, so the next slice does not re-learn them.

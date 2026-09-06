@@ -228,10 +228,14 @@ class ViewEjectorTest {
         assertThat(file.content()).contains("data-hc-lookup")
                 .contains("id=\"field-customer_id-field\"")
                 .contains("name=\"customer_code\"")
-                .contains("hx-get=\"/orders/create/_lookup/customer_id\"")
+                // A link expression, not a literal: an ejected page is served under the same
+                // prefix as the page it replaced, and it is the one copy of these legs a later
+                // template fix can never reach (docs/base-path-emission.md decision 6).
+                .contains("th:attr=\"hx-get=@{/orders/create/_lookup/customer_id}\"")
                 .contains("hx-target=\"closest [data-hc-lookup]\"")
                 .contains("aria-haspopup=\"dialog\"")
-                .contains("hx-get=\"/orders/create/_lookup/customer_id/dialog\"")
+                .contains("hx-get=@{/orders/create/_lookup/customer_id/dialog}")
+                .doesNotContain("hx-get=\"/orders/create/_lookup/customer_id\"")
                 .contains("hx-target=\"[data-hc-remote-dialog-root]\"")
                 .contains("<input type=\"hidden\" name=\"customer_id\"")
                 .contains("hc-field__hint");
