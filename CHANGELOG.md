@@ -63,6 +63,13 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **An ejected page is served where it was ejected from.** `ViewEjector` wrote a form's `action`
+  and `hx-post`, and a list row's link, as root-absolute literals, so an ejected page under a prefix
+  posted and linked at the origin. They are link expressions now, like the lookup legs the
+  base-path campaign already corrected. Ejection is a one-way door — the author owns the output
+  from the moment it is written — so this is the one copy of these URLs no later template fix could
+  have reached.
+
 - **A reviewed import confirms and reports under the application's prefix.** The review page's
   confirm form was built as a wire URL and then rendered through the link builder, so it posted at
   `/<app>/<app>/…/commit` — an address nothing serves, on the one leg that exists for people

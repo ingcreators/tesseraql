@@ -360,11 +360,12 @@ public final class ViewEjector {
                 .append(spec.source()).append(".rows) ? null : ")
                 .append(spec.source()).append(".rows[0]}\">\n");
         titleCluster(html, appHome, routeDir, spec);
-        html.append("  <form id=\"").append(formId).append("\" method=\"post\" action=\"")
-                .append(spec.action()).append("\"\n"
-                        + "        hx-post=\"")
+        html.append("  <form id=\"").append(formId).append("\" method=\"post\""
+                + " th:action=\"@{|")
+                .append(spec.action()).append("|}\"\n"
+                        + "        th:hx-post=\"@{|")
                 .append(spec.action())
-                .append("\" hx-target=\"#").append(formId).append("-errors\""
+                .append("|}\" hx-target=\"#").append(formId).append("-errors\""
                         + " hx-swap=\"innerHTML\"\n"
                         + "        hx-disabled-elt=\"find button[type=submit]\""
                         + " hx-indicator=\"find .hc-spinner\">\n"
@@ -588,8 +589,8 @@ public final class ViewEjector {
             java.util.Map<String, String> codes, String var, String indent) {
         String text = value(codes, column.name(), var);
         if (column.link() != null) {
-            html.append(indent).append("<td class=\"hc-datagrid__cell\"><a th:href=\"|")
-                    .append(linkTemplate(column.link(), var)).append("|\" th:text=\"${")
+            html.append(indent).append("<td class=\"hc-datagrid__cell\"><a th:href=\"@{|")
+                    .append(linkTemplate(column.link(), var)).append("|}\" th:text=\"${")
                     .append(text).append("}\">").append(column.name())
                     .append("</a></td>\n");
         } else {

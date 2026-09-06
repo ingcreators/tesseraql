@@ -41,7 +41,10 @@ class ViewEjectorTest {
                 "web/items/page.html");
         assertThat(file.path()).isEqualTo("web/items/page.html");
         assertThat(file.content()).contains("th:each=\"row : ${main.rows}\"");
-        assertThat(file.content()).contains("th:href=\"|/items/${row['id']}|\"");
+        // A link expression, not a bare literal substitution: an ejected page is served under
+        // the same prefix as the page it replaced (docs/base-path-emission.md decision 6).
+        assertThat(file.content()).contains("th:href=\"@{|/items/${row['id']}|}\"")
+                .doesNotContain("th:href=\"|/items/");
         assertThat(file.content()).contains("th:text=\"${row['status']}\"");
         assertThat(file.content()).contains(">Status</th>");
         assertThat(file.content()).contains("~{templates/frags.html :: newLink}");
@@ -64,7 +67,7 @@ class ViewEjectorTest {
                 """);
         ScaffoldedFile file = ViewEjector.eject(dir, dir, "page.view.yml", spec, List.of(),
                 "web/受注/page.html");
-        assertThat(file.content()).contains("th:href=\"|/受注/${row['受注番号']}|\"");
+        assertThat(file.content()).contains("th:href=\"@{|/受注/${row['受注番号']}|}\"");
         assertThat(file.content()).contains("th:text=\"${row['状態']}\"");
     }
 
@@ -152,7 +155,10 @@ class ViewEjectorTest {
                         null, List.of("OPEN", "CLOSED"), null, null, null, null));
         ScaffoldedFile file = ViewEjector.eject(dir, dir, "page.view.yml", spec, fields,
                 "web/items/new/page.html");
-        assertThat(file.content()).contains("hx-post=\"/items/create\"");
+        // The form posts where it is served, not at the origin.
+        assertThat(file.content()).contains("th:action=\"@{|/items/create|}\"")
+                .contains("th:hx-post=\"@{|/items/create|}\"")
+                .doesNotContain("hx-post=\"/items/create\"");
         assertThat(file.content()).contains("id=\"items-new-form\"");
         assertThat(file.content()).contains("name=\"name\" required maxlength=\"200\"");
         assertThat(file.content()).contains("<option value=\"OPEN\"")
