@@ -204,6 +204,104 @@ class AppLinterTest {
     }
 
     @Test
+    void flagsAnEmbeddedVariableInEverySqlSlotOfADocument(@TempDir Path dir) throws Exception {
+        // The injection lint read definition.main() and returned, so the identical file was an
+        // error under `sources: main:` and clean under a named source, a step or a validation
+        // rule — 44 of this repository's own 85 SQL slots (docs/two-way-sql-parser.md decision 15).
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), """
+                tesseraql:
+                  app:
+                    name: t
+                  security:
+                    policies:
+                      app.read:
+                        anyOf:
+                          - role: READ
+                """);
+        Files.createDirectories(dir.resolve("web/items"));
+        Files.writeString(dir.resolve("web/items/search.sql"),
+                "select 1 from items t\n/*# order by t.{sort} */\n");
+        Files.writeString(dir.resolve("web/items/main.sql"), "select 1 from items\n");
+        Files.writeString(dir.resolve("web/items/get.yml"), """
+                version: tesseraql/v1
+                id: items.list
+                kind: route
+                recipe: query-json
+                input:
+                  sort:
+                    type: string
+                security:
+                  auth: browser
+                  policy: app.read
+                sources:
+                  main:
+                    sql:
+                      file: main.sql
+                      mode: query
+                  extra:
+                    sql:
+                      file: search.sql
+                      mode: query
+                      params:
+                        sort: query.sort
+                response:
+                  json:
+                    body:
+                      rows: main.rows
+                """);
+
+        assertThat(new AppLinter().lint(dir)).anyMatch(f -> f.code().equals("TQL-SQL-2109")
+                && f.isError() && f.source().contains("get.yml"));
+    }
+
+    @Test
+    void flagsAnEmbeddedVariableInACommandStep(@TempDir Path dir) throws Exception {
+        // Steps are 26 of this repository's 44 unchecked SQL slots, and a command route is where
+        // a dynamic ORDER BY over a request input is most likely to be written.
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), """
+                tesseraql:
+                  app:
+                    name: t
+                  security:
+                    policies:
+                      app.write:
+                        anyOf:
+                          - role: WRITE
+                """);
+        Files.createDirectories(dir.resolve("web/items"));
+        Files.writeString(dir.resolve("web/items/adjust.sql"),
+                "update items t set n = n + 1\n/*# where t.{col} = 1 */\n");
+        Files.writeString(dir.resolve("web/items/post.yml"), """
+                version: tesseraql/v1
+                id: items.adjust
+                kind: route
+                recipe: command-json
+                input:
+                  col:
+                    type: string
+                security:
+                  auth: browser
+                  policy: app.write
+                steps:
+                  - id: main
+                    sql:
+                      file: adjust.sql
+                      mode: update
+                      params:
+                        col: body.col
+                response:
+                  json:
+                    body:
+                      ok: true
+                """);
+
+        assertThat(new AppLinter().lint(dir)).anyMatch(f -> f.code().equals("TQL-SQL-2109")
+                && f.isError() && f.source().contains("post.yml"));
+    }
+
+    @Test
     void lintsMcpResources(@TempDir Path dir) throws Exception {
         Files.createDirectories(dir.resolve("config"));
         Files.writeString(dir.resolve("config/tesseraql.yml"), """

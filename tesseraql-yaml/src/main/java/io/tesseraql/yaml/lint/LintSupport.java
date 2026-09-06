@@ -3,6 +3,7 @@ package io.tesseraql.yaml.lint;
 import io.tesseraql.core.expr.Expr;
 import io.tesseraql.core.sql.SqlNode;
 import io.tesseraql.yaml.manifest.AppManifest;
+import io.tesseraql.yaml.model.Binding;
 import io.tesseraql.yaml.model.RouteDefinition;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -25,32 +26,82 @@ final class LintSupport {
     }
 
     /**
+     * One SQL file a document declares: where it hangs, the resolved path, and the {@code params:}
+     * map that binds into it.
+     *
+     * @param slot   a dotted label naming where it hangs, for a finding's message
+     * @param file   the path, resolved against the document's directory and not checked to exist
+     * @param params bind name to source expression, never null
+     */
+    record DocumentSql(String slot, Path file, Map<String, String> params) {
+    }
+
+    /**
+     * Every SQL file a route, consumer or tool document declares — the complete set, in authored
+     * order.
+     *
+     * <p>It exists because the lint package had seven partial, mutually inconsistent enumerations
+     * of this, and the widest of them still missed two slots. The narrowest was the
+     * <em>injection</em> lint, which read {@code definition.main()} and returned — so the same
+     * embedded variable was an error under {@code sources: main:} and clean under a named source,
+     * a step or a validation rule (docs/two-way-sql-parser.md decision 15).
+     *
+     * <p>An {@code enrich:} block hangs off a binding, so it is reachable from both
+     * {@code sources:} and {@code steps:}. A contract or service binding carries no file and does
+     * not appear. Nothing else is filtered: a caller that wants only files that exist, or only
+     * query-mode bindings, decides that for itself.
+     */
+    static List<DocumentSql> documentSql(Path documentSource, RouteDefinition definition) {
+        Path dir = documentSource.getParent();
+        List<DocumentSql> slots = new ArrayList<>();
+        definition.sources().forEach((name, binding) -> addBinding(slots, dir,
+                "sources." + name, binding));
+        definition.steps().forEach((name, binding) -> addBinding(slots, dir,
+                "steps." + name, binding));
+        definition.validate().forEach((name, rule) -> {
+            if (rule.file() != null) {
+                slots.add(new DocumentSql("validate." + name, dir.resolve(rule.file()).normalize(),
+                        rule.params()));
+            }
+        });
+        if (definition.fileExport() != null && definition.fileExport().after() != null
+                && definition.fileExport().after().sql() != null
+                && definition.fileExport().after().sql().file() != null) {
+            Binding.SqlArm after = definition.fileExport().after().sql();
+            slots.add(new DocumentSql("export.after", dir.resolve(after.file()).normalize(),
+                    after.params() == null ? Map.of() : after.params()));
+        }
+        return slots;
+    }
+
+    /** A binding's own SQL file, then every enrichment reference hanging off it. */
+    private static void addBinding(List<DocumentSql> slots, Path dir, String slot,
+            Binding binding) {
+        if (binding.file() != null) {
+            slots.add(new DocumentSql(slot, dir.resolve(binding.file()).normalize(),
+                    binding.params() == null ? Map.of() : binding.params()));
+        }
+        if (binding.enrich() == null) {
+            return;
+        }
+        binding.enrich().forEach((name, enrich) -> {
+            if (enrich.sql() != null && enrich.sql().file() != null) {
+                slots.add(new DocumentSql(slot + ".enrich." + name,
+                        dir.resolve(enrich.sql().file()).normalize(),
+                        enrich.sql().params() == null ? Map.of() : enrich.sql().params()));
+            }
+        });
+    }
+
+    /**
      * The distinct bind expressions matching {@code matches} across a document's parseable SQL
-     * files — its steps, named sources, and validation rules. Unparseable SQL is its own lint's
-     * concern and contributes nothing here.
+     * files. Unparseable SQL is its own lint's concern and contributes nothing here.
      */
     static Set<String> ambientBinds(LintContext context, Path source, RouteDefinition def,
             java.util.function.Predicate<String> matches) {
         Set<String> found = new LinkedHashSet<>();
-        Path dir = source.getParent();
-        List<String> files = new ArrayList<>();
-        def.steps().values().forEach(step -> {
-            if (step.file() != null) {
-                files.add(step.file());
-            }
-        });
-        def.sources().values().forEach(query -> {
-            if (query.file() != null) {
-                files.add(query.file());
-            }
-        });
-        def.validate().values().forEach(rule -> {
-            if (rule.file() != null) {
-                files.add(rule.file());
-            }
-        });
-        for (String file : files) {
-            Path sqlFile = dir.resolve(file).normalize();
+        for (DocumentSql slot : documentSql(source, def)) {
+            Path sqlFile = slot.file();
             if (!Files.isRegularFile(sqlFile)) {
                 continue;
             }

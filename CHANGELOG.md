@@ -41,6 +41,18 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **The embedded-variable injection lint sees every SQL file a document declares, not only
+  `sources: main:`.** `TQL-SQL-2109` requires a `{placeholder}` that resolves to request input to be
+  `enum`-constrained, because an embedded variable interpolates into SQL text rather than binding a
+  `?`. It read one slot and returned, so the identical file was an error under `sources: main:` and
+  reported nothing under a named source, a command step, an enrichment or a validation rule — 44 of
+  this repository's own 85 declared SQL slots, on a security lint.
+
+  The enumeration is now one helper rather than the seven partial, mutually inconsistent copies the
+  lint package had grown, and it is wider than any of them: an `enrich:` block hangs off a binding,
+  so it is reachable from both `sources:` and `steps:`, and an export's `after:` statement carries
+  one too. Nothing in this repository trips the widened rule, so no app changes.
+
 - **A quoted identifier is opaque to the 2-way SQL lexer.** Only `'…'` was, so a `"…"` or
   `` `…` `` identifier was scanned for directives and quotes. The worst case was silent:
   `select "a--b" from t where id = /* id */ 1` matched the `--` inside the identifier as a line
