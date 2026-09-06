@@ -60,10 +60,24 @@ class RowTokensTest {
     }
 
     @Test
-    void aBlankKeyComponentIsRefused() {
+    void anEmptyKeyComponentIsRefused() {
+        // The whole sentence, because the words are what this slice moves: the message said
+        // "blank" while the check refused only an empty value, so it described a rule the code
+        // does not have (docs/two-way-sql-parser.md decision 18).
         assertThatThrownBy(() -> RowTokens.encode(Map.of("id", ""), List.of("id")))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("'id'");
+                .hasMessage("key column 'id' is null, absent or empty in a result row");
+    }
+
+    @Test
+    void aWhitespaceOnlyKeyComponentGetsAToken() {
+        // Whitespace is data. It round-trips byte-identically, decode could not enforce a
+        // stricter rule symmetrically, and SqlStep reads the refusal above as its "the keyset
+        // page ends" signal — so tightening the check would refuse a real key and change a
+        // pagination boundary. The contract as a test rather than as prose.
+        String token = RowTokens.encode(Map.of("id", "  "), List.of("id"));
+
+        assertThat(RowTokens.decode(token, List.of("id"))).containsExactly("  ");
     }
 
     @Test

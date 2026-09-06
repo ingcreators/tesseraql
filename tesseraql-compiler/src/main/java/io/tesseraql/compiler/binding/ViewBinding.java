@@ -40,7 +40,7 @@ public final class ViewBinding {
     static final TqlErrorCode UNKNOWN_SOURCE = new TqlErrorCode(TqlDomain.VIEW, 3308);
     /** TQL-VIEW-3318: an embedded view embeds further — embedding depth is 1. */
     static final TqlErrorCode EMBED_DEPTH = new TqlErrorCode(TqlDomain.VIEW, 3318);
-    /** TQL-VIEW-3322: a declared list key: column is null, absent or blank in a result row. */
+    /** TQL-VIEW-3322: a declared list key: column is null, absent or empty in a result row. */
     static final TqlErrorCode INVALID_ROW_KEY = new TqlErrorCode(TqlDomain.VIEW, 3322);
     /** TQL-VIEW-3330: the row a locked form renders from carries no value for its lock column. */
     static final TqlErrorCode MISSING_LOCK = new TqlErrorCode(TqlDomain.VIEW, 3330);

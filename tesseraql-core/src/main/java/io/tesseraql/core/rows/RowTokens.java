@@ -15,10 +15,11 @@ import java.util.Map;
  * rules and the token stays legal in an HTML id, a URL fragment and a query value.
  *
  * <p>Tokens are deliberately not signed and not secrets: per the upstream datagrid contract they
- * prove nothing, and every consumer re-authorizes what it fetches. A null or absent key
+ * prove nothing, and every consumer re-authorizes what it fetches. A null, absent or empty key
  * component is refused — a row without its declared identity is a data defect, never a silent
- * skip. Callers translate the {@link IllegalArgumentException}s into their own surface's error
- * codes.
+ * skip. Whitespace is not empty: it is data, it round-trips byte-identically, and {@link #decode}
+ * could not enforce a stricter rule symmetrically, which is how a contract acquires two answers.
+ * Callers translate the {@link IllegalArgumentException}s into their own surface's error codes.
  */
 public final class RowTokens {
 
@@ -31,7 +32,7 @@ public final class RowTokens {
     /**
      * The token of {@code row} over the declared {@code columns}, in the order given.
      *
-     * @throws IllegalArgumentException when a key component is null, absent or blank — a row
+     * @throws IllegalArgumentException when a key component is null, absent or empty — a row
      *         without its declared identity has no token
      */
     public static String encode(Map<String, Object> row, List<String> columns) {
@@ -40,7 +41,7 @@ public final class RowTokens {
             Object value = JoinKeys.value(row.get(column));
             if (value == null || String.valueOf(value).isEmpty()) {
                 throw new IllegalArgumentException("key column '" + column
-                        + "' is null, absent or blank in a result row");
+                        + "' is null, absent or empty in a result row");
             }
             if (!token.isEmpty()) {
                 token.append('.');
