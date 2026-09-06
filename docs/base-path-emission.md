@@ -355,9 +355,15 @@ Recorded as they were hit, so the next slice does not re-learn them.
 4. **A stale surefire report reads as a result.** When a compile failure stops the run, the
    previous run's `.txt` is still on disk and still says what it said, so a failing build looks
    like a failing test. Check the build's own output, or delete the report first.
-5. **`clean` does not remove `tesseraql-runtime/file-uploads`.** It sits outside `target/`, and
-   `FileTransferIntegrationTest` asserts it does not exist — so one stale directory fails a full
-   verify on a change that did not create it.
+5. ~~**`clean` does not remove `tesseraql-runtime/file-uploads`.**~~ **Diagnosed and closed
+   2026-09-06.** The mechanism was worse than "a stale directory": `HttpBadRequestTest` installed
+   the default `BodyHandler`, which creates `cwd/file-uploads` on the **urlencoded** branch, not
+   only for uploads — and this module runs surefire with `forkCount=1C` and `reuseForks=true`, so
+   concurrent forks share `tesseraql-runtime/` as their working directory while
+   `FileTransferIntegrationTest` asserts that directory does not exist. One test's side effect,
+   another test's failure, on a machine with more than one core. The test posts nothing multipart,
+   so it now takes `BodyHandler.create(false)` and asserts in an `@AfterAll` that it left nothing
+   behind.
 
 ## Recorded deviations
 
