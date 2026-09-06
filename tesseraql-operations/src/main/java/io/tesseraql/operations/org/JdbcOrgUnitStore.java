@@ -4,6 +4,7 @@ import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.org.OrgUnitStore;
+import io.tesseraql.core.sql.Transactions;
 import io.tesseraql.core.util.SqlScripts;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -92,10 +93,8 @@ public final class JdbcOrgUnitStore implements OrgUnitStore {
 
     @Override
     public void rebuildClosure() {
-        try (Connection connection = dataSource.getConnection()) {
-            boolean autoCommit = connection.getAutoCommit();
-            connection.setAutoCommit(false);
-            try {
+        try (Connection jdbc = dataSource.getConnection()) {
+            Transactions.run(jdbc, "org.rebuildClosure", connection -> {
                 Map<String, String> parents = readParents(connection);
                 connection.createStatement().executeUpdate("delete from tql_org_closure");
                 try (PreparedStatement insert = connection.prepareStatement(
@@ -116,13 +115,7 @@ public final class JdbcOrgUnitStore implements OrgUnitStore {
                     }
                     insert.executeBatch();
                 }
-                connection.commit();
-            } catch (SQLException ex) {
-                connection.rollback();
-                throw ex;
-            } finally {
-                connection.setAutoCommit(autoCommit);
-            }
+            });
         } catch (SQLException ex) {
             throw error("Failed to rebuild org-unit closure", ex);
         }

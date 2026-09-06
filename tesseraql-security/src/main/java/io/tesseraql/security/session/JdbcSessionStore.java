@@ -378,7 +378,12 @@ public final class JdbcSessionStore implements SessionStore {
                     delete.executeUpdate();
                 }
                 connection.commit();
-            } catch (Exception ex) {
+            } catch (Throwable ex) {
+                // Everything, not Exception: restoring autocommit below COMMITS an open
+                // transaction, so an Error would have committed the new session row without
+                // deleting the old one — two live sessions from one rotation
+                // (docs/two-way-sql-parser.md decision 17). The body returns early on a miss,
+                // so it keeps its own bracket rather than moving onto Transactions.
                 connection.rollback();
                 throw ex;
             } finally {

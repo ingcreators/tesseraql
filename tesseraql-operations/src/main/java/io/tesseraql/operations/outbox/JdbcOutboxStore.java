@@ -5,6 +5,7 @@ import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.outbox.OutboxEvent;
 import io.tesseraql.core.outbox.OutboxStore;
+import io.tesseraql.core.sql.Transactions;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -145,10 +146,8 @@ public final class JdbcOutboxStore implements OutboxStore {
                 JdbcOutboxStore.class, "/tesseraql/sql/operations/outbox-claim-pending.sql",
                 vendor(), params);
         List<OutboxEvent> events = new ArrayList<>();
-        try (Connection connection = dataSource.getConnection()) {
-            boolean autoCommit = connection.getAutoCommit();
-            connection.setAutoCommit(false);
-            try {
+        try (Connection jdbc = dataSource.getConnection()) {
+            Transactions.run(jdbc, "outbox.claim", connection -> {
                 try (PreparedStatement ps = connection.prepareStatement(bound.sql())) {
                     for (int i = 0; i < bound.parameters().size(); i++) {
                         ps.setObject(i + 1, bound.parameters().get(i).value());
@@ -172,13 +171,7 @@ public final class JdbcOutboxStore implements OutboxStore {
                         claim.executeBatch();
                     }
                 }
-                connection.commit();
-            } catch (SQLException ex) {
-                connection.rollback();
-                throw ex;
-            } finally {
-                connection.setAutoCommit(autoCommit);
-            }
+            });
         } catch (SQLException ex) {
             throw error("Failed to claim pending outbox events", ex);
         }

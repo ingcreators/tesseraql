@@ -7,6 +7,7 @@ import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.messaging.ChannelEvent;
 import io.tesseraql.core.messaging.EventChannelStore;
 import io.tesseraql.core.messaging.EventMessage;
+import io.tesseraql.core.sql.Transactions;
 import io.tesseraql.core.util.SqlScripts;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -84,10 +85,8 @@ public final class JdbcEventChannelStore implements EventChannelStore {
     public String publish(String channel, String topic, String key, String payloadJson,
             String appName) {
         String id = UUID.randomUUID().toString();
-        try (Connection connection = dataSource.getConnection()) {
-            boolean autoCommit = connection.getAutoCommit();
-            connection.setAutoCommit(false);
-            try {
+        try (Connection jdbc = dataSource.getConnection()) {
+            Transactions.run(jdbc, "event", connection -> {
                 try (PreparedStatement ps = connection.prepareStatement("""
                         insert into tql_event
                           (event_id, channel, topic, msg_key, payload_json, status, attempts,
@@ -110,13 +109,7 @@ public final class JdbcEventChannelStore implements EventChannelStore {
                         notify.execute("NOTIFY \"" + notifyChannel(channel) + "\"");
                     }
                 }
-                connection.commit();
-            } catch (SQLException ex) {
-                connection.rollback();
-                throw ex;
-            } finally {
-                connection.setAutoCommit(autoCommit);
-            }
+            });
         } catch (SQLException ex) {
             throw error("Failed to publish event", ex);
         }
@@ -137,10 +130,8 @@ public final class JdbcEventChannelStore implements EventChannelStore {
         io.tesseraql.core.sql.BoundSql bound = io.tesseraql.core.sql.SqlResources.render(
                 JdbcEventChannelStore.class, "/tesseraql/sql/messaging/event-claim.sql", vendor(),
                 params);
-        try (Connection connection = dataSource.getConnection()) {
-            boolean autoCommit = connection.getAutoCommit();
-            connection.setAutoCommit(false);
-            try {
+        try (Connection jdbc = dataSource.getConnection()) {
+            Transactions.run(jdbc, "event", connection -> {
                 try (PreparedStatement ps = connection.prepareStatement(bound.sql())) {
                     for (int i = 0; i < bound.parameters().size(); i++) {
                         ps.setObject(i + 1, bound.parameters().get(i).value());
@@ -167,13 +158,7 @@ public final class JdbcEventChannelStore implements EventChannelStore {
                         claim.executeBatch();
                     }
                 }
-                connection.commit();
-            } catch (SQLException ex) {
-                connection.rollback();
-                throw ex;
-            } finally {
-                connection.setAutoCommit(autoCommit);
-            }
+            });
         } catch (SQLException ex) {
             throw error("Failed to claim events", ex);
         }
@@ -203,10 +188,8 @@ public final class JdbcEventChannelStore implements EventChannelStore {
     @Override
     public void markConsumed(String messageId, String channel, String topic,
             String idempotencyKey) {
-        try (Connection connection = dataSource.getConnection()) {
-            boolean autoCommit = connection.getAutoCommit();
-            connection.setAutoCommit(false);
-            try {
+        try (Connection jdbc = dataSource.getConnection()) {
+            Transactions.run(jdbc, "event", connection -> {
                 try (PreparedStatement consume = connection.prepareStatement(
                         "update tql_event set status = 'CONSUMED', consumed_at = ? "
                                 + "where event_id = ?")) {
@@ -217,13 +200,7 @@ public final class JdbcEventChannelStore implements EventChannelStore {
                 if (idempotencyKey != null) {
                     recordDedup(connection, channel, topic, idempotencyKey);
                 }
-                connection.commit();
-            } catch (SQLException ex) {
-                connection.rollback();
-                throw ex;
-            } finally {
-                connection.setAutoCommit(autoCommit);
-            }
+            });
         } catch (SQLException ex) {
             throw error("Failed to mark event consumed", ex);
         }
