@@ -314,12 +314,13 @@ keep the URLs they were given. They are the author's from the moment they are wr
 
 ## Filed, not fixed
 
-- **`BulkReportRoundTrip` doubles the prefix on its `Location` too.** It is the third consumer that
-  reads `_return` off the request and hands it to `BasePath.url` (`:126`), so it takes the same
-  one-line correction as the other two. It is filed rather than ridden along because reaching it
-  needs a bulk-report route in the prefixed fixture — a `report:` declaration and an `actions:`
-  block — and a behaviour change here ships with a test that is red today or it does not ship. The
-  two consumers this campaign could reach that way are fixed; this one is a slice with a fixture.
+- ~~**`BulkReportRoundTrip` doubles the prefix on its `Location` too.**~~ **Closed 2026-09-06.**
+  The fixture it needed turned out to be smaller than filed: the workflow already declared a
+  `submit` transition, so `bulk: true` on it synthesizes the endpoint, and a grid page over the
+  same documents supplies the `actions:` form. Measured red at
+  `/shop/shop/docs?bulkReport=…` before the fix. The grid page's own `formaction` was already
+  correct — the defect was only in the value read back off the request, the same place as the
+  other two consumers.
 
 - **The plan's two extra `Templates.render` sites are not defects.** It names
   `FileResponseRenderer` and `TextResponseRenderer` as base-publishing sites the sweep misses.

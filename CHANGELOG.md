@@ -63,6 +63,13 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A bulk action returns to the grid that sent it, under a base path.** The grid's `_return` is
+  handed out as a wire URL and posted back as one, and the round trip appends the parked report's
+  handle and then prefixes the whole thing — so a bulk approve bounced to `/<app>/<app>/…`, which
+  nothing serves. It is the third consumer of `_return` to have made the same mistake, and it takes
+  the same correction: back to base-relative form where the value is read off the request, so the
+  one place that adds the prefix keeps adding it exactly once.
+
 - **An ejected page is served where it was ejected from.** `ViewEjector` wrote a form's `action`
   and `hx-post`, and a list row's link, as root-absolute literals, so an ejected page under a prefix
   posted and linked at the origin. They are link expressions now, like the lookup legs the
