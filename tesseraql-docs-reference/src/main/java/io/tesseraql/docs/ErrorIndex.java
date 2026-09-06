@@ -553,7 +553,7 @@ final class ErrorIndex {
             "duplication-consolidation.md", "process-control-gaps.md", "idempotency-key.md",
             "list-surface.md", "hc-recipe-alignment.md", "workflow-surface.md",
             "reference-lookup.md", "bulk-report.md", "csv-import.md", "edit-conflict.md",
-            "http-edge-robustness.md", "two-way-sql-parser.md");
+            "http-edge-robustness.md", "two-way-sql-parser.md", "base-path-emission.md");
 
     /** Whether {@code name} is an internal planning document; shared with the config index. */
     static boolean isInternalDoc(String name) {

@@ -304,4 +304,7 @@ export const EXCLUDED = [
   // The 2-way SQL parser's three lexical layers and the identifier contract they share,
   // designed 2026-09-05; its first slice shipped ahead of it as #1148.
   'two-way-sql-parser.md',
+  // Which emitted URLs carry the application prefix and which are wire URLs already,
+  // designed 2026-09-06 after re-measurement found a base path is no longer opt-in.
+  'base-path-emission.md',
 ];
