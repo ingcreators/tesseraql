@@ -112,15 +112,24 @@ final class DocumentRules {
      * the SQL text, not a {@code ?} bind, so a request-controlled value there is an injection vector
      * unless allowlisted. This requires every placeholder that resolves to a request input to be
      * {@code enum}-constrained (the runtime guard against meta-characters is only defense in depth).
+     *
+     * <p>Every SQL file the document declares is checked, not only {@code sources: main:}. Reading
+     * one slot made the same file an error there and clean under a named source, a step, an
+     * enrichment or a validation rule — 44 of this repository's own 85 slots, on a security lint
+     * (docs/two-way-sql-parser.md decision 15).
      */
     static void lintEmbeddedVariables(LintContext context, Path documentSource,
             RouteDefinition definition,
             String source, List<LintFinding> findings) {
-        Binding sql = definition.main();
-        if (sql == null || sql.isContract() || sql.file() == null) {
-            return;
+        for (LintSupport.DocumentSql slot : LintSupport.documentSql(documentSource, definition)) {
+            lintEmbeddedVariables(context, definition, slot, source, findings);
         }
-        Path sqlFile = documentSource.getParent().resolve(sql.file());
+    }
+
+    /** The check itself, for one of the document's SQL files. */
+    private static void lintEmbeddedVariables(LintContext context, RouteDefinition definition,
+            LintSupport.DocumentSql slot, String source, List<LintFinding> findings) {
+        Path sqlFile = slot.file();
         if (!Files.isRegularFile(sqlFile)) {
             return; // missing-file is reported separately
         }
@@ -137,7 +146,7 @@ final class DocumentRules {
                 }
             }
         });
-        Map<String, String> params = sql.params() == null ? Map.of() : sql.params();
+        Map<String, String> params = slot.params();
         Map<String, InputField> inputs = definition.input() == null ? Map.of() : definition.input();
         for (String placeholder : placeholders) {
             int dot = placeholder.indexOf('.');
