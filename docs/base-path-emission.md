@@ -129,6 +129,12 @@ produced, and that acquire nothing:
   at the stack's origin fence, deliberately, because the ops console, Studio and IAM Admin are the
   stack's and are mounted once at the origin scope. `shell.html` emits them raw at nine `href`
   sites and one `data-value` site, and every one of those is correct.
+- the **account surface** — `accountHref` and the pin toggle's `toggleHref`. Found by booting the
+  guard's fixture rather than by reading, and on exactly the same rule: `ShellChrome` branches on
+  `hostedMember()` and emits these origin-absolute because a member's account surface is the
+  stack's. `logoutHref` sits beside them and is *not* on this list — sign-out stays the member's
+  own route, so it goes through the link builder. Three adjacent values, two rules, and the code
+  already says which is which.
 - a URL read back off the request, which decision 7 already exempts;
 - an absolute URL supplied by an identity provider;
 - pins and recents, which the browser captured from its own location bar.
@@ -204,6 +210,22 @@ The fixture is new rather than dogfooded into `examples/user-admin-app`, because
 surfaces to a published example changes what that example teaches. The cheaper alternative is
 recorded in [open questions](#open-questions).
 
+**The guard lands over broken ground, so it carries a shrink-only ledger.** `KNOWN_UNPREFIXED`
+names each emission that is not prefixed yet, with the slice that deletes it. A second assertion
+fails when an entry stops being emitted unprefixed, so a fix cannot land without clearing its
+line — which makes the ledger's shrinking the red test for every slice that follows. This is the
+same shape the repository already uses for seeded drift ledgers.
+
+**Two things a fixture must do that reading the code does not reveal**, both found by booting it:
+
+- A hosted member fences every route behind `tql.app.use.<member>` (`AuthStep.fence`), and that
+  step is a no-op on an unhosted boot. A fixture copied from a plain-boot test answers 403 on
+  every page until its principal carries the grant.
+- Three of the four surfaces fail *silently* — a workflow region with no row, a lookup companion
+  with no form whose `action:` matches the POST route's path, a list with no `key:`. A guard over
+  a fixture that renders nothing passes while checking nothing, so the fixture asserts that it
+  rendered before anything asserts on what it rendered.
+
 ### 8 — A document key is a path segment, and a path segment is not a form field
 
 `URLEncoder.encode` is `application/x-www-form-urlencoded`. In a path segment its space is wrong:
@@ -260,6 +282,18 @@ exist.
 
 `ViewEjectorTest` changes its expected output, deliberately, and pages ejected before this campaign
 keep the URLs they were given. They are the author's from the moment they are written.
+
+## Recorded deviations
+
+**The reviewed-import surface joins the fixture in slice 5, not slice 3.** The slice list above
+says the harness declares all four surfaces. Three of them are pure GET renders and crawl
+directly; the import review page is not reachable without a multipart upload, a single-shot
+review token, and a poll to a terminal job card. Building that machinery in the harness slice
+would have put its most failure-prone fixture furthest from the assertions that justify it, so
+the import surface is added by the slice that fixes it, where its upload is already needed. The
+two import defects (the doubled `confirmAction`, and the job page publishing no `base`) were
+both re-confirmed at HEAD while scoping this, and are recorded in
+[What is broken](#what-is-broken) rather than deferred with the fixture.
 
 ## Open questions
 
