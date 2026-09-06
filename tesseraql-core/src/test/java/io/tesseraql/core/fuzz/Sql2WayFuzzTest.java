@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.sql.Sql2WayParser;
+import io.tesseraql.core.sql.SqlNode;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -36,6 +38,45 @@ class Sql2WayFuzzTest {
     void everyInputParsesOrIsCleanlyRejected() {
         ParserFuzz.fuzz("Sql2WayParser", Sql2WayParser::parse, TqlException.class,
                 TOKENS, CORPUS, 20260722L, 4000);
+    }
+
+    /**
+     * The oracle whose absence let a fail-open scan live from the initial engine commit: the
+     * exception-type check above passes a parser that silently discards the rest of its input,
+     * which is exactly what an unterminated dummy did. Every generated input gets a sentinel
+     * clause appended; the parse must either refuse or keep it.
+     *
+     * <p>The sentinel is two tokens on purpose. If a trailing bind directive consumes it as a
+     * bare-word dummy it eats only {@code select}, so the sentinel survives a legal parse.
+     */
+    @Test
+    @Timeout(30)
+    void noInputIsSilentlyTruncated() {
+        for (String input : ParserFuzz.inputs(TOKENS, CORPUS, 20260904L, 4000)) {
+            String probe = input + "\nselect zz_sentinel_zz, 1\n";
+            List<SqlNode> nodes;
+            try {
+                nodes = Sql2WayParser.parse(probe);
+            } catch (TqlException refused) {
+                continue;
+            }
+            assertThat(nodes)
+                    .withFailMessage("the parse kept neither the sentinel nor an error, on input:"
+                            + "%n%s", ParserFuzz.describe(probe))
+                    .anyMatch(node -> node instanceof SqlNode.Text text
+                            && text.text().contains("zz_sentinel_zz"));
+        }
+    }
+
+    /** The four inputs the oracle above catches at its seed, pinned so a reader can see them. */
+    @Test
+    void anUnterminatedDummyDoesNotEatWhatFollows() {
+        assertThatThrownBy(() -> Sql2WayParser.parse(
+                "select * from read_parquet(/* ${scope.s}/f.parquet*/ 'd.parquet)"))
+                .isInstanceOf(TqlException.class);
+        assertThatThrownBy(() -> Sql2WayParser.parse("select a = /* expr */ 'un\nselect zz, 1\n"))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("Unterminated dummy value");
     }
 
     @Test

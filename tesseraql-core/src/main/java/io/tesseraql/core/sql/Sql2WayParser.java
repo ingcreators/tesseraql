@@ -6,6 +6,8 @@ import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.expr.ExpressionParser;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -56,6 +58,14 @@ public final class Sql2WayParser {
 
     /** The {@code for} directive's trailing {@code separator} clause, whitespace-separated. */
     private static final Pattern SEPARATOR = Pattern.compile("\\s+separator\\s+");
+    /**
+     * The type keywords a standard typed literal may open with, so {@code DATE '2024-01-01'} is
+     * one dummy while {@code select /* x *}{@code / x 'alias'} keeps the alias some dialects
+     * write as a string (docs/two-way-sql-parser.md decision 3).
+     */
+    private static final Set<String> TYPE_KEYWORDS = Set.of("date", "time", "timestamp",
+            "timestamptz", "datetime", "interval", "decimal", "numeric", "uuid", "json", "jsonb",
+            "bytea", "bit", "binary");
 
     private final String source;
     private final int length;
@@ -173,17 +183,21 @@ public final class Sql2WayParser {
         if (directive.content().trim().startsWith("${")) {
             return parseFilePath(directive);
         }
-        boolean list = skipWhitespacePeek() == '(';
-        skipDummy(list);
+        // The expression is diagnosed before the dummy is demanded. Studio's SQL builder emits
+        // `insert into <t> (/* TODO: columns */)` as an author-fills-this-in placeholder, and the
+        // expression is the half worth complaining about (docs/two-way-sql-parser.md decision 4).
         String expr = directive.content().trim();
         if (expr.isEmpty()) {
             throw error("Empty bind expression");
         }
-        return list
+        boolean list = skipWhitespacePeek() == '(';
+        SqlNode node = list
                 ? new SqlNode.ListBind(expr, ExpressionParser.parse(expr, functions),
                         directive.sourceLine())
                 : new SqlNode.Bind(expr, ExpressionParser.parse(expr, functions),
                         directive.sourceLine());
+        skipDummy(list, expr);
+        return node;
     }
 
     /**
@@ -192,7 +206,8 @@ public final class Sql2WayParser {
      * renderer; the dummy literal that follows is consumed like any bind's.
      */
     private SqlNode parseFilePath(Directive directive) {
-        skipDummy(false);
+        // Shape first, dummy second, for the same reason parseBind reorders: the `${…}` is the
+        // half an author gets wrong (docs/two-way-sql-parser.md decision 4).
         String content = directive.content().trim();
         int close = content.indexOf('}');
         if (!content.startsWith("${") || close < 0) {
@@ -217,6 +232,7 @@ public final class Sql2WayParser {
             throw error("File placeholder path '" + suffix + "' must be /-separated relative"
                     + " segments of letters, digits, and [._*-] with no '..'");
         }
+        skipDummy(false, content);
         return new SqlNode.FilePath(channel, name, suffix, directive.sourceLine());
     }
 
@@ -432,28 +448,93 @@ public final class Sql2WayParser {
         return new Directive(control, embedded, content.toString().trim(), directiveLine);
     }
 
-    private void skipDummy(boolean list) {
+    /**
+     * Skips the dummy value a bind site carries so the file runs in a plain SQL tool: a quoted
+     * run, or an optional sign and a token, optionally suffixed by a call group, an adjacent
+     * quoted run ({@code N'…'}), or a whitespace-separated one after a type keyword
+     * ({@code DATE '…'}). One grammar, stated once (docs/two-way-sql-parser.md decision 3).
+     *
+     * <p>A bind site with no dummy is refused. That is not hygiene: the token scan has no keyword
+     * boundary, so {@code select /* a *}{@code /, /* b *}{@code / from t} used to eat {@code from}
+     * as the second dummy and render {@code select ?, ? t} — a statement the author never wrote.
+     */
+    private void skipDummy(boolean list, String site) {
         skipWhitespacePeek();
         if (pos >= length) {
-            return;
+            throw missingDummy(site);
         }
         if (list) {
             skipParenGroup();
             return;
         }
         char c = source.charAt(pos);
-        if (c == '\'' || c == '"') {
-            skipQuoted();
-        } else if (Character.isDigit(c) || c == '+' || c == '-' || c == '.') {
-            while (pos < length && (Character.isDigit(source.charAt(pos))
-                    || ".+-eE".indexOf(source.charAt(pos)) >= 0)) {
+        if (c == '\'' || c == '"' || c == '`') {
+            skipQuotedRun(c);
+            return;
+        }
+        if (c == '+' || c == '-') {
+            consume();
+        }
+        int tokenStart = pos;
+        while (pos < length) {
+            char t = source.charAt(pos);
+            if (Character.isJavaIdentifierPart(t) || t == '.') {
                 consume();
-            }
-        } else {
-            while (pos < length && Character.isJavaIdentifierPart(source.charAt(pos))) {
-                consume();
+            } else if ((t == '+' || t == '-') && pos > tokenStart
+                    && "eE".indexOf(source.charAt(pos - 1)) >= 0) {
+                consume(); // the exponent's sign, which is part of the number
+            } else {
+                break;
             }
         }
+        if (pos == tokenStart) {
+            // Includes `-- x`: a line comment is not a dummy, and the sign consumed above is not
+            // one either.
+            throw missingDummy(site);
+        }
+        String token = source.substring(tokenStart, pos);
+        if (pos < length) {
+            char next = source.charAt(pos);
+            if (next == '(') {
+                skipParenGroup(); // a call dummy: now(), coalesce(1, 2)
+                return;
+            }
+            if (next == '\'' || next == '"' || next == '`') {
+                skipQuotedRun(next); // a prefixed literal: N'…', X'…', _utf8'…'
+                return;
+            }
+        }
+        skipTypedLiteral(token);
+    }
+
+    /**
+     * A standard typed literal — {@code DATE '2024-01-01'} — is one dummy, but only after one of
+     * the type keywords. The whitelist is what keeps {@code select /* x *}{@code / x 'alias'} from
+     * losing an alias that some dialects write as a string.
+     */
+    private void skipTypedLiteral(String token) {
+        if (!TYPE_KEYWORDS.contains(token.toLowerCase(Locale.ROOT))) {
+            return;
+        }
+        int after = pos;
+        while (after < length && Character.isWhitespace(source.charAt(after))) {
+            after++;
+        }
+        if (after >= length) {
+            return;
+        }
+        char quote = source.charAt(after);
+        if (quote != '\'' && quote != '"' && quote != '`') {
+            return;
+        }
+        while (pos < after) {
+            consume();
+        }
+        skipQuotedRun(quote);
+    }
+
+    private TqlException missingDummy(String site) {
+        return error("a bind site must be followed by a dummy value, e.g. /* " + site + " */ 'x'");
     }
 
     /**
@@ -461,20 +542,20 @@ public final class Sql2WayParser {
      * {@code /*%lock*}{@code /}. {@code pos} is on the opening {@code (}: every caller checks that
      * with {@link #skipWhitespacePeek()} first.
      *
-     * <p>The loop peeks before it consumes, because {@link #skipQuoted()} expects {@code pos} on
-     * the opening quote. Consuming the quote here and handing the run over made that scanner read
-     * the <em>next</em> character as the opener, so an empty literal ate its own closing quote and
-     * ran to the following quote in the file or to end of input — leaving the group open and
-     * returning without a word. A {@code --} remark is skipped for the same reason: the apostrophe
-     * in {@code (1, 2 -- don't\n)} is that mis-scan one comment over.
+     * <p>The loop peeks before it consumes, because {@link #skipQuotedRun(char)} expects
+     * {@code pos} on the opening quote. Consuming the quote here and handing the run over made
+     * that scanner read the <em>next</em> character as the opener, so an empty literal ate its own
+     * closing quote and ran to the following quote in the file or to end of input — leaving the
+     * group open and returning without a word. A {@code --} remark is skipped for the same reason:
+     * the apostrophe in {@code (1, 2 -- don't\n)} is that mis-scan one comment over.
      */
     private void skipParenGroup() {
         int opened = line;
         int groupDepth = 0;
         while (pos < length) {
             char c = source.charAt(pos);
-            if (c == '\'' || c == '"') {
-                skipQuoted();
+            if (c == '\'' || c == '"' || c == '`') {
+                skipQuotedRun(c);
                 continue;
             }
             if (c == '-' && pos + 1 < length && source.charAt(pos + 1) == '-') {
@@ -494,17 +575,24 @@ public final class Sql2WayParser {
     }
 
     /**
-     * Skips one quoted run. {@code pos} is on the opening quote, which this method consumes along
-     * with the run it opens; a doubled SQL escape ({@code 'it''s'}) is skipped as two adjacent
-     * runs, which lands in the same place.
+     * Skips one quoted run at the dummy layer. The same contract the statement layer's
+     * {@link #consumeQuotedRun} holds — {@code pos} is on the opening delimiter, a doubled
+     * delimiter is the only escape, end of input is an error — with the run discarded rather than
+     * appended, which is why there are two methods and not one overloaded name
+     * (docs/two-way-sql-parser.md decisions 1 and 2).
      */
-    private void skipQuoted() {
-        char quote = consume();
+    private void skipQuotedRun(char quote) {
+        consume();
         while (pos < length) {
             if (consume() == quote) {
+                if (pos < length && source.charAt(pos) == quote) {
+                    consume();
+                    continue;
+                }
                 return;
             }
         }
+        throw error("Unterminated dummy value");
     }
 
     private char skipWhitespacePeek() {

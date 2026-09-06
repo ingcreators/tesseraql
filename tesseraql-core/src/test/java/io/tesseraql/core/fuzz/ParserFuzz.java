@@ -1,5 +1,7 @@
 package io.tesseraql.core.fuzz;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Random;
 import java.util.function.Consumer;
 
@@ -22,9 +24,7 @@ public final class ParserFuzz {
     public static void fuzz(String label, Consumer<String> parse,
             Class<? extends Throwable> allowed,
             String[] tokens, String[] corpus, long seed, int iterations) {
-        Random rnd = new Random(seed);
-        for (int i = 0; i < iterations; i++) {
-            String input = generate(rnd, tokens, corpus);
+        for (String input : inputs(tokens, corpus, seed, iterations)) {
             try {
                 parse.accept(input);
             } catch (Throwable thrown) {
@@ -35,6 +35,28 @@ public final class ParserFuzz {
                 }
             }
         }
+    }
+
+    /**
+     * The generated inputs {@link #fuzz} would run, for an oracle that needs to do something else
+     * with each one. The exception-type oracle is blind to a parser that silently discards its
+     * input, which is how a fail-open scan survived from the initial engine commit
+     * (docs/two-way-sql-parser.md): a caller can append a sentinel to each of these and assert the
+     * parse either refuses or keeps it.
+     */
+    public static List<String> inputs(String[] tokens, String[] corpus, long seed,
+            int iterations) {
+        Random rnd = new Random(seed);
+        List<String> inputs = new ArrayList<>(iterations);
+        for (int i = 0; i < iterations; i++) {
+            inputs.add(generate(rnd, tokens, corpus));
+        }
+        return inputs;
+    }
+
+    /** The offending input, trimmed for a failure message. */
+    public static String describe(String input) {
+        return preview(input);
     }
 
     /** One of: a random token sequence, a mutated corpus entry, or a single token nested deep. */

@@ -479,8 +479,10 @@ Permanent exceptions and known gaps, not approvals.
 1. **PostgreSQL `E'a\'b'` and Oracle `q'[…]'` are not understood.** The backslash escape and
    alternative quoting are not the doubling escape. Both stop at the first unescaped delimiter,
    which is a loud parse error rather than a silent one.
-2. **A `--` remark is skipped inside a paren dummy group and not after a scalar one**, so
-   `/* d */ -- x` scans as a bare-word dummy. Not reachable in any template in the tree.
+2. ~~**A `--` remark is skipped inside a paren dummy group and not after a scalar one**, so
+   `/* d */ -- x` scans as a bare-word dummy.~~ **Closed in slice 4 rather than accepted.** The
+   sign is consumed and the token run is then empty, which is the zero-advance refusal: a line
+   comment is not a dummy, and saying so costs nothing.
 3. **A `not in` split across a directive boundary is not detected** by the backwards scan, because
    the text buffer is empty there.
 4. **`[` diverges between the two lexers** by decision 5, and `select x as [Owner's name] from t`
