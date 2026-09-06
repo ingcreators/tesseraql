@@ -294,13 +294,27 @@ The plan treated the `ScopeRules` edit as a mechanical consequence of the wideni
 not. Three defects stand on their own in a security lint at HEAD, independent of any contract
 change:
 
-1. **The aliased branch is dead** for a marked table name, because it is gated on the composed
-   constant.
+1. **The aliased branch is dead** for a marked table name. Measured, the cause is not the composed
+   gate the plan blames: `SQL_IDENTIFIER.matcher("ग").matches()` is true, so the gate lets the
+   branch run, and it dies one line later inside the hand-inlined table-name class, which stops at
+   the combining mark and then cannot satisfy the following `\s+`.
 2. **Two marked tables sharing a first letter collide into one key**, because both sides truncate
    at the mark identically — which is also why the aliasless warning still fires today, and why the
    plan's stated reason for the coupling was wrong. The collision produces a *false*
    `TQL-SEC-4100`.
-3. **The ALIAS lookahead does not terminate at a mark**, and false-matches.
+3. **The ALIAS lookahead does not terminate at a mark**, and would false-match. This one cannot be
+   demonstrated until decision 11 lands: an alias carrying a mark is refused upstream by the
+   contract gate, so the lookahead is unreachable today. The widening ships with the other three
+   because it belongs to the same rule, and its test rides the contract slice.
+
+**And the fix is not the plan's.** The plan says to compose `SqlIdentifiers.QUALIFIED` into these
+regexes. Measured, a dotted composition picks the wrong segment out of a three-part name: `update
+cat.sch.orders` yields `sch` rather than `orders`, so the security lint would key on a schema. The
+dot stays inside the character class and only `\p{Mn}\p{Mc}` is added — four edits, and the
+linter's output over all nineteen app roots in the repository is byte-identical.
+
+These classes read **SQL text**, where a marked name is already legal, rather than a declared name.
+That is why they are independent of the contract and why they move first.
 
 They land first, in their own pull request, reviewable against `AppLinterScopeTest` alone. The
 contract widening then lands with the copies already composed, so its diff is genuinely one regex

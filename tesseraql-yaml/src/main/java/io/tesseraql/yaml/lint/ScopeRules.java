@@ -137,14 +137,21 @@ final class ScopeRules implements LintRule {
         return files;
     }
 
+    // These read SQL TEXT, where a marked name is already legal, so the classes carry \p{Mn} and
+    // \p{Mc} whatever the declared-name contract admits. They also keep the dot INSIDE the class
+    // rather than composing an identifier constant: a dotted composition picks the wrong segment
+    // out of `cat.sch.orders`, so the lint would key on a schema (docs/two-way-sql-parser.md
+    // decision 14).
+    //
     // The trailing alias guard is a lookahead, not \b: \b only bounds ASCII word characters,
-    // so a Japanese alias would never "end" and the table would silently escape the scope set.
+    // so a Japanese alias would never "end" and the table would silently escape the scope set —
+    // and it must list the marks too, or `g` matches inside `गी`.
     private static final Pattern SCOPED_TABLE_ALIASED = Pattern.compile(
-            "(?is)\\b(?:from|join|into|update)\\s+([\\p{L}_][\\p{L}\\p{N}_.]*)"
-                    + "\\s+(?:as\\s+)?ALIAS(?![\\p{L}\\p{N}_])");
+            "(?is)\\b(?:from|join|into|update)\\s+([\\p{L}_][\\p{L}\\p{Mn}\\p{Mc}\\p{N}_.]*)"
+                    + "\\s+(?:as\\s+)?ALIAS(?![\\p{L}\\p{Mn}\\p{Mc}\\p{N}_])");
 
     private static final Pattern WRITE_TARGET = Pattern.compile(
-            "(?is)^\\s*(?:update|delete\\s+from)\\s+([\\p{L}_][\\p{L}\\p{N}_.]*)");
+            "(?is)^\\s*(?:update|delete\\s+from)\\s+([\\p{L}_][\\p{L}\\p{Mn}\\p{Mc}\\p{N}_.]*)");
 
     /**
      * A defense-in-depth guard (docs/data-scoping.md, docs/security-hardening.md): if the app scopes
@@ -224,7 +231,8 @@ final class ScopeRules implements LintRule {
                 if (write.find()) {
                     out.add(lastSegment(write.group(1)));
                 } else {
-                    Matcher from = Pattern.compile("(?is)\\bfrom\\s+([\\p{L}_][\\p{L}\\p{N}_.]*)")
+                    Matcher from = Pattern
+                            .compile("(?is)\\bfrom\\s+([\\p{L}_][\\p{L}\\p{Mn}\\p{Mc}\\p{N}_.]*)")
                             .matcher(sql);
                     if (from.find()) {
                         out.add(lastSegment(from.group(1)));

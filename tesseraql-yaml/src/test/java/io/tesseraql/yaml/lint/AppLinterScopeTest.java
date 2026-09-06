@@ -214,6 +214,34 @@ class AppLinterScopeTest {
     }
 
     @Test
+    void anAliasedScopeOnAMarkedTableIsSeen(@TempDir Path dir) throws Exception {
+        // The aliased branch's table-name class is hand-inlined and stops at a combining mark, so
+        // `ग्राहक` never matched and the table never entered the governed set — the write below drew
+        // no warning at all (docs/two-way-sql-parser.md decision 14).
+        writeScope(dir);
+        writeRoute(dir, "select * from ग्राहक g where /*%scope orders_scope on g */ (1=1)\n");
+        writeCommandRoute(dir,
+                "update ग्राहक set status = /* status */ 'x' where id = /* id */ 1\n");
+
+        List<LintFinding> findings = new AppLinter().lint(dir);
+
+        assertThat(writeScopeCodes(findings)).containsExactly("TQL-SEC-4100");
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-SEC-4100")
+                && f.message().contains("ग्राहक"));
+    }
+
+    @Test
+    void twoMarkedTablesSharingAFirstLetterAreNotOneTable(@TempDir Path dir) throws Exception {
+        // Both sides truncated at the mark, so `ग्राहक` and `गोदाम` collapsed to the same key `ग`
+        // and an ungoverned write on the *other* table drew a warning naming neither.
+        writeScope(dir);
+        writeRoute(dir, "select * from ग्राहक where /*%scope orders_scope */ (1=1)\n");
+        writeCommandRoute(dir, "update गोदाम set n = 1 where id = /* id */ 1\n");
+
+        assertThat(writeScopeCodes(new AppLinter().lint(dir))).isEmpty();
+    }
+
+    @Test
     void whenWithNoRecognizedPredicateIsAnError(@TempDir Path dir) throws Exception {
         Files.createDirectories(dir.resolve("scope"));
         // `roles:` is a typo for `role:`; the unknown key deserializes away, leaving an empty
