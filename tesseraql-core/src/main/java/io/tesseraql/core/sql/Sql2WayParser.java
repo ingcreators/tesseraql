@@ -6,6 +6,8 @@ import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.expr.ExpressionParser;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Parses TesseraQL 2-way SQL into a {@link SqlNode} tree (design ch. 8.1).
@@ -51,6 +53,9 @@ public final class Sql2WayParser {
      * parse rejection here instead of a fatal {@link StackOverflowError} (docs/security-hardening.md).
      */
     private static final int MAX_NESTING_DEPTH = 200;
+
+    /** The {@code for} directive's trailing {@code separator} clause, whitespace-separated. */
+    private static final Pattern SEPARATOR = Pattern.compile("\\s+separator\\s+");
 
     private final String source;
     private final int length;
@@ -237,17 +242,32 @@ public final class Sql2WayParser {
         String ifCondition = first.argument("if");
         branches.add(new SqlNode.If.Branch(ExpressionParser.parse(ifCondition, functions),
                 ifCondition, first.sourceLine(), parseBlock()));
+        // `else` ends the chain. The renderer takes the first branch with no condition and stops,
+        // so anything written after the else parses, ships and can never run — and because only
+        // an evaluated branch enters the branch denominator, the coverage report cannot tell it
+        // from a well-formed chain (docs/two-way-sql-parser.md decision 8).
+        boolean sawElse = false;
         while (true) {
             Directive terminator = requireTerminator("if");
             switch (terminator.keyword()) {
                 case "elseif" -> {
+                    if (sawElse) {
+                        throw error("elseif after else: the else branch already matches, so this"
+                                + " branch can never run");
+                    }
                     String elseifCondition = terminator.argument("elseif");
                     branches.add(new SqlNode.If.Branch(
                             ExpressionParser.parse(elseifCondition, functions),
                             elseifCondition, terminator.sourceLine(), parseBlock()));
                 }
-                case "else" -> branches.add(new SqlNode.If.Branch(
-                        null, null, terminator.sourceLine(), parseBlock()));
+                case "else" -> {
+                    if (sawElse) {
+                        throw error("a second else: the if chain already has one");
+                    }
+                    sawElse = true;
+                    branches.add(new SqlNode.If.Branch(
+                            null, null, terminator.sourceLine(), parseBlock()));
+                }
                 case "end" -> {
                     pendingTerminator = null;
                     return new SqlNode.If(branches);
@@ -269,15 +289,24 @@ public final class Sql2WayParser {
         // An optional separator keeps multi-row templates SQL-tool-runnable: the separator
         // lives inside the directive comment, never in the raw SQL text.
         String separator = null;
-        int keyword = listExpr.lastIndexOf(" separator ");
-        if (keyword >= 0) {
-            String literal = listExpr.substring(keyword + " separator ".length()).trim();
+        // Whitespace of any kind separates the sub-keyword, so a long list expression may wrap
+        // before it (docs/two-way-sql-parser.md decision 7). Last match, because the separator is
+        // the trailing clause.
+        Matcher keyword = SEPARATOR.matcher(listExpr);
+        int start = -1;
+        int end = -1;
+        while (keyword.find()) {
+            start = keyword.start();
+            end = keyword.end();
+        }
+        if (start >= 0) {
+            String literal = listExpr.substring(end).trim();
             if (literal.length() < 2 || literal.charAt(0) != '\''
                     || literal.charAt(literal.length() - 1) != '\'') {
                 throw error("for separator must be a quoted literal, e.g. separator ','");
             }
             separator = literal.substring(1, literal.length() - 1);
-            listExpr = listExpr.substring(0, keyword).trim();
+            listExpr = listExpr.substring(0, start).trim();
         }
         if (itemVar.isEmpty() || listExpr.isEmpty()) {
             throw error("for directive must be 'item : items'");
@@ -293,20 +322,14 @@ public final class Sql2WayParser {
     }
 
     private SqlNode parseScope(Directive directive) {
-        String argument = directive.argument("scope").trim();
         // `as boolean` renders the scope as a SELECT-list flag (case when … then 1 else 0 end) for
-        // row-level masking, rather than a WHERE predicate (roadmap Phase 29 slice 3).
-        boolean asBoolean = argument.endsWith(" as boolean");
-        if (asBoolean) {
-            argument = argument.substring(0, argument.length() - " as boolean".length()).trim();
-        }
-        String name = argument;
-        String alias = null;
-        int on = argument.indexOf(" on ");
-        if (on >= 0) {
-            name = argument.substring(0, on).trim();
-            alias = argument.substring(on + " on ".length()).trim();
-        }
+        // row-level masking, rather than a WHERE predicate (roadmap Phase 29 slice 3). The split
+        // lives in ScopeArgument because the linter and the coverage manifest read the same
+        // argument and must reach the same answer (docs/two-way-sql-parser.md decision 7).
+        ScopeArgument parsed = ScopeArgument.parse(directive.argument("scope"));
+        String name = parsed.name();
+        String alias = parsed.alias();
+        boolean asBoolean = parsed.asBoolean();
         if (name.isEmpty()) {
             throw error("scope directive needs a scope name");
         }
@@ -504,9 +527,19 @@ public final class Sql2WayParser {
     }
 
     private record Directive(boolean control, boolean embedded, String content, int sourceLine) {
+        /**
+         * The keyword ends at the first whitespace, not at the first space. A long guard written
+         * across lines — {@code /*%if\n  q != null\n*}{@code /} — used to be reported as
+         * {@code Unknown directive 'if\n'}, naming a directive that does not exist, for the
+         * natural way to write it (docs/two-way-sql-parser.md decision 7).
+         */
         String keyword() {
-            int space = content.indexOf(' ');
-            return space < 0 ? content : content.substring(0, space);
+            for (int i = 0; i < content.length(); i++) {
+                if (Character.isWhitespace(content.charAt(i))) {
+                    return content.substring(0, i);
+                }
+            }
+            return content;
         }
 
         String argument(String keyword) {

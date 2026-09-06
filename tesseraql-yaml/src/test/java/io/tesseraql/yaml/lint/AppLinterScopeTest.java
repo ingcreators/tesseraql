@@ -152,6 +152,28 @@ class AppLinterScopeTest {
     }
 
     @Test
+    void aDirectiveWrappedBeforeItsAliasIsTheSameDirective(@TempDir Path dir) throws Exception {
+        // The linter reads the directive argument with its own splitter, so it must reach the
+        // same answer as the parser. Before ScopeArgument it looked up the whole argument as a
+        // scope name and reported the declared scope as undeclared
+        // (docs/two-way-sql-parser.md decision 7).
+        writeScope(dir);
+        writeRoute(dir, "select * from orders o where /*%scope orders_scope\non o */ (1=1)\n");
+        assertThat(scopeCodes(new AppLinter().lint(dir))).isEmpty();
+    }
+
+    @Test
+    void aWrappedDirectiveStillMarksItsTableScopeGoverned(@TempDir Path dir) throws Exception {
+        // …and the governed-table set must see it too, or the write-scope warning below is the
+        // silent-skip mode the Unicode campaign exists to abolish.
+        writeScope(dir);
+        writeRoute(dir, "select * from orders o where /*%scope orders_scope\non o */ (1=1)\n");
+        writeCommandRoute(dir,
+                "update orders set status = /* status */ 'shipped' where id = /* id */ 1\n");
+        assertThat(writeScopeCodes(new AppLinter().lint(dir))).containsExactly("TQL-SEC-4100");
+    }
+
+    @Test
     void unknownScopeReferenceIsAnError(@TempDir Path dir) throws Exception {
         writeScope(dir);
         writeRoute(dir, "select * from orders o where /*%scope ghost on o */ (1=1)\n");

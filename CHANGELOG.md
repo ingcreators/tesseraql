@@ -53,6 +53,20 @@ All notable changes to TesseraQL are documented here. The format follows
   quoted identifier is now its own `TQL-SQL-2102` message. `[` deliberately stays plain text,
   because in DuckDB and PostgreSQL it is list and array syntax rather than quoting.
 
+- **A directive keyword ends at the first whitespace, not at the first space.** `/*%if` followed by
+  a newline or a tab was reported as `Unknown directive 'if\n'`, naming a directive that does not
+  exist, so the natural way to write a long guard was rejected with a message that pointed nowhere.
+  The `separator`, `on` and `as boolean` sub-keywords split the same way, and two of those failed
+  silently rather than loudly: `/*%scope s\nas boolean */` parsed with the whole argument as the
+  scope name and the flag lost, so a SELECT-list masking flag degraded into a WHERE predicate with
+  no diagnostic.
+
+  The argument now has one reader, `ScopeArgument`, because three modules parse it — the parser
+  that renders the directive, the linter that checks the scope is declared and that a write on a
+  scoped table is governed, and the coverage manifest that attributes a suite run to it. Each had
+  its own single-space split, so a wrapped directive meant three different things and widening only
+  the parser would have made the linter report a declared scope as undeclared.
+
 - **The row bound reaches a route's contract read.** `tesseraql.resultMaterialization.maxRows` is a
   route-level budget that a contract binding never passed through, so an admin page backed by a
   contract materialized whatever the store returned. The gap is closed by construction rather than
@@ -239,6 +253,12 @@ All notable changes to TesseraQL are documented here. The format follows
   and with it go the synthetic `/* tqlPageN */` binds it injected into a realm's own SQL namespace
   with no reservation or collision check.
 ### Changed
+
+- **`else` ends an if-chain.** An `elseif` or a second `else` written after the `else` parsed,
+  shipped, and was silently unreachable: `SqlRenderer` takes the first branch with no condition and
+  stops. The coverage report could not tell it apart from a well-formed chain either, because only
+  an evaluated branch enters the branch denominator. Both are now `TQL-SQL-2102`, naming why the
+  branch can never run.
 
 - **`pagination: {strategy: keyset}` on a `contract:` binding is refused.** It was accepted and
   silently wrong: the page binder mints offset 0 for every keyset request, and the `after` predicate

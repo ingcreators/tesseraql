@@ -56,6 +56,54 @@ class Sql2WayParserTest {
     }
 
     @Test
+    void aConditionMayWrapOntoTheNextLine() {
+        String sql = "select * from t where 1=1 /*%if\n  q != null\n  && q != ''\n*/"
+                + " and name = /* q */ 'a' /*%end*/";
+
+        assertThat(SqlRenderer.render(sql, Map.of("q", "x")).sql()).contains("and name = ?");
+        assertThat(SqlRenderer.render(sql, Map.of()).sql()).doesNotContain("and name");
+    }
+
+    @Test
+    void aTabAfterTheKeywordIsAccepted() {
+        String sql = "select * from t where 1=1 /*%if\tq != null */"
+                + " and name = /* q */ 'a' /*%end*/";
+
+        assertThat(SqlRenderer.render(sql, Map.of("q", "x")).sql()).contains("and name = ?");
+    }
+
+    @Test
+    void aForDirectiveMayWrapBeforeItsSeparator() {
+        String sql = "insert into t (id) values /*%for id : ids\nseparator ', '*/"
+                + " (/* id */ 0) /*%end*/";
+
+        BoundSql bound = SqlRenderer.render(sql, Map.of("ids", List.of(1, 2)));
+
+        assertThat(bound.sql()).contains("(?) ,  (?)");
+        assertThat(bound.parameters()).extracting(BoundParameter::value).containsExactly(1, 2);
+    }
+
+    @Test
+    void elseifAfterElseIsRejected() {
+        String sql = "select /*%if a != null */ x /*%else*/ y /*%elseif b != null */ z /*%end*/";
+
+        assertThatThrownBy(() -> SqlRenderer.render(sql, Map.of()))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("TQL-SQL-2102")
+                .hasMessageContaining("can never run");
+    }
+
+    @Test
+    void aSecondElseIsRejected() {
+        String sql = "select /*%if a != null */ x /*%else*/ y /*%else*/ z /*%end*/";
+
+        assertThatThrownBy(() -> SqlRenderer.render(sql, Map.of()))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("TQL-SQL-2102")
+                .hasMessageContaining("already has one");
+    }
+
+    @Test
     void anUnterminatedParenDummyIsRejected() {
         String sql = "select * from t where id in /* ids */ (1, 2";
 
