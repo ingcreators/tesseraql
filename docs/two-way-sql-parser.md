@@ -501,12 +501,12 @@ Permanent exceptions and known gaps, not approvals.
 
 Recorded as they were hit, so the next slice does not re-learn them.
 
-1. **Naming a code that does not exist yet mints a row in the generated reference.** `ErrorIndex`
-   scans comments as well as message literals, so a comment in `ErrorResponseRenderer` reading
-   "TQL-SQL-2119 refuses that route at build time" produced a reference row for `TQL-SQL-2119`
-   with an em-dash meaning and `ErrorResponseRenderer.java` as its provenance — a code the
-   framework cannot raise, documented as if it could. Describe a code that has not shipped; do not
-   spell it.
+1. **Spelling a code in a comment puts that file in the generated reference's "Raised in" column.**
+   `ErrorIndex` scans comments as well as message literals, and it hit twice. A comment in
+   `ErrorResponseRenderer` reading "TQL-SQL-2119 refuses that route at build time" minted a whole
+   reference row for a code that did not exist yet, with an em-dash meaning. A javadoc on the lint
+   that mentioned `TQL-SQL-2118` added `DocumentRules.java` to that code's provenance, where the
+   renderer is the only thing that raises it. Describe the other code; do not spell it.
 2. **A slice that changes a record's shape needs a `clean` before its build is believable**, and a
    slice rebased onto another slice of the same campaign needs the full verify run again — both
    parser slices edited the same file in different regions and merged without a textual conflict.

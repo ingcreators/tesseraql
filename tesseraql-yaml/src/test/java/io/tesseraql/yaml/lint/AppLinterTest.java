@@ -255,6 +255,84 @@ class AppLinterTest {
                 && f.isError() && f.source().contains("get.yml"));
     }
 
+    /** A query route whose main SQL is {@code sql}, for the negated-list cases. */
+    private static void writeListRoute(Path dir, String sql) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), """
+                tesseraql:
+                  app:
+                    name: t
+                  security:
+                    policies:
+                      app.read:
+                        anyOf:
+                          - role: READ
+                """);
+        Files.createDirectories(dir.resolve("web/items"));
+        Files.writeString(dir.resolve("web/items/search.sql"), sql);
+        Files.writeString(dir.resolve("web/items/get.yml"), """
+                version: tesseraql/v1
+                id: items.list
+                kind: route
+                recipe: query-json
+                input:
+                  hidden:
+                    type: array
+                    required: false
+                security:
+                  auth: browser
+                  policy: app.read
+                sources:
+                  main:
+                    sql:
+                      file: search.sql
+                      mode: query
+                      params:
+                        hidden: query.hidden
+                response:
+                  json:
+                    body:
+                      rows: main.rows
+                """);
+    }
+
+    @Test
+    void aNegatedInListWithNoGuardIsReported(@TempDir Path dir) throws Exception {
+        // TQL-SQL-2118 refuses this at render time; the lint is what keeps it from reaching a
+        // request at all (docs/two-way-sql-parser.md decision 9).
+        writeListRoute(dir, "select 1 from items where status not in /* hidden */ ('x')\n");
+
+        assertThat(new AppLinter().lint(dir)).anyMatch(f -> f.code().equals("TQL-SQL-2119")
+                && f.isError() && f.message().contains("hidden"));
+    }
+
+    @Test
+    void aNegatedInListGuardedByItsOwnEmptinessIsClean(@TempDir Path dir) throws Exception {
+        writeListRoute(dir, "select 1 from items where 1=1\n"
+                + "/*%if !hidden.empty */ and status not in /* hidden */ ('x') /*%end*/\n");
+
+        assertThat(new AppLinter().lint(dir))
+                .noneMatch(f -> f.code().equals("TQL-SQL-2119"));
+    }
+
+    @Test
+    void aNegatedInListGuardedByAnUnrelatedConditionIsReported(@TempDir Path dir) throws Exception {
+        // A guard that does not mention the list decides nothing about whether it is empty.
+        writeListRoute(dir, "select 1 from items where 1=1\n"
+                + "/*%if q != null */ and status not in /* hidden */ ('x') /*%end*/\n");
+
+        assertThat(new AppLinter().lint(dir))
+                .anyMatch(f -> f.code().equals("TQL-SQL-2119"));
+    }
+
+    @Test
+    void aPositiveInListNeedsNoGuard(@TempDir Path dir) throws Exception {
+        writeListRoute(dir, "select 1 from items where status in /* hidden */ ('x')\n");
+
+        assertThat(new AppLinter().lint(dir))
+                .noneMatch(f -> f.code().equals("TQL-SQL-2119"));
+    }
+
     @Test
     void flagsAnEmbeddedVariableInACommandStep(@TempDir Path dir) throws Exception {
         // Steps are 26 of this repository's 44 unchecked SQL slots, and a command route is where

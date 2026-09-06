@@ -106,8 +106,8 @@ With `ids = [10, 20, 30]` this renders `id in (?, ?, ?)`. An empty collection re
 A list bound under `not in` may **not** be empty. `x not in (null)` is UNKNOWN for every row, so
 it hides them all where an empty exclusion should hide none — an unselected "exclude these
 statuses" filter returning an empty page. There is no constant list that makes `not in` true for
-every row, so the site is refused at render time with `TQL-SQL-2118`. Guard it with the emptiness
-of its own list:
+every row, so the site is refused at render time with `TQL-SQL-2118`, and the linter reports an
+unguarded one at build time with `TQL-SQL-2119`. Guard it with the emptiness of its own list:
 
 ```sql
 select * from t where active = 1
@@ -284,6 +284,7 @@ statically:
 | `TQL-SQL-2116` | a route declares `lock:` but the UPDATE's SET list never assigns the column, so the lock matches every save |
 | `TQL-SQL-2117` | a `/*%lock*/` directive is not in the statement's `WHERE` |
 | `TQL-SQL-2109` | an embedded variable interpolates request input that is not `enum`-constrained |
+| `TQL-SQL-2119` | a list is bound under `not in` with nothing guarding it against being empty |
 | `TQL-YAML-1018` | a paginated route's SQL carries its own `LIMIT`/`FETCH` |
 | `TQL-SCOPE-3011` / `3013` | a scope directive names an undeclared scope / an invalid `on` alias ([data-scoping.md](data-scoping.md)) |
 

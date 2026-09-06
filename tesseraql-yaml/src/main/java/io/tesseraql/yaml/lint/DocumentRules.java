@@ -33,6 +33,10 @@ final class DocumentRules {
 
     private static final String EMBEDDED_VARIABLE_INTERPOLATES_INPUT = "TQL-SQL-2109";
 
+    // A list bound under NOT IN with nothing guarding its emptiness: the build-time twin of the
+    // renderer's refusal, so a defective template never reaches a request.
+    private static final String NEGATED_IN_LIST_UNGUARDED = "TQL-SQL-2119";
+
     private static final String SHARED_SCHEMA_WITHOUT_TENANT_PREDICATE = "TQL-TENANT-3001";
 
     private static final String UPDATE_WITHOUT_VERSION_PREDICATE = "TQL-SQL-2104";
@@ -173,6 +177,100 @@ final class DocumentRules {
                                 + "prevent injection"));
             }
         }
+    }
+
+    /**
+     * A list bound under {@code NOT IN} whose emptiness nothing guards.
+     *
+     * <p>The renderer refuses an empty one, because {@code not in (null)} is unknown for every row
+     * and hides them all where an empty exclusion should hide none. This is the build-time twin
+     * that keeps a defective template from reaching a request: a site is guarded when an enclosing
+     * {@code /*%if*}{@code /} condition mentions the bound expression's own root name, which is
+     * what {@code !ids.empty} does.
+     *
+     * <p>An {@code else} branch deliberately does not count as a guard. In
+     * {@code /*%if !ids.empty *}{@code / … /*%else*}{@code / … /*%end*}{@code /} the else branch is
+     * the one that runs when the list <em>is</em> empty (docs/two-way-sql-parser.md decision 9).
+     */
+    static void lintNegatedInLists(LintContext context, Path documentSource,
+            RouteDefinition definition, String source, List<LintFinding> findings) {
+        for (LintSupport.DocumentSql slot : LintSupport.documentSql(documentSource, definition)) {
+            if (!Files.isRegularFile(slot.file())) {
+                continue; // missing-file is reported separately
+            }
+            List<SqlNode> nodes = context.sqlNodes(slot.file());
+            if (nodes == null) {
+                continue; // SQL syntax / IO errors surface through other checks
+            }
+            walkNegatedLists(nodes, List.of(), source, findings);
+        }
+    }
+
+    /**
+     * The walk carries the enclosing conditions, which {@link SqlNode#walk} cannot: it visits
+     * every node but loses the ancestry, and ancestry is the whole question here.
+     */
+    private static void walkNegatedLists(List<SqlNode> nodes, List<String> guards, String source,
+            List<LintFinding> findings) {
+        for (SqlNode node : nodes) {
+            switch (node) {
+                case SqlNode.ListBind bind -> {
+                    if (bind.negated() && !guardedBy(guards, bind.expressionSource())) {
+                        findings.add(new LintFinding(NEGATED_IN_LIST_UNGUARDED, ERROR, source,
+                                "'" + bind.expressionSource() + "' is bound under NOT IN and"
+                                        + " nothing guards it against being empty; an empty list"
+                                        + " renders not in (null), which hides every row instead"
+                                        + " of none — wrap the site in /*%if !"
+                                        + bind.expressionSource() + ".empty */ … /*%end*/"));
+                    }
+                }
+                case SqlNode.If conditional -> conditional.branches().forEach(branch -> {
+                    List<String> nested = branch.conditionSource() == null
+                            ? guards
+                            : append(guards, branch.conditionSource());
+                    walkNegatedLists(branch.body(), nested, source, findings);
+                });
+                case SqlNode.For loop -> walkNegatedLists(loop.body(), guards, source, findings);
+                default -> {
+                }
+            }
+        }
+    }
+
+    private static List<String> append(List<String> guards, String condition) {
+        List<String> nested = new java.util.ArrayList<>(guards);
+        nested.add(condition);
+        return nested;
+    }
+
+    /** Whether some enclosing condition names the bound expression's root, as a whole word. */
+    private static boolean guardedBy(List<String> guards, String expressionSource) {
+        int dot = expressionSource.indexOf('.');
+        String root = (dot < 0 ? expressionSource : expressionSource.substring(0, dot)).trim();
+        if (root.isEmpty()) {
+            return false;
+        }
+        return guards.stream().anyMatch(condition -> mentionsWord(condition, root));
+    }
+
+    /**
+     * {@code root} appearing in {@code condition} with no identifier character either side, so a
+     * guard on {@code hidden_extra} does not certify a bind on {@code hidden}.
+     */
+    private static boolean mentionsWord(String condition, String root) {
+        int at = condition.indexOf(root);
+        while (at >= 0) {
+            boolean beforeOk = at == 0
+                    || !Character.isJavaIdentifierPart(condition.charAt(at - 1));
+            int after = at + root.length();
+            boolean afterOk = after >= condition.length()
+                    || !Character.isJavaIdentifierPart(condition.charAt(after));
+            if (beforeOk && afterOk) {
+                return true;
+            }
+            at = condition.indexOf(root, at + 1);
+        }
+        return false;
     }
 
     /** The input name a {@code sql.params} source binds from a request, or {@code null} otherwise. */

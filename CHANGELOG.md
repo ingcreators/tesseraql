@@ -8,6 +8,15 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **A list bound under `not in` with nothing guarding its emptiness is a build error
+  (`TQL-SQL-2119`).** The renderer refuses an empty one at request time, but a route that can reach
+  that refusal is defective before it ever serves a request, and the author is the one who can fix
+  it. A site counts as guarded when an enclosing `/*%if*/` condition names the bound expression's
+  own root — which is what `!ids.empty` does. An `else` branch deliberately does not count: in
+  `/*%if !ids.empty */ … /*%else*/ … /*%end*/` the else branch is the one that runs when the list
+  *is* empty. Checked on every SQL file a route, consumer or MCP tool declares, and nothing in this
+  repository trips it.
+
 - **`materialize:` and `timeoutSeconds:` are honoured on a `contract:` binding.** They were parsed,
   accepted and dropped: `Binding.of` read both from the `sql` arm alone. That mattered once a
   contract read gained a row bound, because without a per-binding override an application whose
