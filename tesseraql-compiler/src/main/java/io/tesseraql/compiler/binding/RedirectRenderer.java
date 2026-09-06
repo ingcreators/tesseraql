@@ -61,7 +61,14 @@ public final class RedirectRenderer implements Step {
     static String resolveLocation(Exchange exchange, String declaredLocation) {
         if (BACK.equals(declaredLocation)) {
             String declared = exchange.request().param("_return");
-            return io.tesseraql.core.http.BasePaths.isLocal(declared) ? declared : "/";
+            if (!io.tesseraql.core.http.BasePaths.isLocal(declared)) {
+                return "/";
+            }
+            // Read back off the request, so it is already a wire URL, and negotiate() prefixes
+            // what it is given (docs/base-path.md decision 7). Returning it to base-relative
+            // form here is what keeps the prefix on it exactly once — the same move the login
+            // page's next target makes.
+            return io.tesseraql.pipeline.BasePath.relative(exchange, declared);
         }
         @SuppressWarnings("unchecked")
         Map<String, Object> context = exchange.getProperty(TesseraqlProperties.CONTEXT, Map.of(),

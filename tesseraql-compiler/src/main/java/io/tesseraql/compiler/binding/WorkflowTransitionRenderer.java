@@ -27,8 +27,12 @@ public final class WorkflowTransitionRenderer implements Step {
                         || contentType.startsWith("multipart/form-data"));
         if (formPost) {
             String declared = exchange.request().param("_return");
+            // Base-relative on the way in, because negotiate() is where the prefix goes
+            // (docs/base-path.md decision 7): the value arrived as a wire URL off the request.
             RedirectRenderer.negotiate(exchange, 303,
-                    io.tesseraql.core.http.BasePaths.isLocal(declared) ? declared : "/");
+                    io.tesseraql.core.http.BasePaths.isLocal(declared)
+                            ? io.tesseraql.pipeline.BasePath.relative(exchange, declared)
+                            : "/");
             return;
         }
         json.process(exchange);

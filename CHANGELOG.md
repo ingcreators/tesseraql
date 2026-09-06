@@ -63,6 +63,14 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A `location: back` redirect returns to the page that sent it, under a base path.** The
+  `_return` target is handed out as a wire URL and posted back as one, and the framework's one
+  redirect prefixes whatever it is given — so a saved row bounced to `/shop/shop/things?page=2`,
+  which nothing serves, and a workflow transition to `/shop/shop/docs/D-1`. Both readers now return
+  the value to base-relative form first, the same move the login page's `next` target already made;
+  the redirect helper stays the one place the prefix goes. No emission changed: `_return` is a wire
+  URL end to end, and the correction belongs where it is read back.
+
 - **A reference-lookup field works under a base path.** The `lookup:` field's four legs — the code
   input, the search button, the dialog's own search form and every pick row — emitted their URLs
   without passing through the link builder, so under a prefix they addressed the origin while the
