@@ -36,13 +36,22 @@ class SbomGeneratorTest {
                 .contains("config/tesseraql.yml");
     }
 
+    /**
+     * The purl sort, which is what makes the component list independent of the order Maven
+     * resolved the dependencies in. This says nothing about salted iteration order — both calls
+     * share one JVM and therefore one salt; {@link io.tesseraql.yaml.release.ReleaseDocumentOrderTest}
+     * guards that.
+     */
     @Test
-    void dependenciesAreOrderedByPurlForReproducibility() {
+    void dependenciesAreOrderedByPurl() {
         SbomGenerator generator = new SbomGenerator();
         String forward = generator.toJson(exampleApp(), "a", "1", DEPENDENCIES);
         String reversed = generator.toJson(exampleApp(), "a", "1",
                 List.of(DEPENDENCIES.get(1), DEPENDENCIES.get(0)));
         assertThat(forward).isEqualTo(reversed);
-        assertThat(forward.indexOf("camel-core")).isLessThan(forward.indexOf("postgresql"));
+        // io.vertx sorts before org.postgresql. The assertion this replaces named camel-core,
+        // which the fixture has not carried since the Camel removal campaign — indexOf returned
+        // -1 and the comparison passed for the wrong reason.
+        assertThat(forward.indexOf("vertx-core")).isLessThan(forward.indexOf("postgresql"));
     }
 }

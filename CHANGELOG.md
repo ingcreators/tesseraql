@@ -63,6 +63,17 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **The release evidence and the SBOM reproduce, and the build stamps a reproducible archive.**
+  Both documents promised reproducibility in their own javadoc, the build Ed25519-signs the
+  evidence, and neither reproduced: `Map.of` iterates in a per-JVM salted order, and the SBOM's
+  salted hash object is emitted once per component, so a sixty-file app carried sixty of them. The
+  test that claimed to guard this compared two documents generated in **one** JVM, where the salt
+  is fixed — it could never have failed, which is why the defect survived. It is replaced by a
+  structural walk that fails on the cause rather than on a byte mismatch. Separately,
+  `project.build.outputTimestamp` is now set and `maven-jar-plugin` pinned, so two clean builds of
+  identical source produce byte-identical jars; measured before and after. Part of the
+  deterministic-output campaign (docs/deterministic-output.md).
+
 - **A declared `input:` block keeps the order it was written in.** The map was copied with
   `Map.copyOf`, whose iteration order comes from a per-JVM salt, so a create form rendered its
   fields in a different order on every boot, a validation failure named whichever field the salt
