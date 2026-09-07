@@ -26,7 +26,13 @@ public final class ReleaseEvidence {
     public Map<String, Object> build(AppManifest manifest, String appName, String appVersion) {
         Map<String, Object> evidence = new LinkedHashMap<>();
         evidence.put("evidenceVersion", "tesseraql/evidence/v1");
-        evidence.put("app", Map.of("name", appName, "version", appVersion));
+        // Built rather than declared with Map.of: a two-key Map.of iterates in one of two
+        // salt-chosen orders, so these two lines alone made the signed document fail to
+        // reproduce on half of all builds (docs/deterministic-output.md).
+        Map<String, Object> app = new LinkedHashMap<>();
+        app.put("name", appName);
+        app.put("version", appVersion);
+        evidence.put("app", app);
         evidence.put("manifestSha256", manifest.index().aggregateHash());
         evidence.put("generated", Map.of(
                 "openapiSha256", Hashing.sha256(new OpenApiGenerator().toJson(manifest))));

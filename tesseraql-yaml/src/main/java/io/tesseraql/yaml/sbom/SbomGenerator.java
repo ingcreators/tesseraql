@@ -44,15 +44,18 @@ public final class SbomGenerator {
         bom.put("bomFormat", "CycloneDX");
         bom.put("specVersion", "1.5");
         bom.put("version", 1);
-        bom.put("metadata", Map.of("component",
-                Map.of("type", "application", "name", appName, "version", appVersion)));
+        Map<String, Object> application = new LinkedHashMap<>();
+        application.put("type", "application");
+        application.put("name", appName);
+        application.put("version", appVersion);
+        bom.put("metadata", Map.of("component", application));
 
         List<Object> components = new ArrayList<>();
         new TreeMap<>(manifest.index().fileChecksums()).forEach((path, sha) -> {
             Map<String, Object> component = new LinkedHashMap<>();
             component.put("type", "file");
             component.put("name", path);
-            component.put("hashes", List.of(Map.of("alg", "SHA-256", "content", sha)));
+            component.put("hashes", List.of(hash(sha)));
             components.add(component);
         });
         dependencies.stream()
@@ -60,6 +63,18 @@ public final class SbomGenerator {
                 .forEach(dependency -> components.add(library(dependency)));
         bom.put("components", components);
         return bom;
+    }
+
+    /**
+     * One CycloneDX hash object. Built rather than declared with {@code Map.of}, whose iteration
+     * order comes from a per-JVM salt and would put these two keys in a different order in every
+     * build of identical source (docs/deterministic-output.md).
+     */
+    private static Map<String, Object> hash(String sha256) {
+        Map<String, Object> hash = new LinkedHashMap<>();
+        hash.put("alg", "SHA-256");
+        hash.put("content", sha256);
+        return hash;
     }
 
     private static Map<String, Object> library(MavenComponent dependency) {
@@ -70,8 +85,7 @@ public final class SbomGenerator {
         component.put("version", dependency.version());
         component.put("purl", dependency.purl());
         if (dependency.sha256() != null && !dependency.sha256().isBlank()) {
-            component.put("hashes",
-                    List.of(Map.of("alg", "SHA-256", "content", dependency.sha256())));
+            component.put("hashes", List.of(hash(dependency.sha256())));
         }
         if (!dependency.licenses().isEmpty()) {
             component.put("licenses", dependency.licenses().stream()

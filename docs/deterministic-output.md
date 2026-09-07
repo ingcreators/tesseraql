@@ -45,7 +45,9 @@ worked this out for `steps:` and did not carry it one line up to `input:`.
 
 The last two are the worst instances and neither the audit's finder nor the plan names them. A
 document whose own javadoc promises reproducibility, which the build signs, and which does not
-reproduce, is the sharpest form this defect takes.
+reproduce, is the sharpest form this defect takes. Both are closed by slice 8, which found the SBOM
+worse than the row above states: the salted hash object is emitted **once per component**, so the
+guard reported 63 salted nodes for the gallery app, 62 of them hash objects.
 
 The signature never fails: the Mojo signs the bytes it just wrote. The harm is precisely that two
 builds of identical source produce different bytes, which is what a reproducible build claim means.
@@ -178,13 +180,24 @@ two-entry hash object once per **file** component and `:73-74` builds one once p
 component, so between them they vary far more of the document than the single metadata block. The
 two `Map.of` calls at `:78` are both one-entry and are exemptions, not conversions.
 
-**The guard is wrong, and it is the sharpest instance of the trap decision 2 exists to prevent.**
-"Generate twice in separate JVMs, compare the bytes" is itself a lucky test. `ReleaseEvidence`'s
-only salted site is one two-key map, so two fresh JVMs emit identical bytes about **half** the
-time: the guard as specified is red on roughly one run in two, and green on the other. For
-`SbomGenerator` it is red on about five runs in six. Slice 8 must state its assertion analytically
-— every salted map enumerated, every reachable order accounted for — or run enough boots to make
-the failure probability negligible and say how many. Two is not enough.
+**The guard was wrong, and it was the sharpest instance of the trap decision 2 exists to
+prevent.** "Generate twice in separate JVMs, compare the bytes" is itself a lucky test.
+`ReleaseEvidence`'s only salted site is one two-key map, so two fresh JVMs emit identical bytes
+about **half** the time: the guard as specified was red on roughly one run in two and green on the
+other. For `SbomGenerator` it was red on about five runs in six. Reaching a negligible flake budget
+that way needs upwards of twenty forks.
+
+Slice 8 replaced it rather than tuning it. `ReleaseDocumentOrderTest` walks the two built document
+*trees* and fails on the **cause**: any node that is an `ImmutableCollections$Map` of two or more
+entries. Which class `Map.of` returns is decided by the call site's arity and never by the salt, so
+the assertion is red on every pre-fix boot and green on every post-fix boot, in one process, with
+no forking — and it names the offending path rather than reporting a byte mismatch. It is
+deliberately a **deny-list**: an allow-list naming `LinkedHashMap` would go red the moment a site
+moved to `OrderedCopies`, which returns an unmodifiable view.
+
+That guard generalises. Any document assembled in memory and then serialized can be checked this
+way, and it is strictly better than a behavioural order test wherever it applies, because it needs
+no key-set enumeration at all.
 
 ### 5 — `ResponseHeaders` is the emission point, not `ResponseSpec`
 
@@ -213,6 +226,13 @@ in the tree contains the string; `git log -S 'outputTimestamp'` now returns exac
 one that added this sentence). A reproducible jar is worth
 little while the documents inside it are not reproducible, which is the other reason it belongs
 beside decision 4 rather than in a release campaign that is parked.
+
+Slice 8 shipped it and measured both halves. The property alone is not enough: `maven-jar-plugin`
+is the archiver that has to honour it, and it was the one lifecycle plugin the root
+`pluginManagement` did not pin — so the plugin the reproducibility claim depends on was the plugin
+the build did not choose. Both land together. Measured on `tesseraql-core`: without the property,
+two clean builds produced different jars (`15f4ba13…` and `c04bcbb1…`); with it, two clean builds
+produced the same jar (`29a36549…` twice).
 
 ## The slices
 

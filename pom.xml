@@ -96,6 +96,14 @@
     <maven.compiler.release>25</maven.compiler.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+    <!--
+      A fixed archive timestamp, so two builds of identical source produce byte-identical jars
+      (docs/deterministic-output.md decision 6). Every plugin that writes an archive reads this;
+      without it each entry is stamped with the moment it was written. Bump it when a release is
+      cut if the release notes want the date to mean something — nothing in the build reads it as
+      a date, only as a constant.
+    -->
+    <project.build.outputTimestamp>2026-09-07T00:00:00Z</project.build.outputTimestamp>
 
     <!-- Third-party library versions -->
     <!--
@@ -195,6 +203,13 @@
     <maven.enforcer.plugin.version>3.6.3</maven.enforcer.plugin.version>
     <maven.surefire.plugin.version>3.5.6</maven.surefire.plugin.version>
     <maven.failsafe.plugin.version>3.5.6</maven.failsafe.plugin.version>
+    <!--
+      The archiver that has to honour project.build.outputTimestamp. Until now it was whichever
+      version the running Maven's default lifecycle bindings supplied, so the one plugin the
+      reproducibility claim depends on was the one plugin the build did not choose
+      (docs/deterministic-output.md decision 6).
+    -->
+    <maven.jar.plugin.version>3.5.0</maven.jar.plugin.version>
   </properties>
 
   <dependencyManagement>
@@ -534,6 +549,11 @@
   <build>
     <pluginManagement>
       <plugins>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-jar-plugin</artifactId>
+          <version>${maven.jar.plugin.version}</version>
+        </plugin>
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-compiler-plugin</artifactId>

@@ -28,8 +28,15 @@ class ReleaseEvidenceTest {
         assertThat(((Map<?, ?>) doc.get("generated")).get("openapiSha256")).asString().hasSize(64);
     }
 
+    /**
+     * Two calls in one process, which is all this can be: iteration order is fixed for the
+     * lifetime of a JVM, so this could never have caught the salted map it was named for — and
+     * did not, for as long as the document carried one. It still earns its place as a check that
+     * nothing time- or identity-dependent has crept in. The reproducibility property itself is
+     * guarded structurally by {@link ReleaseDocumentOrderTest}.
+     */
     @Test
-    void evidenceIsDeterministic() {
+    void evidenceCarriesNoTimestampOrRandomId() {
         AppManifest manifest = exampleApp();
         ReleaseEvidence evidence = new ReleaseEvidence();
         assertThat(evidence.toJson(manifest, "a", "1"))
