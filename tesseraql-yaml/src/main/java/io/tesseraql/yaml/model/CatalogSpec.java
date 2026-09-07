@@ -5,6 +5,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
+import io.tesseraql.core.util.OrderedCopies;
 import java.util.List;
 import java.util.Map;
 
@@ -84,7 +85,7 @@ public record CatalogSpec(String table, String file, List<String> tables,
     }
 
     public CatalogSpec {
-        where = where == null ? Map.of() : Map.copyOf(where);
+        where = where == null ? Map.of() : OrderedCopies.map(where);
         tables = tables == null ? List.of() : List.copyOf(tables);
     }
 

@@ -1,6 +1,7 @@
 package io.tesseraql.yaml.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import io.tesseraql.core.util.OrderedCopies;
 import java.util.Map;
 
 /**
@@ -24,7 +25,7 @@ public record DecisionUse(String use, Map<String, String> params, String effecti
         @com.fasterxml.jackson.annotation.JsonIgnore DecisionsDocument.Decision decision) {
 
     public DecisionUse {
-        params = params == null ? Map.of() : Map.copyOf(params);
+        params = params == null ? Map.of() : OrderedCopies.map(params);
     }
 
     /** This reference with the shared decision resolved underneath (manifest load only). */

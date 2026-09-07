@@ -1,6 +1,6 @@
 # Deterministic output
 
-> **Status: in progress.** Eight slices, closing the findings the 2026-09-04 whole-repo audit filed
+> **Status: complete.** Eight slices shipped 2026-09-06/07 (#1212-#1219), closing the findings the 2026-09-04 whole-repo audit filed
 > as F27, F33 and F74 — plus the two the audit's own finder and the remediation plan both missed,
 > which are the worst instances in the set.
 >
@@ -316,20 +316,35 @@ Nothing an application declares, and nothing an application can observe except b
 on an order that was never stable. The risk runs the other way: a sweep that changes a map's
 identity can change *null* behaviour, which is what decision 1 exists to prevent.
 
-## Open questions
+## Open questions — both closed by slice 7
 
-1. **The exemption vocabulary.** Seventeen of the matched files are converted by no slice above and
-   need either a conversion or a recorded exemption. Whether the exemption is a comment marker or a
-   list in the test is a decision the ledger slice makes.
-2. **`Set.copyOf`.** The same salt applies. It is in scope for the ledger and out of scope for the
-   conversions above, because no shipped output iterates one — that should be re-measured before
-   slice 7 rather than assumed. **Slice 2 re-measured the premise and it is false.** `LintContext`
-   already carries a shipped comment saying the opposite in as many words — "Not `Set.copyOf`: the
-   declaration order feeds finding messages, and `copyOf` randomizes it" — so a set's iteration
-   order does reach output today, and the site that proves it has already been hand-fixed. The
-   question stays open, but it is now "which sets, and does `OrderedCopies` grow a third method",
-   not "does this happen". Slice 2 deliberately did not grow that method: the decision is slice 7's
-   and building ahead of it is how a shipped slice gets reverted.
+1. **The exemption vocabulary — a path list in the test, not a comment marker.** The marker was
+   rejected for the reason decision 3 already names: a comment is not code, the scanner lexes
+   comments out before it matches, and an exemption that lives in a comment would be invisible to
+   the very scanner that has to honour it. It is also the wrong review surface — a marker is added
+   in the file being excused, where nobody sees it, while a path list is added in the guard, where
+   a reviewer reads it beside every other exemption. The list is a `TreeSet` of paths with the
+   reasons in the class javadoc, which is what the other fourteen ledgers in that package do.
+
+   Sixteen files were in scope. Eleven were converted; five are exempt, each a constant vocabulary
+   or an allow-list tested for membership and never iterated into output.
+2. **`Set.copyOf` — in the scanner's pattern, and `OrderedCopies` does not grow a third method.**
+   The original premise ("no shipped output iterates one") is false, and slice 2 refuted it:
+   `LintContext` carries a shipped comment saying the opposite in as many words — "Not
+   `Set.copyOf`: the declaration order feeds finding messages, and `copyOf` randomizes it".
+
+   But slice 7 measured every set in the declaration layer and **none of them needs converting**.
+   All five are constants read by `contains`. So sets are scanned — a new one that does reach
+   output will turn the build red and be seen in review — and no `OrderedCopies.set` is written
+   until a caller exists. `LintContext` already holds the shape that caller would take, hand-rolled
+   with its reason beside it.
+
+3. **`Set.of` and one-entry factories, which neither this document nor the plan considered.**
+   `Set.of` is in the pattern: it is exactly as salted as `Map.of`. Zero- and one-entry factories
+   are **not**, and this is a rule rather than a convenience — they compile to
+   `ImmutableCollections`' `Map0`/`Map1`, which have no table and cannot vary at all. A scanner
+   that matched them would bury sixteen real sites under a hundred-odd that are provably safe, and
+   the ledger would stop being read.
 
 ## What the plan got wrong
 

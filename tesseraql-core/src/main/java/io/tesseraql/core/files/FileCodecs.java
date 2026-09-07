@@ -3,6 +3,7 @@ package io.tesseraql.core.files;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
+import io.tesseraql.core.util.OrderedCopies;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.ServiceLoader;
@@ -19,7 +20,7 @@ public final class FileCodecs {
     private final Map<String, FileCodec> codecs;
 
     private FileCodecs(Map<String, FileCodec> codecs) {
-        this.codecs = Map.copyOf(codecs);
+        this.codecs = OrderedCopies.map(codecs);
     }
 
     public static FileCodecs discover() {

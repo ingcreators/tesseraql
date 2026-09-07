@@ -1,6 +1,7 @@
 package io.tesseraql.yaml.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import io.tesseraql.core.util.OrderedCopies;
 import java.util.Map;
 
 /**
@@ -18,6 +19,6 @@ import java.util.Map;
 public record AssignSpec(String file, Map<String, String> params) {
 
     public AssignSpec {
-        params = params == null ? Map.of() : Map.copyOf(params);
+        params = params == null ? Map.of() : OrderedCopies.map(params);
     }
 }

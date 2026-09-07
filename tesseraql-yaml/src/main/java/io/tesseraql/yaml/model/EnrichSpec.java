@@ -1,6 +1,7 @@
 package io.tesseraql.yaml.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import io.tesseraql.core.util.OrderedCopies;
 import java.util.List;
 import java.util.Map;
 
@@ -59,7 +60,7 @@ public record EnrichSpec(Map<String, String> on, Binding.SqlArm sql,
     public static final String PER_ROW = "perRow";
 
     public EnrichSpec {
-        on = on == null ? Map.of() : Map.copyOf(on);
+        on = on == null ? Map.of() : OrderedCopies.map(on);
         merge = merge == null ? List.of() : List.copyOf(merge);
     }
 
