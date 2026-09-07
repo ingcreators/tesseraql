@@ -63,6 +63,18 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **One Maven, and the build says so.** The repository shipped a wrapper pinning 3.9.16 and a
+  devcontainer that apt-installed 3.8.7, and every contributor-facing instruction named the second
+  one: `AGENTS.md`, `CONTRIBUTING.md`, `docs/build.md`, the pull-request template, and — most
+  sharply — `scripts/run-ci-local.sh`, whose whole purpose is to reproduce CI while invoking the
+  Maven CI never uses, and `scripts/verify-dev-env.sh`, which printed 3.8.7's version and then said
+  the environment looked ready. The two distributions do not agree on the plugins that write shipped
+  bytes. A `requireMavenVersion` rule now refuses anything older than the wrapper's version, with
+  the reason beside it; the devcontainer installs no second Maven; every framework-build instruction
+  names `./mvnw`; and `scripts/bootstrap-maven-wrapper.sh`, which regenerated the wrapper properties
+  by running the Maven it was replacing, is deleted. An application developer's own commands are
+  untouched — theirs is a different build.
+
 - **Every plugin that writes into the build has a version this repository chose.** Two plugin
   declarations in `tesseraql-yaml` carried no version and were managed nowhere, so their version
   came from whichever Maven ran — 3.7.0 and 3.4.0 under the wrapper's 3.9.16, 2.8 and 2.6 under the

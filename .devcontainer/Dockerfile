@@ -17,7 +17,6 @@ RUN rm -f /etc/apt/sources.list.d/yarn.list \
     curl \
     git \
     jq \
-    maven \
     ripgrep \
     unzip \
     zip \

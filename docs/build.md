@@ -1,7 +1,7 @@
 # Build
 
 ```bash
-mvn -B -ntp verify
+./mvnw -B -ntp verify
 ```
 
 TesseraQL 1.x build policy:

@@ -5,7 +5,7 @@
 Use the Dev Container.
 
 ```bash
-mvn -B -ntp verify
+./mvnw -B -ntp verify
 ```
 
 ## Java

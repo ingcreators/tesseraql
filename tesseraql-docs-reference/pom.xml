@@ -15,7 +15,7 @@
   <description>Generates the committed reference pages under docs/ (the YAML-surface
     reference from the JSON schema, the error-code index from a source scan) and
     drift-guards them in the build (docs/docs-site.md). Never published; refresh with
-    `mvn -q -pl tesseraql-docs-reference exec:java`.</description>
+    `./mvnw -q -pl tesseraql-docs-reference exec:java`.</description>
 
   <properties>
     <!-- A build tool, not a library: nothing to deploy (and nothing to publish to
@@ -60,7 +60,7 @@
         <version>3.5.0</version>
         <!-- Deliberately not bound to a phase: the pages are committed, and the drift
              test is what runs on every build. This configuration serves the manual
-             refresh: mvn -q -pl tesseraql-docs-reference exec:java -->
+             refresh: ./mvnw -q -pl tesseraql-docs-reference exec:java -->
         <configuration>
           <mainClass>io.tesseraql.docs.ReferenceGenerator</mainClass>
           <arguments>

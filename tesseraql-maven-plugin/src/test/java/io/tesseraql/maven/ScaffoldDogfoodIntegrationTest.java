@@ -39,7 +39,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  * cleanly and pass its own declarative suites with full branch coverage of the generated SQL.
  *
  * <p>When the generators change intentionally, regenerate the gallery with
- * {@code mvn -pl tesseraql-maven-plugin test -Dtest=ScaffoldDogfoodIntegrationTest
+ * {@code ./mvnw -pl tesseraql-maven-plugin test -Dtest=ScaffoldDogfoodIntegrationTest
  * -Dtesseraql.scaffold.regenerate=true} and commit the diff.
  */
 @Testcontainers
