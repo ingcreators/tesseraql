@@ -212,7 +212,17 @@ It does not touch the `demo-image` job's threat model beyond hoisting its four i
 the checkout at `:269` to succeed on the attacker's ref, which requires push access already. It is
 hygiene, and hoisting is how hygiene is written down.
 
-It does not rewrite the release job's recovery path. See [open questions](#open-questions).
+It does not rewrite the release job's recovery path — [decision 8](#8--github-packages-is-deleted-and-f73-goes-with-it) deletes the step instead.
+
+**Correction, found while building slice 2.** The slice list first put the `jpackage.yml`
+`contents: write` fix in slice 2, described as moving the grant onto the tag-gated jobs. That does
+not work: `permissions:` takes no expression, and `jpackage` and `host-image` run on
+`pull_request` as well as on a tag, so a job-level grant is the same grant. The honest fix is a job
+split — the build jobs drop to `contents: read` and upload a CI artifact, and a separate tag-gated
+job with `contents: write` downloads and attaches it. That is a restructure of the attach
+mechanism, so it belongs to slice 8, which rewrites that mechanism anyway. Note the exposure is
+the same class as F76: a fork's `GITHUB_TOKEN` is read-only whatever the block says, so reaching
+this needs push access already.
 
 ### 8 — GitHub Packages is deleted, and F73 goes with it
 
@@ -264,13 +274,13 @@ first instruction is a barrier that has not been necessary for eight releases.
 | # | Slice | Closes | Size |
 | --- | --- | --- | --- |
 | 1 | This design document, plus `docs-site/nav.mjs` `EXCLUDED` and `ErrorIndex.INTERNAL_DOCS` | — | S |
-| 2 | `WorkflowLedgerTest` with assertions 1 and 3; the two SHA pins; the four `env:` hoists; `contents: write` moved off `jpackage.yml`'s workflow level onto its tag-gated jobs | F71, F76, unfiled | M |
+| 2 | `WorkflowLedgerTest` with assertions 1 and 3; the two SHA pins; the four `env:` hoists | F71, F76 | M |
 | 3 | Assertion 2; `timeout-minutes` on 13 jobs; `concurrency` on the three push-triggered workflows | F77 | M |
 | 4 | `jdk.jfr` in both lists; the system-module ledger; the `*/pom.xml` trigger path | F70, F75 | M |
 | 5 | The plugin-resolution ledger; `maven-help`, `maven-dependency`, `maven-resources` pinned; the `outputTimestamp` row | F78 (part) | S |
 | 6 | `requireMavenVersion`; the `mvn` → `./mvnw` sweep; `.devcontainer` and `scripts/` de-duplicated | F78 (part) | L |
 | 7 | `distributionSha256Sum`, after slice 6 removes the script that regenerates the file without it | F72 | S |
-| 8 | The two attach scripts, the loop ledger, the raised budget | F69 | M |
+| 8 | The two attach scripts, the loop ledger, the raised budget, and the attach job split that lets the build jobs drop to `contents: read` | F69, unfiled | M |
 | 9 | The GitHub Packages deploy, `<distributionManagement>` and the `read:packages` onboarding step are deleted | F73 (dissolved) | M |
 
 Slice 1 must carry the document *and* both registration lists in one pull request.
