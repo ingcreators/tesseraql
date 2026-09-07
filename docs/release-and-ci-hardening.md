@@ -349,6 +349,21 @@ gpg --verify m.zip.asc m.zip                                        # must say "
 sha256sum m.zip                                                     # the value, from signed bytes
 ```
 
+**The checksum is only valid for the archive format the machine picks, and that depends on
+`unzip`.** `mvnw:178-182` rewrites the URL from `.zip` to `.tar.gz` when `unzip` is not on the PATH,
+and `mvnw:252-257` chooses its extraction command by the same test. So a single
+`distributionSha256Sum` can only ever match one of the two files, and the mismatch is reported as
+"your Maven distribution might be compromised" — an alarming message for a benign cause. Pointing
+the URL at the `.tar.gz` instead does not help: it breaks every machine that *does* have `unzip`,
+which would then try to unzip a tarball. Ensuring the tool is the only stable answer, and
+`mvnw.cmd` needs nothing — it always uses `Expand-Archive` on the `.zip`.
+
+This cost a red build. The checksum was rehearsed in both directions on a machine that has `unzip`;
+the two `maven:` base images that run `./mvnw` in `deploy/Dockerfile` and `deploy/Dockerfile.demo`
+ship `tar` and not `unzip`, so `ci.yml`'s Deployment image job failed 0.459s into its build. Both
+Dockerfiles now install it, `PluginVersionLedgerTest` refuses a Dockerfile that runs the wrapper
+without it, and the fix was proved by building the real image rather than by reasoning about it.
+
 The signature is the provenance, not the `.sha512` beside the zip: that file is served by the same
 host as the zip, so it proves integrity of the download and nothing about who produced it. At
 3.9.16 the signature verified as "Good signature from Slawomir Jaranowski <sjaranowski@apache.org>",
