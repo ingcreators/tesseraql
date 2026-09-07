@@ -63,6 +63,16 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A pull request no longer runs under a token that can write to the repository.** The jpackage
+  workflow granted `contents: write` at its top level and triggers on `pull_request`, so every
+  same-repo pull request ran `./mvnw` — arbitrary branch code — holding a write token. Narrowing it
+  per job was not possible: `permissions:` takes no expression and the image jobs run on both
+  events. So the image jobs now drop to `contents: read` and hand their archive to a tag-gated
+  `attach` job, which is the only job in the workflow that can write. `WorkflowLedgerTest` refuses
+  a workflow-wide write grant on any workflow a pull request can trigger. A fork's token was always
+  read-only whatever the block said, so this is defence-in-depth against a compromised account with
+  push access rather than a hole anyone could walk through.
+
 - **The release choreography's polling lives in two scripts that can be run.** Three copies of the
   same twenty-minute loop were written inline in the workflows, waiting on two different things: the
   two in the jpackage workflow waited for the release the release workflow creates, and the one in

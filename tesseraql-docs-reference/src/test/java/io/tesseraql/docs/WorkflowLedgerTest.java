@@ -238,6 +238,77 @@ class WorkflowLedgerTest {
         return body.toString();
     }
 
+    /**
+     * A workflow a pull request can trigger grants no write permission at its top level.
+     *
+     * <p>{@code jpackage.yml} granted {@code contents: write} for the whole workflow and triggers
+     * on {@code pull_request}, so every same-repo pull request ran {@code ./mvnw} — arbitrary
+     * branch code — holding a token that could write to the repository.
+     *
+     * <p>The top level is the only place this can be asserted. {@code permissions:} takes no
+     * expression, and the image jobs run on both events, so a job-level grant is the same grant;
+     * the fix is a separate tag-gated job that does the writing, which is what the workflow now
+     * has. A job-level {@code write} is therefore still allowed here, and is where a reviewer
+     * should look.
+     *
+     * <p>A fork's {@code GITHUB_TOKEN} is read-only whatever the block says, so this is
+     * defence-in-depth against a compromised account with push access rather than a hole anyone
+     * can walk through.
+     */
+    @Test
+    void aPullRequestNeverRunsUnderAWorkflowWideWriteGrant() throws IOException {
+        List<String> granted = new ArrayList<>();
+        for (Path workflow : workflows()) {
+            List<String> lines = Files.readAllLines(workflow);
+            if (!triggersOnPullRequest(lines)) {
+                continue;
+            }
+            boolean inPermissions = false;
+            for (int line = 0; line < lines.size(); line++) {
+                String text = lines.get(line);
+                if (text.startsWith("permissions:")) {
+                    inPermissions = true;
+                    continue;
+                }
+                if (inPermissions) {
+                    if (!text.startsWith(" ") || text.isBlank()) {
+                        break;
+                    }
+                    if (text.strip().endsWith(": write")) {
+                        granted.add(name(workflow) + ":" + (line + 1) + " " + text.strip());
+                    }
+                }
+            }
+        }
+
+        assertThat(granted)
+                .as("workflow-wide write grants on a workflow a pull request can trigger; move the "
+                        + "writing into its own tag-gated job with its own permissions block, "
+                        + "because permissions: takes no expression and a job that runs on both "
+                        + "events cannot be narrowed any other way")
+                .isEmpty();
+    }
+
+    /** Whether the workflow's {@code on:} block names {@code pull_request}. */
+    private static boolean triggersOnPullRequest(List<String> lines) {
+        boolean inOn = false;
+        for (String text : lines) {
+            if (text.startsWith("on:")) {
+                inOn = true;
+                continue;
+            }
+            if (inOn) {
+                if (!text.startsWith(" ") && !text.isBlank()) {
+                    return false;
+                }
+                if (text.strip().startsWith("pull_request")) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     /** One job block: its id, the line it opens on, and whether it declares its own timeout. */
     private record Job(String id, int line, boolean bounded) {
     }

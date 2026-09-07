@@ -328,7 +328,7 @@ first instruction is a barrier that has not been necessary for eight releases.
 | 6b | The scaffolded app's own welcome page names the wrapper it ships | — | S, Docker |
 | 7 | `distributionSha256Sum`, derived from the signed distribution, after slice 6 removes the script that regenerated the file without it | F72 | S |
 | 8 | The two attach scripts, the loop ledger, the raised budget | F69 | M |
-| 8b | The attach job split that lets the build jobs drop to `contents: read` | unfiled | M, needs a decision |
+| 8b | The attach job split that lets the build jobs drop to `contents: read` | unfiled | M |
 | 9 | The GitHub Packages deploy, `<distributionManagement>` and the `read:packages` onboarding step are deleted | F73 (dissolved) | M |
 
 Slice 1 must carry the document *and* both registration lists in one pull request.
@@ -441,16 +441,16 @@ a generated artefact carried in the gallery at
 `examples/scaffold-demo-app/.mvn/wrapper/maven-wrapper.properties`, so fixing it regenerates the
 gallery and needs Docker. It belongs with slice 6b, which already pays that cost.
 
-**4 — Should the attach job be split out so the build jobs can drop to `contents: read`?**
-`jpackage.yml` grants `contents: write` at workflow level and triggers on `pull_request`, so every
-same-repo pull request runs `./mvnw` holding a write token. `permissions:` takes no expression and
-both jobs run on both events, so the only real fix is a restructure: the build jobs upload a CI
-artifact and drop to `contents: read`, and a new tag-gated job with `contents: write` downloads and
-attaches. The upload half is exercised by every pull request; **the download-and-attach half is
-not**, so this trades a hygiene improvement for new logic on the one path that cannot be rehearsed —
-and the exposure needs push access already, since a fork's token is read-only whatever the block
-says. Split out as slice 8b rather than folded into slice 8, because that trade is the maintainer's
-to make.
+**4 — Answered 2026-09-07: yes, split it.** `jpackage.yml` granted `contents: write` for the whole
+workflow and triggers on `pull_request`, so every same-repo pull request ran `./mvnw` — arbitrary
+branch code — holding a token that could write to the repository. `permissions:` takes no
+expression and both image jobs run on both events, so a job-level grant is the same grant; the only
+real fix is the restructure. Slice 8b does it: the image jobs drop to `contents: read` and hand
+their archive over as a CI artifact, and a tag-gated `attach` job with `contents: write` collects
+and attaches. The handover is exercised by every pull request; the collect-and-attach half is only
+ever reached by a tag, which is the cost the maintainer accepted. `always()` on that job is
+deliberate — a plain `needs` would let a Windows failure keep the Linux and macOS images off the
+release, which the per-job attach it replaces could not do.
 
 **3 — Should a `jdeps` step guard the dependency half?** The ledger sees only first-party
 bytecode. A third-party jar's need is invisible to it, and netty's reference to
