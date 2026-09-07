@@ -309,4 +309,6 @@ export const EXCLUDED = [
   'base-path-emission.md',
   // Salted map iteration reaching generated, persisted and signed output, designed 2026-09-06.
   'deterministic-output.md',
+  // The unrehearsable tag path and the workflows nothing tests, designed 2026-09-07.
+  'release-and-ci-hardening.md',
 ];
