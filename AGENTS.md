@@ -25,7 +25,7 @@ TesseraQL is a SQL-first hypermedia and integration framework that compiles simp
 5. SQL examples should remain executable in normal SQL tools by using TesseraQL 2-way SQL comments and dummy values.
 6. Never commit secrets, tokens, local `.env` files, agent auth files, or real credentials.
 7. Prefer small, reviewable commits and include tests for behavior changes.
-8. Run `mvn -B -ntp verify` before proposing a final change when feasible.
+8. Run `./mvnw -B -ntp verify` before proposing a final change when feasible.
 9. Land changes through pull requests with CI green; never push directly to `main`.
 10. Until v1.0.0, backward compatibility is not a goal. Prefer the cleanest design over
     compatibility shims, aliases, or deprecation layers; delete replaced code outright and
@@ -43,8 +43,8 @@ TesseraQL is a SQL-first hypermedia and integration framework that compiles simp
 ## Suggested workflow
 
 ```bash
-mvn -B -ntp verify
-mvn -B -ntp -pl tesseraql-core -am test
+./mvnw -B -ntp verify
+./mvnw -B -ntp -pl tesseraql-core -am test
 ```
 
 When piping Maven output (e.g. through `tail`), the pipeline's exit code is the last

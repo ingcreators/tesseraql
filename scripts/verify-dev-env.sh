@@ -7,8 +7,8 @@ bash "${SCRIPT_DIR}/ensure-devcontainer-volumes.sh"
 echo "== Java =="
 java -version
 
-echo "== Maven =="
-mvn -version
+echo "== Maven (the wrapper; the build refuses any other) =="
+"$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/mvnw" -version
 
 echo "== Git =="
 git --version

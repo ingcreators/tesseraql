@@ -318,7 +318,8 @@ first instruction is a barrier that has not been necessary for eight releases.
 | 3 | Assertion 2; `timeout-minutes` on 13 jobs, each bound measured; `concurrency` on all five workflows; the two `### Fixed` headings merged | F77 | M |
 | 4 | `jdk.jfr` in both lists; the bytecode module ledger in `tesseraql-maven-plugin`; the `*/pom.xml` trigger path | F70, F75 | L |
 | 5 | The plugin-resolution ledger; `maven-help`, `maven-dependency`, `maven-resources` pinned; the `outputTimestamp` row | F78 (part) | M |
-| 6 | `requireMavenVersion`; the `mvn` → `./mvnw` sweep; `.devcontainer` and `scripts/` de-duplicated | F78 (part) | L |
+| 6 | `requireMavenVersion`; the `mvn` → `./mvnw` sweep; `.devcontainer` and `scripts/` de-duplicated; the four reference banners regenerated | F78 (part) | L |
+| 6b | The scaffolded app's own welcome page names the wrapper it ships | — | S, Docker |
 | 7 | `distributionSha256Sum`, after slice 6 removes the script that regenerates the file without it | F72 | S |
 | 8 | The two attach scripts, the loop ledger, the raised budget, and the attach job split that lets the build jobs drop to `contents: read` | F69, unfiled | M |
 | 9 | The GitHub Packages deploy, `<distributionManagement>` and the `read:packages` onboarding step are deleted | F73 (dissolved) | M |
@@ -379,6 +380,14 @@ than cancels. `cancel-in-progress` is `${{ github.event_name == 'pull_request' }
 been answered by the push that superseded it, while a cancelled tag run leaves a published release
 with missing assets. No assertion is added for `concurrency` — it is a policy, and a ledger that
 freezes a policy is a ledger that argues with the next maintainer rather than catching a defect.
+
+**Found while building slice 6: `tesseraql new` ships a wrapper and then tells you not to use
+it.** `AppScaffolder.java:416` writes `mvn tesseraql:test -Dtesseraql.appHome=.` into the generated
+welcome page, while the same scaffolder writes `mvnw` and `mvnw.cmd` beside it — visible in the
+gallery at `examples/scaffold-demo-app/web/index.html:14`. It is the same defect one audience over,
+but it edits a generated artefact, so it regenerates the gallery under
+`-Dtesseraql.scaffold.regenerate=true` and needs Docker. Split out as slice 6b rather than folded in,
+so this slice's diff stays reviewable and its gate stays Docker-free.
 
 **3 — Should a `jdeps` step guard the dependency half?** The ledger sees only first-party
 bytecode. A third-party jar's need is invisible to it, and netty's reference to

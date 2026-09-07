@@ -17,7 +17,7 @@ class GeneratedReferenceTest {
 
     private static final Path REPO = Path.of("..");
     private static final String REFRESH = "the committed page drifted from its sources - refresh with:"
-            + " mvn -q -pl tesseraql-docs-reference exec:java";
+            + " ./mvnw -q -pl tesseraql-docs-reference exec:java";
 
     @Test
     void committedYamlSurfaceMatchesGenerated() throws IOException {

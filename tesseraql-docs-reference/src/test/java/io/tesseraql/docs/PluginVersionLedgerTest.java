@@ -80,6 +80,49 @@ class PluginVersionLedgerTest {
                 .isEmpty();
     }
 
+    /**
+     * The repository's own scripts run the wrapper, and the devcontainer ships no second Maven.
+     *
+     * <p>The root {@code requireMavenVersion} rule is the real guard — it fails a build run by
+     * 3.8.7 with {@code Detected Maven Version: 3.8.7 is not in the allowed range [3.9.16,)}, which
+     * was rehearsed rather than assumed. These two assertions cover the places that produced the
+     * damage rather than the rule: {@code scripts/run-ci-local.sh}, whose whole purpose is to
+     * reproduce CI, invoked the Maven CI never uses, and {@code scripts/verify-dev-env.sh} printed
+     * 3.8.7's version and then said the environment looked ready.
+     *
+     * <p>Deliberately narrow. It reads {@code scripts/} and the devcontainer image, not prose: the
+     * CHANGELOG records past commands verbatim and must keep saying what was true then, and an
+     * application developer's own build is theirs to invoke.
+     */
+    @Test
+    void theRepositorysOwnBuildEntryPointsUseTheWrapper() throws IOException {
+        List<String> bare = new ArrayList<>();
+        try (Stream<Path> scripts = Files.list(REPO.resolve("scripts"))) {
+            for (Path script : scripts.filter(Files::isRegularFile).sorted().toList()) {
+                List<String> lines = Files.readAllLines(script);
+                for (int line = 0; line < lines.size(); line++) {
+                    String text = lines.get(line).strip();
+                    if (text.startsWith("#")) {
+                        continue;
+                    }
+                    if (text.matches(".*(^|[^./\\w-])mvn\\s.*")) {
+                        bare.add("scripts/" + script.getFileName() + ":" + (line + 1) + " " + text);
+                    }
+                }
+            }
+        }
+        assertThat(bare)
+                .as("scripts invoking a Maven off the PATH rather than ./mvnw; the wrapper pins "
+                        + "3.9.16 and the build now refuses anything older")
+                .isEmpty();
+
+        String dockerfile = Files.readString(REPO.resolve(".devcontainer/Dockerfile"));
+        assertThat(dockerfile.lines().map(String::strip).toList())
+                .as("the devcontainer must not install a second Maven; the wrapper is the one the "
+                        + "build uses, and an apt maven on the PATH is how the wrong one gets run")
+                .doesNotContain("maven \\", "maven");
+    }
+
     /** The reproducibility property #1215 shipped, which nothing else fails without. */
     @Test
     void theBuildStampsAReproducibleOutputTimestamp() throws Exception {

@@ -653,6 +653,16 @@
                 <requireJavaVersion>
                   <version>[25,)</version>
                 </requireJavaVersion>
+                <!--
+                  One Maven. The wrapper pins 3.9.16 and the plugin versions this build depends on
+                  come from that distribution: 3.8.7 binds maven-resources 2.6 and maven-dependency
+                  2.8, which are the two that copy the shipped email templates into the jar. A
+                  build run by the wrong Maven now says so instead of quietly producing different
+                  bytes.
+                -->
+                <requireMavenVersion>
+                  <version>[3.9.16,)</version>
+                </requireMavenVersion>
               </rules>
             </configuration>
           </execution>
@@ -821,7 +831,7 @@
       </build>
     </profile>
 
-    <!-- Coverage visibility, opt-in: `mvn verify -Pcoverage` writes each module's report to
+    <!-- Coverage visibility, opt-in: `./mvnw verify -Pcoverage` writes each module's report to
          target/site/jacoco. Report-only by design - no thresholds, no gate - because the number
          this exists to surface is placement (which module's logic is pinned from where), not a
          percentage to chase. The default build stays agent-free. -->

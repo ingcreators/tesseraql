@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-mvn -B -ntp verify
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+./mvnw -B -ntp verify
