@@ -1,8 +1,26 @@
 # Release and CI hardening
 
-> **Status: design.** This document opens the campaign the 2026-09-04 whole-repo audit filed as
-> F69, F70, F71, F72, F73, F75, F76, F77 and F78, and it replaces the remediation plan's twelve-slice
-> version of them.
+> **Status: complete.** Design plus nine slices, shipped 2026-09-07 as #1220-#1229, closing the
+> 2026-09-04 whole-repo audit's F69, F70, F71, F72, F73, F75, F76, F77 and F78. It replaced the
+> remediation plan's twelve-slice version of them.
+>
+> | # | PR | What |
+> | --- | --- | --- |
+> | 1 | #1220 | This document |
+> | 2 | #1221 | `WorkflowLedgerTest`, the two SHA pins, the four `env:` hoists |
+> | 3 | #1222 | `timeout-minutes` on 13 jobs, `concurrency` on all five workflows |
+> | 4 | #1223 | `jdk.jfr`, the bytecode module ledger, the `*/pom.xml` trigger |
+> | 5 | #1224 | The plugin-resolution ledger and three pins |
+> | 6 | #1225 | One Maven, declared and enforced |
+> | 7 | #1226 | `distributionSha256Sum`, and the `unzip` the wrapper needs to honour it |
+> | 8 | #1227 | The attach choreography as two rehearsable scripts |
+> | 8b | #1228 | Only the tag-gated job can write to the repository |
+> | 9 | #1229 | One publish target: Maven Central |
+>
+> **Four things in this document were wrong and were corrected while building it** — the ledger
+> count, the job count, the plugin guard's predicate, and the attach budget's arithmetic ("40
+> attempts" is a cut, not a rise). Two rehearsals proved nothing on their first attempt and had to
+> be redone. Every correction is recorded where it belongs, not only here.
 >
 > **The plan was re-measured against `8c83854bc` on 2026-09-07** — after the deterministic-output
 > campaign (#1212-#1219) moved the root POM underneath it. Nine of the plan's claims did not
