@@ -63,6 +63,18 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A generated application stops contradicting the framework that generated it.** `tesseraql new`
+  ships `mvnw` and `mvnw.cmd` and then told its author to run `mvn`; it pinned Maven 3.9.9 with no
+  `distributionSha256Sum` while the framework moved to 3.9.16 with one, so every new application
+  downloaded and executed an unverified distribution; and its README routed the author through a
+  GitHub Packages `read:packages` token, linking to the very documentation section that stopped
+  saying so one release earlier. All three are corrected at the scaffolder and regenerated into the
+  gallery. Two new guards assert against the scaffolder's own output rather than the committed copy,
+  so they fail at the source and need no container: no generated file names a Maven off the PATH,
+  and none asks for credentials the framework does not need. A third asserts the scaffolded wrapper
+  fetches the same verified distribution the framework does — keyed to equality rather than to a
+  literal version, so it goes red on the wrapper bump that opens the gap rather than a release later.
+
 - **A stream that ends when the runtime stops no longer prints from a dead process.**
   `Context.runOnContext` throws once Vert.x has closed, and `SseRoutes` called it from inside three
   catch blocks, where nothing catches anything — so the throw escaped the producer's virtual thread

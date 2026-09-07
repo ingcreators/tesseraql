@@ -7,6 +7,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.stream.Stream;
@@ -179,6 +180,59 @@ class PluginVersionLedgerTest {
         }
         assertThat(found).as("no Dockerfiles found; this guard would pass vacuously").isNotEmpty();
         return found;
+    }
+
+    /**
+     * A scaffolded application fetches the same Maven this repository does, checked the same way.
+     *
+     * <p>The scaffolder ships its own wrapper properties, and it drifted: it pinned 3.9.9 while the
+     * framework moved to 3.9.16, and it declared no {@code distributionSha256Sum} at all — so every
+     * application {@code tesseraql new} creates downloaded and executed a distribution nobody
+     * checked, using a Maven the framework does not test against.
+     *
+     * <p><b>Equality with the framework's file, not a literal version.</b> A literal only catches
+     * today's drift. Equality goes red on the very commit that opens the gap — a Dependabot bump of
+     * {@code .mvn/wrapper/} alone, which is exactly the shape that opened this one. The cost is
+     * stated so nobody is surprised by it: such a bump now turns this red until the scaffold
+     * resource is updated and the gallery regenerated, and that regeneration needs Docker.
+     *
+     * <p>Both paths are named literally rather than found by walking. After any build there is a
+     * third copy of this file under {@code tesseraql-yaml/target/classes/scaffold/}, and a walk
+     * would have to know to skip it.
+     */
+    @Test
+    void aScaffoldedApplicationFetchesTheSameVerifiedMaven() throws IOException {
+        Map<String, String> framework = properties(
+                REPO.resolve(".mvn/wrapper/maven-wrapper.properties"));
+        Map<String, String> scaffold = properties(REPO.resolve(
+                "tesseraql-yaml/src/main/resources/scaffold/maven-wrapper.properties"));
+
+        assertThat(framework.get("distributionUrl"))
+                .as("the framework's wrapper properties could not be read; this guard would "
+                        + "compare two blanks and pass")
+                .isNotBlank();
+        assertThat(framework.get("distributionSha256Sum")).isNotBlank();
+
+        assertThat(scaffold.get("distributionUrl"))
+                .as("a scaffolded application would fetch a different Maven from the one this "
+                        + "repository builds and tests with")
+                .isEqualTo(framework.get("distributionUrl"));
+        assertThat(scaffold.get("distributionSha256Sum"))
+                .as("a scaffolded application would execute its Maven distribution unverified; "
+                        + "derive the digest from the signed distribution, never by copying")
+                .isEqualTo(framework.get("distributionSha256Sum"));
+    }
+
+    /** A properties file as key/value pairs, comments and blanks dropped. */
+    private static Map<String, String> properties(Path file) throws IOException {
+        Map<String, String> values = new java.util.LinkedHashMap<>();
+        for (String line : Files.readAllLines(file)) {
+            int equals = line.indexOf('=');
+            if (equals > 0 && !line.strip().startsWith("#")) {
+                values.put(line.substring(0, equals).strip(), line.substring(equals + 1).strip());
+            }
+        }
+        return values;
     }
 
     /** The reproducibility property #1215 shipped, which nothing else fails without. */

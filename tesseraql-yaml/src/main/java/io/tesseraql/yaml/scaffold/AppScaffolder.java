@@ -413,7 +413,7 @@ public final class AppScaffolder {
                 <ul>
                   <li>Run it: <code>tesseraql dev</code> (from this directory; the stack is found one level up)</li>
                   <li>Scaffold a UI for the starter table: <code>tesseraql scaffold crud --app . --table items</code></li>
-                  <li>Run the declarative suites: <code>mvn tesseraql:test -Dtesseraql.appHome=.</code></li>
+                  <li>Run the declarative suites: <code>./mvnw tesseraql:test</code> (see the README for the database it needs)</li>
                 </ul>
               </div>
             </section>
@@ -637,10 +637,9 @@ public final class AppScaffolder {
 
             ## Maven path (CI / lifecycle)
 
-            The framework artifacts resolve from GitHub Packages, which requires
-            authentication even for public reads: add the repository profile and a token
-            with `read:packages` to your `~/.m2/settings.xml` first — the snippet is in
-            [getting started](https://github.com/ingcreators/tesseraql/blob/main/docs/getting-started.md#the-maven--ci-path).
+            The framework artifacts are on Maven Central, so there is nothing to configure:
+            this project's `pom.xml` declares no repository because it needs none, and neither
+            does your CI.
 
             ```sh
             ./mvnw verify                    # lint + governance gate (no database)
