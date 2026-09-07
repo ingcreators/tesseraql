@@ -10,6 +10,13 @@
 FROM maven:3.9-eclipse-temurin-25 AS build
 WORKDIR /build
 COPY . .
+# The wrapper chooses its archive format by whether unzip is on PATH (mvnw:178-182): without
+# it, it silently fetches the .tar.gz instead of the .zip, which has a different SHA-256 than the
+# one .mvn/wrapper/maven-wrapper.properties pins - and the failure reads "your Maven distribution
+# might be compromised". This base image ships tar but not unzip.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends unzip \
+    && rm -rf /var/lib/apt/lists/*
 # install (not package): the second invocation resolves the reactor's own modules from the
 # container-local repository, and package alone leaves them unresolvable, so
 # copy-dependencies fails on the io.tesseraql:* coordinates. Dockerfile.demo learned this

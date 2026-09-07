@@ -123,6 +123,64 @@ class PluginVersionLedgerTest {
                 .doesNotContain("maven \\", "maven");
     }
 
+    /**
+     * Anywhere the wrapper runs on a POSIX shell, {@code unzip} is on the PATH.
+     *
+     * <p>This is not a preference. {@code mvnw:178-182} chooses the distribution's archive format
+     * by whether {@code unzip} exists: without it, it rewrites the URL from {@code .zip} to
+     * {@code .tar.gz} and downloads a <b>different file</b>. Since
+     * {@code distributionSha256Sum} is a single value, it can only ever match one of the two, and
+     * the mismatch is reported as "your Maven distribution might be compromised" — an alarming
+     * message for a benign cause.
+     *
+     * <p>It cost a red build to find. The checksum was rehearsed in both directions on a machine
+     * that has {@code unzip}, and the two {@code maven:} base images that run {@code ./mvnw} do
+     * not — they ship {@code tar} only. The extraction branch at {@code mvnw:252-257} keys on the
+     * same test, so pointing the URL at the {@code .tar.gz} instead would break every machine that
+     * <em>does</em> have {@code unzip}. Ensuring the tool is the only stable answer.
+     *
+     * <p>{@code mvnw.cmd} always uses {@code Expand-Archive} on the {@code .zip} and has no such
+     * branch, so the pinned checksum is the zip's.
+     */
+    @Test
+    void everyDockerfileThatRunsTheWrapperInstallsUnzip() throws IOException {
+        List<String> missing = new ArrayList<>();
+        for (Path dockerfile : dockerfiles()) {
+            String text = Files.readString(dockerfile);
+            if (!text.contains("./mvnw")) {
+                continue;
+            }
+            if (!text.contains("unzip")) {
+                missing.add(REPO.relativize(dockerfile).toString().replace('\\', '/'));
+            }
+        }
+
+        assertThat(missing)
+                .as("Dockerfiles that run ./mvnw without unzip on the PATH; the wrapper then "
+                        + "fetches the .tar.gz distribution instead of the .zip and fails the "
+                        + "checksum with a compromise warning (mvnw:178-182)")
+                .isEmpty();
+    }
+
+    /** Every tracked Dockerfile: the devcontainer's and the deployment images'. */
+    private static List<Path> dockerfiles() throws IOException {
+        List<Path> found = new ArrayList<>();
+        for (String directory : List.of(".devcontainer", "deploy")) {
+            Path dir = REPO.resolve(directory);
+            if (!Files.isDirectory(dir)) {
+                continue;
+            }
+            try (Stream<Path> files = Files.list(dir)) {
+                files.filter(Files::isRegularFile)
+                        .filter(path -> path.getFileName().toString().startsWith("Dockerfile"))
+                        .sorted()
+                        .forEach(found::add);
+            }
+        }
+        assertThat(found).as("no Dockerfiles found; this guard would pass vacuously").isNotEmpty();
+        return found;
+    }
+
     /** The reproducibility property #1215 shipped, which nothing else fails without. */
     @Test
     void theBuildStampsAReproducibleOutputTimestamp() throws Exception {

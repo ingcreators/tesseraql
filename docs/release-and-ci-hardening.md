@@ -320,7 +320,7 @@ first instruction is a barrier that has not been necessary for eight releases.
 | 5 | The plugin-resolution ledger; `maven-help`, `maven-dependency`, `maven-resources` pinned; the `outputTimestamp` row | F78 (part) | M |
 | 6 | `requireMavenVersion`; the `mvn` → `./mvnw` sweep; `.devcontainer` and `scripts/` de-duplicated; the four reference banners regenerated | F78 (part) | L |
 | 6b | The scaffolded app's own welcome page names the wrapper it ships | — | S, Docker |
-| 7 | `distributionSha256Sum`, after slice 6 removes the script that regenerates the file without it | F72 | S |
+| 7 | `distributionSha256Sum`, derived from the signed distribution, after slice 6 removes the script that regenerated the file without it | F72 | S |
 | 8 | The two attach scripts, the loop ledger, the raised budget, and the attach job split that lets the build jobs drop to `contents: read` | F69, unfiled | M |
 | 9 | The GitHub Packages deploy, `<distributionManagement>` and the `read:packages` onboarding step are deleted | F73 (dissolved) | M |
 
@@ -335,6 +335,43 @@ properties file and cannot emit the checksum. Each branches from a fresh `origin
 
 Slice 3 also merges the two `### Fixed` headings under `## Unreleased` in `CHANGELOG.md` (`:64` and
 `:674`). Three separate measurements have now reported them and no campaign has owned them.
+
+### How the checksum is derived, and how to renew it
+
+Never paste the value. `wrapper:wrapper` has no parameter for it, so a Dependabot bump of the
+distribution leaves it stale — loudly, but somebody has to know the recipe:
+
+```sh
+URL=$(grep '^distributionUrl=' .mvn/wrapper/maven-wrapper.properties | cut -d= -f2-)
+curl -fsSL -o m.zip "$URL" && curl -fsSL -o m.zip.asc "$URL.asc"
+curl -fsSL https://downloads.apache.org/maven/KEYS | gpg --import   # the ASF's own host
+gpg --verify m.zip.asc m.zip                                        # must say "Good signature"
+sha256sum m.zip                                                     # the value, from signed bytes
+```
+
+**The checksum is only valid for the archive format the machine picks, and that depends on
+`unzip`.** `mvnw:178-182` rewrites the URL from `.zip` to `.tar.gz` when `unzip` is not on the PATH,
+and `mvnw:252-257` chooses its extraction command by the same test. So a single
+`distributionSha256Sum` can only ever match one of the two files, and the mismatch is reported as
+"your Maven distribution might be compromised" — an alarming message for a benign cause. Pointing
+the URL at the `.tar.gz` instead does not help: it breaks every machine that *does* have `unzip`,
+which would then try to unzip a tarball. Ensuring the tool is the only stable answer, and
+`mvnw.cmd` needs nothing — it always uses `Expand-Archive` on the `.zip`.
+
+This cost a red build. The checksum was rehearsed in both directions on a machine that has `unzip`;
+the two `maven:` base images that run `./mvnw` in `deploy/Dockerfile` and `deploy/Dockerfile.demo`
+ship `tar` and not `unzip`, so `ci.yml`'s Deployment image job failed 0.459s into its build. Both
+Dockerfiles now install it, `PluginVersionLedgerTest` refuses a Dockerfile that runs the wrapper
+without it, and the fix was proved by building the real image rather than by reasoning about it.
+
+The signature is the provenance, not the `.sha512` beside the zip: that file is served by the same
+host as the zip, so it proves integrity of the download and nothing about who produced it. At
+3.9.16 the signature verified as "Good signature from Slawomir Jaranowski <sjaranowski@apache.org>",
+whose key is in the ASF KEYS file.
+
+Both directions were rehearsed rather than assumed. With the cache cleared and the property present,
+`./mvnw -version` re-downloaded and ran. With a deliberately wrong value it stopped:
+`Failed to validate Maven distribution SHA-256, your Maven distribution might be compromised.`
 
 ## The guards
 
@@ -388,6 +425,14 @@ gallery at `examples/scaffold-demo-app/web/index.html:14`. It is the same defect
 but it edits a generated artefact, so it regenerates the gallery under
 `-Dtesseraql.scaffold.regenerate=true` and needs Docker. Split out as slice 6b rather than folded in,
 so this slice's diff stays reviewable and its gate stays Docker-free.
+
+**Found while building slice 7: the scaffolded wrapper is two minor versions behind and
+unchecksummed.** `tesseraql-yaml/src/main/resources/scaffold/maven-wrapper.properties` pins 3.9.9
+while the framework's own wrapper is on 3.9.16, and it declares no `distributionSha256Sum` — so
+every application `tesseraql new` creates downloads and executes an unverified distribution. It is
+a generated artefact carried in the gallery at
+`examples/scaffold-demo-app/.mvn/wrapper/maven-wrapper.properties`, so fixing it regenerates the
+gallery and needs Docker. It belongs with slice 6b, which already pays that cost.
 
 **3 — Should a `jdeps` step guard the dependency half?** The ledger sees only first-party
 bytecode. A third-party jar's need is invisible to it, and netty's reference to

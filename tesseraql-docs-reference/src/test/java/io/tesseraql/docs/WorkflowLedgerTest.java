@@ -145,6 +145,42 @@ class WorkflowLedgerTest {
                 .isEmpty();
     }
 
+    /**
+     * The Maven distribution the wrapper fetches is verified against a checksum this repo recorded.
+     *
+     * <p>{@code mvnw:226} validates only when {@code distributionSha256Sum} is present, so its
+     * absence is silent: every cold run downloads and executes a zip nobody checked.
+     * {@code setup-java} caches the distribution for eight of the ten {@code ./mvnw} sites, but not
+     * for the two Docker builds — {@code ci.yml} and {@code release.yml}, the second on the tag path
+     * — which fetch it fresh every run.
+     *
+     * <p>The value was derived, never pasted: the zip's PGP signature was verified against the ASF
+     * KEYS from {@code downloads.apache.org}, and the SHA-256 taken from those same bytes. Both
+     * directions were rehearsed — a cold download validates, and a wrong value stops the build with
+     * "Failed to validate Maven distribution SHA-256".
+     *
+     * <p>The property has no {@code wrapper:wrapper} parameter, so a Dependabot bump of the
+     * distribution will leave it stale. That fails loudly, which is the point, but the recipe has to
+     * be written down: see docs/release-and-ci-hardening.md.
+     */
+    @Test
+    void theMavenDistributionIsFetchedAgainstAChecksum() throws IOException {
+        Path properties = Path.of("..", ".mvn", "wrapper", "maven-wrapper.properties");
+        List<String> lines = Files.readAllLines(properties);
+        assertThat(lines).as("the wrapper properties could not be read").isNotEmpty();
+
+        String checksum = lines.stream()
+                .filter(line -> line.startsWith("distributionSha256Sum="))
+                .map(line -> line.substring("distributionSha256Sum=".length()).trim())
+                .findFirst().orElse("");
+
+        assertThat(checksum)
+                .as(".mvn/wrapper/maven-wrapper.properties declares no distributionSha256Sum, so "
+                        + "mvnw executes whatever it downloaded; derive it from the signed "
+                        + "distribution rather than copying a value")
+                .matches("[0-9a-f]{64}");
+    }
+
     /** One job block: its id, the line it opens on, and whether it declares its own timeout. */
     private record Job(String id, int line, boolean bounded) {
     }

@@ -63,6 +63,16 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **The Maven distribution is verified before it is executed.** `.mvn/wrapper/maven-wrapper.properties`
+  declared no `distributionSha256Sum`, and `mvnw` validates only when that property is present — so
+  every cold run downloaded and executed a distribution nobody checked. `setup-java` caches it for
+  most `./mvnw` sites, but not for the two Docker builds, one of which is on the tag path. The value
+  was derived rather than copied: the distribution's PGP signature was verified against the ASF KEYS
+  from the Apache download host, and the SHA-256 taken from those same bytes. `WorkflowLedgerTest`
+  now refuses the file without it. The two deployment images install `unzip`, because the wrapper
+  picks its archive format by whether that tool is present and silently fetches a different file —
+  with a different checksum — when it is not.
+
 - **One Maven, and the build says so.** The repository shipped a wrapper pinning 3.9.16 and a
   devcontainer that apt-installed 3.8.7, and every contributor-facing instruction named the second
   one: `AGENTS.md`, `CONTRIBUTING.md`, `docs/build.md`, the pull-request template, and — most
