@@ -12,7 +12,11 @@ on:
       - 'tesseraql-host/**'
       - 'deploy/windows/**'
       - '.github/workflows/jpackage.yml'
+      # Both the root POM and every module's: a dependency bump in one module's POM changes
+      # what the fat jar carries, and so what the image must be linked from. '**/pom.xml'
+      # would not do -- it drops the root, which is the one this filter covered before.
       - 'pom.xml'
+      - '*/pom.xml'
   workflow_dispatch:
   push:
     tags:
@@ -106,7 +110,7 @@ jobs:
             --java-options -XX:+AutoCreateSharedArchive \
             --java-options '-XX:SharedArchiveFile=$APPDIR/app-cds.jsa' \
             --java-options -Xlog:cds=error:stderr \
-            --add-modules java.se,jdk.crypto.ec,jdk.crypto.cryptoki,jdk.localedata,jdk.unsupported,jdk.management,jdk.naming.dns,jdk.zipfs,jdk.httpserver,jdk.net,jdk.security.auth \
+            --add-modules java.se,jdk.crypto.ec,jdk.crypto.cryptoki,jdk.jfr,jdk.localedata,jdk.unsupported,jdk.management,jdk.naming.dns,jdk.zipfs,jdk.httpserver,jdk.net,jdk.security.auth \
             --app-version "$APPVER" \
             "${console[@]}" \
             --dest build/jpackage
@@ -250,7 +254,7 @@ jobs:
             --java-options -XX:+AutoCreateSharedArchive \
             --java-options '-XX:SharedArchiveFile=$APPDIR/app-cds.jsa' \
             --java-options -Xlog:cds=error:stderr \
-            --add-modules java.se,jdk.crypto.ec,jdk.crypto.cryptoki,jdk.localedata,jdk.unsupported,jdk.management,jdk.naming.dns,jdk.zipfs,jdk.httpserver,jdk.net,jdk.security.auth \
+            --add-modules java.se,jdk.crypto.ec,jdk.crypto.cryptoki,jdk.jfr,jdk.localedata,jdk.unsupported,jdk.management,jdk.naming.dns,jdk.zipfs,jdk.httpserver,jdk.net,jdk.security.auth \
             --app-version "$APPVER" \
             --win-console \
             --dest build/jpackage
