@@ -242,8 +242,14 @@ contains a `seq 1 ` polling loop, which is red today on three lines and keeps th
 being written.
 
 Raising the budget is a separate question from de-duplicating it, and the measurement above says the
-margin is variance rather than decay, so the budget rises once — to 40 attempts — and the reason is
-recorded rather than tuned again next tag.
+margin is variance rather than decay, so the budget rises once — to **40 minutes** — and the reason
+is recorded rather than tuned again next tag.
+
+**Correction: this decision first said "40 attempts", which is a cut, not a rise.** Sixty attempts
+at twenty seconds is the twenty-minute budget that exists today; forty attempts is thirteen minutes.
+The reasoning beside it ("doubling … a 21-minute margin") means forty *minutes*, which is 120 polls.
+The scripts take `ATTACH_TIMEOUT_MINUTES` and derive the count, so the number in the workflow now
+means what it says.
 
 ### 7 — What this campaign does not do
 
@@ -321,7 +327,8 @@ first instruction is a barrier that has not been necessary for eight releases.
 | 6 | `requireMavenVersion`; the `mvn` → `./mvnw` sweep; `.devcontainer` and `scripts/` de-duplicated; the four reference banners regenerated | F78 (part) | L |
 | 6b | The scaffolded app's own welcome page names the wrapper it ships | — | S, Docker |
 | 7 | `distributionSha256Sum`, derived from the signed distribution, after slice 6 removes the script that regenerated the file without it | F72 | S |
-| 8 | The two attach scripts, the loop ledger, the raised budget, and the attach job split that lets the build jobs drop to `contents: read` | F69, unfiled | M |
+| 8 | The two attach scripts, the loop ledger, the raised budget | F69 | M |
+| 8b | The attach job split that lets the build jobs drop to `contents: read` | unfiled | M, needs a decision |
 | 9 | The GitHub Packages deploy, `<distributionManagement>` and the `read:packages` onboarding step are deleted | F73 (dissolved) | M |
 
 Slice 1 must carry the document *and* both registration lists in one pull request.
@@ -434,6 +441,17 @@ a generated artefact carried in the gallery at
 `examples/scaffold-demo-app/.mvn/wrapper/maven-wrapper.properties`, so fixing it regenerates the
 gallery and needs Docker. It belongs with slice 6b, which already pays that cost.
 
+**4 — Should the attach job be split out so the build jobs can drop to `contents: read`?**
+`jpackage.yml` grants `contents: write` at workflow level and triggers on `pull_request`, so every
+same-repo pull request runs `./mvnw` holding a write token. `permissions:` takes no expression and
+both jobs run on both events, so the only real fix is a restructure: the build jobs upload a CI
+artifact and drop to `contents: read`, and a new tag-gated job with `contents: write` downloads and
+attaches. The upload half is exercised by every pull request; **the download-and-attach half is
+not**, so this trades a hygiene improvement for new logic on the one path that cannot be rehearsed —
+and the exposure needs push access already, since a fork's token is read-only whatever the block
+says. Split out as slice 8b rather than folded into slice 8, because that trade is the maintainer's
+to make.
+
 **3 — Should a `jdeps` step guard the dependency half?** The ledger sees only first-party
 bytecode. A third-party jar's need is invisible to it, and netty's reference to
 `jdk.jfr.FlightRecorder` shows that is not theoretical. A step running
@@ -441,7 +459,7 @@ bytecode. A third-party jar's need is invisible to it, and netty's reference to
 against the parsed `--add-modules` list would close it. It is real work on the tag path's inputs and
 it is not in this campaign's slice list; it wants its own decision.
 
-**2 — Is 40 attempts the right attach budget?** The measured margins are 4m51s, 1m48s and 8m04s, all
+**2 — Is 40 minutes the right attach budget?** The measured margins are 4m51s, 1m48s and 8m04s, all
 against a 20-minute budget. Doubling the attempts makes the worst observed case a 21-minute margin
 rather than a 1m48s one, at the cost of a jpackage job that hangs for forty minutes when the release
 genuinely never appears. The failure is recoverable either way — a timed-out attach reddens jpackage
