@@ -504,4 +504,58 @@ class SchemaSyncTest {
         assertThat(widgets)
                 .containsExactlyInAnyOrderElementsOf(io.tesseraql.yaml.view.ViewSpec.WIDGETS);
     }
+
+    /**
+     * The {@code sql:} and {@code http:} arms are one shape, declared once.
+     *
+     * <p>Three nodes used to say {@code {type: object, additionalProperties: true}} with no
+     * properties — the "schema that describes nothing" of docs/unified-sources.md decision 15 —
+     * while their descriptions told the reader the arm is "written as a source's {@code sql:} arm
+     * is". The reader was pointed at a shape the file declined to declare, so the editor offered
+     * nothing and the published reference rendered the row as a bare object.
+     *
+     * <p>Exactness, not {@code containsAll}: an arm that offers a key the model drops is the
+     * failure this campaign exists to catch, and coverage alone cannot see it. Five tests in this
+     * class use {@code containsAll} for coverage checks — do not copy the nearest neighbour here.
+     */
+    @Test
+    void theSqlAndHttpArmsAreOneSharedShape() throws Exception {
+        JsonNode defs = new ObjectMapper().readTree(
+                getClass().getResourceAsStream("/schema/tesseraql-defs-v1.schema.json"));
+
+        assertThat(defProperties("/schema/tesseraql-defs-v1.schema.json", "sqlArm"))
+                .as("the shared sql arm declares the SqlArm record's keys, and only those")
+                .containsExactlyInAnyOrderElementsOf(
+                        yamlNames(io.tesseraql.yaml.model.Binding.SqlArm.class));
+        assertThat(defProperties("/schema/tesseraql-defs-v1.schema.json", "httpArm"))
+                .as("the shared http arm declares the keys HttpSourceSpec.of reads, and only"
+                        + " those")
+                .containsExactlyInAnyOrderElementsOf(creatorProperties(
+                        io.tesseraql.yaml.model.HttpSourceSpec.class, "of"));
+
+        // Every site that says "written as a source's arm is" must REACH that shape. Without
+        // this the two definitions above can be perfect while the three nodes that motivated
+        // them stay blind — the guard would be green on its own defect.
+        assertThat(armRef(defs, "/$defs/binding/properties/sql")).isEqualTo("#/$defs/sqlArm");
+        assertThat(armRef(defs, "/$defs/enrichment/properties/sql")).isEqualTo("#/$defs/sqlArm");
+        assertThat(armRef(defs, "/$defs/shared/export/properties/after/properties/sql"))
+                .isEqualTo("#/$defs/sqlArm");
+        assertThat(armRef(defs, "/$defs/binding/properties/http")).isEqualTo("#/$defs/httpArm");
+        assertThat(armRef(defs, "/$defs/enrichment/properties/http")).isEqualTo("#/$defs/httpArm");
+    }
+
+    /**
+     * The {@code $ref} at one JSON Pointer, with the node's own description still present.
+     *
+     * <p>The description is asserted because {@code SchemaReference.renderObject} prefers a
+     * property's own sentence over the target's: a bare {@code $ref} would silently replace three
+     * context-specific sentences on the published page with one generic one.
+     */
+    private static String armRef(JsonNode defs, String pointer) {
+        JsonNode node = defs.at(pointer);
+        assertThat(node.isMissingNode()).as("%s exists", pointer).isFalse();
+        assertThat(node.path("description").asText("")).as("%s keeps its own description", pointer)
+                .isNotBlank();
+        return node.path("$ref").asText("");
+    }
 }

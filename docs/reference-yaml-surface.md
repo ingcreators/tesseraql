@@ -112,49 +112,15 @@ Transactional outbox event recorded with the command and delivered at-least-once
 
 | Property | Type | Description |
 | --- | --- | --- |
-| `sql` | [object](#stepssql) | The SQL arm: a colocated 2-way SQL file and how it is run. The keys of the mechanism nest inside the arm that owns them, so there is nowhere to write a call's `select:` on a statement and no lint has to say it is wrong. |
+| `sql` | [sqlArm](#sqlarm) | The SQL arm: a colocated 2-way SQL file and how it is run. The keys of the mechanism nest inside the arm that owns them, so there is nowhere to write a call's `select:` on a statement and no lint has to say it is wrong. |
 | `contract` | [object](#stepscontract) | The contract arm: a statement the identity schema owns, called by name. It reads or writes like any other statement, so it carries the same `mode`, `params` and `expect`. |
 | `service` | [object](#stepsservice) | The service arm: a runtime provider answering rows from process state. It takes only its arguments — there is no statement to run, so no mode and no row-count expectation. |
-| `http` | [object](#stepshttp) | The http arm: an outbound call whose response becomes this binding's rows, in the vocabulary every outbound call shares. Rides the outbound gateway — allow-listed hosts, named credentials, timeouts, and a per-host circuit breaker. |
+| `http` | [httpArm](#httparm) | The http arm: an outbound call whose response becomes this binding's rows, in the vocabulary every outbound call shares. Rides the outbound gateway — allow-listed hosts, named credentials, timeouts, and a per-host circuit breaker. |
 | `sequence` | string | Allocate the next value of a managed document-number sequence instead of running a statement; it binds as `steps.<id>.value`. It has no body beyond its name, which is why it sits beside the arms rather than being one. Documented in transactional-writes.md. |
 | `spool` | string | A context path resolving to an earlier step's spool reference (`steps.<id>.spool`), read as this binding's rows. A chunk reader declares it instead of `sql:` to load what another step extracted — from another connector, or from an API — because a spool is a spool whoever filled it. Documented in jobs.md. |
 | `when` | string | Guard expression on a step: a falsy guard skips it, recording `steps.<id>.skipped` instead of a result. A guard is about whether the step runs at all, not a question for the mechanism, so it sits beside the arm. The declared branch point for decision.* outputs (docs decision-tables). |
 | `enrich` | map of [enrichment](#enrichment) | Keyed references folded into this binding's rows before anything reads them (docs/lookups.md), keyed by enrichment name and applied in authored order. An enrichment nests under the source it transforms, so any arm's rows can be enriched. Each entry names one reference — sql: (fetch by key), http: (call by key), or source: (a result already in the context, joined without a fetch, named by its context path: a route source by name, a job step as steps.&lt;id&gt;) — plus the on: join and one of as:/merge:. Only a binding that holds rows can carry one: a write publishes affectedRows, and a query-spool extract never held its rows. |
 | `id` \* | string | The step's name: what later steps and the response bind against (`steps.<id>`). |
-
-#### steps.sql
-
-The SQL arm: a colocated 2-way SQL file and how it is run. The keys of the mechanism nest inside the arm that owns them, so there is nowhere to write a call's `select:` on a statement and no lint has to say it is wrong.
-
-| Property | Type | Description |
-| --- | --- | --- |
-| `file` | string | A colocated 2-way SQL file, relative to the declaring document (must exist; TQL-SQL-2103). This arm's acquisition target, the role `url` plays for `http`. |
-| `mode` | string | How the statement runs and what it binds: `query` (rows), `query-one` (a single row), `update` (an affected-row count), `query-spool` (rows streamed to a spool a later chunk: step reads, never held), or `call` (a stored call on a command step, its OUT parameters declared under `out:`). |
-| `params` | map of string | Each bind name to the bindable path supplying its value, such as `path.id`, `params.unit` or `principal.claim.tenant_id`. |
-| `keys` | array of string | Columns whose database-generated values are captured after an insert; they bind as `steps.<id>.keys.<column>`. |
-| `out` | map of string | The OUT parameters of a `mode: call` statement on a command step: each name to its JDBC type keyword (varchar, numeric, integer, bigint, boolean, date, timestamp, double). The statement binds them as `out.<name>` bind sites and the values publish as `steps.<id>.out.<name>`. Documented in transactional-writes.md. |
-| `timeoutSeconds` | integer ≥ 0 | Per-binding SQL statement timeout override; 0 disables. Default: tesseraql.sql.timeoutSeconds, else 30s. |
-| `datasource` | string | The named connector this read runs on, overriding the document's. Legal on a read only: a batch step owns its own transaction so an extract elsewhere splits nothing, while a write on another connector would be a second transaction nothing owns (TQL-YAML-1037). |
-| `materialize` | [object](#stepssqlmaterialize) | Bounds on how much of the result is held in memory. |
-| `expect` | [object](#stepssqlexpect) | The row count this statement must affect, and what happens when it does not — the declarative optimistic-locking check on an update or delete. |
-
-##### steps.sql.materialize
-
-Bounds on how much of the result is held in memory.
-
-| Property | Type | Description |
-| --- | --- | --- |
-| `maxRows` | integer | Largest number of rows materialized. Default: `tesseraql.resultMaterialization.maxRows`. |
-| `onOverflow` | string | `fail` (the default) refuses a result past `maxRows`; `warn` truncates it and logs. |
-
-##### steps.sql.expect
-
-The row count this statement must affect, and what happens when it does not — the declarative optimistic-locking check on an update or delete.
-
-| Property | Type | Description |
-| --- | --- | --- |
-| `rowCount` | integer | The exact number of rows the statement must affect (rows is a list of records everywhere else). |
-| `onMismatch` | string | `conflict` (the default) answers 409, so a stale edit is refused honestly; `error` answers 500. |
 
 #### steps.contract
 
@@ -195,37 +161,6 @@ The service arm: a runtime provider answering rows from process state. It takes 
 | --- | --- | --- |
 | `name` | string | The named runtime service provider to call instead of running SQL (docs/extending.md): non-SQL runtime state (lanes, traces, file trees, …) read as rows. |
 | `params` | map of string | Each bind name to the bindable path supplying its value, such as `path.id`, `params.unit` or `principal.claim.tenant_id`. |
-
-#### steps.http
-
-The http arm: an outbound call whose response becomes this binding's rows, in the vocabulary every outbound call shares. Rides the outbound gateway — allow-listed hosts, named credentials, timeouts, and a per-host circuit breaker.
-
-| Property | Type | Description |
-| --- | --- | --- |
-| `method` | string | The HTTP method. Default GET; a source is not restricted to GET, because JSON-RPC, GraphQL and `POST …/search` batch lookups are reads. |
-| `url` | string | The absolute http/https URL. Its host must be allow-listed under tesseraql.http.outbound.allowedHosts — egress is deny by default (TQL-SEC-4070). |
-| `headers` | map of string | Static request headers; values may carry ${…} config or secret placeholders, resolved on send. |
-| `query` | map of string | Query-string parameters, each a bindable path resolved against the execution context. |
-| `credential` | string | A named credential the SecretResolver supplies at call time, so a document never carries a secret. |
-| `body` | string | A bindable path whose value is serialized as the request body. |
-| `expectStatus` | integer | The exact status that counts as success; the default is any 2xx. A mismatch fails the call without tripping the circuit breaker — it is a deterministic rejection, not a sign the dependency is down. |
-| `connectTimeout` | string | Connect timeout for this call (e.g. 2s), overriding tesseraql.http.outbound.connectTimeout. |
-| `requestTimeout` | string | Request timeout for this call (e.g. 10s), overriding tesseraql.http.outbound.requestTimeout. |
-| `retry` | [object](#stepshttpretry) | Opt-in retry for transient faults: connect failures, timeouts and 5xx are repeated; a 4xx and an expectStatus mismatch never are. Unstated numbers come from tesseraql.http.outbound.retry. Every repeated attempt counts against the circuit breaker, the sequence ends the moment the host's circuit opens, and it lives inside a budget of attempts x requestTimeout. Documented in connectors.md. |
-| `select` | string | A dotted path into the response JSON naming the part that becomes rows. Default: the whole body. |
-| `onError` | string | `fail` (default) fails the request or step; `empty` degrades to zero rows and an `error` entry, and the page still renders. The degradation is logged and metered — it is not silent. |
-| `readOnly` | boolean | The author's assertion that the call has no side effect, required on a command route: the write can roll back and the request cannot. |
-| `mode` | string | How the acquired rows are delivered: `query` (default — held and published as rows) or `query-spool` (streamed to a spool a later chunk: step loads, so an API result can be written to the database without holding it). A call reads, so the SQL write modes are not modes it has. |
-
-##### steps.http.retry
-
-Opt-in retry for transient faults: connect failures, timeouts and 5xx are repeated; a 4xx and an expectStatus mismatch never are. Unstated numbers come from tesseraql.http.outbound.retry. Every repeated attempt counts against the circuit breaker, the sequence ends the moment the host's circuit opens, and it lives inside a budget of attempts x requestTimeout. Documented in connectors.md.
-
-| Property | Type | Description |
-| --- | --- | --- |
-| `attempts` | integer ≥ 1 ≤ 10 | Total attempts including the first (TQL-YAML-1058 outside 1..10). |
-| `backoff` | string | The wait before the second attempt, e.g. 200ms. |
-| `multiplier` | number ≥ 1 | The factor the wait grows by before each further attempt. |
 
 ### validate
 
@@ -308,7 +243,7 @@ A statement run once after the extraction, typically to mark the extracted rows.
 | Property | Type | Description |
 | --- | --- | --- |
 | `timing` | string | `extract` (default) runs the statement in the extraction's transaction, so rows are marked exactly when they are extracted; `download` runs it once on the first successful file fetch. A job's export step supports `extract` only (TQL-YAML-1041). |
-| `sql` | object | The follow-up statement, written as a source's `sql:` arm is — `file:`, `params:`, and the rest of the arm's keys. |
+| `sql` | [sqlArm](#sqlarm) | The follow-up statement, written as a source's `sql:` arm is — `file:`, `params:`, and the rest of the arm's keys. |
 
 ### webhook
 
@@ -526,10 +461,10 @@ Fire the job when files arrive: a local directory, SFTP, or FTPS source feeding 
 
 | Property | Type | Description |
 | --- | --- | --- |
-| `sql` | [object](#pipelinesql) | The SQL arm: a colocated 2-way SQL file and how it is run. The keys of the mechanism nest inside the arm that owns them, so there is nowhere to write a call's `select:` on a statement and no lint has to say it is wrong. |
+| `sql` | [sqlArm](#sqlarm) | The SQL arm: a colocated 2-way SQL file and how it is run. The keys of the mechanism nest inside the arm that owns them, so there is nowhere to write a call's `select:` on a statement and no lint has to say it is wrong. |
 | `contract` | [object](#pipelinecontract) | The contract arm: a statement the identity schema owns, called by name. It reads or writes like any other statement, so it carries the same `mode`, `params` and `expect`. |
 | `service` | [object](#pipelineservice) | The service arm: a runtime provider answering rows from process state. It takes only its arguments — there is no statement to run, so no mode and no row-count expectation. |
-| `http` | [object](#pipelinehttp) | The http arm: an outbound call whose response becomes this binding's rows, in the vocabulary every outbound call shares. Rides the outbound gateway — allow-listed hosts, named credentials, timeouts, and a per-host circuit breaker. |
+| `http` | [httpArm](#httparm) | The http arm: an outbound call whose response becomes this binding's rows, in the vocabulary every outbound call shares. Rides the outbound gateway — allow-listed hosts, named credentials, timeouts, and a per-host circuit breaker. |
 | `sequence` | string | Allocate the next value of a managed document-number sequence instead of running a statement; it binds as `steps.<id>.value`. It has no body beyond its name, which is why it sits beside the arms rather than being one. Documented in transactional-writes.md. |
 | `spool` | string | A context path resolving to an earlier step's spool reference (`steps.<id>.spool`), read as this binding's rows. A chunk reader declares it instead of `sql:` to load what another step extracted — from another connector, or from an API — because a spool is a spool whoever filled it. Documented in jobs.md. |
 | `when` | string | Guard expression on a step: a falsy guard skips it, recording `steps.<id>.skipped` instead of a result. A guard is about whether the step runs at all, not a question for the mechanism, so it sits beside the arm. The declared branch point for decision.* outputs (docs decision-tables). |
@@ -539,40 +474,6 @@ Fire the job when files arrive: a local directory, SFTP, or FTPS source feeding 
 | `chunk` | [chunk](#chunk) | Restartable per-row processing: a reader, a writer, and committed checkpoints, so a job that stops resumes where it left off instead of starting over. Documented in jobs.md. |
 | `export` | [object](#pipelineexport) | query-export / file-export output: format (csv, excel, pdf), filename, columns with headers and format patterns, locale/timezone. It says how the rows are written and never what to read - the rows come from sources.main on a route, or the step's own arm in a pipeline. Documented in file-transfers.md. |
 | `push` | [push](#push) | Delivery of a produced transfer to a local or remote drop — the outbound mirror of the poll trigger, under the same policy block. Documented in file-transfers.md. |
-
-#### pipeline.sql
-
-The SQL arm: a colocated 2-way SQL file and how it is run. The keys of the mechanism nest inside the arm that owns them, so there is nowhere to write a call's `select:` on a statement and no lint has to say it is wrong.
-
-| Property | Type | Description |
-| --- | --- | --- |
-| `file` | string | A colocated 2-way SQL file, relative to the declaring document (must exist; TQL-SQL-2103). This arm's acquisition target, the role `url` plays for `http`. |
-| `mode` | string | How the statement runs and what it binds: `query` (rows), `query-one` (a single row), `update` (an affected-row count), `query-spool` (rows streamed to a spool a later chunk: step reads, never held), or `call` (a stored call on a command step, its OUT parameters declared under `out:`). |
-| `params` | map of string | Each bind name to the bindable path supplying its value, such as `path.id`, `params.unit` or `principal.claim.tenant_id`. |
-| `keys` | array of string | Columns whose database-generated values are captured after an insert; they bind as `steps.<id>.keys.<column>`. |
-| `out` | map of string | The OUT parameters of a `mode: call` statement on a command step: each name to its JDBC type keyword (varchar, numeric, integer, bigint, boolean, date, timestamp, double). The statement binds them as `out.<name>` bind sites and the values publish as `steps.<id>.out.<name>`. Documented in transactional-writes.md. |
-| `timeoutSeconds` | integer ≥ 0 | Per-binding SQL statement timeout override; 0 disables. Default: tesseraql.sql.timeoutSeconds, else 30s. |
-| `datasource` | string | The named connector this read runs on, overriding the document's. Legal on a read only: a batch step owns its own transaction so an extract elsewhere splits nothing, while a write on another connector would be a second transaction nothing owns (TQL-YAML-1037). |
-| `materialize` | [object](#pipelinesqlmaterialize) | Bounds on how much of the result is held in memory. |
-| `expect` | [object](#pipelinesqlexpect) | The row count this statement must affect, and what happens when it does not — the declarative optimistic-locking check on an update or delete. |
-
-##### pipeline.sql.materialize
-
-Bounds on how much of the result is held in memory.
-
-| Property | Type | Description |
-| --- | --- | --- |
-| `maxRows` | integer | Largest number of rows materialized. Default: `tesseraql.resultMaterialization.maxRows`. |
-| `onOverflow` | string | `fail` (the default) refuses a result past `maxRows`; `warn` truncates it and logs. |
-
-##### pipeline.sql.expect
-
-The row count this statement must affect, and what happens when it does not — the declarative optimistic-locking check on an update or delete.
-
-| Property | Type | Description |
-| --- | --- | --- |
-| `rowCount` | integer | The exact number of rows the statement must affect (rows is a list of records everywhere else). |
-| `onMismatch` | string | `conflict` (the default) answers 409, so a stale edit is refused honestly; `error` answers 500. |
 
 #### pipeline.contract
 
@@ -614,37 +515,6 @@ The service arm: a runtime provider answering rows from process state. It takes 
 | `name` | string | The named runtime service provider to call instead of running SQL (docs/extending.md): non-SQL runtime state (lanes, traces, file trees, …) read as rows. |
 | `params` | map of string | Each bind name to the bindable path supplying its value, such as `path.id`, `params.unit` or `principal.claim.tenant_id`. |
 
-#### pipeline.http
-
-The http arm: an outbound call whose response becomes this binding's rows, in the vocabulary every outbound call shares. Rides the outbound gateway — allow-listed hosts, named credentials, timeouts, and a per-host circuit breaker.
-
-| Property | Type | Description |
-| --- | --- | --- |
-| `method` | string | The HTTP method. Default GET; a source is not restricted to GET, because JSON-RPC, GraphQL and `POST …/search` batch lookups are reads. |
-| `url` | string | The absolute http/https URL. Its host must be allow-listed under tesseraql.http.outbound.allowedHosts — egress is deny by default (TQL-SEC-4070). |
-| `headers` | map of string | Static request headers; values may carry ${…} config or secret placeholders, resolved on send. |
-| `query` | map of string | Query-string parameters, each a bindable path resolved against the execution context. |
-| `credential` | string | A named credential the SecretResolver supplies at call time, so a document never carries a secret. |
-| `body` | string | A bindable path whose value is serialized as the request body. |
-| `expectStatus` | integer | The exact status that counts as success; the default is any 2xx. A mismatch fails the call without tripping the circuit breaker — it is a deterministic rejection, not a sign the dependency is down. |
-| `connectTimeout` | string | Connect timeout for this call (e.g. 2s), overriding tesseraql.http.outbound.connectTimeout. |
-| `requestTimeout` | string | Request timeout for this call (e.g. 10s), overriding tesseraql.http.outbound.requestTimeout. |
-| `retry` | [object](#pipelinehttpretry) | Opt-in retry for transient faults: connect failures, timeouts and 5xx are repeated; a 4xx and an expectStatus mismatch never are. Unstated numbers come from tesseraql.http.outbound.retry. Every repeated attempt counts against the circuit breaker, the sequence ends the moment the host's circuit opens, and it lives inside a budget of attempts x requestTimeout. Documented in connectors.md. |
-| `select` | string | A dotted path into the response JSON naming the part that becomes rows. Default: the whole body. |
-| `onError` | string | `fail` (default) fails the request or step; `empty` degrades to zero rows and an `error` entry, and the page still renders. The degradation is logged and metered — it is not silent. |
-| `readOnly` | boolean | The author's assertion that the call has no side effect, required on a command route: the write can roll back and the request cannot. |
-| `mode` | string | How the acquired rows are delivered: `query` (default — held and published as rows) or `query-spool` (streamed to a spool a later chunk: step loads, so an API result can be written to the database without holding it). A call reads, so the SQL write modes are not modes it has. |
-
-##### pipeline.http.retry
-
-Opt-in retry for transient faults: connect failures, timeouts and 5xx are repeated; a 4xx and an expectStatus mismatch never are. Unstated numbers come from tesseraql.http.outbound.retry. Every repeated attempt counts against the circuit breaker, the sequence ends the moment the host's circuit opens, and it lives inside a budget of attempts x requestTimeout. Documented in connectors.md.
-
-| Property | Type | Description |
-| --- | --- | --- |
-| `attempts` | integer ≥ 1 ≤ 10 | Total attempts including the first (TQL-YAML-1058 outside 1..10). |
-| `backoff` | string | The wait before the second attempt, e.g. 200ms. |
-| `multiplier` | number ≥ 1 | The factor the wait grows by before each further attempt. |
-
 #### pipeline.export
 
 query-export / file-export output: format (csv, excel, pdf), filename, columns with headers and format patterns, locale/timezone. It says how the rows are written and never what to read - the rows come from sources.main on a route, or the step's own arm in a pipeline. Documented in file-transfers.md.
@@ -672,7 +542,7 @@ A statement run once after the extraction, typically to mark the extracted rows.
 | Property | Type | Description |
 | --- | --- | --- |
 | `timing` | string | `extract` (default) runs the statement in the extraction's transaction, so rows are marked exactly when they are extracted; `download` runs it once on the first successful file fetch. A job's export step supports `extract` only (TQL-YAML-1041). |
-| `sql` | object | The follow-up statement, written as a source's `sql:` arm is — `file:`, `params:`, and the rest of the arm's keys. |
+| `sql` | [sqlArm](#sqlarm) | The follow-up statement, written as a source's `sql:` arm is — `file:`, `params:`, and the rest of the arm's keys. |
 
 ### import
 
@@ -864,8 +734,8 @@ One keyed reference folded into a binding's rows: where the keys are (`on:`), wh
 | Property | Type | Description |
 | --- | --- | --- |
 | `on` | map of string | The join: each column of the rows being enriched to the column of the reference it matches. Several pairs make a composite key, compared by the framework's canonical normalization (INTEGER 1 matches BIGINT 1). |
-| `sql` | object | Fetch the reference by key, written as a source's `sql:` arm is. The statement must bind `keys` — one that never mentions it reads the whole table once per batch and still returns the right answer, which is why only the build can catch it (TQL-YAML-1048). |
-| `http` | object | Call the reference by key, written as a source's `http:` arm is, plus `select:` and `onError:`. How the keys reach it is `mode:`. |
+| `sql` | [sqlArm](#sqlarm) | Fetch the reference by key, written as a source's `sql:` arm is. The statement must bind `keys` — one that never mentions it reads the whole table once per batch and still returns the right answer, which is why only the build can catch it (TQL-YAML-1048). |
+| `http` | [httpArm](#httparm) | Call the reference by key, written as a source's `http:` arm is, plus `select:` and `onError:`. How the keys reach it is `mode:`. |
 | `source` | string | A result already in the context, joined without a fetch, named by its context path: a route source by name, a job step as `steps.<id>`. A spooled sibling is refused (TQL-CAMEL-3114) — load it into a table and enrich from there. |
 | `mode` | string | For an `http:` reference: `perRow` (default) makes one request per distinct key, `batch` one request per `batchSize` keys. A `sql:` reference is always batched — a statement takes a key list by construction. |
 | `as` | string | Attach the matched rows as a list under this name. Exactly one of `as:` or `merge:` (TQL-YAML-1047). |
@@ -994,24 +864,9 @@ Element constraints for `type: array`: `type:`/`enum:` for scalar elements, `fie
 | `when` \* | string | A whitelist-only expression over the execution context; the first matching entry wins. |
 | `status` \* | integer ≥ 100 ≤ 599 | The HTTP status to answer when the expression is truthy. |
 
-### binding
+### sqlArm
 
-One acquisition or one statement. Exactly one mechanism arm names the means — sql (a colocated 2-way SQL file), contract (a named identity contract), service (a runtime provider), http (an outbound call) — or the write-side sequence, and that arm nests the keys the mechanism owns. Beside the arms sit the three questions no mechanism answers: the when: guard, the enrich: folded into the rows, and the spool: another step filled. Documented in unified-sources.md.
-
-| Property | Type | Description |
-| --- | --- | --- |
-| `sql` | [object](#bindingsql) | The SQL arm: a colocated 2-way SQL file and how it is run. The keys of the mechanism nest inside the arm that owns them, so there is nowhere to write a call's `select:` on a statement and no lint has to say it is wrong. |
-| `contract` | [object](#bindingcontract) | The contract arm: a statement the identity schema owns, called by name. It reads or writes like any other statement, so it carries the same `mode`, `params` and `expect`. |
-| `service` | [object](#bindingservice) | The service arm: a runtime provider answering rows from process state. It takes only its arguments — there is no statement to run, so no mode and no row-count expectation. |
-| `http` | [object](#bindinghttp) | The http arm: an outbound call whose response becomes this binding's rows, in the vocabulary every outbound call shares. Rides the outbound gateway — allow-listed hosts, named credentials, timeouts, and a per-host circuit breaker. |
-| `sequence` | string | Allocate the next value of a managed document-number sequence instead of running a statement; it binds as `steps.<id>.value`. It has no body beyond its name, which is why it sits beside the arms rather than being one. Documented in transactional-writes.md. |
-| `spool` | string | A context path resolving to an earlier step's spool reference (`steps.<id>.spool`), read as this binding's rows. A chunk reader declares it instead of `sql:` to load what another step extracted — from another connector, or from an API — because a spool is a spool whoever filled it. Documented in jobs.md. |
-| `when` | string | Guard expression on a step: a falsy guard skips it, recording `steps.<id>.skipped` instead of a result. A guard is about whether the step runs at all, not a question for the mechanism, so it sits beside the arm. The declared branch point for decision.* outputs (docs decision-tables). |
-| `enrich` | map of [enrichment](#enrichment) | Keyed references folded into this binding's rows before anything reads them (docs/lookups.md), keyed by enrichment name and applied in authored order. An enrichment nests under the source it transforms, so any arm's rows can be enriched. Each entry names one reference — sql: (fetch by key), http: (call by key), or source: (a result already in the context, joined without a fetch, named by its context path: a route source by name, a job step as steps.&lt;id&gt;) — plus the on: join and one of as:/merge:. Only a binding that holds rows can carry one: a write publishes affectedRows, and a query-spool extract never held its rows. |
-
-#### binding.sql
-
-The SQL arm: a colocated 2-way SQL file and how it is run. The keys of the mechanism nest inside the arm that owns them, so there is nowhere to write a call's `select:` on a statement and no lint has to say it is wrong.
+A 2-way SQL statement and how it is run — the shape every `sql:` arm carries, wherever one is written. The keys of the mechanism nest inside the arm that owns them, so there is nowhere to write a call's `select:` on a statement and no lint has to say it is wrong.
 
 | Property | Type | Description |
 | --- | --- | --- |
@@ -1022,10 +877,10 @@ The SQL arm: a colocated 2-way SQL file and how it is run. The keys of the mecha
 | `out` | map of string | The OUT parameters of a `mode: call` statement on a command step: each name to its JDBC type keyword (varchar, numeric, integer, bigint, boolean, date, timestamp, double). The statement binds them as `out.<name>` bind sites and the values publish as `steps.<id>.out.<name>`. Documented in transactional-writes.md. |
 | `timeoutSeconds` | integer ≥ 0 | Per-binding SQL statement timeout override; 0 disables. Default: tesseraql.sql.timeoutSeconds, else 30s. |
 | `datasource` | string | The named connector this read runs on, overriding the document's. Legal on a read only: a batch step owns its own transaction so an extract elsewhere splits nothing, while a write on another connector would be a second transaction nothing owns (TQL-YAML-1037). |
-| `materialize` | [object](#bindingsqlmaterialize) | Bounds on how much of the result is held in memory. |
-| `expect` | [object](#bindingsqlexpect) | The row count this statement must affect, and what happens when it does not — the declarative optimistic-locking check on an update or delete. |
+| `materialize` | [object](#sqlarmmaterialize) | Bounds on how much of the result is held in memory. |
+| `expect` | [object](#sqlarmexpect) | The row count this statement must affect, and what happens when it does not — the declarative optimistic-locking check on an update or delete. |
 
-##### binding.sql.materialize
+#### sqlArm.materialize
 
 Bounds on how much of the result is held in memory.
 
@@ -1034,7 +889,7 @@ Bounds on how much of the result is held in memory.
 | `maxRows` | integer | Largest number of rows materialized. Default: `tesseraql.resultMaterialization.maxRows`. |
 | `onOverflow` | string | `fail` (the default) refuses a result past `maxRows`; `warn` truncates it and logs. |
 
-##### binding.sql.expect
+#### sqlArm.expect
 
 The row count this statement must affect, and what happens when it does not — the declarative optimistic-locking check on an update or delete.
 
@@ -1042,6 +897,52 @@ The row count this statement must affect, and what happens when it does not — 
 | --- | --- | --- |
 | `rowCount` | integer | The exact number of rows the statement must affect (rows is a list of records everywhere else). |
 | `onMismatch` | string | `conflict` (the default) answers 409, so a stale edit is refused honestly; `error` answers 500. |
+
+### httpArm
+
+An outbound call and how its response is read — the shape every `http:` arm carries, wherever one is written. Rides the outbound gateway: allow-listed hosts, named credentials, timeouts, and a per-host circuit breaker.
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `method` | string | The HTTP method. Default GET; a source is not restricted to GET, because JSON-RPC, GraphQL and `POST …/search` batch lookups are reads. |
+| `url` | string | The absolute http/https URL. Its host must be allow-listed under tesseraql.http.outbound.allowedHosts — egress is deny by default (TQL-SEC-4070). |
+| `headers` | map of string | Static request headers; values may carry ${…} config or secret placeholders, resolved on send. |
+| `query` | map of string | Query-string parameters, each a bindable path resolved against the execution context. |
+| `credential` | string | A named credential the SecretResolver supplies at call time, so a document never carries a secret. |
+| `body` | string | A bindable path whose value is serialized as the request body. |
+| `expectStatus` | integer | The exact status that counts as success; the default is any 2xx. A mismatch fails the call without tripping the circuit breaker — it is a deterministic rejection, not a sign the dependency is down. |
+| `connectTimeout` | string | Connect timeout for this call (e.g. 2s), overriding tesseraql.http.outbound.connectTimeout. |
+| `requestTimeout` | string | Request timeout for this call (e.g. 10s), overriding tesseraql.http.outbound.requestTimeout. |
+| `retry` | [object](#httparmretry) | Opt-in retry for transient faults: connect failures, timeouts and 5xx are repeated; a 4xx and an expectStatus mismatch never are. Unstated numbers come from tesseraql.http.outbound.retry. Every repeated attempt counts against the circuit breaker, the sequence ends the moment the host's circuit opens, and it lives inside a budget of attempts x requestTimeout. Documented in connectors.md. |
+| `select` | string | A dotted path into the response JSON naming the part that becomes rows. Default: the whole body. |
+| `onError` | string | `fail` (default) fails the request or step; `empty` degrades to zero rows and an `error` entry, and the page still renders. The degradation is logged and metered — it is not silent. |
+| `readOnly` | boolean | The author's assertion that the call has no side effect, required on a command route: the write can roll back and the request cannot. |
+| `mode` | string | How the acquired rows are delivered: `query` (default — held and published as rows) or `query-spool` (streamed to a spool a later chunk: step loads, so an API result can be written to the database without holding it). A call reads, so the SQL write modes are not modes it has. |
+
+#### httpArm.retry
+
+Opt-in retry for transient faults: connect failures, timeouts and 5xx are repeated; a 4xx and an expectStatus mismatch never are. Unstated numbers come from tesseraql.http.outbound.retry. Every repeated attempt counts against the circuit breaker, the sequence ends the moment the host's circuit opens, and it lives inside a budget of attempts x requestTimeout. Documented in connectors.md.
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `attempts` | integer ≥ 1 ≤ 10 | Total attempts including the first (TQL-YAML-1058 outside 1..10). |
+| `backoff` | string | The wait before the second attempt, e.g. 200ms. |
+| `multiplier` | number ≥ 1 | The factor the wait grows by before each further attempt. |
+
+### binding
+
+One acquisition or one statement. Exactly one mechanism arm names the means — sql (a colocated 2-way SQL file), contract (a named identity contract), service (a runtime provider), http (an outbound call) — or the write-side sequence, and that arm nests the keys the mechanism owns. Beside the arms sit the three questions no mechanism answers: the when: guard, the enrich: folded into the rows, and the spool: another step filled. Documented in unified-sources.md.
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `sql` | [sqlArm](#sqlarm) | The SQL arm: a colocated 2-way SQL file and how it is run. The keys of the mechanism nest inside the arm that owns them, so there is nowhere to write a call's `select:` on a statement and no lint has to say it is wrong. |
+| `contract` | [object](#bindingcontract) | The contract arm: a statement the identity schema owns, called by name. It reads or writes like any other statement, so it carries the same `mode`, `params` and `expect`. |
+| `service` | [object](#bindingservice) | The service arm: a runtime provider answering rows from process state. It takes only its arguments — there is no statement to run, so no mode and no row-count expectation. |
+| `http` | [httpArm](#httparm) | The http arm: an outbound call whose response becomes this binding's rows, in the vocabulary every outbound call shares. Rides the outbound gateway — allow-listed hosts, named credentials, timeouts, and a per-host circuit breaker. |
+| `sequence` | string | Allocate the next value of a managed document-number sequence instead of running a statement; it binds as `steps.<id>.value`. It has no body beyond its name, which is why it sits beside the arms rather than being one. Documented in transactional-writes.md. |
+| `spool` | string | A context path resolving to an earlier step's spool reference (`steps.<id>.spool`), read as this binding's rows. A chunk reader declares it instead of `sql:` to load what another step extracted — from another connector, or from an API — because a spool is a spool whoever filled it. Documented in jobs.md. |
+| `when` | string | Guard expression on a step: a falsy guard skips it, recording `steps.<id>.skipped` instead of a result. A guard is about whether the step runs at all, not a question for the mechanism, so it sits beside the arm. The declared branch point for decision.* outputs (docs decision-tables). |
+| `enrich` | map of [enrichment](#enrichment) | Keyed references folded into this binding's rows before anything reads them (docs/lookups.md), keyed by enrichment name and applied in authored order. An enrichment nests under the source it transforms, so any arm's rows can be enriched. Each entry names one reference — sql: (fetch by key), http: (call by key), or source: (a result already in the context, joined without a fetch, named by its context path: a route source by name, a job step as steps.&lt;id&gt;) — plus the on: join and one of as:/merge:. Only a binding that holds rows can carry one: a write publishes affectedRows, and a query-spool extract never held its rows. |
 
 #### binding.contract
 
@@ -1082,34 +983,3 @@ The service arm: a runtime provider answering rows from process state. It takes 
 | --- | --- | --- |
 | `name` | string | The named runtime service provider to call instead of running SQL (docs/extending.md): non-SQL runtime state (lanes, traces, file trees, …) read as rows. |
 | `params` | map of string | Each bind name to the bindable path supplying its value, such as `path.id`, `params.unit` or `principal.claim.tenant_id`. |
-
-#### binding.http
-
-The http arm: an outbound call whose response becomes this binding's rows, in the vocabulary every outbound call shares. Rides the outbound gateway — allow-listed hosts, named credentials, timeouts, and a per-host circuit breaker.
-
-| Property | Type | Description |
-| --- | --- | --- |
-| `method` | string | The HTTP method. Default GET; a source is not restricted to GET, because JSON-RPC, GraphQL and `POST …/search` batch lookups are reads. |
-| `url` | string | The absolute http/https URL. Its host must be allow-listed under tesseraql.http.outbound.allowedHosts — egress is deny by default (TQL-SEC-4070). |
-| `headers` | map of string | Static request headers; values may carry ${…} config or secret placeholders, resolved on send. |
-| `query` | map of string | Query-string parameters, each a bindable path resolved against the execution context. |
-| `credential` | string | A named credential the SecretResolver supplies at call time, so a document never carries a secret. |
-| `body` | string | A bindable path whose value is serialized as the request body. |
-| `expectStatus` | integer | The exact status that counts as success; the default is any 2xx. A mismatch fails the call without tripping the circuit breaker — it is a deterministic rejection, not a sign the dependency is down. |
-| `connectTimeout` | string | Connect timeout for this call (e.g. 2s), overriding tesseraql.http.outbound.connectTimeout. |
-| `requestTimeout` | string | Request timeout for this call (e.g. 10s), overriding tesseraql.http.outbound.requestTimeout. |
-| `retry` | [object](#bindinghttpretry) | Opt-in retry for transient faults: connect failures, timeouts and 5xx are repeated; a 4xx and an expectStatus mismatch never are. Unstated numbers come from tesseraql.http.outbound.retry. Every repeated attempt counts against the circuit breaker, the sequence ends the moment the host's circuit opens, and it lives inside a budget of attempts x requestTimeout. Documented in connectors.md. |
-| `select` | string | A dotted path into the response JSON naming the part that becomes rows. Default: the whole body. |
-| `onError` | string | `fail` (default) fails the request or step; `empty` degrades to zero rows and an `error` entry, and the page still renders. The degradation is logged and metered — it is not silent. |
-| `readOnly` | boolean | The author's assertion that the call has no side effect, required on a command route: the write can roll back and the request cannot. |
-| `mode` | string | How the acquired rows are delivered: `query` (default — held and published as rows) or `query-spool` (streamed to a spool a later chunk: step loads, so an API result can be written to the database without holding it). A call reads, so the SQL write modes are not modes it has. |
-
-##### binding.http.retry
-
-Opt-in retry for transient faults: connect failures, timeouts and 5xx are repeated; a 4xx and an expectStatus mismatch never are. Unstated numbers come from tesseraql.http.outbound.retry. Every repeated attempt counts against the circuit breaker, the sequence ends the moment the host's circuit opens, and it lives inside a budget of attempts x requestTimeout. Documented in connectors.md.
-
-| Property | Type | Description |
-| --- | --- | --- |
-| `attempts` | integer ≥ 1 ≤ 10 | Total attempts including the first (TQL-YAML-1058 outside 1..10). |
-| `backoff` | string | The wait before the second attempt, e.g. 200ms. |
-| `multiplier` | number ≥ 1 | The factor the wait grows by before each further attempt. |
