@@ -63,6 +63,15 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **The workflows are held by a test, not by review.** `WorkflowLedgerTest` is the first test in
+  the repository to read `.github/` for anything but merge-conflict markers, and it lands with the
+  two fixes it was red on: both `actions/upload-artifact` uses were pinned to a mutable `v7` tag
+  and are now pinned to a commit SHA with the version in a trailing comment, and the four GitHub
+  expressions that the demo-image job substituted straight into shell source are bound to `env:`
+  entries the shell reads as data. It resolves `.github/workflows` directly rather than walking the
+  repository root, so a worktree under `.claude/` cannot redden it, and it refuses to pass on an
+  empty directory.
+
 - **A salted map in the declaration layer now fails the build.** `OrderedCopyLedgerTest` is the
   census the deterministic-output campaign was for: every file in the packages that hold or emit
   an author's declaration either builds its maps and sets in declared order or is named in the

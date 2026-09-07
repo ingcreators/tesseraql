@@ -273,16 +273,23 @@ jobs:
       # the workflow ran from, so a Dockerfile.demo fix that postdates a tag can
       # still publish that tag's image (no-op on tag-push events).
       - name: Use the workflow's build recipe
-        run: git checkout ${{ github.sha }} -- deploy/Dockerfile.demo
+        env:
+          WORKFLOW_SHA: ${{ github.sha }}
+        run: git checkout "$WORKFLOW_SHA" -- deploy/Dockerfile.demo
 
       - name: Log in to GHCR
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USER: ${{ github.actor }}
+        run: echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
 
       - name: Build and push
+        env:
+          RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
+          IMAGE_OWNER: ${{ github.repository_owner }}
         run: |
-          TAG="${{ github.event.inputs.tag || github.ref_name }}"
-          VERSION="${TAG#v}"
-          IMAGE="ghcr.io/${{ github.repository_owner }}/tesseraql-demo"
+          VERSION="${RELEASE_TAG#v}"
+          IMAGE="ghcr.io/${IMAGE_OWNER}/tesseraql-demo"
           docker build -f deploy/Dockerfile.demo -t "$IMAGE:$VERSION" -t "$IMAGE:latest" .
           docker push "$IMAGE:$VERSION"
           docker push "$IMAGE:latest"
