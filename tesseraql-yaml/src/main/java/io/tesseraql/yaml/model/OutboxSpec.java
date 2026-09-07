@@ -1,6 +1,7 @@
 package io.tesseraql.yaml.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import io.tesseraql.core.util.OrderedCopies;
 import java.util.Map;
 
 /**
@@ -32,6 +33,6 @@ public record OutboxSpec(String eventType, String aggregateType, String aggregat
     }
 
     public OutboxSpec {
-        payload = payload == null ? Map.of() : Map.copyOf(payload);
+        payload = payload == null ? Map.of() : OrderedCopies.map(payload);
     }
 }

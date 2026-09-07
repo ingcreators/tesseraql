@@ -62,6 +62,24 @@ class ResponseHeaderDefaultsTest {
     }
 
     @Test
+    void theDefaultsKeepTheOrderTheyWereDeclaredIn() {
+        // The security block every bundled app ships, verbatim. Its four names have exactly eight
+        // reachable iteration orders and the authored one is not among them, so this was red on
+        // every boot (docs/deterministic-output.md decision 2). The source map is a
+        // LinkedHashMap, not a Map.of literal: a literal is salted before the defaults see it,
+        // and the test would then never cross the boundary under test.
+        Map<String, Object> declared = new LinkedHashMap<>();
+        declared.put("Content-Security-Policy", "default-src 'self'");
+        declared.put("X-Content-Type-Options", "nosniff");
+        declared.put("X-Frame-Options", "DENY");
+        declared.put("Referrer-Policy", "no-referrer");
+
+        assertThat(defaults(declared).headers().keySet()).containsExactly(
+                "Content-Security-Policy", "X-Content-Type-Options", "X-Frame-Options",
+                "Referrer-Policy");
+    }
+
+    @Test
     void malformedDeclarationsFailFast() {
         assertThatThrownBy(() -> ResponseHeaderDefaults.from(new AppConfig(
                 Map.of("tesseraql", Map.of("security",

@@ -135,6 +135,31 @@ class AppLinterResponseHeadersTest {
                 .count()).isEqualTo(2);
     }
 
+    /**
+     * Findings come out in the order the declaration was written, because {@code tesseraql lint
+     * --format json} serializes this list verbatim — two runs over identical sources have to
+     * produce identical bytes. The four names have eight reachable iteration orders and the
+     * authored one is not among them, so this was red on every boot before the response model
+     * kept its order (docs/deterministic-output.md decision 2).
+     */
+    @Test
+    void findingsFollowTheOrderTheHeadersWereDeclaredIn(@TempDir Path dir) throws Exception {
+        List<LintFinding> findings = new AppLinter().lint(app(dir,
+                "    headers:\n      Content-Length: \"100\"\n"
+                        + "      Transfer-Encoding: chunked\n      Connection: close\n"
+                        + "      Trailer: Expires"));
+
+        assertThat(findings.stream()
+                .filter(f -> f.code().equals("TQL-SEC-4139"))
+                .map(LintFinding::message))
+                .hasSize(4)
+                .allSatisfy(message -> assertThat(message).contains("'"));
+        assertThat(findings.stream()
+                .filter(f -> f.code().equals("TQL-SEC-4139"))
+                .map(f -> f.message().replaceAll("(?s).*response header '([^']+)'.*", "$1")))
+                .containsExactly("Content-Length", "Transfer-Encoding", "Connection", "Trailer");
+    }
+
     /** The app-wide defaults are held to the same rule, named as config. */
     @Test
     void refusesAReservedDefaultHeader(@TempDir Path dir) throws Exception {
