@@ -23,9 +23,16 @@ on:
 permissions:
   contents: write
 
+# As ci.yml: supersede a pull request's run, never a tag's -- a cancelled tag run
+# leaves the release without its app images.
+concurrency:
+  group: jpackage-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   jpackage:
     name: Native image on ${{ matrix.os }}
+    timeout-minutes: 45
     runs-on: ${{ matrix.os }}
 
     strategy:
@@ -201,6 +208,7 @@ jobs:
   # stopping"), the same contract SIGTERM has in the container.
   host-image:
     name: Host image on windows-latest
+    timeout-minutes: 45
     runs-on: windows-latest
 
     steps:

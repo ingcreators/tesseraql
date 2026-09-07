@@ -275,7 +275,7 @@ first instruction is a barrier that has not been necessary for eight releases.
 | --- | --- | --- | --- |
 | 1 | This design document, plus `docs-site/nav.mjs` `EXCLUDED` and `ErrorIndex.INTERNAL_DOCS` | — | S |
 | 2 | `WorkflowLedgerTest` with assertions 1 and 3; the two SHA pins; the four `env:` hoists | F71, F76 | M |
-| 3 | Assertion 2; `timeout-minutes` on 13 jobs; `concurrency` on the three push-triggered workflows | F77 | M |
+| 3 | Assertion 2; `timeout-minutes` on 13 jobs, each bound measured; `concurrency` on all five workflows; the two `### Fixed` headings merged | F77 | M |
 | 4 | `jdk.jfr` in both lists; the system-module ledger; the `*/pom.xml` trigger path | F70, F75 | M |
 | 5 | The plugin-resolution ledger; `maven-help`, `maven-dependency`, `maven-resources` pinned; the `outputTimestamp` row | F78 (part) | S |
 | 6 | `requireMavenVersion`; the `mvn` → `./mvnw` sweep; `.devcontainer` and `scripts/` de-duplicated | F78 (part) | L |
@@ -329,6 +329,16 @@ check. Slice 3 sets it on `pull_request` only; `push` and tag runs are never can
 question F73 turned on, and the maintainer's answer is that it has no users. It is now
 [decision 8](#8--github-packages-is-deleted-and-f73-goes-with-it) and slice 9, and F73 is closed by
 deletion rather than by a fix.
+
+**Answered while building slice 3: `concurrency` goes on all five workflows, not three.** The
+slice list said the three push-triggered ones. Leaving `dialects.yml` out is wrong for a different
+reason than the others: it is scheduled, it holds vendor containers, and two overlapping runs
+contend for them — so it gets a group with `cancel-in-progress: false`, which serialises rather
+than cancels. `cancel-in-progress` is `${{ github.event_name == 'pull_request' }}` on `ci.yml` and
+`jpackage.yml` and plain `false` on the two release workflows: a superseded pull-request run has
+been answered by the push that superseded it, while a cancelled tag run leaves a published release
+with missing assets. No assertion is added for `concurrency` — it is a policy, and a ledger that
+freezes a policy is a ledger that argues with the next maintainer rather than catching a defect.
 
 **2 — Is 40 attempts the right attach budget?** The measured margins are 4m51s, 1m48s and 8m04s, all
 against a 20-minute budget. Doubling the attempts makes the worst observed case a 21-minute margin

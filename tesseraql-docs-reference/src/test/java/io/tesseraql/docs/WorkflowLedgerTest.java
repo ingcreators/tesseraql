@@ -116,6 +116,89 @@ class WorkflowLedgerTest {
     }
 
     /**
+     * A job with no {@code timeout-minutes} runs under GitHub's default of six hours.
+     *
+     * <p>Two of these jobs hold a required check, so an unbounded one holds the branch as well as
+     * the runner. The bounds are measured rather than guessed — see docs/release-and-ci-hardening.md
+     * — and one of them cannot be measured from a green run at all: {@code bump-package-managers}
+     * finishes in seconds today only because it soft-skips on absent credentials, and its real path
+     * polls the release assets for twenty minutes.
+     *
+     * <p>The key is read at <b>job</b> depth only. GitHub accepts the same key on a step, and a job
+     * that bounds one step is not a bounded job — an assertion that matched at any depth would go
+     * green on the wrong thing. Verified red on 13 of 14 jobs; only {@code dialects.yml} had one.
+     */
+    @Test
+    void everyJobDeclaresATimeout() throws IOException {
+        List<String> unbounded = new ArrayList<>();
+        for (Path workflow : workflows()) {
+            for (Job job : jobs(Files.readAllLines(workflow))) {
+                if (!job.bounded()) {
+                    unbounded.add(name(workflow) + ":" + job.line() + " " + job.id());
+                }
+            }
+        }
+
+        assertThat(unbounded)
+                .as("jobs with no timeout-minutes, so bounded only by GitHub's six-hour default; "
+                        + "give each one a bound taken from its measured runtime")
+                .isEmpty();
+    }
+
+    /** One job block: its id, the line it opens on, and whether it declares its own timeout. */
+    private record Job(String id, int line, boolean bounded) {
+    }
+
+    /** A job key sits two spaces in, under the top-level {@code jobs:} mapping. */
+    private static final Pattern JOB = Pattern.compile("^ {2}([A-Za-z0-9_-]+):\\s*$");
+
+    /** The bound, at job depth. Four spaces, not eight: eight would be a step's. */
+    private static final Pattern JOB_TIMEOUT = Pattern
+            .compile("^ {4}timeout-minutes:\\s*\\d+\\s*$");
+
+    /** The job blocks of one workflow, in file order. */
+    private static List<Job> jobs(List<String> lines) {
+        List<Job> jobs = new ArrayList<>();
+        String open = null;
+        int opened = 0;
+        boolean bounded = false;
+        boolean inJobs = false;
+        for (int line = 0; line < lines.size(); line++) {
+            String text = lines.get(line);
+            if (text.equals("jobs:")) {
+                inJobs = true;
+                continue;
+            }
+            if (!inJobs || text.isBlank() || text.stripLeading().startsWith("#")) {
+                continue;
+            }
+            // A key back at column zero ends the jobs mapping.
+            if (indent(text) == 0) {
+                inJobs = false;
+            }
+            Matcher job = JOB.matcher(text);
+            if (!inJobs || job.matches()) {
+                if (open != null) {
+                    jobs.add(new Job(open, opened, bounded));
+                    open = null;
+                }
+                if (!inJobs) {
+                    continue;
+                }
+                open = job.group(1);
+                opened = line + 1;
+                bounded = false;
+            } else if (open != null && JOB_TIMEOUT.matcher(text).matches()) {
+                bounded = true;
+            }
+        }
+        if (open != null) {
+            jobs.add(new Job(open, opened, bounded));
+        }
+        return jobs;
+    }
+
+    /**
      * The shell source contributed by line {@code index}: the inline remainder of a {@code run:},
      * or — when {@code index} is inside a block scalar a {@code run:} opened — that line itself.
      */

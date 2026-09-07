@@ -63,6 +63,16 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **Every CI job is bounded, and a superseded pull-request run stops.** Thirteen of the fourteen
+  jobs across the five workflows declared no `timeout-minutes`, so each was bounded only by
+  GitHub's six-hour default — including the two that hold a required check, where a hung job holds
+  the branch as well as the runner. Each bound is taken from that job's measured runtime across
+  recent successful runs, not guessed, and `WorkflowLedgerTest` now refuses a job that declares
+  none. The key is read at job depth only: GitHub accepts the same key on a step, and a job that
+  bounds one step is not a bounded job. Every workflow also gains a `concurrency` group —
+  superseded runs are cancelled on a pull request, never on a push, a tag, or the scheduled
+  dialect suite, which serialises instead because it holds vendor containers.
+
 - **The workflows are held by a test, not by review.** `WorkflowLedgerTest` is the first test in
   the repository to read `.github/` for anything but merge-conflict markers, and it lands with the
   two fixes it was red on: both `actions/upload-artifact` uses were pinned to a mutable `v7` tag
@@ -467,6 +477,60 @@ All notable changes to TesseraQL are documented here. The format follows
   `IdentityService`'s paged read is removed too — one day old, its only caller was the deleted step,
   and with it go the synthetic `/* tqlPageN */` binds it injected into a realm's own SQL namespace
   with no reservation or collision check.
+
+- **A poll source's listed file names are the server's, and are now checked.** A remote poll
+  source downloaded to `workDirectory.resolve(name)` and archived under the same name, with no
+  check, so a hostile or impersonated SFTP/FTPS server could list `../../../config/application.yml`
+  and have the poll cycle write its content there. The SFTP client verifies server identity only
+  when a `knownHostsFile` is declared, so that server is inside the recorded threat model. A listed
+  name must now be a plain file name — anything carrying a separator or a NUL, an empty name, or a
+  bare `.` or `..` is skipped with a warning — and a remote download target is confined to the
+  job's work directory as well. `include:` was never a control here: a glob's `*` does not cross a
+  separator, so declaring one hid such a name rather than refusing it.
+
+- **A running file transfer reports on the same clock a run does.** A transfer is recorded as a
+  job execution, but it never wrote the heartbeat every execution is read against — so any import
+  or export outliving `tesseraql.batch.heartbeat.livenessWindow` (five minutes by default) was
+  treated as abandoned. A polled file was reported failed and moved to `.error` while its rows
+  committed anyway, and an operator re-dropping it imported it twice. Runs and transfers now share
+  one `ExecutionHeartbeats` clock, which writes every live execution in a single statement per
+  interval rather than taking a connection each: transfers run on an unbounded virtual-thread
+  executor, so a pulse per execution would have queued behind the very work it reports on.
+  `JobExecutor.heartbeatInterval` and `JobExecutor.close()` are gone in its favour, and both
+  `JobExecutor` and `JdbcFileTransferService` now take the clock as a constructor argument, so no
+  wiring site can produce executions that never report.
+
+- **A `''` or `""` inside a parenthesized dummy no longer swallows the rest of the statement.**
+  The paren-group scanner consumed the opening quote before handing the run to the quote scanner,
+  which consumed it again, so an empty literal ate its own closing quote and the scan ran to the
+  next quote in the file or to end of input — with the group still open and no error raised.
+  `where code in /* codes */ ('') and active = 1` rendered as `where code in (?, ?)`, dropping
+  every predicate after the dummy, a tenant or soft-delete guard among them; the `/*%scope*/` and
+  `/*%lock*/` dummies share the scanner and shared the defect. A `--` remark inside the group is
+  now skipped rather than scanned for quotes, and a dummy group that reaches end of input is
+  `TQL-SQL-2102` instead of a silent stop.
+
+- **An upload spools in the application's work directory, not in whatever directory the process
+  was started from.** The body handler was left with Vert.x's `file-uploads` default, which
+  resolves against the process working directory — and the handler creates it for every
+  url-encoded form post, not only for multipart. So `tesseraql dev` wrote the spool into the
+  application checkout, and a deployment whose working directory is not writable by the runtime
+  user failed every form post, sign-in included, before a route ran. Parts now spool under
+  `work/tmp/tesseraql/uploads`, beside the temp store's scratch, and the directory is created at
+  boot so an unwritable location fails the boot instead of each request. `RouteEdge` hands a
+  route the same `Part`, at an absolute path rather than a relative one.
+
+- **Document sequences on Oracle and SQL Server.** The first allocation of any sequence name
+  failed on both drivers with `TQL-SQL-2610`, on its success path: the seed released its savepoint
+  in a `finally`, `releaseSavepoint` is a `SQLFeatureNotSupportedException` there, and a `finally`
+  that throws discards the value the method was returning. It no longer releases — the commit does
+  that on every dialect, which is the rule `JdbcEventChannelStore` has stated since the same defect
+  was fixed one store over in 0.5.0. The gated portability suites now seed a sequence, race a
+  second connection for it, and prove the loser's transaction survives its own savepoint rollback;
+  a new `SavepointLedgerTest` names every main source that opens a savepoint and refuses any
+  release outside the one site that catches the refusal. `MAX_ATTEMPTS` drops to 2, which is what
+  the comment beside it already claimed.
+
 ### Changed
 
 - **The identifier contract admits combining marks.** `[\p{L}_][\p{L}\p{N}_]*` excluded `\p{M}`,
@@ -679,61 +743,6 @@ All notable changes to TesseraQL are documented here. The format follows
   Two consequences worth stating. A reaped export whose file exists stays undownloadable, because
   a download serves only a `COMPLETED` execution — previously the late completion rescued it. And
   work after a successful commit can no longer rewrite the count or the outcome.
-
-### Fixed
-
-- **A poll source's listed file names are the server's, and are now checked.** A remote poll
-  source downloaded to `workDirectory.resolve(name)` and archived under the same name, with no
-  check, so a hostile or impersonated SFTP/FTPS server could list `../../../config/application.yml`
-  and have the poll cycle write its content there. The SFTP client verifies server identity only
-  when a `knownHostsFile` is declared, so that server is inside the recorded threat model. A listed
-  name must now be a plain file name — anything carrying a separator or a NUL, an empty name, or a
-  bare `.` or `..` is skipped with a warning — and a remote download target is confined to the
-  job's work directory as well. `include:` was never a control here: a glob's `*` does not cross a
-  separator, so declaring one hid such a name rather than refusing it.
-
-- **A running file transfer reports on the same clock a run does.** A transfer is recorded as a
-  job execution, but it never wrote the heartbeat every execution is read against — so any import
-  or export outliving `tesseraql.batch.heartbeat.livenessWindow` (five minutes by default) was
-  treated as abandoned. A polled file was reported failed and moved to `.error` while its rows
-  committed anyway, and an operator re-dropping it imported it twice. Runs and transfers now share
-  one `ExecutionHeartbeats` clock, which writes every live execution in a single statement per
-  interval rather than taking a connection each: transfers run on an unbounded virtual-thread
-  executor, so a pulse per execution would have queued behind the very work it reports on.
-  `JobExecutor.heartbeatInterval` and `JobExecutor.close()` are gone in its favour, and both
-  `JobExecutor` and `JdbcFileTransferService` now take the clock as a constructor argument, so no
-  wiring site can produce executions that never report.
-
-- **A `''` or `""` inside a parenthesized dummy no longer swallows the rest of the statement.**
-  The paren-group scanner consumed the opening quote before handing the run to the quote scanner,
-  which consumed it again, so an empty literal ate its own closing quote and the scan ran to the
-  next quote in the file or to end of input — with the group still open and no error raised.
-  `where code in /* codes */ ('') and active = 1` rendered as `where code in (?, ?)`, dropping
-  every predicate after the dummy, a tenant or soft-delete guard among them; the `/*%scope*/` and
-  `/*%lock*/` dummies share the scanner and shared the defect. A `--` remark inside the group is
-  now skipped rather than scanned for quotes, and a dummy group that reaches end of input is
-  `TQL-SQL-2102` instead of a silent stop.
-
-- **An upload spools in the application's work directory, not in whatever directory the process
-  was started from.** The body handler was left with Vert.x's `file-uploads` default, which
-  resolves against the process working directory — and the handler creates it for every
-  url-encoded form post, not only for multipart. So `tesseraql dev` wrote the spool into the
-  application checkout, and a deployment whose working directory is not writable by the runtime
-  user failed every form post, sign-in included, before a route ran. Parts now spool under
-  `work/tmp/tesseraql/uploads`, beside the temp store's scratch, and the directory is created at
-  boot so an unwritable location fails the boot instead of each request. `RouteEdge` hands a
-  route the same `Part`, at an absolute path rather than a relative one.
-
-- **Document sequences on Oracle and SQL Server.** The first allocation of any sequence name
-  failed on both drivers with `TQL-SQL-2610`, on its success path: the seed released its savepoint
-  in a `finally`, `releaseSavepoint` is a `SQLFeatureNotSupportedException` there, and a `finally`
-  that throws discards the value the method was returning. It no longer releases — the commit does
-  that on every dialect, which is the rule `JdbcEventChannelStore` has stated since the same defect
-  was fixed one store over in 0.5.0. The gated portability suites now seed a sequence, race a
-  second connection for it, and prove the loser's transaction survives its own savepoint rollback;
-  a new `SavepointLedgerTest` names every main source that opens a savepoint and refuses any
-  release outside the one site that catches the refusal. `MAX_ATTEMPTS` drops to 2, which is what
-  the comment beside it already claimed.
 
 ## 0.15.0 - 2026-09-03
 
