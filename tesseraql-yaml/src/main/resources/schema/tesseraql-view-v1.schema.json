@@ -53,19 +53,22 @@
     },
     "fields": {
       "type": "array",
+      "items": { "$ref": "tesseraql-defs-v1.schema.json#/$defs/viewField" },
       "description": "The fields a form or detail view renders, in order. Documented in declarative-views.md."
     },
     "columns": {
       "type": "array",
+      "items": { "$ref": "tesseraql-defs-v1.schema.json#/$defs/viewColumn" },
       "description": "The columns a list view renders, in order. Documented in declarative-views.md."
     },
     "children": {
-      "type": "object",
-      "additionalProperties": true,
-      "description": "Views embedded inside this one, keyed by the slot each fills. Documented in declarative-views.md."
+      "type": "array",
+      "items": { "$ref": "tesseraql-defs-v1.schema.json#/$defs/viewChild" },
+      "description": "The child regions a detail view renders under its own fields, in order: a named query through the shared table pattern, or an embedded view document. Documented in declarative-views.md."
     },
     "panels": {
       "type": "array",
+      "items": { "$ref": "tesseraql-defs-v1.schema.json#/$defs/viewPanel" },
       "description": "The panels a dashboard view composes, in order. Documented in declarative-views.md."
     },
     "slots": {

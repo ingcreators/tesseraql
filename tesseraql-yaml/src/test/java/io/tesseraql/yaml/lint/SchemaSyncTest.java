@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -542,6 +543,74 @@ class SchemaSyncTest {
                 .isEqualTo("#/$defs/sqlArm");
         assertThat(armRef(defs, "/$defs/binding/properties/http")).isEqualTo("#/$defs/httpArm");
         assertThat(armRef(defs, "/$defs/enrichment/properties/http")).isEqualTo("#/$defs/httpArm");
+    }
+
+    /**
+     * A view document's nested shapes are described, and {@code children:} is a list.
+     *
+     * <p>The view schema is the one whose own root {@code $comment} claims strictness — "a view
+     * document is strict: the loader refuses an unknown key at every nesting level
+     * (TQL-VIEW-3314), so this schema declares additionalProperties false to match". Its four
+     * nested shapes were exactly where it failed that claim: {@code fields}, {@code columns} and
+     * {@code panels} were bare {@code type: array} with no {@code items}, and {@code children}
+     * was typed {@code object} while {@link io.tesseraql.yaml.view.ViewSpec#children()} is a
+     * {@code List} — so the editor {@code tesseraql new} installs rejected both shipped detail
+     * views.
+     *
+     * <p>The expected key sets come from {@link io.tesseraql.yaml.model.AcceptedKeys}, the same
+     * derivation {@code ViewSpec}'s own strict vocabulary is built from, so a key added to a
+     * record reaches this assertion the day it lands rather than waiting for someone to extend a
+     * hand-typed list.
+     */
+    @Test
+    void aViewDocumentsNestedShapesAreDescribed() throws Exception {
+        JsonNode defs = new ObjectMapper().readTree(
+                getClass().getResourceAsStream("/schema/tesseraql-defs-v1.schema.json"));
+        JsonNode view = new ObjectMapper().readTree(
+                getClass().getResourceAsStream("/schema/tesseraql-view-v1.schema.json"));
+
+        Map<String, Class<?>> shapes = new java.util.LinkedHashMap<>();
+        shapes.put("viewField", io.tesseraql.yaml.view.ViewSpec.Field.class);
+        shapes.put("viewColumn", io.tesseraql.yaml.view.ViewSpec.Column.class);
+        shapes.put("viewChild", io.tesseraql.yaml.view.ViewSpec.Child.class);
+        shapes.put("viewPanel", io.tesseraql.yaml.view.ViewSpec.Panel.class);
+        shapes.put("viewSeries", io.tesseraql.yaml.view.ViewSpec.Series.class);
+        shapes.forEach((name, record) -> {
+            JsonNode node = defs.path("$defs").path(name);
+            assertThat(node.isMissingNode()).as("$defs/%s exists", name).isFalse();
+            assertThat(names(node.path("properties")))
+                    .as("%s declares the keys %s accepts, and only those", name,
+                            record.getSimpleName())
+                    .containsExactlyInAnyOrderElementsOf(
+                            io.tesseraql.yaml.model.AcceptedKeys.of(record));
+            // The document is strict at every nesting level, and its own $comment says so.
+            assertThat(node.path("additionalProperties").asBoolean(true))
+                    .as("%s refuses an unknown key, as TQL-VIEW-3314 does", name).isFalse();
+        });
+
+        // The list keys reach those shapes. Without this the five definitions above can be
+        // perfect while the document keys that motivated them stay undescribed.
+        Map<String, String> lists = new java.util.LinkedHashMap<>();
+        lists.put("fields", "viewField");
+        lists.put("columns", "viewColumn");
+        lists.put("children", "viewChild");
+        lists.put("panels", "viewPanel");
+        lists.forEach((key, target) -> {
+            JsonNode node = view.path("properties").path(key);
+            assertThat(node.path("type").asText())
+                    .as("%s: is a list — ViewSpec holds a List for it", key).isEqualTo("array");
+            assertThat(node.path("items").path("$ref").asText())
+                    .as("%s: items reach the shared %s shape", key, target)
+                    .isEqualTo("tesseraql-defs-v1.schema.json#/$defs/" + target);
+        });
+
+        // The widget vocabulary now has two copies in the schema; neither may drift from the
+        // framework's set. inputField's copy is pinned by its own test above.
+        List<String> widgets = new ArrayList<>();
+        defs.path("$defs").path("viewField").path("properties").path("widget").path("enum")
+                .forEach(node -> widgets.add(node.asText()));
+        assertThat(widgets).as("a view field's widget vocabulary is the framework's")
+                .containsExactlyInAnyOrderElementsOf(io.tesseraql.yaml.view.ViewSpec.WIDGETS);
     }
 
     /**
