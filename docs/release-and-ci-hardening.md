@@ -198,7 +198,15 @@ root `pluginManagement` covers them — so the guard's predicate is **unresolved
 POMs, eleven of them for no reason.
 
 The same ledger asserts that `project.build.outputTimestamp` is still set. #1215 shipped the
-property with nothing that fails if it is deleted.
+property with nothing that fails if it is deleted; both assertions were verified able to fail by
+removing what they hold and watching them go red.
+
+**The `maven-help-plugin` pin was rehearsed, not assumed.** This document first recorded it as a
+risk — documented Maven behaviour that could not be tried here. It can: `./mvnw -N help:evaluate`
+resolved `help:3.5.2` before the pin and the pinned version after it, so `pluginManagement` does
+bind a goal resolved by prefix from the command line. The pinned values are the ones the wrapper's
+Maven already supplied, so nothing about the build changes except that it is now this repository's
+choice.
 
 The sharpest instance of the two-Mavens half is `scripts/bootstrap-maven-wrapper.sh:6`, the script
 whose entire job is to install the wrapper: it runs `mvn -N wrapper:wrapper`. It invokes the Maven
@@ -309,7 +317,7 @@ first instruction is a barrier that has not been necessary for eight releases.
 | 2 | `WorkflowLedgerTest` with assertions 1 and 3; the two SHA pins; the four `env:` hoists | F71, F76 | M |
 | 3 | Assertion 2; `timeout-minutes` on 13 jobs, each bound measured; `concurrency` on all five workflows; the two `### Fixed` headings merged | F77 | M |
 | 4 | `jdk.jfr` in both lists; the bytecode module ledger in `tesseraql-maven-plugin`; the `*/pom.xml` trigger path | F70, F75 | L |
-| 5 | The plugin-resolution ledger; `maven-help`, `maven-dependency`, `maven-resources` pinned; the `outputTimestamp` row | F78 (part) | S |
+| 5 | The plugin-resolution ledger; `maven-help`, `maven-dependency`, `maven-resources` pinned; the `outputTimestamp` row | F78 (part) | M |
 | 6 | `requireMavenVersion`; the `mvn` → `./mvnw` sweep; `.devcontainer` and `scripts/` de-duplicated | F78 (part) | L |
 | 7 | `distributionSha256Sum`, after slice 6 removes the script that regenerates the file without it | F72 | S |
 | 8 | The two attach scripts, the loop ledger, the raised budget, and the attach job split that lets the build jobs drop to `contents: read` | F69, unfiled | M |

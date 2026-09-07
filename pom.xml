@@ -210,6 +210,9 @@
       (docs/deterministic-output.md decision 6).
     -->
     <maven.jar.plugin.version>3.5.0</maven.jar.plugin.version>
+    <maven.help.plugin.version>3.5.2</maven.help.plugin.version>
+    <maven.dependency.plugin.version>3.7.0</maven.dependency.plugin.version>
+    <maven.resources.plugin.version>3.4.0</maven.resources.plugin.version>
   </properties>
 
   <dependencyManagement>
@@ -603,6 +606,34 @@
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-plugin-plugin</artifactId>
           <version>${maven.plugin.tools.version}</version>
+        </plugin>
+        <!--
+          Resolved by prefix from the command line (help:evaluate), never declared in a POM, so
+          nothing bound its version: the five tag-path invocations in release.yml and jpackage.yml
+          each got whatever was newest in the plugin repository. Rehearsed rather than assumed:
+          pinning here moved a real invocation from help:3.5.2 to the pinned version.
+        -->
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-help-plugin</artifactId>
+          <version>${maven.help.plugin.version}</version>
+        </plugin>
+        <!--
+          The two plugins tesseraql-yaml declares with no version. They unpack the Hypermedia
+          Components WebJAR and copy its email templates into the jar, so they write bytes that
+          ship, and their version came from whichever Maven ran: 3.7.0 and 3.4.0 under the
+          wrapper's 3.9.16, 2.8 and 2.6 under the 3.8.7 the devcontainer installs. That is the same
+          reproducibility claim project.build.outputTimestamp makes, resolved one layer down.
+        -->
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-dependency-plugin</artifactId>
+          <version>${maven.dependency.plugin.version}</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-resources-plugin</artifactId>
+          <version>${maven.resources.plugin.version}</version>
         </plugin>
       </plugins>
     </pluginManagement>
