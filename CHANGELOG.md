@@ -63,6 +63,19 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **Every plugin that writes into the build has a version this repository chose.** Two plugin
+  declarations in `tesseraql-yaml` carried no version and were managed nowhere, so their version
+  came from whichever Maven ran — 3.7.0 and 3.4.0 under the wrapper's 3.9.16, 2.8 and 2.6 under the
+  3.8.7 the devcontainer installs and that AGENTS.md, CONTRIBUTING.md and docs/build.md all tell a
+  contributor to invoke. They are the two that unpack the Hypermedia Components WebJAR and copy its
+  email templates into the jar, so they write bytes that ship, which makes this the same claim
+  `project.build.outputTimestamp` makes one layer down. `maven-help-plugin` is pinned beside them:
+  it is resolved by prefix at five tag-path invocations, appears in no POM, and was resolving to
+  whatever was newest. A new `PluginVersionLedgerTest` refuses a declaration the root
+  `pluginManagement` does not resolve — the predicate is "unresolved", not "has no version", since
+  eleven honest declarations rely on that management — and holds
+  `project.build.outputTimestamp`, which shipped with nothing that failed without it.
+
 - **The jlinked images carry the module the pinning diagnostic needs.** `JfrPinningSource` imports
   `jdk.jfr.consumer`, and neither `--add-modules` list in the jpackage workflow named `jdk.jfr` —
   the eleven roots resolve to a 31-module closure that does not contain it. So an operator who set
