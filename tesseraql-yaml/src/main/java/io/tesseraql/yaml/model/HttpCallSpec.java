@@ -2,6 +2,7 @@ package io.tesseraql.yaml.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import io.tesseraql.core.util.OrderedCopies;
 import java.util.Locale;
 import java.util.Map;
 
@@ -50,8 +51,8 @@ public record HttpCallSpec(
         RetrySpec retry) {
 
     public HttpCallSpec {
-        headers = headers == null ? Map.of() : Map.copyOf(headers);
-        query = query == null ? Map.of() : Map.copyOf(query);
+        headers = headers == null ? Map.of() : OrderedCopies.map(headers);
+        query = query == null ? Map.of() : OrderedCopies.map(query);
     }
 
     /** The HTTP method in upper case, defaulting to {@code GET}. */

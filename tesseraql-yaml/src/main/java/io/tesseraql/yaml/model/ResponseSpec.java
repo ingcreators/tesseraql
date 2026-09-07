@@ -1,6 +1,7 @@
 package io.tesseraql.yaml.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import io.tesseraql.core.util.OrderedCopies;
 
 /**
  * Route response declaration (design ch. 6.3, 6.4): JSON, HTML (template-rendered), streaming
@@ -60,7 +61,7 @@ public record ResponseSpec(JsonResponse json, HtmlResponse html, StreamResponse 
             java.util.Map<String, Object> model) {
 
         public FileResponse {
-            model = model == null ? java.util.Map.of() : java.util.Map.copyOf(model);
+            model = model == null ? java.util.Map.of() : OrderedCopies.map(model);
         }
 
         public int effectiveStatus() {
@@ -94,7 +95,7 @@ public record ResponseSpec(JsonResponse json, HtmlResponse html, StreamResponse 
             java.util.Map<String, Object> model) {
 
         public TextResponse {
-            model = model == null ? java.util.Map.of() : java.util.Map.copyOf(model);
+            model = model == null ? java.util.Map.of() : OrderedCopies.map(model);
         }
 
         public int effectiveStatus() {
@@ -158,14 +159,14 @@ public record ResponseSpec(JsonResponse json, HtmlResponse html, StreamResponse 
             java.util.Map<String, Object> headers, java.util.Map<String, String> headersWhen) {
 
         public JsonResponse {
-            fields = fields == null ? java.util.Map.of() : java.util.Map.copyOf(fields);
+            fields = fields == null ? java.util.Map.of() : OrderedCopies.map(fields);
             statusWhen = statusWhen == null
                     ? java.util.List.of()
                     : java.util.List.copyOf(statusWhen);
-            headers = headers == null ? java.util.Map.of() : java.util.Map.copyOf(headers);
+            headers = headers == null ? java.util.Map.of() : OrderedCopies.map(headers);
             headersWhen = headersWhen == null
                     ? java.util.Map.of()
-                    : java.util.Map.copyOf(headersWhen);
+                    : OrderedCopies.map(headersWhen);
         }
 
         /** A synthesized response: a status and a body, with nothing declared around them. */
@@ -252,11 +253,11 @@ public record ResponseSpec(JsonResponse json, HtmlResponse html, StreamResponse 
                     ? java.util.List.of()
                     : java.util.List.copyOf(statusWhen);
             views = views == null ? java.util.List.of() : java.util.List.copyOf(views);
-            model = model == null ? java.util.Map.of() : java.util.Map.copyOf(model);
-            headers = headers == null ? java.util.Map.of() : java.util.Map.copyOf(headers);
+            model = model == null ? java.util.Map.of() : OrderedCopies.map(model);
+            headers = headers == null ? java.util.Map.of() : OrderedCopies.map(headers);
             headersWhen = headersWhen == null
                     ? java.util.Map.of()
-                    : java.util.Map.copyOf(headersWhen);
+                    : OrderedCopies.map(headersWhen);
         }
 
         public int effectiveStatus() {

@@ -211,6 +211,31 @@ class HttpCallClientTest {
         assertThat(hits.get()).isEqualTo(1);
     }
 
+    /**
+     * A partner logging the request must see the same URL for the same call. The query map is
+     * iterated straight into the query string, so a salted copy meant every boot produced a
+     * different URL for identical inputs. Four names, and the declared order is not one of their
+     * eight reachable iteration orders — an order test on three or fewer keys, or on a key set
+     * whose declared order is reachable, would be green by luck
+     * (docs/deterministic-output.md decision 2).
+     */
+    @Test
+    void theQueryStringFollowsTheDeclaredParameterOrder() {
+        HttpCallClient client = client(Map.of("allowedHosts", List.of("localhost")));
+        Map<String, String> query = new java.util.LinkedHashMap<>();
+        query.put("base", "params.base");
+        query.put("quote", "params.quote");
+        query.put("amount", "params.amount");
+        query.put("asOf", "params.asOf");
+        HttpCallSpec spec = new HttpCallSpec("GET", "http://localhost:" + port + "/rates",
+                Map.of(), query, null, null, null, null, null, null);
+
+        client.call(spec, Map.of("params", Map.of("base", "JPY", "quote", "USD",
+                "amount", "100", "asOf", "2026-09-07")), null);
+
+        assertThat(lastQuery).isEqualTo("base=JPY&quote=USD&amount=100&asOf=2026-09-07");
+    }
+
     @Test
     void issuesACallApplyingMethodHeadersQueryBodyAndCredential() {
         HttpCallClient client = client(Map.of(

@@ -3,6 +3,7 @@ package io.tesseraql.yaml.config;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
+import io.tesseraql.core.util.OrderedCopies;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -38,7 +39,10 @@ public final class ResponseHeaderDefaults {
     private final Map<String, String> headers;
 
     private ResponseHeaderDefaults(Map<String, String> headers) {
-        this.headers = Map.copyOf(headers);
+        // Declaration order: the javadoc below promises it, the lint findings this map
+        // feeds are emitted in it, and every bundled app declares a four-header security
+        // block whose authored order was unreachable (docs/deterministic-output.md).
+        this.headers = OrderedCopies.map(headers);
     }
 
     /** Parses {@code tesseraql.security.responseHeaders}; absent config yields no defaults. */

@@ -205,17 +205,27 @@ A declared response header block is re-copied where it is emitted, so converting
 alone changes nothing observable and the slice's own promised test would fail after the fix. The
 conversion belongs at the emission point, and the test asserts on the wire.
 
-Slice 2 re-measured this and there is not one emission point but **three salting layers**.
-`ResponseSpec` is masked by `ResponseHeaders`, and `ResponseHeaders` is in turn fed a salted
-app-wide default map by `ResponseHeaderDefaults` — plus a fourth path through
-`ErrorResponseRenderer` for the error response. A slice that converts `ResponseHeaders` alone is
-still red on any route that inherits app-wide headers, which is the same "fix one layer, prove
-nothing" failure this decision was written to avoid, one layer further up. Note also that
-`ResponseHeaders`'s second `Map.copyOf`, over the compiled guards, is order-irrelevant — the
-guards are only ever read by key — so it is an exemption, not a conversion.
+Slice 2 said there were three salting layers and that the fix belonged at `ResponseHeaders`.
+**Slice 4 measured the whole path and this decision is wrong at its root.**
 
-This decision leaves the response-header conversion owned by no slice. Whoever takes it takes all
-three layers.
+`Response` — the pipeline's own response object, which every renderer writes headers into — holds
+them in a `TreeMap(String.CASE_INSENSITIVE_ORDER)`. **The wire is alphabetical.** Response-header
+order is not observable on the wire at all, so "the test asserts on the wire" cannot be done, and
+every downstream copy (`ResponseHeaders`, `ErrorResponseRenderer`, the two lookup processors) is an
+exemption rather than a conversion.
+
+**And there is a trap under that.** A test written with `java.net.http.HttpClient` would sort the
+headers again on the way in — `HttpHeadersBuilder` holds them in its own case-insensitive
+`TreeMap` — so a wire-order assertion written the obvious way is green on a broken build **100% of
+the time**. That is worse than decision 2's lucky test: it is a test that can never fail. Nothing
+in this campaign may assert response-header order through an HTTP client.
+
+The order *is* observable, in the place nobody looked: the **linter**. `ResponseHeaderRules`
+iterates the declared map and the defaults map unsorted at three sites, straight into the finding
+list, and `tesseraql lint --format json` serializes that list verbatim. Two runs over identical
+sources emitted different JSON bytes — a persisted-artifact defect, which outranks the wire claim
+on this campaign's own terms. So the conversions are `ResponseHeaderDefaults` and `ResponseSpec`,
+and the reason is the linter, not the wire.
 
 ### 5a — The step-result map is an answer only where no response is declared
 
@@ -285,7 +295,7 @@ Each is one pull request, branched from fresh `origin/main`.
 | 1 | This design document, registered in both internal-doc lists | S | — |
 | 2 | `OrderedCopies`, its two methods, and `config/flags.yml` keeps the author's key order | M | F27 |
 | 3 | A declared `input:` keeps its order — route, job, and the import re-copy | M | F27 |
-| 4 | The model's remaining maps keep their declared order | M | F27 |
+| 4 | The model's remaining maps keep their declared order, response headers included | M | F27 |
 | 5 | An MCP tool answers in authored step order | S | F33 |
 | 6 | A declared payload keeps its key order on the wire and in the file | M | — |
 | 7 | The ordered-copy ledger | L | the guard |

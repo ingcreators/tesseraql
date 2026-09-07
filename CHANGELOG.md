@@ -63,6 +63,14 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **The response model, the outbound call and the app-wide header defaults keep their declared
+  order.** Twelve `Map.copyOf` sites across the response spec, the HTTP call spec, the outbox spec
+  and the response-header defaults. Two consequences were user-visible: an outbound call built its
+  query string straight from the salted map, so a partner logged a different URL for the same
+  call, and `tesseraql lint --format json` emitted its response-header findings in a salt-chosen
+  order, so two runs over identical sources produced different bytes. Part of the
+  deterministic-output campaign (docs/deterministic-output.md).
+
 - **A notification or published event delivers its payload in the declared key order — and no
   longer crashes on an absent value.** Both envelope records decode the payload into a
   `LinkedHashMap` in the order the JSON carries it, then copied it with `Map.copyOf` twenty lines
