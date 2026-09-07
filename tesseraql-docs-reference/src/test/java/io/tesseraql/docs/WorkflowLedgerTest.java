@@ -181,6 +181,63 @@ class WorkflowLedgerTest {
                 .matches("[0-9a-f]{64}");
     }
 
+    /**
+     * The release choreography's polling lives in a script, not copied into a workflow.
+     *
+     * <p>Three copies of {@code for i in $(seq 1 60); do … sleep 20} waited on two different
+     * things: the two in {@code jpackage.yml} waited for the release {@code release.yml} creates,
+     * and the one in {@code release.yml} waited for the assets {@code jpackage.yml} attaches. So
+     * they are two scripts, not one, and neither belongs inline: a workflow step cannot be run
+     * anywhere, and this is the choreography on the one path no pull request enters.
+     *
+     * <p>The predicate is a counting loop that <b>talks to the release API</b>, not any counting
+     * loop. Written the broad way it is red on {@code ci.yml}'s dev-server readiness wait, which is
+     * honest: that one polls a local port, is bounded at three minutes, and breaks early when the
+     * process it is waiting for dies. A guard that is red for an honest reason is one somebody
+     * eventually deletes.
+     *
+     * <p>The check is on the workflows only. The scripts themselves poll, by definition.
+     */
+    @Test
+    void noWorkflowCarriesItsOwnReleasePollingLoop() throws IOException {
+        List<String> loops = new ArrayList<>();
+        for (Path workflow : workflows()) {
+            List<String> lines = Files.readAllLines(workflow);
+            for (int line = 0; line < lines.size(); line++) {
+                String text = lines.get(line);
+                if (!text.contains("for ") || !text.contains("seq ")) {
+                    continue;
+                }
+                if (bodyOf(lines, line).contains("gh release")) {
+                    loops.add(name(workflow) + ":" + (line + 1) + " " + text.trim());
+                }
+            }
+        }
+
+        assertThat(loops)
+                .as("release-choreography polling written inline in a workflow; put the wait in "
+                        + ".github/scripts/ where it can be read, rehearsed and fixed once")
+                .isEmpty();
+    }
+
+    /** The lines of the loop opening at {@code start}: everything indented under it. */
+    private static String bodyOf(List<String> lines, int start) {
+        int indent = indent(lines.get(start));
+        StringBuilder body = new StringBuilder();
+        for (int line = start + 1; line < lines.size(); line++) {
+            String text = lines.get(line);
+            if (!text.isBlank() && indent(text) <= indent) {
+                // "done" closes the loop at the opening indent; anything shallower ends the block.
+                if (text.strip().startsWith("done")) {
+                    body.append(text).append('\n');
+                }
+                break;
+            }
+            body.append(text).append('\n');
+        }
+        return body.toString();
+    }
+
     /** One job block: its id, the line it opens on, and whether it declares its own timeout. */
     private record Job(String id, int line, boolean bounded) {
     }

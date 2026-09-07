@@ -63,6 +63,16 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **The release choreography's polling lives in two scripts that can be run.** Three copies of the
+  same twenty-minute loop were written inline in the workflows, waiting on two different things: the
+  two in the jpackage workflow waited for the release the release workflow creates, and the one in
+  the release workflow waited for the assets the jpackage workflow attaches. They are now
+  `.github/scripts/attach-release-asset.sh` and `.github/scripts/await-release-assets.sh`, with the
+  budget stated in minutes and raised to forty — the margin before the old deadline was 1m48s at
+  v0.14.0, recomputed from the real runs. A timeout now names the asset it gave up on and says the
+  release itself is unaffected, and the asset wait names *which* of the two is still missing rather
+  than reporting "and/or". `WorkflowLedgerTest` refuses a release-polling loop written inline again.
+
 - **The Maven distribution is verified before it is executed.** `.mvn/wrapper/maven-wrapper.properties`
   declared no `distributionSha256Sum`, and `mvnw` validates only when that property is present — so
   every cold run downloaded and executed a distribution nobody checked. `setup-java` caches it for

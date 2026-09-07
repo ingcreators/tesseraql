@@ -192,26 +192,12 @@ jobs:
           VERSION="${GITHUB_REF_NAME#v}"
           DIST="tesseraql-cli-${VERSION}-dist.tar.gz"
           WIN="tesseraql-${VERSION}-windows-x86_64.zip"
-          # The Windows jpackage job takes ~10 minutes; poll up to 20.
-          for i in $(seq 1 60); do
-            JSON=$(gh release view "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" --json assets)
-            DIST_SHA=$(printf '%s' "$JSON" | jq -r --arg n "$DIST" \
-              '.assets[] | select(.name == $n) | .digest // empty' | sed 's/^sha256://')
-            WIN_SHA=$(printf '%s' "$JSON" | jq -r --arg n "$WIN" \
-              '.assets[] | select(.name == $n) | .digest // empty' | sed 's/^sha256://')
-            if [ -n "$DIST_SHA" ] && [ -n "$WIN_SHA" ]; then
-              {
-                echo "version=$VERSION"
-                echo "dist_sha=$DIST_SHA"
-                echo "win_sha=$WIN_SHA"
-              } >> "$GITHUB_OUTPUT"
-              exit 0
-            fi
-            echo "Waiting for release assets ($i/60)..."
-            sleep 20
-          done
-          echo "Timed out waiting for $DIST and/or $WIN on release $GITHUB_REF_NAME" >&2
-          exit 1
+          DIGESTS=$(bash .github/scripts/await-release-assets.sh "$GITHUB_REF_NAME" "$DIST" "$WIN")
+          {
+            echo "version=$VERSION"
+            echo "dist_sha=$(echo "$DIGESTS" | awk -v n="$DIST" '$1 == n { print $2 }')"
+            echo "win_sha=$(echo "$DIGESTS" | awk -v n="$WIN" '$1 == n { print $2 }')"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Bump the Homebrew formula
         if: steps.token.outputs.present == 'true'

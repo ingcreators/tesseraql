@@ -187,21 +187,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          TAG="$GITHUB_REF_NAME"
-          # release.yml publishes the release near the END of its run (verify + deploy first), so
-          # this per-OS job will usually finish first — poll until the release exists, then attach.
-          for i in $(seq 1 60); do
-            if gh release view "$TAG" >/dev/null 2>&1; then
-              gh release upload "$TAG" "$ASSET" --clobber
-              echo "Attached $ASSET to $TAG"
-              exit 0
-            fi
-            echo "Waiting for release $TAG ($i/60)..."
-            sleep 20
-          done
-          echo "Release $TAG did not appear within the timeout" >&2
-          exit 1
+        run: bash .github/scripts/attach-release-asset.sh "$GITHUB_REF_NAME" "$ASSET"
 
   # The Windows Server deployment artifact (docs/runtime-footprint.md decision 2a): the
   # tesseraql-host distribution as a jpackage app image, plus the WinSW service definition it is
@@ -449,16 +435,4 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          TAG="$GITHUB_REF_NAME"
-          for i in $(seq 1 60); do
-            if gh release view "$TAG" >/dev/null 2>&1; then
-              gh release upload "$TAG" "$ASSET" --clobber
-              echo "Attached $ASSET to $TAG"
-              exit 0
-            fi
-            echo "Waiting for release $TAG ($i/60)..."
-            sleep 20
-          done
-          echo "Release $TAG did not appear within the timeout" >&2
-          exit 1
+        run: bash .github/scripts/attach-release-asset.sh "$GITHUB_REF_NAME" "$ASSET"
