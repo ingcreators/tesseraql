@@ -1,6 +1,7 @@
 package io.tesseraql.yaml.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import io.tesseraql.core.util.OrderedCopies;
 import java.util.Map;
 
 /**
@@ -74,7 +75,7 @@ public record Binding(String file, String contract, String mode, Map<String, Str
         String spool, String when, Map<String, EnrichSpec> enrich, Map<String, String> out) {
 
     public Binding {
-        params = params == null ? Map.of() : Map.copyOf(params);
+        params = params == null ? Map.of() : OrderedCopies.map(params);
         keys = keys == null ? java.util.List.of() : java.util.List.copyOf(keys);
         enrich = enrich == null
                 ? Map.of()
@@ -202,7 +203,7 @@ public record Binding(String file, String contract, String mode, Map<String, Str
             // The arm is read directly wherever a slot holds one (an enrichment's reference, an
             // import's row write, an export's follow-up), so its collections normalize here as
             // the enclosing record's do — an absent params: is an empty map, not a null.
-            params = params == null ? Map.of() : Map.copyOf(params);
+            params = params == null ? Map.of() : OrderedCopies.map(params);
             keys = keys == null ? java.util.List.of() : java.util.List.copyOf(keys);
             out = out == null
                     ? Map.of()
@@ -238,7 +239,7 @@ public record Binding(String file, String contract, String mode, Map<String, Str
     public record NamedCall(String name, String mode, Map<String, String> params, Expect expect) {
 
         public NamedCall {
-            params = params == null ? Map.of() : Map.copyOf(params);
+            params = params == null ? Map.of() : OrderedCopies.map(params);
         }
     }
 
@@ -259,7 +260,7 @@ public record Binding(String file, String contract, String mode, Map<String, Str
             Materialize materialize, Integer timeoutSeconds) {
 
         public ContractCall {
-            params = params == null ? Map.of() : Map.copyOf(params);
+            params = params == null ? Map.of() : OrderedCopies.map(params);
         }
     }
 

@@ -63,6 +63,15 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A salted map in the declaration layer now fails the build.** `OrderedCopyLedgerTest` is the
+  census the deterministic-output campaign was for: every file in the packages that hold or emit
+  an author's declaration either builds its maps and sets in declared order or is named in the
+  ledger with the reason its order cannot reach output. The scanner lexes comments and string
+  literals out before it matches — several sites carry a comment saying they avoid `copyOf`, and a
+  whole-file matcher would have counted the comment — and it counts arguments, because a zero- or
+  one-entry factory has no table and cannot vary. Eleven remaining model records were converted in
+  the same change. Completes the deterministic-output campaign (docs/deterministic-output.md).
+
 - **The response model, the outbound call and the app-wide header defaults keep their declared
   order.** Twelve `Map.copyOf` sites across the response spec, the HTTP call spec, the outbox spec
   and the response-header defaults. Two consequences were user-visible: an outbound call built its

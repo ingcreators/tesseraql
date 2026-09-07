@@ -1,6 +1,7 @@
 package io.tesseraql.yaml.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import io.tesseraql.core.util.OrderedCopies;
 import java.util.Map;
 
 /**
@@ -26,7 +27,7 @@ import java.util.Map;
 public record MatchArm(WhenCondition when, String apply, String file, Map<String, String> params) {
 
     public MatchArm {
-        params = params == null ? Map.of() : Map.copyOf(params);
+        params = params == null ? Map.of() : OrderedCopies.map(params);
     }
 
     /** Whether this arm grants all rows ({@code apply: all}). */

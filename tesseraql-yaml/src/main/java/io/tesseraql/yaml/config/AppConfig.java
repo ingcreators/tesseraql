@@ -3,6 +3,7 @@ package io.tesseraql.yaml.config;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
+import io.tesseraql.core.util.OrderedCopies;
 import java.util.Map;
 import java.util.Optional;
 
@@ -47,7 +48,7 @@ public final class AppConfig {
 
     public AppConfig(Map<String, Object> root, EnvironmentSource environment,
             io.tesseraql.yaml.secret.SecretResolvers secrets) {
-        this.root = Map.copyOf(root);
+        this.root = OrderedCopies.map(root);
         this.environment = environment;
         this.secrets = secrets;
     }

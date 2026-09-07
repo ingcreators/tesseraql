@@ -3,6 +3,7 @@ package io.tesseraql.yaml.view;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
+import io.tesseraql.core.util.OrderedCopies;
 import io.tesseraql.yaml.SimpleYamlParser;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -267,7 +268,7 @@ public record ViewSpec(String id,
         columns = columns == null ? List.of() : List.copyOf(columns);
         children = children == null ? List.of() : List.copyOf(children);
         panels = panels == null ? List.of() : List.copyOf(panels);
-        slots = slots == null ? Map.of() : Map.copyOf(slots);
+        slots = slots == null ? Map.of() : OrderedCopies.map(slots);
         key = key == null ? List.of() : List.copyOf(key);
     }
 
