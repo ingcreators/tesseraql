@@ -129,34 +129,8 @@ JDK:
     -Dtesseraql.jdbcUrl=jdbc:postgresql://localhost:5432/myapp
 ```
 
-The framework artifacts resolve from GitHub Packages, which **requires authentication even for
-public reads**. The scaffolded `pom.xml` declares no repository, so add both the repository and
-a personal access token with `read:packages` to your `~/.m2/settings.xml` (in CI, the workflow
-`GITHUB_TOKEN` works the same way):
-
-```xml
-<settings>
-  <activeProfiles><activeProfile>tesseraql</activeProfile></activeProfiles>
-  <profiles>
-    <profile>
-      <id>tesseraql</id>
-      <repositories>
-        <repository>
-          <id>github-tesseraql</id>
-          <url>https://maven.pkg.github.com/ingcreators/tesseraql</url>
-        </repository>
-      </repositories>
-    </profile>
-  </profiles>
-  <servers>
-    <server>
-      <id>github-tesseraql</id>
-      <username>YOUR_GITHUB_USER</username>
-      <password>ghp_your_token_with_read_packages</password>
-    </server>
-  </servers>
-</settings>
-```
+The framework artifacts are on Maven Central, so there is nothing to configure: the scaffolded
+`pom.xml` declares no repository because it needs none, and neither does your CI.
 
 The BOM version-manages the opt-in JDBC drivers (`ojdbc11`, `mssql-jdbc`,
 `mysql-connector-j`), so a consumer declares bare coordinates. Behind a proxy or internal

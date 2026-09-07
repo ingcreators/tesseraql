@@ -14,7 +14,6 @@ on:
 
 permissions:
   contents: write
-  packages: write
 
 # Never cancel a release in flight: the tag path is not rehearsable and a half-run
 # leaves a published release with missing assets.
@@ -40,20 +39,10 @@ jobs:
           java-version: '25'
           cache: maven
           # Stated, not inherited: v6 turned signature verification on by default, and this JDK
-          # compiles the jars published to GitHub Packages. A value this load-bearing should not
-          # move because Dependabot landed a pin. The tag path cannot be rehearsed, which is an
-          # argument for stating the value here, not for switching it off.
+          # builds the distribution archives this release publishes. A value this load-bearing
+          # should not move because Dependabot landed a pin. The tag path cannot be rehearsed,
+          # which is an argument for stating the value here, not for switching it off.
           verify-signature: true
-          # Writes a settings.xml mapping the 'github' server (parent distributionManagement) to
-          # the workflow token, so `mvn deploy` can upload to GitHub Packages. The values are
-          # environment variable NAMES, resolved as ${env.*} by the deploy step below.
-          # v6 renamed these inputs; `server-username`/`server-password` still work as wired
-          # deprecated aliases, but once those are dropped the inputs fall back to the names
-          # GITHUB_ACTOR/GITHUB_TOKEN, which this job never exports — so the deploy would 401
-          # at tag time, the one path no pull request can rehearse.
-          server-id: github
-          server-username-env-var: MAVEN_USERNAME
-          server-password-env-var: MAVEN_PASSWORD
 
       - name: Verify
         run: ./mvnw -B -ntp clean verify
@@ -67,11 +56,12 @@ jobs:
             exit 1
           fi
 
-      - name: Publish to GitHub Packages and build the CLI distribution
-        env:
-          MAVEN_USERNAME: ${{ github.actor }}
-          MAVEN_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
-        run: ./mvnw -B -ntp -DskipTests -Pdist deploy
+      # Package, not deploy. The framework's artifacts are published to Maven Central by the
+      # central-publish job below; GitHub Packages was a second channel nothing consumed, and
+      # because that job declares needs: release, a blip in its upload stopped the publish to
+      # the channel that is actually read.
+      - name: Build the CLI distribution
+        run: ./mvnw -B -ntp -DskipTests -Pdist package
 
       - name: Publish GitHub release
         env:

@@ -309,6 +309,45 @@ class WorkflowLedgerTest {
         return false;
     }
 
+    /**
+     * The only place the framework's artifacts are published is Maven Central.
+     *
+     * <p>A second channel existed on GitHub Packages, and nothing consumed it: no POM in this
+     * repository declared it under {@code <repositories>}, the CLI's module resolver never
+     * contacted it, and Central has carried the same artifacts publicly and unauthenticated since
+     * 0.7.1. It was worse than unused — {@code release.yml}'s Central publish declares
+     * {@code needs: release}, so a 401 or a blip uploading to the channel nobody read stopped the
+     * publish to the channel everyone does.
+     *
+     * <p>So a Maven {@code deploy} in a workflow must carry {@code -Pcentral}. That profile
+     * activates {@code central-publishing-maven-plugin} with {@code <extensions>true</extensions>},
+     * whose lifecycle participant replaces {@code maven-deploy-plugin} on the {@code deploy} phase —
+     * measured, not read: with {@code distributionManagement} deleted, {@code -Pcentral deploy}
+     * runs {@code central-publishing:publish (injected-central-publishing)} and fails at the Portal
+     * with a 401, never at "repository element was not specified".
+     */
+    @Test
+    void theOnlyPublishTargetIsMavenCentral() throws IOException {
+        List<String> deploys = new ArrayList<>();
+        for (Path workflow : workflows()) {
+            List<String> lines = Files.readAllLines(workflow);
+            for (int line = 0; line < lines.size(); line++) {
+                for (String shell : shellSourceAt(lines, line)) {
+                    if (shell.contains("mvnw") && shell.matches(".*\\sdeploy(\\s.*)?$")
+                            && !shell.contains("-Pcentral")) {
+                        deploys.add(name(workflow) + ":" + (line + 1) + " " + shell.trim());
+                    }
+                }
+            }
+        }
+
+        assertThat(deploys)
+                .as("a Maven deploy that is not the Maven Central publish; the framework has one "
+                        + "publish target, and a second one gates the first through the "
+                        + "central-publish job's needs:")
+                .isEmpty();
+    }
+
     /** One job block: its id, the line it opens on, and whether it declares its own timeout. */
     private record Job(String id, int line, boolean bounded) {
     }

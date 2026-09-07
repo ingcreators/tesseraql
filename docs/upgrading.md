@@ -46,7 +46,7 @@ Verify with `tesseraql --version`. The install channels are described in
 
 1. **Bump the wrapper pom.** Set `tesseraql.version` in the scaffolded `pom.xml` to the
    new release, so the Maven/CI path builds against the same version the CLI runs. The
-   framework artifacts resolve from GitHub Packages as before.
+   framework artifacts resolve from Maven Central, with nothing to configure.
 2. **Refresh `modules.lock`** if the app declares `tesseraql.modules`. Framework module
    coordinates declared without a version (the normal form, e.g.
    `io.tesseraql:tesseraql-pdf`) resolve through the BOM at the CLI's own version, so

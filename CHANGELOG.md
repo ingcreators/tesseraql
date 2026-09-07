@@ -63,6 +63,17 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **The framework has one publish target, and it is Maven Central.** Release tags also deployed
+  every module to GitHub Packages, and nothing consumed that channel: no POM in this repository
+  declared it under `<repositories>`, the CLI's module resolver never contacted it, and Central has
+  carried the same artifacts publicly and unauthenticated since 0.7.1. It was worse than unused —
+  the Central publish job declares `needs: release`, so a 401 or a blip uploading to the channel
+  nobody read stopped the publish to the channel everyone does. The release job now runs
+  `-Pdist package`, the root POM's `distributionManagement` is gone, and `WorkflowLedgerTest`
+  refuses a Maven deploy that is not the Central publish. Getting started, troubleshooting and
+  upgrading no longer ask a reader to mint a `read:packages` token: that instruction had been
+  unnecessary for eight releases.
+
 - **A pull request no longer runs under a token that can write to the repository.** The jpackage
   workflow granted `contents: write` at its top level and triggers on `pull_request`, so every
   same-repo pull request ran `./mvnw` — arbitrary branch code — holding a write token. Narrowing it
