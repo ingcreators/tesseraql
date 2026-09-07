@@ -135,8 +135,7 @@
                 "description": "`extract` (default) runs the statement in the extraction's transaction, so rows are marked exactly when they are extracted; `download` runs it once on the first successful file fetch. A job's export step supports `extract` only (TQL-YAML-1041)."
               },
               "sql": {
-                "type": "object",
-                "additionalProperties": true,
+                "$ref": "#/$defs/sqlArm",
                 "description": "The follow-up statement, written as a source's `sql:` arm is — `file:`, `params:`, and the rest of the arm's keys."
               }
             },
@@ -179,13 +178,11 @@
           "description": "The join: each column of the rows being enriched to the column of the reference it matches. Several pairs make a composite key, compared by the framework's canonical normalization (INTEGER 1 matches BIGINT 1)."
         },
         "sql": {
-          "type": "object",
-          "additionalProperties": true,
+          "$ref": "#/$defs/sqlArm",
           "description": "Fetch the reference by key, written as a source's `sql:` arm is. The statement must bind `keys` — one that never mentions it reads the whole table once per batch and still returns the right answer, which is why only the build can catch it (TQL-YAML-1048)."
         },
         "http": {
-          "type": "object",
-          "additionalProperties": true,
+          "$ref": "#/$defs/httpArm",
           "description": "Call the reference by key, written as a source's `http:` arm is, plus `select:` and `onError:`. How the keys reach it is `mode:`."
         },
         "source": {
@@ -613,89 +610,188 @@
         "additionalProperties": true
       }
     },
+    "sqlArm": {
+      "type": "object",
+      "properties": {
+        "file": {
+          "type": "string",
+          "description": "A colocated 2-way SQL file, relative to the declaring document (must exist; TQL-SQL-2103). This arm's acquisition target, the role `url` plays for `http`."
+        },
+        "mode": {
+          "type": "string",
+          "examples": [
+            "query",
+            "query-one",
+            "update",
+            "query-spool",
+            "call"
+          ],
+          "description": "How the statement runs and what it binds: `query` (rows), `query-one` (a single row), `update` (an affected-row count), `query-spool` (rows streamed to a spool a later chunk: step reads, never held), or `call` (a stored call on a command step, its OUT parameters declared under `out:`)."
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Each bind name to the bindable path supplying its value, such as `path.id`, `params.unit` or `principal.claim.tenant_id`."
+        },
+        "keys": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Columns whose database-generated values are captured after an insert; they bind as `steps.<id>.keys.<column>`."
+        },
+        "out": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "The OUT parameters of a `mode: call` statement on a command step: each name to its JDBC type keyword (varchar, numeric, integer, bigint, boolean, date, timestamp, double). The statement binds them as `out.<name>` bind sites and the values publish as `steps.<id>.out.<name>`. Documented in transactional-writes.md."
+        },
+        "timeoutSeconds": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Per-binding SQL statement timeout override; 0 disables. Default: tesseraql.sql.timeoutSeconds, else 30s."
+        },
+        "datasource": {
+          "type": "string",
+          "description": "The named connector this read runs on, overriding the document's. Legal on a read only: a batch step owns its own transaction so an extract elsewhere splits nothing, while a write on another connector would be a second transaction nothing owns (TQL-YAML-1037)."
+        },
+        "materialize": {
+          "type": "object",
+          "properties": {
+            "maxRows": {
+              "type": "integer",
+              "description": "Largest number of rows materialized. Default: `tesseraql.resultMaterialization.maxRows`."
+            },
+            "onOverflow": {
+              "type": "string",
+              "description": "`fail` (the default) refuses a result past `maxRows`; `warn` truncates it and logs."
+            }
+          },
+          "additionalProperties": true,
+          "description": "Bounds on how much of the result is held in memory."
+        },
+        "expect": {
+          "type": "object",
+          "properties": {
+            "rowCount": {
+              "type": "integer",
+              "description": "The exact number of rows the statement must affect (rows is a list of records everywhere else)."
+            },
+            "onMismatch": {
+              "type": "string",
+              "description": "`conflict` (the default) answers 409, so a stale edit is refused honestly; `error` answers 500."
+            }
+          },
+          "additionalProperties": true,
+          "description": "The row count this statement must affect, and what happens when it does not — the declarative optimistic-locking check on an update or delete."
+        }
+      },
+      "additionalProperties": true,
+      "description": "A 2-way SQL statement and how it is run — the shape every `sql:` arm carries, wherever one is written. The keys of the mechanism nest inside the arm that owns them, so there is nowhere to write a call's `select:` on a statement and no lint has to say it is wrong."
+    },
+    "httpArm": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "type": "string",
+          "description": "The HTTP method. Default GET; a source is not restricted to GET, because JSON-RPC, GraphQL and `POST …/search` batch lookups are reads."
+        },
+        "url": {
+          "type": "string",
+          "description": "The absolute http/https URL. Its host must be allow-listed under tesseraql.http.outbound.allowedHosts — egress is deny by default (TQL-SEC-4070)."
+        },
+        "headers": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Static request headers; values may carry ${…} config or secret placeholders, resolved on send."
+        },
+        "query": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Query-string parameters, each a bindable path resolved against the execution context."
+        },
+        "credential": {
+          "type": "string",
+          "description": "A named credential the SecretResolver supplies at call time, so a document never carries a secret."
+        },
+        "body": {
+          "type": "string",
+          "description": "A bindable path whose value is serialized as the request body."
+        },
+        "expectStatus": {
+          "type": "integer",
+          "description": "The exact status that counts as success; the default is any 2xx. A mismatch fails the call without tripping the circuit breaker — it is a deterministic rejection, not a sign the dependency is down."
+        },
+        "connectTimeout": {
+          "type": "string",
+          "description": "Connect timeout for this call (e.g. 2s), overriding tesseraql.http.outbound.connectTimeout."
+        },
+        "requestTimeout": {
+          "type": "string",
+          "description": "Request timeout for this call (e.g. 10s), overriding tesseraql.http.outbound.requestTimeout."
+        },
+        "retry": {
+          "type": "object",
+          "properties": {
+            "attempts": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10,
+              "description": "Total attempts including the first (TQL-YAML-1058 outside 1..10)."
+            },
+            "backoff": {
+              "type": "string",
+              "description": "The wait before the second attempt, e.g. 200ms."
+            },
+            "multiplier": {
+              "type": "number",
+              "minimum": 1,
+              "description": "The factor the wait grows by before each further attempt."
+            }
+          },
+          "additionalProperties": true,
+          "description": "Opt-in retry for transient faults: connect failures, timeouts and 5xx are repeated; a 4xx and an expectStatus mismatch never are. Unstated numbers come from tesseraql.http.outbound.retry. Every repeated attempt counts against the circuit breaker, the sequence ends the moment the host's circuit opens, and it lives inside a budget of attempts x requestTimeout. Documented in connectors.md."
+        },
+        "select": {
+          "type": "string",
+          "description": "A dotted path into the response JSON naming the part that becomes rows. Default: the whole body."
+        },
+        "onError": {
+          "type": "string",
+          "examples": [
+            "fail",
+            "empty"
+          ],
+          "description": "`fail` (default) fails the request or step; `empty` degrades to zero rows and an `error` entry, and the page still renders. The degradation is logged and metered — it is not silent."
+        },
+        "readOnly": {
+          "type": "boolean",
+          "description": "The author's assertion that the call has no side effect, required on a command route: the write can roll back and the request cannot."
+        },
+        "mode": {
+          "type": "string",
+          "examples": [
+            "query",
+            "query-spool"
+          ],
+          "description": "How the acquired rows are delivered: `query` (default — held and published as rows) or `query-spool` (streamed to a spool a later chunk: step loads, so an API result can be written to the database without holding it). A call reads, so the SQL write modes are not modes it has."
+        }
+      },
+      "additionalProperties": true,
+      "description": "An outbound call and how its response is read — the shape every `http:` arm carries, wherever one is written. Rides the outbound gateway: allow-listed hosts, named credentials, timeouts, and a per-host circuit breaker."
+    },
     "binding": {
       "type": "object",
       "properties": {
         "sql": {
-          "type": "object",
-          "properties": {
-            "file": {
-              "type": "string",
-              "description": "A colocated 2-way SQL file, relative to the declaring document (must exist; TQL-SQL-2103). This arm's acquisition target, the role `url` plays for `http`."
-            },
-            "mode": {
-              "type": "string",
-              "examples": [
-                "query",
-                "query-one",
-                "update",
-                "query-spool",
-                "call"
-              ],
-              "description": "How the statement runs and what it binds: `query` (rows), `query-one` (a single row), `update` (an affected-row count), `query-spool` (rows streamed to a spool a later chunk: step reads, never held), or `call` (a stored call on a command step, its OUT parameters declared under `out:`)."
-            },
-            "params": {
-              "type": "object",
-              "additionalProperties": {
-                "type": "string"
-              },
-              "description": "Each bind name to the bindable path supplying its value, such as `path.id`, `params.unit` or `principal.claim.tenant_id`."
-            },
-            "keys": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              },
-              "description": "Columns whose database-generated values are captured after an insert; they bind as `steps.<id>.keys.<column>`."
-            },
-            "out": {
-              "type": "object",
-              "additionalProperties": {
-                "type": "string"
-              },
-              "description": "The OUT parameters of a `mode: call` statement on a command step: each name to its JDBC type keyword (varchar, numeric, integer, bigint, boolean, date, timestamp, double). The statement binds them as `out.<name>` bind sites and the values publish as `steps.<id>.out.<name>`. Documented in transactional-writes.md."
-            },
-            "timeoutSeconds": {
-              "type": "integer",
-              "minimum": 0,
-              "description": "Per-binding SQL statement timeout override; 0 disables. Default: tesseraql.sql.timeoutSeconds, else 30s."
-            },
-            "datasource": {
-              "type": "string",
-              "description": "The named connector this read runs on, overriding the document's. Legal on a read only: a batch step owns its own transaction so an extract elsewhere splits nothing, while a write on another connector would be a second transaction nothing owns (TQL-YAML-1037)."
-            },
-            "materialize": {
-              "type": "object",
-              "properties": {
-                "maxRows": {
-                  "type": "integer",
-                  "description": "Largest number of rows materialized. Default: `tesseraql.resultMaterialization.maxRows`."
-                },
-                "onOverflow": {
-                  "type": "string",
-                  "description": "`fail` (the default) refuses a result past `maxRows`; `warn` truncates it and logs."
-                }
-              },
-              "additionalProperties": true,
-              "description": "Bounds on how much of the result is held in memory."
-            },
-            "expect": {
-              "type": "object",
-              "properties": {
-                "rowCount": {
-                  "type": "integer",
-                  "description": "The exact number of rows the statement must affect (rows is a list of records everywhere else)."
-                },
-                "onMismatch": {
-                  "type": "string",
-                  "description": "`conflict` (the default) answers 409, so a stale edit is refused honestly; `error` answers 500."
-                }
-              },
-              "additionalProperties": true,
-              "description": "The row count this statement must affect, and what happens when it does not — the declarative optimistic-locking check on an update or delete."
-            }
-          },
-          "additionalProperties": true,
+          "$ref": "#/$defs/sqlArm",
           "description": "The SQL arm: a colocated 2-way SQL file and how it is run. The keys of the mechanism nest inside the arm that owns them, so there is nowhere to write a call's `select:` on a statement and no lint has to say it is wrong."
         },
         "contract": {
@@ -779,98 +875,7 @@
           "description": "The service arm: a runtime provider answering rows from process state. It takes only its arguments — there is no statement to run, so no mode and no row-count expectation."
         },
         "http": {
-          "type": "object",
-          "properties": {
-            "method": {
-              "type": "string",
-              "description": "The HTTP method. Default GET; a source is not restricted to GET, because JSON-RPC, GraphQL and `POST …/search` batch lookups are reads."
-            },
-            "url": {
-              "type": "string",
-              "description": "The absolute http/https URL. Its host must be allow-listed under tesseraql.http.outbound.allowedHosts — egress is deny by default (TQL-SEC-4070)."
-            },
-            "headers": {
-              "type": "object",
-              "additionalProperties": {
-                "type": "string"
-              },
-              "description": "Static request headers; values may carry ${…} config or secret placeholders, resolved on send."
-            },
-            "query": {
-              "type": "object",
-              "additionalProperties": {
-                "type": "string"
-              },
-              "description": "Query-string parameters, each a bindable path resolved against the execution context."
-            },
-            "credential": {
-              "type": "string",
-              "description": "A named credential the SecretResolver supplies at call time, so a document never carries a secret."
-            },
-            "body": {
-              "type": "string",
-              "description": "A bindable path whose value is serialized as the request body."
-            },
-            "expectStatus": {
-              "type": "integer",
-              "description": "The exact status that counts as success; the default is any 2xx. A mismatch fails the call without tripping the circuit breaker — it is a deterministic rejection, not a sign the dependency is down."
-            },
-            "connectTimeout": {
-              "type": "string",
-              "description": "Connect timeout for this call (e.g. 2s), overriding tesseraql.http.outbound.connectTimeout."
-            },
-            "requestTimeout": {
-              "type": "string",
-              "description": "Request timeout for this call (e.g. 10s), overriding tesseraql.http.outbound.requestTimeout."
-            },
-            "retry": {
-              "type": "object",
-              "properties": {
-                "attempts": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 10,
-                  "description": "Total attempts including the first (TQL-YAML-1058 outside 1..10)."
-                },
-                "backoff": {
-                  "type": "string",
-                  "description": "The wait before the second attempt, e.g. 200ms."
-                },
-                "multiplier": {
-                  "type": "number",
-                  "minimum": 1,
-                  "description": "The factor the wait grows by before each further attempt."
-                }
-              },
-              "additionalProperties": true,
-              "description": "Opt-in retry for transient faults: connect failures, timeouts and 5xx are repeated; a 4xx and an expectStatus mismatch never are. Unstated numbers come from tesseraql.http.outbound.retry. Every repeated attempt counts against the circuit breaker, the sequence ends the moment the host's circuit opens, and it lives inside a budget of attempts x requestTimeout. Documented in connectors.md."
-            },
-            "select": {
-              "type": "string",
-              "description": "A dotted path into the response JSON naming the part that becomes rows. Default: the whole body."
-            },
-            "onError": {
-              "type": "string",
-              "examples": [
-                "fail",
-                "empty"
-              ],
-              "description": "`fail` (default) fails the request or step; `empty` degrades to zero rows and an `error` entry, and the page still renders. The degradation is logged and metered — it is not silent."
-            },
-            "readOnly": {
-              "type": "boolean",
-              "description": "The author's assertion that the call has no side effect, required on a command route: the write can roll back and the request cannot."
-            },
-            "mode": {
-              "type": "string",
-              "examples": [
-                "query",
-                "query-spool"
-              ],
-              "description": "How the acquired rows are delivered: `query` (default — held and published as rows) or `query-spool` (streamed to a spool a later chunk: step loads, so an API result can be written to the database without holding it). A call reads, so the SQL write modes are not modes it has."
-            }
-          },
-          "additionalProperties": true,
+          "$ref": "#/$defs/httpArm",
           "description": "The http arm: an outbound call whose response becomes this binding's rows, in the vocabulary every outbound call shares. Rides the outbound gateway — allow-listed hosts, named credentials, timeouts, and a per-host circuit breaker."
         },
         "sequence": {
