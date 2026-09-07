@@ -583,10 +583,10 @@ Schema for TesseraQL declarative view documents (*.view.yml): what a route rende
 | `action` | string | The id of the command route a form view submits to; its `input:` block is where the form's fields come from. |
 | `source` | string | The model key a view reads its rows from - a name in the route's `sources:`, whatever arm it declares, defaulting to `main`. |
 | `search` | string | The route input a list view binds its search box to; it must be declared on the route. |
-| `fields` | array of any | The fields a form or detail view renders, in order. Documented in declarative-views.md. |
-| `columns` | array of any | The columns a list view renders, in order. Documented in declarative-views.md. |
-| `children` | object | Views embedded inside this one, keyed by the slot each fills. Documented in declarative-views.md. |
-| `panels` | array of any | The panels a dashboard view composes, in order. Documented in declarative-views.md. |
+| `fields` | array of [viewField](#viewfield) | The fields a form or detail view renders, in order. Documented in declarative-views.md. |
+| `columns` | array of [viewColumn](#viewcolumn) | The columns a list view renders, in order. Documented in declarative-views.md. |
+| `children` | array of [viewChild](#viewchild) | The child regions a detail view renders under its own fields, in order: a named query through the shared table pattern, or an embedded view document. Documented in declarative-views.md. |
+| `panels` | array of [viewPanel](#viewpanel) | The panels a dashboard view composes, in order. Documented in declarative-views.md. |
 | `slots` | map of string | Named regions this view exposes for a composing parent to fill. Documented in declarative-views.md. |
 | `refreshOn` | string | Refetch this view's refresh region whenever a command emits this topic (docs/realtime.md). List, detail and dashboard views only - not forms. |
 | `workflow` | string | The workflow whose transitions region and lifecycle stepper this page renders (docs/workflow-surface.md): the server shows only the transitions legal for this user on the row's current state. Detail views only; the id must name a declared kind: workflow document. |
@@ -928,6 +928,73 @@ Opt-in retry for transient faults: connect failures, timeouts and 5xx are repeat
 | `attempts` | integer ≥ 1 ≤ 10 | Total attempts including the first (TQL-YAML-1058 outside 1..10). |
 | `backoff` | string | The wait before the second attempt, e.g. 200ms. |
 | `multiplier` | number ≥ 1 | The factor the wait grows by before each further attempt. |
+
+### viewField
+
+One field a form or detail view renders. The keys mirror ViewSpec.Field, and the view loader refuses any other at this level (TQL-VIEW-3314).
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `name` | string | The input or result name this field renders. The camelCase-input over snake_case-column convention falls back automatically. |
+| `label` | string | The field's heading. A message key resolves through the app bundles; anything else renders literally. |
+| `widget` | enum: `text` \| `textarea` \| `number` \| `date` \| `datetime-local` \| `checkbox` \| `select` \| `hidden` \| `lookup` | Presentation hint: the form widget this field renders as. A per-view override wins over the domain's. Never part of the HTTP contract. |
+| `column` | string | The result-set column this field reads, when it differs from `name:`. |
+| `domain` | string | An app-level field domain this field inherits presentation and data-classification knowledge from — the explicit read-side link. |
+
+### viewColumn
+
+One column a list view renders. The keys mirror ViewSpec.Column, and the view loader refuses any other at this level (TQL-VIEW-3314).
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `name` | string | The result-set column this column renders. |
+| `label` | string | The column heading. A message key resolves through the app bundles; anything else renders literally. |
+| `link` | string | A URL pattern making each cell a link; row values interpolate into it. |
+| `sortable` | boolean | Render the header as a server-driven sort link. The route must declare the `sort`/`dir` inputs its SQL applies. |
+| `text` | string | Render this literal instead of the row value, styled as a small button when linked — the per-row action column. |
+| `domain` | string | An app-level field domain this column inherits presentation and data-classification knowledge from. |
+
+### viewSeries
+
+One charted series on a dashboard panel. The keys mirror ViewSpec.Series.
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `column` | string | The numeric result column plotted per row. |
+| `label` | string | The series' display name, message-key-first like every label. |
+| `mark` | string | Under `chart: combo` only: the mark the kit draws this series with. |
+
+### viewChild
+
+One child region of a detail view: a named query rendered through the shared table pattern, or — with `view:` — an embedded view document. The keys mirror ViewSpec.Child.
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `source` | string | The named query this child reads its rows from. Overrides an embedded document's own `source:`. |
+| `title` | string | The child region's heading, message-key-first. |
+| `columns` | array of [viewColumn](#viewcolumn) | The columns the inline table shorthand renders. Refused together with `view:`, which embeds a document that carries its own. |
+| `view` | string | The id of a view document embedded here, fed from this route's context. |
+
+### viewPanel
+
+One dashboard panel over a route result. The keys mirror ViewSpec.Panel — note the authored key is `chart:` where the record component is `kind`.
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `title` | string | The panel heading, message-key-first. |
+| `type` | string | Which panel this is. |
+| `source` | string | The model key this panel reads its rows from. |
+| `column` | string | The value column a `stat` or `sparkline` panel reads. |
+| `x` | string | The category column a chart plots along its x axis. |
+| `y` | string | The single numeric column to plot — the shorthand for a one-entry `series:`. |
+| `chart` | string | The chart the kit draws, in its `data-hc-chart` vocabulary. |
+| `series` | array of [viewSeries](#viewseries) | The columns plotted, for a multi-series chart. Wins over `y:`. |
+| `xType` | string | How the x axis is scaled, passed through as the kit's data attribute. |
+| `height` | integer | The panel height in pixels, passed through as the kit's data attribute. |
+| `legend` | boolean | Whether the kit renders the chart legend. |
+| `yLabel` | string | The y axis label, passed through as the kit's data attribute. |
+| `columns` | array of [viewColumn](#viewcolumn) | The columns an embedded `table` panel renders. |
+| `view` | string | The id of a view document embedded as this panel. |
 
 ### binding
 
