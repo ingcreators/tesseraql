@@ -63,6 +63,15 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A notification or published event delivers its payload in the declared key order — and no
+  longer crashes on an absent value.** Both envelope records decode the payload into a
+  `LinkedHashMap` in the order the JSON carries it, then copied it with `Map.copyOf` twenty lines
+  later, so two identical events reached a webhook or a broker as different bytes. The same copy
+  threw a bare `NullPointerException` out of the decoder for any payload expression that resolved
+  to nothing, taking the delivery path down; that is fixed and pinned. The export request models
+  are converted for the same reason. Part of the deterministic-output campaign
+  (docs/deterministic-output.md).
+
 - **An MCP command tool answers in the order its steps were authored.** A tool that declares no
   `response:` is answered with the step-result map itself, and that map — built in authored order —
   was copied with `Map.copyOf` at the very exit, so an agent read the steps back in one of eight

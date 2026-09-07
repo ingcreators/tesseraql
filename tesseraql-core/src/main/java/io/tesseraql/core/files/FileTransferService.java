@@ -1,5 +1,6 @@
 package io.tesseraql.core.files;
 
+import io.tesseraql.core.util.OrderedCopies;
 import java.io.InputStream;
 import java.nio.file.Path;
 import java.util.List;
@@ -87,7 +88,7 @@ public interface FileTransferService {
         public ExportRequest {
             rowCap = rowCap == null ? ExportRowCap.unbounded() : rowCap;
             queries = queries == null ? List.of() : List.copyOf(queries);
-            values = values == null ? Map.of() : Map.copyOf(values);
+            values = values == null ? Map.of() : OrderedCopies.map(values);
         }
     }
 
@@ -260,7 +261,7 @@ public interface FileTransferService {
 
         public InlineExport {
             rowCap = rowCap == null ? ExportRowCap.unbounded() : rowCap;
-            queries = queries == null ? Map.of() : Map.copyOf(queries);
+            queries = queries == null ? Map.of() : OrderedCopies.map(queries);
         }
     }
 

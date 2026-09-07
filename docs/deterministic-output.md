@@ -234,6 +234,31 @@ it.
 
 This is also the row the campaign had mis-filed. F33 is this defect, not slice 6's payload row.
 
+### 5b — The payload row is two defects of opposite shapes, and closes no finding
+
+Slice 6 re-measured its own row. "A persisted outbox payload and a webhook body" reads as one rule
+and is two, of opposite shapes:
+
+- The **model** specs are already correct. `NotifySpec` and `PublishSpec` both hand-roll
+  `Collections.unmodifiableMap(new LinkedHashMap<>(payload))`, so a slice that swept the model here
+  would have converted correct code and shipped a green test proving nothing.
+- The **emission points** are the defect, and there are two: `NotifyEvents.Envelope` and
+  `PublishEvents.Envelope`. Each one's own `parse` builds the payload as a `LinkedHashMap` in the
+  order the JSON carried it, and the record's compact constructor twenty lines further down copies
+  it with `Map.copyOf`. Decision 5's shape again, twice, in two files that are otherwise identical.
+
+Both take the null-**permitting** method, and that is not a preference. `Map.copyOf` there threw a
+raw `NullPointerException` out of `parse` for any payload whose expression resolved to nothing — a
+live crash on the delivery path, reproduced and now pinned by a regression test. Neither the audit
+nor this document filed it.
+
+The row's "in the file" reading is the export path: `ExportModel`, `SplitExport.narrow` (a third
+build-then-discard), and the two `FileTransferService` request records. Converted for the same
+reason, without a behavioural test — their order is not independently observable today, and an
+exemption whose reason is "probably not iterated" is not worth writing.
+
+**This slice closes no audit finding.** F33 is the step-result map, which slice 5 closed.
+
 ### 6 — This campaign owns `project.build.outputTimestamp`
 
 F74 is double-owned: the plan's campaign map assigns it to the release campaign and its slice list
@@ -262,7 +287,7 @@ Each is one pull request, branched from fresh `origin/main`.
 | 3 | A declared `input:` keeps its order — route, job, and the import re-copy | M | F27 |
 | 4 | The model's remaining maps keep their declared order | M | F27 |
 | 5 | An MCP tool answers in authored step order | S | F33 |
-| 6 | A declared payload keeps its key order on the wire and in the file | M | F33 |
+| 6 | A declared payload keeps its key order on the wire and in the file | M | — |
 | 7 | The ordered-copy ledger | L | the guard |
 | 8 | The signed documents reproduce, and the build stamps a reproducible timestamp | L | F74 |
 
