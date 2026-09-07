@@ -3,6 +3,7 @@ package io.tesseraql.core.files;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
+import io.tesseraql.core.util.OrderedCopies;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -44,7 +45,9 @@ public final class ExportModel {
             Iterable<Map<String, Object>> repeatable, Map<String, Object> values) {
         this.single = single;
         this.repeatable = repeatable;
-        this.values = Map.copyOf(values);
+        // The named-query results an export template renders from; declared order
+        // (docs/deterministic-output.md).
+        this.values = OrderedCopies.map(values);
     }
 
     /** For a codec that streams: the rows arrive once, in order, and are not held. */

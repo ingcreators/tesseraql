@@ -121,6 +121,32 @@ class NotifyEventsTest {
     }
 
     @Test
+    void aParsedEnvelopeKeepsThePayloadOrderItWasWrittenIn() {
+        // parse() builds the payload in the order the JSON carries it and the record's compact
+        // constructor is twenty lines further down — a decoded envelope is what the delivery
+        // path renders and what a webhook body serializes from. Four keys, because every
+        // permutation of a three-key map is reachable; these four have eight reachable orders
+        // and the declared one is not among them (docs/deterministic-output.md decision 2).
+        var envelope = NotifyEvents.parse("""
+                {"channel": "mail", "source": "orders.place", "payload":
+                  {"orderId": 7, "customer": "Suzuki", "total": 4200, "placedAt": "2026-09-07"}}
+                """);
+
+        assertThat(envelope.payload().keySet())
+                .containsExactly("orderId", "customer", "total", "placedAt");
+    }
+
+    @Test
+    void aPayloadValueThatResolvedToNothingSurvivesDecoding() {
+        // Map.copyOf threw a raw NullPointerException out of parse here, on the delivery path,
+        // for any payload expression that resolved to nothing.
+        var envelope = NotifyEvents.parse(
+                "{\"channel\": \"mail\", \"payload\": {\"a\": 1, \"b\": null}}");
+
+        assertThat(envelope.payload()).containsEntry("b", null);
+    }
+
+    @Test
     void compileAllKeepsTheAuthoredOrder() {
         java.util.Map<String, NotifySpec> block = new java.util.LinkedHashMap<>();
         block.put("first", new NotifySpec("a", null, Map.of()));

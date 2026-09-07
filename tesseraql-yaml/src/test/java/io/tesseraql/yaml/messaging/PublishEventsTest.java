@@ -40,6 +40,32 @@ class PublishEventsTest {
     }
 
     @Test
+    void aParsedEnvelopeKeepsThePayloadOrderItWasWrittenIn() {
+        // The decoded payload is what payloadJson() serializes into the message body a subscriber
+        // receives, so two identical events used to reach the broker as different bytes. Four
+        // keys: every permutation of a three-key map is reachable, and these four have eight
+        // reachable orders with the declared one absent (docs/deterministic-output.md).
+        var envelope = PublishEvents.parse("""
+                {"channel": "events", "topic": "orders", "payload":
+                  {"orderId": 7, "status": "PLACED", "amount": 4200, "updatedAt": "2026-09-07"}}
+                """);
+
+        assertThat(envelope.payload().keySet())
+                .containsExactly("orderId", "status", "amount", "updatedAt");
+        assertThat(PublishEvents.payloadJson(envelope.payload())).isEqualTo(
+                "{\"orderId\":7,\"status\":\"PLACED\",\"amount\":4200,"
+                        + "\"updatedAt\":\"2026-09-07\"}");
+    }
+
+    @Test
+    void aPayloadValueThatResolvedToNothingSurvivesDecoding() {
+        var envelope = PublishEvents.parse(
+                "{\"channel\": \"events\", \"payload\": {\"a\": 1, \"b\": null}}");
+
+        assertThat(envelope.payload()).containsEntry("b", null);
+    }
+
+    @Test
     void aPublishWithoutChannelOrTopicFailsFast() {
         assertThatThrownBy(() -> PublishEvents.compile("orders.create",
                 new PublishSpec(null, "t", null, Map.of())))

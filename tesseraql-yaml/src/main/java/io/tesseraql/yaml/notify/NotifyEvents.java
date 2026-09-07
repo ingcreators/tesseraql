@@ -10,6 +10,7 @@ import io.tesseraql.core.expr.Expr;
 import io.tesseraql.core.expr.ExpressionFunctions;
 import io.tesseraql.core.expr.ExpressionParser;
 import io.tesseraql.core.outbox.OutboxEvent;
+import io.tesseraql.core.util.OrderedCopies;
 import io.tesseraql.yaml.model.NotifySpec;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -300,7 +301,11 @@ public final class NotifyEvents {
             String attach, Map<String, Object> payload) {
 
         public Envelope {
-            payload = payload == null ? Map.of() : Map.copyOf(payload);
+            // parse() built this in the order the JSON carried it, twenty lines up.
+            // Null-permitting: a payload expression that resolved to nothing used to throw a
+            // raw NullPointerException out of parse on the delivery path
+            // (docs/deterministic-output.md).
+            payload = payload == null ? Map.of() : OrderedCopies.mapAllowingNulls(payload);
         }
 
         /** The pre-Phase-49 shape, for callers that never address. */

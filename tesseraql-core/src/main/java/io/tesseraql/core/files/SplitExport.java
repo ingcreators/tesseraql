@@ -3,6 +3,7 @@ package io.tesseraql.core.files;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
+import io.tesseraql.core.util.OrderedCopies;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.LinkedHashMap;
@@ -103,7 +104,7 @@ public final class SplitExport {
         Map<String, Object> narrowed = new LinkedHashMap<>(values);
         perDocument.forEach((name, byKey) -> narrowed.put(name,
                 byKey.getOrDefault(key, ExportModel.result(List.of(), 0))));
-        return Map.copyOf(narrowed);
+        return OrderedCopies.map(narrowed);
     }
 
     /**
