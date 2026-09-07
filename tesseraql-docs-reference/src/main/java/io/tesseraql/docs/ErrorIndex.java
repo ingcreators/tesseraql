@@ -554,7 +554,8 @@ final class ErrorIndex {
             "list-surface.md", "hc-recipe-alignment.md", "workflow-surface.md",
             "reference-lookup.md", "bulk-report.md", "csv-import.md", "edit-conflict.md",
             "http-edge-robustness.md", "two-way-sql-parser.md", "base-path-emission.md",
-            "deterministic-output.md", "release-and-ci-hardening.md");
+            "deterministic-output.md", "release-and-ci-hardening.md",
+            "yaml-surface-drift.md");
 
     /** Whether {@code name} is an internal planning document; shared with the config index. */
     static boolean isInternalDoc(String name) {
