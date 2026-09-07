@@ -13,6 +13,7 @@ import io.tesseraql.core.sql.BoundSql;
 import io.tesseraql.core.sql.Sql2WayParser;
 import io.tesseraql.core.sql.SqlNode;
 import io.tesseraql.core.sql.SqlRenderer;
+import io.tesseraql.core.util.OrderedCopies;
 import io.tesseraql.core.validation.ValidationRules;
 import io.tesseraql.core.workflow.WorkflowStore;
 import io.tesseraql.core.workflow.WorkflowTaskStore;
@@ -712,7 +713,10 @@ public final class TransactionalCommandProcessor implements Step {
                 }
             }
         }
-        exchange.setBody(Map.copyOf(stepResults));
+        // stepResults is filled in authored order above; Map.copyOf would throw that away
+        // right at the exit, and for a tool that declares no response: this map is the
+        // answer the agent reads (docs/deterministic-output.md).
+        exchange.setBody(OrderedCopies.map(stepResults));
     }
 
     /** The canonical audit binds: the caller's identity and one clock reading (roadmap Phase 18). */

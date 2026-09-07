@@ -63,6 +63,12 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **An MCP command tool answers in the order its steps were authored.** A tool that declares no
+  `response:` is answered with the step-result map itself, and that map — built in authored order —
+  was copied with `Map.copyOf` at the very exit, so an agent read the steps back in one of eight
+  salt-chosen orders and never the authored one. Part of the deterministic-output campaign
+  (docs/deterministic-output.md).
+
 - **The release evidence and the SBOM reproduce, and the build stamps a reproducible archive.**
   Both documents promised reproducibility in their own javadoc, the build Ed25519-signs the
   evidence, and neither reproduced: `Map.of` iterates in a per-JVM salted order, and the SBOM's
