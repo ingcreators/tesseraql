@@ -476,14 +476,34 @@ ever reached by a tag, which is the cost the maintainer accepted. `always()` on 
 deliberate — a plain `needs` would let a Windows failure keep the Linux and macOS images off the
 release, which the per-job attach it replaces could not do.
 
-**3 — Should a `jdeps` step guard the dependency half?** The ledger sees only first-party
-bytecode. A third-party jar's need is invisible to it, and netty's reference to
-`jdk.jfr.FlightRecorder` shows that is not theoretical. A step running
-`jdeps --multi-release 25 --add-modules ALL-SYSTEM --list-deps` over both fat jars and diffing
-against the parsed `--add-modules` list would close it. It is real work on the tag path's inputs and
-it is not in this campaign's slice list; it wants its own decision.
+**3 — Answered 2026-09-07, and the question's own premise was wrong.** A `jdeps` step now runs in
+`ci.yml` and `jpackage.yml`, but it buys much less than this document claimed, and the claim is
+corrected here rather than quietly left standing.
 
-**2 — Is 40 minutes the right attach budget?** The measured margins are 4m51s, 1m48s and 8m04s, all
+- **The motivating example was already guarded.** This document rested the case on netty's
+  `PlatformDependent` reaching `jdk.jfr.FlightRecorder`. But `jdk.jfr` is also reached by
+  first-party code — `JfrPinningSource` imports `jdk.jfr.consumer` — and `JlinkModuleLedgerTest`
+  already asserts it. `jdk.jfr` was over-determined; netty demonstrated nothing that was unguarded.
+- **`--add-modules ALL-SYSTEM` is a measured no-op** on the shipped fat jars: with and without it,
+  `jdeps` names the same twenty modules, `jdk.jfr` included. The flag is not in the step.
+- **`--ignore-missing-deps` is mandatory.** Without it the command produces no module list at all.
+- **A one-way diff defends four of the twelve roots and is green for eight**, measured by dropping
+  each root in turn. Two of those four are already covered by the first-party ledger. The honest
+  marginal value is `jdk.unsupported`, `java.se`, and forward cover for a new dependency.
+- **It is red today for the wrong reason** unless ignored carefully: `jdk.attach` and `jdk.jdi` are
+  reached only by `javassist.util.HotSwapAgent`, `HotSwapper` and `HotSwapper$1`, which have no
+  callers anywhere in the 51 MB jar. The ignore list is keyed on the **reaching class**, never on
+  the module — keyed on the module it would also hide a real dependency that reached them.
+- **`jdeps --list-deps` exits 0 on a path that does not exist**, printing its warning to stdout and
+  then a plausible module list. The step checks the jar first and refuses an empty parse, so it
+  fails closed where bare `jdeps` would go silently green.
+- **It is not in `mvn verify` and cannot be**: every `-Pdist` invocation passes `-DskipTests`, so a
+  test would never see a fat jar. It runs in the two jobs that already build one, at about 17s each.
+
+Positively validated rather than only observed red: a synthetic dependency reaching
+`javax.smartcardio` and `com.sun.nio.sctp` is caught, both modules named with the reaching class.
+
+**2 — Is 40 minutes the right attach budget?****2 — Is 40 minutes the right attach budget?** The measured margins are 4m51s, 1m48s and 8m04s, all
 against a 20-minute budget. Doubling the attempts makes the worst observed case a 21-minute margin
 rather than a 1m48s one, at the cost of a jpackage job that hangs for forty minutes when the release
 genuinely never appears. The failure is recoverable either way — a timed-out attach reddens jpackage

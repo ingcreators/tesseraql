@@ -114,6 +114,16 @@ jobs:
       - name: Smoke-test the fat jar
         run: java -jar tesseraql-cli/target/tesseraql-cli-*-all.jar routes --app examples/scaffold-demo-app
 
+      # The other half of JlinkModuleLedgerTest, which sees first-party bytecode only: a
+      # dependency's need for a JDK module is invisible to it. This adds one root the images
+      # carry for nobody's first-party code and forward cover for whatever a new dependency
+      # reaches; it does not close the dependency half, because most of the listed roots are
+      # reached by name and leave nothing to analyse. It cannot live in `mvn verify` -- every
+      # -Pdist invocation passes -DskipTests, so a test would never see a fat jar.
+      - name: The images carry what the dependencies reach for
+        shell: bash
+        run: bash .github/scripts/check-image-modules.sh tesseraql-cli/target/tesseraql-cli-*-all.jar
+
       # The dist-only failure class (a stale or missing class, a dropped driver, a
       # service file lost in the fat-jar merge) is invisible to in-JVM tests: prove
       # the shipped archive actually lints, clears admission, and RUNS a gallery
