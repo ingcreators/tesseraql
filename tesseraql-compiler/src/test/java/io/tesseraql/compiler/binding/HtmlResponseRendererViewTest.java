@@ -503,6 +503,42 @@ class HtmlResponseRendererViewTest {
     }
 
     @Test
+    void aFormRendersItsFieldsInTheDeclaredOrder(@TempDir Path dir) throws Exception {
+        // The fixture is parsed from text, never built with Map.of: a Map.of literal is salted
+        // before the route sees it, so a test written that way never crosses the boundary under
+        // test. These six names are the scaffold-demo create form's, chosen by enumeration —
+        // twelve reachable iteration orders and the declared one is not among them, so this
+        // assertion failed on every boot before the fix (docs/deterministic-output.md).
+        RouteDefinition action = MAPPER.readValue("""
+                {"id": "items.create", "kind": "route", "recipe": "command-json",
+                 "input": {"name": {"type": "string", "required": true},
+                           "quantity": {"type": "integer"},
+                           "unit_price": {"type": "decimal"},
+                           "due_date": {"type": "date"},
+                           "active": {"type": "boolean"},
+                           "note": {"type": "string"}}}
+                """, RouteDefinition.class);
+        Files.writeString(dir.resolve("page.view.yml"), """
+                version: tesseraql/v1
+                kind: view
+                recipe: form
+                action: /items/ordered
+                """);
+        ViewBinding binding = ViewBinding.of(dir, "page", null,
+                path -> "/items/ordered".equals(path) ? action : null,
+                id -> dir.resolve("page.view.yml"));
+        HtmlResponseRenderer renderer = new HtmlResponseRenderer(new HtmlResponse(200, null,
+                "page", null, null, Map.of(), Map.of(), Map.of(), null), dir, dir, "en", binding);
+
+        assertThat(render(renderer, Map.of())).containsSubsequence("field-name", "field-quantity",
+                "field-unit_price", "field-due_date", "field-active", "field-note");
+        // …and the map the form derives from, so a later regression is diagnosed at the layer it
+        // happens in rather than only at the rendered page.
+        assertThat(action.input().keySet()).containsExactly("name", "quantity", "unit_price",
+                "due_date", "active", "note");
+    }
+
+    @Test
     void aFormEchoesAValidatedReturnTarget(@TempDir Path dir) throws Exception {
         HtmlResponseRenderer renderer = renderer(dir, """
                 version: tesseraql/v1

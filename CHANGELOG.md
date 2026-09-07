@@ -63,6 +63,17 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A declared `input:` block keeps the order it was written in.** The map was copied with
+  `Map.copyOf`, whose iteration order comes from a per-JVM salt, so a create form rendered its
+  fields in a different order on every boot, a validation failure named whichever field the salt
+  put first, and an MCP tool advertised a different `inputSchema` and `required` array to every
+  agent that read its tool list. The same construct was salted in three places, not one: a route's
+  `input:`, a job's `input:`, and the import processor's own re-copy of the route's map — that last
+  one silently defeated the hand-written ordering fix in `RowContract` downstream of it, so a
+  rejected CSV row reported a different reason per boot and two identical review-imports parked
+  different `contract_json` bytes. Part of the deterministic-output campaign
+  (docs/deterministic-output.md).
+
 - **Toggling a feature flag no longer reshuffles `config/flags.yml`.** Studio reads the file, adds
   one key and writes the whole document back, and the read went through `Map.copyOf`, whose
   iteration order is derived from a per-JVM salt. So every flag toggle rewrote every line of a

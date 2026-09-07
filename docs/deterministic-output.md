@@ -54,11 +54,12 @@ builds of identical source produce different bytes, which is what a reproducible
 
 ### 1 — One primitive, and it has two methods
 
-`OrderedCopies` does not exist yet (`grep` over the tree returns nothing). It is created here, and
-it takes **two** methods rather than one:
+`OrderedCopies` was created by slice 2 as `io.tesseraql.core.util.OrderedCopies`, and it takes
+**two** methods rather than one:
 
-- `map(Map)` — insertion-ordered and **null-rejecting**, matching `Map.copyOf`'s contract.
-- an explicitly named null-permitting variant, for the sites that need it.
+- `map(Map)` — insertion-ordered and **null-rejecting**, matching `Map.copyOf`'s contract and
+  naming the offending key in the message, which `Map.copyOf` cannot.
+- `mapAllowingNulls(Map)` — spelled out, for the sites that carry null values deliberately.
 
 The second method is not a convenience. `Map.copyOf`'s `NullPointerException` is the load-time
 guard for a null value in a model map, and `ManifestLoader` dereferences without checking. A
@@ -117,6 +118,13 @@ not, the assertion fails on every boot.
 So a slice does not sample its test's redness, it *chooses key names that make it red*, and records
 that it enumerated all `2n` orders and the declared one is absent. Slice 2's six flag names do
 exactly that: twelve reachable orders, the authored one not among them.
+
+That gives the campaign a hard floor, which slice 3 measured and which no earlier slice knew.
+`2n >= n!` exactly when `n <= 3`, so for two- and three-key maps **every** permutation is
+reachable and the declared order is therefore always among them. **No order assertion on three
+keys or fewer can be red on every boot**, however the names are chosen. Four keys is the minimum
+for a provable evidence test, and a slice whose surface only ever carries three keys needs the
+ledger rather than a behavioural test.
 
 ### 3 — The scanner strips comments before it matches
 
@@ -214,7 +222,7 @@ Each is one pull request, branched from fresh `origin/main`.
 | --- | --- | --- | --- |
 | 1 | This design document, registered in both internal-doc lists | S | — |
 | 2 | `OrderedCopies`, its two methods, and `config/flags.yml` keeps the author's key order | M | F27 |
-| 3 | A route's `input:` keeps its declared order | M | F27 |
+| 3 | A declared `input:` keeps its order — route, job, and the import re-copy | M | F27 |
 | 4 | The model's remaining maps keep their declared order | M | F27 |
 | 5 | An MCP tool answers in authored step order | S | F27 |
 | 6 | A declared payload keeps its key order on the wire and in the file | M | F33 |
@@ -259,8 +267,10 @@ Recorded so nobody re-derives them from `REMEDIATION-PLAN.md`.
    a rotation of a hash-determined slot cycle, so there are roughly `2n` — which is why a small map
    agrees with insertion order often enough for a careless test to pass.
 2. **`RouteDefinition` is not a sweep.** Only `input` is salted there; the five fields below it are
-   already insertion-ordered on purpose. The fix in that file is one line, and converting the rest
-   is churn on correct code.
+   already insertion-ordered on purpose, and converting the rest is churn on correct code. But
+   **slice 3 measured that "one line" to be one line in that *file* and three in the *slice***:
+   the same `input:` construct is salted at `JobDefinition` for a `kind: job` document, and
+   `FileImportProcessor` re-copies the route's map at the import processor. See slice 3.
 3. **`ResponseSpec` is the wrong file** — decision 5.
 4. **One `OrderedCopies.map` is not enough** — decision 1.
 5. **There was no slice for the signed documents**, which are the worst instances — decision 4.

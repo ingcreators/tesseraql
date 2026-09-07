@@ -92,4 +92,37 @@ class McpInputSchemaTest {
 
         assertThat(schema.path("properties").path("ids").has("description")).isFalse();
     }
+
+    /**
+     * An agent reads the tool list once and follows the contract it was given, so the contract has
+     * to be the same contract on every boot. The document is parsed rather than assembled with
+     * {@code Map.of}, because a {@code Map.of} literal is already salted before the schema sees
+     * it and a test written that way never crosses the boundary under test. The five names are
+     * chosen by enumeration: ten reachable iteration orders, and the authored one is not among
+     * them (docs/deterministic-output.md).
+     */
+    @Test
+    void aToolAdvertisesItsFieldsInTheAuthoredOrder() {
+        var definition = new io.tesseraql.yaml.SimpleYamlParser().parseRoute("""
+                version: tesseraql/v1
+                id: users.find
+                kind: route
+                recipe: query-json
+                input:
+                  name: {type: string, required: true}
+                  email: {type: string, required: true}
+                  department: {type: string}
+                  role: {type: string, required: true}
+                  status: {type: string, required: true}
+                """, "<test>");
+
+        ObjectNode schema = McpInputSchema.fromInputs(definition.input());
+
+        List<String> advertised = new java.util.ArrayList<>();
+        schema.path("properties").fieldNames().forEachRemaining(advertised::add);
+
+        assertThat(advertised).containsExactly("name", "email", "department", "role", "status");
+        assertThat(schema.path("required").toString())
+                .isEqualTo("[\"name\",\"email\",\"role\",\"status\"]");
+    }
 }

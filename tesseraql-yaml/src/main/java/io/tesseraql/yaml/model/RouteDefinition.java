@@ -1,6 +1,7 @@
 package io.tesseraql.yaml.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import io.tesseraql.core.util.OrderedCopies;
 import java.util.List;
 import java.util.Map;
 
@@ -97,7 +98,9 @@ public record RouteDefinition(
         LockSpec lock) {
 
     public RouteDefinition {
-        input = input == null ? Map.of() : Map.copyOf(input);
+        // Insertion-ordered so a form renders, a binder reports and a tool advertises the
+        // fields in the order they were declared (docs/deterministic-output.md).
+        input = input == null ? Map.of() : OrderedCopies.map(input);
         // Insertion-ordered so command steps and named sources run in their authored order.
         steps = steps == null
                 ? Map.of()

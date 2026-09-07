@@ -45,7 +45,8 @@ class RouteSpecGeneratorTest {
         assertThat(search.method()).isEqualTo("GET");
         assertThat(search.path()).isEqualTo("/api/items");
         assertThat(search.recipe()).isEqualTo("query-json");
-        // Inputs are sorted by name (RouteDefinition.input() is unordered).
+        // Inputs are sorted by name — the spec's own alphabetical contract, not a defence
+        // against a salted map: RouteDefinition.input() is in declared order now.
         assertThat(search.inputs())
                 .extracting(RouteSpec.Input::name, RouteSpec.Input::type,
                         RouteSpec.Input::required, RouteSpec.Input::min, RouteSpec.Input::max,
