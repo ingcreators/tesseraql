@@ -217,6 +217,23 @@ guards are only ever read by key — so it is an exemption, not a conversion.
 This decision leaves the response-header conversion owned by no slice. Whoever takes it takes all
 three layers.
 
+### 5a — The step-result map is an answer only where no response is declared
+
+Slice 5 measured where `TransactionalCommandProcessor`'s step-result map actually reaches a
+caller, because it is the third instance of decision 5's shape and the narrowest. The map is built
+as a `LinkedHashMap` in authored step order and then copied with `Map.copyOf` at the very exit —
+careful ordered construction, discarded one line before it leaves.
+
+It reaches a caller **only** through `mcpToolRenderer`, whose own javadoc says it renders "its
+declared JSON shape, or the raw SQL/command result". An MCP tool that declares no `response:` is
+answered with that map verbatim, and its keys are what an agent reads. The HTTP path never sees
+it: `RouteCompiler.responseRenderer` dereferences `definition.response().json()` unconditionally,
+so a `recipe: command-json` **route** with no `response:` block does not serve a raw step map — it
+fails to compile at boot. That correction cost one wrong fixture; record it rather than re-derive
+it.
+
+This is also the row the campaign had mis-filed. F33 is this defect, not slice 6's payload row.
+
 ### 6 — This campaign owns `project.build.outputTimestamp`
 
 F74 is double-owned: the plan's campaign map assigns it to the release campaign and its slice list
@@ -244,7 +261,7 @@ Each is one pull request, branched from fresh `origin/main`.
 | 2 | `OrderedCopies`, its two methods, and `config/flags.yml` keeps the author's key order | M | F27 |
 | 3 | A declared `input:` keeps its order — route, job, and the import re-copy | M | F27 |
 | 4 | The model's remaining maps keep their declared order | M | F27 |
-| 5 | An MCP tool answers in authored step order | S | F27 |
+| 5 | An MCP tool answers in authored step order | S | F33 |
 | 6 | A declared payload keeps its key order on the wire and in the file | M | F33 |
 | 7 | The ordered-copy ledger | L | the guard |
 | 8 | The signed documents reproduce, and the build stamps a reproducible timestamp | L | F74 |

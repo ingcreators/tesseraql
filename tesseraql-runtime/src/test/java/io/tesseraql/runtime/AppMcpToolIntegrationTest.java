@@ -123,6 +123,19 @@ class AppMcpToolIntegrationTest {
     }
 
     @Test
+    void aCommandToolAnswersInAuthoredStepOrder() throws Exception {
+        // A tool that declares no response: answers with the step-result map itself, so the order
+        // the steps were authored in is the order the agent reads them in — and an agent that
+        // reads a different contract on every boot cannot be given one.
+        JsonNode structured = call("audit-user", Map.of(), token(List.of("USER_WRITE")))
+                .path("structuredContent");
+
+        List<String> answered = new java.util.ArrayList<>();
+        structured.fieldNames().forEachRemaining(answered::add);
+        assertThat(answered).containsExactly("main", "audit", "notify", "stamp");
+    }
+
+    @Test
     void initializeAdvertisesTheResourcesCapability() throws Exception {
         JsonNode capabilities = rpc(initializeBody(), null, null).path("result")
                 .path("capabilities");
@@ -427,6 +440,44 @@ class AppMcpToolIntegrationTest {
         Files.writeString(mcp.resolve("deactivate.sql"), """
                 update users set status = 'INACTIVE'
                 where name = /* name */ 'sato'
+                """);
+
+        // A command tool declaring no response:, so its structuredContent is the step-result map
+        // itself and the agent reads the steps in the order they were authored. Four steps,
+        // because every permutation of a two- or three-key map is reachable and could never be
+        // asserted on; these four names have eight reachable orders and the authored one is not
+        // among them (docs/deterministic-output.md decision 2).
+        Files.writeString(mcp.resolve("audit-user.yml"), """
+                version: tesseraql/v1
+                id: audit-user
+                kind: tool
+                recipe: command-json
+                description: Run the user audit steps and report each one.
+
+                security:
+                  auth: bearer
+                  policy: users.write
+
+                steps:
+                  - id: main
+                    sql:
+                      file: count-users.sql
+                      mode: query
+                  - id: audit
+                    sql:
+                      file: count-users.sql
+                      mode: query
+                  - id: notify
+                    sql:
+                      file: count-users.sql
+                      mode: query
+                  - id: stamp
+                    sql:
+                      file: count-users.sql
+                      mode: query
+                """);
+        Files.writeString(mcp.resolve("count-users.sql"), """
+                select count(*) as n from users
                 """);
 
         // The app also declares a read-only MCP resource over the same table: an agent attaches
