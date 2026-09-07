@@ -296,15 +296,21 @@ job that publishes to the channel consumers actually read **never starts**. The 
 gates the real one. That is F73's whole scenario, and deleting the step removes the scenario rather
 than making it recoverable.
 
-Removing `<distributionManagement>` does not endanger the Central publish. `-Pcentral` activates
-`central-publishing-maven-plugin` with `<extensions>true</extensions>`, whose
-`DeployLifecycleParticipant` injects an `injected-central-publishing` execution binding the
-`publish` goal to the `deploy` phase and calls `maybeSkipMavenDeployPlugin` — verified by reading
-the class in the plugin jar, not from its documentation. `maven-deploy-plugin`, the only consumer of
-`<distributionManagement>`, does not run on that path. The slice proves it before deleting anything:
-`./mvnw -Pcentral -DskipTests validate` must log "Installing Central Publishing features", and a
-`deploy` on the branch with the element already removed must fail at the Portal or at GPG, never at
-"repository element was not specified".
+Removing `<distributionManagement>` does not endanger the Central publish, and slice 9 proved it by
+running it rather than by reading. `-Pcentral` activates `central-publishing-maven-plugin` with
+`<extensions>true</extensions>`, whose `DeployLifecycleParticipant` injects an
+`injected-central-publishing` execution binding the `publish` goal to the `deploy` phase and calls
+`maybeSkipMavenDeployPlugin`. Two measurements, in order:
+
+1. `./mvnw -Pcentral -N validate` logs **"Installing Central Publishing features"** — the
+   participant runs.
+2. With `<distributionManagement>` deleted, `./mvnw -Pcentral -N -Dgpg.skip=true deploy` reaches
+   `central-publishing:0.11.0:publish (injected-central-publishing)` and fails with a **401 at the
+   Portal** — not with "repository element was not specified". `maven-deploy-plugin` does not run.
+
+The first attempt at measurement 2 proved nothing and is worth recording: without `-Dgpg.skip`, the
+build failed at `maven-gpg-plugin:sign` for want of a key, which is the **verify** phase — the
+`deploy` phase was never reached. A probe that stops before the thing it is probing is not a probe.
 
 `release.yml:67` becomes `-Pdist package`; the next step still uploads
 `tesseraql-cli/target/tesseraql-cli-*-dist.zip`, so the release assets are unchanged.

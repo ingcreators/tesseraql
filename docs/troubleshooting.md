@@ -39,13 +39,15 @@ The hint is suppressed when password login is switched off
 (`tesseraql.console.login.password.enabled`), so if you see no hint and no user works, check
 that key. Full surface: [authentication.md](authentication.md).
 
-### Maven cannot resolve `io.tesseraql:*` — 401 Unauthorized
+### Maven cannot resolve `io.tesseraql:*`
 
-GitHub Packages **requires authentication even for public reads**. The scaffolded `pom.xml`
-declares no repository on purpose; add both the repository and a token with `read:packages`
-to your `~/.m2/settings.xml`. The exact block is in
-[getting-started.md](getting-started.md#the-maven--ci-path). In CI the workflow `GITHUB_TOKEN`
-works unchanged.
+The framework's artifacts are on Maven Central, so nothing needs configuring — the scaffolded
+`pom.xml` declares no repository because it needs none. A resolution failure is a version that is
+not published yet, or a mirror in your `~/.m2/settings.xml` that does not proxy Central; behind an
+internal mirror see [proxy.md](proxy.md).
+
+Earlier releases were read from GitHub Packages and needed a `read:packages` token in
+`~/.m2/settings.xml`. That is no longer required, and the entry can be removed.
 
 ### `--embedded-db` refuses to start on an existing directory
 

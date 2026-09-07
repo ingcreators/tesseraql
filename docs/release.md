@@ -189,8 +189,8 @@ git's hint suggests `git pull`; that advice is wrong in this worktree. Fix the r
    version number.
 
    **What the tag sets in motion.** `release.yml` runs four jobs: `release` re-verifies the tag,
-   checks the reactor version against it, publishes every module to GitHub Packages
-   (`-Pdist deploy`) and creates the GitHub release with the CLI dist archives;
+   checks the reactor version against it, builds the CLI dist archives (`-Pdist package`) and
+   creates the GitHub release with them;
    `central-publish` rebuilds from the tag and uploads the signed bundle to Maven Central;
    `bump-package-managers` commits to the `homebrew-tap` and `scoop-bucket` repositories; and
    `demo-image` pushes `ghcr.io/ingcreators/tesseraql-demo` at `:<version>` and `:latest`.
@@ -228,18 +228,18 @@ Semantic versioning. Until 1.0.0, minor releases may change APIs and YAML contra
 changes are called out in `CHANGELOG.md`. The Java baseline is 25
 ([jvm-baseline.md](jvm-baseline.md)), and 1.x will be declared on it.
 
-## Publishing to GitHub Packages
+## Building the distribution archives
 
-The release workflow runs `./mvnw -B -ntp -DskipTests -Pdist deploy` against the `github`
-`distributionManagement` repository (`https://maven.pkg.github.com/ingcreators/tesseraql`),
-authenticated with the workflow `GITHUB_TOKEN` (no extra secrets). The `dist` profile is what
-also builds the CLI archives the same job attaches to the release, and the Homebrew and Scoop
-bumps wait on. Every reactor module — the
-BOM, the Maven plugin, the runtime, Studio, and the opt-in `tesseraql-pdf`/`-excel`/`-s3`
-codecs — is published, so an application resolves the framework from GitHub Packages by
-declaring the BOM. Consumers add the repository to their `~/.m2/settings.xml` (GitHub Packages
-requires authentication even for reads). The BOM version-manages the opt-in JDBC drivers
-(`ojdbc11`, `mssql-jdbc`, `mysql-connector-j`) so a consumer specifies bare coordinates.
+The release job runs `./mvnw -B -ntp -DskipTests -Pdist package`. The `dist` profile builds the
+CLI archives the same job attaches to the release and that the Homebrew and Scoop bumps wait on.
+It publishes nothing: the framework's artifacts go to Maven Central, below.
+
+It used to say `deploy`, against a `distributionManagement` repository on GitHub Packages. That
+channel was removed in 0.16.0 because nothing consumed it — no POM in the repository declared it
+as a `<repositories>` entry, the CLI's module resolver never contacted it, and Maven Central has
+carried the same artifacts publicly and unauthenticated since 0.7.1. It was also a liability
+rather than merely unused: the `central-publish` job declares `needs: release`, so a 401 or a
+blip uploading to the channel nobody read would stop the publish to the channel everyone does.
 
 ## Publishing to Maven Central
 
@@ -252,5 +252,6 @@ sources + javadoc jars, signs every artifact with the org-wide
 `CENTRAL_TOKEN_USERNAME`/`CENTRAL_TOKEN_PASSWORD` Portal user token and the
 `GPG_PRIVATE_KEY`/`GPG_PASSPHRASE` secrets; the job soft-skips while any of them are
 missing, so a release never fails on absent Central credentials. Namespaces `io.tesseraql`
-and `com.ingcreators` are DNS-verified on the Portal account. GitHub Packages remains the
-deploy target for the profile-less build (SNAPSHOTs and internal consumption).
+and `com.ingcreators` are DNS-verified on the Portal account. It is the only place the
+framework's artifacts are published; the profile-less build deploys nowhere, and no SNAPSHOT has
+ever been published, because the release workflow only runs on a tag.
