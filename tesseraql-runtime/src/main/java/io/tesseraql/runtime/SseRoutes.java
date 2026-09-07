@@ -132,7 +132,7 @@ public final class SseRoutes {
                         ? null
                         : sessions.sessionIdFromCookie(cookie);
                 Producer producer = handler.begin(principal, ctx.request()::getParam);
-                connection.runOnContext(open -> {
+                onConnection(connection, open -> {
                     if (!gone.get()) {
                         response.setStatusCode(200);
                         response.putHeader("Content-Type", "text/event-stream; charset=utf-8");
@@ -147,14 +147,14 @@ public final class SseRoutes {
                     }
                 });
                 producer.produce(frameWriter(connection, response, gone, sessions, sessionId));
-                connection.runOnContext(end -> {
+                onConnection(connection, end -> {
                     if (!gone.get() && !response.ended()) {
                         response.end();
                     }
                 });
             } catch (TqlException refusal) {
                 // begin() refused before the stream opened: the framework's error envelope.
-                connection.runOnContext(refuse -> {
+                onConnection(connection, refuse -> {
                     if (!gone.get() && !response.ended()) {
                         int status = ErrorResponseRenderer.httpStatus(refusal.code());
                         response.setStatusCode(status);
@@ -179,7 +179,7 @@ public final class SseRoutes {
                 // invalidated under it. Both end here, and both must actually close the response:
                 // leaving it open held the client on a stream that would never produce again.
                 LOG.debug("SSE stream {} ended early: {}", path, ended.getMessage());
-                connection.runOnContext(close -> {
+                onConnection(connection, close -> {
                     if (!response.ended()) {
                         response.end();
                     }
@@ -188,7 +188,7 @@ public final class SseRoutes {
                 Thread.currentThread().interrupt();
             } catch (Exception unexpected) {
                 LOG.warn("SSE stream {} failed", path, unexpected);
-                connection.runOnContext(close -> {
+                onConnection(connection, close -> {
                     if (!response.ended()) {
                         // Mid-stream failure: drop the connection so the client reconnects.
                         ctx.request().connection().close();
@@ -196,6 +196,35 @@ public final class SseRoutes {
                 });
             }
         });
+    }
+
+    /**
+     * Dispatches a response mutation onto the connection's event loop, unless that loop is gone.
+     *
+     * <p>{@code runOnContext} throws {@link java.util.concurrent.RejectedExecutionException} once
+     * Vert.x has closed, and every caller here is cleanup — three of them from inside a catch
+     * block, where nothing catches anything. So the throw escaped the producer's virtual thread,
+     * the JVM's default handler printed it, and every green CI run carried a failure-level
+     * annotation for a stream that had already ended.
+     *
+     * <p>A closed loop means the response is closed too, so there is nothing left to do and
+     * nothing to report: the mutation is dropped. This is the shape {@code StackReconciler} uses
+     * for the same reason ({@code StackReconciler.java}, {@code requestPass}).
+     *
+     * <p><b>Not for delivery.</b> {@code frameWriter} must not use this: dropping a write silently
+     * leaves the producer looping against a dead stream.
+     *
+     * <p>The belt, not the trousers. Nothing stops an SSE producer when the runtime closes — it is
+     * parked on {@code LiveEvents}' heartbeat and no drain counts it — so it wakes into a dead
+     * loop by construction. Ending open subscriptions at close is a separate change.
+     */
+    private static void onConnection(Context connection, io.vertx.core.Handler<Void> mutation) {
+        try {
+            connection.runOnContext(mutation);
+        } catch (java.util.concurrent.RejectedExecutionException closed) {
+            // The loop is gone, so the response is gone; there is nothing to write and nobody
+            // to tell.
+        }
     }
 
     private static Writer frameWriter(Context connection, HttpServerResponse response,
@@ -226,13 +255,23 @@ public final class SseRoutes {
                     gone.set(true);
                     throw new IOException("The session ended");
                 }
-                connection.runOnContext(deliver -> {
-                    if (!gone.get() && !response.ended()) {
-                        response.write(io.vertx.core.buffer.Buffer.buffer(
-                                frame.getBytes(StandardCharsets.UTF_8)))
-                                .onFailure(failure -> gone.set(true));
-                    }
-                });
+                try {
+                    connection.runOnContext(deliver -> {
+                        if (!gone.get() && !response.ended()) {
+                            response.write(io.vertx.core.buffer.Buffer.buffer(
+                                    frame.getBytes(StandardCharsets.UTF_8)))
+                                    .onFailure(failure -> gone.set(true));
+                        }
+                    });
+                } catch (java.util.concurrent.RejectedExecutionException stopping) {
+                    // NOT onConnection: swallowing here would let the producer keep looping
+                    // against a stream that can never be written to again, until the
+                    // fifteen-minute lifetime expires. An IOException is how this loop already
+                    // says "stop", so the runtime stopping ends the stream the same clean way a
+                    // departed client does.
+                    gone.set(true);
+                    throw new IOException("The runtime is stopping");
+                }
             }
         };
     }

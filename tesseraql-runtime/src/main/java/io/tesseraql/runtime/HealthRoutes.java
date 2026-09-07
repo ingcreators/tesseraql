@@ -103,7 +103,14 @@ final class HealthRoutes {
         Context connection = ctx.vertx().getOrCreateContext();
         Thread.ofVirtual().name("tql-readiness-first").start(() -> {
             String status = rollUp();
-            connection.runOnContext(reply -> answer(ctx, status));
+            try {
+                connection.runOnContext(reply -> answer(ctx, status));
+            } catch (java.util.concurrent.RejectedExecutionException closed) {
+                // The roll-up outlived the runtime: it consults dependencies, so a close can
+                // land while it is still running. There is no response left to answer and this
+                // thread has no catch above it, so an escape here would print from a dead
+                // process the same way the SSE producer's did.
+            }
         });
     }
 

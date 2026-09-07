@@ -63,6 +63,19 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A stream that ends when the runtime stops no longer prints from a dead process.**
+  `Context.runOnContext` throws once Vert.x has closed, and `SseRoutes` called it from inside three
+  catch blocks, where nothing catches anything — so the throw escaped the producer's virtual thread
+  and the JVM printed it. Every green `Maven verify` run carried a failure-level annotation for a
+  stream that had already ended, which is how a team learns to ignore annotations. Five cleanup
+  sites now drop the mutation when the loop is gone, the way `StackReconciler` already did. The
+  delivery site deliberately does not: swallowing a write there would leave the producer looping
+  against a dead stream until its fifteen-minute lifetime expired, so it ends the stream the same
+  clean way a departed client does. `HealthRoutes`' first readiness roll-up had the same shape with
+  no `try` at all and is guarded too. This is the belt: nothing yet stops an SSE producer when the
+  runtime closes, so it still wakes into a dead loop — ending open subscriptions at close is a
+  separate change.
+
 - **The framework has one publish target, and it is Maven Central.** Release tags also deployed
   every module to GitHub Packages, and nothing consumed that channel: no POM in this repository
   declared it under `<repositories>`, the CLI's module resolver never contacted it, and Central has
