@@ -1,6 +1,7 @@
 package io.tesseraql.yaml.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import io.tesseraql.core.util.OrderedCopies;
 import java.util.List;
 import java.util.Map;
 
@@ -44,7 +45,9 @@ public record JobDefinition(
         SlaSpec sla) {
 
     public JobDefinition {
-        input = input == null ? Map.of() : Map.copyOf(input);
+        // Insertion-ordered: a job's params form renders and its binder reports in the
+        // order the fields were declared (docs/deterministic-output.md).
+        input = input == null ? Map.of() : OrderedCopies.map(input);
         pipeline = pipeline == null ? List.of() : List.copyOf(pipeline);
     }
 

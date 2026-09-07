@@ -64,7 +64,11 @@ public final class RouteSpecGenerator {
                 sqlStatements(route));
     }
 
-    /** Declared inputs sorted by name — {@code RouteDefinition.input()} is unordered. */
+    /**
+     * Declared inputs sorted by name. {@code RouteDefinition.input()} is in declared order
+     * since docs/deterministic-output.md; the sort here is the spec's own alphabetical
+     * contract, kept so a generated spec diffs cleanly, not a defence against a salted map.
+     */
     private List<RouteSpec.Input> inputs(RouteDefinition definition) {
         return definition.input().entrySet().stream()
                 .sorted(Map.Entry.comparingByKey())

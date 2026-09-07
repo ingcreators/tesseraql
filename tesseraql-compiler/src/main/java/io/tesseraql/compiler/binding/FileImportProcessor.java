@@ -5,6 +5,7 @@ import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.files.FileReadSpec;
 import io.tesseraql.core.files.FileTransferService;
+import io.tesseraql.core.util.OrderedCopies;
 import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.pipeline.Headers;
 import io.tesseraql.pipeline.Step;
@@ -79,7 +80,9 @@ public final class FileImportProcessor implements Step {
         this.rowSqlFile = rowSqlFile;
         this.onError = onError;
         this.review = review;
-        this.input = input == null ? Map.of() : Map.copyOf(input);
+        // Re-copying with Map.copyOf here re-salted the route's map, defeating the
+        // hand-written ordering fix in RowContract downstream of it.
+        this.input = input == null ? Map.of() : OrderedCopies.map(input);
     }
 
     @Override
