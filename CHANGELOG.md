@@ -63,6 +63,17 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A dependency that reaches a JDK module the images are not linked from now fails the build.**
+  The module ledger scans first-party bytecode, so what a third-party jar needs was invisible to it.
+  A `jdeps` step in the two jobs that already build a fat jar closes part of that: it names one root
+  the images carry for no first-party code, and covers whatever a future dependency reaches. It is
+  deliberately not sold as more — measured by dropping each root in turn, a one-way diff defends
+  four of the twelve and is green for the other eight, which are reached by a locale, a cipher suite
+  or a keystore type and leave nothing to analyse. The ignore list is keyed on the reaching class
+  rather than the module, so the two dead javassist hot-swap helpers stay quiet while a real
+  dependency reaching the same modules would not. It fails closed on a missing jar, where `jdeps`
+  itself exits 0 with a plausible list.
+
 - **A generated application stops contradicting the framework that generated it.** `tesseraql new`
   ships `mvnw` and `mvnw.cmd` and then told its author to run `mvn`; it pinned Maven 3.9.9 with no
   `distributionSha256Sum` while the framework moved to 3.9.16 with one, so every new application
