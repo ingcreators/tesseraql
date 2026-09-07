@@ -13,6 +13,12 @@ on:
 permissions:
   contents: read
 
+# The scheduled suite holds vendor containers; two overlapping runs contend for them.
+# A run already under way finishes rather than being cancelled by the next schedule.
+concurrency:
+  group: dialects-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   dialects:
     name: Oracle + SQL Server portability

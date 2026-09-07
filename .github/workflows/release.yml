@@ -16,9 +16,16 @@ permissions:
   contents: write
   packages: write
 
+# Never cancel a release in flight: the tag path is not rehearsable and a half-run
+# leaves a published release with missing assets.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   release:
     name: Verify tag and publish GitHub release
+    timeout-minutes: 45
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
 
@@ -84,6 +91,7 @@ jobs:
   # shows up red. Soft-skips while the Central token / GPG secrets are not configured.
   central-publish:
     name: Publish to Maven Central
+    timeout-minutes: 30
     runs-on: ubuntu-latest
     needs: release
     if: github.event_name == 'push'
@@ -144,6 +152,7 @@ jobs:
   # never fail a release.
   bump-package-managers:
     name: Bump Homebrew tap and Scoop bucket
+    timeout-minutes: 45
     runs-on: ubuntu-latest
     needs: release
     if: github.event_name == 'push'
@@ -258,6 +267,7 @@ jobs:
   # release job beyond the tag having been verified there.
   demo-image:
     name: Publish the demo image
+    timeout-minutes: 20
     runs-on: ubuntu-latest
     needs: release
     if: always() && (github.event_name == 'workflow_dispatch' || needs.release.result == 'success')

@@ -19,9 +19,15 @@ on:
 permissions:
   contents: write
 
+# Never cancel a publish in flight, as release.yml.
+concurrency:
+  group: extension-release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   publish:
     name: Publish to the Visual Studio Marketplace
+    timeout-minutes: 20
     runs-on: ubuntu-latest
 
     steps:
