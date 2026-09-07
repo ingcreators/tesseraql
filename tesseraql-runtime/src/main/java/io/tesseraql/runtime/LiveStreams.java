@@ -25,6 +25,9 @@ import java.util.Map;
  */
 final class LiveStreams implements TopicBus {
 
+    /** Looked up by name at shutdown, the way the edge's drain is. */
+    static final String BEAN = "tesseraqlLiveStreams";
+
     /** Await outcome: the fired signal key, or one of the markers below. */
     static final String IDLE = " idle";
     static final String CLOSED = " closed";
@@ -104,7 +107,7 @@ final class LiveStreams implements TopicBus {
             notifyAll();
         }
 
-        private synchronized void end() {
+        synchronized void end() {
             closed = true;
             notifyAll();
         }
@@ -183,5 +186,34 @@ final class LiveStreams implements TopicBus {
     private void evict(Subscription subscription) {
         unregister(subscription);
         subscription.end();
+    }
+
+    /**
+     * Ends every open stream, so its producer stops waiting and leaves.
+     *
+     * <p>A live stream is long-lived on purpose: its producer parks on {@code await} for
+     * twenty-five seconds at a time and the stream itself lasts fifteen minutes. So a shutdown
+     * cannot <em>wait</em> for one — it has to <em>ask</em>, which is the same thing the job
+     * executor's {@code requestDrainStop} does one line above the call site, and for the same
+     * reason.
+     *
+     * <p>Nothing asked before this existed. The edge counts the requests it serves and drains
+     * them; an SSE producer is counted by nothing, so it stayed parked through the drain and woke
+     * up to twenty-five seconds later into a runtime that had finished closing. That is why its
+     * cleanup had to be made safe against a dead event loop (#1231) — this is the other half, and
+     * the reason that one is the belt rather than the trousers.
+     *
+     * <p>{@code end()} is what an eviction already used, so a producer stopped this way takes the
+     * path it already had: {@code await} returns {@link #CLOSED} at once, the loop returns, and
+     * the response is ended while the event loop is still alive to do it.
+     */
+    synchronized void close() {
+        // A copy: end() wakes the producer, which returns and closes its subscription, and
+        // unregister() mutates these maps.
+        for (List<Subscription> subscriptions : List.copyOf(byKey.values())) {
+            for (Subscription subscription : List.copyOf(subscriptions)) {
+                subscription.end();
+            }
+        }
     }
 }

@@ -112,4 +112,62 @@ class LiveStreamsTest {
         // A closed subscription only reports IDLE on timeout — nothing was queued for it.
         assertThat(sub.await(SHORT)).isEqualTo(LiveStreams.IDLE);
     }
+
+    /**
+     * A shutdown asks every stream to stop, and a producer already parked wakes at once.
+     *
+     * <p>This is the half {@code SseRoutes}' guarded cleanup is the belt for. A producer parks on
+     * {@code await} for twenty-five seconds and its stream lasts fifteen minutes, and nothing
+     * counted it: the edge drains the requests it serves, and an SSE producer is not one of them.
+     * So it slept through the whole shutdown and woke into a runtime that had finished closing.
+     *
+     * <p><b>The subscription is parked before {@code close()} is called, and that is the whole
+     * test.</b> Written the other way round — close first, then await — it passes against a
+     * {@code close()} that sets the flag and never notifies, because {@code await} checks the flag
+     * before it waits and returns without ever parking. Measured: that version of this test was
+     * green against a deliberately broken {@code end()}. Production always has the producer parked
+     * first, so only this order asks the question that matters.
+     */
+    @Test
+    void closingTheHubWakesAProducerThatIsAlreadyParked() throws Exception {
+        LiveStreams streams = new LiveStreams();
+        try (var subscription = streams.subscribe("alice",
+                List.of(LiveStreams.topicKey(null, "orders")))) {
+
+            var outcome = new java.util.concurrent.atomic.AtomicReference<String>();
+            var elapsed = new java.util.concurrent.atomic.AtomicLong();
+            Thread producer = new Thread(() -> {
+                long from = System.nanoTime();
+                try {
+                    // Ten seconds is twice the bound asserted below: long enough that a stream
+                    // which was never woken cannot satisfy it by luck, short enough that a broken
+                    // build says so quickly.
+                    outcome.set(subscription.await(Duration.ofSeconds(10)));
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                }
+                elapsed.set(System.nanoTime() - from);
+            }, "test-parked-producer");
+            producer.start();
+
+            // Wait for it to be genuinely inside wait(), not merely started: closing before it
+            // parks would test the flag check again rather than the wake-up.
+            long parkedBy = System.currentTimeMillis() + 5_000;
+            while (producer.getState() != Thread.State.TIMED_WAITING
+                    && System.currentTimeMillis() < parkedBy) {
+                Thread.sleep(5);
+            }
+            assertThat(producer.getState())
+                    .as("the producer never parked, so this test would not exercise the wake-up")
+                    .isEqualTo(Thread.State.TIMED_WAITING);
+
+            streams.close();
+            producer.join(Duration.ofSeconds(30).toMillis());
+
+            assertThat(outcome.get()).isEqualTo(LiveStreams.CLOSED);
+            assertThat(Duration.ofNanos(elapsed.get()))
+                    .as("a parked producer was left to time out instead of being woken")
+                    .isLessThan(Duration.ofSeconds(5));
+        }
+    }
 }
