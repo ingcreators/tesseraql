@@ -311,4 +311,7 @@ export const EXCLUDED = [
   'deterministic-output.md',
   // The unrehearsable tag path and the workflows nothing tests, designed 2026-09-07.
   'release-and-ci-hardening.md',
+  // Four descriptions of one YAML surface, and the schema nodes that describe nothing,
+  // designed 2026-09-07 after the plan's model-to-schema walk proved non-terminating.
+  'yaml-surface-drift.md',
 ];
