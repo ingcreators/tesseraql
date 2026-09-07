@@ -1254,6 +1254,10 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 inboxStore = null;
             }
             if (liveStreams != null) {
+                // Bound by name so close() can ask its streams to stop, the way it asks the edge
+                // to drain. Registration position decides service stop order; this must happen at
+                // a point of the shutdown the reverse order cannot express.
+                context.bind(LiveStreams.BEAN, liveStreams);
                 // Live views (docs/realtime.md): commands reach the bus through the registry
                 // (TopicEmitProcessor), so hot-reloaded routes keep working. On PostgreSQL the
                 // bus rides pg_notify across nodes and the bridge forwards peers' signals into
@@ -2464,6 +2468,15 @@ public final class TesseraqlRuntime implements AutoCloseable {
         // force-cut it. The force timeout stays, unchanged, as the last resort for a run that
         // ignores the flag.
         closeQuietly(() -> jobExecutor.requestDrainStop(drainReason));
+        // The same gesture for live streams, and for the same reason the comment above gives. A
+        // stream is long-lived by design — its producer parks for twenty-five seconds at a time
+        // and the stream lasts fifteen minutes — so waiting for one is not an option and the edge
+        // counts none of them. Asked here, before the drain, each producer wakes at once, ends
+        // its response while the event loop is still alive, and is gone before the context stops.
+        LiveStreams streams = runtimeContext.lookup(LiveStreams.BEAN, LiveStreams.class);
+        if (streams != null) {
+            closeQuietly(streams::close);
+        }
         // The requests the edge is serving, drained before the context stops (docs/runtime-replace.md,
         // docs/camel-removal.md decision 1). A shutdown strategy drains what it can count, and
         // nothing counts a compiled pipeline but the edge — so the edge counts its own and is

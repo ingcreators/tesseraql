@@ -63,6 +63,16 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A shutdown asks the live streams to stop instead of leaving them parked.** An SSE producer waits
+  twenty-five seconds at a time and its stream lasts fifteen minutes, and nothing counted it: the
+  edge drains the requests it serves, and a stream is not one of them. So every producer slept
+  through the whole shutdown and woke into a runtime that had finished closing — which is why its
+  cleanup had to be made safe against a dead event loop, and why that fix was only the belt. The
+  hub is now asked to end its streams beside the job executor's drain-stop request, before the edge
+  drains, for the reason the comment there already gave: something long-lived is stopped by asking,
+  not by waiting. Each producer wakes at once, ends its response while the event loop is still
+  alive, and is gone before the context stops.
+
 - **A dependency that reaches a JDK module the images are not linked from now fails the build.**
   The module ledger scans first-party bytecode, so what a third-party jar needs was invisible to it.
   A `jdeps` step in the two jobs that already build a fat jar closes part of that: it names one root
