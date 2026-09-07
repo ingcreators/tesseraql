@@ -50,7 +50,7 @@ Every row was re-measured at `8c83854bc`; the command that produced it is in the
 | --- | --- | --- | --- |
 | F71 | Two actions are floating tags, not SHAs | **2 of 30** `uses:` lines — `jpackage.yml:144` and `:429`, both `actions/upload-artifact@v7` | `grep -E '^\s*uses:' .github/workflows/*.yml \| grep -vE '@[0-9a-f]{40}'` |
 | F77 | Jobs run under GitHub's 360-minute default | **13 of 14 jobs** declare no `timeout-minutes`; the only one that does is `dialects.yml:20`. No workflow declares `concurrency` | `grep -n 'timeout-minutes\|concurrency' .github/workflows/*.yml` → one hit |
-| F70 | The jlinked image omits a module the code imports | `JfrPinningSource.java:4-5` imports `jdk.jfr.consumer`; both `--add-modules` lists (`jpackage.yml:102`, `:245`) omit `jdk.jfr` | BFS over `java --describe-module` from the eleven roots on JDK 25.0.4: **31-module closure, `jdk.jfr` absent** |
+| F70 | The jlinked image omits a module the code imports | `JfrPinningSource.java:4-5` imports `jdk.jfr.consumer`; both `--add-modules` lists omit `jdk.jfr` (found by token, never by line — they moved by seven in slice 3) | BFS over `java --describe-module` from the eleven roots on JDK 25.0.4: **31-module closure, `jdk.jfr` absent** |
 | F76 | Untrusted-shaped values are interpolated into shell | **4 sites**, all in `release.yml` — `:276`, `:279`, `:283`, `:285` | `${{ … }}` inside a `run:` body |
 | F72 | The Maven distribution is fetched unverified | `.mvn/wrapper/maven-wrapper.properties` is three lines with no `distributionSha256Sum`; `mvnw:226` verifies only when the property is present | `cat .mvn/wrapper/maven-wrapper.properties` |
 | F78 | Two Mavens, and the plugins that write shipped bytes float | `.devcontainer/Dockerfile:20` installs `maven` (3.8.7); the wrapper is 3.9.16. **`maven-help-plugin` is unpinned and `help:evaluate` runs at 5 tag-path sites**. `tesseraql-yaml` declares `maven-dependency-plugin` and `maven-resources-plugin` with no version and nothing manages them | See [decision 4](#4--the-unpinned-plugins-that-matter-are-the-two-that-write-shipped-bytes) |
@@ -108,24 +108,56 @@ This is the campaign's whole answer to "the release path cannot be rehearsed". N
 assertions rehearses it. All four make the *configuration* of it checkable, which is the part that
 actually drifted.
 
-### 3 — The module list is checked one way: sources → `--add-modules`, never the reverse
+### 3 — The module list is checked from bytecode, one way, and only half of it can be checked at all
 
-F70 is two tokens of YAML. The guard is the interesting half, and it must be stated one-way.
+F70 is two tokens of YAML. The guard is the interesting half, and re-measurement replaced all three
+of its parts: the instrument, its home, and the escape hatch that justified its scope.
 
-A ledger builds a package → module index from `ModuleFinder.ofSystem()` (verified: `jdk.jfr.consumer
-→ jdk.jfr`, `com.sun.net.httpserver → jdk.httpserver`, 915 system packages). It scans every
-first-party `*/src/main/java/**.java` import, keeps the ones that resolve to a non-`java.*` system
-module, and asserts each appears in **both** `--add-modules` lists. Red today on `jdk.jfr`.
+**Bytecode, not imports.** The first specification scanned `import` statements. That is falsified by
+a file already in the tree: `tesseraql-test-core/.../CaptureServer.java` declares
+`private final com.sun.net.httpserver.HttpServer server;` at `:20` and calls
+`HttpServer.create(...)` at `:30`, all fully qualified, its only imports being four `java.util`
+types. Run as specified against that module the scan returns nothing, while the truth is
+`jdk.httpserver`. And the habit is not rare — 354 of the 1021 main sources write some system class
+fully qualified. A constant pool has no such blind spot, and this repository already scans compiled
+classes for exactly this reason (`ModelFieldConsumerScan`, docs/yaml-surface-consumers.md).
 
-The objection to a source scan is that it cannot see nine of the eleven modules already listed —
-`jdk.net`, for one, is required by Netty through `vertx-core` and appears in no first-party import.
-That objection applies only to the reverse assertion. This ledger never claims the list is minimal
-or that every entry is justified; it claims that nothing the framework's own code imports is
-*missing* from it. A dependency's transitive need stays the `jdeps` step's job, which reads the fat
-jar and sees what no source scan can.
+**In `tesseraql-maven-plugin`, not `tesseraql-docs-reference`.** A bytecode scan needs every
+sibling's `target/classes`. `tesseraql-docs-reference` builds 27th of 30 — ahead of `tesseraql-host`,
+which is one of the two images. `tesseraql-maven-plugin` builds 30th, which is why
+`YamlSurfaceConsumerGuardTest` already lives there. Its reactor walk lists direct `tesseraql-*`
+children rather than walking from `..`, so it also cannot read the six worktrees under `.claude/`,
+where a naive walk finds 6110 main sources instead of 1021.
 
-The repo-wide scan returns exactly two non-`java.*` package families today — `jdk.jfr.consumer` and
-`com.sun.net.httpserver` — so `jdk.jfr` is one missing module, not the first of many.
+**One way, and honest about the half it cannot see.** The assertion is that nothing the framework's
+own classes reach for is *missing* from the list — never that a listed module is unnecessary. Of the
+twelve roots, this scan justifies two. The rest are reached by name and leave no trace: `jdk.localedata`
+through the `Locale.forLanguageTag` calls the compiler makes in ten places, `jdk.crypto.ec` through a
+TLS cipher suite, `jdk.crypto.cryptoki` through an operator's `PKCS11` keystore type. Dropping any of
+them degrades silently — non-root locales fall back to ROOT formatting in a framework whose feature
+list includes Japanese identifiers. The failure message says this, so a green run is never read as
+permission to trim.
+
+**The escape hatch was false and is withdrawn.** The first version of this decision said a
+dependency's transitive need "stays the `jdeps` step's job". There is no `jdeps` step: `grep -rn
+jdeps` over the repository returned exactly one hit, which was that sentence. Worse, the obvious step
+would miss the same module — netty's `PlatformDependent` references `jdk.jfr.FlightRecorder`, and
+`jdeps --list-deps` on `netty-common` prints only `java.base java.logging jdk.unsupported` unless it
+is given `--add-modules ALL-SYSTEM`. So `jdk.jfr` was owed twice over, and the dependency half is
+**unguarded**. See open question 3.
+
+**And the guard's failure direction had to be inverted.** Every way it can go blind produced a green
+run: an index that cannot see the package, a scan that matches nothing, a workflow with no
+`--add-modules` line. Each is now asserted before the membership check — two canary mappings, a
+non-empty required set naming both modules, and exactly two lists whose parsed sets are equal. The
+lists are found by the `--add-modules` token and parsed into a `Set` after stripping an optional `=`;
+a `contains` test would pass on a prefix, and JDK 25 ships `jdk.management` against
+`jdk.management.jfr` and `java.sql` against `java.sql.rowset`. Line numbers are never pinned — slice
+3 moved both lines by seven while this document was being written.
+
+Finally, `java.se` membership is resolved rather than derived from the `java.` prefix. Exactly one
+`java.*` module sits outside that closure on JDK 25, `java.smartcardio`, and this repository ships
+the SAML, OIDC and OAuth signing surfaces where an HSM path would land.
 
 ### 4 — The unpinned plugins that matter are the two that write shipped bytes
 
@@ -276,7 +308,7 @@ first instruction is a barrier that has not been necessary for eight releases.
 | 1 | This design document, plus `docs-site/nav.mjs` `EXCLUDED` and `ErrorIndex.INTERNAL_DOCS` | — | S |
 | 2 | `WorkflowLedgerTest` with assertions 1 and 3; the two SHA pins; the four `env:` hoists | F71, F76 | M |
 | 3 | Assertion 2; `timeout-minutes` on 13 jobs, each bound measured; `concurrency` on all five workflows; the two `### Fixed` headings merged | F77 | M |
-| 4 | `jdk.jfr` in both lists; the system-module ledger; the `*/pom.xml` trigger path | F70, F75 | M |
+| 4 | `jdk.jfr` in both lists; the bytecode module ledger in `tesseraql-maven-plugin`; the `*/pom.xml` trigger path | F70, F75 | L |
 | 5 | The plugin-resolution ledger; `maven-help`, `maven-dependency`, `maven-resources` pinned; the `outputTimestamp` row | F78 (part) | S |
 | 6 | `requireMavenVersion`; the `mvn` → `./mvnw` sweep; `.devcontainer` and `scripts/` de-duplicated | F78 (part) | L |
 | 7 | `distributionSha256Sum`, after slice 6 removes the script that regenerates the file without it | F72 | S |
@@ -305,7 +337,7 @@ Everything this campaign leaves behind, and whether it is red today:
 | Every job declares `timeout-minutes` | 13 of 14 jobs |
 | No `${{ }}` inside a `run:` body | 4 lines |
 | `maven-wrapper.properties` declares a checksum | the file |
-| Every imported system module is in both `--add-modules` lists | `jdk.jfr` |
+| Every system module the compiled classes reach for is in both `--add-modules` lists | `jdk.jfr` |
 | Every `<build>` plugin resolves through root `pluginManagement` | 2 declarations |
 | `project.build.outputTimestamp` is set | nothing — a forward guard for #1215 |
 | No workflow holds a `seq 1 ` polling loop | 3 lines |
@@ -339,6 +371,13 @@ than cancels. `cancel-in-progress` is `${{ github.event_name == 'pull_request' }
 been answered by the push that superseded it, while a cancelled tag run leaves a published release
 with missing assets. No assertion is added for `concurrency` — it is a policy, and a ledger that
 freezes a policy is a ledger that argues with the next maintainer rather than catching a defect.
+
+**3 — Should a `jdeps` step guard the dependency half?** The ledger sees only first-party
+bytecode. A third-party jar's need is invisible to it, and netty's reference to
+`jdk.jfr.FlightRecorder` shows that is not theoretical. A step running
+`jdeps --multi-release 25 --add-modules ALL-SYSTEM --list-deps` over both fat jars and diffing
+against the parsed `--add-modules` list would close it. It is real work on the tag path's inputs and
+it is not in this campaign's slice list; it wants its own decision.
 
 **2 — Is 40 attempts the right attach budget?** The measured margins are 4m51s, 1m48s and 8m04s, all
 against a 20-minute budget. Doubling the attempts makes the worst observed case a 21-minute margin

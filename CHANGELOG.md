@@ -63,6 +63,18 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **The jlinked images carry the module the pinning diagnostic needs.** `JfrPinningSource` imports
+  `jdk.jfr.consumer`, and neither `--add-modules` list in the jpackage workflow named `jdk.jfr` —
+  the eleven roots resolve to a 31-module closure that does not contain it. So an operator who set
+  the documented `tesseraql.diagnostics.pinning.enabled` on the CLI or host image got a
+  `NoClassDefFoundError` while the runtime pools were being built, with no fallback path. A new
+  `JlinkModuleLedgerTest` walks every reactor module's compiled classes and refuses a system module
+  the images are not linked from. It reads bytecode rather than imports, because a system class
+  written fully qualified has no import line to find and 354 of the 1021 main sources write one that
+  way. The check is one-way by design: it never claims a listed module is unnecessary, since most of
+  them are reached by a locale, a cipher suite or a keystore type and leave no trace to scan. The
+  jpackage workflow also now triggers on a module POM, not only the root one.
+
 - **Every CI job is bounded, and a superseded pull-request run stops.** Thirteen of the fourteen
   jobs across the five workflows declared no `timeout-minutes`, so each was bounded only by
   GitHub's six-hour default — including the two that hold a required check, where a hung job holds
