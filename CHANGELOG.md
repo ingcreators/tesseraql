@@ -70,6 +70,15 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A route that moves is served at its new URL.** A route's URL comes from where its directory
+  sits, but the per-route fingerprint hashed only file names and bytes — so renaming a route
+  directory with its contents untouched produced an identical fingerprint. The route was judged
+  unchanged, never recompiled, and never re-mounted: it kept answering at the URL it no longer
+  declares while the new one returned 404 until the next restart. Under `tesseraql dev` that is
+  the reload promising to move a route and silently not moving it. The fingerprint now includes
+  the declared URL — the declared URL rather than the directory's absolute path, so moving the
+  whole application home still rebuilds nothing.
+
 - **A pinning sample names the carrier, the site and when it happened.** All three payload fields
   of the virtual-thread pinning diagnostic were wrong. The carrier column held the *pinned* thread
   — the empty string for an unnamed virtual thread — because the event's own `carrierThread` field
