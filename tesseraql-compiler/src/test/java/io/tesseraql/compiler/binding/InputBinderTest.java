@@ -7,6 +7,7 @@ import io.tesseraql.core.error.TqlException;
 import io.tesseraql.yaml.model.InputField;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -284,6 +285,47 @@ class InputBinderTest {
                 .isInstanceOf(TqlException.class)
                 .satisfies(ex -> assertThat(firstField((TqlException) ex))
                         .containsEntry("code", "url"));
+    }
+
+    // type: datetime with no format: — the shape ViewFields renders as <input
+    // type="datetime-local">, whose browsers submit yyyy-MM-ddTHH:mm. The column default is the
+    // space-separated form a CSV carries, so the field could not round-trip through the widget
+    // the framework itself picks for it.
+
+    @Test
+    void aFormatlessDatetimeAcceptsWhatItsOwnWidgetSubmits() {
+        Map<String, Object> bound = InputBinder.bind(Map.of("due", field("datetime", null)),
+                value("2026-01-01T09:30"), Locale.ENGLISH);
+
+        assertThat(bound).containsEntry("due", LocalDateTime.of(2026, 1, 1, 9, 30));
+    }
+
+    @Test
+    void aFormatlessDatetimeAcceptsTheWidgetFormWithSeconds() {
+        Map<String, Object> bound = InputBinder.bind(Map.of("due", field("datetime", null)),
+                value("2026-01-01T09:30:15"), Locale.ENGLISH);
+
+        assertThat(bound).containsEntry("due", LocalDateTime.of(2026, 1, 1, 9, 30, 15));
+    }
+
+    /** The column default keeps working: this is an addition, not a replacement. */
+    @Test
+    void aFormatlessDatetimeStillAcceptsTheColumnDefault() {
+        Map<String, Object> bound = InputBinder.bind(Map.of("due", field("datetime", null)),
+                value("2026-01-01 09:30:00"), Locale.ENGLISH);
+
+        assertThat(bound).containsEntry("due", LocalDateTime.of(2026, 1, 1, 9, 30));
+    }
+
+    /** A declared format still governs alone — the widget fallback is for a formatless field. */
+    @Test
+    void aDeclaredDatetimeFormatIsNotWidenedByTheFallback() {
+        assertThatThrownBy(() -> InputBinder.bind(
+                Map.of("due", field("datetime", "yyyy/MM/dd HH:mm")),
+                value("2026-01-01T09:30"), Locale.ENGLISH))
+                .isInstanceOf(TqlException.class)
+                .satisfies(ex -> assertThat(firstField((TqlException) ex))
+                        .containsEntry("format", "yyyy/MM/dd HH:mm"));
     }
 
     @SuppressWarnings("unchecked")

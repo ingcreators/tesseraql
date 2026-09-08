@@ -410,10 +410,11 @@
             "number",
             "boolean",
             "date",
+            "datetime",
             "array",
             "sort"
           ],
-          "description": "The declared type. A supplied value is coerced to it and refused when it does not fit. `sort` is an ordered sort set (`-ship,order` - a leading `-` for descending) validated against `columns:`; the bound `params.<name>Sql` sibling carries the safe ORDER BY fragment."
+          "description": "The declared type. A supplied value is coerced to it and refused when it does not fit. `datetime` binds a date and time — with no `format:` it accepts the `yyyy-MM-ddTHH:mm` a datetime-local widget submits as well as the column default. `sort` is an ordered sort set (`-ship,order` - a leading `-` for descending) validated against `columns:`; the bound `params.<name>Sql` sibling carries the safe ORDER BY fragment."
         },
         "required": {
           "type": "boolean",
