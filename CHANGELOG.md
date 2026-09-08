@@ -70,6 +70,12 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A terminated MCP session is not brought back by a request already in flight.** Refreshing a
+  session's idle timer read the entry and then wrote it back unconditionally, so a `DELETE /mcp`
+  landing between the two was silently undone: the session the client had just terminated stayed
+  usable until its idle window expired. The refresh is now conditional on the entry still being
+  there.
+
 - **The configuration reference lists the keys that point the framework at a non-AWS S3 store.**
   Six of them — the endpoint, region, path style, checksum mode and both credentials — were
   invisible to the index, so an operator configuring MinIO or Ceph read a page showing two keys of

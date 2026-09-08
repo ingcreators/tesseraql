@@ -77,17 +77,29 @@ public final class McpHttpHandler {
 
     /** Whether the session is known and still inside its idle window; touches it if so. */
     private boolean touch(String sessionId) {
+        return touch(sessions, sessionId, System.currentTimeMillis(), ttl.toMillis());
+    }
+
+    /**
+     * The refresh itself, over its map — package-private so the concurrent case has a seam a
+     * deterministic test can reach.
+     *
+     * <p>The write is {@code computeIfPresent}, not {@code put}. The read and the write are two
+     * operations, and {@code DELETE /mcp} removes the entry between them often enough to matter:
+     * an unconditional put re-adds what the client just terminated, and the session then lives on
+     * to its idle window. The remapping runs under the map's per-entry lock, so the entry is
+     * either still there and refreshed, or gone and reported gone.
+     */
+    static boolean touch(Map<String, Long> sessions, String sessionId, long now, long ttlMillis) {
         Long lastSeen = sessions.get(sessionId);
         if (lastSeen == null) {
             return false;
         }
-        long now = System.currentTimeMillis();
-        if (now - lastSeen > ttl.toMillis()) {
+        if (now - lastSeen > ttlMillis) {
             sessions.remove(sessionId);
             return false;
         }
-        sessions.put(sessionId, now);
-        return true;
+        return sessions.computeIfPresent(sessionId, (id, seen) -> now) != null;
     }
 
     /** Drops expired entries, then the oldest if the ceiling is still reached. */

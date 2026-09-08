@@ -2,6 +2,8 @@ package io.tesseraql.mcp;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import org.junit.jupiter.api.Test;
 
 class McpHttpHandlerTest {
@@ -123,5 +125,62 @@ class McpHttpHandlerTest {
         McpHttpHandler.Response accepted = handler
                 .handle(new McpHttpHandler.Request("POST", "Bearer good", null, null, INIT));
         assertThat(accepted.status()).isEqualTo(200);
+    }
+
+    /**
+     * A map that drops the entry the moment it is read — the DELETE landing in the window between
+     * {@code touch}'s read and its write, deterministically rather than by racing threads.
+     */
+    private static final class DeletedOnRead extends ConcurrentHashMap<String, Long> {
+        private static final long serialVersionUID = 1L;
+
+        @Override
+        public Long get(Object key) {
+            Long seen = super.get(key);
+            super.remove(key);
+            return seen;
+        }
+    }
+
+    /**
+     * {@code DELETE /mcp} terminates a session; a request already in flight must not bring it
+     * back. {@code touch} read the entry and then wrote it back unconditionally, so a delete
+     * arriving between the two was silently undone and the terminated session lived on to its
+     * idle window.
+     */
+    @Test
+    void aSessionDeletedWhileARequestIsInFlightIsNotResurrected() {
+        Map<String, Long> sessions = new DeletedOnRead();
+        long now = System.currentTimeMillis();
+        sessions.put("session-1", now);
+
+        boolean alive = McpHttpHandler.touch(sessions, "session-1", now, 7_200_000L);
+
+        assertThat(alive)
+                .as("the session was deleted mid-request; the request must not report it live")
+                .isFalse();
+        assertThat(sessions)
+                .as("and must not put it back")
+                .doesNotContainKey("session-1");
+    }
+
+    /** The ordinary path still refreshes, so the fix is not "always report gone". */
+    @Test
+    void touchRefreshesALiveSession() {
+        Map<String, Long> sessions = new ConcurrentHashMap<>();
+        sessions.put("session-2", 1_000L);
+
+        assertThat(McpHttpHandler.touch(sessions, "session-2", 2_000L, 7_200_000L)).isTrue();
+        assertThat(sessions).containsEntry("session-2", 2_000L);
+    }
+
+    /** And an idle session is still dropped rather than refreshed. */
+    @Test
+    void touchDropsASessionPastItsIdleWindow() {
+        Map<String, Long> sessions = new ConcurrentHashMap<>();
+        sessions.put("session-3", 1_000L);
+
+        assertThat(McpHttpHandler.touch(sessions, "session-3", 10_000L, 5_000L)).isFalse();
+        assertThat(sessions).doesNotContainKey("session-3");
     }
 }
