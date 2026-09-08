@@ -145,13 +145,6 @@
     </dependency>
 
     <!--
-      The gateway's relay (docs/stack-architecture.md decision 13). Vert.x is already here through
-      camel-platform-http-vertx, so this adds one jar at a version the runtime already resolves;
-      its only transitive dependency is the vertx-core already on the classpath. A hand-rolled
-      relay was measured on 2026-08-16 and lost chunked bodies outright, buffered event streams,
-      and copied HTTP/2 pseudo-headers into HTTP/1.1 answers — see MultiAppGateway.
-    -->
-    <!--
       The runtime owns its HTTP server and router (docs/http-edge.md decision 1); they used to
       arrive through camel-platform-http-vertx, which no longer has anything to route.
     -->
@@ -159,17 +152,17 @@
       <groupId>io.vertx</groupId>
       <artifactId>vertx-web</artifactId>
     </dependency>
+    <!--
+      The gateway's relay (docs/stack-architecture.md decision 13). One jar: its only transitive
+      dependency is the vertx-core that vertx-web above already brings, at the version the root
+      pom pins for all three. A hand-rolled relay was measured on 2026-08-16 and lost chunked
+      bodies outright, buffered event streams, and copied HTTP/2 pseudo-headers into HTTP/1.1
+      answers — see MultiAppGateway.
+    -->
     <dependency>
       <groupId>io.vertx</groupId>
       <artifactId>vertx-http-proxy</artifactId>
     </dependency>
-    <!--
-      The components this runtime resolves, declared one by one rather than taken from the
-      camel-core aggregate (slice 0). The list keeps shrinking as the campaign proceeds: direct
-      and timer left with the pipelines and the schedules that used to need them
-      (docs/camel-removal.md decisions 1 and 5), leaving the FTPS consumer's own. A component that
-      is not on the classpath cannot be auto-discovered, refused, or exploited.
-    -->
     <!--
       Quartz's cron expression, without Quartz's scheduler (docs/camel-removal.md decision 5).
       What makes a cron firing safe across replicas is that every node computes the same fire time
