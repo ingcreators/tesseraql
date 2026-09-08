@@ -52,7 +52,7 @@ tesseraql scaffold crud --app . --table items \
   --jdbc-url jdbc:postgresql://localhost:5432/order_entry --username dev --password dev
 ```
 
-The table must already exist in the database — apply your migration first (`serve`
+The table must already exist in the database — apply your migration first (`dev`
 auto-applies `db/migration` on start, or run `tesseraql migrate --app .`). Without
 `--jdbc-url` the app's main datasource is introspected; when it does not answer but a
 `dev --embedded-db` is running, its embedded database is used instead (the

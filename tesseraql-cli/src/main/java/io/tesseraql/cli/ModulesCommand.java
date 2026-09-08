@@ -48,9 +48,6 @@ final class ModulesCommand implements Runnable {
         @Mixin
         ConfigOptions configOptions;
 
-        @Option(names = {"--offline"}, description = "Resolve only from the local repository.")
-        boolean offline;
-
         @Override
         public Integer call() throws Exception {
             configOptions.apply();
@@ -61,7 +58,7 @@ final class ModulesCommand implements Runnable {
             System.out.println("Added " + coordinate + " to " + tesseraqlYml);
 
             AppConfig config = new ManifestLoader().load(app).config();
-            new ModulesInstaller(offline).install(app, config, true)
+            new ModulesInstaller(configOptions.offline).install(app, config, true)
                     .ifPresent(result -> System.out.println("Resolved " + result.artifacts().size()
                             + " artifact(s) into " + result.cacheDir() + "; wrote modules.lock"));
             return 0;
@@ -83,9 +80,6 @@ final class ModulesCommand implements Runnable {
         @Mixin
         ConfigOptions configOptions;
 
-        @Option(names = {"--offline"}, description = "Resolve only from the local repository.")
-        boolean offline;
-
         @Override
         public Integer call() {
             configOptions.apply();
@@ -106,12 +100,13 @@ final class ModulesCommand implements Runnable {
             }
             for (Path home : homes) {
                 AppConfig config = new ManifestLoader().load(home).config();
-                new ModulesInstaller(offline).install(home, config, true).ifPresentOrElse(
-                        result -> System.out.println(home.getFileName() + ": resolved "
-                                + result.artifacts().size() + " artifact(s) into "
-                                + result.cacheDir() + "; wrote modules.lock"),
-                        () -> System.out.println(
-                                home.getFileName() + ": no tesseraql.modules declared."));
+                new ModulesInstaller(configOptions.offline).install(home, config, true)
+                        .ifPresentOrElse(
+                                result -> System.out.println(home.getFileName() + ": resolved "
+                                        + result.artifacts().size() + " artifact(s) into "
+                                        + result.cacheDir() + "; wrote modules.lock"),
+                                () -> System.out.println(
+                                        home.getFileName() + ": no tesseraql.modules declared."));
             }
             return 0;
         }

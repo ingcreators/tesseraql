@@ -27,7 +27,7 @@ final class IdentitySchemaCommand implements Callable<Integer> {
     @Option(names = {
             "--app"}, description = "App home for datasource fallback (optional; else use "
                     + "--jdbc-url). Precedence: an explicit --jdbc-url, then the app's configured "
-                    + "main datasource, then a running `serve --embedded-db` (its "
+                    + "main datasource, then a running `dev --embedded-db` (its "
                     + "work/embedded-db.jdbc marker) when the config does not resolve or answer.")
     Path app;
 

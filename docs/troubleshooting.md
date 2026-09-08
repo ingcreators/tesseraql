@@ -27,7 +27,7 @@ things to check, in order:
 
 ### The login page appears and no password works
 
-The identity store is **not seeded**. No application ships with a user. `serve` detects this
+The identity store is **not seeded**. No application ships with a user. `dev` detects this
 at startup and prints the command; if you missed it:
 
 ```sh

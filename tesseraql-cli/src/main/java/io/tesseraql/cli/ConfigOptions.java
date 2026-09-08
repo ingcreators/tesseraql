@@ -24,6 +24,18 @@ public final class ConfigOptions {
     public java.nio.file.Path repo;
 
     /**
+     * Declared here rather than on the two {@code modules} subcommands that used to own it.
+     * {@code --repo}'s own text tells the reader to combine the two, and that text renders on
+     * every command carrying this mixin — twenty-seven rows of {@code docs/reference-cli.md}
+     * named a flag two of them declared. Decision 5's argument settles which way to close the
+     * gap: a flag that exists on one command and not another reads as a missing capability.
+     */
+    @Option(names = {"--offline"}, description = "Resolve modules only from the local repository,"
+            + " never over the network. Pair with --repo to resolve from a bag produced by"
+            + " 'tesseraql modules fetch'.")
+    public boolean offline;
+
+    /**
      * Applies the profile and the repository location before any manifest loads or any module
      * resolves — the same system properties the environment feeds, so every loader and resolver
      * on the call path sees the same answer. Each is a no-op when its flag was not given, leaving
@@ -41,5 +53,14 @@ public final class ConfigOptions {
         if (repo != null) {
             System.setProperty("maven.repo.local", repo.toAbsolutePath().toString());
         }
+        if (offline) {
+            // A property, so the resolutions a command performs without being handed the flag —
+            // dev's and package's, which construct ModulesInstaller with no arguments — honour it
+            // too. That is the whole point: those two are what the --repo text promises works.
+            System.setProperty(OFFLINE_PROPERTY, "true");
+        }
     }
+
+    /** Set by {@code --offline}; read by {@code ModulesInstaller}'s no-argument constructor. */
+    public static final String OFFLINE_PROPERTY = "tesseraql.modules.offline";
 }

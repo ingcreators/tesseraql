@@ -78,7 +78,7 @@ Verify with `tesseraql --version`. The install channels are described in
   manual step. This is one reason to roll staging first: the first boot of a new version
   is what applies its framework schema changes.
 - **App migrations are unchanged.** Your own `db/migration` scripts run exactly as before
-  — `serve` auto-applies them, or run `tesseraql migrate` / the Maven goal explicitly. A
+  — `dev` auto-applies them, or run `tesseraql migrate` / the Maven goal explicitly. A
   framework upgrade never rewrites app migrations.
 - **Embedded database directories are safe.** A persistent `--embedded-db` directory is
   pinned to the PostgreSQL version that initialized it, so a CLI upgrade that bumps the

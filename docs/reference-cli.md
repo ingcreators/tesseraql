@@ -17,6 +17,7 @@ Run the development stack over the gateway until interrupted.
 | `--app-name <name>` | — | Run only this application from the stack, at the same address it has as a stack member. |
 | `--env <profile>` | — | Environment profile: merges config/env/<profile>.yml between the base config and the Studio overlay (also TESSERAQL_ENV). |
 | `--repo <dir>` | — | Local artifact repository to resolve modules from — a bag produced by 'tesseraql modules fetch' on a connected machine (also -Dmaven.repo.local). Combine with --offline to resolve nothing over the network. |
+| `--offline` | — | Resolve modules only from the local repository, never over the network. Pair with --repo to resolve from a bag produced by 'tesseraql modules fetch'. |
 | `--log-format <text\|json>` | — | Log line format (default text; json for structured logs). |
 | `--log-level <level>` | — | Log threshold: trace\|debug\|info\|warn\|error (default info). |
 | `--port <port>` | — | The port the gateway fronts every app on (default 8080). |
@@ -36,6 +37,7 @@ Serve every installed app from one port, each in its own runtime.
 | `--app-name <name>` | — | Serve only this application from the stack, at the same address it has as a stack member. |
 | `--env <profile>` | — | Environment profile: merges config/env/<profile>.yml between the base config and the Studio overlay (also TESSERAQL_ENV). |
 | `--repo <dir>` | — | Local artifact repository to resolve modules from — a bag produced by 'tesseraql modules fetch' on a connected machine (also -Dmaven.repo.local). Combine with --offline to resolve nothing over the network. |
+| `--offline` | — | Resolve modules only from the local repository, never over the network. Pair with --repo to resolve from a bag produced by 'tesseraql modules fetch'. |
 | `--port <port>` | — | The port the gateway fronts every app on (default 8080). |
 | `--http2` | — | Serve and forward cleartext HTTP/2 (h2c). Off by default. One switch moves both hops: a client's connection to the gateway and the gateway's connection to each app. An app that does not offer h2c answers the upgrade over HTTP/1.1 and is reached exactly as before. |
 | `--trusted-proxies <cidr,...>` | — | Addresses whose forwarded headers come from your edge rather than from a caller, e.g. 10.0.0.0/8,192.168.1.5. When set, an application's mTLS forwardedHeader is stripped from requests arriving from anywhere else. Empty by default, which strips nothing: the edge overwriting the header on every inbound request is the contract either way. |
@@ -104,6 +106,7 @@ List the routes discovered in the app.
 | `--app <app>` | yes | Path to the external app home. |
 | `--env <profile>` | — | Environment profile: merges config/env/<profile>.yml between the base config and the Studio overlay (also TESSERAQL_ENV). |
 | `--repo <dir>` | — | Local artifact repository to resolve modules from — a bag produced by 'tesseraql modules fetch' on a connected machine (also -Dmaven.repo.local). Combine with --offline to resolve nothing over the network. |
+| `--offline` | — | Resolve modules only from the local repository, never over the network. Pair with --repo to resolve from a bag produced by 'tesseraql modules fetch'. |
 | `--modules <dir>` | — | Directory of optional plugin module jars (e.g. the pdf/excel file-format codecs), composed with the application's declared tesseraql.modules. |
 
 ## `new`
@@ -133,6 +136,7 @@ Scaffold list/detail/edit routes, 2-way SQL, pages, and tests for a table.
 | `--password <password>` | — | Database password for --jdbc-url. |
 | `--env <profile>` | — | Environment profile: merges config/env/<profile>.yml between the base config and the Studio overlay (also TESSERAQL_ENV). |
 | `--repo <dir>` | — | Local artifact repository to resolve modules from — a bag produced by 'tesseraql modules fetch' on a connected machine (also -Dmaven.repo.local). Combine with --offline to resolve nothing over the network. |
+| `--offline` | — | Resolve modules only from the local repository, never over the network. Pair with --repo to resolve from a bag produced by 'tesseraql modules fetch'. |
 | `--force` | — | Overwrite edited and user-owned files. |
 
 ### `scaffold decision`
@@ -160,6 +164,7 @@ Eject a route's declarative view into a hand-owned template and flip the route t
 | `--force` | — | Overwrite an edited or user-owned template. |
 | `--env <profile>` | — | Environment profile: merges config/env/<profile>.yml between the base config and the Studio overlay (also TESSERAQL_ENV). |
 | `--repo <dir>` | — | Local artifact repository to resolve modules from — a bag produced by 'tesseraql modules fetch' on a connected machine (also -Dmaven.repo.local). Combine with --offline to resolve nothing over the network. |
+| `--offline` | — | Resolve modules only from the local repository, never over the network. Pair with --repo to resolve from a bag produced by 'tesseraql modules fetch'. |
 
 ## `lint`
 
@@ -173,6 +178,7 @@ Lint the app home, failing on errors.
 | `--modules <dir>` | — | Directory of optional plugin module jars (e.g. the pdf/excel file-format codecs), composed with the application's declared tesseraql.modules. |
 | `--env <profile>` | — | Environment profile: merges config/env/<profile>.yml between the base config and the Studio overlay (also TESSERAQL_ENV). |
 | `--repo <dir>` | — | Local artifact repository to resolve modules from — a bag produced by 'tesseraql modules fetch' on a connected machine (also -Dmaven.repo.local). Combine with --offline to resolve nothing over the network. |
+| `--offline` | — | Resolve modules only from the local repository, never over the network. Pair with --repo to resolve from a bag produced by 'tesseraql modules fetch'. |
 
 ## `token`
 
@@ -184,6 +190,7 @@ Obtain a bearer token: mint one from an app's HS256 secret (--app), or sign in t
 | `--url <base-url>` | — | Base URL of a running application; signs in and exchanges the session for a token. Include the base path if the application has one. |
 | `--env <profile>` | — | Environment profile: merges config/env/<profile>.yml between the base config and the Studio overlay (also TESSERAQL_ENV). |
 | `--repo <dir>` | — | Local artifact repository to resolve modules from — a bag produced by 'tesseraql modules fetch' on a connected machine (also -Dmaven.repo.local). Combine with --offline to resolve nothing over the network. |
+| `--offline` | — | Resolve modules only from the local repository, never over the network. Pair with --repo to resolve from a bag produced by 'tesseraql modules fetch'. |
 | `--sub <subject>` | — | Subject claim (default dev). |
 | `--login <login>` | — | With --app, the loginId claim (default: the subject). With --url, the login id to sign in as; required there. |
 | `--password <password>` | — | With --url: the password. Omit to be prompted, or set TESSERAQL_PASSWORD — passing it here puts a credential in the process list and the shell history. |
@@ -221,6 +228,7 @@ Run the app's test suites; --report writes the docs overlay.
 | `--modules <dir>` | — | Directory of optional plugin module jars (e.g. the pdf/excel file-format codecs), composed with the application's declared tesseraql.modules. |
 | `--env <profile>` | — | Environment profile: merges config/env/<profile>.yml between the base config and the Studio overlay (also TESSERAQL_ENV). |
 | `--repo <dir>` | — | Local artifact repository to resolve modules from — a bag produced by 'tesseraql modules fetch' on a connected machine (also -Dmaven.repo.local). Combine with --offline to resolve nothing over the network. |
+| `--offline` | — | Resolve modules only from the local repository, never over the network. Pair with --repo to resolve from a bag produced by 'tesseraql modules fetch'. |
 
 ## `coverage`
 
@@ -240,6 +248,7 @@ Run suites and enforce the SQL coverage gate.
 | `--modules <dir>` | — | Directory of optional plugin module jars (e.g. the pdf/excel file-format codecs), composed with the application's declared tesseraql.modules. |
 | `--env <profile>` | — | Environment profile: merges config/env/<profile>.yml between the base config and the Studio overlay (also TESSERAQL_ENV). |
 | `--repo <dir>` | — | Local artifact repository to resolve modules from — a bag produced by 'tesseraql modules fetch' on a connected machine (also -Dmaven.repo.local). Combine with --offline to resolve nothing over the network. |
+| `--offline` | — | Resolve modules only from the local repository, never over the network. Pair with --repo to resolve from a bag produced by 'tesseraql modules fetch'. |
 
 ## `generate`
 
@@ -250,6 +259,7 @@ Generate OpenAPI, the htmx contract, and the docs spec.
 | `--app <app>` | yes | Path to the external app home. |
 | `--env <profile>` | — | Environment profile: merges config/env/<profile>.yml between the base config and the Studio overlay (also TESSERAQL_ENV). |
 | `--repo <dir>` | — | Local artifact repository to resolve modules from — a bag produced by 'tesseraql modules fetch' on a connected machine (also -Dmaven.repo.local). Combine with --offline to resolve nothing over the network. |
+| `--offline` | — | Resolve modules only from the local repository, never over the network. Pair with --repo to resolve from a bag produced by 'tesseraql modules fetch'. |
 | `--out <out>` | — | Output directory (default: <app>/work/generated). |
 
 ## `schema`
@@ -265,6 +275,7 @@ Introspect the database and write the schema overlay.
 | `--password <password>` | — | Database password for --jdbc-url. |
 | `--env <profile>` | — | Environment profile: merges config/env/<profile>.yml between the base config and the Studio overlay (also TESSERAQL_ENV). |
 | `--repo <dir>` | — | Local artifact repository to resolve modules from — a bag produced by 'tesseraql modules fetch' on a connected machine (also -Dmaven.repo.local). Combine with --offline to resolve nothing over the network. |
+| `--offline` | — | Resolve modules only from the local repository, never over the network. Pair with --repo to resolve from a bag produced by 'tesseraql modules fetch'. |
 
 ## `symbols`
 
@@ -275,6 +286,7 @@ Print the app's declared symbols (policies, message keys, domains, rules, decisi
 | `--app <app>` | yes | Path to the external app home. |
 | `--env <profile>` | — | Environment profile: merges config/env/<profile>.yml between the base config and the Studio overlay (also TESSERAQL_ENV). |
 | `--repo <dir>` | — | Local artifact repository to resolve modules from — a bag produced by 'tesseraql modules fetch' on a connected machine (also -Dmaven.repo.local). Combine with --offline to resolve nothing over the network. |
+| `--offline` | — | Resolve modules only from the local repository, never over the network. Pair with --repo to resolve from a bag produced by 'tesseraql modules fetch'. |
 
 ## `release-diff`
 
@@ -285,6 +297,7 @@ Diff two app trees: what does deploying the candidate change.
 | `--app <app>` | yes | Path to the candidate app home (what you are about to deploy). |
 | `--env <profile>` | — | Environment profile: merges config/env/<profile>.yml between the base config and the Studio overlay (also TESSERAQL_ENV). |
 | `--repo <dir>` | — | Local artifact repository to resolve modules from — a bag produced by 'tesseraql modules fetch' on a connected machine (also -Dmaven.repo.local). Combine with --offline to resolve nothing over the network. |
+| `--offline` | — | Resolve modules only from the local repository, never over the network. Pair with --repo to resolve from a bag produced by 'tesseraql modules fetch'. |
 | `--baseline <baseline>` | yes | Path to the baseline app home (what runs today: a checkout of the deployed tag or an unpacked release). |
 | `--json` | — | Emit JSON instead of Markdown. |
 | `--out <out>` | — | Also write the report to this file. |
@@ -298,6 +311,7 @@ Assess route governance and apply the review gate.
 | `--app <app>` | yes | Path to the external app home. |
 | `--env <profile>` | — | Environment profile: merges config/env/<profile>.yml between the base config and the Studio overlay (also TESSERAQL_ENV). |
 | `--repo <dir>` | — | Local artifact repository to resolve modules from — a bag produced by 'tesseraql modules fetch' on a connected machine (also -Dmaven.repo.local). Combine with --offline to resolve nothing over the network. |
+| `--offline` | — | Resolve modules only from the local repository, never over the network. Pair with --repo to resolve from a bag produced by 'tesseraql modules fetch'. |
 | `--fail-on-violation` | — | Whether unapproved routes fail (default: true). |
 
 ## `admission`
@@ -309,6 +323,7 @@ Run the admission profile over an app tree.
 | `--app <app>` | yes | Path to the app home. |
 | `--env <profile>` | — | Environment profile: merges config/env/<profile>.yml between the base config and the Studio overlay (also TESSERAQL_ENV). |
 | `--repo <dir>` | — | Local artifact repository to resolve modules from — a bag produced by 'tesseraql modules fetch' on a connected machine (also -Dmaven.repo.local). Combine with --offline to resolve nothing over the network. |
+| `--offline` | — | Resolve modules only from the local repository, never over the network. Pair with --repo to resolve from a bag produced by 'tesseraql modules fetch'. |
 
 ## `migrate`
 
@@ -324,6 +339,7 @@ Apply/info/validate/repair the app's db/migration scripts.
 | `--password <password>` | — | Database password for --jdbc-url. |
 | `--env <profile>` | — | Environment profile: merges config/env/<profile>.yml between the base config and the Studio overlay (also TESSERAQL_ENV). |
 | `--repo <dir>` | — | Local artifact repository to resolve modules from — a bag produced by 'tesseraql modules fetch' on a connected machine (also -Dmaven.repo.local). Combine with --offline to resolve nothing over the network. |
+| `--offline` | — | Resolve modules only from the local repository, never over the network. Pair with --repo to resolve from a bag produced by 'tesseraql modules fetch'. |
 
 ## `job`
 
@@ -345,6 +361,7 @@ List, run, or rerun batch jobs in-process (exit 0 completed, 1 failed, 3 calenda
 | `--modules <dir>` | — | Directory of optional plugin module jars (e.g. the pdf/excel file-format codecs), composed with the application's declared tesseraql.modules. |
 | `--env <profile>` | — | Environment profile: merges config/env/<profile>.yml between the base config and the Studio overlay (also TESSERAQL_ENV). |
 | `--repo <dir>` | — | Local artifact repository to resolve modules from — a bag produced by 'tesseraql modules fetch' on a connected machine (also -Dmaven.repo.local). Combine with --offline to resolve nothing over the network. |
+| `--offline` | — | Resolve modules only from the local repository, never over the network. Pair with --repo to resolve from a bag produced by 'tesseraql modules fetch'. |
 
 ## `identity-schema`
 
@@ -352,13 +369,14 @@ Apply the managed IAM schema and optionally seed an administrator.
 
 | Argument | Required? | Description |
 | --- | --- | --- |
-| `--app <app>` | — | App home for datasource fallback (optional; else use --jdbc-url). Precedence: an explicit --jdbc-url, then the app's configured main datasource, then a running `serve --embedded-db` (its work/embedded-db.jdbc marker) when the config does not resolve or answer. |
+| `--app <app>` | — | App home for datasource fallback (optional; else use --jdbc-url). Precedence: an explicit --jdbc-url, then the app's configured main datasource, then a running `dev --embedded-db` (its work/embedded-db.jdbc marker) when the config does not resolve or answer. |
 | `--jdbc-url <jdbcUrl>` | — | JDBC URL (default: the app's --datasource config). |
 | `--datasource <name>` | — | Named datasource whose configuration backs the connection, and the key for datasource-scoped work (default: main). |
 | `--username <username>` | — | Database user for --jdbc-url. |
 | `--password <password>` | — | Database password for --jdbc-url. |
 | `--env <profile>` | — | Environment profile: merges config/env/<profile>.yml between the base config and the Studio overlay (also TESSERAQL_ENV). |
 | `--repo <dir>` | — | Local artifact repository to resolve modules from — a bag produced by 'tesseraql modules fetch' on a connected machine (also -Dmaven.repo.local). Combine with --offline to resolve nothing over the network. |
+| `--offline` | — | Resolve modules only from the local repository, never over the network. Pair with --repo to resolve from a bag produced by 'tesseraql modules fetch'. |
 | `--dialect <dialect>` | — | SQL dialect (default: postgres). |
 | `--admin-login <adminLogin>` | — | Administrator to create or update after the schema is applied. |
 | `--admin-password-file <adminPasswordFile>` | — | File holding the admin password (else TESSERAQL_ADMIN_PASSWORD). |
@@ -374,6 +392,7 @@ Package the app home into a deterministic .tqlapp.
 | `--app <app>` | yes | Path to the external app home. |
 | `--env <profile>` | — | Environment profile: merges config/env/<profile>.yml between the base config and the Studio overlay (also TESSERAQL_ENV). |
 | `--repo <dir>` | — | Local artifact repository to resolve modules from — a bag produced by 'tesseraql modules fetch' on a connected machine (also -Dmaven.repo.local). Combine with --offline to resolve nothing over the network. |
+| `--offline` | — | Resolve modules only from the local repository, never over the network. Pair with --repo to resolve from a bag produced by 'tesseraql modules fetch'. |
 | `--out <out>` | — | Output archive (default: <app>/work/<app-name>.tqlapp). |
 | `--generated <generated>` | — | Generated docs directory to merge (default: <app>/work/generated/docs when present). |
 
@@ -386,6 +405,7 @@ Verify release evidence against the app sources.
 | `--app <app>` | yes | Path to the external app home. |
 | `--env <profile>` | — | Environment profile: merges config/env/<profile>.yml between the base config and the Studio overlay (also TESSERAQL_ENV). |
 | `--repo <dir>` | — | Local artifact repository to resolve modules from — a bag produced by 'tesseraql modules fetch' on a connected machine (also -Dmaven.repo.local). Combine with --offline to resolve nothing over the network. |
+| `--offline` | — | Resolve modules only from the local repository, never over the network. Pair with --repo to resolve from a bag produced by 'tesseraql modules fetch'. |
 | `--evidence-file <evidenceFile>` | yes | The release-evidence.json to verify (its sibling .sig is auto-detected). |
 | `--require-signature` | — | Fail if no signature envelope is present. |
 | `--expected-key-sha256 <expectedKeySha256>` | — | SHA-256 fingerprint of the public key the evidence must be signed with. |
@@ -404,7 +424,7 @@ Add a coordinate to tesseraql.modules and refresh modules.lock.
 | `--app <app>` | yes | Path to the external app home. |
 | `--env <profile>` | — | Environment profile: merges config/env/<profile>.yml between the base config and the Studio overlay (also TESSERAQL_ENV). |
 | `--repo <dir>` | — | Local artifact repository to resolve modules from — a bag produced by 'tesseraql modules fetch' on a connected machine (also -Dmaven.repo.local). Combine with --offline to resolve nothing over the network. |
-| `--offline` | — | Resolve only from the local repository. |
+| `--offline` | — | Resolve modules only from the local repository, never over the network. Pair with --repo to resolve from a bag produced by 'tesseraql modules fetch'. |
 
 ### `modules resolve`
 
@@ -416,7 +436,7 @@ Resolve tesseraql.modules and (re)write modules.lock.
 | `--stack <dir>` | — | Resolve every member of the stack: an install root (catalog.json) or a folder of application homes — the operator step a host's declared-but-unresolved refusal names. |
 | `--env <profile>` | — | Environment profile: merges config/env/<profile>.yml between the base config and the Studio overlay (also TESSERAQL_ENV). |
 | `--repo <dir>` | — | Local artifact repository to resolve modules from — a bag produced by 'tesseraql modules fetch' on a connected machine (also -Dmaven.repo.local). Combine with --offline to resolve nothing over the network. |
-| `--offline` | — | Resolve only from the local repository. |
+| `--offline` | — | Resolve modules only from the local repository, never over the network. Pair with --repo to resolve from a bag produced by 'tesseraql modules fetch'. |
 
 ### `modules fetch`
 
@@ -431,6 +451,7 @@ Fetch every module a stack needs into a portable bag.
 | `--embedded-db-version <version>` | — | Binary version for --platform (default: the CLI's built-in default). Pass the version a persistent data directory is pinned to when it differs. |
 | `--env <profile>` | — | Environment profile: merges config/env/<profile>.yml between the base config and the Studio overlay (also TESSERAQL_ENV). |
 | `--repo <dir>` | — | Local artifact repository to resolve modules from — a bag produced by 'tesseraql modules fetch' on a connected machine (also -Dmaven.repo.local). Combine with --offline to resolve nothing over the network. |
+| `--offline` | — | Resolve modules only from the local repository, never over the network. Pair with --repo to resolve from a bag produced by 'tesseraql modules fetch'. |
 
 ### `modules list`
 
@@ -441,6 +462,7 @@ List the declared tesseraql.modules.
 | `--app <app>` | yes | Path to the external app home. |
 | `--env <profile>` | — | Environment profile: merges config/env/<profile>.yml between the base config and the Studio overlay (also TESSERAQL_ENV). |
 | `--repo <dir>` | — | Local artifact repository to resolve modules from — a bag produced by 'tesseraql modules fetch' on a connected machine (also -Dmaven.repo.local). Combine with --offline to resolve nothing over the network. |
+| `--offline` | — | Resolve modules only from the local repository, never over the network. Pair with --repo to resolve from a bag produced by 'tesseraql modules fetch'. |
 
 ## `embedded-db`
 
@@ -467,6 +489,7 @@ Resolve declared engine extensions into the offline cache (or from/into a bundle
 | `--app <app>` | yes | Path to the app home. |
 | `--env <profile>` | — | Environment profile: merges config/env/<profile>.yml between the base config and the Studio overlay (also TESSERAQL_ENV). |
 | `--repo <dir>` | — | Local artifact repository to resolve modules from — a bag produced by 'tesseraql modules fetch' on a connected machine (also -Dmaven.repo.local). Combine with --offline to resolve nothing over the network. |
+| `--offline` | — | Resolve modules only from the local repository, never over the network. Pair with --repo to resolve from a bag produced by 'tesseraql modules fetch'. |
 | `--repository <repository>` | — | Extension repository URL (a corporate mirror); default is DuckDB's. |
 | `--bundle <bundle>` | — | Also write the cache as a portable zip for air-gapped provisioning. |
 | `--from-bundle <fromBundle>` | — | Populate the cache from a bundle zip instead of the network. |
@@ -480,6 +503,7 @@ Report the engine pin, the cache location, and which declared extensions it hold
 | `--app <app>` | yes | Path to the app home. |
 | `--env <profile>` | — | Environment profile: merges config/env/<profile>.yml between the base config and the Studio overlay (also TESSERAQL_ENV). |
 | `--repo <dir>` | — | Local artifact repository to resolve modules from — a bag produced by 'tesseraql modules fetch' on a connected machine (also -Dmaven.repo.local). Combine with --offline to resolve nothing over the network. |
+| `--offline` | — | Resolve modules only from the local repository, never over the network. Pair with --repo to resolve from a bag produced by 'tesseraql modules fetch'. |
 
 ## `mcp`
 
@@ -491,6 +515,7 @@ Serve the developer MCP tools over stdio or HTTP.
 | `--app-name <name>` | — | Serve only this application's tools from the stack. |
 | `--env <profile>` | — | Environment profile: merges config/env/<profile>.yml between the base config and the Studio overlay (also TESSERAQL_ENV). |
 | `--repo <dir>` | — | Local artifact repository to resolve modules from — a bag produced by 'tesseraql modules fetch' on a connected machine (also -Dmaven.repo.local). Combine with --offline to resolve nothing over the network. |
+| `--offline` | — | Resolve modules only from the local repository, never over the network. Pair with --repo to resolve from a bag produced by 'tesseraql modules fetch'. |
 | `--modules <dir>` | — | Directory of optional plugin module jars (e.g. the pdf/excel file-format codecs), composed with the application's declared tesseraql.modules. |
 | `--transport <transport>` | — | Transport: stdio (default) or http. Default: `stdio`. |
 | `--read-only` | — | Expose only the read tools. |
