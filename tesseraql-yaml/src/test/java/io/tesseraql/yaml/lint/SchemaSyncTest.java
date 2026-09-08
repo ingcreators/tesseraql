@@ -546,6 +546,61 @@ class SchemaSyncTest {
     }
 
     /**
+     * Every response arm declares exactly the keys its record carries.
+     *
+     * <p>{@code response.json} declared four of {@code ResponseSpec.JsonResponse}'s six: an author
+     * could set {@code headers:} and {@code headersWhen:} — the feature is documented in
+     * response-shaping.md and {@code JsonResponseRenderer} builds a {@code ResponseHeaders} from
+     * both — while the editor said they did not exist. The other seven arms happened to agree,
+     * and nothing was checking any of them.
+     *
+     * <p>Exactness in both directions, arm by arm. A missing key is the defect above; an extra one
+     * is a key the editor offers and {@code @JsonIgnoreProperties} drops in silence, which is the
+     * worse half and the one {@code containsAll} cannot see.
+     *
+     * <p>This deliberately does <em>not</em> assert {@code additionalProperties: false}. The route
+     * schema's own root {@code $comment} records openness as a forward-compatibility choice —
+     * "newer keys never break older editors" — and four document families share this file.
+     */
+    @Test
+    void everyResponseArmDeclaresItsRecordsKeys() throws Exception {
+        JsonNode route = new ObjectMapper().readTree(
+                getClass().getResourceAsStream("/schema/tesseraql-route-v1.schema.json"));
+        JsonNode arms = route.path("properties").path("response").path("properties");
+
+        assertThat(names(arms))
+                .as("the response block offers exactly the arms ResponseSpec carries")
+                .containsExactlyInAnyOrderElementsOf(
+                        yamlNames(io.tesseraql.yaml.model.ResponseSpec.class));
+
+        Map<String, Class<? extends Record>> shapes = new java.util.LinkedHashMap<>();
+        shapes.put("json", io.tesseraql.yaml.model.ResponseSpec.JsonResponse.class);
+        shapes.put("html", io.tesseraql.yaml.model.ResponseSpec.HtmlResponse.class);
+        shapes.put("stream", io.tesseraql.yaml.model.ResponseSpec.StreamResponse.class);
+        shapes.put("redirect", io.tesseraql.yaml.model.ResponseSpec.RedirectResponse.class);
+        shapes.put("file", io.tesseraql.yaml.model.ResponseSpec.FileResponse.class);
+        shapes.put("text", io.tesseraql.yaml.model.ResponseSpec.TextResponse.class);
+        shapes.put("onError", io.tesseraql.yaml.model.ResponseSpec.OnError.class);
+        shapes.put("session", io.tesseraql.yaml.model.ResponseSpec.SessionResponse.class);
+        shapes.forEach((arm, record) -> assertThat(names(arms.path(arm).path("properties")))
+                .as("response.%s declares the keys %s carries, and only those", arm,
+                        record.getSimpleName())
+                .containsExactlyInAnyOrderElementsOf(yamlNames(record)));
+
+        // A model: value is read as a PATH, not as data: HtmlResponseRenderer does
+        // String.valueOf(expr) then ExpressionParser.parse, and the text and file renderers
+        // String.valueOf(expr).split("\\."). A non-string is silently mangled, so the schema
+        // says string. headers: is the deliberate contrast — ResponseHeaders interpolates a
+        // nested map or list and JSON-serializes it, so those values really are Object.
+        for (String arm : List.of("html", "text", "file")) {
+            assertThat(arms.path(arm).path("properties").path("model")
+                    .path("additionalProperties").path("type").asText())
+                    .as("response.%s.model is a map of bindable paths, which are strings", arm)
+                    .isEqualTo("string");
+        }
+    }
+
+    /**
      * The config schema describes every key the scaffolder writes.
      *
      * <p>Its own root {@code $comment} makes the promise this checks — "descriptions and the keys

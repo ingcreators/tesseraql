@@ -446,6 +446,18 @@
             "statusWhen": {
               "$ref": "tesseraql-defs-v1.schema.json#/$defs/statusWhen",
               "description": "Conditional statuses: the first entry whose expression matches decides the status."
+            },
+            "headers": {
+              "type": "object",
+              "additionalProperties": true,
+              "description": "Response headers to set, merged over the app-wide `responseHeaders` defaults. A `{expression}` placeholder in a value resolves per request; a nested map or list is serialized as JSON."
+            },
+            "headersWhen": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              },
+              "description": "A guard per header name: the header above is emitted only when its expression is truthy. The case this exists for is a header defined in terms of a status `statusWhen` already varies — `Location` on a 201, `Retry-After` on a 429 or 503."
             }
           },
           "additionalProperties": true,
@@ -486,8 +498,10 @@
             },
             "model": {
               "type": "object",
-              "additionalProperties": true,
-              "description": "Extra model entries for the template: each name to the bindable path supplying it."
+              "additionalProperties": {
+                "type": "string"
+              },
+              "description": "Extra model entries for the template: each name to the bindable path supplying it. The value is read as a path, not as data — every renderer stringifies it and parses the result, so a non-string is silently mangled."
             },
             "headers": {
               "type": "object",
@@ -499,7 +513,7 @@
               "additionalProperties": {
                 "type": "string"
               },
-              "description": "Conditional response headers: the first entry whose expression matches decides the headers."
+              "description": "A guard per header name: the header above is emitted only when its expression is truthy. On an HTML fragment that is an `HX-Trigger` toast firing on success but not on a handled error."
             },
             "statusWhen": {
               "$ref": "tesseraql-defs-v1.schema.json#/$defs/statusWhen",
@@ -564,7 +578,10 @@
             },
             "model": {
               "type": "object",
-              "description": "Extra model entries for the template: each name to the bindable path supplying it."
+              "additionalProperties": {
+                "type": "string"
+              },
+              "description": "Extra model entries for the template: each name to the bindable path supplying it. The value is read as a path, not as data — every renderer stringifies it and parses the result, so a non-string is silently mangled."
             }
           },
           "additionalProperties": true,
@@ -586,7 +603,10 @@
             },
             "model": {
               "type": "object",
-              "description": "Extra model entries for the template: each name to the bindable path supplying it."
+              "additionalProperties": {
+                "type": "string"
+              },
+              "description": "Extra model entries for the template: each name to the bindable path supplying it. The value is read as a path, not as data — every renderer stringifies it and parses the result, so a non-string is silently mangled."
             }
           },
           "additionalProperties": false,
