@@ -419,6 +419,23 @@ Two more the implementation found, which no amount of reading would have:
   written out and `asTqlException` widened to own the `Error` half. Moving that body onto the
   primitive is a restructuring with its own review, not a line of a sweep — filed, not done.
 
+**The sweep did the rollback half and left the restore half, so the rule has a second clause.
+Nothing on the cleanup path may rewrite the work's own outcome.** A `finally` that throws discards
+the enclosing `return` — the mechanism of the savepoint bug this campaign opened with. Three owners
+guarded their restore; four called `setAutoCommit` bare over a committed transaction, and one of
+those four was rewritten by the sweep itself one line above.
+
+What that cost was measured, not argued. A rotation that had already deleted the old session row
+and written the new one was reported as a failure, signing the user out. An inline export whose
+extraction had committed and whose execution already read `COMPLETED` raised a failure the operator
+saw and the tables did not, because `finishExecution` writes only over a `RUNNING` row — so a rerun
+repeated the `after:` statement.
+
+`Transactions.restoreQuietly` is therefore public. A bracket that genuinely cannot be a lambda
+still calls the one implementation rather than copying it, which is how the rollback half came to
+be written out fourteen times. The same clause covers anything else sharing that `finally`: the
+export's spool reclaim deletes a file, and a failed delete used to discard the result beside it.
+
 ### 18 — `RowTokens`' words move, not its check
 
 `encode` refuses `null` or empty, while the class javadoc, the `@throws` clause and the thrown

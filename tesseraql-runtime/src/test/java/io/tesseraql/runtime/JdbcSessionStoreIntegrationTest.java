@@ -5,9 +5,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.tesseraql.security.Principal;
 import io.tesseraql.security.session.JdbcSessionStore;
 import io.tesseraql.security.session.SessionStore;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
+import java.sql.Connection;
+import java.sql.SQLException;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import javax.sql.DataSource;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.postgresql.ds.PGSimpleDataSource;
@@ -118,6 +124,65 @@ class JdbcSessionStoreIntegrationTest {
         assertThat(after.createdAt()).isEqualTo(before.createdAt());
         assertThat(after.expiresAt()).isEqualTo(before.expiresAt());
         assertThat(after.handle()).isNotEqualTo(before.handle());
+    }
+
+    /**
+     * The rotation commits, and only the cleanup after it fails. A {@code finally} that throws
+     * discards the enclosing {@code return}, so the caller used to be told the rotation failed
+     * over a transaction that had already deleted the old row and written the new one — a sign-out
+     * caused by nothing but a connection dying between the commit and the autocommit restore.
+     */
+    @Test
+    void aCommittedRotationSurvivesAFailedAutocommitRestore() {
+        JdbcSessionStore honest = store(null);
+        String old = honest.create(principal("jdbc-restore"),
+                new SessionStore.ClientInfo("Mozilla/5.0", "203.0.113.11"));
+
+        String fresh = new JdbcSessionStore(refusesToRestoreAutocommit(dataSource),
+                Duration.ofHours(1), null, SessionStore.DEFAULT_COOKIE_NAME).rotate(old);
+
+        assertThat(fresh).isNotNull().isNotEqualTo(old);
+        assertThat(honest.session(old)).isNull();
+        assertThat(honest.session(fresh)).isNotNull();
+    }
+
+    /**
+     * A DataSource whose connections refuse to go back to autocommit. It sabotages the cleanup
+     * only: the read, the insert, the delete and the commit all run against the real database.
+     * Keyed on having seen {@code setAutoCommit(false)} first, so a driver that sets autocommit on
+     * a fresh connection is unaffected.
+     */
+    private static DataSource refusesToRestoreAutocommit(DataSource target) {
+        return (DataSource) Proxy.newProxyInstance(
+                JdbcSessionStoreIntegrationTest.class.getClassLoader(),
+                new Class<?>[]{DataSource.class},
+                (proxy, method, args) -> {
+                    Object answer = invoke(target, method, args);
+                    if (!(answer instanceof Connection connection)) {
+                        return answer;
+                    }
+                    boolean[] inTransaction = new boolean[1];
+                    return Proxy.newProxyInstance(
+                            JdbcSessionStoreIntegrationTest.class.getClassLoader(),
+                            new Class<?>[]{Connection.class},
+                            (c, called, callArgs) -> {
+                                if ("setAutoCommit".equals(called.getName())) {
+                                    if (Boolean.TRUE.equals(callArgs[0]) && inTransaction[0]) {
+                                        throw new SQLException("connection reset by peer");
+                                    }
+                                    inTransaction[0] = Boolean.FALSE.equals(callArgs[0]);
+                                }
+                                return invoke(connection, called, callArgs);
+                            });
+                });
+    }
+
+    private static Object invoke(Object target, Method method, Object[] args) throws Throwable {
+        try {
+            return method.invoke(target, args);
+        } catch (InvocationTargetException ex) {
+            throw ex.getCause();
+        }
     }
 
     @Test

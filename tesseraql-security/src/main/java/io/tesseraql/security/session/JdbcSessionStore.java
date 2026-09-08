@@ -1,6 +1,7 @@
 package io.tesseraql.security.session;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.tesseraql.core.sql.Transactions;
 import io.tesseraql.security.Principal;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -384,10 +385,19 @@ public final class JdbcSessionStore implements SessionStore {
                 // deleting the old one — two live sessions from one rotation
                 // (docs/two-way-sql-parser.md decision 17). The body returns early on a miss,
                 // so it keeps its own bracket rather than moving onto Transactions.
-                connection.rollback();
+                try {
+                    connection.rollback();
+                } catch (SQLException rollback) {
+                    // A rollback that also fails must not replace the failure that matters.
+                    ex.addSuppressed(rollback);
+                }
                 throw ex;
             } finally {
-                connection.setAutoCommit(autoCommit);
+                // Not a bare setAutoCommit: the rotation is already committed by here, and a
+                // finally that throws discards the enclosing return. The old row is deleted and
+                // the new one is live, so re-reporting that as a failure signs the caller out of
+                // a session that exists.
+                Transactions.restoreQuietly(connection, autoCommit, "session rotate");
             }
         } catch (SQLException | com.fasterxml.jackson.core.JsonProcessingException ex) {
             throw new IllegalStateException("Failed to rotate session", ex);
