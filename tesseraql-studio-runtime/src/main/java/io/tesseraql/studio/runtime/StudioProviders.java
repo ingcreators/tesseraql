@@ -261,18 +261,17 @@ final class StudioProviders {
                         model.put("hasTables", !tables.isEmpty());
                     }
                     return model;
-                })
-        // The mail composer (docs/html-email.md D4). The channel list reads
-        // the manifest's mail channels raw — display never resolves ${ENV}
-        // placeholders — and the composer page opens a template as blocks
-        // only when it matches the composer grammar (MailComposer.parse);
-        // anything else keeps the source editor as its authoring surface.
-        ;
+                });
     }
 
     /** Mail and page composers. */
     private void mailAndPageComposers(io.tesseraql.core.service.ServiceProviders serviceProviders) {
         serviceProviders
+                // The mail composer (docs/html-email.md D4). The channel list reads
+                // the manifest's mail channels raw — display never resolves ${ENV}
+                // placeholders — and the composer page opens a template as blocks
+                // only when it matches the composer grammar (MailComposer.parse);
+                // anything else keeps the source editor as its authoring surface.
                 .register("studio.mail", params -> {
                     java.util.List<Map<String, Object>> channels = new java.util.ArrayList<>();
                     for (String name : notificationChannels.names()) {
@@ -420,18 +419,17 @@ final class StudioProviders {
                         model.put("message", ex.getMessage());
                     }
                     return model;
-                })
-        // The Pages overview (docs/pages-and-mail-lints.md D1): every route
-        // with an HTML response and its rendering mode, from a fresh
-        // manifest load (the eject precedent — the boot snapshot may be
-        // stale). Read-only: actions link into the existing surfaces.
-        ;
+                });
     }
 
     /** Pages, views, drafts and the copilot. */
     private void pagesViewsDraftsCopilot(
             io.tesseraql.core.service.ServiceProviders serviceProviders) {
         serviceProviders
+                // The Pages overview (docs/pages-and-mail-lints.md D1): every route
+                // with an HTML response and its rendering mode, from a fresh
+                // manifest load (the eject precedent — the boot snapshot may be
+                // stale). Read-only: actions link into the existing surfaces.
                 .register("studio.pages", params -> {
                     io.tesseraql.yaml.manifest.AppManifest fresh = new ManifestLoader()
                             .load(appHome);
@@ -728,18 +726,17 @@ final class StudioProviders {
                     model.put("empty", visible.isEmpty());
                     model.put("summary", "Showing the menu for " + who + ".");
                     return model;
-                })
-        // Health dashboard (governance): runs the same AppLinter as the CLI/Maven lint
-        // over the app and surfaces its findings grouped by severity, each linking to
-        // the source editor. An app that fails to even load is shown as one blocking
-        // finding rather than a 500, so the dashboard is usable exactly when it matters.
-        ;
+                });
     }
 
     /** Health, security, policy and the try-it console. */
     private void healthSecurityPolicyTry(
             io.tesseraql.core.service.ServiceProviders serviceProviders) {
         serviceProviders
+                // Health dashboard (governance): runs the same AppLinter as the CLI/Maven lint
+                // over the app and surfaces its findings grouped by severity, each linking to
+                // the source editor. An app that fails to even load is shown as one blocking
+                // finding rather than a 500, so the dashboard is usable exactly when it matters.
                 .register("studio.health", params -> {
                     java.util.List<io.tesseraql.yaml.lint.LintFinding> findings;
                     try {
@@ -969,23 +966,19 @@ final class StudioProviders {
                             studio.recordedSqlFile(method, path), caseParams, rowCount,
                             actorOf(params));
                     return Map.of("recorded", name);
-                })
-        // Config viewer (governance): the effective merged configuration (application
-        // .yml + tesseraql.yml + overlay.yml), flattened to dotted keys, with secret
-        // values redacted. Read-only — a curated overlay-backed editor is a later slice.
-        // Connector & SSO authoring (roadmap Phase 43, Track J2): the managed
-        // connector config — egress allow-lists, outbound/poll credentials,
-        // webhook verifiers — and the IAM wizards write config/overlay.yml
-        // through the same gated path as policies. Secret REFERENCES only;
-        // egress changes are always confirm-gated; all of it restart-bound
-        // (these sections load at boot), which the pages state.
-        ;
+                });
     }
 
     /** Connectors and the identity wizards. */
     private void connectorsAndIdentityWizards(
             io.tesseraql.core.service.ServiceProviders serviceProviders) {
         serviceProviders
+                // Connector & SSO authoring (roadmap Phase 43, Track J2): the managed
+                // connector config — egress allow-lists, outbound/poll credentials,
+                // webhook verifiers — and the IAM wizards write config/overlay.yml
+                // through the same gated path as policies. Secret REFERENCES only;
+                // egress changes are always confirm-gated; all of it restart-bound
+                // (these sections load at boot), which the pages state.
                 .register("studio.connectors.view", params -> {
                     boolean canEdit = studioEdit.canEdit(params);
                     Map<String, Object> model = new java.util.LinkedHashMap<>(
@@ -1134,6 +1127,9 @@ final class StudioProviders {
     private void configAndFlags(
             io.tesseraql.core.service.ServiceProviders serviceProviders) {
         serviceProviders
+                // Config viewer (governance): the effective merged configuration (application
+                // .yml + tesseraql.yml + overlay.yml), flattened to dotted keys, with secret
+                // values redacted. Read-only — a curated overlay-backed editor is a later slice.
                 .register("studio.config", params -> {
                     java.util.List<Map<String, Object>> rows = studio.effectiveConfig();
                     long secrets = rows.stream()
@@ -1637,17 +1633,16 @@ final class StudioProviders {
                                     match.map(
                                             io.tesseraql.studio.StudioService.SharedDecision::dated)
                                             .orElse(false)));
-                })
-        // Decision rows grid (docs/decision-tables.md "Studio"): a YAML-backed
-        // decision's rows as a table-shaped editor, saved through the draft flow
-        // (routeFormSave's persistence contract) after a parse + compile check.
-        ;
+                });
     }
 
     /** Decisions, calendars and jobs. */
     private void decisionsCalendarsJobs(
             io.tesseraql.core.service.ServiceProviders serviceProviders) {
         serviceProviders
+                // Decision rows grid (docs/decision-tables.md "Studio"): a YAML-backed
+                // decision's rows as a table-shaped editor, saved through the draft flow
+                // (routeFormSave's persistence contract) after a parse + compile check.
                 .register("studio.decisions.view", params -> {
                     Map<String, Object> model = new java.util.LinkedHashMap<>();
                     model.put("editable", studioEdit.canEdit(params));
