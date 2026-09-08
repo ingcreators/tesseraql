@@ -61,14 +61,15 @@ with everything preinstalled.
 
 Run the bundled example. It needs only an empty PostgreSQL at
 `jdbc:postgresql://localhost:5432/user_admin` (see `examples/user-admin-app/config/application.yml`);
-the app owns its schema, so `serve` applies its `db/migration` on start. Build the CLI distribution
-and serve the example (the `-Pdist` archive bundles the opt-in pdf/excel codecs under `modules/`):
+the app owns its schema, so `dev` applies its `db/migration` on start. Build the CLI distribution
+and run the example (the `-Pdist` archive ships `bin/` and `lib/tesseraql.jar`; the opt-in pdf and
+excel codecs are not in it):
 
 ```bash
 ./mvnw -B -ntp -DskipTests -pl tesseraql-cli -am -Pdist package
 ( cd tesseraql-cli/target && unzip -q tesseraql-cli-*-dist.zip )
 tesseraql-cli/target/tesseraql-*/bin/tesseraql dev \
-  --stack examples --app-name user-admin-app
+  --stack examples --app-name user-admin
 ```
 
 `GET /api/users` is a `bearer`-authenticated route, so mint a dev JWT (HS256, the

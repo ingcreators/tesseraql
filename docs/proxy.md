@@ -7,7 +7,7 @@ This guide covers the build/resolution-time and runtime outbound paths.
 
 | Outbound path | Honors |
 | --- | --- |
-| Embedded module resolver (`tesseraql modules`, `serve`) | `~/.m2/settings.xml` `<proxies>`/`<mirrors>`/`<servers>`, then JVM proxy properties / the env bridge |
+| Embedded module resolver (`tesseraql modules`, `dev`) | `~/.m2/settings.xml` `<proxies>`/`<mirrors>`/`<servers>`, then JVM proxy properties / the env bridge |
 | Runtime HTTP clients (OIDC, HTTP-call, webhooks) | JVM proxy properties via `ProxySelector.getDefault()` (the env bridge feeds these) |
 | `mvnw` (Maven download) | `MVNW_REPOURL` and `~/.m2/settings.xml` |
 | S3 (AWS SDK) | `https.proxyHost` system properties |

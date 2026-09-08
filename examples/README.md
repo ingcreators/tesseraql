@@ -2,7 +2,7 @@
 
 Each example is a self-contained, runnable TesseraQL application that **owns its schema** via
 `db/migration` (the standard app layout — see [../docs/app-layout.md](../docs/app-layout.md)). Copy
-one as a starting point, or generate a fresh skeleton with `tesseraql new`. Running `serve` against
+one as a starting point, or generate a fresh skeleton with `tesseraql new`. Running `dev` against
 an empty PostgreSQL applies the app's migrations on start, so there is no manual schema setup.
 
 | App | What it shows |

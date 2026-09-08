@@ -28,8 +28,14 @@ public final class ModulesInstaller {
 
     private final boolean offline;
 
+    /**
+     * The resolutions a command performs without being handed the flag — {@code dev}'s and
+     * {@code package}'s. They honour {@code --offline} through the property
+     * {@code ConfigOptions.apply()} sets, so the flag means the same thing on every command that
+     * carries it rather than only on the two that once declared it.
+     */
     public ModulesInstaller() {
-        this(false);
+        this(Boolean.getBoolean(io.tesseraql.cli.ConfigOptions.OFFLINE_PROPERTY));
     }
 
     public ModulesInstaller(boolean offline) {
