@@ -43,6 +43,34 @@ final class ConfigReference {
             "(?:get(?:String|Boolean|Int|Integer|Long|List|Map|Duration|Double)|requireString|navigate)\\(\\s*\""
                     + "((?:tesseraql|server|db)\\.[A-Za-z0-9_.<>-]*)\"");
 
+    /**
+     * A key handed to a helper instead of to the config object: {@code flag("tesseraql.scim.enabled",
+     * false)}, {@code readSql(config, "tesseraql.scim.users.list")}, {@code duration(config,
+     * "tesseraql.security.jwt.clockSkew", …)}.
+     *
+     * <p>Seven same-file private helpers wrap a config accessor to add a default, a refusal or a
+     * type conversion, and every key reaching config through one of them was invisible to
+     * {@link #READ} — the whole SCIM enable-and-contract surface, the JWT and JWKS clock tuning,
+     * the mTLS skew. An operator following a troubleshooting page to this index could not find
+     * them, on a page whose header promised every key.
+     *
+     * <p>This pattern alone would be too loose, so {@link #readsConfig} gates it. See there.
+     *
+     * <p>The callee is captured with {@code \w+} rather than a spelled-out identifier class, so
+     * this file stays outside {@code IdentifierContractLedgerTest}'s ledger. That guard exists
+     * because a re-inlined copy of the identifier contract is how the write-scope lint went blind,
+     * and a scan over Java method names has no business being ledgered beside the SQL grammar just
+     * to be allowed to spell one out.
+     */
+    private static final Pattern HELPER_READ = Pattern.compile(
+            "\\b(\\w+)\\(\\s*[^\"(),]*(?:\\([^()\"]*\\))?[^\"(),]*,\\s*"
+                    + "\"((?:tesseraql|server|db)\\.[A-Za-z0-9_.<>-]*)\"");
+
+    /** A config accessor, for deciding whether a helper's own body actually reads one. */
+    private static final Pattern ACCESSOR = Pattern.compile(
+            "\\.(?:get(?:String|Boolean|Int|Integer|Long|List|Map|Duration|Double)"
+                    + "|requireString|navigate)\\(");
+
     private static final String BLOB = "https://github.com/ingcreators/tesseraql/blob/main/";
 
     /** One key with every file that reads it, and the pages that discuss it. */
@@ -60,11 +88,16 @@ final class ConfigReference {
 
         StringBuilder md = new StringBuilder();
         md.append("# Configuration reference\n\n")
-                .append("All ").append(total).append(" configuration keys the framework reads, "
-                        + "scanned from the module sources on every refresh and grouped by "
+                .append("All ").append(total).append(" configuration keys the framework reads "
+                        + "whose name appears as a literal in a scanned source, grouped by "
                         + "namespace. The reading files are the provenance, and where a page "
                         + "discusses a key, it is linked. A key no page discusses still appears "
                         + "— that is the point of an index.\n\n")
+                .append("Deliberately not here, because none of them is a key an application "
+                        + "declares: JVM system properties, the Maven plugin's own goal "
+                        + "parameters, metric and span names, keys a lookup composes from a "
+                        + "prefix at request time, and the stack-level keys read from "
+                        + "`tesseraql-stack.yml`.\n\n")
                 .append("Keys are declared in `config/application.yml` and `config/tesseraql.yml`, "
                         + "overridden per environment by `config/env/<profile>.yml`, and readable "
                         + "in Studio's Config screen. Nesting in YAML and the dotted form here are "
@@ -99,14 +132,91 @@ final class ConfigReference {
             try (Stream<Path> files = Files.walk(tree)) {
                 for (Path file : files.filter(p -> p.toString().endsWith(".java")).toList()) {
                     String relative = repoRoot.relativize(file).toString().replace('\\', '/');
-                    Matcher matcher = READ.matcher(Files.readString(file));
+                    String text = Files.readString(file);
+                    Matcher matcher = READ.matcher(text);
                     while (matcher.find()) {
                         collect(byNamespace, matcher.group(1), relative);
+                    }
+                    Map<String, Boolean> helpers = new java.util.HashMap<>();
+                    Matcher helper = HELPER_READ.matcher(text);
+                    while (helper.find()) {
+                        if (readsConfig(text, helper.group(1), helpers)) {
+                            collect(byNamespace, helper.group(2), relative);
+                        }
                     }
                 }
             }
         }
         return byNamespace;
+    }
+
+    /**
+     * Whether {@code callee} is declared in this same file and its own body reads configuration.
+     *
+     * <p>Both halves fail closed, and each closes a real false positive.
+     *
+     * <p><b>Not declared here.</b> {@code StudioProviders} calls a statically imported
+     * {@code putIfPresent(values, "tesseraql.saml.idp.metadata", ...)} seven times - that helper
+     * <em>writes</em> the key into the Studio wizard's overlay map. There is no declaration to
+     * inspect, and admitting it would put seven rows on this page citing a writer as a reader.
+     *
+     * <p><b>Declared, but reads nothing.</b> {@code OidcRuntimeExtension.require(value,
+     * "tesseraql.oidc.clientId")} uses the key only inside a refusal message; the read itself is
+     * in {@code OidcConfig}. The test has to be on the helper's own <em>body</em> rather than on
+     * the file, because that file does call {@code config.getString} elsewhere - a file-level
+     * check fails open on exactly this case.
+     *
+     * <p>An allow-list of the seven known helper names would be the hand-kept roster this campaign
+     * exists to remove, and would silently miss the eighth.
+     */
+    private static boolean readsConfig(String fileText, String callee, Map<String, Boolean> memo) {
+        Boolean known = memo.get(callee);
+        if (known != null) {
+            return known;
+        }
+        boolean reads = false;
+        Matcher declaration = Pattern.compile("\\b" + Pattern.quote(callee) + "\\s*\\(")
+                .matcher(fileText);
+        while (declaration.find() && !reads) {
+            int open = fileText.indexOf('(', declaration.start());
+            int close = matching(fileText, open, '(', ')');
+            if (close < 0) {
+                continue;
+            }
+            int brace = close + 1;
+            while (brace < fileText.length() && Character.isWhitespace(fileText.charAt(brace))) {
+                brace++;
+            }
+            // A declaration is followed by its body; a call is followed by anything else. An
+            // abstract or interface method ends in ';' and has no body to inspect, so it is not
+            // a declaration this can vouch for either.
+            if (brace >= fileText.length() || fileText.charAt(brace) != '{') {
+                continue;
+            }
+            int end = matching(fileText, brace, '{', '}');
+            if (end > brace) {
+                reads = ACCESSOR.matcher(fileText.substring(brace, end)).find();
+            }
+        }
+        memo.put(callee, reads);
+        return reads;
+    }
+
+    /** The index of the delimiter closing the one at {@code from}, or -1. */
+    private static int matching(String text, int from, char open, char close) {
+        int depth = 0;
+        for (int at = from; at < text.length(); at++) {
+            char ch = text.charAt(at);
+            if (ch == open) {
+                depth++;
+            } else if (ch == close) {
+                depth--;
+                if (depth == 0) {
+                    return at;
+                }
+            }
+        }
+        return -1;
     }
 
     /**

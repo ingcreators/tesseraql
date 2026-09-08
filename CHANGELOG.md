@@ -70,6 +70,14 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **The configuration reference lists the keys read through a helper.** Its header promised every
+  key the framework reads, and a whole class of them was invisible: a key handed to a same-file
+  wrapper that adds a default or a refusal never appeared beside a config accessor, so the scan
+  never saw it. That hid the entire SCIM enable-and-contract surface, the JWT and JWKS clock
+  tuning and the mTLS skew from an operator following a troubleshooting page to the index — 26
+  keys, taking the page from 236 to 262. The header now also names what the index deliberately
+  does not cover, rather than promising more than a literal scan can deliver.
+
 - **A regenerated `schema.json` reaches Studio without a reload.** The SQL and migration builders
   parsed the whole schema overlay on every request — twice on a page that shows a table list and a
   column cascade — while the source editor's table dropdown read a copy memoized against the last
