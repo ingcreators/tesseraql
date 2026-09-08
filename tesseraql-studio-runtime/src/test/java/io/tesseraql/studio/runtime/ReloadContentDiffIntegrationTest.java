@@ -8,7 +8,6 @@ import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.URI;
 import java.net.URLEncoder;
-import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
@@ -138,20 +137,16 @@ class ReloadContentDiffIntegrationTest {
     }
 
     private static HttpResponse<String> get(String path) throws Exception {
-        HttpRequest request = HttpRequest.newBuilder(
+        return TestHttp.send(HttpRequest.newBuilder(
                 URI.create("http://localhost:" + runtime.port() + path))
-                .header("Authorization", "Bearer " + token())
-                .build();
-        return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+                .header("Authorization", "Bearer " + token()));
     }
 
     private static HttpResponse<String> post(String path, String body) throws Exception {
-        HttpRequest request = HttpRequest.newBuilder(
+        return TestHttp.send(HttpRequest.newBuilder(
                 URI.create("http://localhost:" + runtime.port() + path))
                 .header("Authorization", "Bearer " + token())
-                .POST(HttpRequest.BodyPublishers.ofString(body))
-                .build();
-        return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+                .POST(HttpRequest.BodyPublishers.ofString(body)));
     }
 
     private static String enc(String value) {

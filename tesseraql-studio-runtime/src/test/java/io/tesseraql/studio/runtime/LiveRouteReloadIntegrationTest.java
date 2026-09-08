@@ -8,7 +8,6 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.URI;
 import java.net.URLEncoder;
-import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
@@ -91,10 +90,9 @@ class LiveRouteReloadIntegrationTest {
         assertThat(reload.statusCode()).isEqualTo(200);
         assertThat(reload.body()).contains("\"failed\"").contains("no-such-recipe");
 
-        HttpResponse<String> stub = HttpClient.newHttpClient().send(
+        HttpResponse<String> stub = TestHttp.send(
                 HttpRequest.newBuilder(URI.create(
-                        "http://localhost:" + runtime.port() + "/api/ping")).build(),
-                HttpResponse.BodyHandlers.ofString());
+                        "http://localhost:" + runtime.port() + "/api/ping")));
         assertThat(stub.statusCode()).isEqualTo(500);
         // The code identifies the failure; the cause goes to the log, not the response —
         // the stub replaces the route's own security chain, so it can be reached without
@@ -198,28 +196,23 @@ class LiveRouteReloadIntegrationTest {
     }
 
     private static HttpResponse<String> get(String path) throws Exception {
-        return HttpClient.newHttpClient().send(
-                HttpRequest.newBuilder(URI.create(
-                        "http://localhost:" + runtime.port() + path)).build(),
-                HttpResponse.BodyHandlers.ofString());
+        return TestHttp.send(HttpRequest.newBuilder(URI.create(
+                "http://localhost:" + runtime.port() + path)));
     }
 
     private static String pingVersion() throws Exception {
-        HttpResponse<String> response = HttpClient.newHttpClient().send(
+        HttpResponse<String> response = TestHttp.send(
                 HttpRequest.newBuilder(URI.create(
-                        "http://localhost:" + runtime.port() + "/api/ping")).build(),
-                HttpResponse.BodyHandlers.ofString());
+                        "http://localhost:" + runtime.port() + "/api/ping")));
         assertThat(response.statusCode()).isEqualTo(200);
         return MAPPER.readTree(response.body()).get("data").get(0).get("version").asText();
     }
 
     private static HttpResponse<String> studioPost(String path, String body) throws Exception {
-        return HttpClient.newHttpClient().send(
+        return TestHttp.send(
                 HttpRequest.newBuilder(URI.create("http://localhost:" + runtime.port() + path))
                         .header("Authorization", "Bearer " + token())
-                        .POST(HttpRequest.BodyPublishers.ofString(body))
-                        .build(),
-                HttpResponse.BodyHandlers.ofString());
+                        .POST(HttpRequest.BodyPublishers.ofString(body)));
     }
 
     private static String enc(String value) {

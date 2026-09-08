@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.tesseraql.runtime.FrameworkSurfaces;
 import io.tesseraql.runtime.TesseraqlRuntime;
 import java.net.URI;
-import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.file.Files;
@@ -239,13 +238,12 @@ class FrameworkSurfaceGuardTest {
                 continue;
             }
             Mounted mounted = mountedAt(id);
-            HttpResponse<String> response = HttpClient.newHttpClient().send(
+            HttpResponse<String> response = TestHttp.send(
                     HttpRequest.newBuilder(URI.create("http://localhost:" + runtime.port()
                             + mounted.path()))
                             .header("Content-Type", "application/json")
-                            .method(mounted.method(), HttpRequest.BodyPublishers.ofString("{}"))
-                            .build(),
-                    HttpResponse.BodyHandlers.ofString());
+                            .method(mounted.method(),
+                                    HttpRequest.BodyPublishers.ofString("{}")));
             probed.add(id);
             if (response.statusCode() != 401 && response.statusCode() != 403) {
                 answered.add("%s (%s %s) answered %d".formatted(id, mounted.method(),
