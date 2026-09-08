@@ -73,7 +73,7 @@ content is turning the middle column into the right column.
 | `README.md` cli row | Lists 16 of the 25 subcommands `TesseraqlCli` declares | A hand-typed roster, drifting, one line under the row being fixed |
 | `docs/reference-cli.md` | Generated from the developer root only | An operator cannot tell which verbs the binary in the container has |
 | `docs/reference-config.md` | "All 236 keys the framework reads" | 26 keys read through a helper are absent from a page that promises completeness |
-| `docs/runtime-footprint.md` guard table | Three rows against seven enforcer rules in the tree | The register does not know about half its own guards |
+| `docs/runtime-footprint.md` decision 5 | States one enforcer shape when the tree has two, and has no row for core | An allow-list rule reads as a deviation from the documented pattern rather than the second shape it is |
 | `RouteCompiler.formViewForAction` | Re-parses every view per lookup-bearing POST route | `ViewFile` already carries the parsed spec; the catch guards a case the loader filtered |
 | `CliModules` | A stack-spanning union loader with a retired-design javadoc | Invites the cross-application leakage decision 28 removed |
 | `tesseraql-studio-runtime/pom.xml` | A test-scoped `tesseraql-scim` that narrows a compile dependency | The first `io.tesseraql.scim` import in main fails to compile with no obvious cause |
@@ -173,7 +173,24 @@ session and `applySecurity` emits authenticate before csrf, so an MCP `auth: bro
 refused *today*. What changes is the compiled shape only: an unreachable csrf step. No
 security-posture claim belongs in the CHANGELOG or the PR body.
 
-### 6 — A default lives on the primitive; the config reader only defers to it
+### 6 — There are two enforcer shapes, and both registers already exist
+
+A tempting reading of the tree is that `docs/runtime-footprint.md` decision 5 lists three rules
+against the seven the poms carry, and is therefore four rows stale. It is not. The other four are
+registered in [module channel](module-channel.md)'s own Guards table, which the campaign that
+added them wrote. All seven are recorded; the split is by campaign, which is how this repo has
+always kept its registers.
+
+What *is* wrong is narrower and worth stating precisely, because it is the reason core's rule
+looks like a deviation. Decision 5 describes one shape — coordinates that must not arrive through
+anyone's closure, searched transitively — and the tree has two. The second is an allow-list naming
+everything a module may declare, searched on direct declarations only, because an allow-list
+already refuses the parent of any transitive. `oidc`, `saml`, `scim` and now `core` are that
+shape, and `searchTransitive=false` on them is load-bearing rather than drift:
+`BannedDependenciesBase` defaults the field to true, so deleting the line silently turns the walk
+on.
+
+### 7 — A default lives on the primitive; the config reader only defers to it
 
 The timeout precedent this campaign is named after splits in two: the value lives on
 `SqlStatement` and `SqlDefaults` reads the key and defers with `.orElse(…)`. The row cap and the
@@ -184,7 +201,7 @@ overflow policy mirror it exactly, which is what makes the constants reachable f
 No clamp on the row cap. Unlike the timeout, a negative ceiling is the live "unbounded" sentinel
 that three consumers honour and that `export.maxRows:` documents as its opt-out.
 
-### 7 — F81 splits by mechanism, and only its helper class ships here
+### 8 — F81 splits by mechanism, and only its helper class ships here
 
 The config index misses 115 key-shaped literals over its own corpus. They are not one defect:
 roughly 35 are Maven mojo `@Parameter` properties, roughly 28 are Micrometer metric and span
