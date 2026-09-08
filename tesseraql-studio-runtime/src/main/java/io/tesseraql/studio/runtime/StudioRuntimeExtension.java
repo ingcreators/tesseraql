@@ -81,9 +81,11 @@ public final class StudioRuntimeExtension implements RuntimeExtension {
         // per-deployment safety is topology (a host mounts no Studio at all, slice 3).
         io.tesseraql.studio.StudioService studio = new io.tesseraql.studio.StudioService(
                 manifest, false, functions);
-        // Studio's memoized schema/decision lookups (the data browser's column contracts,
-        // the SQL-builder table list); each hot reload — and the Studio schema refresh —
-        // starts a fresh epoch, so the memo is never staler than the served routes.
+        // The data browser's column contracts, read from decisions/. A hot reload is the right
+        // epoch for them: the reload's app-wide scope covers that tree, and every reload path
+        // funnels through the reloader. The schema overlay is deliberately NOT here — it is
+        // written from outside this process, where no reload happens, so it is memoized against
+        // the file's own stamp in DocService instead.
         StudioDocCache studioDocCache = new StudioDocCache(manifest);
         reloader.onReload(() -> {
             studioDocCache.invalidate();

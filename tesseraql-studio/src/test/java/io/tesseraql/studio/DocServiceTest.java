@@ -157,6 +157,63 @@ class DocServiceTest {
         });
     }
 
+    /**
+     * Two independent {@code DocService} instances share one parse of an unchanged file.
+     *
+     * <p>Six Studio providers construct a fresh {@code DocService} inside the request lambda and
+     * the copilot builds one per table, so this is the shape that matters: an instance field would
+     * memoize nothing. Identity is the assertion because it is the only one that can tell a shared
+     * parse from two equal ones.
+     */
+    @Test
+    void anUnchangedSchemaFileIsParsedOnceAcrossInstances(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"),
+                "tesseraql:\n  app:\n    name: demo\n");
+        Files.createDirectories(dir.resolve(".tesseraql/docs"));
+        Files.writeString(dir.resolve(".tesseraql/docs/schema.json"), SCHEMA_JSON);
+
+        SchemaOverlay first = new DocService(new ManifestLoader().load(dir)).schema();
+        assertThat(first).isNotNull();
+        // Anti-vacuity: two nulls are also "the same object".
+        assertThat(first.datasources()).containsKey("main");
+
+        assertThat(new DocService(new ManifestLoader().load(dir)).schema()).isSameAs(first);
+    }
+
+    /**
+     * A schema.json rewritten outside this process reaches the next read.
+     *
+     * <p>This is the half a parse-count assertion cannot see, and the reason the memo is stamped
+     * on the file rather than on a route reload: {@code tesseraql schema} and the Maven goal write
+     * this file with no reload anywhere near it.
+     */
+    @Test
+    void aRewrittenSchemaFileIsPickedUpWithoutAReload(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"),
+                "tesseraql:\n  app:\n    name: demo\n");
+        Path schema = dir.resolve(".tesseraql/docs/schema.json");
+        Files.createDirectories(schema.getParent());
+        Files.writeString(schema, SCHEMA_JSON);
+
+        assertThat(new DocService(new ManifestLoader().load(dir)).tableNames())
+                .containsExactly("customers", "orders");
+
+        Files.writeString(schema, SCHEMA_JSON.replace("customers", "suppliers"));
+        // "customers" and "suppliers" are the same length on purpose: the rewrite leaves the
+        // file's size identical, so the last-modified half of the stamp is the only thing that
+        // can carry it. Set it explicitly rather than depending on the filesystem's timestamp
+        // granularity being finer than this test is fast.
+        Files.setLastModifiedTime(schema,
+                java.nio.file.attribute.FileTime.fromMillis(
+                        Files.getLastModifiedTime(schema).toMillis() + 2000));
+
+        assertThat(new DocService(new ManifestLoader().load(dir)).tableNames())
+                .as("a schema.json regenerated outside this process reaches the next read")
+                .containsExactly("orders", "suppliers");
+    }
+
     @Test
     void tableNamesAndColumnNamesComeFromTheSchemaOverlay(@TempDir Path dir) throws Exception {
         Files.createDirectories(dir.resolve("config"));

@@ -252,11 +252,12 @@ final class StudioProviders {
                             && path.endsWith(".yml") && saved != null
                             && saved.matches("(?s).*(?m)^\\s*view:\\s*\\S.*"));
                     // On a route SQL file, offer the 2-way SQL builder inline (insert into the
-                    // editor): populate its table dropdown from the schema overlay. The list
-                    // reads through the shared memo — an editor page render must not re-parse
-                    // schema.json every time.
+                    // editor): populate its table dropdown from the schema overlay. DocService
+                    // memoizes the parse against schema.json's own stamp, so this costs a stat on
+                    // an unchanged file and follows the file rather than the last route reload.
                     if (Boolean.TRUE.equals(model.get("isRouteSql"))) {
-                        java.util.List<String> tables = docCache.tableNames();
+                        java.util.List<String> tables = new io.tesseraql.studio.DocService(manifest)
+                                .tableNames();
                         model.put("tables", tables);
                         model.put("hasTables", !tables.isEmpty());
                     }
@@ -1866,10 +1867,9 @@ final class StudioProviders {
                                             + entry.getKey() + "': " + ex.getMessage());
                         }
                     }
+                    // refreshSchema evicts the overlay memo itself, at the write. Nothing here
+                    // touches decisions/, which is all StudioDocCache holds now.
                     studio.refreshSchema(introspected, actorOf(params));
-                    // schema.json changed in place, outside any route reload: the shared
-                    // memo's table list must not keep serving the pre-refresh overlay.
-                    docCache.invalidate();
                     return java.util.Map.of("refreshed", true,
                             "datasources", introspected.size());
                 })
