@@ -24,9 +24,17 @@ final class ObjectStorageEgressRules implements LintRule {
     }
 
     /**
-     * Object-storage egress (roadmap Phase 30 slice 2): when {@code provider: s3}, every attachment's
-     * resolved bucket must be in {@code tesseraql.object-storage.allowedBuckets} (deny-by-default,
-     * mirroring the HTTP/poll egress allow-lists). The {@code file} provider needs no allow-list.
+     * Object-storage egress (roadmap Phase 30 slice 2): when {@code provider: s3}, every bucket the
+     * runtime will write to must be in {@code tesseraql.object-storage.allowedBuckets}
+     * (deny-by-default, mirroring the HTTP/poll egress allow-lists). The {@code file} provider
+     * needs no allow-list.
+     *
+     * <p>Every bucket, not every attachment. {@code tesseraql.temp.store: blob} builds a second
+     * writer over {@code tesseraql.temp.bucket} — defaulting to {@code tesseraql-temp}, a name
+     * nobody types and so nobody thinks to allow-list. Checking only attachments let that app lint
+     * clean, boot, and fail on its first export with a runtime refusal rendered as a 500. The
+     * control is fail-closed either way; the defect was that a build-time answer arrived at
+     * request time.
      */
     void lintObjectStorageEgress(Path appHome, AppManifest manifest,
             List<LintFinding> findings) {
@@ -40,6 +48,17 @@ final class ObjectStorageEgressRules implements LintRule {
                 .navigate("tesseraql.object-storage.allowedBuckets") instanceof List<?> declared) {
             declared.forEach(value -> allowed.add(String.valueOf(value)));
         }
+        if ("blob".equalsIgnoreCase(config.getString("tesseraql.temp.store").orElse("file"))) {
+            String logical = config.getString("tesseraql.temp.bucket").orElse("tesseraql-temp");
+            String real = resolve(config, logical);
+            if (!allowed.contains(real)) {
+                findings.add(new LintFinding(INVALID_OBJECT_STORAGE_BUCKET, ERROR,
+                        "config/tesseraql.yml",
+                        "tesseraql.temp.store is blob and its bucket '" + real + "' is not in"
+                                + " tesseraql.object-storage.allowedBuckets (deny by default);"
+                                + " every produced file and every spooled result goes there"));
+            }
+        }
         for (io.tesseraql.yaml.manifest.AttachmentFile attachment : manifest.attachments()) {
             io.tesseraql.yaml.model.AttachmentDefinition def = attachment.definition();
             String source = LintSupport.relative(appHome, attachment.source());
@@ -52,8 +71,7 @@ final class ObjectStorageEgressRules implements LintRule {
                                 + " is s3"));
                 continue;
             }
-            String real = config.getString(
-                    "tesseraql.object-storage.buckets." + logical + ".bucket").orElse(logical);
+            String real = resolve(config, logical);
             if (!allowed.contains(real)) {
                 findings.add(new LintFinding(INVALID_OBJECT_STORAGE_BUCKET, ERROR, source,
                         "attachment '"
@@ -61,5 +79,11 @@ final class ObjectStorageEgressRules implements LintRule {
                                 + "tesseraql.object-storage.allowedBuckets (deny by default)"));
             }
         }
+    }
+
+    /** A declared bucket alias to the bucket the store actually addresses. */
+    private static String resolve(io.tesseraql.yaml.config.AppConfig config, String logical) {
+        return config.getString("tesseraql.object-storage.buckets." + logical + ".bucket")
+                .orElse(logical);
     }
 }

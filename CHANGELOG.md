@@ -70,6 +70,14 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **The object-storage egress allow-list covers the blob temp bucket.** `TQL-SEC-4110` checked
+  every attachment's bucket and nothing else, but `tesseraql.temp.store: blob` writes every
+  produced file and every spooled result to `tesseraql.temp.bucket` — which defaults to
+  `tesseraql-temp`, a name nobody types and so nobody adds to `allowedBuckets`. Such an app linted
+  clean, booted, and failed on its first export with a runtime refusal rendered as a 500. The
+  control was fail-closed throughout; what was wrong is that a build-time answer arrived at request
+  time. The rule now resolves and checks that bucket too, the same way it resolves an attachment's.
+
 - **A terminated MCP session is not brought back by a request already in flight.** Refreshing a
   session's idle timer read the entry and then wrote it back unconditionally, so a `DELETE /mcp`
   landing between the two was silently undone: the session the client had just terminated stayed
