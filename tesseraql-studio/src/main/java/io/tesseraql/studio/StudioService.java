@@ -1269,6 +1269,11 @@ public final class StudioService {
         } catch (IOException ex) {
             throw new UncheckedIOException(ex);
         }
+        // This process just rewrote the file the overlay memo is stamped against. The stamp is
+        // (last-modified, size), so a rewrite inside the filesystem's timestamp granularity that
+        // happened to produce the same length would be invisible to it — and this writer knows
+        // exactly when it has written, so it says so rather than leaving that window open.
+        DocService.evictSchema(appHome);
         recordAudit(actor, "schema-refresh", DocService.SCHEMA_PATH);
     }
 

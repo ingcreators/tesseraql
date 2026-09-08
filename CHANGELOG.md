@@ -70,6 +70,15 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A regenerated `schema.json` reaches Studio without a reload.** The SQL and migration builders
+  parsed the whole schema overlay on every request — twice on a page that shows a table list and a
+  column cascade — while the source editor's table dropdown read a copy memoized against the last
+  route reload. That second one was the wrong epoch: `tesseraql schema` and the Maven goal write
+  the file from outside the process, with no reload anywhere near it, so the dropdown could serve a
+  pre-refresh overlay indefinitely. Both now read one memo stamped on the file's own last-modified
+  time and size, so an unchanged file costs a `stat` and a regenerated one is picked up on the next
+  request.
+
 - **The BOM manages every module a consumer can depend on.** `tesseraql-scim`, `-saml`, `-oidc`,
   `-oauth` and `-ops-ui` were absent from it, so an integrator pinning one directly got
   "dependencies.dependency.version is missing" against a document `docs/release.md` promises will

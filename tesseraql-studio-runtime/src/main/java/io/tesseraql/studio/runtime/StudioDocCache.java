@@ -1,38 +1,32 @@
 package io.tesseraql.studio.runtime;
 
 import io.tesseraql.yaml.manifest.AppManifest;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * The Studio surfaces' shared schema/decision lookups, memoized so a data-browser page render
- * stops paying a full {@code DecisionSets.load} plus a {@code schema.json} parse per request.
- * The docs portal already keeps one cache-bearing {@link io.tesseraql.studio.DocService} for
- * the runtime's life; this cache holds Studio's two hot lookups at least as fresh: a hot
- * reload invalidates it (the reload's app-wide scope includes the {@code decisions/} tree the
- * column contracts read, and every reload path — Studio apply, scaffold apply, the file
- * watcher, the manual reload — funnels through {@link RouteReloader}), and the Studio
- * schema-refresh action invalidates it when it rewrites {@code schema.json} in place.
+ * The Studio surfaces' decision-contract lookup, memoized so a data-browser page render stops
+ * paying a full {@code DecisionSets.load} per request.
+ *
+ * <p>Its epoch is a route reload, which is the right one for this: every reload path — Studio
+ * apply, scaffold apply, the file watcher, the manual reload — funnels through
+ * {@link RouteReloader}, and the reload's app-wide scope includes the {@code decisions/} tree
+ * these contracts are read from.
+ *
+ * <p>The schema overlay used to be memoized here too, and that was the wrong epoch for it.
+ * {@code schema.json} is written by {@code tesseraql schema} and the Maven goal from outside the
+ * process, where no reload happens, so a table list cached against a reload could outlive the file
+ * it came from indefinitely. It is memoized against the file's own stamp in
+ * {@code DocService.schema()} instead, which is both fresher and shared with the five other
+ * surfaces that read the overlay.
  */
 final class StudioDocCache {
 
     private final AppManifest manifest;
-    private volatile List<String> tableNames;
     private final Map<String, Map<String, String>> contractsByTable = new ConcurrentHashMap<>();
 
     StudioDocCache(AppManifest manifest) {
         this.manifest = manifest;
-    }
-
-    /** Every introspected table name across the schema overlay, computed once per epoch. */
-    List<String> tableNames() {
-        List<String> names = tableNames;
-        if (names == null) {
-            names = new io.tesseraql.studio.DocService(manifest).tableNames();
-            tableNames = names;
-        }
-        return names;
     }
 
     /**
@@ -49,7 +43,6 @@ final class StudioDocCache {
 
     /** Drops everything memoized; the next lookup re-reads the current files. */
     void invalidate() {
-        tableNames = null;
         contractsByTable.clear();
     }
 }

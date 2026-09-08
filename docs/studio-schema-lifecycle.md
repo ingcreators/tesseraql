@@ -55,6 +55,28 @@ POST routes + 303 + flash, the established shape. `.tesseraql/` is already exclu
 the actual problem ("schema.json exists but cannot be parsed — refresh to regenerate")
 instead of pretending nothing was ever introspected.
 
+### 5. The overlay is memoized against the file, not against a route reload
+
+`DocService.schema()` follows the `MenuSpec.live` contract: it stats `schema.json` and re-parses
+only when the last-modified time or size has moved. That reaches the SQL and migration builders,
+the source editor's table dropdown, the docs portal's schema and table pages, and the copilot's
+`schema_tables` tool — six providers that each construct a `DocService` inside the request lambda,
+so the memo is static and keyed on the resolved file.
+
+The epoch matters more than the saving. A table list memoized against a route reload — which is
+where the Studio half of this lived — could serve a pre-refresh overlay indefinitely, because
+`tesseraql schema` and the Maven goal write this file from outside the process and no reload
+follows. Studio's own refresh action evicts the entry at the write, since a rewrite inside the
+filesystem's timestamp granularity that happened to produce the same length would otherwise be
+invisible to the stamp.
+
+A corrupt parse is never memoized: `schemaCorrupt()` exists so the page can name the real problem,
+and a null pinned under this stamp could keep it saying so about a file that parses again.
+
+Two neighbours are deliberately untouched, because neither has a seam a guard could hold.
+`docs.search` never re-reads at all — its index is built once and nothing invalidates it — and
+`schema.baseline.json` is still parsed ad hoc by the corrupt check and the DDL diff.
+
 ## Out of scope
 
 - `report.json` / `history.json`: test-run artifacts; they belong to the test runner and
