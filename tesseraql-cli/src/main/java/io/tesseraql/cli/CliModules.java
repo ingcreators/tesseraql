@@ -50,15 +50,6 @@ public final class CliModules {
     }
 
     /**
-     * A classloader that adds every {@code *.jar} in {@code modulesDir} as a child of {@code parent},
-     * or {@code parent} unchanged when the directory is {@code null}, missing, or holds no jars.
-     */
-    static ClassLoader classLoader(File modulesDir, ClassLoader parent) {
-        URL[] jars = jars(modulesDir);
-        return jars.length == 0 ? parent : new URLClassLoader(jars, parent);
-    }
-
-    /**
      * A classloader over the jars in every directory of {@code modulesDirs} (the resolved
      * {@code tesseraql.modules} cache and an explicit {@code --modules} directory compose), or
      * {@code parent} unchanged when none hold jars.
@@ -73,34 +64,35 @@ public final class CliModules {
 
     /**
      * Composes the app's resolved {@code tesseraql.modules} cache and an optional explicit
-     * {@code --modules} directory onto the thread context classloader and installs the
-     * {@link ExpressionFunctions} registry from it — the authoring-tool counterpart of the
-     * {@code dev} wiring, so {@code lint}/{@code test}/{@code coverage}/{@code mcp} parse and
-     * evaluate the same custom functions the runtime serves. A broken app (unreadable manifest)
-     * installs nothing and does not fail here: the linter reports the manifest problem itself.
+     * {@code --modules} directory onto the thread context classloader, and installs the
+     * {@link ExpressionFunctions} registry and the module drivers from it. Custom expression
+     * functions must be installed before parsing, so the authoring commands that read an
+     * application — {@code lint}, {@code test}, {@code coverage}, {@code routes}, {@code job},
+     * {@code duckdb} — call this first. A broken app (unreadable manifest) installs nothing and
+     * does not fail here: the linter reports the manifest problem itself.
+     *
+     * <p>Mutating process-global state is correct here by construction: one CLI invocation is
+     * one application. A process that serves several — {@code dev}, the gateway — must not use
+     * this; it builds one loader per runtime through {@code appLoader}/{@code AppModules},
+     * because docs/stack-architecture.md decision 28 rejects a single union classloader over
+     * every application's modules, which leaks functions and drivers between applications.
      */
     public static void installAppExtensions(Path app, File explicitModules) {
-        installAppExtensions(List.of(app), explicitModules);
-    }
-
-    /**
-     * The stack-spanning form: every application's resolved {@code tesseraql.modules} cache
-     * composes onto one classloader, the same wiring {@code dev} boots the stack with — interim
-     * until docs/stack-architecture.md decision 28 wires modules per runtime.
-     */
-    public static void installAppExtensions(List<Path> apps, File explicitModules) {
-        List<File> moduleDirs = new ArrayList<>();
-        for (Path app : apps) {
-            moduleCache(app).ifPresent(moduleDirs::add);
-        }
-        if (explicitModules != null) {
-            moduleDirs.add(explicitModules);
-        }
-        ClassLoader loader = classLoaderOver(moduleDirs,
+        ClassLoader loader = classLoaderOver(moduleDirs(app, explicitModules),
                 Thread.currentThread().getContextClassLoader());
         Thread.currentThread().setContextClassLoader(loader);
         ExpressionFunctions.install(loader);
         ModuleDrivers.register(loader);
+    }
+
+    /** The resolved module cache and an explicit {@code --modules} directory, in that order. */
+    private static List<File> moduleDirs(Path app, File explicitModules) {
+        List<File> dirs = new ArrayList<>();
+        moduleCache(app).ifPresent(dirs::add);
+        if (explicitModules != null) {
+            dirs.add(explicitModules);
+        }
+        return dirs;
     }
 
     /**
@@ -130,12 +122,9 @@ public final class CliModules {
      * an optional explicit {@code --modules} directory over the CLI's own classpath.
      */
     public static ClassLoader appLoader(Path app, File explicitModules) {
-        List<File> moduleDirs = new ArrayList<>();
-        moduleCache(app).ifPresent(moduleDirs::add);
-        if (explicitModules != null) {
-            moduleDirs.add(explicitModules);
-        }
-        return classLoaderOver(moduleDirs, CliModules.class.getClassLoader());
+        // The parent is this class's loader, not the thread context loader: that difference from
+        // installAppExtensions is the whole reason both methods exist.
+        return classLoaderOver(moduleDirs(app, explicitModules), CliModules.class.getClassLoader());
     }
 
     /** The {@code *.jar} files in {@code modulesDir} as URLs, sorted for a stable classpath order. */

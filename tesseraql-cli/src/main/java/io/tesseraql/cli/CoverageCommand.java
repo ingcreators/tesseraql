@@ -54,8 +54,7 @@ final class CoverageCommand implements Callable<Integer> {
     @Override
     public Integer call() throws Exception {
         configOptions.apply();
-        // Validation rules evaluate expressions, so custom functions install first (the same
-        // modules wiring dev boots with).
+        // Validation rules evaluate expressions, so custom functions install first.
         CliModules.installAppExtensions(app, compile.modules);
         AppManifest manifest = new ManifestLoader().load(app);
         DriverManagerDataSource dataSource = datasource.resolve(manifest.config(), app);

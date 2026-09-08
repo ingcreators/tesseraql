@@ -48,7 +48,7 @@ final class LintCommand implements Callable<Integer> {
     public Integer call() throws Exception {
         configOptions.apply();
         // Custom expression functions must install before parsing, or their call sites lint as
-        // unknown functions (the same modules wiring dev boots with).
+        // unknown functions.
         CliModules.installAppExtensions(app, compile.modules);
         List<LintFinding> findings = new AppLinter().lint(app);
         long errors = findings.stream().filter(LintFinding::isError).count();
