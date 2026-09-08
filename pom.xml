@@ -739,7 +739,8 @@
          'ingcreators Release <release@ingcreators.com>' key (public key on
          keyserver.ubuntu.com), private key + passphrase in the workflow's secrets. The
          central-publishing plugin (extensions=true) replaces the default deploy with a
-         Portal bundle upload; GitHub Packages deploys stay on the profile-less build. -->
+         Portal bundle upload; the profile-less build deploys nowhere at all, since
+         <distributionManagement> was deleted with the GitHub Packages channel. -->
     <profile>
       <id>central</id>
       <build>

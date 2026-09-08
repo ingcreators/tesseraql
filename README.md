@@ -148,18 +148,22 @@ browsable here under [docs/](docs/).
 | `tesseraql-yaml` | Route/job model, manifest loader, config, secrets SPI, OpenAPI & htmx contract generators, SBOM / evidence / governance |
 | `tesseraql-compiler` | Compiles route definitions into pipelines (recipes, security, telemetry, transfers) |
 | `tesseraql-pipeline` | The pipeline contract and its steps: exchange, message, SQL, auth |
-| `tesseraql-runtime` | The runtime: HTTP edge, app mounting, migrations, scheduling, ops API, Studio, app MCP endpoints |
+| `tesseraql-runtime` | The runtime: HTTP edge, app mounting, migrations, scheduling, ops API, app MCP endpoints. Studio rides `tesseraql-studio-runtime` through the RuntimeExtension SPI |
 | `tesseraql-security` | Policy engine, JWT/session auth, CSRF, principal model |
 | `tesseraql-identity` | Managed identity schema, Identity SQL Contracts, realm resolution |
-| `tesseraql-scim` / `tesseraql-saml` | SCIM provisioning and SAML SP federation |
+| `tesseraql-scim` / `tesseraql-saml` / `tesseraql-oidc` | SCIM provisioning, SAML SP federation, OIDC sign-in — inert until configured |
+| `tesseraql-oauth` | The stack's authorization server: token issuance and the grant layer |
 | `tesseraql-operations` | Job repository, outbox dispatch, idempotency, file transfers, app installer |
 | `tesseraql-observability` | OpenTelemetry integration |
 | `tesseraql-test-core` / `tesseraql-coverage-core` / `tesseraql-report` | Declarative tests, coverage kinds, plan guard, report exporters |
-| `tesseraql-studio` / `tesseraql-ops-ui` | Bundled Studio and operations console apps |
-| `tesseraql-excel` | Optional Excel codec (fastexcel reads/writes, jxls report templates) |
+| `tesseraql-studio` / `tesseraql-studio-runtime` / `tesseraql-ops-ui` | Bundled Studio and operations console apps, and the workshop's runtime extension |
+| `tesseraql-excel` / `tesseraql-pdf` / `tesseraql-s3` | Opt-in codecs and stores: Excel (fastexcel, jxls), printable PDF, S3-compatible attachment storage |
 | `tesseraql-mcp` | Model Context Protocol server core: JSON-RPC dispatch, tool model, stdio and HTTP transports |
-| `tesseraql-cli` | `tesseraql dev` / `routes` / `new` / `scaffold` / `lint` / `test` / `coverage` / `generate` / `schema` / `governance` / `migrate` / `identity-schema` / `package` / `verify` / `modules` / `mcp` |
-| `tesseraql-maven-plugin` | `lint`, `test`, `coverage`, `generate`, `package-app`, `migrate`, `identity-schema`, `release-evidence`, `verify-evidence`, `governance` |
+| `tesseraql-cli` | The developer command line: every verb is generated into the [CLI reference](docs/reference-cli.md) from the command model the binary parses with |
+| `tesseraql-maven-plugin` | `admission`, `coverage`, `generate`, `governance`, `identity-schema`, `lint`, `migrate`, `package-app`, `release-diff`, `release-evidence`, `report`, `schema`, `test`, `verify-evidence` |
+| `tesseraql-apptasks` | Shared app-lifecycle tasks — package, migrate, identity bootstrap — so the CLI and the Maven plugin stay thin adapters over one engine |
+| `tesseraql-host` | The deployment distribution's entry point and its operator verbs |
+| `tesseraql-docs-reference` | Generates the committed reference pages under `docs/`; build-only, never published |
 | `tesseraql-bom` | Dependency BOM for applications |
 
 ## Java policy

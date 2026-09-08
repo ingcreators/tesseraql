@@ -243,7 +243,11 @@ blip uploading to the channel nobody read would stop the publish to the channel 
 
 ## Publishing to Maven Central
 
-Release tags also publish the reactor to Maven Central: the `central-publish` job in
+Release tags also publish the reactor to Maven Central — every module except
+`tesseraql-docs-reference`, which sets `skipPublishing` because it exists to generate the pages
+under `docs/` at build time and is not something a consumer depends on. It is the only opt-out in
+the tree, and `PublishedModuleLedgerTest` derives that exemption from the pom rather than from a
+list, so a second one has to be declared where the fact belongs. The `central-publish` job in
 `release.yml` rebuilds from the tag with the root POM's `central` profile, which attaches
 sources + javadoc jars, signs every artifact with the org-wide
 `ingcreators Release <release@ingcreators.com>` PGP key (public key on

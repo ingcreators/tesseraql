@@ -121,6 +121,35 @@
         <artifactId>tesseraql-host</artifactId>
         <version>${project.version}</version>
       </dependency>
+      <!-- Corporate identity and the authorization server. They arrive with tesseraql-runtime, so
+           an application rarely names them — but an integrator pinning one directly, or a test
+           tree declaring one the way tesseraql-studio-runtime once did, resolves it here rather
+           than being told the version is missing. -->
+      <dependency>
+        <groupId>io.tesseraql</groupId>
+        <artifactId>tesseraql-scim</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.tesseraql</groupId>
+        <artifactId>tesseraql-saml</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.tesseraql</groupId>
+        <artifactId>tesseraql-oidc</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.tesseraql</groupId>
+        <artifactId>tesseraql-oauth</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.tesseraql</groupId>
+        <artifactId>tesseraql-ops-ui</artifactId>
+        <version>${project.version}</version>
+      </dependency>
       <!-- Self-hosted browser libraries, vendored as WebJars so the supply chain stays on Maven
            Central and pages never reference external CDNs (design ch. 12, 50). -->
       <dependency>
