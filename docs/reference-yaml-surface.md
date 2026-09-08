@@ -301,6 +301,8 @@ The JSON response: status, body, per-field policy, and nested composition.
 | `body` | any | What the response body is: a bindable path such as `rows` or `steps.<name>`, or a literal shape composing several. |
 | `fields` | map of [fieldPolicy](#fieldpolicy) | Per-field visibility, masking, and classification applied to the body. Documented in data-scoping.md. |
 | `statusWhen` | [statusWhen](#statuswhen) | Conditional statuses: the first entry whose expression matches decides the status. |
+| `headers` | object | Response headers to set, merged over the app-wide `responseHeaders` defaults. A `{expression}` placeholder in a value resolves per request; a nested map or list is serialized as JSON. |
+| `headersWhen` | map of string | A guard per header name: the header above is emitted only when its expression is truthy. The case this exists for is a header defined in terms of a status `statusWhen` already varies — `Location` on a 201, `Retry-After` on a 429 or 503. |
 
 #### response.html
 
@@ -313,9 +315,9 @@ The HTML response: a template or a view, its model, the status, and headers.
 | `view` | string | The id of a *.view.yml document (exclusive with template:). |
 | `shell` | enum: `auto` \| `always` \| `never` | Shell negotiation: auto (default) serves the bare #page-content region to htmx requests and the shell-wrapped page to direct navigation; always wraps unconditionally; never declares an htmx-only region endpoint. |
 | `views` | array of string | View ids whose models a template: route binds; each renders into views['<id>'] for the template to insert (illegal alongside view:). |
-| `model` | object | Extra model entries for the template: each name to the bindable path supplying it. |
+| `model` | map of string | Extra model entries for the template: each name to the bindable path supplying it. The value is read as a path, not as data — every renderer stringifies it and parses the result, so a non-string is silently mangled. |
 | `headers` | object | Response headers to set, merged over the app-wide `responseHeaders` defaults. |
-| `headersWhen` | map of string | Conditional response headers: the first entry whose expression matches decides the headers. |
+| `headersWhen` | map of string | A guard per header name: the header above is emitted only when its expression is truthy. On an HTML fragment that is an `HX-Trigger` toast firing on success but not on a handled error. |
 | `statusWhen` | [statusWhen](#statuswhen) | Conditional statuses: the first entry whose expression matches decides the status. |
 
 #### response.stream
@@ -345,7 +347,7 @@ Render a template into a file and answer with it as a download.
 | `template` \* | string | The template rendered into the file. |
 | `contentType` | string | The Content-Type of the produced file. |
 | `filename` | string | The download filename offered to the client, as a literal or a bindable path. |
-| `model` | object | Extra model entries for the template: each name to the bindable path supplying it. |
+| `model` | map of string | Extra model entries for the template: each name to the bindable path supplying it. The value is read as a path, not as data — every renderer stringifies it and parses the result, so a non-string is silently mangled. |
 
 #### response.text
 
@@ -355,7 +357,7 @@ Render a template and answer with the text itself — the message a `prompt-text
 | --- | --- | --- |
 | `status` | integer | The status answered on success (default 200). |
 | `template` \* | string | The template rendered into the message, in Thymeleaf TEXT mode. |
-| `model` | object | Extra model entries for the template: each name to the bindable path supplying it. |
+| `model` | map of string | Extra model entries for the template: each name to the bindable path supplying it. The value is read as a path, not as data — every renderer stringifies it and parses the result, so a non-string is silently mangled. |
 
 #### response.onError
 
