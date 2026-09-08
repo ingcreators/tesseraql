@@ -230,7 +230,7 @@ query-export / file-export output: format (csv, excel, pdf), filename, columns w
 | `columns` | array of [fileColumn](#filecolumn) | The columns written, in order, with their headings and format patterns. Omit it to write every column the rows carry, under its own name. |
 | `locale` | string | The locale date and number patterns render in. A literal, or a request source such as `principal.claim.locale`, so the requesting user decides; unset, `tesseraql.files.locale` applies. A job has no request, so a step's is a literal. |
 | `timezone` | string | The zone date and time values render in, with the same literal / request-source / `tesseraql.files.timezone` fallback as `locale`. |
-| `after` | [object](#exportafter) | A statement run once after the extraction, typically to mark the extracted rows. `file-export` only: on `query-export` it is a build error (TQL-CAMEL-3101), because a synchronous download has no transaction to hang it on. |
+| `after` | [object](#exportafter) | A statement run once after the extraction, typically to mark the extracted rows. `file-export` only: on `query-export` it is a build error (TQL-ROUTE-3101), because a synchronous download has no transaction to hang it on. |
 | `maxRows` | integer | The ceiling for a format that holds every row before it writes (pdf, and the workbook template modes), defaulting to `tesseraql.resultMaterialization.maxRows`; a negative value opts out. A streaming format is never capped. |
 | `onOverflow` | string | `fail` (default) refuses an export past `maxRows` (TQL-LD-2850); `warn` truncates it at the cap and logs. |
 | `groupBy` | string | A column the rows are read as ordered groups by, each exposed to the template as a `key` and its own `rows`. The rows must be ordered by it (TQL-LD-2851). |
@@ -238,7 +238,7 @@ query-export / file-export output: format (csv, excel, pdf), filename, columns w
 
 #### export.after
 
-A statement run once after the extraction, typically to mark the extracted rows. `file-export` only: on `query-export` it is a build error (TQL-CAMEL-3101), because a synchronous download has no transaction to hang it on.
+A statement run once after the extraction, typically to mark the extracted rows. `file-export` only: on `query-export` it is a build error (TQL-ROUTE-3101), because a synchronous download has no transaction to hang it on.
 
 | Property | Type | Description |
 | --- | --- | --- |
@@ -487,7 +487,7 @@ query-export / file-export output: format (csv, excel, pdf), filename, columns w
 | `columns` | array of [fileColumn](#filecolumn) | The columns written, in order, with their headings and format patterns. Omit it to write every column the rows carry, under its own name. |
 | `locale` | string | The locale date and number patterns render in. A literal, or a request source such as `principal.claim.locale`, so the requesting user decides; unset, `tesseraql.files.locale` applies. A job has no request, so a step's is a literal. |
 | `timezone` | string | The zone date and time values render in, with the same literal / request-source / `tesseraql.files.timezone` fallback as `locale`. |
-| `after` | [object](#pipelineexportafter) | A statement run once after the extraction, typically to mark the extracted rows. `file-export` only: on `query-export` it is a build error (TQL-CAMEL-3101), because a synchronous download has no transaction to hang it on. |
+| `after` | [object](#pipelineexportafter) | A statement run once after the extraction, typically to mark the extracted rows. `file-export` only: on `query-export` it is a build error (TQL-ROUTE-3101), because a synchronous download has no transaction to hang it on. |
 | `maxRows` | integer | The ceiling for a format that holds every row before it writes (pdf, and the workbook template modes), defaulting to `tesseraql.resultMaterialization.maxRows`; a negative value opts out. A streaming format is never capped. |
 | `onOverflow` | string | `fail` (default) refuses an export past `maxRows` (TQL-LD-2850); `warn` truncates it at the cap and logs. |
 | `groupBy` | string | A column the rows are read as ordered groups by, each exposed to the template as a `key` and its own `rows`. The rows must be ordered by it (TQL-LD-2851). |
@@ -495,7 +495,7 @@ query-export / file-export output: format (csv, excel, pdf), filename, columns w
 
 ##### pipeline.export.after
 
-A statement run once after the extraction, typically to mark the extracted rows. `file-export` only: on `query-export` it is a build error (TQL-CAMEL-3101), because a synchronous download has no transaction to hang it on.
+A statement run once after the extraction, typically to mark the extracted rows. `file-export` only: on `query-export` it is a build error (TQL-ROUTE-3101), because a synchronous download has no transaction to hang it on.
 
 | Property | Type | Description |
 | --- | --- | --- |
@@ -694,7 +694,7 @@ One keyed reference folded into a binding's rows: where the keys are (`on:`), wh
 | `on` | map of string | The join: each column of the rows being enriched to the column of the reference it matches. Several pairs make a composite key, compared by the framework's canonical normalization (INTEGER 1 matches BIGINT 1). |
 | `sql` | [sqlArm](#sqlarm) | Fetch the reference by key, written as a source's `sql:` arm is. The statement must bind `keys` — one that never mentions it reads the whole table once per batch and still returns the right answer, which is why only the build can catch it (TQL-YAML-1048). |
 | `http` | [httpArm](#httparm) | Call the reference by key, written as a source's `http:` arm is, plus `select:` and `onError:`. How the keys reach it is `mode:`. |
-| `source` | string | A result already in the context, joined without a fetch, named by its context path: a route source by name, a job step as `steps.<id>`. A spooled sibling is refused (TQL-CAMEL-3114) — load it into a table and enrich from there. |
+| `source` | string | A result already in the context, joined without a fetch, named by its context path: a route source by name, a job step as `steps.<id>`. A spooled sibling is refused (TQL-ROUTE-3114) — load it into a table and enrich from there. |
 | `mode` | string | For an `http:` reference: `perRow` (default) makes one request per distinct key, `batch` one request per `batchSize` keys. A `sql:` reference is always batched — a statement takes a key list by construction. |
 | `as` | string | Attach the matched rows as a list under this name. Exactly one of `as:` or `merge:` (TQL-YAML-1047). |
 | `merge` | array of string | Copy these columns of the matched row onto each row instead of attaching a list. Exactly one of `as:` or `merge:` (TQL-YAML-1047). |

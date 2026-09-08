@@ -140,7 +140,7 @@
               }
             },
             "additionalProperties": false,
-            "description": "A statement run once after the extraction, typically to mark the extracted rows. `file-export` only: on `query-export` it is a build error (TQL-CAMEL-3101), because a synchronous download has no transaction to hang it on."
+            "description": "A statement run once after the extraction, typically to mark the extracted rows. `file-export` only: on `query-export` it is a build error (TQL-ROUTE-3101), because a synchronous download has no transaction to hang it on."
           },
           "maxRows": {
             "type": "integer",
@@ -187,7 +187,7 @@
         },
         "source": {
           "type": "string",
-          "description": "A result already in the context, joined without a fetch, named by its context path: a route source by name, a job step as `steps.<id>`. A spooled sibling is refused (TQL-CAMEL-3114) — load it into a table and enrich from there."
+          "description": "A result already in the context, joined without a fetch, named by its context path: a route source by name, a job step as `steps.<id>`. A spooled sibling is refused (TQL-ROUTE-3114) — load it into a table and enrich from there."
         },
         "mode": {
           "type": "string",
