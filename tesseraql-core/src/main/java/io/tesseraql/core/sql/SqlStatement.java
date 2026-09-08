@@ -48,6 +48,20 @@ public final class SqlStatement {
      */
     public static final int DEFAULT_TIMEOUT_SECONDS = 30;
 
+    /**
+     * The ceiling a materializing read runs under when a caller declares none — the same 10,000
+     * {@code tesseraql.resultMaterialization.maxRows} carries, so an unwired caller is bounded
+     * rather than unbounded. A negative ceiling is the framework's no-cap sentinel, which is why
+     * this one is never clamped.
+     */
+    public static final int DEFAULT_MAX_ROWS = 10_000;
+
+    /**
+     * What the row past the ceiling means when no caller declares a policy: {@code fail} refuses,
+     * {@code warn} truncates. It sits beside the ceiling because the two are one bound.
+     */
+    public static final String DEFAULT_ON_OVERFLOW = "fail";
+
     private final DataSource dataSource;
     private final String dialect;
     private final int timeoutSeconds;

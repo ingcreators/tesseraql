@@ -70,6 +70,14 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A CLI-run job honours the configured row cap.** `tesseraql job run` and `job rerun` — and so
+  `tesseraql-host job run`, since `job` is on the deployment roster — built their executor without
+  passing the result bounds, so `tesseraql.resultMaterialization.maxRows` and `.onOverflow` were
+  read by the served runtime and ignored by the command. The same job against the same application
+  capped at ten thousand rows or at whatever was configured, depending only on how it was started.
+  Both sites now resolve the bounds through `SqlDefaults`, which is also where the row cap's eight
+  restated defaults collapse to one, the way the statement timeout already had.
+
 - **An agent's `resources/read` is recorded like every other read.** A `kind: resource` or
   `kind: ui` document compiled its route head by hand rather than through the applier every other
   recipe uses, so with `tesseraql.audit.routes.enabled` the same SQL read wrote an audit row when a

@@ -1169,11 +1169,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     // A job has no request to read configuration from, so a step's default row
                     // ceiling arrives the same way its timeout does (docs/export-pipeline.md, dec. 7).
                     .resultBounds(
-                            manifest.config().getString("tesseraql.resultMaterialization.maxRows")
-                                    .map(Integer::parseInt).orElse(10_000),
-                            manifest.config()
-                                    .getString("tesseraql.resultMaterialization.onOverflow")
-                                    .orElse("fail"))
+                            io.tesseraql.yaml.config.SqlDefaults.maxRows(manifest.config()),
+                            io.tesseraql.yaml.config.SqlDefaults.onOverflow(manifest.config()))
                     // A batch read step may extract from another declared connector and load into
                     // the job's (docs/unified-sources.md decision 19).
                     .connectors(dataSources::get)

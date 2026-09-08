@@ -424,6 +424,12 @@ final class JobCommand implements Callable<Integer> {
                 io.tesseraql.core.expr.ExpressionFunctions.processDefault())
                 .sqlTimeoutSeconds(
                         io.tesseraql.yaml.config.SqlDefaults.timeoutSeconds(manifest.config()))
+                // The same bounds the served runtime gives its executor. Without this the
+                // executor's field defaults win and a CLI-run job caps differently from the same
+                // job run by `host` — the configuration is in reach here, so it is passed here.
+                .resultBounds(
+                        io.tesseraql.yaml.config.SqlDefaults.maxRows(manifest.config()),
+                        io.tesseraql.yaml.config.SqlDefaults.onOverflow(manifest.config()))
                 // notify: steps enqueue on the durable outbox; the serving runtime delivers.
                 .notificationOutbox(outbox)
                 .fileTransfers(transfers, app)
