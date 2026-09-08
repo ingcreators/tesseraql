@@ -78,15 +78,13 @@ final class OpsAccountProviders {
             if (view == null) {
                 continue;
             }
-            try {
-                String workflowId = io.tesseraql.yaml.view.ViewSpec.parse(view.source())
-                        .workflow();
-                String docType = workflowId == null ? null : workflowDocTypes.get(workflowId);
-                if (docType != null) {
-                    byDocType.putIfAbsent(docType, route.urlPath());
-                }
-            } catch (RuntimeException unparseable) {
-                // The compiler already refused a broken view; the queue map just skips it.
+            // The registry's own parsed spec: viewById returns a ViewFile the loader built, and
+            // the loader drops a document whose parse throws, so there is no unparseable source
+            // here to guard against — and no reason to read the file a second time.
+            String workflowId = view.spec().workflow();
+            String docType = workflowId == null ? null : workflowDocTypes.get(workflowId);
+            if (docType != null) {
+                byDocType.putIfAbsent(docType, route.urlPath());
             }
         }
         return byDocType;
