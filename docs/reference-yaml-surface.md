@@ -463,59 +463,15 @@ Fire the job when files arrive: a local directory, SFTP, or FTPS source feeding 
 
 | Property | Type | Description |
 | --- | --- | --- |
-| `sql` | [sqlArm](#sqlarm) | The SQL arm: a colocated 2-way SQL file and how it is run. The keys of the mechanism nest inside the arm that owns them, so there is nowhere to write a call's `select:` on a statement and no lint has to say it is wrong. |
-| `contract` | [object](#pipelinecontract) | The contract arm: a statement the identity schema owns, called by name. It reads or writes like any other statement, so it carries the same `mode`, `params` and `expect`. |
-| `service` | [object](#pipelineservice) | The service arm: a runtime provider answering rows from process state. It takes only its arguments — there is no statement to run, so no mode and no row-count expectation. |
-| `http` | [httpArm](#httparm) | The http arm: an outbound call whose response becomes this binding's rows, in the vocabulary every outbound call shares. Rides the outbound gateway — allow-listed hosts, named credentials, timeouts, and a per-host circuit breaker. |
-| `sequence` | string | Allocate the next value of a managed document-number sequence instead of running a statement; it binds as `steps.<id>.value`. It has no body beyond its name, which is why it sits beside the arms rather than being one. Documented in transactional-writes.md. |
-| `spool` | string | A context path resolving to an earlier step's spool reference (`steps.<id>.spool`), read as this binding's rows. A chunk reader declares it instead of `sql:` to load what another step extracted — from another connector, or from an API — because a spool is a spool whoever filled it. Documented in jobs.md. |
-| `when` | string | Guard expression on a step: a falsy guard skips it, recording `steps.<id>.skipped` instead of a result. A guard is about whether the step runs at all, not a question for the mechanism, so it sits beside the arm. The declared branch point for decision.* outputs (docs decision-tables). |
-| `enrich` | map of [enrichment](#enrichment) | Keyed references folded into this binding's rows before anything reads them (docs/lookups.md), keyed by enrichment name and applied in authored order. An enrichment nests under the source it transforms, so any arm's rows can be enriched. Each entry names one reference — sql: (fetch by key), http: (call by key), or source: (a result already in the context, joined without a fetch, named by its context path: a route source by name, a job step as steps.&lt;id&gt;) — plus the on: join and one of as:/merge:. Only a binding that holds rows can carry one: a write publishes affectedRows, and a query-spool extract never held its rows. |
+| `sql` | [sqlArm](#sqlarm) | The statement this step runs, written as a source's `sql:` arm is. A `mode: query-spool` extract publishes `steps.<id>.spool` for a later step's chunk reader. |
+| `http` | [httpArm](#httparm) | The outbound call this step makes, written as a source's `http:` arm is. Rides the outbound gateway like every other call. |
+| `when` | string | Guard expression on the step: a falsy guard skips it, recording `steps.<id>.skipped` instead of a result. It decides whether the step runs at all, so it sits beside the arm rather than inside it. |
+| `enrich` | map of [enrichment](#enrichment) | Keyed references folded into this step's rows before anything reads them (docs/lookups.md), keyed by enrichment name and applied in authored order. |
 | `id` \* | string | The step's name: what later steps bind against (`steps.<id>`) and what the execution record reports. |
 | `notify` | [notification](#notification) | One notification enqueued on the transactional outbox, so it is sent if and only if the write commits. Documented in notifications.md. |
 | `chunk` | [chunk](#chunk) | Restartable per-row processing: a reader, a writer, and committed checkpoints, so a job that stops resumes where it left off instead of starting over. Documented in jobs.md. |
 | `export` | [object](#pipelineexport) | query-export / file-export output: format (csv, excel, pdf), filename, columns with headers and format patterns, locale/timezone. It says how the rows are written and never what to read - the rows come from sources.main on a route, or the step's own arm in a pipeline. Documented in file-transfers.md. |
 | `push` | [push](#push) | Delivery of a produced transfer to a local or remote drop — the outbound mirror of the poll trigger, under the same policy block. Documented in file-transfers.md. |
-
-#### pipeline.contract
-
-The contract arm: a statement the identity schema owns, called by name. It reads or writes like any other statement, so it carries the same `mode`, `params` and `expect`.
-
-| Property | Type | Description |
-| --- | --- | --- |
-| `name` | string | The named IAM SQL contract to execute instead of a colocated file, so an app reuses the identity schema's statements. Documented in authentication.md. |
-| `mode` | string | How the contract runs and what it binds, exactly as it means on the `sql` arm. |
-| `params` | map of string | Each bind name to the bindable path supplying its value, such as `path.id`, `params.unit` or `principal.claim.tenant_id`. |
-| `expect` | [object](#pipelinecontractexpect) | The row count this statement must affect, and what happens when it does not — the declarative optimistic-locking check on an update or delete. |
-| `materialize` | [object](#pipelinecontractmaterialize) | Bounds on how much of the result is held in memory. Declared here so a contract that legitimately returns more than the app-wide budget says so on the binding, rather than an application raising the budget for every route, command and export at once. |
-| `timeoutSeconds` | integer ≥ 0 | Per-binding SQL statement timeout override; 0 disables. Default: tesseraql.sql.timeoutSeconds, else 30s. |
-
-##### pipeline.contract.expect
-
-The row count this statement must affect, and what happens when it does not — the declarative optimistic-locking check on an update or delete.
-
-| Property | Type | Description |
-| --- | --- | --- |
-| `rowCount` | integer | The exact number of rows the statement must affect (rows is a list of records everywhere else). |
-| `onMismatch` | string | `conflict` (the default) answers 409, so a stale edit is refused honestly; `error` answers 500. |
-
-##### pipeline.contract.materialize
-
-Bounds on how much of the result is held in memory. Declared here so a contract that legitimately returns more than the app-wide budget says so on the binding, rather than an application raising the budget for every route, command and export at once.
-
-| Property | Type | Description |
-| --- | --- | --- |
-| `maxRows` | integer | Largest number of rows materialized. Default: `tesseraql.resultMaterialization.maxRows`. |
-| `onOverflow` | string | `fail` (the default) refuses a result past `maxRows`; `warn` truncates it and logs. |
-
-#### pipeline.service
-
-The service arm: a runtime provider answering rows from process state. It takes only its arguments — there is no statement to run, so no mode and no row-count expectation.
-
-| Property | Type | Description |
-| --- | --- | --- |
-| `name` | string | The named runtime service provider to call instead of running SQL (docs/extending.md): non-SQL runtime state (lanes, traces, file trees, …) read as rows. |
-| `params` | map of string | Each bind name to the bindable path supplying its value, such as `path.id`, `params.unit` or `principal.claim.tenant_id`. |
 
 #### pipeline.export
 

@@ -51,12 +51,17 @@ class ContractBindingBoundsTest {
     @Test
     void aServiceBindingHasNoPlaceToDeclareBounds() {
         Binding binding = Binding.of(null, null,
-                new Binding.NamedCall("iam.grantHistory", null, null, null),
+                new Binding.NamedCall("iam.grantHistory", null),
                 null, null, null, null, null);
 
         assertThat(binding.isService()).isTrue();
         assertThat(binding.materialize()).isNull();
         assertThat(binding.timeoutSeconds()).isNull();
+        // Structural now, not merely absent: NamedCall carries neither key, so there is nowhere
+        // to declare them. It held both until #1180 gave the contract arm its own record and
+        // left this one wearing the departed arm's shape.
+        assertThat(binding.mode()).isNull();
+        assertThat(binding.expect()).isNull();
     }
 
     /** The contract arm's other components still arrive, so the split loses nothing. */
