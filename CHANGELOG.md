@@ -70,6 +70,11 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **An S3 upload whose flush fails no longer leaves its spool on disk.** The writer buffers to a
+  temp file and deletes it in a `finally`, but the stream close sat outside that `try` — and the
+  close is the flush, the one call most likely to fail on a full or failing disk, which is exactly
+  when a leaked spool hurts most. It is inside now.
+
 - **The object-storage egress allow-list covers the blob temp bucket.** `TQL-SEC-4110` checked
   every attachment's bucket and nothing else, but `tesseraql.temp.store: blob` writes every
   produced file and every spooled result to `tesseraql.temp.bucket` — which defaults to

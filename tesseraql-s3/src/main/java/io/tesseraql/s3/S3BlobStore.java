@@ -164,10 +164,18 @@ public final class S3BlobStore implements BlobStore {
             bytes += data.length;
         }
 
+        /**
+         * Flushes, uploads, and always reclaims the temp file.
+         *
+         * <p>The stream close is inside the {@code try}. It buffers, so it is the flush — the one
+         * call here most likely to fail on a full or failing disk, which is exactly when a leaked
+         * spool hurts most. Outside the {@code try} its failure skipped the delete and left the
+         * file behind.
+         */
         @Override
         public void close() throws IOException {
-            out.close();
             try {
+                out.close();
                 PutObjectRequest.Builder put = PutObjectRequest.builder()
                         .bucket(realBucket).key(objectKey);
                 if (contentType != null && !contentType.isBlank()) {
