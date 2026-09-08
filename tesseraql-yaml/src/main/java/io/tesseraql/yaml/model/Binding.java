@@ -124,7 +124,7 @@ public record Binding(String file, String contract, String mode, Map<String, Str
         return new Binding(
                 sql == null ? null : sql.file(),
                 contract == null ? null : contract.name(),
-                mode(sql, contract, service, http),
+                mode(sql, contract, http),
                 params(sql, contract, service),
                 service == null ? null : service.name(),
                 http,
@@ -136,7 +136,7 @@ public record Binding(String file, String contract, String mode, Map<String, Str
                         : (contract == null ? null : contract.materialize()),
                 sequence,
                 sql == null ? null : sql.keys(),
-                expect(sql, contract, service),
+                expect(sql, contract),
                 sql != null
                         ? sql.timeoutSeconds()
                         : (contract == null ? null : contract.timeoutSeconds()),
@@ -154,17 +154,14 @@ public record Binding(String file, String contract, String mode, Map<String, Str
      * answer, so a reader asks "how does this acquisition deliver its rows" once rather than per
      * mechanism (docs/unified-sources.md decision 19a).
      */
-    private static String mode(SqlArm sql, ContractCall contract, NamedCall service,
-            HttpSourceSpec http) {
+    private static String mode(SqlArm sql, ContractCall contract, HttpSourceSpec http) {
         if (sql != null) {
             return sql.mode();
         }
         if (contract != null) {
             return contract.mode();
         }
-        if (service != null) {
-            return service.mode();
-        }
+        // A service arm has no mode: it answers from process state, with no statement to run.
         return http == null ? null : http.mode();
     }
 
@@ -179,14 +176,12 @@ public record Binding(String file, String contract, String mode, Map<String, Str
         return service == null ? null : service.params();
     }
 
-    private static Expect expect(SqlArm sql, ContractCall contract, NamedCall service) {
+    private static Expect expect(SqlArm sql, ContractCall contract) {
         if (sql != null) {
             return sql.expect();
         }
-        if (contract != null) {
-            return contract.expect();
-        }
-        return service == null ? null : service.expect();
+        // A service arm has no expect: there is no affected-row count to assert on.
+        return contract == null ? null : contract.expect();
     }
 
     /**
@@ -230,13 +225,19 @@ public record Binding(String file, String contract, String mode, Map<String, Str
     }
 
     /**
-     * The {@code contract} and {@code service} arms: the name to call, and how. A contract is
-     * SQL the identity schema owns, so it reads or writes like any other statement and carries
-     * {@code mode} and {@code expect}; a service provider answers rows from runtime state and
-     * takes only its arguments.
+     * The {@code service} arm: the provider to call, and the arguments it takes.
+     *
+     * <p>It carries no {@code mode} and no {@code expect}. A service answers rows from process
+     * state — there is no statement to run, so there is no way to run it and no affected-row
+     * count to assert on — and {@code RouteCompiler} compiles it to a three-argument
+     * {@code ServiceStep} that is handed the name alone. The two keys were held here until now
+     * only because this record used to back the {@code contract} arm as well; #1180 gave that
+     * arm its own {@link ContractCall} and left their shape behind, so an author could write
+     * {@code service: {mode: query-spool}} and have it parsed, lifted into the binding, and
+     * dropped. The shipped schema never offered either key.
      */
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record NamedCall(String name, String mode, Map<String, String> params, Expect expect) {
+    public record NamedCall(String name, Map<String, String> params) {
 
         public NamedCall {
             params = params == null ? Map.of() : OrderedCopies.map(params);

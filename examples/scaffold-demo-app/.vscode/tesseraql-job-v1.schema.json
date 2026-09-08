@@ -144,7 +144,30 @@
       "items": {
         "allOf": [
           {
-            "$ref": "tesseraql-defs-v1.schema.json#/$defs/binding"
+            "$comment": "Only the arms PipelineStep.of folds, each by $ref into the shared definition so a key added to an arm reaches jobs without a second edit. The whole binding was offered here once, which put contract:, service:, sequence: and spool: on a job step — route-plane concepts a batch pipeline drops in silence (docs/unified-sources.md decisions 1, 12 and 19).",
+            "type": "object",
+            "properties": {
+              "sql": {
+                "$ref": "tesseraql-defs-v1.schema.json#/$defs/sqlArm",
+                "description": "The statement this step runs, written as a source's `sql:` arm is. A `mode: query-spool` extract publishes `steps.<id>.spool` for a later step's chunk reader."
+              },
+              "http": {
+                "$ref": "tesseraql-defs-v1.schema.json#/$defs/httpArm",
+                "description": "The outbound call this step makes, written as a source's `http:` arm is. Rides the outbound gateway like every other call."
+              },
+              "when": {
+                "type": "string",
+                "description": "Guard expression on the step: a falsy guard skips it, recording `steps.<id>.skipped` instead of a result. It decides whether the step runs at all, so it sits beside the arm rather than inside it."
+              },
+              "enrich": {
+                "type": "object",
+                "additionalProperties": {
+                  "$ref": "tesseraql-defs-v1.schema.json#/$defs/enrichment"
+                },
+                "description": "Keyed references folded into this step's rows before anything reads them (docs/lookups.md), keyed by enrichment name and applied in authored order."
+              }
+            },
+            "additionalProperties": true
           },
           {
             "type": "object",

@@ -198,6 +198,19 @@ class SchemaSyncTest {
         return names(node.path("properties"));
     }
 
+    /**
+     * A node with its {@code $ref} followed, against the shared definitions.
+     *
+     * <p>Only the shapes this class walks: a cross-file pointer into {@code tesseraql-defs-v1}, or
+     * a local one, both resolving against that document — which is what {@code SchemaReference}
+     * does for every {@code $ref} it meets. A pointer that does not resolve returns a missing
+     * node, and the callers assert non-emptiness so that fails rather than passing quietly.
+     */
+    private static JsonNode resolve(JsonNode node, JsonNode defs) {
+        String ref = node.path("$ref").asText("");
+        return ref.isEmpty() ? node : defs.at(ref.substring(ref.indexOf('#') + 1));
+    }
+
     /** The field names of a schema node, in declaration order. */
     private static List<String> names(JsonNode node) {
         List<String> names = new ArrayList<>();
@@ -543,6 +556,57 @@ class SchemaSyncTest {
                 .isEqualTo("#/$defs/sqlArm");
         assertThat(armRef(defs, "/$defs/binding/properties/http")).isEqualTo("#/$defs/httpArm");
         assertThat(armRef(defs, "/$defs/enrichment/properties/http")).isEqualTo("#/$defs/httpArm");
+    }
+
+    /**
+     * A job step offers only the arms it folds, and a service arm only what it honours.
+     *
+     * <p>The pipeline item used to {@code allOf} the whole {@code #/$defs/binding}, so the editor
+     * offered thirteen keys against {@code PipelineStep.of}'s nine. The four extra —
+     * {@code contract:}, {@code service:}, {@code sequence:}, {@code spool:} — are route-plane
+     * concepts (docs/unified-sources.md decisions 1, 12 and 19) that a job step drops in silence:
+     * {@code PipelineStep} is {@code @JsonIgnoreProperties(ignoreUnknown = true)}, and no lint
+     * fires because the schema offered them.
+     *
+     * <p>Exactness, not {@code containsAll}. This is an <em>over</em>-offering, and the nine the
+     * loader folds are a subset of the thirteen it offered — so a coverage check passes on the
+     * defect. That is exactly what the remediation plan proposed, and it was green on the finding
+     * it was written for.
+     *
+     * <p>The {@code service:} arm is the same shape one level down: the schema has always
+     * declared {@code name} and {@code params} and said in its own description that a service
+     * takes "no mode and no row bound", while {@code NamedCall} carried {@code mode} and
+     * {@code expect} — the shape left behind when #1180 gave the contract arm its own record.
+     * {@code RouteCompiler} hands {@code ServiceStep} the name alone, and
+     * {@code TransactionalCommandProcessor.validate} refuses a service binding in a command step
+     * outright, so neither key could ever have been honoured.
+     */
+    @Test
+    void aJobStepAndAServiceArmOfferOnlyWhatTheyHonour() throws Exception {
+        JsonNode job = new ObjectMapper().readTree(
+                getClass().getResourceAsStream("/schema/tesseraql-job-v1.schema.json"));
+        JsonNode defs = new ObjectMapper().readTree(
+                getClass().getResourceAsStream("/schema/tesseraql-defs-v1.schema.json"));
+        // Resolve each branch's $ref before reading its keys. Collecting only the INLINE
+        // properties leaves the guard blind to the defect returning in its original shape: a
+        // branch that re-offers the whole binding by $ref adds four keys the editor accepts and
+        // contributes none to a walk that does not follow it. Verified by building exactly that
+        // variant — nine keys inline plus a $ref branch — and watching this test pass.
+        List<String> offered = new ArrayList<>();
+        job.path("properties").path("pipeline").path("items").path("allOf")
+                .forEach(branch -> offered.addAll(names(resolve(branch, defs).path("properties"))));
+
+        assertThat(offered).as("the pipeline item's branches resolve").isNotEmpty();
+        assertThat(offered)
+                .as("a pipeline step offers exactly the keys PipelineStep.of folds")
+                .containsExactlyInAnyOrderElementsOf(creatorProperties(
+                        io.tesseraql.yaml.model.PipelineStep.class, "of"));
+
+        assertThat(defProperties("/schema/tesseraql-defs-v1.schema.json", "binding", "properties",
+                "service"))
+                .as("the service arm declares the keys NamedCall carries, and only those")
+                .containsExactlyInAnyOrderElementsOf(
+                        yamlNames(io.tesseraql.yaml.model.Binding.NamedCall.class));
     }
 
     /**
