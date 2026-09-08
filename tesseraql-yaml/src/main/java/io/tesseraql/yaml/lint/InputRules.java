@@ -10,7 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * The declared-input vocabulary of a route ({@code input:}, {@code page:},
+ * The declared-input vocabulary of a route ({@code input:}, {@code pagination:},
  * {@code statusWhen:}).
  *
  * <p>Extracted verbatim from {@code AppLinter} (docs/lint-restructure.md decision 1).
@@ -81,13 +81,15 @@ final class InputRules implements LintRule {
             String recipe = route.definition().recipe();
             if (!"query-json".equals(recipe) && !"query-html".equals(recipe)) {
                 findings.add(new LintFinding(PAGE_ON_UNSUPPORTED_RECIPE, ERROR, source,
-                        "page: is a query-json/query-html key (recipe is " + recipe + ")"));
+                        "pagination: is a query-json/query-html key (recipe is " + recipe + ")",
+                        context.lineOf(route.source(), "pagination:"), null));
             }
             if (io.tesseraql.yaml.model.PageSpec.KEYSET.equals(page.effectiveStrategy())
                     && page.effectiveBy().isEmpty()) {
                 findings.add(new LintFinding(INVALID_PAGE_STRATEGY, ERROR, source,
-                        "page: strategy keyset requires by: (the cursor column, or an ordered"
-                                + " list for a composite cursor)"));
+                        "pagination: strategy keyset requires by: (the cursor column, or an"
+                                + " ordered list for a composite cursor)",
+                        context.lineOf(route.source(), "pagination:"), null));
             }
             // Keyset is refused on a contract binding rather than published, because the
             // cursor it would advertise cannot be honoured: the `after` predicate lives in the
@@ -98,35 +100,37 @@ final class InputRules implements LintRule {
                     && route.definition().main() != null
                     && route.definition().main().isContract()) {
                 findings.add(new LintFinding(INVALID_PAGE_STRATEGY, ERROR, source,
-                        "page: strategy keyset is not available on a contract: binding - the"
+                        "pagination: strategy keyset is not available on a contract: binding - the"
                                 + " after predicate lives in the statement, and a contract's is"
                                 + " the framework's. Use strategy: offset",
-                        context.lineOf(route.source(), "page:"), null));
+                        context.lineOf(route.source(), "pagination:"), null));
             }
             if (page.effectiveBy().stream().anyMatch(column -> column == null
                     || column.isBlank())) {
                 findings.add(new LintFinding(INVALID_PAGE_STRATEGY, ERROR, source,
-                        "page: by: entries must be column names"));
+                        "pagination: by: entries must be column names",
+                        context.lineOf(route.source(), "pagination:"), null));
             }
             if (!io.tesseraql.yaml.model.PageSpec.OFFSET.equals(page.effectiveStrategy())
                     && !io.tesseraql.yaml.model.PageSpec.KEYSET.equals(page.effectiveStrategy())
                     && !io.tesseraql.yaml.model.PageSpec.SNAPSHOT
                             .equals(page.effectiveStrategy())) {
                 findings.add(new LintFinding(INVALID_PAGE_STRATEGY, ERROR, source,
-                        "page: unknown strategy " + page.strategy()
+                        "pagination: unknown strategy " + page.strategy()
                                 + " (offset, keyset or snapshot)",
-                        context.lineOf(route.source(), "page:"), null));
+                        context.lineOf(route.source(), "pagination:"), null));
             }
             if (page.cap() != null && !io.tesseraql.yaml.model.PageSpec.SNAPSHOT
                     .equals(page.effectiveStrategy())) {
                 findings.add(new LintFinding(INVALID_PAGE_STRATEGY, ERROR, source,
-                        "page: cap: is a strategy: snapshot key"));
+                        "pagination: cap: is a strategy: snapshot key",
+                        context.lineOf(route.source(), "pagination:"), null));
             }
             if (page.effectiveSize() < 1
                     || (page.maxSize() != null && page.maxSize() < page.effectiveSize())) {
                 findings.add(new LintFinding(INVALID_PAGE_SIZE, ERROR, source,
-                        "page: size must be >= 1 and maxSize >= size",
-                        context.lineOf(route.source(), "page:"), null));
+                        "pagination: size must be >= 1 and maxSize >= size",
+                        context.lineOf(route.source(), "pagination:"), null));
             }
             if (route.definition().main() != null && route.definition().main().file() != null) {
                 Path sqlFile = route.source().getParent()
@@ -137,9 +141,9 @@ final class InputRules implements LintRule {
                 if (sql != null && sql.toLowerCase(java.util.Locale.ROOT)
                         .matches("(?s).*\\b(limit|fetch)\\b.*")) {
                     findings.add(new LintFinding(PAGED_SQL_DECLARES_LIMIT, WARNING, source,
-                            "page: appends the pagination clause — the authored SQL should"
+                            "pagination: appends the pagination clause — the authored SQL should"
                                     + " not carry its own LIMIT/FETCH",
-                            context.lineOf(route.source(), "page:"), null));
+                            context.lineOf(route.source(), "pagination:"), null));
                 }
             }
         }

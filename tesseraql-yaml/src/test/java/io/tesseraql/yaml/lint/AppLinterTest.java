@@ -874,6 +874,62 @@ class AppLinterTest {
         assertThat(findings).anyMatch(f -> f.code().equals("TQL-YAML-1016") && f.isError()
                 && f.message().contains("keyset")
                 && f.message().contains("contract:"));
+        // This document is the wrong-line specimen: its input: declares a field named `page` at
+        // line 6, and `pagination:` — the block the finding is about — is at line 9. lineOf is a
+        // whole-file indexOf, so searching for "page:" landed on the input field. An isNotNull
+        // assertion cannot see that; only the exact line can.
+        assertThat(findings).filteredOn(f -> f.code().equals("TQL-YAML-1016"))
+                .allSatisfy(f -> {
+                    assertThat(f.message()).startsWith("pagination: ");
+                    assertThat(f.line()).isEqualTo(9);
+                });
+    }
+
+    /**
+     * Every pagination finding names the key an author can write, and points at it.
+     *
+     * <p>Seven messages opened with {@code page: } — a key {@code UnknownKeyRules.RENAMED_KEYS}
+     * turns into a {@code TQL-YAML-1044} error, so the lint told the reader to fix a key the
+     * loader refuses. Four of the eight carried no position at all.
+     */
+    @Test
+    void everyPaginationFindingNamesAndLocatesTheKeyThatExists(@TempDir Path dir)
+            throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/application.yml"), "server:\n  port: 0\n");
+        Files.writeString(dir.resolve("config/tesseraql.yml"), "tesseraql:\n  app:\n    name: t\n");
+        Files.createDirectories(dir.resolve("web/api/users"));
+        Files.writeString(dir.resolve("web/api/users/get.yml"), """
+                version: tesseraql/v1
+                id: users.list
+                kind: route
+                recipe: command-json
+                pagination:
+                  strategy: bogus
+                  size: 0
+                  cap: 10
+                sources:
+                  main:
+                    sql:
+                      file: list.sql
+                response:
+                  json:
+                    body:
+                      data: main.rows
+                """);
+        Files.writeString(dir.resolve("web/api/users/list.sql"), "SELECT 1\n");
+
+        List<LintFinding> findings = new AppLinter().lint(dir);
+
+        assertThat(findings).as("the pagination rules fired at all")
+                .filteredOn(f -> f.message().startsWith("pagination: ")).hasSizeGreaterThan(3);
+        assertThat(findings).filteredOn(f -> f.message().toLowerCase(java.util.Locale.ROOT)
+                .startsWith("page:"))
+                .as("no finding names `page:`, which RENAMED_KEYS turns into TQL-YAML-1044")
+                .isEmpty();
+        assertThat(findings).filteredOn(f -> f.message().startsWith("pagination: "))
+                .as("every pagination finding points at the pagination: block, at line 5")
+                .allSatisfy(f -> assertThat(f.line()).isEqualTo(5));
     }
 
     /** Offset pagination on the same binding is untouched: it is the half a contract can honour. */
