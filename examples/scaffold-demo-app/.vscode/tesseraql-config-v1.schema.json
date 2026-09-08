@@ -40,6 +40,10 @@
               "password": {
                 "type": "string",
                 "description": "Prefer a ${secret.*} reference over a literal."
+              },
+              "maximumPoolSize": {
+                "type": "integer",
+                "description": "The pool's maximum size. The scaffolded config sets it; HikariCP's default applies when it is absent."
               }
             },
             "additionalProperties": true
@@ -185,6 +189,21 @@
                 },
                 "tenantClaim": {
                   "type": "string"
+                },
+                "audience": {
+                  "oneOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "minItems": 1
+                    }
+                  ],
+                  "description": "The audience an incoming token must carry — one value or a list. Required once a JWT issuer is configured; its absence is a lint error (TQL-YAML-1105)."
                 }
               },
               "additionalProperties": true
@@ -407,7 +426,118 @@
         },
         "identity": {
           "type": "object",
-          "additionalProperties": true
+          "properties": {
+            "defaultRealm": {
+              "type": "string",
+              "description": "The realm the runtime resolves when a caller names none. Defaults to local."
+            },
+            "realms": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "managed",
+                      "sql"
+                    ],
+                    "description": "Where the realm's users live: the framework's own tables, or the application's SQL under sqlRoot."
+                  },
+                  "datasource": {
+                    "type": "string",
+                    "description": "The named datasource the realm reads and writes. Defaults to main."
+                  },
+                  "sqlRoot": {
+                    "type": "string",
+                    "description": "For type: sql, the directory holding the realm's statements. Defaults to security/identity/<realm> under the app home."
+                  },
+                  "capabilities": {
+                    "type": "object",
+                    "properties": {
+                      "userManagement": {
+                        "type": "string",
+                        "enum": [
+                          "read-write",
+                          "read-only"
+                        ],
+                        "description": "How much of this realm the console may change."
+                      },
+                      "groupManagement": {
+                        "type": "string",
+                        "enum": [
+                          "read-write",
+                          "read-only"
+                        ],
+                        "description": "How much of this realm the console may change."
+                      },
+                      "roleManagement": {
+                        "type": "string",
+                        "enum": [
+                          "read-write",
+                          "read-only"
+                        ],
+                        "description": "How much of this realm the console may change."
+                      }
+                    },
+                    "additionalProperties": true,
+                    "description": "What the identity console may change in this realm. Defaults to read-write for a managed realm and read-only for a SQL one."
+                  }
+                },
+                "additionalProperties": true,
+                "description": "One identity realm, keyed by its id."
+              },
+              "description": "The declared realms, keyed by id."
+            },
+            "maxRows": {
+              "type": "integer",
+              "description": "The row bound identity reads are refused above."
+            },
+            "invite": {
+              "type": "object",
+              "properties": {
+                "channel": {
+                  "type": "string",
+                  "description": "The notification channel an invitation is sent over."
+                },
+                "url": {
+                  "type": "string",
+                  "description": "The base URL an invitation link is built from."
+                },
+                "ttlDays": {
+                  "type": "integer",
+                  "description": "How many days an invitation stays redeemable."
+                }
+              },
+              "additionalProperties": true,
+              "description": "User invitations. channel: and url: are required together."
+            },
+            "recovery": {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Whether self-service password recovery is offered."
+                },
+                "channel": {
+                  "type": "string",
+                  "description": "The notification channel a recovery message is sent over."
+                },
+                "url": {
+                  "type": "string",
+                  "description": "The base URL a recovery link is built from."
+                },
+                "ttlMinutes": {
+                  "type": "integer",
+                  "description": "How many minutes a recovery link stays redeemable."
+                }
+              },
+              "additionalProperties": true,
+              "description": "Self-service password recovery."
+            }
+          },
+          "additionalProperties": true,
+          "description": "Identity realms and the account flows around them. Documented in identity.md."
         }
       },
       "additionalProperties": true
