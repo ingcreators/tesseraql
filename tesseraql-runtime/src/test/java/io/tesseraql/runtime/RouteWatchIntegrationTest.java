@@ -124,6 +124,36 @@ class RouteWatchIntegrationTest {
     }
 
     /**
+     * A route that moves answers at its new URL, and stops answering at the old one.
+     *
+     * <p>The URL is derived from the directory structure, but the per-route fingerprint hashed
+     * only file <em>names</em> and bytes — so a directory renamed with its contents untouched
+     * produced an identical print. The route landed in {@code unchanged}, was never recompiled,
+     * and the mount table was never told: the page kept answering where it no longer declares and
+     * the new URL 404'd until restart.
+     */
+    @Test
+    void renamingARouteDirectoryMovesItsUrl() throws Exception {
+        Path from = appHome.resolve("web/api/here");
+        Files.createDirectories(from);
+        Files.writeString(from.resolve("here.sql"), "select 'moved' as answer\n");
+        Files.writeString(from.resolve("get.yml"), routeYaml("here", "here"));
+        assertThat(await("/api/here", response -> response.statusCode() == 200).statusCode())
+                .isEqualTo(200);
+
+        // The contents do not change — only where they live, which is what picks the URL.
+        Path to = appHome.resolve("web/api/there");
+        Files.move(from, to);
+
+        assertThat(await("/api/there", response -> response.statusCode() == 200).body())
+                .as("a route that moved is recompiled and mounted at the URL it now declares")
+                .contains("moved");
+        assertThat(await("/api/here", response -> response.statusCode() == 404).statusCode())
+                .as("and stops answering at the URL it left")
+                .isEqualTo(404);
+    }
+
+    /**
      * Polls until a watch line matching {@code expected} arrives (or 10s elapse). The route swap
      * is observable over HTTP before the watcher publishes its line, so asserting the list
      * immediately after the HTTP flip races the callback.

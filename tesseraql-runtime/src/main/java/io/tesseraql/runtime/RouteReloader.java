@@ -310,14 +310,27 @@ public final class RouteReloader {
         return new Result(reloadedIds, addedIds, removed, failed);
     }
 
-    /** Per-route content fingerprints: the digest of each route's source directory. */
+    /**
+     * Per-route fingerprints: the digest of each route's source directory, and the URL it
+     * declares.
+     *
+     * <p>The URL has to be in it. It is derived from the directory structure while the digest
+     * hashes only file <em>names</em> and bytes, so renaming a route directory with its contents
+     * untouched produced an identical print: the route landed in {@code unchanged}, was never
+     * recompiled, and kept answering at the URL it no longer declares while the new one 404'd
+     * until restart. That is the one thing a reload promises not to do.
+     *
+     * <p>Deliberately the declared URL rather than the absolute directory path — the delta stays
+     * minimal, and moving the whole application home does not rebuild every route.
+     */
     private static Map<String, String> fingerprintsOf(AppManifest manifest) {
         Map<Path, String> byDirectory = new LinkedHashMap<>();
         Map<String, String> prints = new LinkedHashMap<>();
         for (RouteFile route : manifest.routes()) {
             if (route.definition().id() != null) {
-                prints.put(route.definition().id(), byDirectory.computeIfAbsent(
-                        normalize(route.source()).getParent(), RouteReloader::digestDirectory));
+                String contents = byDirectory.computeIfAbsent(
+                        normalize(route.source()).getParent(), RouteReloader::digestDirectory);
+                prints.put(route.definition().id(), contents + "@" + route.urlPath());
             }
         }
         return prints;
