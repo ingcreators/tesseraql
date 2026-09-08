@@ -138,12 +138,10 @@ public final class CrudScaffolder {
             files.add(new ScaffoldedFile("rules/" + names.table() + ".yml",
                     rulesFile(table, names)));
             table.uniqueIndexes().forEach((index, column) -> files.add(new ScaffoldedFile(
-                    "rules/" + names.table() + "-" + column.toLowerCase(Locale.ROOT)
-                            .replace('_', '-') + "-free.sql",
+                    "rules/" + names.uniqueRuleFile(column),
                     uniqueRuleSql(names, column))));
             table.foreignKeys().forEach(fk -> files.add(new ScaffoldedFile(
-                    "rules/" + names.table() + "-" + fk.column().toLowerCase(Locale.ROOT)
-                            .replace('_', '-') + "-exists.sql",
+                    "rules/" + names.fkRuleFile(fk.column()),
                     fkRuleSql(fk))));
         }
         files.add(new ScaffoldedFile(names.dir() + "/get.yml", listRoute(table, names)));
@@ -217,6 +215,41 @@ public final class CrudScaffolder {
         /** The key column names, lowercased, in key-sequence order. */
         List<String> pkColumns() {
             return pks.stream().map(Names::columnName).toList();
+        }
+
+        /**
+         * The shared rule's id, e.g. {@code items_name_is_free} — the key {@code rules/<table>.yml}
+         * declares and the route's {@code use:} names. Both sites derive it here: composed
+         * separately they drifted into a route naming a rule that was never declared.
+         */
+        String uniqueRuleId(String column) {
+            return ruleId(column, "_is_free");
+        }
+
+        /** The foreign-key rule's id, e.g. {@code items_owner_id_exists}. */
+        String fkRuleId(String column) {
+            return ruleId(column, "_exists");
+        }
+
+        /**
+         * The rule's SQL file, relative to {@code rules/} — both the emitted artifact's name and
+         * the {@code file:} value that references it, which is why one producer owns it.
+         */
+        String uniqueRuleFile(String column) {
+            return ruleFile(column, "-free.sql");
+        }
+
+        /** The foreign-key rule's SQL file, relative to {@code rules/}. */
+        String fkRuleFile(String column) {
+            return ruleFile(column, "-exists.sql");
+        }
+
+        private String ruleId(String column, String suffix) {
+            return table() + '_' + column.toLowerCase(Locale.ROOT) + suffix;
+        }
+
+        private String ruleFile(String column, String suffix) {
+            return table() + '-' + column.toLowerCase(Locale.ROOT).replace('_', '-') + suffix;
         }
 
         /** The key field names — identical to the columns (docs/unicode-identifiers.md). */
@@ -984,11 +1017,8 @@ public final class CrudScaffolder {
                         .formatted(names.table(), names.table()));
         table.uniqueIndexes().forEach((index, column) -> {
             String field = column.toLowerCase(Locale.ROOT);
-            String sql = names.table() + "-" + column.toLowerCase(Locale.ROOT).replace('_', '-')
-                    + "-free.sql";
-            yml.append("  ").append(names.table()).append('_').append(field)
-                    .append("_is_free:\n");
-            yml.append("    file: ").append(sql).append('\n');
+            yml.append("  ").append(names.uniqueRuleId(column)).append(":\n");
+            yml.append("    file: ").append(names.uniqueRuleFile(column)).append('\n');
             String fieldType = table.column(column)
                     .map(TableSchema.Column::inputType).orElse("string");
             yml.append("    binds: { ").append(field).append(": ").append(fieldType);
@@ -1005,11 +1035,8 @@ public final class CrudScaffolder {
         });
         table.foreignKeys().forEach(fk -> {
             String field = fk.column().toLowerCase(Locale.ROOT);
-            String sql = names.table() + "-" + fk.column().toLowerCase(Locale.ROOT)
-                    .replace('_', '-') + "-exists.sql";
-            yml.append("  ").append(names.table()).append('_').append(field)
-                    .append("_exists:\n");
-            yml.append("    file: ").append(sql).append('\n');
+            yml.append("  ").append(names.fkRuleId(fk.column())).append(":\n");
+            yml.append("    file: ").append(names.fkRuleFile(fk.column())).append('\n');
             yml.append("    binds: { ").append(field).append(": ")
                     .append(table.column(fk.column())
                             .map(TableSchema.Column::inputType).orElse("string"))
@@ -1101,8 +1128,7 @@ public final class CrudScaffolder {
                     .filter(column -> column.name().equalsIgnoreCase(fk.column()))
                     .anyMatch(TableSchema.Column::nullable);
             yml.append("  ").append(field).append("_exists:\n");
-            yml.append("    use: ").append(names.table()).append('_').append(field)
-                    .append("_exists\n");
+            yml.append("    use: ").append(names.fkRuleId(fk.column())).append('\n');
             if (nullable) {
                 yml.append("    when: params.").append(field).append(" != null\n");
             }
@@ -1113,8 +1139,7 @@ public final class CrudScaffolder {
         table.uniqueIndexes().forEach((index, column) -> {
             String field = column.toLowerCase(Locale.ROOT);
             yml.append("  ").append(field).append("_is_free:\n");
-            yml.append("    use: ").append(names.table()).append('_').append(field)
-                    .append("_is_free\n");
+            yml.append("    use: ").append(names.uniqueRuleId(column)).append('\n');
             yml.append("    params:\n");
             yml.append("      ").append(field).append(": params.").append(field).append('\n');
             if (names.pks().size() == 1) {

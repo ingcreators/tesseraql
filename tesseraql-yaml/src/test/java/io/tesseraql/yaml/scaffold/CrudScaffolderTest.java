@@ -16,6 +16,7 @@ import java.nio.file.Path;
 import java.sql.Types;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -364,6 +365,62 @@ class CrudScaffolderTest {
                 content(files, "web/order_lines/{id}/update/post.yml"), "post.yml");
         assertThat(update.validate().get("product_id_exists").use())
                 .isEqualTo("order_lines_product_id_exists");
+    }
+
+    /**
+     * The rules a scaffolded app declares, the SQL files it emits, and the routes that reference
+     * them are three views of one naming convention, and until this guard the link between them
+     * was only checked at two of its three joins: a rule's {@code file:} value was asserted
+     * nowhere. A single producer per name is what makes that link hold, so this is the assertion
+     * that would notice it being taken apart again — an app whose {@code file:} names a SQL file
+     * that was never written lints red at the first request.
+     */
+    @Test
+    void everyRuleFileAndUseNamesSomethingTheScaffolderActuallyEmitted() {
+        TableSchema table = new TableSchema("order_lines", List.of(
+                new TableSchema.Column("id", Types.BIGINT, "bigint", 0, 0, false, true, false),
+                column("product_id", Types.BIGINT, false, false),
+                column("sku", Types.VARCHAR, false, false),
+                new TableSchema.Column("qty", Types.INTEGER, "int", 0, 0, false, false, false)),
+                List.of("id"), Map.of("uq_order_lines_sku", "sku"),
+                List.of(new TableSchema.ForeignKey("product_id", "products", "id")));
+        List<ScaffoldedFile> files = scaffolder.scaffold(table);
+
+        Set<String> emitted = files.stream().map(ScaffoldedFile::path)
+                .collect(java.util.stream.Collectors.toSet());
+        String rules = content(files, "rules/order_lines.yml");
+
+        // Both arms are exercised: a unique index and a foreign key derive their names by
+        // different suffixes through the same two producers.
+        assertThat(declared(rules)).containsExactlyInAnyOrder(
+                "order_lines_sku_is_free", "order_lines_product_id_exists");
+
+        for (String file : referencedFiles(rules)) {
+            assertThat(emitted).as("rules/order_lines.yml names file: %s", file)
+                    .contains("rules/" + file);
+        }
+        for (String path : List.of("web/order_lines/create/post.yml",
+                "web/order_lines/{id}/update/post.yml")) {
+            RouteDefinition route = parser.parseRoute(content(files, path), "post.yml");
+            for (var rule : route.validate().values()) {
+                if (rule.use() != null) {
+                    assertThat(declared(rules)).as("%s uses rule %s", path, rule.use())
+                            .contains(rule.use());
+                }
+            }
+        }
+    }
+
+    /** The rule ids {@code rules/<table>.yml} declares: the two-space keys under {@code rules:}. */
+    private static List<String> declared(String rulesYml) {
+        return rulesYml.lines().filter(line -> line.matches("  [A-Za-z0-9_]+:"))
+                .map(line -> line.strip().replace(":", "")).toList();
+    }
+
+    /** The {@code file:} values that document references. */
+    private static List<String> referencedFiles(String rulesYml) {
+        return rulesYml.lines().filter(line -> line.strip().startsWith("file: "))
+                .map(line -> line.strip().substring("file: ".length())).toList();
     }
 
     @Test
