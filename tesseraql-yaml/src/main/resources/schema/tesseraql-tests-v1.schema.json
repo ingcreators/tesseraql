@@ -109,9 +109,25 @@
             "items": {
               "type": "object",
               "properties": {
-                "sql": { "type": "object", "additionalProperties": true },
-                "params": { "type": "object", "additionalProperties": true },
-                "expect": { "type": "object", "additionalProperties": true }
+                "sql": {
+                  "type": "object",
+                  "properties": {
+                    "file": { "type": "string", "description": "The 2-way SQL file under the app home this read-back executes." }
+                  },
+                  "additionalProperties": true,
+                  "description": "The read-back statement, written as the case's own `sql:` target is."
+                },
+                "params": { "type": "object", "additionalProperties": true, "description": "Bind values for the read-back statement." },
+                "expect": {
+                  "type": "object",
+                  "properties": {
+                    "rowCount": { "type": "integer" },
+                    "updateCount": { "type": "integer" },
+                    "rows": { "type": "array", "items": { "type": "object", "additionalProperties": true } }
+                  },
+                  "additionalProperties": true,
+                  "description": "Data-independent expectations over the read-back's result."
+                }
               },
               "additionalProperties": true
             }

@@ -546,6 +546,61 @@ class SchemaSyncTest {
     }
 
     /**
+     * The config schema describes every key the scaffolder writes.
+     *
+     * <p>Its own root {@code $comment} makes the promise this checks — "descriptions and the keys
+     * below mirror the scaffolded config and its consumers (ScaffoldedConfigKeys)" — and it was
+     * not kept: {@code tesseraql.identity} was a bare open object with no description and no
+     * properties while the skeleton writes three keys under it, the datasource entry omitted the
+     * {@code maximumPoolSize} the skeleton sets, and {@code tesseraql.security.jwt.audience} — a
+     * key {@code JwtConfigRules} makes a lint <em>error</em> to omit — was named nowhere. Every
+     * one is a key an author must write into a file the editor offers no completion for.
+     *
+     * <p>Scoped to the {@code tesseraql.} namespace on purpose, and the assertion message says
+     * so: the schema's root declares that one namespace, so {@code server.port} and the
+     * {@code db.main.*} placeholders the template rewrites are outside what this file claims to
+     * describe. Widening it there is a separate decision, not a silent side effect of this one.
+     */
+    @Test
+    void theConfigSchemaDescribesEveryScaffoldedKey() throws Exception {
+        JsonNode config = new ObjectMapper().readTree(
+                getClass().getResourceAsStream("/schema/tesseraql-config-v1.schema.json"));
+        List<String> scaffolded = io.tesseraql.yaml.scaffold.ScaffoldedConfigKeys.CONSUMERS
+                .keySet().stream().filter(key -> key.startsWith("tesseraql.")).sorted().toList();
+
+        // Non-vacuity first: an empty registry, or one that stopped using this prefix, would
+        // satisfy every assertion below by having nothing to check.
+        assertThat(scaffolded).as("the scaffolded-key registry still carries tesseraql.* keys")
+                .hasSizeGreaterThan(10);
+
+        List<String> undescribed = scaffolded.stream()
+                .filter(key -> !describes(config, key.split("\\."), 0)).toList();
+        assertThat(undescribed)
+                .as("every tesseraql.* key the skeleton writes is described by the config schema"
+                        + " — the schema's own $comment promises it mirrors ScaffoldedConfigKeys")
+                .isEmpty();
+    }
+
+    /**
+     * Whether the schema <em>describes</em> a dotted key, rather than merely tolerating it.
+     *
+     * <p>{@code additionalProperties: true} is not a description: the whole file is deliberately
+     * open (its {@code $comment} says so), so a containment check against it would pass on every
+     * key ever written and this guard would be green by construction.
+     */
+    private static boolean describes(JsonNode node, String[] segments, int at) {
+        if (at == segments.length) {
+            return true;
+        }
+        JsonNode declared = node.path("properties").path(segments[at]);
+        if (!declared.isMissingNode()) {
+            return describes(declared, segments, at + 1);
+        }
+        JsonNode values = node.path("additionalProperties");
+        return values.isObject() && !values.isEmpty() && describes(values, segments, at + 1);
+    }
+
+    /**
      * A view document's nested shapes are described, and {@code children:} is a list.
      *
      * <p>The view schema is the one whose own root {@code $comment} claims strictness — "a view
