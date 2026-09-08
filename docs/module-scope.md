@@ -20,12 +20,19 @@ in the gap between removing the shim and adding the pool binding), and the share
 bind-contract check (`ValidationRuleSets`) turning out to silently no-op on custom functions —
 threaded rather than left as the flagged gap.
 
+**Note 2026-09-08.** The "what exists today" section below describes the shape this document
+replaced, and is kept as the measurement it was. One remnant of it outlived the campaign:
+`installAppExtensions` kept a `List<Path>` overload — the stack-spanning union loader — carrying
+a javadoc that called itself "interim until decision 28 wires modules per runtime", years after
+decision 28 had rejected exactly that loader. It never had a caller outside its own single-app
+sibling. It is now collapsed into that sibling, so the union form no longer exists to be reached
+for (docs/module-boundary-guards.md).
+
 ## What exists today, measured
 
 **The wiring is three lines, and every line is process-global.** `CliModules.installAppExtensions`
-(`tesseraql-cli`, `CliModules.java:68-87`) resolves each listed application's `tesseraql.modules`
-into its `work/modules` cache, builds one `URLClassLoader` over *all* the caches plus the
-`--modules` directory, and then:
+(`tesseraql-cli`) resolves each listed application's `tesseraql.modules` into its `work/modules`
+cache, builds one `URLClassLoader` over *all* the caches plus the `--modules` directory, and then:
 
 ```java
 Thread.currentThread().setContextClassLoader(loader);
