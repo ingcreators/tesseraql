@@ -70,6 +70,13 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **The BOM manages every module a consumer can depend on.** `tesseraql-scim`, `-saml`, `-oidc`,
+  `-oauth` and `-ops-ui` were absent from it, so an integrator pinning one directly got
+  "dependencies.dependency.version is missing" against a document `docs/release.md` promises will
+  resolve any of them. The coverage had decayed silently as modules were added — one campaign
+  promoted three of them without touching the BOM — and `PublishedModuleLedgerTest` now holds both
+  that roster and the README module map, which had drifted eight modules behind.
+
 - **A CLI-run job honours the configured row cap.** `tesseraql job run` and `job rerun` — and so
   `tesseraql-host job run`, since `job` is on the deployment roster — built their executor without
   passing the result bounds, so `tesseraql.resultMaterialization.maxRows` and `.onOverflow` were
