@@ -496,19 +496,48 @@ public final class InputBinder {
         }
     }
 
+    /**
+     * What a formatless {@code type: datetime} field accepts, beside the column default.
+     *
+     * <p>{@code ViewFields} renders a datetime field as {@code <input type="datetime-local">},
+     * whose browsers submit {@code 2026-01-01T09:30} — while {@code ColumnValues}' column default
+     * is {@code yyyy-MM-dd HH:mm:ss}, the shape a CSV carries. A field with no {@code format:}
+     * therefore could not round-trip through the widget the framework picks for it, and the
+     * scaffolder only avoided it by always emitting an explicit {@code format:} of its own.
+     *
+     * <p>Tried after the column default rather than instead of it: a caller already posting the
+     * space-separated form keeps working, and this is purely an addition.
+     */
+    private static final String WIDGET_DATETIME = "yyyy-MM-dd'T'HH:mm[:ss]";
+
     /** Locale-aware parsing through the file-transfer column machinery (mirrors import-side). */
     private static Object parseFormatted(String name, InputField field, String type, String raw,
             Locale locale) {
         try {
             return ColumnValues.parse(
                     new ColumnMapping(name, null, null, type, field.format()), raw, locale);
-        } catch (IllegalArgumentException ex) {
-            Map<String, Object> params = field.format() == null
-                    ? Map.of()
-                    : Map.of("format", field.format());
-            throw reject(name, type, params,
-                    "Input '" + name + "' is not a valid " + type + ": " + raw);
+        } catch (IllegalArgumentException notTheColumnDefault) {
+            if (field.format() == null && "datetime".equals(type)) {
+                try {
+                    return ColumnValues.parse(
+                            new ColumnMapping(name, null, null, type, WIDGET_DATETIME), raw,
+                            locale);
+                } catch (IllegalArgumentException notTheWidgetFormEither) {
+                    throw invalidValue(name, field, type, raw);
+                }
+            }
+            throw invalidValue(name, field, type, raw);
         }
+    }
+
+    /** The rejection a badly-formatted value earns, naming the declared format when there is one. */
+    private static TqlException invalidValue(String name, InputField field, String type,
+            String raw) {
+        Map<String, Object> params = field.format() == null
+                ? Map.of()
+                : Map.of("format", field.format());
+        return reject(name, type, params,
+                "Input '" + name + "' is not a valid " + type + ": " + raw);
     }
 
     /** The conditional-required rejection ({@code requiredWhen}, roadmap Phase 40). */
