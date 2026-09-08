@@ -39,6 +39,24 @@ final class ErrorIndex {
     private static final Pattern STRING_CONSTANT = Pattern.compile(
             "static\\s+final\\s+String\\s+([A-Za-z_][A-Za-z0-9_]*)\\s*=\\s*\"(TQL-[A-Z]+-\\d+)\"");
 
+    /**
+     * A code held in a {@code TqlErrorCode} constant — the compiler and runtime idiom, and the
+     * other half of the same problem {@link #STRING_CONSTANT} solves.
+     *
+     * <p>Only the {@code String} form was resolved, so every {@code throw new TqlException(NAME,
+     * "…")} that named a {@code TqlErrorCode} was invisible: the constructor call in the
+     * declaration was the sole site the index ever saw, and the code published whatever meaning
+     * that one line offered. Measured over the 1021 main sources, that silenced the raise sites of
+     * <strong>96 codes across 366 throws</strong> — {@code TQL-LD-2810} is raised at twenty, and
+     * {@code TQL-ROUTE-3100}'s eight distinct refusals all published as "unknown recipe".
+     */
+    private static final Pattern CODE_CONSTANT = Pattern.compile(
+            "static\\s+final\\s+TqlErrorCode\\s+([A-Za-z_][A-Za-z0-9_]*)\\s*=\\s*"
+                    + "new\\s+TqlErrorCode\\(\\s*TqlDomain\\.([A-Z]+)\\s*,\\s*(\\d+)\\s*\\)");
+
+    /** The declaring types a constant's own declaration can carry, so a use is not confused. */
+    private static final List<String> CONSTANT_TYPES = List.of("String", "TqlErrorCode");
+
     /** A screaming-snake identifier: the only shape a resolved code constant reference has. */
     private static final Pattern REFERENCE = Pattern.compile("\\b[A-Z][A-Z0-9_]*\\b");
 
@@ -92,7 +110,7 @@ final class ErrorIndex {
     static Map<String, Map<Integer, Code>> scan(Path repoRoot) throws IOException {
         Map<String, Map<Integer, Code>> byDomain = new TreeMap<>();
         List<Path> trees = sourceTrees(repoRoot);
-        Map<String, CodeConstant> constants = codeConstants(repoRoot, trees);
+        Map<String, List<CodeConstant>> constants = codeConstants(repoRoot, trees);
         for (Path tree : trees) {
             try (Stream<Path> files = Files.walk(tree)) {
                 for (Path file : files.filter(p -> p.toString().endsWith(".java")).toList()) {
@@ -113,33 +131,49 @@ final class ErrorIndex {
     }
 
     /**
-     * Every {@code static final String NAME = "TQL-…"} in the scanned trees, by name. A name
-     * that two files give different codes is dropped rather than guessed at — an ambiguous
-     * reference would attribute one rule's message to another rule's number.
+     * Every code constant in the scanned trees, by name — <em>all</em> the constants a name has.
+     *
+     * <p>A name is not unique: {@code UNKNOWN_KEY} is {@code TQL-YAML-1043} in
+     * {@code UnknownKeyRules} and {@code TQL-VIEW-3314} in {@code ViewSpec}, and
+     * {@code INVALID_LOOKUP} names two more. Keeping one entry per name meant dropping such a
+     * name as ambiguous and losing <em>both</em> codes' raise sites — which is exactly what
+     * happened to those two the moment the second idiom was read. {@link #refersTo} is the real
+     * disambiguator: a reference counts only inside its declaring file or written
+     * {@code Owner.NAME}, so the candidates are kept and each site picks its own.
      */
-    private static Map<String, CodeConstant> codeConstants(Path repoRoot, List<Path> trees)
+    private static Map<String, List<CodeConstant>> codeConstants(Path repoRoot, List<Path> trees)
             throws IOException {
-        Map<String, CodeConstant> byName = new TreeMap<>();
-        Set<String> ambiguous = new TreeSet<>();
+        Map<String, List<CodeConstant>> byName = new TreeMap<>();
         for (Path tree : trees) {
             try (Stream<Path> files = Files.walk(tree)) {
                 for (Path file : files.filter(p -> p.toString().endsWith(".java")).toList()) {
                     String rel = repoRoot.relativize(file).toString().replace('\\', '/');
                     String name = file.getFileName().toString();
                     String owner = name.substring(0, name.length() - ".java".length());
-                    Matcher declaration = STRING_CONSTANT.matcher(Files.readString(file));
+                    String source = Files.readString(file);
+                    Matcher declaration = STRING_CONSTANT.matcher(source);
                     while (declaration.find()) {
-                        CodeConstant previous = byName.put(declaration.group(1),
+                        declare(byName, declaration.group(1),
                                 new CodeConstant(declaration.group(2), rel, owner));
-                        if (previous != null && !previous.code().equals(declaration.group(2))) {
-                            ambiguous.add(declaration.group(1));
-                        }
+                    }
+                    // The TqlErrorCode form spells the domain and number separately; the index
+                    // keys on the rendered code, so both idioms resolve through one map.
+                    Matcher constructed = CODE_CONSTANT.matcher(source);
+                    while (constructed.find()) {
+                        declare(byName, constructed.group(1),
+                                new CodeConstant("TQL-" + constructed.group(2) + "-"
+                                        + constructed.group(3), rel, owner));
                     }
                 }
             }
         }
-        ambiguous.forEach(byName::remove);
         return byName;
+    }
+
+    /** Records one constant among the candidates its name may resolve to. */
+    private static void declare(Map<String, List<CodeConstant>> byName, String name,
+            CodeConstant constant) {
+        byName.computeIfAbsent(name, key -> new ArrayList<>()).add(constant);
     }
 
     /**
@@ -152,18 +186,25 @@ final class ErrorIndex {
      * honestly meaningless.
      */
     private static void collectReferences(Map<String, Map<Integer, Code>> byDomain,
-            Map<String, CodeConstant> constants, String rel, String source, Lexed lexed) {
+            Map<String, List<CodeConstant>> constants, String rel, String source, Lexed lexed) {
         if (constants.isEmpty()) {
             return;
         }
         Matcher reference = REFERENCE.matcher(source);
         while (reference.find()) {
-            CodeConstant constant = constants.get(reference.group());
             int start = reference.start();
             int end = reference.end();
-            if (constant == null || lexed.insideComment(start, end)
-                    || lexed.insideLiteral(start, end) || isDeclaredAt(source, start)
-                    || !refersTo(source, start, rel, constant)) {
+            if (lexed.insideComment(start, end) || lexed.insideLiteral(start, end)
+                    || isDeclaredAt(source, start)) {
+                continue;
+            }
+            // The name may belong to several constants; the site resolves to the one it can
+            // actually see. Two candidates cannot both match: one requires this file, the other
+            // a qualifier naming a different owner.
+            CodeConstant constant = constants.getOrDefault(reference.group(), List.of()).stream()
+                    .filter(candidate -> refersTo(source, start, rel, candidate))
+                    .findFirst().orElse(null);
+            if (constant == null) {
                 continue;
             }
             Matcher parsed = LITERAL.matcher(constant.code());
@@ -188,15 +229,26 @@ final class ErrorIndex {
                 && source.startsWith(qualifier, start - qualifier.length());
     }
 
-    /** Whether the identifier at {@code start} is the name being declared, not a use of it. */
+    /**
+     * Whether the identifier at {@code start} is the name being declared, not a use of it.
+     *
+     * <p>Both declaring types, because both idioms are resolved now. Missing the second would
+     * count each {@code TqlErrorCode} declaration as a raise site and publish the declaration
+     * line's own text as one of the code's meanings.
+     */
     private static boolean isDeclaredAt(String source, int start) {
         int i = start - 1;
         while (i >= 0 && Character.isWhitespace(source.charAt(i))) {
             i--;
         }
-        int from = i - "String".length() + 1;
-        return from > 0 && source.startsWith("String", from)
-                && !Character.isJavaIdentifierPart(source.charAt(from - 1));
+        for (String type : CONSTANT_TYPES) {
+            int from = i - type.length() + 1;
+            if (from > 0 && source.startsWith(type, from)
+                    && !Character.isJavaIdentifierPart(source.charAt(from - 1))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
