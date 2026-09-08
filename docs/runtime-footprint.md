@@ -293,15 +293,31 @@ platforms by construction.
 
 `no-workshop-on-the-runtime` (the runtime module's rule from the Studio extraction) generalizes
 into a pattern: **each module that owns a classpath boundary carries a `bannedDependencies`
-enforcer rule naming what must never cross it, at compile and runtime scope, transitively, with
-test scope free.** A guard lives in the module whose invariant it protects, fails the module's
-own `verify`, and names the design document that explains it.
+enforcer rule naming what must never cross it.** A guard lives in the module whose invariant it
+protects, fails the module's own `verify`, and names the design document that explains it.
 
-| Module | Rule | Bans (compile/runtime, transitive) |
+The pattern has two shapes, and which one a module takes follows from what its boundary says:
+
+- A **deny-list** names coordinates that must not arrive through anyone's closure, at compile and
+  runtime scope, `searchTransitive=true`, with test scope free. The module still declares freely;
+  only the named coordinates are refused, and they must be refused however deep they arrive.
+- An **allow-list** names everything the module may declare, `searchTransitive=false`. The walk is
+  omitted deliberately rather than by oversight: when everything is excluded and only a short list
+  is allowed, every transitive node descends from a direct declaration, and a direct declaration
+  outside the allow-list is already refused at depth 1. The element is load-bearing —
+  `BannedDependenciesBase` defaults it to true, so deleting the line turns the walk on silently.
+
+| Module | Rule | Shape and what it refuses |
 | --- | --- | --- |
-| `tesseraql-runtime` | `no-workshop-on-the-runtime` (exists) | studio, studio-runtime, test-core, greenmail, junit |
-| `tesseraql-cli` | `no-bundled-database-binaries` (new) | `io.zonky.test.postgres:*` — the supervisor stays, binaries resolve on demand; the declared test-scope linux-amd64 is untouched |
-| `tesseraql-host` | `no-workshop-in-the-deployment` (new) | studio, studio-runtime, test-core, greenmail, junit, `io.zonky.test:*`, `io.zonky.test.postgres:*`, `org.jboss.shrinkwrap.resolver:*`, report, coverage-core — plus tripwire artifacts from the resolver closure (`org.apache.maven.resolver:maven-resolver-api`, `com.google.inject:guice`) so the stack cannot return under a different root |
+| `tesseraql-runtime` | `no-workshop-on-the-runtime` (exists) | deny-list: studio, studio-runtime, test-core, greenmail, junit |
+| `tesseraql-cli` | `no-bundled-database-binaries` (new) | deny-list: `io.zonky.test.postgres:*` — the supervisor stays, binaries resolve on demand; the declared test-scope linux-amd64 is untouched |
+| `tesseraql-host` | `no-workshop-in-the-deployment` (new) | deny-list: studio, studio-runtime, test-core, greenmail, junit, `io.zonky.test:*`, `io.zonky.test.postgres:*`, `org.jboss.shrinkwrap.resolver:*`, report, coverage-core — plus tripwire artifacts from the resolver closure (`org.apache.maven.resolver:maven-resolver-api`, `com.google.inject:guice`) so the stack cannot return under a different root |
+| `tesseraql-core` | `core-is-dependency-free` (new) | allow-list: every declared dependency except test scope, direct declarations only. No `io.tesseraql:*` exception — core's contract is no dependency at all, not merely no third-party one (docs/module-boundary-guards.md decision 6) |
+
+The four rules the module-channel campaign added — `weightless-on-the-runtime` on `tesseraql-oidc`,
+`-saml` and `-scim`, and `no-unused-http-clients` on `tesseraql-s3` — are registered in
+[module channel](module-channel.md)'s own Guards table rather than repeated here. The first three
+are allow-lists; between the two tables every enforcer rule in the tree is recorded.
 
 Why enforcer rules and not a test: the rule runs inside the module's own build on every `verify`,
 needs no fixture to keep in sync with the pom, and its failure message names the banned

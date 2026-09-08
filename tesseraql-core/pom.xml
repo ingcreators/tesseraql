@@ -38,6 +38,52 @@
         <filtering>true</filtering>
       </resource>
     </resources>
+    <plugins>
+      <!-- The boundary this repository names first: tesseraql-core carries no dependencies at
+           all (AGENTS.md rules 2 and 3, docs/roadmap.md invariant 5, the "(dependency-free)"
+           claim on the core row of README.md's Modules table, docs/runtime-footprint.md
+           decision 5). Three classes in this module are written the way they are only because
+           of it: JsonLimits holds plain constants "because this module carries no Jackson",
+           RowContract deliberately has no isEmpty() because core cannot annotate a bare getter
+           away, and ExpressionParser is hand-written "to keep tesseraql-core dependency-free".
+           Until now that boundary was enforced by review alone, so a convenience dependency
+           would have passed every CI job.
+
+           An allow-list, not a deny-list: core's contract is no dependency at all, not merely
+           no third-party one, so unlike the oidc/saml/scim rules there is no io.tesseraql:*
+           include. searchTransitive is false deliberately and is load-bearing rather than
+           drift — with <exclude>*</exclude> every transitive node descends from a direct
+           declaration, and a direct declaration outside test scope is already refused at
+           depth 1, so the walk adds no detection power and only a false-positive surface.
+           BannedDependenciesBase defaults the field to true, so deleting the line turns the
+           walk on silently. Widening this rule means editing this comment: that is the
+           explanation AGENTS.md rule 3 asks for. -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-enforcer-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>core-is-dependency-free</id>
+            <goals>
+              <goal>enforce</goal>
+            </goals>
+            <configuration>
+              <rules>
+                <bannedDependencies>
+                  <excludes>
+                    <exclude>*</exclude>
+                  </excludes>
+                  <includes>
+                    <include>*:*:*:*:test</include>
+                  </includes>
+                  <searchTransitive>false</searchTransitive>
+                </bannedDependencies>
+              </rules>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
   </build>
 
 </project>
