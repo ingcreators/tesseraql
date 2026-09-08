@@ -4,8 +4,11 @@ import io.vertx.core.Future;
 import io.vertx.core.Handler;
 import io.vertx.core.Vertx;
 import io.vertx.core.buffer.Buffer;
+import io.vertx.core.http.HttpClientRequest;
 import io.vertx.core.http.HttpClientResponse;
+import io.vertx.core.http.HttpConnection;
 import io.vertx.core.http.HttpServerRequest;
+import io.vertx.core.http.HttpVersion;
 import io.vertx.core.streams.ReadStream;
 import io.vertx.httpproxy.Body;
 import io.vertx.httpproxy.ProxyContext;
@@ -91,16 +94,39 @@ final class EarlyResponseDrain implements ProxyInterceptor {
 
     /**
      * Releases the origin leg once the early answer is relayed: the member is owed the rest of a
-     * body that will never be forwarded, and a reset turns its own polite drain into a closed
-     * stream its handlers see immediately. Deferred until after the relay on purpose — a reset
-     * closes the connection, and closing it with the answer's bytes still unread is the TCP
-     * reset that destroys the very response this class exists to deliver.
+     * body that will never be forwarded, and it must be told so rather than left waiting.
+     *
+     * <p>Deferred until after the relay on purpose — the release ends the exchange, and ending it
+     * with the answer's bytes still unread destroys the very response this class exists to
+     * deliver.
+     *
+     * <p><b>On HTTP/1.1 the close is ours to make.</b> The protocol has no reset frame, so closing
+     * the connection is the only signal there is. Vert.x used to do it as a side effect —
+     * resetting an already-received stream closed the connection — and this class relied on that
+     * until 5.1.7 fixed it as a bug (eclipse-vertx/vert.x#6298). Relying on it was always
+     * borrowing: the behaviour was never promised, and it is gone. So the close is explicit here,
+     * which is also what recycles the pool slot, since the client frees a lease from the stream's
+     * close handler and a reset alone no longer reaches it.
+     *
+     * <p><b>And only on HTTP/1.1.</b> An h2c hop multiplexes every concurrent forward to a member
+     * onto one connection ({@code setHttp2MultiplexingLimit}, StackRelay), where the reset is a
+     * per-stream RST_FRAME and closing would abort the unrelated forwards riding beside it. The
+     * version is read from the exchange rather than from the client's options, because a member
+     * that declined the h2c upgrade genuinely answers over HTTP/1.1 and genuinely needs the close.
      */
     private static void resetOrigin(ProxyContext context) {
         ProxyResponse response = context.response();
         HttpClientResponse origin = response == null ? null : response.proxiedResponse();
-        if (origin != null) {
-            origin.request().reset();
+        if (origin == null) {
+            return;
+        }
+        HttpClientRequest request = origin.request();
+        // Captured before the reset: the request may not answer for its connection afterwards.
+        HttpConnection connection = request.connection();
+        boolean http11 = request.version() != HttpVersion.HTTP_2;
+        request.reset();
+        if (http11 && connection != null) {
+            connection.close();
         }
     }
 

@@ -604,6 +604,44 @@ class StackRelayTest {
     }
 
     /**
+     * On h2c an early answer releases its own stream and leaves the others alone.
+     *
+     * <p>The companion to {@link #anEarlyAnswerMidUploadArrivesAndTheDoorDrainsTheRest}, and the
+     * reason that one's release is version-guarded. HTTP/1.1 has no reset frame, so the drain
+     * closes the connection to signal the member — but an h2c hop multiplexes every concurrent
+     * forward to that member onto one connection, where closing would abort the forwards riding
+     * beside the refused one. Here the refusal happens while a second forward is in flight, and
+     * the second forward has to complete.
+     */
+    @Test
+    void anEarlyAnswerOnH2cDoesNotAbortTheForwardsBesideIt() throws Exception {
+        originLegReleased = new java.util.concurrent.CountDownLatch(1);
+        byte[] upload = new byte[8 * 1024 * 1024];
+
+        // A slow neighbour riding the same multiplexed connection to the same member.
+        java.util.concurrent.CompletableFuture<HttpResponse<String>> neighbour = java.util.concurrent.CompletableFuture
+                .supplyAsync(() -> {
+                    try {
+                        return sendOver(Version.HTTP_2,
+                                HttpRequest.newBuilder(URI.create(h2Base + "/slow")));
+                    } catch (Exception failed) {
+                        throw new java.util.concurrent.CompletionException(failed);
+                    }
+                });
+
+        HttpResponse<String> refused = sendOver(Version.HTTP_2,
+                HttpRequest.newBuilder(URI.create(h2Base + "/refuse-upload"))
+                        .POST(HttpRequest.BodyPublishers.ofByteArray(upload)));
+        assertThat(refused.statusCode()).as("the early answer still crosses on h2c")
+                .isEqualTo(413);
+
+        assertThat(neighbour.get(30, TimeUnit.SECONDS).statusCode())
+                .as("a forward multiplexed beside the refused one must not be aborted with it —"
+                        + " on h2c the release is a stream reset, never a connection close")
+                .isEqualTo(200);
+    }
+
+    /**
      * An application that does not speak h2c stays reachable through an h2c front.
      *
      * <p>This is the claim the outbound options make and it has to be checked, because the

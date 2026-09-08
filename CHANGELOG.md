@@ -70,6 +70,16 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **The gateway releases a member's request leg itself, rather than relying on Vert.x to do it.**
+  When a hosted application answers early — a 413 at the headers while the caller is still
+  uploading — the relay drains the rest at the front door and then releases the member's leg. That
+  release was `reset()`, which worked only because Vert.x closed the connection as a side effect;
+  HTTP/1.1 has no reset frame, so the close was the only signal there was. Vert.x 5.1.7 removed
+  that side effect as a bug, which left the member waiting for a body that would never arrive and
+  pinned the gateway's outbound pool slot until the member's own timeout. The close is explicit
+  now, and only on HTTP/1.1: an h2c hop multiplexes every concurrent forward to a member onto one
+  connection, where closing would abort the forwards riding beside the refused one.
+
 - **An S3 upload whose flush fails no longer leaves its spool on disk.** The writer buffers to a
   temp file and deletes it in a `finally`, but the stream close sat outside that `try` — and the
   close is the flush, the one call most likely to fail on a full or failing disk, which is exactly
