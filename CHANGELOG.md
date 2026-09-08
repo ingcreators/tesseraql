@@ -70,6 +70,15 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A page that answers two methods survives a hot reload.** A snapshot-paginated list mounts GET
+  and POST on one pipeline id — the pager re-posts its membership tokens to the same URL — but the
+  HTTP edge keyed its router bookkeeping by that pipeline id alone. The two mounts then reconciled
+  against each other on every reload, each one deciding the route had moved and taking the
+  sibling's router route off on its way past. Adding `strategy: snapshot` to a page already being
+  served left it answering POST only, so the browser reading it got a 404 from the next save; and a
+  page that moved left its GET stranded at the URL it moved away from. The edge now keys by method
+  and pipeline, the way `HttpMounts` has since the pager shipped.
+
 - **A settled transaction is no longer re-reported as a failure by the cleanup after it.** Four
   hand-rolled transaction brackets restored autocommit with a bare `setAutoCommit` in a `finally`,
   and a `finally` that throws discards the enclosing `return`. So a connection dying between the
