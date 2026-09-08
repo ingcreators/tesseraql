@@ -70,6 +70,15 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **The configuration reference lists the keys that point the framework at a non-AWS S3 store.**
+  Six of them — the endpoint, region, path style, checksum mode and both credentials — were
+  invisible to the index, so an operator configuring MinIO or Ceph read a page showing two keys of
+  the namespace's eight. They are read by joining a compile-time constant to a suffix, and the scan
+  looks for literals, so nothing found them. The page and its ledger justified the absence with an
+  exemption written for a different case (a key a lookup composes at request time); that wording is
+  corrected, and now says plainly that a fixed key is never exempt however its reading code chooses
+  to spell it. The index moves from 262 keys to 268.
+
 - **A route that moves is served at its new URL.** A route's URL comes from where its directory
   sits, but the per-route fingerprint hashed only file names and bytes — so renaming a route
   directory with its contents untouched produced an identical fingerprint. The route was judged

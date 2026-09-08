@@ -95,9 +95,12 @@ final class ConfigReference {
                         + "— that is the point of an index.\n\n")
                 .append("Deliberately not here, because none of them is a key an application "
                         + "declares: JVM system properties, the Maven plugin's own goal "
-                        + "parameters, metric and span names, keys a lookup composes from a "
-                        + "prefix at request time, and the stack-level keys read from "
-                        + "`tesseraql-stack.yml`.\n\n")
+                        + "parameters, metric and span names, keys whose last segment is a name "
+                        + "the operator chose (a bucket alias, a datasource name) so no literal "
+                        + "exists to find, and the stack-level keys read from "
+                        + "`tesseraql-stack.yml`. A fixed key is never exempt: one spelled by "
+                        + "joining a constant to a suffix is a key an operator cannot find here, "
+                        + "which is a defect in the reading code, not a limit of the scan.\n\n")
                 .append("Keys are declared in `config/application.yml` and `config/tesseraql.yml`, "
                         + "overridden per environment by `config/env/<profile>.yml`, and readable "
                         + "in Studio's Config screen. Nesting in YAML and the dotted form here are "
