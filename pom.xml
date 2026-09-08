@@ -183,20 +183,20 @@
     <pmd.version>7.27.0</pmd.version>
 
     <!-- Build plugin versions -->
-    <maven.compiler.plugin.version>3.15.0</maven.compiler.plugin.version>
+    <maven.compiler.plugin.version>3.16.0</maven.compiler.plugin.version>
     <maven.enforcer.plugin.version>3.6.3</maven.enforcer.plugin.version>
-    <maven.surefire.plugin.version>3.5.6</maven.surefire.plugin.version>
-    <maven.failsafe.plugin.version>3.5.6</maven.failsafe.plugin.version>
+    <maven.surefire.plugin.version>3.6.0</maven.surefire.plugin.version>
+    <maven.failsafe.plugin.version>3.6.0</maven.failsafe.plugin.version>
     <!--
       The archiver that has to honour project.build.outputTimestamp. Until now it was whichever
       version the running Maven's default lifecycle bindings supplied, so the one plugin the
       reproducibility claim depends on was the one plugin the build did not choose
       (docs/deterministic-output.md decision 6).
     -->
-    <maven.jar.plugin.version>3.5.0</maven.jar.plugin.version>
+    <maven.jar.plugin.version>3.5.1</maven.jar.plugin.version>
     <maven.help.plugin.version>3.5.2</maven.help.plugin.version>
-    <maven.dependency.plugin.version>3.7.0</maven.dependency.plugin.version>
-    <maven.resources.plugin.version>3.4.0</maven.resources.plugin.version>
+    <maven.dependency.plugin.version>3.11.0</maven.dependency.plugin.version>
+    <maven.resources.plugin.version>3.5.0</maven.resources.plugin.version>
   </properties>
 
   <dependencyManagement>
