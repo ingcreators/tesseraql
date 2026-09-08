@@ -314,4 +314,7 @@ export const EXCLUDED = [
   // Four descriptions of one YAML surface, and the schema nodes that describe nothing,
   // designed 2026-09-07 after the plan's model-to-schema walk proved non-terminating.
   'yaml-surface-drift.md',
+  // What the framework asserts about itself — its module rosters, its published verbs, its
+  // governed heads — and the guards that hold each claim, designed 2026-09-08.
+  'module-boundary-guards.md',
 ];
