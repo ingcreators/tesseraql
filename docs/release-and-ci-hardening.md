@@ -141,8 +141,8 @@ fully qualified. A constant pool has no such blind spot, and this repository alr
 classes for exactly this reason (`ModelFieldConsumerScan`, docs/yaml-surface-consumers.md).
 
 **In `tesseraql-maven-plugin`, not `tesseraql-docs-reference`.** A bytecode scan needs every
-sibling's `target/classes`. `tesseraql-docs-reference` builds 27th of 30 — ahead of `tesseraql-host`,
-which is one of the two images. `tesseraql-maven-plugin` builds 30th, which is why
+sibling's `target/classes`. `tesseraql-maven-plugin` builds 30th of 30, last in the reactor, which
+is why
 `YamlSurfaceConsumerGuardTest` already lives there. Its reactor walk lists direct `tesseraql-*`
 children rather than walking from `..`, so it also cannot read the six worktrees under `.claude/`,
 where a naive walk finds 6110 main sources instead of 1021.

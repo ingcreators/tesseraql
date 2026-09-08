@@ -8,6 +8,13 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **The CLI reference names the deployment host's verbs.** The page promised a roster generated
+  from the command model "so it cannot describe a flag that does not exist", and delivered that for
+  the developer CLI only — while the binary an operator actually runs, `tesseraql-host`, answers a
+  different and smaller set. A new deployment-roster section is generated from `TesseraqlHostCli`'s
+  own command model and links each verb to its existing section, so the two rosters cannot drift
+  apart. `docs/hosting.md` now links it instead of carrying a hand-typed copy.
+
 - **A `params:` key that is not a bind name is a build error (`TQL-SQL-2120`).**
   `params: { order-id: query.order-id }` with the matching `/* order-id */` bind linted clean and
   ran forever with a null bind: the directive expression grammar reads `order-id` as the

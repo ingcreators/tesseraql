@@ -424,10 +424,10 @@ already labels job runs by application.
 
 A Windows deployment does not use the container image. It runs the **`tesseraql-host`
 distribution** — `tesseraql-host-<version>-windows-x86_64.zip` on each release — which carries
-the host and the operator commands (`host`, `deploy`, `migrate`, `identity-schema`, `job`,
-`token`, `verify`, `admission`, `routes`, `duckdb`) with a bundled Java runtime, and none of the
-development tooling: no `dev`, no Studio, no embedded database. Development on Windows uses the
-developer CLI (`scoop install tesseraql`); a server runs this artifact.
+the host and the [operator commands](reference-cli.md#the-deployment-roster) with a bundled Java
+runtime, and none of the development tooling: no `dev`, no Studio, no embedded database.
+Development on Windows uses the developer CLI (`scoop install tesseraql`); a server runs this
+artifact.
 
 Install and supervise it as a Windows service:
 

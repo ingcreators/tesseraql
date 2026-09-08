@@ -184,6 +184,11 @@ lives inside the host set* (the enforcer arbitrates disagreements at build time)
 | --- | --- |
 | `host`, `deploy`, `migrate`, `identity-schema`, `job`, `token`, `verify`, `admission`, `routes`, `duckdb` (the documented operator step: `install-extensions`) | `dev`, `new`, `scaffold`, `lint`, `test`, `coverage`, `generate`, `schema`, `symbols`, `release-diff`, `governance`, `package`, `modules`, `embedded-db`, `mcp` |
 
+This table is the decision record, and stays: the in-host / developer-only contrast *is* the
+decision. What an operator reads is now generated instead — `docs/reference-cli.md` renders the
+left-hand column from `TesseraqlHostCli`'s own command model, so the published roster cannot drift
+from the binary the way a second hand-typed copy would.
+
 Consequences the draft's open questions asked about:
 
 - **`dev --embedded-db` stays in the developer CLI unchanged**, and so does the `embedded-db`

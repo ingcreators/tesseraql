@@ -42,10 +42,42 @@ final class CliReference {
         }
         md.append('\n').append(String.join(" · ", toc)).append('\n');
 
+        appendHostRoster(md);
+
         for (CommandSpec command : commands) {
             renderCommand(md, command, command.name(), 2);
         }
         return md.toString();
+    }
+
+    /**
+     * The verbs the deployment binary answers, from its own command model.
+     *
+     * <p>The page above is the developer CLI's roster, and an operator reading it cannot tell
+     * which of those verbs the binary in their container actually runs. This section links rather
+     * than re-renders: every host verb is one of the developer CLI's own command classes and
+     * already has its section below, so rendering them twice would double the page for no new
+     * fact.
+     */
+    private static void appendHostRoster(StringBuilder md) {
+        CommandSpec host = new CommandLine(
+                new io.tesseraql.cli.TesseraqlHostCli()).getCommandSpec();
+        md.append("\n## The deployment roster\n\n")
+                .append("The deployment distribution — the container image and the Windows zip — "
+                        + "runs `tesseraql-host`, whose root command names only the verbs below. "
+                        + "Every other command on this page belongs to the developer CLI, and "
+                        + "`tesseraql-host` answers it with an unmatched-argument error rather "
+                        + "than running it.\n\n")
+                .append("Each verb is the same command the developer CLI declares, so its "
+                        + "options and behaviour are documented in its own section below.\n\n")
+                .append("| Verb | What it does |\n| --- | --- |\n");
+        for (CommandSpec command : subcommands(host)) {
+            md.append("| [`").append(command.name()).append("`](#")
+                    .append(ReferenceGenerator.slug(command.name())).append(") | ")
+                    .append(ReferenceGenerator.cell(
+                            String.join(" ", command.usageMessage().description())))
+                    .append(" |\n");
+        }
     }
 
     /** A command's own section: its description, its arguments, then its subcommands. */

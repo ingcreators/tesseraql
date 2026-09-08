@@ -40,6 +40,22 @@
       <version>${project.version}</version>
     </dependency>
 
+    <!-- The deployment binary's roster is generated from its own command model for the same
+         reason the developer roster is: an operator reading the CLI reference must be able to
+         tell which verbs the binary in the container actually answers.
+
+         The tesseraql-cli declaration above is load-bearing and must NOT be removed as "now
+         redundant". It is depth-1 and carries no exclusions, so Maven's nearest-wins keeps
+         tesseraql-studio, io.zonky.test and the shrinkwrap resolver on this module's classpath —
+         and generating the developer roster instantiates all 25 subcommand classes, which need
+         them. tesseraql-host prunes exactly those jars, so reaching the CLI only through host
+         would fail to load half the page. -->
+    <dependency>
+      <groupId>io.tesseraql</groupId>
+      <artifactId>tesseraql-host</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+
     <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter</artifactId>
