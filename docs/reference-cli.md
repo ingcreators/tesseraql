@@ -7,6 +7,25 @@ Most commands take `--app <dir>`, the application home they act on. Every subcom
 
 [`dev`](#dev) · [`host`](#host) · [`deploy`](#deploy) · [`routes`](#routes) · [`new`](#new) · [`scaffold`](#scaffold) · [`lint`](#lint) · [`token`](#token) · [`test`](#test) · [`coverage`](#coverage) · [`generate`](#generate) · [`schema`](#schema) · [`symbols`](#symbols) · [`release-diff`](#release-diff) · [`governance`](#governance) · [`admission`](#admission) · [`migrate`](#migrate) · [`job`](#job) · [`identity-schema`](#identity-schema) · [`package`](#package) · [`verify`](#verify) · [`modules`](#modules) · [`embedded-db`](#embedded-db) · [`duckdb`](#duckdb) · [`mcp`](#mcp)
 
+## The deployment roster
+
+The deployment distribution — the container image and the Windows zip — runs `tesseraql-host`, whose root command names only the verbs below. Every other command on this page belongs to the developer CLI, and `tesseraql-host` answers it with an unmatched-argument error rather than running it.
+
+Each verb is the same command the developer CLI declares, so its options and behaviour are documented in its own section below.
+
+| Verb | What it does |
+| --- | --- |
+| [`host`](#host) | Serve every installed app from one port, each in its own runtime. |
+| [`deploy`](#deploy) | Deploy one application into a stack's install root; a running host replaces its runtime without a restart. |
+| [`routes`](#routes) | List the routes discovered in the app. |
+| [`token`](#token) | Obtain a bearer token: mint one from an app's HS256 secret (--app), or sign in to a running application and exchange (--url). |
+| [`migrate`](#migrate) | Apply/info/validate/repair the app's db/migration scripts. |
+| [`job`](#job) | List, run, or rerun batch jobs in-process (exit 0 completed, 1 failed, 3 calendar-filtered). |
+| [`identity-schema`](#identity-schema) | Apply the managed IAM schema and optionally seed an administrator. |
+| [`verify`](#verify) | Verify release evidence against the app sources. |
+| [`admission`](#admission) | Run the admission profile over an app tree. |
+| [`duckdb`](#duckdb) | Provision and inspect the analytics engine's offline extension cache. |
+
 ## `dev`
 
 Run the development stack over the gateway until interrupted.

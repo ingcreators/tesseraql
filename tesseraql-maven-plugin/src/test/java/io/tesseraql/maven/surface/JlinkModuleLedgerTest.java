@@ -37,9 +37,10 @@ import org.junit.jupiter.api.Test;
  * {@code jdk.jfr} was owed twice over. See docs/release-and-ci-hardening.md, decision 3.
  *
  * <p>This guard lives in {@code tesseraql-maven-plugin} rather than {@code tesseraql-docs-reference}
- * for the reason {@link YamlSurfaceConsumerGuardTest} does: this module builds last, so every
- * sibling's {@code target/classes} exists. {@code tesseraql-docs-reference} builds 27th of 30, ahead
- * of {@code tesseraql-host} — one of the two images.
+ * for the reason {@link YamlSurfaceConsumerGuardTest} does: this module builds 30th of 30, last in
+ * the reactor, so every sibling's {@code target/classes} exists. No other module can host a scan
+ * over the whole tree — {@code tesseraql-docs-reference} depends on both images and so builds late,
+ * but not last.
  */
 class JlinkModuleLedgerTest {
 

@@ -7,9 +7,11 @@ import picocli.CommandLine.Command;
 /**
  * The deployment distribution's entry point (docs/runtime-footprint.md decision 1): the verbs an
  * operator runs against a production stack, and nothing else. The command implementations are the
- * developer CLI's own, unchanged; what this class changes is what gets loaded — the dev-only verbs
- * (and the workshop, embedded-database and artifact-resolver jars behind them) are absent from the
- * deployment classpath, so a root command that never names them is what makes that absence safe.
+ * developer CLI's own, unchanged; what this class changes is what gets loaded. Every command class
+ * arrives with {@code tesseraql-cli}, this module's only compile dependency, and the shade filters
+ * none of them out — what the pom's exclusions drop is the workshop, embedded-database and
+ * artifact-resolver <em>jars</em> those dev-only verbs depend on. A root command that never names
+ * them never loads them, and that is what makes dropping those jars safe.
  *
  * <p>It lives in {@code io.tesseraql.cli} so the package-private command classes are reachable;
  * the deployment runs on a plain {@code -cp lib/*} classpath, where the split package is legal.
