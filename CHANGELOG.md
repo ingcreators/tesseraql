@@ -70,6 +70,17 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A pinning sample names the carrier, the site and when it happened.** All three payload fields
+  of the virtual-thread pinning diagnostic were wrong. The carrier column held the *pinned* thread
+  — the empty string for an unnamed virtual thread — because the event's own `carrierThread` field
+  was never read. The site column held `java.lang.VirtualThread.postPinnedEvent` for every event
+  ever recorded, the VM's reporting frame rather than the code that pinned. And the timestamp was
+  taken from the wall clock at delivery, so a whole flushed batch collapsed onto one instant and
+  pins made hundreds of milliseconds apart were reported as simultaneous. The diagnostic is opt-in
+  (`tesseraql.diagnostics.pinning.enabled`), so this reached the operator who had turned it on to
+  chase a pinning problem. Its one test had been a no-op since Java 25 became the baseline: it was
+  gated on `synchronized` pinning, which JEP 491 removed.
+
 - **A page that answers two methods survives a hot reload.** A snapshot-paginated list mounts GET
   and POST on one pipeline id — the pager re-posts its membership tokens to the same URL — but the
   HTTP edge keyed its router bookkeeping by that pipeline id alone. The two mounts then reconciled
