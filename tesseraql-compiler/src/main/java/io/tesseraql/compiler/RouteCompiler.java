@@ -1982,13 +1982,13 @@ public final class RouteCompiler {
 
     /**
      * Builds an application-declared MCP resource (roadmap Phase 24) as a read-only {@code direct:}
-     * route, never mounted on HTTP. It runs the same read pipeline a {@code query-json} route runs -
-     * telemetry, the resource's own security (auth + policy), tenancy and locale resolution, and the
-     * 2-way SQL - so a resource is governed exactly like a read route. The runtime's MCP endpoint
-     * sends to {@code direct:mcp.resource.<id>} on {@code resources/read} and returns the JSON body
-     * as the resource contents. A resource declares no {@code input:} (it is addressed only by its
-     * uri), so the binder runs with no path or request parameters; idempotency does not apply to a
-     * read.
+     * route, never mounted on HTTP. Its head comes from {@link #applyCommonGovernance}, which is
+     * the only way a recipe gets one — follow the applier rather than a list here, because a list
+     * is what this javadoc used to carry and what the code used to copy, and both went stale the
+     * next time a step was added to the applier. The runtime's MCP endpoint sends to
+     * {@code direct:mcp.resource.<id>} on {@code resources/read} and returns the JSON body as the
+     * resource contents. A resource declares no {@code input:} (it is addressed only by its uri),
+     * so the binder runs with no path or request parameters; idempotency does not apply to a read.
      */
     private void buildMcpResource(ResourceFile resourceFile) {
         RouteDefinition definition = resourceFile.definition();
@@ -1998,13 +1998,17 @@ public final class RouteCompiler {
         String routeId = "mcp.resource." + definition.id();
 
         PipelineBuilder route = pipelines.pipeline(routeId);
-        route.process(new io.tesseraql.compiler.binding.RouteTelemetry(
-                definition.id(), "MCP-RESOURCE", "/" + definition.id(), appName));
-        applyConcurrency(route, definition);
-        applyLane(route, definition);
-        applySecurity(route, definition.security(), "GET", null);
-        applyTenancy(route);
-        applyI18n(route);
+        // The applier, not a hand-written list: this head used to omit the audit row and hard-wire
+        // the access log off, because the six statements it spelled out were the applier's
+        // contents copied at a moment when the applier had fewer of them.
+        //
+        // The label IS the method everywhere the applier uses it — the span and counter label, the
+        // audit row's method column, and SecuritySpec.csrfEnforced, where a non-GET label installs
+        // a csrf AuthStep for an `auth: browser` document. That step is unreachable over MCP:
+        // AppMcpServer.call forwards only Authorization, so the authenticate step ahead of it
+        // already throws UNAUTHORIZED for want of a session.
+        applyCommonGovernance(route, definition.id(), "MCP-RESOURCE", "/" + definition.id(),
+                definition);
         PipelineBuilder step = route
                 .process(new RequestBinder(definition, null, compiledAppHome,
                         functions))
@@ -2019,10 +2023,11 @@ public final class RouteCompiler {
 
     /**
      * Builds an application-declared MCP Apps UI resource (roadmap Phase 24) as a read-only
-     * {@code direct:} route, never mounted on HTTP. It runs the same read-and-render pipeline a
-     * {@code query-html} route runs - telemetry, the resource's own security, tenancy and locale
-     * resolution, the 2-way SQL, then the Thymeleaf template - so the route renders the same
-     * {@code hc-*} fragment a page would. The runtime's MCP endpoint sends to
+     * {@code direct:} route, never mounted on HTTP. Its head comes from
+     * {@link #applyCommonGovernance}, exactly as {@link #buildMcpResource}'s does and for the
+     * reason recorded there; after the head it runs the 2-way SQL and then the Thymeleaf template,
+     * so the route renders the same {@code hc-*} fragment a page would. The runtime's MCP endpoint
+     * sends to
      * {@code direct:mcp.ui.<id>} on {@code resources/read} and returns the rendered HTML as the
      * resource contents. A UI resource declares no {@code input:} (it is addressed only by its
      * {@code ui://} uri), so the binder runs with no parameters.
@@ -2035,13 +2040,8 @@ public final class RouteCompiler {
         String routeId = "mcp.ui." + definition.id();
 
         PipelineBuilder route = pipelines.pipeline(routeId);
-        route.process(new io.tesseraql.compiler.binding.RouteTelemetry(
-                definition.id(), "MCP-UI", "/" + definition.id(), appName));
-        applyConcurrency(route, definition);
-        applyLane(route, definition);
-        applySecurity(route, definition.security(), "GET", null);
-        applyTenancy(route);
-        applyI18n(route);
+        // The applier owns the head; see buildMcpResource for why the label is the method.
+        applyCommonGovernance(route, definition.id(), "MCP-UI", "/" + definition.id(), definition);
         PipelineBuilder step = route
                 .process(new RequestBinder(definition, null, compiledAppHome,
                         functions))

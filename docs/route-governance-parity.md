@@ -43,19 +43,30 @@ What each recipe applies today. **`—`** marks a confirmed gap against the reci
 | Recipe | telemetry | security | i18n | tenancy | concurrency / lane | audit | emit | queries | idempotency |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `command-json` | yes | yes | yes | yes | yes | yes | yes | yes | begin + complete |
-| `query-json` | yes | yes | yes | yes | yes | n/a | n/a | yes | begin + complete |
-| `query-html` / `page` | yes | yes | yes | yes | yes | n/a | n/a | yes | begin + complete |
-| `query-export` | yes | yes | yes | yes | yes | n/a | n/a | yes | n/a |
+| `query-json` | yes | yes | yes | yes | yes | yes | n/a | yes | begin + complete |
+| `query-html` / `page` | yes | yes | yes | yes | yes | yes | n/a | yes | begin + complete |
+| `query-export` | yes | yes | yes | yes | yes | yes | n/a | yes | n/a |
 | `file-import` | yes | yes | yes | yes | yes | yes | n/a | n/a | n/a |
-| `file-export` | yes | yes | yes | yes | yes | yes | n/a | n/a | n/a |
+| `file-export` | yes | yes | yes | yes | yes | yes | n/a | yes | n/a |
 | `queue-consume` | yes | yes | yes | yes | yes | yes | **—** | **—** | n/a |
-| MCP tool | yes | yes | yes | yes | yes | yes | **—** | yes | begin + complete |
+| MCP tool | yes | yes | yes | yes | yes | yes | yes | yes | begin + complete |
+| MCP resource | yes | yes | yes | yes | yes | yes | n/a | yes | n/a |
+| MCP UI resource | yes | yes | yes | yes | yes | yes | n/a | yes | n/a |
+| MCP prompt | yes | yes | yes | yes | yes | yes | n/a | yes | n/a |
 | workflow delegate | yes | yes | yes | yes | yes | yes | n/a | n/a | n/a |
 | attachment upload | yes | yes | yes | yes | n/a | n/a | n/a | n/a | n/a |
 | attachment list / download | yes | yes | yes | yes | n/a | n/a | n/a | n/a | n/a |
 
-`n/a` marks a step the recipe cannot carry (a read route has nothing to audit or emit); every
-`—` is a step its siblings apply and it does not.
+`yes` means the applier applies it — for audit, subject to `tesseraql.audit.routes.enabled`, which
+is what "applies" has always meant for that column. `n/a` marks a step the recipe cannot carry (a
+read route has nothing to emit); every `—` is a step its siblings apply and it does not.
+
+Three corrections landed with the MCP read rows, because the new rows would otherwise have sat
+beside cells asserting the opposite of what the compiler does. `applyCommonGovernance` calls
+`applyAudit` unconditionally, so every recipe that goes through the applier audits — the three read
+recipes read `n/a` on the theory that a read has nothing to audit, which is not the rule the code
+follows. `emit:` on an MCP tool works and `RecipeGovernanceTest` pins it. And `file-export` passes
+its export queries, so its `sources` cell was never `n/a`.
 
 ## Matrix 2 — the SQL execution contract
 

@@ -42,6 +42,26 @@ final class CompiledPipelines {
         return found;
     }
 
+    /**
+     * Every step of {@code type} in ONE pipeline. {@link #steps(RuntimeContext, Class)} is global
+     * across every compiled pipeline, so it cannot answer a per-route question — "which method
+     * label did <em>this</em> route's telemetry step get" needs the route named.
+     */
+    static <T> List<T> steps(RuntimeContext context, String pipelineId, Class<T> type) {
+        Pipeline pipeline = Pipelines.of(context).all().get(pipelineId);
+        if (pipeline == null) {
+            throw new AssertionError("no pipeline compiled with id '" + pipelineId + "'; ids are "
+                    + Pipelines.of(context).all().keySet());
+        }
+        List<T> found = new ArrayList<>();
+        for (io.tesseraql.pipeline.Step step : pipeline.steps()) {
+            if (type.isInstance(step)) {
+                found.add(type.cast(step));
+            }
+        }
+        return found;
+    }
+
     private static List<String> names(Pipeline pipeline) {
         List<String> names = new ArrayList<>();
         for (io.tesseraql.pipeline.Step step : pipeline.steps()) {

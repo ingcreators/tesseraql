@@ -63,6 +63,17 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **An agent's `resources/read` is recorded like every other read.** A `kind: resource` or
+  `kind: ui` document compiled its route head by hand rather than through the applier every other
+  recipe uses, so with `tesseraql.audit.routes.enabled` the same SQL read wrote an audit row when a
+  `query-json` route served it and none when an agent did, and with `tesseraql.logging.accessLog`
+  those two routes were the only ones in the framework that wrote no line at all. Both now go
+  through the applier, with `MCP-RESOURCE` and `MCP-UI` in the method column.
+
+  The convenience constructor that made the hand-written head look right is deleted along with it.
+  It defaulted the access-log flag to off, so the omission read as a shorter call rather than as a
+  decision — which is how the same head could be written again tomorrow and still look correct.
+
 - **A shutdown asks the live streams to stop instead of leaving them parked.** An SSE producer waits
   twenty-five seconds at a time and its stream lasts fifteen minutes, and nothing counted it: the
   edge drains the requests it serves, and a stream is not one of them. So every producer slept
