@@ -155,7 +155,7 @@ public final class AppInstaller {
                 String name = entry.getName();
                 Path resolved = root.resolve(name)
                         .orElseThrow(() -> new TqlException(INVALID_PACKAGE,
-                                "Package entry escapes install root (design ch. 20.2): "
+                                "Package entry escapes install root: "
                                         + name));
                 if (entry.isDirectory()) {
                     Files.createDirectories(resolved);
