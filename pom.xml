@@ -108,15 +108,15 @@
     -->
     <vertx.version>5.1.6</vertx.version>
     <!--
-      The SFTP client the poll connector drives directly (docs/camel-removal.md slice 1). It has
-      been on the classpath all along, under camel-ftp, which is exactly why it is declared here:
-      a borrowed type is a borrowed dependency, and camel-ftp is on its way out.
+      The SFTP client the poll connector drives directly (docs/camel-removal.md slice 1). It was
+      on the classpath all along, under camel-ftp, which is exactly why it is declared here:
+      a borrowed type is a borrowed dependency, and camel-ftp left with the consumers it served.
     -->
     <jsch.version>2.28.7</jsch.version>
     <!--
       The cron expression the batch scheduler computes fire times with (docs/camel-removal.md
-      decision 5). Arrived under camel-quartz, which is on its way out; declared here for the same
-      reason jsch is.
+      decision 5). Arrived under camel-quartz, which left with the schedules it ran; declared
+      here for the same reason jsch is.
     -->
     <quartz.version>2.5.2</quartz.version>
     <!--
@@ -230,10 +230,10 @@
       </dependency>
 
       <!--
-        Vert.x, pinned as a pair: vertx-core is what the runtime's own HTTP edge serves on and
-        vertx-http-proxy is what the gateway relays through. Managing both here means they cannot
-        drift apart silently — a proxy loaded beside a core it was not built against is the
-        failure this pin exists to prevent.
+        Vert.x, pinned as a trio: vertx-web is the runtime's own HTTP server and router,
+        vertx-http-proxy is what the gateway relays through, and vertx-core is the base both
+        bring. Managing all three here means they cannot drift apart silently — a proxy loaded
+        beside a core it was not built against is the failure this pin exists to prevent.
       -->
       <dependency>
         <groupId>io.vertx</groupId>
@@ -507,7 +507,8 @@
         <version>${assertj.version}</version>
         <scope>test</scope>
       </dependency>
-      <!-- In-JVM SMTP server for notification (camel-mail) integration tests. -->
+      <!-- In-JVM SMTP server for the mail notification channel's integration tests; the
+           transport under test is angus-mail, declared in tesseraql-yaml. -->
       <dependency>
         <groupId>com.icegreen</groupId>
         <artifactId>greenmail-junit5</artifactId>
