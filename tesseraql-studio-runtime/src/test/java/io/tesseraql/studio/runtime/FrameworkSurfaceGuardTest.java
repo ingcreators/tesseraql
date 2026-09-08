@@ -38,6 +38,21 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  *
  * <p>The fixture enables Studio, metrics, MCP and SCIM deliberately. A guard that runs against a
  * default app would check a handful of routes, pass, and read as if it had checked the surface.
+ *
+ * <p>Where each family comes from, per family rather than as a blanket claim — this module once
+ * declared a test-scoped {@code tesseraql-scim} to "have them all on one classpath", which by
+ * then only narrowed the compile-scope copy it already received:
+ *
+ * <ul>
+ * <li>{@code ops.}, {@code system.} and {@code mcp.} are {@code tesseraql-runtime}'s own routes.
+ * <li>{@code scim.} is {@code tesseraql-scim}'s, on this classpath because
+ * {@code tesseraql-runtime} compile-depends on it (docs/module-channel.md decision 2). This
+ * module declares nothing.
+ * <li>{@code tql.} is the bundled system apps, plus this module's own {@code tql.copilot.send}.
+ * <li>{@code studio.} is this module's own main tree, and <em>cannot</em> arrive through
+ * {@code tesseraql-runtime}: its {@code no-workshop-on-the-runtime} enforcer bans
+ * {@code io.tesseraql:tesseraql-studio-runtime} at every scope, transitively.
+ * </ul>
  */
 @Testcontainers
 class FrameworkSurfaceGuardTest {
@@ -263,8 +278,11 @@ class FrameworkSurfaceGuardTest {
             assertThat(ids).as("family '%s' must be mounted for this guard to mean anything",
                     family).anyMatch(id -> id.startsWith(family));
         }
-        // Measured at 173 when this landed. The floor is deliberately below that: it catches a
-        // fixture that stops mounting a whole surface, without failing on every route added.
+        // Measured at 173 when this landed. The floor catches a fixture that mounts almost
+        // nothing — a boot that lost several surfaces at once — without failing on every route
+        // added. It does NOT catch one family going missing: dropping all thirteen scim. routes
+        // still leaves 160, comfortably over this floor. That is the FAMILIES loop's job above,
+        // and it is the only assertion in this class that notices a single surface disappearing.
         assertThat(routes.size()).as("framework HTTP routes mounted").isGreaterThan(150);
     }
 
