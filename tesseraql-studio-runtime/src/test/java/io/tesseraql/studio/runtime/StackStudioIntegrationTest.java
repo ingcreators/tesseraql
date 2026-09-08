@@ -9,7 +9,6 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.URI;
 import java.net.URLEncoder;
-import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
@@ -79,11 +78,11 @@ class StackStudioIntegrationTest {
     @Test
     @Order(1)
     void anonymousBrowsersBounceToTheOriginSignIn() throws Exception {
-        HttpResponse<String> denied = HttpClient.newBuilder()
-                .followRedirects(HttpClient.Redirect.NEVER).build()
-                .send(HttpRequest.newBuilder(uri("/_tesseraql/studio"))
-                        .header("Accept", "text/html").build(),
-                        HttpResponse.BodyHandlers.ofString());
+        // TestHttp's client keeps the JDK default redirect policy, which is NEVER, so the
+        // 302 asserted below is still the answer under test rather than a followed hop.
+        HttpResponse<String> denied = TestHttp.send(
+                HttpRequest.newBuilder(uri("/_tesseraql/studio"))
+                        .header("Accept", "text/html"));
         assertThat(denied.statusCode()).isEqualTo(302);
         assertThat(denied.headers().firstValue("Location").orElse(""))
                 .startsWith("/_tesseraql/login?redirect=");
@@ -203,14 +202,12 @@ class StackStudioIntegrationTest {
     }
 
     private static String signInAt(int port, String loginId) throws Exception {
-        HttpResponse<String> login = HttpClient.newHttpClient().send(
+        HttpResponse<String> login = TestHttp.send(
                 HttpRequest.newBuilder(URI.create("http://localhost:" + port
                         + "/shop-a/_tesseraql/login"))
                         .header("Content-Type", "application/json")
                         .POST(HttpRequest.BodyPublishers.ofString(
-                                "{\"loginId\":\"" + loginId + "\",\"password\":\"s3cret\"}"))
-                        .build(),
-                HttpResponse.BodyHandlers.ofString());
+                                "{\"loginId\":\"" + loginId + "\",\"password\":\"s3cret\"}")));
         assertThat(login.statusCode()).as(login.body()).isEqualTo(200);
         String setCookie = login.headers().firstValue("Set-Cookie").orElseThrow();
         return setCookie.substring(0, setCookie.indexOf(';'));
@@ -231,20 +228,16 @@ class StackStudioIntegrationTest {
         if (cookie != null) {
             request.header("Cookie", cookie);
         }
-        return HttpClient.newHttpClient().send(request.build(),
-                HttpResponse.BodyHandlers.ofString());
+        return TestHttp.send(request);
     }
 
     private static HttpResponse<String> postForm(String path, String cookie, String csrf,
             String form) throws Exception {
-        HttpRequest request = HttpRequest.newBuilder(uri(path))
+        return TestHttp.send(HttpRequest.newBuilder(uri(path))
                 .header("Cookie", cookie)
                 .header("X-CSRF-Token", csrf)
                 .header("Content-Type", "application/x-www-form-urlencoded")
-                .POST(HttpRequest.BodyPublishers.ofString(form))
-                .build();
-        return HttpClient.newHttpClient().send(request,
-                HttpResponse.BodyHandlers.ofString());
+                .POST(HttpRequest.BodyPublishers.ofString(form)));
     }
 
     /** The application's schema plus the framework schema its sessions and identity live in. */

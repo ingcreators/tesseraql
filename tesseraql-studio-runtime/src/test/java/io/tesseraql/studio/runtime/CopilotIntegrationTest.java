@@ -9,7 +9,6 @@ import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.net.URLEncoder;
-import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
@@ -281,35 +280,29 @@ class CopilotIntegrationTest {
     }
 
     private static HttpResponse<String> get(String path) throws Exception {
-        HttpRequest request = HttpRequest.newBuilder(
+        return TestHttp.send(HttpRequest.newBuilder(
                 URI.create("http://localhost:" + runtime.port() + path))
-                .header("Cookie", sessionCookie)
-                .build();
-        return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+                .header("Cookie", sessionCookie));
     }
 
     private static HttpResponse<String> postForm(String path, String form) throws Exception {
-        HttpRequest request = HttpRequest.newBuilder(
+        return TestHttp.send(HttpRequest.newBuilder(
                 URI.create("http://localhost:" + runtime.port() + path))
                 .header("Cookie", sessionCookie)
                 .header("X-CSRF-Token", csrf)
                 .header("Content-Type", "application/x-www-form-urlencoded")
-                .POST(HttpRequest.BodyPublishers.ofString(form))
-                .build();
-        return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+                .POST(HttpRequest.BodyPublishers.ofString(form)));
     }
 
     /** A form post the way htmx sends it — the HX-Request header selects the fragment path. */
     private static HttpResponse<String> postHtmx(String path, String form) throws Exception {
-        HttpRequest request = HttpRequest.newBuilder(
+        return TestHttp.send(HttpRequest.newBuilder(
                 URI.create("http://localhost:" + runtime.port() + path))
                 .header("Cookie", sessionCookie)
                 .header("X-CSRF-Token", csrf)
                 .header("HX-Request", "true")
                 .header("Content-Type", "application/x-www-form-urlencoded")
-                .POST(HttpRequest.BodyPublishers.ofString(form))
-                .build();
-        return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+                .POST(HttpRequest.BodyPublishers.ofString(form)));
     }
 
     private static Path prepareAppHome(String modelEndpoint) throws IOException {
