@@ -30,7 +30,13 @@ import software.amazon.awssdk.services.s3.presigner.S3Presigner;
  */
 public final class S3BlobStoreProvider implements BlobStoreProvider {
 
-    private static final String PREFIX = "tesseraql.object-storage.";
+    /**
+     * Only for the bucket map, whose leaf name is a declaration the operator chose and so cannot
+     * be a literal here. Every fixed key below is spelled in full instead: the configuration index
+     * scans sources for literals, so a key composed from this constant is a key an operator
+     * cannot find on the reference page.
+     */
+    private static final String BUCKETS = "tesseraql.object-storage.buckets";
 
     @Override
     public String provider() {
@@ -39,22 +45,26 @@ public final class S3BlobStoreProvider implements BlobStoreProvider {
 
     @Override
     public BlobStore create(AppConfig config, Path appHome) {
-        String endpoint = config.getString(PREFIX + "s3.endpoint").orElse(null);
-        String region = config.getString(PREFIX + "s3.region").orElse("us-east-1");
-        boolean pathStyle = config.getString(PREFIX + "s3.pathStyle")
+        String endpoint = config.getString("tesseraql.object-storage.s3.endpoint").orElse(null);
+        String region = config.getString("tesseraql.object-storage.s3.region").orElse("us-east-1");
+        boolean pathStyle = config.getString("tesseraql.object-storage.s3.pathStyle")
                 .map(Boolean::parseBoolean).orElse(false);
-        String checksumMode = config.getString(PREFIX + "s3.checksumMode").orElse(null);
-        String accessKey = config.getString(PREFIX + "s3.credentials.accessKey").orElse(null);
-        String secretKey = config.getString(PREFIX + "s3.credentials.secretKey").orElse(null);
+        String checksumMode = config.getString("tesseraql.object-storage.s3.checksumMode")
+                .orElse(null);
+        String accessKey = config.getString("tesseraql.object-storage.s3.credentials.accessKey")
+                .orElse(null);
+        String secretKey = config.getString("tesseraql.object-storage.s3.credentials.secretKey")
+                .orElse(null);
 
         Map<String, String> buckets = new LinkedHashMap<>();
-        if (config.navigate(PREFIX + "buckets") instanceof Map<?, ?> declared) {
+        if (config.navigate(BUCKETS) instanceof Map<?, ?> declared) {
             declared.forEach((name, settings) -> buckets.put(String.valueOf(name),
-                    config.getString(PREFIX + "buckets." + name + ".bucket")
+                    config.getString(BUCKETS + "." + name + ".bucket")
                             .orElse(String.valueOf(name))));
         }
         Set<String> allowedBuckets = new LinkedHashSet<>();
-        if (config.navigate(PREFIX + "allowedBuckets") instanceof List<?> declared) {
+        Object egressList = config.navigate("tesseraql.object-storage.allowedBuckets");
+        if (egressList instanceof List<?> declared) {
             declared.forEach(value -> allowedBuckets.add(String.valueOf(value)));
         }
 

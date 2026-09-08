@@ -20,9 +20,15 @@ import org.junit.jupiter.api.Test;
  * rather than being the full 26: the point is that each distinct wrapper is reached, and a list of
  * every key would be a second roster to maintain by hand.
  *
- * <p><b>What this cannot see.</b> A key composed from a prefix at request time has no literal to
- * find and is out of scope by construction — the page now says so. This asserts on the rendered
- * page rather than on the scanner's internals, because the page is what an operator reads.
+ * <p>The second shape is a key spelled by joining a compile-time constant to a suffix. That one
+ * hid the whole S3 store surface — the six keys an operator must set to point the framework at a
+ * store that is not AWS — behind an exemption written for a different case. A FIXED key is never
+ * exempt from this page, however its reading code chooses to spell it; only a key whose last
+ * segment is a name the operator chose has no literal to find.
+ *
+ * <p><b>What this cannot see.</b> It samples rather than enumerating, so a new helper or a new
+ * constant-composed key in a namespace nobody lists here goes unnoticed. This asserts on the
+ * rendered page rather than on the scanner's internals, because the page is what an operator reads.
  */
 class ConfigKeyLedgerTest {
 
@@ -39,6 +45,28 @@ class ConfigKeyLedgerTest {
             "tesseraql.oidc.enabled", // LoginMethods.flag
             "tesseraql.saml.enabled", // ManifestCoverage.flag
             "tesseraql.oidc.clientId"); // OidcSamlRules.rawString
+
+    /**
+     * The keys that point the framework at a store that is not AWS. Every one was invisible, so
+     * an operator configuring MinIO or Ceph read a page that listed two keys of the eight.
+     */
+    private static final List<String> THE_S3_STORE_SURFACE = List.of(
+            "tesseraql.object-storage.s3.endpoint",
+            "tesseraql.object-storage.s3.region",
+            "tesseraql.object-storage.s3.pathStyle",
+            "tesseraql.object-storage.s3.checksumMode",
+            "tesseraql.object-storage.s3.credentials.accessKey",
+            "tesseraql.object-storage.s3.credentials.secretKey");
+
+    @Test
+    void everyKeyOfTheS3StoreSurfaceIsOnThePage() throws IOException {
+        String page = ReferenceGenerator.config(REPO);
+        assertThat(THE_S3_STORE_SURFACE)
+                .allSatisfy(key -> assertThat(page)
+                        .as("a key spelled by joining a constant to a suffix is still a key an"
+                                + " operator has to set — inline it rather than exempting it")
+                        .contains("`" + key + "`"));
+    }
 
     @Test
     void everyKeyReadThroughAHelperIsOnThePage() throws IOException {
