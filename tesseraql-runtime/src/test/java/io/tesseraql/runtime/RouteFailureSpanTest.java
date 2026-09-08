@@ -59,7 +59,7 @@ class RouteFailureSpanTest {
 
             TqlException failure = new TqlException(BOOM, "the step refused");
             Pipelines.of(context).compiling(List.of()).pipeline("t.fails")
-                    .process(new RouteTelemetry("t.fails", "GET", "/t", null))
+                    .process(new RouteTelemetry("t.fails", "GET", "/t", null, false))
                     .onException(TqlException.class, rendered -> rendered
                             .response().status(500))
                     .process(exchange -> {
@@ -88,7 +88,7 @@ class RouteFailureSpanTest {
             context.bind(TesseraqlProperties.TRACER_BEAN, (Tracer) name -> span);
 
             Pipelines.of(context).compiling(List.of()).pipeline("t.ok")
-                    .process(new RouteTelemetry("t.ok", "GET", "/t", null))
+                    .process(new RouteTelemetry("t.ok", "GET", "/t", null, false))
                     .process(exchange -> exchange.response().status(200));
 
             RoutePipelines.of(context).run("t.ok", exchange -> exchange.setFromRouteId("t.ok"))

@@ -2,6 +2,7 @@ package io.tesseraql.compiler;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.tesseraql.compiler.binding.RouteTelemetry;
 import io.tesseraql.pipeline.RuntimeContext;
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.ManifestLoader;
@@ -39,7 +40,12 @@ class RecipeGovernanceTest {
             "mcp.items.tool",
             // A prompt is a route like its three mcp siblings (docs/prompt-as-recipe.md): it
             // gets the head every recipe gets, which is the whole point of it having one.
-            "mcp.prompt.items.brief");
+            "mcp.prompt.items.brief",
+            // A resource and a ui resource are reads like any other. Both heads were written by
+            // hand and had drifted out of the applier: no audit row, and the access log wired
+            // off by a convenience constructor that has since been deleted.
+            "mcp.resource.items.context",
+            "mcp.ui.items.board");
 
     @Test
     void everyRecipeCarriesTheGovernedHeadInOrder(@TempDir Path dir) throws Exception {
@@ -48,9 +54,13 @@ class RecipeGovernanceTest {
         assertThat(compiled).containsKeys(GOVERNED_ROUTES.toArray(String[]::new));
         for (String routeId : GOVERNED_ROUTES) {
             List<String> steps = compiled.get(routeId);
-            assertThat(steps)
+            // Each once, in order — not containsSubsequence, which any superset satisfies.
+            // Every governed step class has exactly one construction site in the compiler, so a
+            // route carrying two of them is as wrong as one carrying none, and a subsequence
+            // assertion is green on both.
+            assertThat(steps.stream().filter(RouteCompiler.GOVERNED_STEPS::contains).toList())
                     .as("route '%s' governance head", routeId)
-                    .containsSubsequence(RouteCompiler.GOVERNED_STEPS.toArray(String[]::new));
+                    .containsExactlyElementsOf(RouteCompiler.GOVERNED_STEPS);
         }
     }
 
@@ -87,6 +97,40 @@ class RecipeGovernanceTest {
         assertThat(tool).contains("TopicEmitProcessor");
     }
 
+    /**
+     * The two facts a step's class name cannot show, for the two routes that had them wrong.
+     *
+     * <p>{@code stepsById} records {@code getClass().getSimpleName()}, so a head assertion sees
+     * that a {@code RouteTelemetry} is present and nothing about how it was built. Both of this
+     * slice's defects lived in those arguments: the method label the audit row is written with,
+     * and the access-log flag the deleted four-argument constructor pinned to false.
+     */
+    @Test
+    void theMcpReadHeadsCarryTheirLabelAndTheAccessLog(@TempDir Path dir) throws Exception {
+        writeApp(dir);
+        AppManifest manifest = new ManifestLoader().load(dir);
+        try (RuntimeContext context = new RuntimeContext()) {
+            new RouteCompiler().appName("governance-test")
+                    .compile(context, manifest, false, null);
+
+            for (Map.Entry<String, String> route : Map.of(
+                    "mcp.resource.items.context", "MCP-RESOURCE",
+                    "mcp.ui.items.board", "MCP-UI").entrySet()) {
+                List<RouteTelemetry> telemetry = CompiledPipelines.steps(context, route.getKey(),
+                        RouteTelemetry.class);
+
+                assertThat(telemetry).as("route '%s' telemetry steps", route.getKey()).hasSize(1);
+                assertThat(telemetry.get(0).method())
+                        .as("route '%s' method label", route.getKey())
+                        .isEqualTo(route.getValue());
+                assertThat(telemetry.get(0).accessLog())
+                        .as("route '%s' writes the access-log line the fixture enables",
+                                route.getKey())
+                        .isTrue();
+            }
+        }
+    }
+
     /** Compiles the fixture app and maps each route id to its processors' simple class names. */
     private static Map<String, List<String>> compileAndCollect(Path dir) throws Exception {
         writeApp(dir);
@@ -99,9 +143,12 @@ class RecipeGovernanceTest {
     }
 
     /**
-     * One route per served recipe, plus an attachment document. Audit, tenancy, a rate limit and
-     * a lane are all enabled, because each is conditional on configuration — a fixture without
-     * them would assert an empty head and pass against the very bug this guards.
+     * One route per served recipe, plus an attachment document. Audit, tenancy, a rate limit, a
+     * lane and the access log are all enabled, because each is conditional on configuration — a
+     * fixture without them would assert an empty head and pass against the very bug this guards.
+     *
+     * <p>The access log is the fifth, and it was the one missing: the two MCP read heads had it
+     * hard-wired off, and no fixture here turned it on, so nothing could see the difference.
      */
     private static void writeApp(Path dir) throws Exception {
         Files.createDirectories(dir.resolve("config"));
@@ -119,6 +166,8 @@ class RecipeGovernanceTest {
                   audit:
                     routes:
                       enabled: true
+                  logging:
+                    accessLog: true
                   lanes:
                     reports:
                       threads: 2
@@ -321,6 +370,55 @@ class RecipeGovernanceTest {
                       items: main.rows
                 """.formatted(policy), "list.sql");
         Files.writeString(dir.resolve("mcp/brief.txt.tpl"), "[(${items})]\n");
+
+        // A resource and a ui resource. uri:, description: and the absence of input: are LINT
+        // rules (ResourceRules, UiResourceRules) and this test runs no linter — compileAndCollect
+        // is ManifestLoader.load followed by RouteCompiler.compile. They are declared because
+        // they are what a reader recognises as these documents, not because anything here
+        // enforces them.
+        route(dir, "mcp", "context.yml", """
+                version: tesseraql/v1
+                id: items.context
+                kind: resource
+                recipe: query-json
+                uri: tesseraql://items/context
+                description: the items an agent is working against
+                security:
+                  policy: app.read
+                %s
+                sources:
+                  main:
+                    sql:
+                      file: list.sql
+                      mode: query
+                response:
+                  json:
+                    body:
+                      data: main.rows
+                """.formatted(policy), "list.sql");
+
+        route(dir, "mcp", "board.yml", """
+                version: tesseraql/v1
+                id: items.board
+                kind: ui
+                recipe: query-html
+                uri: ui://items/board
+                description: the items board an agent can render
+                security:
+                  policy: app.read
+                %s
+                sources:
+                  main:
+                    sql:
+                      file: list.sql
+                      mode: query
+                response:
+                  html:
+                    template: board.html
+                """.formatted(policy), "list.sql");
+        // The template must exist on disk: TemplateResolution throws at COMPILE time, not on the
+        // first request.
+        Files.writeString(dir.resolve("mcp/board.html"), "<ul></ul>\n");
 
         Files.createDirectories(dir.resolve("attachments"));
         Files.writeString(dir.resolve("attachments/notes.yml"), """

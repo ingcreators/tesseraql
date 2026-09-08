@@ -109,9 +109,9 @@ sources:
 ```
 
 The runtime serves every declared resource over the same `/_tesseraql/mcp` endpoint as the tools.
-On startup the compiler turns each resource into a read-only internal route — telemetry, the
-resource's own authentication and authorization, tenancy and locale resolution, the 2-way SQL — and
-the MCP endpoint answers `resources/list` and `resources/read` from it. So:
+On startup the compiler turns each resource into a read-only internal route — telemetry and the
+audit trail, the resource's own authentication and authorization, tenancy and locale resolution,
+the 2-way SQL — and the MCP endpoint answers `resources/list` and `resources/read` from it. So:
 
 - **Discovery and read.** `resources/list` advertises every resource (`uri`, `name`, `mimeType`,
   `description`); `resources/read { "uri": ... }` runs the SQL and returns the JSON result as the
@@ -174,9 +174,9 @@ ui: ui://orders/board
 ```
 
 On startup the compiler turns each UI resource into a read-only internal route running the
-same read-and-render pipeline a `query-html` route runs: telemetry, the resource's own
-authentication and authorization, tenancy and locale resolution, the 2-way SQL, then the
-Thymeleaf template. It therefore renders the same `hc-*` fragment a page would. UI work
+same read-and-render pipeline a `query-html` route runs: telemetry and the audit trail, the
+resource's own authentication and authorization, tenancy and locale resolution, the 2-way SQL,
+then the Thymeleaf template. It therefore renders the same `hc-*` fragment a page would. UI work
 follows the blessed patterns in [docs/hypermedia-ui.md](hypermedia-ui.md), and any gap
 belongs upstream in the kit rather than in app CSS.
 

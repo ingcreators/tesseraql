@@ -25,10 +25,13 @@ public final class RouteTelemetry implements Step {
     private static final org.slf4j.Logger ACCESS = org.slf4j.LoggerFactory
             .getLogger("tesseraql.access");
 
-    public RouteTelemetry(String routeId, String method, String path, String appName) {
-        this(routeId, method, path, appName, false);
-    }
-
+    /**
+     * There is deliberately no four-argument form defaulting {@code accessLog} to {@code false}.
+     * That convenience is how two hand-written route heads came to have the access log wired off
+     * while reading as if they were governed like every other route: the omission looked like a
+     * shorter call, not like a decision. Every caller states the flag, and in practice every
+     * caller is {@code RouteCompiler.applyTelemetry}.
+     */
     public RouteTelemetry(String routeId, String method, String path, String appName,
             boolean accessLog) {
         this.routeId = routeId;
@@ -36,6 +39,20 @@ public final class RouteTelemetry implements Step {
         this.path = path;
         this.appName = appName;
         this.accessLog = accessLog;
+    }
+
+    /**
+     * The method label this step was built with — the span and counter label, and the audit row's
+     * method column. Exposed because the applier collapses two arguments into one {@code method},
+     * and a compiled step's class name cannot show which value survived.
+     */
+    public String method() {
+        return method;
+    }
+
+    /** Whether this route writes an access-log line; a compiled step's name cannot show it. */
+    public boolean accessLog() {
+        return accessLog;
     }
 
     @Override
