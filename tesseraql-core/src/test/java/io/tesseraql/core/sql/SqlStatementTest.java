@@ -52,6 +52,11 @@ class SqlStatementTest {
 
         assertThat(database.calls).contains("setQueryTimeout(30)");
         assertThat(SqlStatement.DEFAULT_TIMEOUT_SECONDS).isEqualTo(30);
+        // The row bound's two halves, pinned here for the same reason: SqlDefaultsReadLedgerTest
+        // asserts that one place reads each key, which stays green if the value behind it moves.
+        // The published configuration reference documents these numbers.
+        assertThat(SqlStatement.DEFAULT_MAX_ROWS).isEqualTo(10_000);
+        assertThat(SqlStatement.DEFAULT_ON_OVERFLOW).isEqualTo("fail");
     }
 
     @Test

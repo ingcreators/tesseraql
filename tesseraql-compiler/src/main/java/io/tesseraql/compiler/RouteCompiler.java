@@ -65,7 +65,6 @@ public final class RouteCompiler {
     /** TQL-VIEW-3327: a detail view's workflow: names no declared kind: workflow document. */
     private static final TqlErrorCode UNKNOWN_WORKFLOW = new TqlErrorCode(TqlDomain.VIEW, 3327);
     private static final String DEFAULT_DATASOURCE = "main";
-    private static final int DEFAULT_MAX_ROWS = 10_000;
     private static final long DEFAULT_IDEMPOTENCY_TTL = java.time.Duration.ofHours(24).toMillis();
 
     private AppConfig config;
@@ -2412,11 +2411,8 @@ public final class RouteCompiler {
      * route-level SQL path does rather than running unbounded (docs/route-governance-parity.md).
      */
     private io.tesseraql.compiler.binding.ExecutionBounds commandBounds() {
-        int maxRows = config.getString("tesseraql.resultMaterialization.maxRows")
-                .map(Integer::parseInt)
-                .orElse(DEFAULT_MAX_ROWS);
-        String onOverflow = config.getString("tesseraql.resultMaterialization.onOverflow")
-                .orElse("fail");
+        int maxRows = io.tesseraql.yaml.config.SqlDefaults.maxRows(config);
+        String onOverflow = io.tesseraql.yaml.config.SqlDefaults.onOverflow(config);
         return new io.tesseraql.compiler.binding.ExecutionBounds(
                 defaultTimeoutSeconds(), maxRows, onOverflow);
     }
@@ -2449,12 +2445,10 @@ public final class RouteCompiler {
             io.tesseraql.yaml.model.ExportSpec spec, String format) {
         int maxRows = spec != null && spec.maxRows() != null
                 ? spec.maxRows()
-                : config.getString("tesseraql.resultMaterialization.maxRows")
-                        .map(Integer::parseInt)
-                        .orElse(DEFAULT_MAX_ROWS);
+                : io.tesseraql.yaml.config.SqlDefaults.maxRows(config);
         String onOverflow = spec != null && spec.onOverflow() != null
                 ? spec.onOverflow()
-                : config.getString("tesseraql.resultMaterialization.onOverflow").orElse("fail");
+                : io.tesseraql.yaml.config.SqlDefaults.onOverflow(config);
         return new io.tesseraql.core.files.ExportRowCap(maxRows, onOverflow, format);
     }
 
@@ -2463,16 +2457,14 @@ public final class RouteCompiler {
         if (sql.materialize() != null && sql.materialize().maxRows() != null) {
             return sql.materialize().maxRows();
         }
-        return config.getString("tesseraql.resultMaterialization.maxRows")
-                .map(Integer::parseInt)
-                .orElse(DEFAULT_MAX_ROWS);
+        return io.tesseraql.yaml.config.SqlDefaults.maxRows(config);
     }
 
     private String effectiveOnOverflow(Binding sql) {
         if (sql.materialize() != null && sql.materialize().onOverflow() != null) {
             return sql.materialize().onOverflow();
         }
-        return config.getString("tesseraql.resultMaterialization.onOverflow").orElse("fail");
+        return io.tesseraql.yaml.config.SqlDefaults.onOverflow(config);
     }
 
     /**

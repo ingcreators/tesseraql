@@ -109,6 +109,23 @@ final class ConfigReference {
         return byNamespace;
     }
 
+    /**
+     * The files this page reports as reading {@code key}, or an empty set.
+     *
+     * <p>For a ledger that pins a key to one reader. It goes through {@link #scan} rather than
+     * carrying its own regex on purpose: a narrower pattern would let a reader the published page
+     * already names hide from the guard, which is the one failure a read ledger cannot have.
+     */
+    static java.util.SortedSet<String> readersOf(Path repoRoot, String key) throws IOException {
+        for (Map<String, Key> namespace : scan(repoRoot).values()) {
+            Key found = namespace.get(key);
+            if (found != null) {
+                return found.sources();
+            }
+        }
+        return new TreeSet<>();
+    }
+
     private static void collect(Map<String, Map<String, Key>> byNamespace, String key,
             String source) {
         // A prefix a lookup builds on (`tesseraql.apps.` + name) is not a key a reader sets.

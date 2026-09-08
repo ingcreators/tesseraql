@@ -38,8 +38,8 @@ public final class JobExecutor {
             4041);
 
     private int sqlTimeoutSeconds;
-    private int maxRows = 10_000;
-    private String onOverflow = "fail";
+    private int maxRows = io.tesseraql.core.sql.SqlStatement.DEFAULT_MAX_ROWS;
+    private String onOverflow = io.tesseraql.core.sql.SqlStatement.DEFAULT_ON_OVERFLOW;
 
     /** Observes failed job executions (roadmap Phase 20 operations alerts). */
     @FunctionalInterface
@@ -195,7 +195,9 @@ public final class JobExecutor {
      */
     public JobExecutor resultBounds(int maxRows, String onOverflow) {
         this.maxRows = maxRows;
-        this.onOverflow = onOverflow == null ? "fail" : onOverflow;
+        this.onOverflow = onOverflow == null
+                ? io.tesseraql.core.sql.SqlStatement.DEFAULT_ON_OVERFLOW
+                : onOverflow;
         return this;
     }
 

@@ -321,8 +321,8 @@ Keys are declared in `config/application.yml` and `config/tesseraql.yml`, overri
 
 | Key | Read by | Documented in |
 | --- | --- | --- |
-| `tesseraql.resultMaterialization.maxRows` | [RouteCompiler.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-compiler/src/main/java/io/tesseraql/compiler/RouteCompiler.java), [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [file-transfers](file-transfers.md) |
-| `tesseraql.resultMaterialization.onOverflow` | [RouteCompiler.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-compiler/src/main/java/io/tesseraql/compiler/RouteCompiler.java), [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
+| `tesseraql.resultMaterialization.maxRows` | [SqlDefaults.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/config/SqlDefaults.java) | [file-transfers](file-transfers.md) |
+| `tesseraql.resultMaterialization.onOverflow` | [SqlDefaults.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/config/SqlDefaults.java) | — |
 
 ## tesseraql.retention
 
