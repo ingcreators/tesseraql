@@ -70,6 +70,19 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A settled transaction is no longer re-reported as a failure by the cleanup after it.** Four
+  hand-rolled transaction brackets restored autocommit with a bare `setAutoCommit` in a `finally`,
+  and a `finally` that throws discards the enclosing `return`. So a connection dying between the
+  commit and the restore turned committed work into a failure the caller acted on. Session rotation
+  had already deleted the old row and written the new one, and reported an error that signed the
+  user out of the session it had just created. An inline export had committed its extraction, run
+  its `after:` statement and recorded the execution as `COMPLETED`, and raised a failure the tables
+  never agreed with — `finishExecution` writes only over a `RUNNING` row — so a rerun ran the
+  `after:` statement a second time. The rule the transaction primitive already stated for its own
+  restore now has one public implementation the remaining brackets call, and it covers the export's
+  spool reclaim in the same `finally`, whose failed delete discarded the same result. A failing
+  rollback is suppressed onto the failure that matters rather than replacing it.
+
 - **The configuration reference lists the keys read through a helper.** Its header promised every
   key the framework reads, and a whole class of them was invisible: a key handed to a same-file
   wrapper that adds a default or a refusal never appeared beside a config accessor, so the scan

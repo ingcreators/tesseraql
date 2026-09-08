@@ -21,6 +21,7 @@ import io.tesseraql.core.sql.BoundSql;
 import io.tesseraql.core.sql.Sql2WayParser;
 import io.tesseraql.core.sql.SqlNode;
 import io.tesseraql.core.sql.SqlRenderer;
+import io.tesseraql.core.sql.Transactions;
 import io.tesseraql.operations.batch.ExecutionHeartbeats;
 import io.tesseraql.operations.batch.JobRepository;
 import java.io.IOException;
@@ -351,13 +352,22 @@ public final class JdbcFileTransferService implements FileTransferService {
                 // Everything, not Exception: restoring autocommit below COMMITS an open
                 // transaction (docs/two-way-sql-parser.md decision 17). These bodies return a
                 // value from inside the transaction, so they keep their own bracket.
-                connection.rollback();
+                try {
+                    connection.rollback();
+                } catch (SQLException rollback) {
+                    // A rollback that also fails must not replace the failure that matters.
+                    ex.addSuppressed(rollback);
+                }
                 throw ex;
             } finally {
-                connection.setAutoCommit(autoCommit);
+                // Nothing here may throw: by this point the extraction is committed, the spool is
+                // recorded and the execution is COMPLETED, and a finally that throws discards the
+                // InlineResult being returned. The caller would be told an export failed that a
+                // rerun then runs a second time, `after:` statement included.
+                Transactions.restoreQuietly(connection, autoCommit, "inline export " + transferId);
                 // The named results outlive the codec's write and nothing else, so their spools
                 // are this method's to reclaim.
-                spools.forEach(SpooledRows::close);
+                closeQuietly(spools);
             }
         } catch (Exception ex) {
             jobs.failExecution(transferId, ex.getMessage());
@@ -672,7 +682,11 @@ public final class JdbcFileTransferService implements FileTransferService {
                 }
                 throw failure;
             } finally {
-                connection.setAutoCommit(autoCommit);
+                // The rollback half of this bracket was rewritten and the restore one line below
+                // was left bare. The `committed` flag and the RUNNING compare-and-set already
+                // keep this import's verdict honest, so this is uniformity, not a defect — but a
+                // rule that holds in three of four owners is not a rule.
+                Transactions.restoreQuietly(connection, autoCommit, "import " + transferId);
             }
             span.attribute("affectedRows", applied[0]);
         } catch (Exception ex) {
@@ -1242,13 +1256,22 @@ public final class JdbcFileTransferService implements FileTransferService {
                 // Everything, not Exception: restoring autocommit below COMMITS an open
                 // transaction (docs/two-way-sql-parser.md decision 17). These bodies return a
                 // value from inside the transaction, so they keep their own bracket.
-                connection.rollback();
+                try {
+                    connection.rollback();
+                } catch (SQLException rollback) {
+                    // A rollback that also fails must not replace the failure that matters.
+                    ex.addSuppressed(rollback);
+                }
                 throw ex;
             } finally {
-                connection.setAutoCommit(autoCommit);
+                // The commit above settled this export and its execution together. A throw from
+                // here would send it to the handler below, whose failExecution writes only over a
+                // RUNNING row — so the execution would stay COMPLETED while the operator is told
+                // it failed, and a rerun would repeat the `after:` statement.
+                Transactions.restoreQuietly(connection, autoCommit, "export " + transferId);
                 // The named results outlive the codec's write and nothing else, so their spools
                 // are this method's to reclaim.
-                spools.forEach(SpooledRows::close);
+                closeQuietly(spools);
             }
         } catch (Exception ex) {
             span.recordError(ex);
@@ -1256,6 +1279,26 @@ public final class JdbcFileTransferService implements FileTransferService {
             jobs.failExecution(transferId, ex.getMessage());
         } finally {
             span.end();
+        }
+    }
+
+    /**
+     * Reclaims the named results' spools without throwing.
+     *
+     * <p>It shares a {@code finally} with the autocommit restore, and {@code SpooledRows.close}
+     * deletes a file — {@code FileTempStore} answers a failed delete with an
+     * {@code UncheckedIOException}. That would discard the same committed outcome the restore
+     * beside it is careful not to discard. A spool nobody deleted is collected by the expiry
+     * sweep; an export re-reported as failed is not recoverable.
+     */
+    private static void closeQuietly(List<SpooledRows> spools) {
+        for (SpooledRows spool : spools) {
+            try {
+                spool.close();
+            } catch (RuntimeException uncollected) {
+                LOG.warn("Could not reclaim a spooled result; the expiry sweep will: {}",
+                        uncollected.getMessage());
+            }
         }
     }
 
@@ -1484,27 +1527,18 @@ public final class JdbcFileTransferService implements FileTransferService {
      */
     private void recordSpoolAndComplete(String transferId, SpoolRef ref, long rows) {
         try (Connection connection = dataSource.getConnection()) {
-            boolean autoCommit = connection.getAutoCommit();
-            connection.setAutoCommit(false);
-            try {
-                recordSpool(connection, transferId, ref, rows);
-                if (!jobs.completeExecution(connection, transferId)) {
-                    connection.rollback();
+            // The primitive rather than a hand-rolled bracket: this body returns nothing, captures
+            // no mutable local and abandons by throwing, so it is a lambda outright. The rollback
+            // on any failure and the restore that cannot throw both come with it.
+            Transactions.run(connection, "record exported file " + transferId, c -> {
+                recordSpool(c, transferId, ref, rows);
+                if (!jobs.completeExecution(c, transferId)) {
                     tempStore.delete(ref);
                     throw new TqlException(TRANSFER_ERROR, "Export step " + transferId
                             + " was finished elsewhere while it ran; the produced file was"
                             + " discarded");
                 }
-                connection.commit();
-            } catch (Throwable ex) {
-                // Everything, not a listed set: restoring autocommit below COMMITS an open
-                // transaction, so an Error here would record a file the caller was told was
-                // discarded (docs/two-way-sql-parser.md decision 17).
-                connection.rollback();
-                throw ex;
-            } finally {
-                connection.setAutoCommit(autoCommit);
-            }
+            });
         } catch (SQLException ex) {
             throw new TqlException(TRANSFER_ERROR,
                     "Failed to record the exported file: " + ex.getMessage());

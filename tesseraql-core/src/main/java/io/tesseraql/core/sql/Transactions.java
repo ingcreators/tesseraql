@@ -71,7 +71,7 @@ public final class Transactions {
             }
             throw failure;
         } finally {
-            restoreAutoCommit(connection, previous, name);
+            restoreQuietly(connection, previous, name);
         }
     }
 
@@ -91,12 +91,19 @@ public final class Transactions {
     }
 
     /**
-     * The transaction is already committed or rolled back by here. A restore that fails would
+     * Restores autocommit without throwing, for a bracket that cannot be a lambda.
+     *
+     * <p>The transaction is already committed or rolled back by here. A restore that fails would
      * otherwise replace that outcome with a failure the caller acts on — a committed create
      * re-reported as a 500 invites the retry that duplicates it. The pool retires the sick
      * connection.
+     *
+     * <p>Public because the rule outlives this class: a hand-rolled bracket restores autocommit in
+     * a {@code finally}, and a {@code finally} that throws discards the enclosing {@code return}.
+     * Four owners lost a committed outcome that way. Calling this is the whole fix; copying the
+     * body is how the rollback half came to be written out fourteen times.
      */
-    private static void restoreAutoCommit(Connection connection, boolean previous, String name) {
+    public static void restoreQuietly(Connection connection, boolean previous, String name) {
         try {
             connection.setAutoCommit(previous);
         } catch (SQLException restore) {

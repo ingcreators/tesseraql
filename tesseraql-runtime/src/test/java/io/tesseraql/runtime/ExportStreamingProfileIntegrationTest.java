@@ -7,13 +7,17 @@ import io.tesseraql.core.files.FileCodecs;
 import io.tesseraql.core.files.FileTransferService;
 import io.tesseraql.core.files.FileWriteSpec;
 import io.tesseraql.core.spool.FileTempStore;
+import io.tesseraql.core.spool.TempStore;
 import io.tesseraql.core.sql.BoundSql;
 import io.tesseraql.core.sql.Sql2WayParser;
 import io.tesseraql.core.sql.SqlRenderer;
 import io.tesseraql.operations.batch.JobRepository;
+import io.tesseraql.operations.batch.JobStatus;
 import io.tesseraql.operations.files.CsvFileCodec;
 import io.tesseraql.operations.files.JdbcFileTransferService;
+import java.io.IOException;
 import java.io.PrintWriter;
+import java.io.UncheckedIOException;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -113,6 +117,133 @@ class ExportStreamingProfileIntegrationTest {
         assertThat(indexOf(calls, "closeResultSet"))
                 .as("the after: extract statement must not run while the cursor is open")
                 .isLessThan(indexOf(calls, "executeUpdate"));
+    }
+
+    /**
+     * The extraction commits, the spool is recorded and the execution is COMPLETED — and then the
+     * autocommit restore fails. A {@code finally} that throws discards the enclosing
+     * {@code return}, so the caller used to be told the export failed. Nothing takes the outcome
+     * back either: {@code failExecution} writes only over a RUNNING row, so the execution stayed
+     * COMPLETED while the operator saw a failure, and a rerun ran the {@code after:} statement a
+     * second time.
+     */
+    @Test
+    void aCompletedExportIsNotReReportedAsFailedByACleanupThatThrows() throws Exception {
+        JobRepository jobs = new JobRepository(dataSource);
+        jobs.ensureSchema();
+        Path spoolDir = Files.createTempDirectory("export-restore-spool");
+        JdbcFileTransferService transfers = new JdbcFileTransferService(jobs,
+                new io.tesseraql.operations.batch.ExecutionHeartbeats(jobs,
+                        java.time.Duration.ofSeconds(30)),
+                new FileTempStore(spoolDir), dataSource, FileCodecs.of(new CsvFileCodec()),
+                io.tesseraql.core.expr.ExpressionFunctions.processDefault());
+        transfers.ensureSchema();
+
+        FileTransferService.InlineResult result = transfers.exportInline(
+                new FileTransferService.InlineExport(
+                        "items.restore", "app", "csv",
+                        new FileWriteSpec(List.of(ColumnMapping.of("id"), ColumnMapping.of("name")),
+                                null, null, null),
+                        "items.csv",
+                        sql("select id, name from export_source order by id"),
+                        null,
+                        io.tesseraql.core.files.ExportRowCap.unbounded(), java.util.Map.of()),
+                refusesToRestoreAutocommit(dataSource));
+
+        assertThat(result.rows()).isEqualTo(3);
+        assertThat(jobs.findExecution(result.transferId()).orElseThrow().status())
+                .as("the execution the caller is told about must be the one the tables hold")
+                .isEqualTo(JobStatus.COMPLETED);
+    }
+
+    /**
+     * The other job that {@code finally} does. Reclaiming a named result's spool deletes a file,
+     * and the temp store answers a failed delete with an {@code UncheckedIOException} — which
+     * discards the same committed outcome the restore beside it is careful not to discard. A spool
+     * nobody deleted is collected by the expiry sweep; an export re-reported as failed is not.
+     */
+    @Test
+    void aCompletedExportIsNotReReportedAsFailedByASpoolItCouldNotReclaim() throws Exception {
+        JobRepository jobs = new JobRepository(dataSource);
+        jobs.ensureSchema();
+        Path spoolDir = Files.createTempDirectory("export-reclaim-spool");
+        JdbcFileTransferService transfers = new JdbcFileTransferService(jobs,
+                new io.tesseraql.operations.batch.ExecutionHeartbeats(jobs,
+                        java.time.Duration.ofSeconds(30)),
+                refusesToDelete(new FileTempStore(spoolDir)), dataSource,
+                FileCodecs.of(new CsvFileCodec()),
+                io.tesseraql.core.expr.ExpressionFunctions.processDefault());
+        transfers.ensureSchema();
+
+        FileTransferService.InlineResult result = transfers.exportInline(
+                new FileTransferService.InlineExport(
+                        "items.reclaim", "app", "csv",
+                        new FileWriteSpec(List.of(ColumnMapping.of("id"), ColumnMapping.of("name")),
+                                null, null, null),
+                        "items.csv",
+                        sql("select id, name from export_source order by id"),
+                        null,
+                        io.tesseraql.core.files.ExportRowCap.unbounded(),
+                        // A named result, so there is a spool to reclaim in the finally.
+                        Map.of("codes", sql("select id from export_source order by id"))),
+                dataSource);
+
+        assertThat(result.rows()).isEqualTo(3);
+        assertThat(jobs.findExecution(result.transferId()).orElseThrow().status())
+                .isEqualTo(JobStatus.COMPLETED);
+    }
+
+    /** A temp store that writes normally and refuses every delete. */
+    private static TempStore refusesToDelete(TempStore target) {
+        return (TempStore) Proxy.newProxyInstance(
+                ExportStreamingProfileIntegrationTest.class.getClassLoader(),
+                new Class<?>[]{TempStore.class},
+                (proxy, method, args) -> {
+                    if ("delete".equals(method.getName())) {
+                        throw new UncheckedIOException(
+                                new IOException("spool directory is gone"));
+                    }
+                    return pass(target, method, args);
+                });
+    }
+
+    /**
+     * The datasource, with the autocommit RESTORE sabotaged and nothing else: the connection goes
+     * into a transaction, the extraction and the commit run for real, and only the cleanup that
+     * follows refuses. Keyed on having seen {@code setAutoCommit(false)} first, so a pool or
+     * driver that sets autocommit on a fresh connection is unaffected.
+     */
+    private static DataSource refusesToRestoreAutocommit(DataSource target) {
+        return (DataSource) Proxy.newProxyInstance(
+                ExportStreamingProfileIntegrationTest.class.getClassLoader(),
+                new Class<?>[]{DataSource.class},
+                (proxy, method, args) -> {
+                    Object answer = pass(target, method, args);
+                    if (!(answer instanceof Connection connection)) {
+                        return answer;
+                    }
+                    boolean[] inTransaction = new boolean[1];
+                    return Proxy.newProxyInstance(
+                            ExportStreamingProfileIntegrationTest.class.getClassLoader(),
+                            new Class<?>[]{Connection.class},
+                            (c, called, callArgs) -> {
+                                if ("setAutoCommit".equals(called.getName())) {
+                                    if (Boolean.TRUE.equals(callArgs[0]) && inTransaction[0]) {
+                                        throw new SQLException("connection reset by peer");
+                                    }
+                                    inTransaction[0] = Boolean.FALSE.equals(callArgs[0]);
+                                }
+                                return pass(connection, called, callArgs);
+                            });
+                });
+    }
+
+    private static Object pass(Object target, Method method, Object[] args) throws Throwable {
+        try {
+            return method.invoke(target, args);
+        } catch (InvocationTargetException ex) {
+            throw ex.getCause();
+        }
     }
 
     private static int indexOf(List<String> calls, String call) {
