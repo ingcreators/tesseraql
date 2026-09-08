@@ -330,19 +330,21 @@ public final class RouteCompiler {
         return null;
     }
 
-    /** The first form view whose {@code action:} is this path — the fragment's label source. */
+    /**
+     * The first form view whose {@code action:} is this path — the fragment's label source.
+     *
+     * <p>Reads the registry's own parsed spec, the way {@code snapshotKey} and
+     * {@code bulkSelectionKey} do. Re-parsing {@code view.source()} here read the file a second
+     * time per lookup-bearing route, and its {@code catch} guarded a case the loader had already
+     * removed: {@code ManifestLoader.loadViews} drops a document whose parse throws, so no
+     * {@code ViewFile} in the manifest can carry an unparseable source.
+     */
     private io.tesseraql.yaml.view.ViewSpec formViewForAction(String path) {
         for (io.tesseraql.yaml.manifest.ViewFile view : manifest.views()) {
-            try {
-                io.tesseraql.yaml.view.ViewSpec spec = io.tesseraql.yaml.view.ViewSpec
-                        .parse(view.source());
-                if (io.tesseraql.yaml.view.ViewSpec.FORM.equals(spec.view())
-                        && path.equals(spec.action())) {
-                    return spec;
-                }
-            } catch (RuntimeException unparseable) {
-                // The compiler already refuses a broken view on its own route; the
-                // companion scan just skips it.
+            io.tesseraql.yaml.view.ViewSpec spec = view.spec();
+            if (io.tesseraql.yaml.view.ViewSpec.FORM.equals(spec.view())
+                    && path.equals(spec.action())) {
+                return spec;
             }
         }
         return null;
