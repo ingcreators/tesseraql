@@ -66,10 +66,17 @@ final class RouteEdge {
                     io.tesseraql.core.error.TqlDomain.ROUTE, 5000), "Internal error");
 
     private final RuntimeContext runtimeContext;
+    /**
+     * Keyed by method AND pipeline, the way {@link io.tesseraql.pipeline.HttpMounts} keys its own
+     * table. A snapshot-paginated page mounts GET and POST onto ONE pipeline id
+     * (docs/list-surface.md decision 10), so a map keyed by the pipeline alone holds one of the
+     * two and reconciles the pair against each other — each remount tearing the sibling's router
+     * route back off.
+     */
     private final Map<String, Route> mounted = new ConcurrentHashMap<>();
-    /** Per route: the router's wire-safe parameter name back to the declared one (WireNames). */
+    /** Per mount: the router's wire-safe parameter name back to the declared one (WireNames). */
     private final Map<String, Map<String, String>> declaredNames = new ConcurrentHashMap<>();
-    /** What each mounted route was mounted as, so a reload can tell a moved URL from a stable one. */
+    /** What each mount was mounted as, so a reload can tell a moved URL from a stable one. */
     private final Map<String, io.tesseraql.pipeline.HttpMounts.Mount> at = new ConcurrentHashMap<>();
     private volatile io.vertx.ext.web.Router router;
     /** Requests being served right now, and the monitor a drain waits on. */
@@ -115,6 +122,7 @@ final class RouteEdge {
         for (io.tesseraql.pipeline.HttpMounts.Mount mount : io.tesseraql.pipeline.HttpMounts
                 .of(runtimeContext).all()) {
             String routeId = mount.pipeline();
+            String mountKey = key(mount);
             if (!Pipelines.of(runtimeContext).contains(routeId)) {
                 // Declared but not built: a save that did not compile and left no stub. The
                 // watcher has to survive that, which is why a reload is tolerant where a boot is
@@ -122,16 +130,16 @@ final class RouteEdge {
                 // takes the good routes with it.
                 continue;
             }
-            declared.add(routeId);
-            if (!(mounted.containsKey(routeId) && mount.equals(at.get(routeId)))) {
+            declared.add(mountKey);
+            if (!(mounted.containsKey(mountKey) && mount.equals(at.get(mountKey)))) {
                 // A recompiled route that kept its URL needs nothing from the edge: the serve
                 // handler asks the registry per request, so the swap already happened there.
-                remount(mount, routeId);
+                remount(mount);
             }
         }
-        for (String routeId : java.util.List.copyOf(mounted.keySet())) {
-            if (!declared.contains(routeId)) {
-                unmount(routeId);
+        for (String mountKey : java.util.List.copyOf(mounted.keySet())) {
+            if (!declared.contains(mountKey)) {
+                unmount(mountKey);
             }
         }
     }
@@ -144,42 +152,55 @@ final class RouteEdge {
      * a route rather than waiting for a restart. Tolerant, for the reason above: a reload that
      * cannot mount one route leaves the others serving.
      */
-    private void remount(io.tesseraql.pipeline.HttpMounts.Mount mount, String routeId) {
-        unmount(routeId);
-        at.put(routeId, mount);
-        declaredNames.put(routeId, wireToDeclared(mount.path()));
-        mounted.put(routeId, router.route(HttpMethod.valueOf(mount.method()), path(mount.path()))
+    private void remount(io.tesseraql.pipeline.HttpMounts.Mount mount) {
+        String routeId = mount.pipeline();
+        String mountKey = key(mount);
+        unmount(mountKey);
+        at.put(mountKey, mount);
+        declaredNames.put(mountKey, wireToDeclared(mount.path()));
+        mounted.put(mountKey, router.route(HttpMethod.valueOf(mount.method()), path(mount.path()))
                 .order(AFTER_THE_GATE)
                 .handler(HttpEdgeBeans.bodyHandler(runtimeContext))
-                .handler(ctx -> serve(ctx, routeId)));
+                .handler(ctx -> serve(ctx, routeId, mountKey)));
     }
 
     /** Takes a route off the router, so a deleted route answers 404 rather than its last body. */
-    private void unmount(String routeId) {
-        Route route = mounted.remove(routeId);
+    private void unmount(String mountKey) {
+        Route route = mounted.remove(mountKey);
         if (route != null) {
             route.remove();
         }
-        at.remove(routeId);
-        declaredNames.remove(routeId);
+        at.remove(mountKey);
+        declaredNames.remove(mountKey);
+    }
+
+    /**
+     * One mounted endpoint's identity: its method and its pipeline, never the pipeline alone.
+     *
+     * <p>The path is deliberately not part of it — a route that moved must be found under its old
+     * identity so the reload can take it off the URL it left.
+     */
+    private static String key(io.tesseraql.pipeline.HttpMounts.Mount mount) {
+        return mount.method() + " " + mount.pipeline();
     }
 
     private void mount(io.vertx.ext.web.Router router,
             io.tesseraql.pipeline.HttpMounts.Mount mount) {
         String routeId = mount.pipeline();
+        String mountKey = key(mount);
         if (!Pipelines.of(runtimeContext).contains(routeId)) {
             throw new IllegalStateException("The HTTP surface " + mount.method() + " "
                     + mount.path() + " names pipeline " + routeId + ", which was not compiled");
         }
-        at.put(routeId, mount);
-        declaredNames.put(routeId, wireToDeclared(mount.path()));
+        at.put(mountKey, mount);
+        declaredNames.put(mountKey, wireToDeclared(mount.path()));
         // The body handler is the router's own — the instance the platform consumer would have used,
         // with whatever the server configured on it — so an upload spools where it already
         // spooled and a form parses the way it already parsed.
-        mounted.put(routeId, router.route(HttpMethod.valueOf(mount.method()), path(mount.path()))
+        mounted.put(mountKey, router.route(HttpMethod.valueOf(mount.method()), path(mount.path()))
                 .order(AFTER_THE_GATE)
                 .handler(HttpEdgeBeans.bodyHandler(runtimeContext))
-                .handler(ctx -> serve(ctx, routeId)));
+                .handler(ctx -> serve(ctx, routeId, mountKey)));
     }
 
     /**
@@ -228,7 +249,7 @@ final class RouteEdge {
         return back;
     }
 
-    private void serve(RoutingContext ctx, String routeId) {
+    private void serve(RoutingContext ctx, String routeId, String mountKey) {
         // Asked of the registry per request, which is what makes hot reload a swap: a recompiled
         // route replaces its entry there and this handler picks the new chain up on the next
         // request, with no router surgery (docs/vertx-native.md decision 4).
@@ -239,7 +260,7 @@ final class RouteEdge {
             return;
         }
         Context connection = ctx.vertx().getOrCreateContext();
-        Exchange exchange = request(ctx, routeId, declaredNames.getOrDefault(routeId,
+        Exchange exchange = request(ctx, routeId, declaredNames.getOrDefault(mountKey,
                 Map.of()));
         // Counted here, because this is the only place that knows (docs/camel-removal.md
         // decision 1). It used to be registered in Camel's inflight repository under the route
