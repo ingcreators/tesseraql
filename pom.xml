@@ -155,7 +155,7 @@
     <hypermedia-editor-kit.version>0.2.0</hypermedia-editor-kit.version>
     <observablehq-plot.version>0.6.10</observablehq-plot.version>
     <webjars-locator.version>1.1.4</webjars-locator.version>
-    <flyway.version>13.4.0</flyway.version>
+    <flyway.version>13.5.0</flyway.version>
     <commons-csv.version>1.14.1</commons-csv.version>
     <jxls.version>3.1.0</jxls.version>
     <fastexcel.version>0.20.2</fastexcel.version>
@@ -168,14 +168,14 @@
     <!-- DuckDB analytics engine (docs/duckdb.md): MIT licensed, module-channel only — the jar
          bundles per-platform native libraries and never ships in the CLI fat jar. -->
     <duckdb.version>1.3.1.0</duckdb.version>
-    <greenmail.version>2.1.12</greenmail.version>
+    <greenmail.version>2.1.13</greenmail.version>
     <h2.version>2.4.240</h2.version>
     <!-- Embedded PostgreSQL for the serve embedded-db option (run a tqlapp with no external DB).
          The lib is a small pure-Java process supervisor; the platform-specific postgres binary is
          NOT a dependency — it is resolved on demand via the CLI's ShrinkWrap resolver, pinned to
          this version (surfaced to the CLI through a build-filtered resource). -->
     <zonky.embedded.postgres.version>2.2.2</zonky.embedded.postgres.version>
-    <zonky.postgres.binaries.version>17.10.0</zonky.postgres.binaries.version>
+    <zonky.postgres.binaries.version>17.11.0</zonky.postgres.binaries.version>
     <spotless.version>3.9.0</spotless.version>
     <maven.pmd.plugin.version>3.28.0</maven.pmd.plugin.version>
     <!-- The plugin's bundled PMD lags; the analyzer version is pinned here so Java language
@@ -183,20 +183,20 @@
     <pmd.version>7.27.0</pmd.version>
 
     <!-- Build plugin versions -->
-    <maven.compiler.plugin.version>3.15.0</maven.compiler.plugin.version>
+    <maven.compiler.plugin.version>3.16.0</maven.compiler.plugin.version>
     <maven.enforcer.plugin.version>3.6.3</maven.enforcer.plugin.version>
-    <maven.surefire.plugin.version>3.5.6</maven.surefire.plugin.version>
-    <maven.failsafe.plugin.version>3.5.6</maven.failsafe.plugin.version>
+    <maven.surefire.plugin.version>3.6.0</maven.surefire.plugin.version>
+    <maven.failsafe.plugin.version>3.6.0</maven.failsafe.plugin.version>
     <!--
       The archiver that has to honour project.build.outputTimestamp. Until now it was whichever
       version the running Maven's default lifecycle bindings supplied, so the one plugin the
       reproducibility claim depends on was the one plugin the build did not choose
       (docs/deterministic-output.md decision 6).
     -->
-    <maven.jar.plugin.version>3.5.0</maven.jar.plugin.version>
+    <maven.jar.plugin.version>3.5.1</maven.jar.plugin.version>
     <maven.help.plugin.version>3.5.2</maven.help.plugin.version>
-    <maven.dependency.plugin.version>3.7.0</maven.dependency.plugin.version>
-    <maven.resources.plugin.version>3.4.0</maven.resources.plugin.version>
+    <maven.dependency.plugin.version>3.11.0</maven.dependency.plugin.version>
+    <maven.resources.plugin.version>3.5.0</maven.resources.plugin.version>
   </properties>
 
   <dependencyManagement>
