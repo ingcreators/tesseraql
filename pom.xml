@@ -361,6 +361,14 @@
         <artifactId>jcl-over-slf4j</artifactId>
         <version>${slf4j.version}</version>
       </dependency>
+      <!-- The System.Logger -> SLF4J bridge. tesseraql-core may not depend on SLF4J, so it and
+           six other modules log through System.Logger; without a LoggerFinder those lines fall to
+           the JDK's JUL default and bypass the provider the CLI ships. -->
+      <dependency>
+        <groupId>org.slf4j</groupId>
+        <artifactId>slf4j-jdk-platform-logging</artifactId>
+        <version>${slf4j.version}</version>
+      </dependency>
       <!-- Self-hosted browser libraries, vendored as WebJars so the supply chain stays on Maven
            Central and pages never reference external CDNs (design ch. 12, 50). -->
       <dependency>

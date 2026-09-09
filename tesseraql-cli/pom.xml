@@ -20,6 +20,18 @@
       <groupId>org.slf4j</groupId>
       <artifactId>slf4j-api</artifactId>
     </dependency>
+    <!-- ...and the System.Logger -> SLF4J bridge beside it, for the same reason and in the same
+         place. tesseraql-core may not depend on SLF4J (AGENTS.md rules 2 and 3), so it logs
+         through System.Logger and six other modules follow it; without a LoggerFinder those
+         lines fall to the JDK's JUL default, arriving unstructured, without the MDC, and deaf to
+         the log-level flag. A System.LoggerFinder is a JVM-global, once-per-process choice, so it is
+         declared here where the process owner is - never in tesseraql-runtime, which a host with
+         its own backend embeds. tesseraql-host inherits it transitively, and deploy/Dockerfile
+         copies the runtime closure, so neither needs a change. -->
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-jdk-platform-logging</artifactId>
+    </dependency>
     <dependency>
       <groupId>io.tesseraql</groupId>
       <artifactId>tesseraql-runtime</artifactId>
