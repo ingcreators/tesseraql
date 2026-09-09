@@ -35,7 +35,13 @@ if not "%LOCALAPPDATA%"=="" if not "%FINGERPRINT%"=="" (
   if not exist "%LOCALAPPDATA%\tesseraql\" mkdir "%LOCALAPPDATA%\tesseraql" 2>nul
   if exist "%LOCALAPPDATA%\tesseraql\" (
     if not exist "%LOCALAPPDATA%\tesseraql\cds-!FINGERPRINT!.jsa" del /q "%LOCALAPPDATA%\tesseraql\cds-*.jsa" 2>nul
-    set "OPTS=!OPTS! -XX:+AutoCreateSharedArchive -XX:SharedArchiveFile=%LOCALAPPDATA%\tesseraql\cds-!FINGERPRINT!.jsa -Xlog:cds=error:stderr"
+    rem The archive option is quoted because %LOCALAPPDATA% contains a space for every user whose
+    rem profile name does. `set "V=..."` keeps everything between the first and last quote, so the
+    rem inner pair is stored in OPTS; `java %OPTS%` substitutes it textually and java.exe's own
+    rem argv splitter then takes the quoted run as one token. Unquoted, the tail arrived as a
+    rem second argument, and because it precedes -cp the JVM took it as the main class and the
+    rem real classpath became a program argument - the CLI died before running any of its code.
+    set "OPTS=!OPTS! -XX:+AutoCreateSharedArchive "-XX:SharedArchiveFile=%LOCALAPPDATA%\tesseraql\cds-!FINGERPRINT!.jsa" -Xlog:cds=error:stderr"
   )
 )
 
