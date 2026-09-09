@@ -27,6 +27,33 @@ All notable changes to TesseraQL are documented here. The format follows
   with that assertion disabled so it could not mask the other, the generated code failing the
   ASCII gate.
 
+- **Every streaming read on MariaDB failed before it began.** `Integer.MIN_VALUE` is MySQL
+  Connector/J's row-streaming signal, and it is that driver's alone. MariaDB Connector/J answers
+  `setFetchSize(Integer.MIN_VALUE)` with `SQLSyntaxErrorException: invalid fetch size`, so every
+  `recipe: query-export` route, every `query-spool` batch step and the async export leg in
+  `JdbcFileTransferService` failed outright on MariaDB.
+
+  The driver this broke on is the one the project recommends: MariaDB Connector/J is LGPL, and
+  [docs/module-channel.md](docs/module-channel.md) decision 7 offers it as the documented exit for
+  organizations that cannot redistribute `mysql-connector-j`.
+
+  A dialect cannot decide this. A `jdbc:mariadb://` URL infers `Dialect.MYSQL` — correctly, the
+  SQL really is MySQL's — so mapping `mariadb` to a positive fetch size does not reach an
+  unconfigured deployment at all. `SqlStatement.prepare` now asks the connection whether its
+  driver defines the sentinel and substitutes the conservative fetch size when it does not. The
+  test is a whitelist, so an unfamiliar driver is given a fetch size JDBC defines rather than one
+  it may reject. `StreamingProfiles` still answers `mariadb` truthfully for the paths that do know
+  the vendor.
+
+  Two guards, each verified red. `StreamingProfileDriverIntegrationTest` streams fifty rows
+  through the framework's own primitive against a live MySQL and a live MariaDB, deriving the
+  dialect from the container's JDBC URL the way the compiler does rather than naming it — it stays
+  red on the `StreamingProfiles`-only repair, which is how that repair was caught as insufficient.
+  A unit case pins the substitution against a fake driver name.
+
+  `SqlStatementTest`'s fake had no driver name and accepted every fetch size, which is why nothing
+  saw this; it now answers one, and its MySQL assertion means something for the first time.
+
 - **The two release jobs that only a tag can run, and the guards that hold them.** Cutting
   0.16.0 ran the release path for the first time since the release-and-CI-hardening campaign
   reshaped it, and two of its four jobs failed — neither reachable from a pull request, so

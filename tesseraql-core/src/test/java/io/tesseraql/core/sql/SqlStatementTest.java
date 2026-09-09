@@ -543,12 +543,34 @@ class SqlStatementTest {
                         .fetchSize())
                 .read("web/api/export.sql", bound, (resultSet, span) -> resultSet.next());
 
-        // MySQL/MariaDB stream row-by-row only on setFetchSize(Integer.MIN_VALUE); anything
-        // else buffers the whole result in the driver.
+        // MySQL streams row-by-row only on setFetchSize(Integer.MIN_VALUE); anything else
+        // buffers the whole result in the driver. The fake accepts every fetch size, so this
+        // asserts only that the value reaches the driver unclamped — whether a real driver
+        // takes it is StreamingProfileDriverIntegrationTest's job. MariaDB's does not.
         assertThat(database.calls)
                 .anyMatch(call -> call.startsWith("prepareStatement(")
                         && call.endsWith(",1003,1007)"))
                 .contains("setFetchSize(" + Integer.MIN_VALUE + ")");
+    }
+
+    @Test
+    void aDriverThatDoesNotDefineMysqlsSentinelGetsAFetchSizeJdbcDoes() throws Exception {
+        FakeDatabase database = new FakeDatabase(List.of("name"), List.of("Anne"));
+        database.driverName = "MariaDB Connector/J";
+        BoundSql bound = SqlRenderer.render(SELECT, Map.of("id", "u1"));
+
+        // The dialect still says "mysql" — a jdbc:mariadb:// URL infers Dialect.MYSQL, because the
+        // SQL really is MySQL's. Only the driver knows the sentinel is meaningless to it, and
+        // handing it over anyway is what made every streaming read on MariaDB fail outright.
+        SqlStatement.on(database.dataSource())
+                .fetchSize(io.tesseraql.core.dialect.StreamingProfiles.forDialect("mysql")
+                        .fetchSize())
+                .read("web/api/export.sql", bound, (resultSet, span) -> resultSet.next());
+
+        assertThat(database.calls)
+                .contains("setFetchSize("
+                        + io.tesseraql.core.dialect.StreamingProfiles.CONSERVATIVE_FETCH_SIZE + ")")
+                .doesNotContain("setFetchSize(" + Integer.MIN_VALUE + ")");
     }
 
     @Test
@@ -705,6 +727,12 @@ class SqlStatementTest {
         private boolean rowRead;
         private int batched;
         private int autoCommitCalls;
+        /**
+         * What {@code DatabaseMetaData.getDriverName()} answers. It decides whether MySQL's
+         * row-streaming sentinel may be handed to this driver, so the fake has to have one — a
+         * fake with no driver name made that branch untestable.
+         */
+        private String driverName = "MySQL Connector/J";
 
         private FakeDatabase(List<String> labels, List<Object> row) {
             this.labels = labels;
@@ -736,7 +764,12 @@ class SqlStatementTest {
                 case "executeBatch" -> drained();
                 case "clearBatch" -> cleared();
                 case "getGeneratedKeys" -> proxy(ResultSet.class);
-                case "getMetaData" -> proxy(ResultSetMetaData.class);
+                // Connection.getMetaData answers DatabaseMetaData; ResultSet.getMetaData answers
+                // ResultSetMetaData. Both are this same handler, so the declaring type decides.
+                case "getMetaData" -> method.getDeclaringClass() == Connection.class
+                        ? proxy(java.sql.DatabaseMetaData.class)
+                        : proxy(ResultSetMetaData.class);
+                case "getDriverName" -> driverName;
                 case "getColumnCount" -> labels.size();
                 case "getColumnLabel" -> labels.get((Integer) args[0] - 1);
                 case "getObject" -> row.get((Integer) args[0] - 1);
