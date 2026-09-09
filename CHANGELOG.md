@@ -4,7 +4,26 @@ All notable changes to TesseraQL are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/).
 
-## Unreleased
+## 0.16.0 - 2026-09-09
+
+This is the release where a whole-repository audit was worked to the end. Seventy-nine verified
+findings were grouped into twelve campaigns and closed one at a time — the HTTP edge, the 2-way
+SQL parser, base-path emission, deterministic output, the contract execution seam, release and
+CI hardening, YAML surface drift, module boundary guards, JDBC transaction close-out and test
+hygiene — and the pattern that repeated across all of them is that reading the code was not
+enough. Nearly every campaign found a live defect behind a finding filed as maintainability, and
+several found guards that were green on the very defect they had been written for; what caught
+those was building the broken variant and running the guard against it. So the shape of this
+release is a long list of small, specific repairs: a `job run` that ignored its row cap, a
+completed export reported as failed, a committed rotation that signed the user out, an aborted
+download that cost an admission permit permanently, a settled transaction re-reported as a
+failure by its own cleanup. Alongside them the framework's outputs became deterministic — a
+response, a notification payload, an MCP tool answer and the release evidence each keep the order
+they were declared in — the repository grew its first `.github/` guards, every one proven red
+before its fix, and publishing narrowed to one target: Maven Central, the only channel anything
+ever consumed. On the declarative surface, a locked statement became a test-suite target, so a
+scaffolded application's writes no longer sit outside `tesseraql test`. **Includes many pre-1.0
+breaking changes**, recorded in the Changed entries.
 
 ### Added
 
