@@ -3,6 +3,7 @@ package io.tesseraql.security.totp;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Locale;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -45,6 +46,45 @@ class TotpTest {
         assertThat(Totp.matchedStep(secret, "12345")).isEqualTo(-1);
         assertThat(Totp.matchedStep(secret, "not-a-code")).isEqualTo(-1);
         assertThat(Totp.matchedStep(secret, null)).isEqualTo(-1);
+    }
+
+    /**
+     * A TOTP code is an identity, not a rendering: the same secret and step must produce the
+     * same six characters on every JVM. Under a default locale whose numbering system is not
+     * Latin — Arabic-Indic (ar-EG), Bengali (bn-BD), Devanagari — a locale-sensitive format
+     * would render {@code ٤٧٠٧٦٢}, which {@link Totp#matchedStep} then refuses because Java's
+     * {@code \d} is ASCII-only. The server would reject the code it had just generated, and
+     * every user with MFA enabled would be locked out in both directions.
+     *
+     * <p>There is no parallel test execution in this repository, so restoring the default in a
+     * finally block is enough; a lock would guard against a scheduler that does not exist.
+     */
+    @Test
+    void aCodeIsTheSameSixCharactersUnderALocaleWithItsOwnDigits() {
+        Locale original = Locale.getDefault();
+        try {
+            for (Locale locale : new Locale[]{
+                    Locale.of("ar", "EG"), Locale.of("bn", "BD"),
+                    Locale.forLanguageTag("hi-IN-u-nu-deva")}) {
+                Locale.setDefault(locale);
+
+                // The RFC vector is a fixed string, whatever the JVM thinks digits look like.
+                assertThat(Totp.codeAt(RFC_SECRET, 59L / 30))
+                        .as("RFC 6238 vector under %s", locale)
+                        .isEqualTo("287082");
+
+                // And the round trip the login flow actually performs still closes.
+                String secret = Totp.generateSecret();
+                long now = Totp.currentStep();
+                String generated = Totp.codeAt(secret, now);
+                assertThat(generated).as("code under %s is ASCII", locale).matches("\\d{6}");
+                assertThat(Totp.matchedStep(secret, generated))
+                        .as("the server accepts the code it generated under %s", locale)
+                        .isEqualTo(now);
+            }
+        } finally {
+            Locale.setDefault(original);
+        }
     }
 
     @Test

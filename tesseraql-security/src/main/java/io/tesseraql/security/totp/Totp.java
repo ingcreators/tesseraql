@@ -2,6 +2,7 @@ package io.tesseraql.security.totp;
 
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
+import java.util.Locale;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 
@@ -39,6 +40,11 @@ public final class Totp {
      * The step (within {@code currentStep() ± WINDOW}) whose code matches, or -1. The
      * caller must then win the store's last-used-step compare-and-set before accepting —
      * that, not this, is what stops a captured code replaying inside its window.
+     *
+     * <p>The gate is {@code \d}, which in Java is ASCII-only, and that is deliberate: a code
+     * is transcribed from an authenticator app, which renders ASCII digits regardless of the
+     * phone's locale, so ASCII is what a user has to type. Normalising other numbering
+     * systems here would widen the accepted alphabet for a keypad no authenticator uses.
      */
     public static long matchedStep(String base32Secret, String code) {
         if (code == null || !code.matches("\\d{" + DIGITS + "}")) {
@@ -82,7 +88,11 @@ public final class Totp {
                     | ((hash[offset + 1] & 0xff) << 16)
                     | ((hash[offset + 2] & 0xff) << 8)
                     | (hash[offset + 3] & 0xff);
-            return String.format("%0" + DIGITS + "d", binary % 1_000_000);
+            // Locale.ROOT, not the default: a code is an identity that is compared, typed and
+            // stored, not a number rendered for a reader. Under ar-EG or bn-BD the default
+            // locale would format Arabic-Indic or Bengali digits, which matchedStep then
+            // refuses — the server rejecting the code it had just generated.
+            return String.format(Locale.ROOT, "%0" + DIGITS + "d", binary % 1_000_000);
         } catch (java.security.GeneralSecurityException ex) {
             throw new IllegalStateException("HmacSHA1 unavailable", ex);
         }
