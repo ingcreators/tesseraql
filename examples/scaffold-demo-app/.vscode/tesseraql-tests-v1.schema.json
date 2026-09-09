@@ -35,6 +35,16 @@
             "additionalProperties": true,
             "description": "The request principal the case runs as (docs data-scoping): resolves /*%scope ... */ directives in the target SQL through the app's scope/ declarations exactly as the runtime would, and seeds the principal.* ambient paths. Without it, a scoped statement renders deny-by-default for arms that need a principal."
           },
+          "lock": {
+            "type": "object",
+            "properties": {
+              "route": { "type": "string", "description": "The route whose lock: names the column this case seeds." },
+              "value": { "type": ["string", "integer", "number"], "description": "The lock value the case sends back, bound as the comparison's parameter. A scalar: the framework refuses a list or a map as a lock value." },
+              "overwrite": { "type": "boolean", "description": "Waive the comparison, rendering (1=1) - the conflict dialog's Overwrite button." }
+            },
+            "additionalProperties": true,
+            "description": "The optimistic lock a sql case runs under (docs edit-conflict): seeds the value a /*%lock*/ directive compares, so a locked update or delete is a suite target like any other write. The column comes from the named route's own lock: declaration."
+          },
           "validate": {
             "type": "object",
             "properties": {

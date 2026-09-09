@@ -22,6 +22,10 @@ final class SqlCases {
      * (an {@code UPDATE}/{@code INSERT}/{@code DELETE}) therefore executes for real and is
      * asserted through {@code expect.updateCount} and the verify steps, yet a test run never
      * commits anything to the database — pass or fail.
+     *
+     * <p>The case's {@code lock:} is seeded on the target alone (docs/edit-conflict.md). A
+     * {@code verify:} step is a read-back, and a read-back cannot carry a lock directive at
+     * all — so the seeding stops at the write, and a locked read-back keeps failing loudly.
      */
     TestResult run(TestCase test) {
         try (Connection connection = context.dataSource().getConnection()) {
@@ -29,7 +33,9 @@ final class SqlCases {
             try {
                 SqlOutcome outcome = context.executeSql(connection,
                         context.appHome().resolve(test.sql().file()),
-                        SuiteContext.withPrincipal(test.params(), test.principal()));
+                        context.withLock(
+                                SuiteContext.withPrincipal(test.params(), test.principal()),
+                                test.lock()));
                 String failure = Expectations.assertOutcome(test.expect(), outcome);
                 for (int i = 0; failure == null && i < test.verify().size(); i++) {
                     failure = runVerifyStep(connection, test.verify().get(i), i,

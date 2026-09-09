@@ -51,6 +51,9 @@ public record TestSuite(String version, List<TestCase> tests) {
      * @param principal the request principal the case runs as (docs/data-scoping.md): resolves
      *                 {@code /*%scope … *}{@code /} directives in the target SQL exactly as the
      *                 runtime would, and seeds the {@code principal.*} ambient paths
+     * @param lock     the optimistic lock a {@code sql} case runs under
+     *                 (docs/edit-conflict.md): seeds the value a {@code /*%lock*}{@code /}
+     *                 directive compares, which only the command pipeline could build before
      */
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record TestCase(String name, SqlTarget sql, String contract,
@@ -59,12 +62,23 @@ public record TestSuite(String version, List<TestCase> tests) {
             MessagesTarget messages,
             @com.fasterxml.jackson.annotation.JsonProperty("http") HttpCallTarget httpCall,
             DecideTarget decide, List<VerifyStep> verify, PrincipalSpec principal,
-            TransitionTarget transition, DispatchTarget dispatch, List<GivenStep> given) {
+            TransitionTarget transition, DispatchTarget dispatch, List<GivenStep> given,
+            LockTarget lock) {
 
         public TestCase {
             params = params == null ? Map.of() : Map.copyOf(params);
             verify = verify == null ? List.of() : List.copyOf(verify);
             given = given == null ? List.of() : List.copyOf(given);
+        }
+
+        /** Convenience constructor without a {@code lock} (the pre-edit-conflict shape). */
+        public TestCase(String name, SqlTarget sql, String contract, Map<String, Object> params,
+                Expectation expect, ValidateTarget validate, NotifyTarget notifications,
+                MessagesTarget messages, HttpCallTarget httpCall, DecideTarget decide,
+                List<VerifyStep> verify, PrincipalSpec principal, TransitionTarget transition,
+                DispatchTarget dispatch, List<GivenStep> given) {
+            this(name, sql, contract, params, expect, validate, notifications, messages, httpCall,
+                    decide, verify, principal, transition, dispatch, given, null);
         }
 
         /** Convenience constructor without {@code given} steps (the initial-state shape). */
@@ -241,6 +255,36 @@ public record TestSuite(String version, List<TestCase> tests) {
     /** A SQL file target. */
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record SqlTarget(String file) {
+    }
+
+    /**
+     * The optimistic lock a {@code sql} case runs under (docs/edit-conflict.md): the value the
+     * case sends back for the column a route's {@code lock:} declares.
+     *
+     * <p>The route is named rather than the column, because the column is the route's
+     * declaration and a case that restated it would keep passing after the route changed it.
+     * This is where the lock and {@code principal:} stop being the same shape: a
+     * {@code /*%scope … *}{@code /} directive names its scope id in the statement, so the case
+     * supplies only claims — while {@code /*%lock*}{@code /} names nothing, and the column
+     * exists in the route's YAML alone.
+     *
+     * <p>The value is bound as the YAML typed it. The route's {@code lock.type} exists to turn a
+     * form's string back into the column's type, and a suite has no form — {@code value: 1} is
+     * already an integer, so coercing it again would only add a way to disagree.
+     *
+     * @param route     the id of the route whose {@code lock:} names the column; the route must
+     *                  declare one
+     * @param value     the lock value the case sends back, bound as the comparison's parameter
+     * @param overwrite whether the case waives the comparison, which renders {@code (1=1)} —
+     *                  the suite-side spelling of the conflict dialog's Overwrite button
+     */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record LockTarget(String route, Object value, Boolean overwrite) {
+
+        /** Whether the case waives the comparison; a waived lock ignores {@code value}. */
+        public boolean waived() {
+            return Boolean.TRUE.equals(overwrite);
+        }
     }
 
     /**

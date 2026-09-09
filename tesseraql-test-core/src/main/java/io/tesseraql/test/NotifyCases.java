@@ -32,7 +32,7 @@ final class NotifyCases {
         }
         List<io.tesseraql.yaml.notify.NotifyEvents.CompiledNotify> compiled = new ArrayList<>();
         if (target.route() != null) {
-            RouteFile route = context.route(target.route());
+            RouteFile route = context.route(target.route(), "notify.route");
             route.definition().notifications().forEach((id, spec) -> {
                 if (target.id() == null || target.id().equals(id)) {
                     compiled.add(io.tesseraql.yaml.notify.NotifyEvents

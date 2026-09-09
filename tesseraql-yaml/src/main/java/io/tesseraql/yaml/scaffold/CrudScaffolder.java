@@ -980,7 +980,58 @@ public final class CrudScaffolder {
                     expect:
                       rowCount: 0
                 """);
+        suite.append(writeCase(table, names, "update", names.detailDir() + "/update/update.sql"));
+        suite.append(writeCase(table, names, "delete", names.detailDir() + "/delete/delete.sql"));
         return suite.toString();
+    }
+
+    /**
+     * One generated case per write statement. Until a case could seed a lock these two were out
+     * of reach altogether (docs/edit-conflict.md), so a scaffolded app's whole write half left
+     * {@code tesseraql test}.
+     *
+     * <p>The key cannot match, which is what keeps the case data-independent like the reads
+     * above — and it is also the limit of what it claims: the statement renders, its binds line
+     * up, and the database accepts it. Point the key at a row that exists to assert the write
+     * itself; the lock value is then the row's own, and a stale one is the conflict.
+     *
+     * <p>Only the key is bound. The remaining binds are null for an unmatched key either way,
+     * and a suite binds a YAML scalar as it reads it — so a generated {@code due_date: sample}
+     * would send a string to a date column and be refused before the key was ever compared
+     * (docs/testing.md). The author who points the case at a real row adds the columns that row
+     * needs.
+     *
+     * @param verb the write, named as the route id's suffix
+     * @param file the app-home-relative statement
+     */
+    private static String writeCase(TableSchema table, Names names, String verb, String file) {
+        StringBuilder test = new StringBuilder();
+        test.append("""
+
+                  - name: the %s %s runs for an unmatched key
+                    sql:
+                      file: %s
+                """.formatted(names.table(), verb, file));
+        // The lock value is an integer literal because a version column always is:
+        // versionColumn() filters on isIntegerLike, so the unlocked table is the only other
+        // shape and it emits no lock: block at all.
+        test.append(table.versionColumn()
+                .map(column -> """
+                            lock:
+                              route: %s.%s
+                              value: 1
+                        """.formatted(names.entity(), verb))
+                .orElse(""));
+        test.append("    params:\n");
+        for (TableSchema.Column pk : names.pks()) {
+            test.append("      ").append(Names.field(pk)).append(": ")
+                    .append(pk.isIntegerLike() ? "-1" : "no-such-key").append('\n');
+        }
+        test.append("""
+                    expect:
+                      updateCount: 0
+                """);
+        return test.toString();
     }
 
     // ---------------------------------------------------------------- shared pieces

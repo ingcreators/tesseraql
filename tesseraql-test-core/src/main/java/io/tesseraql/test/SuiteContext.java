@@ -3,6 +3,7 @@ package io.tesseraql.test;
 import io.tesseraql.core.expr.ExpressionFunctions;
 import io.tesseraql.core.sql.BoundParameter;
 import io.tesseraql.core.sql.BoundSql;
+import io.tesseraql.core.sql.LockBinding;
 import io.tesseraql.core.sql.Sql2WayParser;
 import io.tesseraql.core.sql.SqlNode;
 import io.tesseraql.core.sql.SqlRenderer;
@@ -13,6 +14,7 @@ import io.tesseraql.identity.RealmConfig;
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.ManifestLoader;
 import io.tesseraql.yaml.manifest.RouteFile;
+import io.tesseraql.yaml.model.LockSpec;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
@@ -117,15 +119,20 @@ final class SuiteContext {
                         "Unknown job '" + jobId + "' in notify case"));
     }
 
-    RouteFile route(String routeId) {
+    /**
+     * The manifest route a case addresses by id. {@code key} names the document key that
+     * carried the id, so the refusal points at what the author wrote — three case kinds reach
+     * this now, and a notify or lock case once reported its unknown route as a validation one.
+     */
+    RouteFile route(String routeId, String key) {
         if (routeId == null || routeId.isBlank()) {
-            throw new IllegalArgumentException("A validation case needs a validate.route id");
+            throw new IllegalArgumentException("A case needs a " + key + " id");
         }
         return manifest().routes().stream()
                 .filter(route -> routeId.equals(route.definition().id()))
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException(
-                        "Unknown route '" + routeId + "' in validation case"));
+                        "Unknown route '" + routeId + "' in " + key));
     }
 
     /** The coverage id of a SQL file: its app-home-relative path with forward slashes. */
@@ -187,6 +194,36 @@ final class SuiteContext {
         seeded.put("principal", new io.tesseraql.security.Principal(principal.subject(),
                 principal.loginId(), null, null, principal.groups(), principal.roles(),
                 principal.permissions(), principal.claims()));
+        return seeded;
+    }
+
+    /**
+     * Seeds the case's {@code lock:} under the parameters, so a statement carrying
+     * {@code /*%lock … *}{@code /} renders the comparison the command pipeline would render
+     * (docs/edit-conflict.md). The column comes from the named route's own {@code lock:}
+     * declaration; the case supplies the value.
+     *
+     * <p>This is the one ambient a suite could not spell for itself. The renderer takes the
+     * lock as a {@link LockBinding} instance and lifts it out of the bind scope, so no
+     * {@code params:} entry — no scalar, no map — can stand in for one; {@code audit.*}, by
+     * contrast, is an ordinary bind a case has always been able to write.
+     */
+    Map<String, Object> withLock(Map<String, Object> params, TestSuite.LockTarget lock) {
+        if (lock == null) {
+            return params;
+        }
+        LockSpec declared = route(lock.route(), "lock.route").definition().lock();
+        if (declared == null) {
+            throw new IllegalArgumentException("Route '" + lock.route() + "' declares no lock:,"
+                    + " so it names no column for a lock case to seed");
+        }
+        if (!lock.waived() && lock.value() == null) {
+            throw new IllegalArgumentException("A lock case on route '" + lock.route()
+                    + "' needs a value: (the value the caller sends back) or overwrite: true");
+        }
+        Map<String, Object> seeded = new LinkedHashMap<>(params);
+        seeded.put(LockBinding.PARAM,
+                new LockBinding(declared.column(), lock.value(), lock.waived()));
         return seeded;
     }
 

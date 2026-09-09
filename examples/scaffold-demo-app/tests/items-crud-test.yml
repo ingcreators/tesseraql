@@ -1,4 +1,4 @@
-# tesseraql-scaffold-checksum: sha256:4101cfb24eb0ed86f9e87bb2f3dc948a7d3e955cb3e4f14513ba70c737aa6529
+# tesseraql-scaffold-checksum: sha256:09e0f66a94fbe328d333c37c3c49cb1b753e8fea850bfd4febea9a9b6cce716a
 # Scaffolded suite for the items table (design ch. 13): exercises the generated
 # queries with data-independent expectations, so it passes against any contents.
 version: tesseraql/v1
@@ -34,3 +34,25 @@ tests:
       id: -1
     expect:
       rowCount: 0
+
+  - name: the items update runs for an unmatched key
+    sql:
+      file: web/items/{id}/update/update.sql
+    lock:
+      route: items.update
+      value: 1
+    params:
+      id: -1
+    expect:
+      updateCount: 0
+
+  - name: the items delete runs for an unmatched key
+    sql:
+      file: web/items/{id}/delete/delete.sql
+    lock:
+      route: items.delete
+      value: 1
+    params:
+      id: -1
+    expect:
+      updateCount: 0
