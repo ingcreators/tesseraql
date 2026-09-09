@@ -60,6 +60,55 @@ class SpacedPathLauncherTest {
                 .contains(MARKER);
     }
 
+    /**
+     * The CDS archive's name has to keep tracking the classpath when the installation directory
+     * contains a space.
+     *
+     * <p>This one never failed to launch, which is why it needs its own case: splitting the
+     * classpath on whitespace as well as on its separator made the size-and-name listing find
+     * nothing, so the fingerprint became the checksum of an empty input — one constant for every
+     * classpath. Adding an extension jar then reused the previous archive, the JVM found one that
+     * no longer matched, and — as the launcher's own comment says — quietly stopped using it. The
+     * measured start-up saving was lost permanently and with nothing printed.
+     */
+    @Test
+    @EnabledOnOs({OS.LINUX, OS.MAC})
+    void theArchiveNameStillTracksTheClasspathUnderASpacedInstallation(@TempDir Path tmp)
+            throws Exception {
+        Path home = distribution(tmp.resolve("install dir with space"), "tesseraql");
+        Path launcher = home.resolve("bin/tesseraql");
+
+        Path before = tmp.resolve("cache-before");
+        assertThat(run(tmp, List.of(launcher.toString(), "--version"),
+                Map.of("XDG_CACHE_HOME", before.toString()))).contains(MARKER);
+
+        Files.createDirectories(home.resolve("lib/ext"));
+        Files.copy(home.resolve("lib/tesseraql.jar"), home.resolve("lib/ext/extra.jar"));
+
+        Path after = tmp.resolve("cache-after");
+        assertThat(run(tmp, List.of(launcher.toString(), "--version"),
+                Map.of("XDG_CACHE_HOME", after.toString()))).contains(MARKER);
+
+        assertThat(archiveNames(after))
+                .as("adding an extension jar must land on a different archive")
+                .isNotEmpty()
+                .isNotEqualTo(archiveNames(before));
+    }
+
+    /** The CDS archive file names the launcher left in a cache directory. */
+    private static List<String> archiveNames(Path cache) throws IOException {
+        Path dir = cache.resolve("tesseraql");
+        if (!Files.isDirectory(dir)) {
+            return List.of();
+        }
+        try (var entries = Files.list(dir)) {
+            return entries.map(p -> p.getFileName().toString())
+                    .filter(name -> name.endsWith(".jsa"))
+                    .sorted()
+                    .toList();
+        }
+    }
+
     @Test
     @EnabledOnOs(OS.WINDOWS)
     void theWindowsLauncherRunsWhenTheProfilePathHasASpace(@TempDir Path tmp) throws Exception {

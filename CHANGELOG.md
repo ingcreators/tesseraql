@@ -8,6 +8,39 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **The launchers survive a space in the path they cache under.** Both built the CDS archive's
+  path into the JVM option string unquoted and then expanded that string unquoted, so one space
+  split the option in two. The second half is not an option, so the JVM took it as the main class —
+  and because it arrives before `-cp`, the real classpath and main class were demoted to program
+  arguments. The CLI died before running any of its own code.
+
+  On Windows that is `%LOCALAPPDATA%`, which contains a space for every user whose profile name
+  does; on POSIX it is `$XDG_CACHE_HOME` or `$HOME/.cache`. Nothing had ever executed either
+  launcher against such a path: the distribution job runs the POSIX one from `$RUNNER_TEMP`, and no
+  job ran the `.cmd` at all.
+
+  The two launchers need different repairs, and the POSIX one must not copy the Windows one.
+  `set "V=…"` keeps the inner quotes and java.exe re-parses them; `sh` does not re-parse quotes
+  after expansion, so the same edit would embed literal quote characters in the path — and since
+  `-XX:+AutoCreateSharedArchive` is non-fatal by design, the CLI would exit 0 having silently lost
+  CDS forever. `bin/tesseraql` assembles its options as positional parameters instead.
+
+  A third defect lived in the same lines and does **not** break the launch, which is why it
+  survived. The fingerprint splitting the classpath on whitespace as well as on `:` made its
+  size-and-name listing find nothing once any entry held a space, so the fingerprint became the
+  checksum of an empty input — `cds-4294967295.jsa` for every classpath. Adding an extension jar
+  reused the previous archive, the JVM found one that no longer matched and, as the launcher's own
+  comment says, quietly stopped using it: the measured start-up saving lost permanently, with
+  nothing printed. Splitting on the separator alone restores it, and unspaced fingerprints are
+  byte-identical, so no existing archive is invalidated.
+
+  `SpacedPathLauncherTest` builds a real distribution around each shipped launcher, with a stub
+  whose main class is the one the launcher execs, so a successful run prints a marker. Every case
+  carries an unspaced control. The Windows leg was proven red on a real `windows-latest` runner
+  before the fix was written — `Could not find or load main class dir`, with the control passing in
+  the same run — because nothing here can execute `cmd.exe`, and the reasoning about its quoting
+  was a model until a runner confirmed it.
+
 - **The framework's own `System.Logger` lines reach the provider the CLI ships.** `tesseraql-core`
   may not depend on SLF4J, so it logs through `System.Logger`, and six other modules follow it —
   forty-nine call sites. Nothing bridged them: with no `System.LoggerFinder` on the classpath the
