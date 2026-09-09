@@ -8,6 +8,28 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A route failure leaves a record.** Nothing wrote one down. `PipelineRunner` caught the
+  exception, stored it as a property and handed it to a renderer; `ErrorResponseRenderer` published
+  the status *phrase* rather than the cause; and `RingTracer.recordError(Throwable)` received the
+  throwable and set `error = true`, discarding it.
+
+  For a failure whose own library logs — a Thymeleaf render, say — the stack survived by accident.
+  For one whose library does not, nothing survived at all. A SQL error reaches the runner wrapped
+  in `TqlException`, so no driver is left to report it: an operator got
+  `{"error":{"code":"TQL-SQL-2500","message":"Internal Server Error"}}`, a span saying
+  `error=true`, and no way to learn which relation was missing short of attaching OTLP.
+
+  Two changes. The runner now logs the failure once, naming the route, at a level that follows the
+  status the caller will receive — a 5xx is the operator's problem and carries the stack, anything
+  else is the caller's and stays at debug, so one scripted client cannot bury the failures that
+  matter. `RingTracer` keeps the failure's type and message as span attributes, which is what the
+  operations console's trace page reads; the stack stays in the log, because the ring is bounded.
+
+  Four guards, all proven red. The two ring cases failed on an empty attribute map; the log case
+  failed on empty stderr. The fourth — that a 4xx is *not* logged at the operator's level — was
+  green before the fix for the wrong reason, so it was proven against a variant that logs
+  everything at error, where it fails naming `Route 'orders.create' failed with TQL-FIELD-4001`.
+
 - **A CSV written by a spreadsheet imports.** "CSV UTF-8" writes a byte-order mark, and the codec
   decoded the upload as raw UTF-8, so the mark survived as `U+FEFF` on the first header cell.
   `String.trim()` does not remove it.

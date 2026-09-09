@@ -105,6 +105,18 @@ public final class RingTracer implements Tracer, TraceLog {
         @Override
         public void recordError(Throwable error) {
             this.error = true;
+            if (error == null) {
+                return;
+            }
+            // What failed, not merely that something did. The error envelope carries the status
+            // phrase rather than the cause, so for a failure whose library does not log itself
+            // — a SQL error arrives wrapped in the framework's own type — the ring is where an
+            // operator's trace page can still say which exception it was. The stack is the log's
+            // job; the ring is bounded and holds identity only.
+            attributes.put("error.type", error.getClass().getName());
+            if (error.getMessage() != null) {
+                attributes.put("error.message", error.getMessage());
+            }
         }
 
         @Override

@@ -1,6 +1,9 @@
 package io.tesseraql.runtime;
 
+import io.tesseraql.compiler.binding.ErrorResponseRenderer;
 import io.tesseraql.compiler.pipeline.Pipeline;
+import io.tesseraql.core.error.TqlErrorCode;
+import io.tesseraql.core.error.TqlException;
 import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.pipeline.Step;
 import io.tesseraql.pipeline.TesseraqlProperties;
@@ -80,6 +83,7 @@ final class PipelineRunner {
             // the audit row and the released permit are recorded against.
             exchange.setException(null);
             exchange.setProperty(TesseraqlProperties.EXCEPTION_CAUGHT, failure);
+            logFailure(pipeline, failure);
             Step renderer = rendererFor(pipeline, failure);
             if (renderer == null) {
                 throw new IllegalStateException(failure);
@@ -160,6 +164,34 @@ final class PipelineRunner {
             throw failed.getCause() instanceof Exception cause
                     ? cause
                     : new IllegalStateException(failed.getCause());
+        }
+    }
+
+    /**
+     * The one place a route failure is written down.
+     *
+     * <p>Nothing downstream does it. The error envelope publishes the status phrase rather than
+     * the cause, and the ring keeps the failure's identity but not its stack — so for a failure
+     * whose own library does not log (a SQL error reaches here wrapped in {@code TqlException},
+     * leaving no driver to report it) this line is the only record that the statement, the
+     * SQLState and the throw site ever existed. The MDC still carries the route's traceId and
+     * spanId here: {@code RouteTelemetry} sets them on the way in and clears them at completion,
+     * which is after this.
+     *
+     * <p>The level follows the status the caller will receive, because that is what decides whose
+     * fault it is. A 5xx is the operator's and carries the stack; anything else is the caller's —
+     * a malformed body, a refused credential — and logging those at error level would turn one
+     * scripted client into an alert storm and bury the failures that matter.
+     */
+    private static void logFailure(Pipeline pipeline, Exception failure) {
+        TqlErrorCode code = failure instanceof TqlException tql ? tql.code() : null;
+        int status = code == null ? 500 : ErrorResponseRenderer.httpStatus(code);
+        if (status >= 500) {
+            LOG.error("Route '{}' failed with {}", pipeline.id(),
+                    code == null ? failure.getClass().getName() : code, failure);
+        } else if (LOG.isDebugEnabled()) {
+            LOG.debug("Route '{}' refused the request with {} ({})", pipeline.id(), code, status,
+                    failure);
         }
     }
 
