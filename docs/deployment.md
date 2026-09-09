@@ -335,6 +335,19 @@ aggregator correlates each line with the request that produced it:
 
 Route identity is not on the MDC; it is on the access-log line below as `route=`.
 
+**The framework's own `System.Logger` lines ride the same provider.** `tesseraql-core` may not
+depend on SLF4J, so it logs through `System.Logger`, and six other modules follow it — forty-nine
+call sites in all. Until 2026-09-09 nothing bridged them: with no `System.LoggerFinder` on the
+classpath the JDK falls back to `java.util.logging`, and those lines arrived as two-line
+unstructured records with no MDC, unmoved by `--log-format` and ungoverned by `--log-level`. The
+distribution now ships `slf4j-jdk-platform-logging` beside the provider, so every line the
+framework emits goes through one backend.
+
+The bridge is declared in the CLI, never in the runtime: a `System.LoggerFinder` is a JVM-global,
+once-per-process choice, and only the process owner may make it — a host embedding the runtime
+keeps its own. `tesseraql-host` inherits it transitively and the container image copies the runtime
+closure, so neither needed a change.
+
 The ids travel on the exchange rather than on the thread, and are copied into the MDC around
 each step, so a step handed to an execution lane still logs under the request that started it.
 

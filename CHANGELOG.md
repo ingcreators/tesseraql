@@ -8,6 +8,33 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **The framework's own `System.Logger` lines reach the provider the CLI ships.** `tesseraql-core`
+  may not depend on SLF4J, so it logs through `System.Logger`, and six other modules follow it —
+  forty-nine call sites. Nothing bridged them: with no `System.LoggerFinder` on the classpath the
+  JDK falls back to `java.util.logging`, so those lines arrived as two-line unstructured records
+  with no `traceId`, unmoved by `--log-format json` and ungoverned by `--log-level`. Half the
+  framework's logging bypassed its own backend.
+
+  The distribution now ships `slf4j-jdk-platform-logging`. The repair is one artifact rather than
+  a conversion of the forty-nine sites, and it has to be: `tesseraql-core` cannot be converted at
+  all, so converting the rest would leave the split in place while fixing nothing core emits.
+
+  It is declared in `tesseraql-cli`, never in `tesseraql-runtime` — a `System.LoggerFinder` is a
+  JVM-global, once-per-process choice that only the process owner may make, and a host embedding
+  the runtime keeps its own backend. `tesseraql-host` inherits it transitively and
+  `deploy/Dockerfile` copies the runtime closure, so neither needed a change; both were verified
+  after installing, because a stale local repository answers this question wrongly.
+
+  Three guards, all proven red on empty output, and all driven through `System.getLogger` rather
+  than asserting the dependency is present — a presence assertion passes on a bridge that never
+  routes a line. The threshold case asserts both directions, and its "silenced at `level=error`"
+  half is paired with the same line arriving at `level=info`, so the silence is a threshold
+  decision rather than the line failing to arrive at all.
+
+  The shaded fat jar was checked by unzipping it: `META-INF/services/java.lang.System$LoggerFinder`
+  names `SLF4JSystemLoggerFinder`, so the `ServicesResourceTransformer` really does carry the entry
+  through the shade.
+
 - **A route failure leaves a record.** Nothing wrote one down. `PipelineRunner` caught the
   exception, stored it as a property and handed it to a renderer; `ErrorResponseRenderer` published
   the status *phrase* rather than the cause; and `RingTracer.recordError(Throwable)` received the
