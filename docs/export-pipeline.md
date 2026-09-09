@@ -141,10 +141,25 @@ document composes *around* the rows — the order header, the totals, the master
 labels with. It is the header-and-lines case, answered where the asymmetry was rather than by
 denormalizing into the line query.
 
-**`queries:`** run before the extraction, on the same connection and inside the same transaction as
-the export query, so a document reads exactly the state its rows came from. They are declared as
-**`export.queries:`** rather than at route level, which is where this decision first put them: a
-batch export step has no route level, and one idea should not have two shapes.
+**The named queries** run before the extraction, on the same connection and inside the same
+transaction as the export query, so a document reads exactly the state its rows came from.
+
+*Corrected 2026-09-09, twice over.* This paragraph named the key `export.queries:`, "rather than at
+route level, which is where this decision first put them". The unified-source model moved it back:
+an export query is now any non-`main` entry of the route-level `sources:` that carries a `file:`,
+and `UnknownKeyRules.MOVED_KEYS` rejects `queries:` under `export:` outright. The reasoning that
+chose `export.queries:` — a batch export step has no route level — was answered by giving the step
+the same `sources:` shape, so one idea still has one shape.
+
+And the ordering the first sentence states was not what the code did. `SqlStep.export` composed the
+named queries *inside* the extraction's reader lambda, on a connection the extraction had already
+made unusable: MySQL streams at `Integer.MIN_VALUE`, and Connector/J refuses any further statement
+while that result set is open. Every `recipe: query-export` with a named source answered 500 on
+MySQL. The composition now happens before the read is opened, inside the same auto-commit bracket,
+which is what this paragraph always said.
+
+Neither shipped example declares a named source, which is why nothing exercised it;
+`MySqlPortabilityIntegrationTest` now writes one into the app it mounts.
 
 **`http:` sources** are ordered before the extraction too, which reverses the read-route order
 (where they run after the SQL). The reason is not composition but the connection: `runExport` takes

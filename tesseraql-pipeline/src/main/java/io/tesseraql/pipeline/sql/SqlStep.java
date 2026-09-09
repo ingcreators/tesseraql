@@ -249,6 +249,20 @@ public class SqlStep implements Step {
                 connection.setAutoCommit(false);
             }
             try {
+                // Before the extraction opens its result set, not inside the reader. The named
+                // queries compose on this same connection (docs/export-pipeline.md decision 2 —
+                // one connection, one transaction, so a document reads exactly the state its rows
+                // came from), and MySQL's row-streaming fetch size makes the connection unusable
+                // for any other statement until that result set closes. Running them inside the
+                // reader was the difference between a document and "Streaming result set ... is
+                // still active". The autocommit bracket above is already open, so the transaction
+                // the decision requires still holds.
+                io.tesseraql.core.files.ExportRowCap cap = io.tesseraql.core.files.ExportWrite
+                        .effectiveCap(codec, spec, exchange.getProperty(
+                                TesseraqlProperties.EXPORT_ROW_CAP,
+                                io.tesseraql.core.files.ExportRowCap.class));
+                Map<String, Object> values = composedValues(exchange, connection,
+                        statements, tempStore, cap, spools, statement);
                 SpoolKind kind = "csv".equals(codec.format()) ? SpoolKind.CSV : SpoolKind.BINARY;
                 SpoolWriter writer = tempStore.createWriter(kind);
                 try {
@@ -260,13 +274,6 @@ public class SqlStep implements Step {
                                 // contract is SQLException, so an I/O failure travels unchecked
                                 // and the outer catch unwraps it to the code it always mapped to.
                                 try (writer) {
-                                    io.tesseraql.core.files.ExportRowCap cap = io.tesseraql.core.files.ExportWrite
-                                            .effectiveCap(codec, spec, exchange.getProperty(
-                                                    TesseraqlProperties.EXPORT_ROW_CAP,
-                                                    io.tesseraql.core.files.ExportRowCap.class));
-                                    Map<String, Object> values = composedValues(exchange,
-                                            connection,
-                                            statements, tempStore, cap, spools, statement);
                                     io.tesseraql.core.files.ResultSetRows extraction = new io.tesseraql.core.files.ResultSetRows(
                                             resultSet, statement.dialect(), cap,
                                             EXECUTION_ERROR);
