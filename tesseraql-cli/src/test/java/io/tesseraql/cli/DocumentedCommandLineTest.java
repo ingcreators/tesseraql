@@ -212,7 +212,16 @@ class DocumentedCommandLineTest {
         return found;
     }
 
-    /** Every published page, plus the two front pages a newcomer reads first. */
+    /**
+     * Every published page, the two front pages a newcomer reads first, and each example's own
+     * README.
+     *
+     * <p>The examples were the gap. {@code examples/README.md} calls those pages "copy one as a
+     * starting point", and one of them ran {@code tesseraql run --app …} — a verb that has never
+     * existed — from #630 until it was found by measuring this guard's reach rather than its
+     * result. The list was non-recursive and stopped at {@code examples/README.md}, so the pages
+     * it points at were the one place a newcomer looks that nothing checked.
+     */
     private static List<Path> pages() throws IOException {
         List<Path> pages = new ArrayList<>();
         pages.add(REPO.resolve("README.md"));
@@ -220,6 +229,75 @@ class DocumentedCommandLineTest {
         try (Stream<Path> docs = Files.list(REPO.resolve("docs"))) {
             pages.addAll(docs.filter(p -> p.toString().endsWith(".md")).sorted().toList());
         }
+        try (Stream<Path> examples = Files.list(REPO.resolve("examples"))) {
+            pages.addAll(examples.filter(Files::isDirectory)
+                    .map(app -> app.resolve("README.md"))
+                    .filter(Files::isRegularFile)
+                    .sorted()
+                    .toList());
+        }
         return pages;
+    }
+
+    /**
+     * A command line a <em>shipped page</em> teaches must also name a verb the CLI has.
+     *
+     * <p>Studio's PDF empty state told the reader to "start the server with it enabled
+     * (<code>serve --modules pdf</code>)". {@code serve} was deleted in 0.15.0, and
+     * {@code --modules} takes a directory rather than a module name, so the sentence was wrong
+     * twice — in a page the product itself renders. The markdown guard above cannot see it: it is
+     * HTML, not a fenced block, and the line does not begin with the binary's name.
+     *
+     * <p>The shape checked here is a {@code <code>} element whose content is a bare word followed
+     * by a flag. Measured across every shipped resource tree before being written, that shape
+     * matches exactly one element — so this is a check with no exemption list rather than a
+     * heuristic that needs one.
+     */
+    @Test
+    void everyCommandTaughtByAShippedPageNamesAVerbTheCliHas() throws IOException {
+        CommandLine cli = new CommandLine(new TesseraqlCli());
+        java.util.regex.Pattern embedded = java.util.regex.Pattern
+                .compile("<code>([a-z][a-z-]*) (--[^<]*)</code>");
+        List<String> problems = new ArrayList<>();
+        int checked = 0;
+
+        for (Path resources : shippedResourceRoots()) {
+            if (!Files.isDirectory(resources)) {
+                continue;
+            }
+            try (Stream<Path> files = Files.walk(resources)) {
+                for (Path page : files.filter(p -> p.toString().endsWith(".html")).toList()) {
+                    java.util.regex.Matcher found = embedded.matcher(Files.readString(page));
+                    while (found.find()) {
+                        checked++;
+                        String verb = found.group(1);
+                        if (cli.getSubcommands().containsKey(verb)) {
+                            continue;
+                        }
+                        problems.add(page + ": no such command '" + verb + "' in: "
+                                + found.group());
+                    }
+                }
+            }
+        }
+
+        // One element matches today. Zero means either that the last shipped page teaching a
+        // command line was reworded - in which case delete this test, its subject is gone - or
+        // that the shape stopped matching and the assertion below is passing on nothing.
+        assertThat(checked)
+                .as("shipped pages teaching a command line were found; zero means this guard has"
+                        + " no subject left, or has stopped recognising it")
+                .isPositive();
+        assertThat(problems)
+                .as("a shipped page teaches a verb the CLI does not have")
+                .isEmpty();
+    }
+
+    /** The resource trees whose pages the product renders to a user. */
+    private static List<Path> shippedResourceRoots() {
+        return List.of(
+                REPO.resolve("tesseraql-studio/src/main/resources"),
+                REPO.resolve("tesseraql-ops-ui/src/main/resources"),
+                REPO.resolve("tesseraql-runtime/src/main/resources"));
     }
 }
