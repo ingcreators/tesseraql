@@ -8,6 +8,25 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A TOTP code is an identity, so it no longer depends on the JVM's default locale.**
+  `Totp.codeAt` formatted its six digits with a locale-sensitive `String.format`. On a JVM whose
+  default locale carries its own numbering system — `ar-EG`, `bn-BD`, Devanagari — it produced
+  `٤٧٠٧٦٢` rather than `470762`.
+
+  `matchedStep` gates on `\d{6}`, and Java's `\d` is ASCII-only, so the server refused the code it
+  had itself just generated. Every user with MFA enabled was locked out, in both directions: the
+  code the authenticator app displayed did not match, and neither did the one the server produced.
+  Formatting now pins `Locale.ROOT`.
+
+  The ASCII gate stays as it is, and the reason is now written next to it: a code is transcribed
+  from an authenticator app, which renders ASCII digits whatever the phone's locale, so ASCII is
+  what a user has to type.
+
+  `TotpTest` gained a locale round trip over three numbering systems. Both of its halves were
+  verified red separately against the unfixed code — the RFC 6238 vector reading `٢٨٧٠٨٢`, and,
+  with that assertion disabled so it could not mask the other, the generated code failing the
+  ASCII gate.
+
 - **The two release jobs that only a tag can run, and the guards that hold them.** Cutting
   0.16.0 ran the release path for the first time since the release-and-CI-hardening campaign
   reshaped it, and two of its four jobs failed — neither reachable from a pull request, so
