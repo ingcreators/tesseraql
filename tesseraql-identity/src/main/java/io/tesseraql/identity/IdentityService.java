@@ -141,7 +141,8 @@ public final class IdentityService {
             Map<String, Object> params, int maxRows) {
         SqlStatement statements = statements(realm);
         try {
-            return statements.read(contract, io.tesseraql.core.sql.SqlRenderer.render(sql, params),
+            return statements.read(contract,
+                    io.tesseraql.core.sql.SqlRenderer.render(sql, onTheApplicationClock(params)),
                     statements.rows(maxRows, refusal(contract, maxRows)));
         } catch (SQLException ex) {
             throw TqlException.builder(EXEC_ERROR)
@@ -149,6 +150,29 @@ public final class IdentityService {
                     .cause(ex)
                     .build();
         }
+    }
+
+    /**
+     * Seeds {@code now} so a validity window is compared against the APPLICATION's clock.
+     *
+     * <p>The pack's window predicates used to read {@code current_timestamp}, the DATABASE's
+     * clock, while {@code starts_at}/{@code ends_at} are written from this JVM into zone-less
+     * columns. On PostgreSQL that is invisible — pgjdbc pins the session zone — but on MySQL,
+     * MariaDB and SQL Server the two clocks are whatever each host was configured with, and a
+     * mismatch breaks the comparison in BOTH directions: a grant that has just started does not
+     * resolve, and one that ended an offset ago still does. The second is the dangerous half,
+     * because docs/access-governance.md makes this predicate the sole enforcement of expiry —
+     * nothing sweeps an expired row, it is simply supposed to stop resolving.
+     *
+     * <p>Seeded here rather than at the call sites because a forgotten seed fails SILENTLY and
+     * PARTIALLY: {@code SqlRenderer} binds an unseeded path as NULL, so {@code ends_at > NULL}
+     * drops every WINDOWED grant while unbounded grants keep resolving. Most callers also pass an
+     * immutable {@code Map.of(…)}, so the map is copied rather than added to.
+     */
+    private static Map<String, Object> onTheApplicationClock(Map<String, Object> params) {
+        Map<String, Object> seeded = new LinkedHashMap<>(params);
+        seeded.put("now", java.sql.Timestamp.from(java.time.Instant.now()));
+        return seeded;
     }
 
     /**
@@ -202,7 +226,7 @@ public final class IdentityService {
         requireWritable(realm, contract);
         String sql = new ContractResolver(realm, dialect).resolve(contract);
         try {
-            return statements(realm).update(contract, sql, params);
+            return statements(realm).update(contract, sql, onTheApplicationClock(params));
         } catch (SQLException ex) {
             throw TqlException.builder(EXEC_ERROR)
                     .message("Write contract '" + contract + "' failed: " + ex.getMessage())

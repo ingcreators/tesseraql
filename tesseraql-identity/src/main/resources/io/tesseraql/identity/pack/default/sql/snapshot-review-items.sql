@@ -24,23 +24,23 @@ from (
          ur.source as source, r.application as application
   from tql_user_roles ur
     join tql_roles r on r.role_id = ur.role_id
-  where (ur.starts_at is null or ur.starts_at <= current_timestamp)
-    and (ur.ends_at is null or ur.ends_at > current_timestamp)
+  where (ur.starts_at is null or ur.starts_at <= /* now */ '2026-08-20 09:00:00')
+    and (ur.ends_at is null or ur.ends_at > /* now */ '2026-08-20 09:00:00')
   union
   select ug.user_id as user_id, 'role' as item_kind, r.role_code as subject_code,
          'group' as source, r.application as application
   from tql_user_groups ug
     join tql_group_roles gr on gr.group_id = ug.group_id
     join tql_roles r on r.role_id = gr.role_id
-  where (ug.starts_at is null or ug.starts_at <= current_timestamp)
-    and (ug.ends_at is null or ug.ends_at > current_timestamp)
+  where (ug.starts_at is null or ug.starts_at <= /* now */ '2026-08-20 09:00:00')
+    and (ug.ends_at is null or ug.ends_at > /* now */ '2026-08-20 09:00:00')
   union
   select up.user_id as user_id, 'permission' as item_kind, p.permission_code as subject_code,
          'admin' as source, null as application
   from tql_user_permissions up
     join tql_permissions p on p.permission_id = up.permission_id
-  where (up.starts_at is null or up.starts_at <= current_timestamp)
-    and (up.ends_at is null or up.ends_at > current_timestamp)
+  where (up.starts_at is null or up.starts_at <= /* now */ '2026-08-20 09:00:00')
+    and (up.ends_at is null or up.ends_at > /* now */ '2026-08-20 09:00:00')
 ) h
 where 1 = 1
 /*%if application != null */

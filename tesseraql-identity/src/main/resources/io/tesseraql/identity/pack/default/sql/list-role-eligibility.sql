@@ -25,7 +25,7 @@ where
 /*%if userId != null */
   and e.user_id = /* userId */ 'u1'
 /*%end*/
-  and (e.expires_at is null or e.expires_at > current_timestamp)
+  and (e.expires_at is null or e.expires_at > /* now */ '2026-08-20 09:00:00')
 order by
   e.user_id, r.role_code
 ;

@@ -8,6 +8,24 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A validity window is evaluated on the application's clock.** The identity and SCIM packs
+  compared `starts_at`/`ends_at` — zone-less columns written from the JVM — against
+  `current_timestamp`, the database's clock. Where the two hosts sat in different zones the
+  comparison broke in both directions, and the quiet direction is the one that matters: a grant
+  whose window closed kept resolving for the whole offset. Nothing else revokes it, because
+  `docs/access-governance.md` makes this predicate the sole enforcement of expiry — a role
+  elevation, a time-boxed access-request approval and a group membership all end by ceasing to
+  match. In the other direction a freshly granted elevation did not resolve at all.
+
+  All 39 predicates across the 12 contract files now bind `now` from the application, seeded
+  centrally in `IdentityService` for the eleven identity contracts and in `ScimGroupService` for
+  the SCIM one — which builds its own statement and never passes through `IdentityService`.
+
+  PostgreSQL was never affected: pgjdbc pins the session zone, so the two clocks agree. That is
+  also why no existing test could see this — every identity suite runs on PostgreSQL, and every
+  fixture grants roles with no window at all. Oracle was likewise unaffected, and deliberately
+  stays on the same comparison shape rather than moving to `systimestamp`.
+
 - **The launchers survive a space in the path they cache under.** Both built the CDS archive's
   path into the JVM option string unquoted and then expanded that string unquoted, so one space
   split the option in two. The second half is not an option, so the JVM took it as the main class —
