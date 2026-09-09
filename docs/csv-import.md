@@ -13,6 +13,10 @@
 > the always-asynchronous commit is settled rather than weighed (decision 6), and the
 > format is an axis rather than a name — Excel import rides this design unchanged and
 > the export side inherits the job card through the shared status mount (decision 8).
+>
+> **Amended 2026-09-09.** Decision 10: the file's encoding is decided by its bytes. A
+> spreadsheet's "CSV UTF-8" save was refused, and its derived-column form silently wrote
+> a null first column for every row.
 
 Today an import is a fire-and-forget upload: `POST` the file, get `202` and a
 transfer id, poll for the outcome, and discover in the answer that row 3 had a
@@ -630,6 +634,44 @@ off, not by a report.
   scan gate belongs to the attachment path and its SPI; widening it is its own
   trigger, and pretending otherwise would put a claim in the threat model that the
   code does not keep.
+
+## Decision 10 — the file's encoding is decided by its bytes
+
+*Amended 2026-09-09, after a whole-repository audit lead was measured against main.*
+
+A spreadsheet's "CSV UTF-8" save writes a byte-order mark, and the codec read the file as raw
+UTF-8. The mark therefore survived as `U+FEFF` on the first header cell. `String.trim()` does not
+remove it, so nothing matched, and the surface answered in one of two ways:
+
+- with declared columns, `TQL-LD-2826` — the header refusal decision 3 introduced, firing on a
+  file that is in fact correct;
+- with columns derived from the header, **nothing at all**. The first column was simply named
+  `﻿sku`, so the rendered statement bound its `sku` parameter to null and wrote a null first
+  column for every row of the file.
+
+The second is the one that matters. It is a silent wrong write on a shape this document blesses,
+which is the class [silent-tolerance.md](silent-tolerance.md) exists to abolish.
+
+Three clauses:
+
+- **The mark is consumed where bytes become characters** — in the codec, once. The header matcher
+  stays exact and `Tables`/`TabularReader` do not change. Three reasons, and each rules out the
+  alternative of stripping the mark from the first cell: the `headerRow: false` shape corrupts the
+  first *data* cell, so a header-side strip fixes nothing there; `Tables.indexOf` is shared with
+  the Excel codec, where a leading `U+FEFF` in a cell is genuine content rather than an artifact;
+  and a per-cell strip cannot read a UTF-16 file at all, because the decode is what is wrong.
+- **A mark names its encoding, so it decides the charset.** UTF-8, UTF-16LE and UTF-16BE are
+  honoured rather than merely skipped. "Unicode Text" is the spreadsheet's other Unicode save, and
+  it was the second file this surface refused; honouring the mark costs one line more than
+  skipping it, and needs no new error code, no `LD` status mapping and no message.
+- **With no mark the file is UTF-8, full stop.** No charset sniffing, no `import.encoding:` key,
+  no reading a `Content-Type` charset parameter. Sniffing is a guess, and a wrong guess writes
+  wrong data with no diagnostic — the exact failure this decision removes. A genuinely
+  Shift_JIS-encoded upload is a separate trigger with a declaration behind it, not a heuristic.
+
+The other two byte-to-character decodes in the tree were checked and are not the same defect:
+`ChunkRows` reads a JSONL spool the framework itself wrote from parsed rows through Jackson, and
+`StdioTransport` reads the MCP client's own stream. Neither ever sees a file a user supplied.
 
 ## The three contracts, and where each clause lands
 

@@ -11,6 +11,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
+import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -20,6 +21,8 @@ import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVPrinter;
 import org.apache.commons.csv.CSVRecord;
+import org.apache.commons.io.ByteOrderMark;
+import org.apache.commons.io.input.BOMInputStream;
 
 /**
  * The built-in CSV codec (design ch. 28), RFC 4180 via Apache Commons CSV: UTF-8, quoted fields.
@@ -47,9 +50,27 @@ public final class CsvFileCodec implements FileCodec {
 
     @Override
     public void read(InputStream in, FileReadSpec spec, RowHandler handler) throws Exception {
-        try (CSVParser parser = CSVParser.parse(
-                new InputStreamReader(in, StandardCharsets.UTF_8), CSVFormat.RFC4180)) {
-            TabularReader.read(parser.iterator(), spec, CELLS, handler);
+        // A spreadsheet's "CSV UTF-8" and "Unicode Text" saves both begin with a byte-order mark.
+        // Consume it here, where bytes become characters, and let it name the charset: read as
+        // raw UTF-8 the mark survives as U+FEFF on the first header cell, where it either hides a
+        // declared column behind the unmatched-header refusal or, with derived columns, silently
+        // renames it so every row writes a null. A mark identifies its own encoding, so honouring
+        // it costs one line more than skipping it and reads the UTF-16 save too. Without a mark
+        // the file is UTF-8, full stop — sniffing is a guess, and a wrong guess writes wrong data
+        // with no diagnostic. See docs/csv-import.md decision 10.
+        try (BOMInputStream bytes = BOMInputStream.builder()
+                .setInputStream(in)
+                .setInclude(false)
+                .setByteOrderMarks(ByteOrderMark.UTF_8, ByteOrderMark.UTF_16LE,
+                        ByteOrderMark.UTF_16BE)
+                .get()) {
+            Charset charset = bytes.hasBOM()
+                    ? Charset.forName(bytes.getBOMCharsetName())
+                    : StandardCharsets.UTF_8;
+            try (CSVParser parser = CSVParser.parse(new InputStreamReader(bytes, charset),
+                    CSVFormat.RFC4180)) {
+                TabularReader.read(parser.iterator(), spec, CELLS, handler);
+            }
         }
     }
 

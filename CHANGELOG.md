@@ -8,6 +8,28 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A CSV written by a spreadsheet imports.** "CSV UTF-8" writes a byte-order mark, and the codec
+  decoded the upload as raw UTF-8, so the mark survived as `U+FEFF` on the first header cell.
+  `String.trim()` does not remove it.
+
+  With declared columns the import was refused with `TQL-LD-2826` — the header-mismatch refusal,
+  firing on a file that is correct. With columns derived from the header there was no refusal at
+  all: the first column was named `﻿sku`, so the statement bound its `sku` parameter to null and
+  wrote a null first column for **every row of the file**, silently. That silent half is the
+  serious one, and it lands on a shape [docs/csv-import.md](docs/csv-import.md) blesses.
+
+  The mark is now consumed where bytes become characters, and it names the charset rather than
+  merely being skipped — so the spreadsheet's "Unicode Text" (UTF-16) save reads too, which was
+  the second file this surface refused. Without a mark a file is still UTF-8; there is no
+  sniffing, because a wrong guess writes wrong data with no diagnostic.
+
+  The repair is one decode site rather than a strip in the header matcher: `headerRow: false`
+  corrupts the first *data* cell, `Tables.indexOf` is shared with the Excel codec where a leading
+  `U+FEFF` is genuine content, and a per-cell strip cannot read a UTF-16 file at all.
+
+  `CsvFileCodecTest` gained four cases — the two BOM shapes, the UTF-16 save, and an unmarked file
+  as the control. All three defect cases were verified red, the control green throughout.
+
 - **A TOTP code is an identity, so it no longer depends on the JVM's default locale.**
   `Totp.codeAt` formatted its six digits with a locale-sensitive `String.format`. On a JVM whose
   default locale carries its own numbering system — `ar-EG`, `bn-BD`, Devanagari — it produced
