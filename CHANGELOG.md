@@ -30,6 +30,27 @@ All notable changes to TesseraQL are documented here. The format follows
   `CsvFileCodecTest` gained four cases — the two BOM shapes, the UTF-16 save, and an unmarked file
   as the control. All three defect cases were verified red, the control green throughout.
 
+- **An export with a named source answers a document instead of a 500 on MySQL.**
+  [docs/export-pipeline.md](docs/export-pipeline.md) decision 2 says the export's named queries run
+  *before* the extraction, on its connection and inside its transaction, so a document reads exactly
+  the state its rows came from. `SqlStep.export` composed them **inside** the extraction's reader
+  lambda instead — on a connection the extraction had already made unusable, because MySQL streams
+  at `Integer.MIN_VALUE` and Connector/J refuses any further statement while that result set is
+  open.
+
+  So every `recipe: query-export` route declaring a source beside `main` answered
+  `TQL-SQL-2500` on MySQL. The composition now happens before the read is opened, inside the same
+  auto-commit bracket, which is what the decision always said.
+
+  `MySqlPortabilityIntegrationTest` gained an export route that declares a named source — neither
+  shipped example does, which is why nothing exercised the ordering. It was verified red at 500 and
+  green after, with the SQL and the route unchanged between the two runs, so the ordering is the
+  only thing the result turns on.
+
+  Two corrections to the doc while it was open: the key is no longer `export.queries:` (the
+  unified-source model moved it to a route-level `sources:` entry, and `UnknownKeyRules` now rejects
+  the old spelling), and the ordering sentence described behaviour the code did not have.
+
 - **A TOTP code is an identity, so it no longer depends on the JVM's default locale.**
   `Totp.codeAt` formatted its six digits with a locale-sensitive `String.format`. On a JVM whose
   default locale carries its own numbering system — `ar-EG`, `bn-BD`, Devanagari — it produced

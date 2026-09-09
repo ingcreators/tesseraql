@@ -79,6 +79,28 @@ class MySqlPortabilityIntegrationTest {
         assertThat(body.path("data").get(0).path("source").asText()).isEqualTo("mysql");
     }
 
+    /**
+     * The export's named queries must run before the extraction opens its result set. They compose
+     * on the extraction's own connection, and MySQL's row-streaming fetch size makes that
+     * connection unusable for any other statement until the result set closes — so running them
+     * inside the reader is the difference between a document and
+     * {@code Streaming result set ... is still active}.
+     */
+    @Test
+    void anExportWithANamedQueryStreamsOnAConnectionThatIsBusy() throws Exception {
+        HttpResponse<String> response = HttpClient.newHttpClient().send(
+                HttpRequest.newBuilder(URI.create("http://localhost:" + runtime.port()
+                        + "/api/users/export-with-totals"))
+                        .header("Authorization", "Bearer " + token())
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+
+        // The body is in the message because a route failure logs nothing: without it a red run
+        // here says only "expected 200 but was 500".
+        assertThat(response.statusCode()).as("body: %s", response.body()).isEqualTo(200);
+        assertThat(response.body()).contains("sato");
+    }
+
     @Test
     void managedIdentitySchemaAndBootstrapContractsWorkOnMySql() throws Exception {
         DialectIdentityChecks.seedAndAuthenticate(mysqlDataSource(), "mysql");
@@ -161,6 +183,7 @@ class MySqlPortabilityIntegrationTest {
             files.forEach(path -> copy(source, target, path));
         }
         UserAdminAppJobs.parkDailyMaintenanceSchedule(target);
+        writeExportWithANamedQuery(target);
         // The example's db/migration is Postgres DDL; this dialect test builds its own MySQL schema
         // in seedDatabase(), so disable the app migration for this mount.
         Files.writeString(target.resolve("config/application.yml"), """
@@ -180,6 +203,46 @@ class MySqlPortabilityIntegrationTest {
                     enabled: false
                 """.formatted(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword()));
         return target;
+    }
+
+    /**
+     * An export that declares a named source beside {@code main}, which the compiler turns into an
+     * export query (docs/export-pipeline.md decision 2: they run before the extraction, on its
+     * connection and inside its transaction, so a document reads exactly the state its rows came
+     * from). Neither shipped example declares one, which is why nothing exercised the ordering.
+     *
+     * <p>It lives here rather than in the example because MySQL is where the ordering is
+     * observable: the extraction streams at {@code Integer.MIN_VALUE}, and Connector/J refuses any
+     * further statement on that connection while the result set is open.
+     */
+    private static void writeExportWithANamedQuery(Path target) throws IOException {
+        Path dir = target.resolve("web/api/users/export-with-totals");
+        Files.createDirectories(dir);
+        Files.writeString(dir.resolve("get.yml"), """
+                version: tesseraql/v1
+                id: users.export.with.totals
+                kind: route
+                recipe: query-export
+
+                security:
+                  policy: users.read
+
+                export:
+                  format: csv
+                  filename: users-with-totals.csv
+
+                sources:
+                  main:
+                    sql:
+                      file: export.sql
+                  totals:
+                    sql:
+                      file: totals.sql
+                """);
+        Files.writeString(dir.resolve("export.sql"),
+                "select u.id, u.name, u.status from users u order by u.id\n");
+        Files.writeString(dir.resolve("totals.sql"),
+                "select count(*) as total from users\n");
     }
 
     private static void copy(Path source, Path target, Path path) {
