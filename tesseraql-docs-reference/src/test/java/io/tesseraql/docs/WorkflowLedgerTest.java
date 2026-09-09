@@ -348,6 +348,145 @@ class WorkflowLedgerTest {
                 .isEmpty();
     }
 
+    /**
+     * A job that runs a script out of the repository has to have the repository.
+     *
+     * <p>v0.16.0 extracted the release choreography's polling into {@code .github/scripts/}, and
+     * {@code release.yml}'s {@code bump-package-managers} — the one job of the four that never
+     * checked anything out, because until then it only called {@code gh} — kept calling it as a
+     * path. The job died in seven seconds with {@code exit 127} on a tag nobody could re-cut,
+     * where its own timeout says it should have polled for up to forty-five minutes. Both release
+     * assets were in fact on the release twelve seconds later.
+     *
+     * <p>This is the shape of defect the ledger exists for: it can only appear on a {@code v*}
+     * tag, so no pull request reaches it, and reading the diff that introduced it shows a script
+     * being called exactly as the two workflows that do check out call it. Verified red on
+     * {@code release.yml}'s {@code bump-package-managers}, one of eleven jobs.
+     */
+    @Test
+    void aJobThatRunsARepositoryScriptChecksOutTheRepository() throws IOException {
+        List<String> blind = new ArrayList<>();
+        for (Path workflow : workflows()) {
+            List<String> lines = Files.readAllLines(workflow);
+            for (JobBody job : bodies(lines)) {
+                if (job.body().stream().noneMatch(text -> text.contains(".github/scripts/"))) {
+                    continue;
+                }
+                if (job.body().stream().noneMatch(text -> text.contains("actions/checkout@"))) {
+                    blind.add(name(workflow) + ":" + job.job().line() + " " + job.job().id());
+                }
+            }
+        }
+
+        // Non-vacuity: the walk has to be finding script calls at all, or an empty result says
+        // nothing. Three jobs call into .github/scripts/ today.
+        assertThat(scriptCallingJobs()).as("the walk finds jobs that call a repository script")
+                .isGreaterThanOrEqualTo(3);
+        assertThat(blind)
+                .as("jobs that run a script from .github/scripts/ without checking the repository"
+                        + " out; the script is not on the runner, so the step fails with exit 127"
+                        + " however long its timeout says it would have waited")
+                .isEmpty();
+    }
+
+    /**
+     * A job that pushes an image declares the grant that lets it.
+     *
+     * <p>The other half of the same tag-only failure. v0.16.0 narrowed {@code release.yml} to
+     * {@code permissions: contents: write} — correct for three of its four jobs — and
+     * {@code demo-image} pushes to GHCR, which needs {@code packages: write}. It built the image
+     * for two minutes and then answered
+     * {@code denied: installation not allowed to Write organization package}.
+     *
+     * <p>A job's own {@code permissions:} block replaces the workflow's rather than adding to it,
+     * so the grant counts from whichever block applies to that job — which is also why the fix is
+     * a job-level block and not a wider workflow-level one. Verified red on {@code demo-image}.
+     */
+    @Test
+    void aJobThatPushesAnImageMayWritePackages() throws IOException {
+        List<String> ungranted = new ArrayList<>();
+        for (Path workflow : workflows()) {
+            List<String> lines = Files.readAllLines(workflow);
+            for (JobBody job : bodies(lines)) {
+                if (job.body().stream().noneMatch(text -> text.contains("docker push"))) {
+                    continue;
+                }
+                // A job's block sits two levels in, so its entries are at six; the
+                // workflow's are at two. The argument is the entries' indent.
+                List<String> own = permissions(job.body(), 6);
+                List<String> effective = own.isEmpty() ? permissions(lines, 2) : own;
+                if (!effective.contains("packages: write")) {
+                    ungranted.add(name(workflow) + ":" + job.job().line() + " " + job.job().id());
+                }
+            }
+        }
+
+        assertThat(imagePushingJobs()).as("the walk finds jobs that push an image")
+                .isGreaterThanOrEqualTo(1);
+        assertThat(ungranted)
+                .as("jobs that run docker push without packages: write in the permissions block"
+                        + " that applies to them; the registry refuses the push after the image"
+                        + " has already been built")
+                .isEmpty();
+    }
+
+    /** The entries of the first {@code permissions:} block at the given indent, stripped. */
+    private static List<String> permissions(List<String> lines, int indent) {
+        List<String> entries = new ArrayList<>();
+        boolean inside = false;
+        for (String text : lines) {
+            if (text.strip().equals("permissions:") && indent(text) == indent - 2) {
+                inside = true;
+                continue;
+            }
+            if (inside) {
+                if (text.isBlank() || indent(text) < indent) {
+                    break;
+                }
+                entries.add(text.strip());
+            }
+        }
+        return entries;
+    }
+
+    /** How many jobs across all workflows call a repository script (the non-vacuity floor). */
+    private static int scriptCallingJobs() throws IOException {
+        return matchingJobs(text -> text.contains(".github/scripts/"));
+    }
+
+    /** How many jobs across all workflows push an image (the non-vacuity floor). */
+    private static int imagePushingJobs() throws IOException {
+        return matchingJobs(text -> text.contains("docker push"));
+    }
+
+    private static int matchingJobs(java.util.function.Predicate<String> line) throws IOException {
+        int count = 0;
+        for (Path workflow : workflows()) {
+            for (JobBody job : bodies(Files.readAllLines(workflow))) {
+                if (job.body().stream().anyMatch(line)) {
+                    count++;
+                }
+            }
+        }
+        return count;
+    }
+
+    /** One job with the lines it spans, so a body can be searched without re-deriving bounds. */
+    private record JobBody(Job job, List<String> body) {
+    }
+
+    /** Each job of one workflow paired with its own lines, bounded by the next job's opening. */
+    private static List<JobBody> bodies(List<String> lines) {
+        List<Job> found = jobs(lines);
+        List<JobBody> bodies = new ArrayList<>();
+        for (int i = 0; i < found.size(); i++) {
+            int from = found.get(i).line() - 1;
+            int to = i + 1 < found.size() ? found.get(i + 1).line() - 1 : lines.size();
+            bodies.add(new JobBody(found.get(i), lines.subList(from, to)));
+        }
+        return bodies;
+    }
+
     /** One job block: its id, the line it opens on, and whether it declares its own timeout. */
     private record Job(String id, int line, boolean bounded) {
     }

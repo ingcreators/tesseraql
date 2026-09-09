@@ -4,6 +4,33 @@ All notable changes to TesseraQL are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Fixed
+
+- **The two release jobs that only a tag can run, and the guards that hold them.** Cutting
+  0.16.0 ran the release path for the first time since the release-and-CI-hardening campaign
+  reshaped it, and two of its four jobs failed — neither reachable from a pull request, so
+  neither had ever executed.
+
+  `bump-package-managers` calls `.github/scripts/await-release-assets.sh`, the polling the
+  campaign extracted from inline shell, and was the one job of the four that checks nothing out.
+  It ended in seven seconds with `exit 127` where its timeout says it polls for up to
+  forty-five minutes; both release assets were on the release twelve seconds later. It now
+  checks the repository out, and runs on a `workflow_dispatch` as well, so a release whose bump
+  failed can be completed from the tag rather than only from the push that created it.
+
+  `demo-image` pushes to GHCR, which needs `packages: write`; the campaign narrowed the workflow
+  to `contents: write`, correct for the other three jobs. It built the image and then answered
+  `denied: installation not allowed to Write organization package`. The grant is a job-level
+  block, which replaces the workflow's rather than adding to it — so the checkout's
+  `contents: read` is restated there.
+
+  Two `WorkflowLedgerTest` assertions now hold both shapes: a job that runs a script out of
+  `.github/scripts/` checks the repository out, and a job that runs `docker push` may write
+  packages. Each was verified red against the workflow as it stood, naming exactly the failing
+  job and no other.
+
 ## 0.16.0 - 2026-09-09
 
 This is the release where a whole-repository audit was worked to the end. Seventy-nine verified
