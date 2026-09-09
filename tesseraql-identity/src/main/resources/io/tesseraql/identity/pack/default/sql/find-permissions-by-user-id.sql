@@ -8,8 +8,8 @@ from
   join tql_permissions p on p.permission_id = rp.permission_id
 where
   ur.user_id = /* userId */ 'u1'
-  and (ur.starts_at is null or ur.starts_at <= current_timestamp)
-  and (ur.ends_at is null or ur.ends_at > current_timestamp)
+  and (ur.starts_at is null or ur.starts_at <= /* now */ '2026-08-20 09:00:00')
+  and (ur.ends_at is null or ur.ends_at > /* now */ '2026-08-20 09:00:00')
 
 union
 
@@ -24,8 +24,8 @@ from
   join tql_permissions p on p.permission_id = rp.permission_id
 where
   ug.user_id = /* userId */ 'u1'
-  and (ug.starts_at is null or ug.starts_at <= current_timestamp)
-  and (ug.ends_at is null or ug.ends_at > current_timestamp)
+  and (ug.starts_at is null or ug.starts_at <= /* now */ '2026-08-20 09:00:00')
+  and (ug.ends_at is null or ug.ends_at > /* now */ '2026-08-20 09:00:00')
 
 union
 
@@ -38,6 +38,6 @@ from
   join tql_permissions p on p.permission_id = up.permission_id
 where
   up.user_id = /* userId */ 'u1'
-  and (up.starts_at is null or up.starts_at <= current_timestamp)
-  and (up.ends_at is null or up.ends_at > current_timestamp)
+  and (up.starts_at is null or up.starts_at <= /* now */ '2026-08-20 09:00:00')
+  and (up.ends_at is null or up.ends_at > /* now */ '2026-08-20 09:00:00')
 ;

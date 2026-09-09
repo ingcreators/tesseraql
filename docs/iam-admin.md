@@ -81,7 +81,8 @@ assignments are kept, and re-declaring it revives it. The user detail page edits
 - **Role assignments**: assign or unassign a role, optionally with a **validity window**
   (a from and until date-time). An expired or not-yet-started assignment does not reach
   the user's next sign-in; a future-dated one arrives at the first sign-in after its
-  start.
+  start. A window is evaluated on the **application's** clock, the same clock that wrote
+  it, so a database host in another zone does not move it.
 - **Direct permissions**: grant a permission code to one person directly — the bounded
   exception that needs no synthetic role — with the same optional window.
 

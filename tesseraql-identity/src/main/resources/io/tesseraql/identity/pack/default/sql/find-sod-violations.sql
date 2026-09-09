@@ -21,8 +21,8 @@ from
     select ur.user_id as user_id, r.role_code as role_code
     from tql_user_roles ur
       join tql_roles r on r.role_id = ur.role_id
-    where (ur.starts_at is null or ur.starts_at <= current_timestamp)
-      and (ur.ends_at is null or ur.ends_at > current_timestamp)
+    where (ur.starts_at is null or ur.starts_at <= /* now */ '2026-08-20 09:00:00')
+      and (ur.ends_at is null or ur.ends_at > /* now */ '2026-08-20 09:00:00')
     union
     select ug.user_id as user_id, r.role_code as role_code
     from tql_user_groups ug

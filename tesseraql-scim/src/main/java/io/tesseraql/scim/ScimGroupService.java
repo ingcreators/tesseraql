@@ -5,6 +5,8 @@ import io.tesseraql.core.sql.SqlRenderer;
 import io.tesseraql.core.sql.SqlStatement;
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.sql.Timestamp;
+import java.time.Instant;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -257,17 +259,31 @@ public final class ScimGroupService {
                 Map.of("groupId", groupId, "memberId", memberId));
     }
 
+    /**
+     * The membership window's {@code now} is this JVM's clock, not the database's.
+     *
+     * <p>{@code list-members.sql} compares {@code starts_at}/{@code ends_at} — columns written
+     * from here, without a zone — against {@code now}. It read {@code current_timestamp} until
+     * the identity pack was moved onto the application clock; leaving SCIM behind would have been
+     * the same defect one module over, because this service builds its own {@link SqlStatement}
+     * and never passes through {@code IdentityService}, where the other eleven contracts are
+     * seeded.
+     */
+    private static Map<String, Object> membersParams(String groupId) {
+        return Map.of("groupId", groupId, "now", Timestamp.from(Instant.now()));
+    }
+
     private List<ScimGroup.Member> members(Connection connection, String groupId)
             throws SQLException {
         return statements.read(connection, "scim.groups.listMembers",
-                SqlRenderer.render(contract.listMembersSql(), Map.of("groupId", groupId)),
+                SqlRenderer.render(contract.listMembersSql(), membersParams(groupId)),
                 statements.rows())
                 .stream().map(ScimGroupMapper::memberFromRow).toList();
     }
 
     private List<ScimGroup.Member> members(String groupId) {
         try {
-            return queryAll("listMembers", contract.listMembersSql(), Map.of("groupId", groupId))
+            return queryAll("listMembers", contract.listMembersSql(), membersParams(groupId))
                     .stream().map(ScimGroupMapper::memberFromRow).toList();
         } catch (SQLException ex) {
             throw new ScimException(500, null, "SCIM group members failed: " + ex.getMessage());

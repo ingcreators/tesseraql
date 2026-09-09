@@ -18,8 +18,8 @@ where
     select ur.role_id
     from tql_user_roles ur
     where ur.user_id = /* userId */ 'u1'
-      and (ur.starts_at is null or ur.starts_at <= current_timestamp)
-      and (ur.ends_at is null or ur.ends_at > current_timestamp)
+      and (ur.starts_at is null or ur.starts_at <= /* now */ '2026-08-20 09:00:00')
+      and (ur.ends_at is null or ur.ends_at > /* now */ '2026-08-20 09:00:00')
 
     union
 
@@ -27,8 +27,8 @@ where
     from tql_user_groups ug
       join tql_group_roles gr on gr.group_id = ug.group_id
     where ug.user_id = /* userId */ 'u1'
-      and (ug.starts_at is null or ug.starts_at <= current_timestamp)
-      and (ug.ends_at is null or ug.ends_at > current_timestamp)
+      and (ug.starts_at is null or ug.starts_at <= /* now */ '2026-08-20 09:00:00')
+      and (ug.ends_at is null or ug.ends_at > /* now */ '2026-08-20 09:00:00')
   )
 order by
   role_code, condition_kind, value
