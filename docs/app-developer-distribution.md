@@ -2,8 +2,9 @@
 
 How a developer obtains TesseraQL and builds an application on it without cloning the
 framework repository. Everything below is available today except the items called out
-inline as planned — Maven Central + signing (GitHub Packages ships now) and a Gradle
-plugin.
+inline as planned — a Gradle plugin. The artifacts publish to Maven Central, signed
+([release.md](release.md)); GitHub Packages was the first channel and was removed in 0.16.0,
+so the passages below that name it are records of the plan, not of the build.
 
 ## Goal
 
@@ -62,7 +63,10 @@ surface by context; neither is more capable than the other once command parity (
 
 - Add `distributionManagement` and a publish job. **GitHub Packages first** (covers the
   internal audience immediately), **Maven Central later** (fills the `release.md` "Publishing
-  to Maven Central (later)" section, with signing).
+  to Maven Central (later)" section, with signing). *Both shipped, and only the second
+  survives: Central has carried the artifacts publicly since 0.7.1, and 0.16.0 removed the
+  GitHub Packages channel — nothing consumed it, and its `deploy` step gated the Central
+  publish behind an upload nobody read.*
 - Published set: `tesseraql-bom`, `tesseraql-maven-plugin`, `tesseraql-runtime`,
   `tesseraql-studio`, and every module an app resolves, **including the opt-in
   `tesseraql-pdf` / `tesseraql-excel` / `tesseraql-s3`**.
@@ -133,7 +137,9 @@ removes the separate-JDK install.
 Audience is "both internal and public", so phase it:
 
 - **Now (internal):** publish to GitHub Packages; distribute the CLI as a container image / Dev
-  Container feature (host needs only Docker) and/or a jpackage image.
+  Container feature (host needs only Docker) and/or a jpackage image. *The publish half is
+  Maven Central today — the internal channel was removed in 0.16.0 and the public one covers
+  both audiences.*
 - **Now (public):** package managers on top of the release assets — a Homebrew tap
   ([`ingcreators/homebrew-tap`](https://github.com/ingcreators/homebrew-tap): the portable jar
   dist on Homebrew's OpenJDK, covering macOS Intel/ARM and Linux; the macOS app image is
@@ -308,10 +314,11 @@ today.
 
 ## Suggested sequencing
 
-1. ✅ **Done** — Publish (BOM + plugin + runtime + studio + codecs) to GitHub Packages:
-   `distributionManagement` (the `github` repo) plus a `deploy` step in the release workflow; the
-   BOM version-manages the opt-in drivers (`ojdbc11`, `mssql-jdbc`, `mysql-connector-j`). Maven
-   Central + signing stay a later step.
+1. ✅ **Done** — Publish (BOM + plugin + runtime + studio + codecs), and the channel has since
+   changed: `distributionManagement` (the `github` repo) plus a `deploy` step in the release
+   workflow came first, then Maven Central + signing landed in 0.7.1, and 0.16.0 deleted the
+   GitHub Packages half. The BOM version-manages the opt-in drivers (`ojdbc11`, `mssql-jdbc`,
+   `mysql-connector-j`) throughout.
 2. ✅ **Done** — Extract the shared app-tasks library (`AppPackager`, `AppMigrator`,
    `IdentityBootstrap`) into `tesseraql-apptasks`.
 3. ✅ **Done** — Add the CLI subcommands (work item 2).
