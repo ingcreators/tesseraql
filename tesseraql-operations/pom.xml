@@ -19,6 +19,12 @@
       <groupId>org.apache.commons</groupId>
       <artifactId>commons-csv</artifactId>
     </dependency>
+    <!-- BOMInputStream: the codec consumes a byte-order mark and reads the charset it names.
+         Already on the classpath through commons-csv; declared because the codec uses it. -->
+    <dependency>
+      <groupId>commons-io</groupId>
+      <artifactId>commons-io</artifactId>
+    </dependency>
     <dependency>
       <groupId>io.tesseraql</groupId>
       <artifactId>tesseraql-core</artifactId>

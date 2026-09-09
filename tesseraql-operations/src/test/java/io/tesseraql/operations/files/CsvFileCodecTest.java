@@ -19,10 +19,22 @@ class CsvFileCodecTest {
     private final CsvFileCodec codec = new CsvFileCodec();
 
     private List<Map<String, Object>> read(String csv, FileReadSpec spec) throws Exception {
+        return read(csv.getBytes(StandardCharsets.UTF_8), spec);
+    }
+
+    private List<Map<String, Object>> read(byte[] bytes, FileReadSpec spec) throws Exception {
         List<Map<String, Object>> rows = new ArrayList<>();
-        codec.read(new ByteArrayInputStream(csv.getBytes(StandardCharsets.UTF_8)), spec,
-                (rowNumber, values) -> rows.add(values));
+        codec.read(new ByteArrayInputStream(bytes), spec, (rowNumber, values) -> rows.add(values));
         return rows;
+    }
+
+    /** The bytes a spreadsheet writes for "CSV UTF-8": the mark, then the text. */
+    private static byte[] marked(String csv, java.nio.charset.Charset charset, byte... mark) {
+        byte[] text = csv.getBytes(charset);
+        byte[] bytes = new byte[mark.length + text.length];
+        System.arraycopy(mark, 0, bytes, 0, mark.length);
+        System.arraycopy(text, 0, bytes, mark.length, text.length);
+        return bytes;
     }
 
     @Test
@@ -68,6 +80,68 @@ class CsvFileCodecTest {
                 new FileReadSpec(List.of(), true, null, 1));
         assertThat(rows).hasSize(1);
         assertThat(rows.get(0).get("name")).isEqualTo("alpha");
+    }
+
+    /**
+     * "CSV UTF-8" is the encoding a spreadsheet offers by name, and it writes a byte-order mark.
+     * Read as raw UTF-8 the mark becomes U+FEFF on the first header cell, which no header label
+     * matches and which {@code String.trim()} does not remove, so the transfer was refused.
+     */
+    @Test
+    void aUtf8ByteOrderMarkDoesNotHideTheFirstDeclaredColumn() throws Exception {
+        List<Map<String, Object>> rows = read(
+                marked("sku,qty\nA-1,5\n", StandardCharsets.UTF_8,
+                        (byte) 0xEF, (byte) 0xBB, (byte) 0xBF),
+                new FileReadSpec(List.of(
+                        new ColumnMapping("sku", null, null),
+                        new ColumnMapping("qty", null, null)), true, null, 1));
+        assertThat(rows).hasSize(1);
+        assertThat(rows.get(0).get("sku")).isEqualTo("A-1");
+        assertThat(rows.get(0).get("qty")).isEqualTo("5");
+    }
+
+    /**
+     * The silent half, and the worse one. With columns derived from the header there is nothing to
+     * refuse: the first column was simply named "﻿sku", so the rendered statement bound its
+     * `sku` parameter to null and wrote a null first column for every row of the file.
+     */
+    @Test
+    void aUtf8ByteOrderMarkDoesNotRenameTheFirstDerivedColumn() throws Exception {
+        List<Map<String, Object>> rows = read(
+                marked("sku,qty\nA-1,5\n", StandardCharsets.UTF_8,
+                        (byte) 0xEF, (byte) 0xBB, (byte) 0xBF),
+                new FileReadSpec(List.of(), true, null, 1));
+        assertThat(rows).hasSize(1);
+        assertThat(rows.get(0)).containsOnlyKeys("sku", "qty");
+        assertThat(rows.get(0).get("sku")).isEqualTo("A-1");
+    }
+
+    /**
+     * A mark names its encoding, so it decides the charset rather than merely being skipped.
+     * "Unicode Text" is the spreadsheet's other Unicode save, and it is UTF-16.
+     */
+    @Test
+    void aUtf16MarkedFileIsReadInTheEncodingItsMarkNames() throws Exception {
+        List<Map<String, Object>> rows = read(
+                marked("sku,qty\nA-1,5\n", StandardCharsets.UTF_16LE,
+                        (byte) 0xFF, (byte) 0xFE),
+                new FileReadSpec(List.of(
+                        new ColumnMapping("sku", null, null),
+                        new ColumnMapping("qty", null, null)), true, null, 1));
+        assertThat(rows).hasSize(1);
+        assertThat(rows.get(0).get("sku")).isEqualTo("A-1");
+        assertThat(rows.get(0).get("qty")).isEqualTo("5");
+    }
+
+    /** No mark still means UTF-8. There is no sniffing: a wrong guess writes wrong data. */
+    @Test
+    void anUnmarkedFileIsStillUtf8() throws Exception {
+        List<Map<String, Object>> rows = read("商品,数量\nアルファ,3\n",
+                new FileReadSpec(List.of(
+                        new ColumnMapping("product", "商品", null),
+                        new ColumnMapping("qty", "数量", null)), true, null, 1));
+        assertThat(rows).hasSize(1);
+        assertThat(rows.get(0).get("product")).isEqualTo("アルファ");
     }
 
     @Test
