@@ -318,6 +318,13 @@
         <artifactId>mysql-connector-j</artifactId>
         <version>${mysql.version}</version>
       </dependency>
+      <!-- Test scope only, to prove the streaming profile MariaDB gets is one its own driver
+           accepts. The coordinate ships to operators through tesseraql-bom, never from here. -->
+      <dependency>
+        <groupId>org.mariadb.jdbc</groupId>
+        <artifactId>mariadb-java-client</artifactId>
+        <version>${mariadb.version}</version>
+      </dependency>
       <!-- Embedded PostgreSQL process supervisor (the binary is resolved on demand, not bundled). -->
       <dependency>
         <groupId>io.zonky.test</groupId>

@@ -218,6 +218,33 @@ close the result set through try-with-resources before running the `after: timin
 statement on the same connection. The tests state that ordering so a later edit cannot quietly
 break it.
 
+**Amended 2026-09-09: a dialect chooses the fetch size, but only the driver can accept it.**
+`Integer.MIN_VALUE` is MySQL Connector/J's row-streaming signal and is that driver's alone.
+MariaDB Connector/J answers it with `invalid fetch size`, so every streaming read on MariaDB
+failed before it began — each `query-export` route, each `query-spool` batch step and the async
+export leg. The driver this broke on is the one
+[module-channel.md](module-channel.md) decision 7 recommends as the LGPL exit for MySQL users.
+
+The obvious repair — map `mariadb` to a positive fetch size — is not the repair, and measuring it
+is what showed why. A `jdbc:mariadb://` URL infers `Dialect.MYSQL`, correctly, because the SQL
+really is MySQL's; `RouteCompiler.datasourceDialect` therefore hands `SqlStep` the id `mysql`, and
+the `mariadb` branch is reached only when an operator declares `dialect: mariadb` or when a
+transfer detects the vendor from the connection. A guard written against
+`forDialect("mariadb")` passes while every unconfigured MariaDB deployment stays broken.
+
+So the decision is split in two. `StreamingProfiles` answers what the SQL dialect needs.
+`SqlStatement.prepare` asks the connection whether this driver defines the sentinel, and
+substitutes the conservative fetch size when it does not — a whitelist, so an unfamiliar driver
+is given a fetch size JDBC defines rather than one it may reject. The constraint above is MySQL's
+alone: with a positive fetch size MariaDB leaves the connection usable while the result set is
+open.
+
+`StreamingProfileDriverIntegrationTest` streams fifty rows through the framework's own primitive
+against a live MySQL and a live MariaDB, deriving the dialect from the container's JDBC URL the
+way the compiler does rather than naming it. The unit tests around this could not have caught the
+defect: they assert the fetch size reaches the driver, against a fake that accepted any value and
+had no driver name at all.
+
 ### 6. A codec declares whether it streams, for a given write spec
 
 `FileCodec` gains `boolean streams(FileWriteSpec spec)`, defaulting to `true`. CSV inherits the

@@ -294,6 +294,19 @@
       <artifactId>mysql-connector-j</artifactId>
       <scope>test</scope>
     </dependency>
+    <!-- MariaDB Connector/J is the documented licensing exit for MySQL users
+         (docs/module-channel.md decision 7), so the streaming profile it gets is proved
+         against the real driver, not assumed to be MySQL's. -->
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>testcontainers-mariadb</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.mariadb.jdbc</groupId>
+      <artifactId>mariadb-java-client</artifactId>
+      <scope>test</scope>
+    </dependency>
     <dependency>
       <groupId>org.testcontainers</groupId>
       <artifactId>testcontainers-junit-jupiter</artifactId>

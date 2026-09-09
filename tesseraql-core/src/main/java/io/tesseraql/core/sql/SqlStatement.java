@@ -1,6 +1,7 @@
 package io.tesseraql.core.sql;
 
 import io.tesseraql.core.dialect.Dialect;
+import io.tesseraql.core.dialect.StreamingProfiles;
 import io.tesseraql.core.telemetry.NoopTracer;
 import io.tesseraql.core.telemetry.Span;
 import io.tesseraql.core.telemetry.Tracer;
@@ -289,7 +290,7 @@ public final class SqlStatement {
                 statement.setQueryTimeout(timeoutSeconds);
             }
             if (fetchSize != 0 && keys.isEmpty()) {
-                statement.setFetchSize(fetchSize);
+                statement.setFetchSize(acceptedFetchSize(connection, fetchSize));
             }
             List<BoundParameter> parameters = bound.parameters();
             for (int i = 0; i < parameters.size(); i++) {
@@ -306,6 +307,34 @@ public final class SqlStatement {
             }
             throw ex;
         }
+    }
+
+    /**
+     * The fetch size to hand this driver. {@link Integer#MIN_VALUE} is MySQL Connector/J's
+     * row-streaming signal and is that driver's alone — MariaDB Connector/J answers it with
+     * {@code invalid fetch size} and the read never starts.
+     *
+     * <p>The dialect cannot decide this. A {@code jdbc:mariadb://} URL infers
+     * {@link Dialect#MYSQL}, correctly: the SQL really is MySQL's. Only the driver knows whether
+     * the sentinel means anything, so it is asked here, at the last point before the value
+     * reaches it. The test is a whitelist rather than a MariaDB exclusion so that an unfamiliar
+     * driver is given a fetch size JDBC defines, not a sentinel it may reject.
+     */
+    private static int acceptedFetchSize(Connection connection, int requested) {
+        if (requested != Integer.MIN_VALUE) {
+            return requested;
+        }
+        String driver;
+        try {
+            driver = connection.getMetaData().getDriverName();
+        } catch (SQLException unavailable) {
+            // Some pooling wrappers refuse metadata. The sentinel is what the caller asked for,
+            // so pass it through rather than silently changing a working MySQL export.
+            return requested;
+        }
+        return driver != null && driver.toLowerCase(Locale.ROOT).contains("mysql")
+                ? requested
+                : StreamingProfiles.CONSERVATIVE_FETCH_SIZE;
     }
 
     private boolean generatedKeyColumns() {
