@@ -2,6 +2,12 @@
 
 > **Status: complete.** Four slices shipped 2026-09-03, from the design at #1134/#1135.
 >
+> **The deferred suite-runner slice shipped 2026-09-09** — decision 11 below. A case declares
+> `lock: { route: <id>, value: <v> }`, so a locked statement is a `sql` case target and a
+> scaffolded app's update and delete no longer sit outside `tesseraql test`. Measuring it found
+> the second half nobody had filed: the audit binds those same statements need, and the YAML
+> scalar typing that bounds what a generated write case can bind at all.
+>
 > **Slice 4 (the scaffolder, and the gallery regenerated) shipped as #1139.**
 > `CrudScaffolder` emits `lock: { column: version, type: integer }` and `/*%lock*/ (1=1)`, and
 > the five hand-wired halves are gone: the `version:` input on both command routes, its bind,
@@ -658,6 +664,45 @@ statement's WHERE. And the framework
 stops telling authors to write `expect.rows`: the key is `rowCount`, and the lint message,
 the boot refusal and the scaffolded SQL comment all say `rows` today.
 
+## Decision 11 — a case seeds the lock by naming the route, and only the lock
+
+**Settled 2026-09-09; shipped as the suite-runner slice this design deferred.** A statement
+carrying `/*%lock*/` could not be a declarative-suite `sql` case: the runner renders with the
+case's plain YAML map, and only the command pipeline built the `LockBinding` the directive
+needs, so an unseeded render refused at `TQL-SQL-2115`. The generated suite only ever exercised
+the reads, so slice 4 broke no shipped suite — but it put every scaffolded app's update and
+delete out of reach of `tesseraql test`.
+
+A case now declares `lock: { route: <id>, value: <v> }`, or `overwrite: true` to waive the
+comparison. Three things about that shape were measured rather than assumed:
+
+- **The route is named, not the column.** The column is the route's declaration, and a case
+  restating it would keep passing after the route changed it. This is also where the lock stops
+  being the same shape as `principal:`, the analogue this design reached for: a
+  `/*%scope … */` directive names its scope id in the statement, so the case supplies only
+  claims — while `/*%lock*/` names nothing, and the column exists in the route's YAML alone.
+- **The key is case-level, not inside `sql:`.** `TestsSchemaSyncTest` requires a `verify:`
+  step's `sql:` to describe exactly what a case's own `sql:` does. A lock nested under `sql:`
+  would therefore have to be legal on a read-back, which is a query and can carry no lock.
+- **The value is bound as YAML typed it.** `lock.type` exists to turn a form's string back into
+  the column's type, and a suite has no form; `value: 1` is already an integer.
+
+**The lock was not the only thing keeping a scaffolded write out of the suite, and the second
+half was never filed.** With the lock seeded, the generated `update.sql` still failed — on
+`updated_by`/`updated_at`, which are `not null` and bind from `audit.user`/`audit.now`. Those
+are ordinary binds a case has always been able to write under an `audit` key, so nothing was
+blocked; nobody had written them. The same statement shape is reachable today through the
+unlocked `insert.sql`, which has four audit binds and no lock at all.
+
+Measuring that turned up a third thing, and it bounds what a generated write case can claim: a
+case binds each YAML scalar as it reads it, and **YAML reads `2026-01-01` as a string whether or
+not it is quoted** — Jackson's YAML parser returns `String` for every date and timestamp form.
+PostgreSQL refuses a string parameter for a `date` column when it *parses* the statement, before
+any row is matched, so the refusal lands even on a case that matches nothing. The scaffolded
+write cases therefore bind the key alone and assert `updateCount: 0`; they prove the statement
+renders, binds and is accepted, which is exactly what was unreachable, and no more.
+[testing.md](testing.md) states the limit for authors.
+
 ## The contract, clause by clause
 
 | Upstream clause | Where it lands |
@@ -768,17 +813,6 @@ one authored, and the pairing lints keep pointing the authored one at the declar
   keeps decision 6's rule intact — nothing arms a lock value except a render of the record.
 - **No region-granular htmx choreography.** The conflict answer is a dialog and a redirect,
   the same stance [workflow-surface.md](workflow-surface.md) decision 3 took.
-
-## Not in this design, and worth its own slice
-
-A statement carrying `/*%lock*/` cannot be a declarative-suite `sql` case: the runner renders
-with the case's plain YAML map, and only the command pipeline builds the `LockBinding` the
-directive needs, so an unseeded render refuses at `TQL-SQL-2115`. The generated suite only ever
-exercised the reads, so slice 4 broke no shipped suite — but it made every scaffolded app's
-update and delete statements unreachable from `tesseraql test`, and the gap is recorded in
-[testing.md](testing.md) rather than closed here. Closing it means a case-level key that builds a
-lock the way `principal:` builds a scope context, which is a change to the suite runner and
-belongs to it.
 
 ## Deliberately not in this design
 

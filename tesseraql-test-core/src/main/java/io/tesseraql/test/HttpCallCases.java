@@ -49,7 +49,7 @@ final class HttpCallCases {
         } else {
             // A route source whose arm is an outbound call plans the same way a job's step does
             // (docs/connectors.md, "HTTP sources") — url, host, and the allow-list verdict.
-            RouteFile route = context.route(target.route());
+            RouteFile route = context.route(target.route(), "http.route");
             route.definition().sources().forEach((name, binding) -> {
                 if (binding.isHttp() && (target.id() == null || target.id().equals(name))) {
                     calls.add(Map.entry(name, binding.http().call()));

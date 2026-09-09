@@ -117,6 +117,11 @@ public final class TestRunner {
             if (test.sql() != null && test.sql().file() != null) {
                 return sqlCases.run(test);
             }
+            if (test.lock() != null) {
+                throw new IllegalArgumentException("Test '" + test.name()
+                        + "' declares lock:, which requires a sql target — a lock is seeded"
+                        + " into a statement's render, and only a sql case renders one");
+            }
             if (test.transition() != null) {
                 return workflowCases.runTransition(test);
             }

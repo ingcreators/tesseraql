@@ -59,10 +59,10 @@ scope posture, and how the `data-scope` [coverage kind](#coverage-kinds) is earn
 - **`sql`** — runs a 2-way SQL file. A query's result rows are the case's rows; a write file
   (`UPDATE`/`INSERT`/`DELETE`) is just as valid a target — its affected-row count is asserted
   with `expect.updateCount`, and `verify:` read-backs observe the write (see
-  [Testing write routes](#testing-write-routes)). One write shape is out of reach: a statement
-  carrying `/*%lock*/` cannot be a `sql` case target, because the lock value is seeded from a
-  request and a suite has none — such a write is proven through its HTTP surface instead. Every `sql` case runs inside a transaction
-  the runner always rolls back, so a test run never commits anything to the database.
+  [Testing write routes](#testing-write-routes)). A statement carrying `/*%lock*/` is a target
+  like any other once the case declares a [`lock:`](#locked-writes). Every `sql` case runs inside
+  a transaction the runner always rolls back, so a test run never commits anything to the
+  database.
 - **`contract`** — runs a named identity contract (for example
   `identity.find-roles-by-user-id`) against the configured realm; its rows are the case's rows.
 - **`validate`** — evaluates a route's `validate:` rules against the case's `params` (the
@@ -235,6 +235,56 @@ Write cases record SQL coverage like read cases, and a `verify:` read-back exerc
 for route and item coverage exactly as a case target does — so a `command-json` route's UPDATE
 now counts toward the `route` and `security` coverage kinds. The route's `validate:` and
 `notify:` declarations remain separately testable through their own case kinds.
+
+### Locked writes
+
+A statement carrying a `/*%lock*/` directive ([edit conflicts](edit-conflict.md)) needs a lock
+value to render. On a request the framework seeds it from what the caller sent back; a case
+declares it:
+
+```yaml
+  - name: a stale lock writes nothing
+    sql:
+      file: web/items/{id}/update/update.sql
+    lock:
+      route: items.update
+      value: 1
+    params:
+      id: 1
+      name: Renamed
+    expect:
+      updateCount: 0
+```
+
+`lock.route` names the route whose `lock:` declares the column; the case supplies only the
+value. The column is not restated here, because it is the route's declaration — a case carrying
+its own copy would keep passing after the route changed it. This is where `lock:` and
+`principal:` stop being the same shape: a `/*%scope … */` directive names its scope in the
+statement, while `/*%lock*/` names nothing at all.
+
+Set `overwrite: true` instead of `value:` to waive the comparison, which renders `(1=1)` — the
+suite-side spelling of the conflict dialog's Overwrite button. Omitting `lock:` altogether is
+not a waiver: the statement still refuses with `TQL-SQL-2115`, because a locked write that
+quietly rendered unlocked is the defect the directive exists to prevent. A `verify:` read-back
+never carries a lock; read-backs are queries.
+
+### Ambient binds in a case
+
+`audit.user` and `audit.now` are seeded by the command pipeline on a request, so a `sql` case
+supplies them itself under an `audit` key:
+
+```yaml
+    params:
+      id: 1
+      audit:
+        user: suite
+```
+
+One limit is worth knowing before it surprises you: a case binds each YAML scalar as it reads
+it, and YAML reads `2026-01-01` as a string whether or not it is quoted. A string sent to a
+`date` or `timestamp` column is refused by PostgreSQL before any row is compared. So a case that
+writes a date or timestamp column leaves that bind unset — `null` is accepted everywhere — or
+proves the write through the route's HTTP surface, where the declared types do the coercion.
 
 ## Running the suites
 

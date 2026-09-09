@@ -464,6 +464,62 @@ class CrudScaffolderTest {
                 .contains("id: -1");
     }
 
+    /**
+     * Both write statements are suite targets, each seeding the lock its route declares
+     * (docs/edit-conflict.md decision 11). Before the case-level key they could not be targets
+     * at all, so a scaffolded app's whole write half sat outside {@code tesseraql test}.
+     */
+    @Test
+    void suiteCoversBothWriteStatementsAndSeedsTheirLocks() {
+        String suite = content(scaffolder.scaffold(items()), "tests/items-crud-test.yml");
+
+        assertThat(suite).contains("""
+                  - name: the items update runs for an unmatched key
+                    sql:
+                      file: web/items/{id}/update/update.sql
+                    lock:
+                      route: items.update
+                      value: 1
+                    params:
+                      id: -1
+                    expect:
+                      updateCount: 0
+                """);
+        assertThat(suite).contains("""
+                  - name: the items delete runs for an unmatched key
+                    sql:
+                      file: web/items/{id}/delete/delete.sql
+                    lock:
+                      route: items.delete
+                      value: 1
+                """);
+        // The key alone is bound: a case binds each YAML scalar as it reads it, and a generated
+        // due_date would be a string sent to a date column (docs/testing.md).
+        assertThat(suite).doesNotContain("due_date:");
+    }
+
+    /**
+     * The unlocked table's write cases carry no {@code lock:} — the key names a route's
+     * declaration, and a route that declares none has no column to seed. The gallery app's
+     * table has a version column, so this is the only place the other branch is generated.
+     */
+    @Test
+    void anUnlockedTablesWriteCasesSeedNoLock() {
+        String suite = content(scaffolder.scaffold(bare()), "tests/codes-crud-test.yml");
+
+        assertThat(suite).contains("""
+                  - name: the codes update runs for an unmatched key
+                    sql:
+                      file: web/codes/{code}/update/update.sql
+                    params:
+                      code: no-such-key
+                    expect:
+                      updateCount: 0
+                """);
+        assertThat(suite).contains("web/codes/{code}/delete/delete.sql");
+        assertThat(suite).doesNotContain("lock:");
+    }
+
     @Test
     void scaffoldAppliedToASkeletonLoadsAsAManifest(@TempDir Path target) {
         AppScaffolder apps = new AppScaffolder();

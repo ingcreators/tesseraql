@@ -8,6 +8,26 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **A locked statement is a declarative-suite `sql` case (`lock:`).** A statement carrying
+  `/*%lock*/` could not be a suite target at all: only the command pipeline built the
+  `LockBinding` the directive needs, and no `params:` entry can stand in for one — the renderer
+  takes the lock as an instance and lifts it out of the bind scope — so every scaffolded app's
+  update and delete sat outside `tesseraql test`. A case now declares
+  `lock: { route: <id>, value: <v> }`, or `overwrite: true` to waive the comparison the way the
+  conflict dialog's Overwrite button does. The route is named rather than the column, because the
+  column is the route's own declaration and a case restating it would keep passing after the
+  route changed it. Omitting `lock:` is still a refusal (`TQL-SQL-2115`), never a silent
+  `(1=1)` — and that refusal's message, which used to say a suite could not drive a locked
+  statement, now says how.
+
+  The scaffolder generates one case per write statement, so a regenerated app's update and delete
+  count toward the `route` and `security` coverage kinds. They bind the key alone and assert
+  `updateCount: 0`: a case binds each YAML scalar as it reads it, and YAML reads `2026-01-01` as
+  a string quoted or not, which PostgreSQL refuses for a `date` column when it parses the
+  statement — before any row is matched. `audit.user` and `audit.now`, which those same
+  statements need, were never blocked; they are ordinary binds a case writes under an `audit`
+  key, and [testing.md](docs/testing.md) now says so.
+
 - **The CLI reference names the deployment host's verbs.** The page promised a roster generated
   from the command model "so it cannot describe a flag that does not exist", and delivered that for
   the developer CLI only — while the binary an operator actually runs, `tesseraql-host`, answers a

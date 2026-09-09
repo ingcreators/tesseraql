@@ -127,9 +127,10 @@ class ScaffoldDogfoodIntegrationTest {
         AppTestRunner.RunResult result = new AppTestRunner()
                 .run(EXAMPLE, dataSource, RealmConfig.managed("local", "main"), reportDir);
 
-        // Two skeleton smoke cases + the crud suite (no-filter, filter, a descending sort, detail).
-        // The sort is an embedded variable (no branches), so it needs no per-column case.
-        assertThat(result.report().results()).hasSize(6);
+        // Two skeleton smoke cases + the crud suite (no-filter, filter, a descending sort,
+        // detail, and one case per write statement). The sort is an embedded variable (no
+        // branches), so it needs no per-column case.
+        assertThat(result.report().results()).hasSize(8);
         assertThat(result.report().allPassed())
                 .as(() -> result.report().results().toString()).isTrue();
         // Every branch of both generated search templates is exercised — for the crud fragment the
@@ -139,11 +140,15 @@ class ScaffoldDogfoodIntegrationTest {
         assertThat(result.coverage().report("web/items/search.sql")
                 .branchRatio()).isEqualTo(1.0);
         // The suites prove the SQL-bound generated routes — the list is one view-backed route
-        // now (no fragment route), so it also counts into the view coverage kind.
+        // now (no fragment route), so it also counts into the view coverage kind. The two
+        // write routes are here because a case can seed a lock (docs/edit-conflict.md); before
+        // that, a scaffolded app's update and delete could not be suite targets at all.
         assertThat(result.kind("route").covered())
-                .contains("items.search", "items.page", "items.detail");
+                .contains("items.search", "items.page", "items.detail",
+                        "items.update", "items.delete");
         assertThat(result.kind("security").covered())
-                .contains("items.search", "items.page", "items.detail");
+                .contains("items.search", "items.page", "items.detail",
+                        "items.update", "items.delete");
         // View coverage keys by view DOCUMENT id since docs/view-composition.md wave 1.
         assertThat(result.kind("view").declared())
                 .contains("items", "items.edit", "items.new");

@@ -27,7 +27,7 @@ final class ValidationCases {
      * SQL rules run against the test datasource and record coverage like SQL-file cases.
      */
     List<Map<String, Object>> evaluate(TestCase test) {
-        RouteFile route = context.route(test.validate().route());
+        RouteFile route = context.route(test.validate().route(), "validate.route");
         Path routeDir = route.source().getParent();
         List<ValidationRules.Rule> rules = new ArrayList<>();
         route.definition().validate().forEach((id, rule) -> {
