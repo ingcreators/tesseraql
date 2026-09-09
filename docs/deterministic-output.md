@@ -30,6 +30,37 @@ rule. `RouteDefinition`'s compact constructor is the pattern in miniature: line 
 "Insertion-ordered so command steps and named sources run in their authored order." Somebody
 worked this out for `steps:` and did not carry it one line up to `input:`.
 
+### The second environment input: the default locale
+
+*Added 2026-09-09, from a whole-repository audit lead measured against main.*
+
+The hash salt is not the only ambient input that reaches a machine-read string. `String.format`
+and `.formatted` consult `Locale.getDefault()` unless given a locale, and `%d` and `%f` localize
+under it — `ar-EG`, `bn-BD` and Devanagari render their own digits. `%x`, `%X` and `%s` do not,
+which is why a hex site is safe and a `%04d` site is not.
+
+Same class, same rule: **a string that is compared, hashed, put on the wire, or written into a
+generated file is rendered without consulting the default locale.** Two sites qualified:
+
+- `TqlErrorCode.toString()` — the code in the error envelope, and the thing every comparison
+  against a literal like `"TQL-SQL-2001"` matches. Under `ar-EG` it spelled `TQL-SQL-٢٠٠١`, which
+  matches nothing and which `TqlErrorCode.parse` cannot read back.
+- `ErrorIndex` — it pads the code number itself, and has to: the scan finds domain strings that are
+  not `TqlDomain` constants (`ADM`, `ATTACH`, `OPS`, `SCOPE`), so delegating through
+  `TqlDomain.valueOf` would throw on the real repository. Because the padding is its own, fixing
+  `TqlErrorCode` alone left the generated reference — a committed artifact with a drift test behind
+  it — localizing every row.
+
+**Census by shape, not by pattern.** The sweep looked for a `String.format`/`.formatted` whose
+first argument is not a `Locale`, then judged each numeric conversion. A census scoped by matching
+the *format string* would have been green on its own defect: the sibling defect this lead led to,
+`Totp.codeAt`, builds its format string by concatenation (`"%0" + DIGITS + "d"`) and no
+format-string pattern finds it. That one is a security-availability defect — the server refused the
+TOTP code it had just generated, locking every user out of MFA — and it is fixed separately.
+
+Sixty locale-sensitive format calls exist in main sources; eleven carry a numeric conversion; the
+remaining nine are coverage percentages and Maven log lines a human reads, deliberately left alone.
+
 ## What is broken
 
 | Where | What varies |

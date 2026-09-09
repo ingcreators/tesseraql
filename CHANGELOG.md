@@ -30,6 +30,27 @@ All notable changes to TesseraQL are documented here. The format follows
   green before the fix for the wrong reason, so it was proven against a variant that logs
   everything at error, where it fails naming `Route 'orders.create' failed with TQL-FIELD-4001`.
 
+- **An error code is the same string on every JVM.** `TqlErrorCode.toString()` padded its number
+  with a locale-sensitive `String.format`, so on a JVM whose default locale carries its own
+  numbering system — `ar-EG`, `bn-BD`, Devanagari — the code went onto the wire as
+  `TQL-SQL-٢٠٠١`. That matches no literal anywhere, and `TqlErrorCode.parse` cannot read it back.
+
+  `ErrorIndex` had the same defect independently, and fixing the code alone would not have reached
+  it: it pads the number itself, because the scan finds domain strings that are not `TqlDomain`
+  constants and delegating would throw on the real repository. Generated under `ar-EG`, every row
+  of `docs/reference-error-codes.md` — a committed artifact with a drift test behind it — spelled
+  its code in Arabic-Indic digits.
+
+  Both now pin `Locale.ROOT`. `docs/deterministic-output.md` gains the default locale as the second
+  ambient input of the class it already describes, along with the census: sixty locale-sensitive
+  format calls in main sources, eleven with a numeric conversion, two that are machine-read. The
+  remaining nine are coverage percentages and Maven log lines a human reads, left alone
+  deliberately.
+
+  The census is by *shape* — a format call whose first argument is not a `Locale` — and not by
+  format-string pattern, because a pattern-scoped one is green on its own defect: `Totp.codeAt`
+  builds its format string by concatenation and no pattern finds it.
+
 - **A CSV written by a spreadsheet imports.** "CSV UTF-8" writes a byte-order mark, and the codec
   decoded the upload as raw UTF-8, so the mark survived as `U+FEFF` on the first header cell.
   `String.trim()` does not remove it.
