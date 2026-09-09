@@ -615,7 +615,8 @@ final class ErrorIndex {
             "reference-lookup.md", "bulk-report.md", "csv-import.md", "edit-conflict.md",
             "http-edge-robustness.md", "two-way-sql-parser.md", "base-path-emission.md",
             "deterministic-output.md", "release-and-ci-hardening.md",
-            "yaml-surface-drift.md", "module-boundary-guards.md");
+            "yaml-surface-drift.md", "module-boundary-guards.md",
+            "audit-medium-leads.md");
 
     /** Whether {@code name} is an internal planning document; shared with the config index. */
     static boolean isInternalDoc(String name) {

@@ -317,4 +317,7 @@ export const EXCLUDED = [
   // What the framework asserts about itself — its module rosters, its published verbs, its
   // governed heads — and the guards that hold each claim, designed 2026-09-08.
   'module-boundary-guards.md',
+  // The 22 medium leads the whole-repo audit left unverified: what survived measurement against
+  // current main, what the campaigns had already killed, and the slices that follow, 2026-09-09.
+  'audit-medium-leads.md',
 ];
