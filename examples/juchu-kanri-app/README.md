@@ -19,5 +19,5 @@ What it exercises:
 Run it like any gallery app:
 
 ```bash
-tesseraql run --app examples/juchu-kanri-app
+tesseraql dev --app-name juchu-kanri --embedded-db
 ```

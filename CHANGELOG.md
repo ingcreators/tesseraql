@@ -35,6 +35,26 @@ All notable changes to TesseraQL are documented here. The format follows
   names `SLF4JSystemLoggerFinder`, so the `ServicesResourceTransformer` really does carry the entry
   through the shade.
 
+- **A command line taught outside `docs/` names a verb the CLI has.** `DocumentedCommandLineTest`
+  covered `README.md`, `examples/README.md` and a **non-recursive** listing of `docs/`. Two pages
+  a user actually reads sat outside it, and both were wrong.
+
+  `examples/juchu-kanri-app/README.md` ran `tesseraql run --app …`. There has never been a `run`
+  verb; the line exited 2 and had done since #630. `examples/README.md` offers those pages as
+  "copy one as a starting point", so the one directory the guard stopped at was the one a
+  newcomer opens next. It now reads `tesseraql dev --app-name juchu-kanri --embedded-db`, matching
+  its sibling examples.
+
+  Studio's PDF empty state told the reader to start the server with `serve --modules pdf` — a
+  page the product itself renders. `serve` was deleted in 0.15.0, and `--modules` takes a
+  directory rather than a module name, so the sentence was wrong twice.
+
+  The guard gained both: `examples/*/README.md`, and a scan of shipped HTML for a `<code>` element
+  whose content is a bare word followed by a flag. That shape was measured across every shipped
+  resource tree before the check was written — it matches exactly one element, so this is a check
+  with no exemption list rather than a heuristic that needs one. Both halves were verified red,
+  each naming exactly its own violation.
+
 - **A route failure leaves a record.** Nothing wrote one down. `PipelineRunner` caught the
   exception, stored it as a property and handed it to a renderer; `ErrorResponseRenderer` published
   the status *phrase* rather than the cause; and `RingTracer.recordError(Throwable)` received the
