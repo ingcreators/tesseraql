@@ -145,9 +145,17 @@ jobs:
     timeout-minutes: 45
     runs-on: ubuntu-latest
     needs: release
-    if: github.event_name == 'push'
+    if: always() && (github.event_name == 'workflow_dispatch' || needs.release.result == 'success')
 
     steps:
+      # This job reads .github/scripts/await-release-assets.sh as a path, so it needs the
+      # repository like every other job that calls a script does. Without it the step ends in
+      # seconds with exit 127, whatever its timeout promises (WorkflowLedgerTest holds this).
+      - name: Checkout the release sources
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
       - name: Check for the cross-repo app credentials
         id: token
         env:
@@ -178,11 +186,12 @@ jobs:
         id: assets
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
+          VERSION="${RELEASE_TAG#v}"
           DIST="tesseraql-cli-${VERSION}-dist.tar.gz"
           WIN="tesseraql-${VERSION}-windows-x86_64.zip"
-          DIGESTS=$(bash .github/scripts/await-release-assets.sh "$GITHUB_REF_NAME" "$DIST" "$WIN")
+          DIGESTS=$(bash .github/scripts/await-release-assets.sh "$RELEASE_TAG" "$DIST" "$WIN")
           {
             echo "version=$VERSION"
             echo "dist_sha=$(echo "$DIGESTS" | awk -v n="$DIST" '$1 == n { print $2 }')"
@@ -247,6 +256,13 @@ jobs:
     runs-on: ubuntu-latest
     needs: release
     if: always() && (github.event_name == 'workflow_dispatch' || needs.release.result == 'success')
+
+    # docker push to GHCR needs packages: write, which the workflow-level contents: write does
+    # not carry. A job's own block replaces the workflow's rather than adding to it, so the
+    # checkout's contents: read is restated here (WorkflowLedgerTest holds this).
+    permissions:
+      contents: read
+      packages: write
 
     steps:
       - name: Checkout the release sources
