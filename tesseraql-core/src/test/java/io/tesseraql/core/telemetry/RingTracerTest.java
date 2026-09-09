@@ -30,4 +30,38 @@ class RingTracerTest {
 
         assertThat(tracer.recentSpans()).extracting(SpanSample::name).containsExactly("c", "b");
     }
+
+    /**
+     * {@code error=true} says a route failed and nothing else. The ring is what the operations
+     * console's trace page reads, and it was the last place a failure's identity could have
+     * survived: the error envelope carries the status phrase rather than the cause, and until
+     * this was written nothing logged a route failure at all.
+     */
+    @Test
+    void aRecordedErrorKeepsWhatFailed() {
+        RingTracer tracer = new RingTracer(4);
+        Span failing = tracer.start("route");
+        failing.recordError(new IllegalStateException("relation \"orders\" does not exist"));
+        failing.end();
+
+        SpanSample sample = tracer.recentSpans().get(0);
+        assertThat(sample.error()).isTrue();
+        assertThat(sample.attributes())
+                .containsEntry("error.type", "java.lang.IllegalStateException")
+                .containsEntry("error.message", "relation \"orders\" does not exist");
+    }
+
+    /** A throwable with no message must not put a null in the ring. */
+    @Test
+    void aRecordedErrorWithoutAMessageKeepsItsType() {
+        RingTracer tracer = new RingTracer(4);
+        Span failing = tracer.start("route");
+        failing.recordError(new IllegalStateException());
+        failing.end();
+
+        SpanSample sample = tracer.recentSpans().get(0);
+        assertThat(sample.attributes())
+                .containsEntry("error.type", "java.lang.IllegalStateException")
+                .doesNotContainKey("error.message");
+    }
 }
