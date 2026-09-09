@@ -96,8 +96,16 @@ final class ErrorIndex {
                 // Zero-padded, exactly as TqlErrorCode.toString() renders it. An unpadded row
                 // spells a code the runtime never emits, so a user searching for the one in
                 // their error payload finds nothing.
+                //
+                // Locale.ROOT for the same reason it renders one, and the padding stays here
+                // rather than delegating to TqlErrorCode: the scan finds domain strings that are
+                // not TqlDomain constants (ADM, ATTACH, OPS, SCOPE), so TqlDomain.valueOf would
+                // throw on the real repository. This page is a committed artifact with a drift
+                // test behind it — generating it under a different default locale must not change
+                // a byte.
                 md.append("| `TQL-").append(domain.getKey()).append('-')
-                        .append(String.format("%04d", code.getKey())).append("` | ")
+                        .append(String.format(java.util.Locale.ROOT, "%04d", code.getKey()))
+                        .append("` | ")
                         .append(meaningCell(code.getValue().messages())).append(" | ")
                         .append(docLinks(code.getValue().docs())).append(" | ")
                         .append(sourceLinks(code.getValue().sources())).append(" |\n");

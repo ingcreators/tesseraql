@@ -1,5 +1,6 @@
 package io.tesseraql.core.error;
 
+import java.util.Locale;
 import java.util.Objects;
 
 /**
@@ -26,7 +27,12 @@ public record TqlErrorCode(TqlDomain domain, int number) {
      */
     @Override
     public String toString() {
-        return "TQL-" + domain.name() + "-" + String.format("%04d", number);
+        // Locale.ROOT, not the default: a code is an identity, not a rendering. It goes on the
+        // wire in the error envelope, into the generated reference, and into every comparison
+        // against a literal like "TQL-SQL-2001". A JVM whose default locale carries its own
+        // numbering system would otherwise spell TQL-SQL-٢٠٠١, which matches no literal anywhere
+        // and which parse() cannot read back.
+        return "TQL-" + domain.name() + "-" + String.format(Locale.ROOT, "%04d", number);
     }
 
     /**
