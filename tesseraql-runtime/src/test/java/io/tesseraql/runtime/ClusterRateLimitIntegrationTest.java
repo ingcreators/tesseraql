@@ -1,7 +1,7 @@
 package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 import io.tesseraql.core.rate.RateBudget;
 import io.tesseraql.operations.rate.JdbcRateLeaseStore;
@@ -147,13 +147,19 @@ class ClusterRateLimitIntegrationTest {
                 lock.executeQuery().close();
             }
             long start = System.nanoTime();
-            assertThatThrownBy(() -> store.claim("lock|route", window, 1, 10))
+            Throwable refusal = catchThrowable(() -> store.claim("lock|route", window, 1, 10));
+            long elapsedMs = (System.nanoTime() - start) / 1_000_000;
+            assertThat(refusal)
                     .as("the claim gives up rather than waiting out the pool")
                     .isInstanceOf(IllegalStateException.class);
-            long elapsedMs = (System.nanoTime() - start) / 1_000_000;
+            assertThat(sqlStates(refusal))
+                    .as("and it gives up because the STATEMENT bound fired — 57014 is the only"
+                            + " way this row can be given up on, so the case cannot pass by"
+                            + " failing quickly for some unrelated reason")
+                    .contains("57014");
             assertThat(elapsedMs)
-                    .as("and it gives up at the statement bound, not the connection bound")
-                    .isLessThan(15_000);
+                    .as("it waited for that bound rather than failing instantly")
+                    .isBetween(1_000L, 15_000L);
             holder.rollback();
         }
     }
@@ -235,6 +241,20 @@ class ClusterRateLimitIntegrationTest {
                         .forEach(path -> path.toFile().delete());
             }
         }
+    }
+
+    /** Every SQLState in the cause chain — the precise signal, not the message text. */
+    private static List<String> sqlStates(Throwable failure) {
+        List<String> states = new ArrayList<>();
+        for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
+            if (cause instanceof java.sql.SQLException sql && sql.getSQLState() != null) {
+                states.add(sql.getSQLState());
+            }
+            if (cause.getCause() == cause) {
+                break;
+            }
+        }
+        return states;
     }
 
     private static Path prepareAppHome() throws IOException {
