@@ -8,6 +8,24 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **Ctrl+C on `dev --embedded-db` no longer kills the request it was draining.** The embedded
+  PostgreSQL registered a JVM shutdown hook of its own, and JVM shutdown hooks all run at once. It
+  stopped the server about a tenth of a second into the stop, while the CLI was still draining
+  in-flight requests. A request that was in the database at that moment came back as a 500 carrying
+  a `FATAL: terminating connection due to administrator command` trace, and anything served during
+  the rest of the drain waited out the pool's connection timeout and failed too.
+
+  The CLI now owns the instance end to end. It chooses the data directory, claims the server before
+  starting it, and registers its one shutdown hook before anything it has to stop. So the database
+  stops after the runtimes have released their connections. An interrupted, refused or failed start
+  now stops the server it started, instead of leaving it running on the developer's machine — which
+  includes the everyday case of starting `dev` while the gateway port is already taken.
+
+  One consequence to know about: stopping now takes as long as the drain does. A `kill -9` in the
+  middle of a drain therefore leaves a `postgres` process and its temporary directory behind, where
+  before the database had already been stopped. An idle stack is unaffected — the drain ends as soon
+  as nothing is in flight, and it announces its count and its bound before it waits.
+
 - **A stalled rate-limit ledger no longer takes the node down with it.** A `scope: cluster`
   route leased its tokens from inside the limiter's monitor, so every other request to that
   route queued behind one database call. Those are route threads still holding their runtime
