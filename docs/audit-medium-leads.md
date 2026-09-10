@@ -38,7 +38,7 @@ All 22 carried `reproduce-lens-missing` + `deliberate-lens-missing`; 21 also car
 | F97 `:target` row rules | **LIVE (reframed)** | medium | untouched |
 | F98 hypermedia-ui.md teaches a deleted stand-in | **LIVE (reframed)** | medium | untouched |
 | F106 failures logged message-only | **LIVE (reframed)** | medium | half-killed by #1291 |
-| F113 `dev --embedded-db` shutdown race | **LIVE** | medium | fixed, slice 3 |
+| F113 `dev --embedded-db` shutdown race | **LIVE** | medium | fixed #1299 |
 | F114 CLI usage errors are stack traces | **LIVE (widens)** | medium | untouched |
 | F118 `MessageCatalog.live()` per resolution | **LIVE (widens)** | medium | untouched |
 | F119 rate-limiter monitor across JDBC claim | **LIVE (reframed)** | medium | untouched |
@@ -221,8 +221,8 @@ fresh `origin/main`. Nothing here is scheduled in `remediation.json` — this is
 | # | Slice | Leads | Size | Note |
 |---|---|---|---|---|
 | 1 | Bind one clock to every identity validity window | F129 | M | The only high. Seed `now` at `IdentityService`, and separately at `ScimGroupService` — the central seam does not reach SCIM. |
-| 2 | Release the limiter monitor across the lease claim | F119 | M | SHIPPED. The scope written here was wrong in both directions: of the two `JdbcCatalogStore` sites one is unreachable dead code and the other needs a promise change rather than a lock change, so both are filed instead; `setQueryTimeout` does belong here, because the fix's own liveness depends on it. |
-| 3 | An interrupted `dev --embedded-db` stops the database last | F113 | M | SHIPPED. Three pieces, not two, and the two written here do not work alone: the window the library's own hook covers is *inside* `builder.start()`, which no hoisted hook can reach, so the CLI must also choose the data directory and claim the instance before that call. With only the first two, an interrupt during startup — or a gateway port already in use, with no signal at all — leaves a live PostgreSQL behind. Carries a cost of its own, filed: a `kill -9` during the drain now leaks what it used to have already stopped. |
+| 2 | Release the limiter monitor across the lease claim | F119 | M | SHIPPED #1298. The scope written here was wrong in both directions: of the two `JdbcCatalogStore` sites one is unreachable dead code and the other needs a promise change rather than a lock change, so both are filed instead; `setQueryTimeout` does belong here, because the fix's own liveness depends on it. |
+| 3 | An interrupted `dev --embedded-db` stops the database last | F113 | M | SHIPPED #1299. Three pieces, not two, and the two written here do not work alone: the window the library's own hook covers is *inside* `builder.start()`, which no hoisted hook can reach, so the CLI must also choose the data directory and claim the instance before that call. With only the first two, an interrupt during startup — or a gateway port already in use, with no signal at all — leaves a live PostgreSQL behind. Carries a cost of its own, filed: a `kill -9` during the drain now leaks what it used to have already stopped. |
 | 4 | A download keeps its name and its bytes | F125, F128 | S+M | One response, two halves. RFC 6266 `filename*` at the single helper; `bom:` on the `export` block. |
 | 5 | An export declaration is refused, or it takes effect | F126 | M | Subsumes the two unfiled halves: the inert untyped-column zone, and the routes-only lint gate. |
 | 6 | Bound the accumulators by their unit of work | F120, F118 | M+M | Same shape, shared design review: age-swept session map; per-render catalog memo. |
