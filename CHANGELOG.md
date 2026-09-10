@@ -8,6 +8,36 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A stalled rate-limit ledger no longer takes the node down with it.** A `scope: cluster`
+  route leased its tokens from inside the limiter's monitor, so every other request to that
+  route queued behind one database call. Those are route threads still holding their runtime
+  admission permit, so one slow ledger on one route could exhaust the node's whole in-flight
+  budget and leave *unrelated* routes refused at capacity. The claim now runs on one virtual
+  thread and no request waits on the ledger for more than 100 ms.
+
+  **The degrade condition widens, and this is the part to read before upgrading.** It used to
+  mean "the ledger threw". It now also means "the ledger did not answer in time", measured
+  against the ledger's own normal latency — four times that, or one window if it has never
+  answered. A fixed deadline cannot tell a slow ledger from an unreachable one; it only
+  chooses which latencies get called unreachable. While the ledger is down each node serves
+  the declared rate, so a cluster of N nodes serves N times it. That is the existing
+  availability-over-precision stance applied to a new condition, not a new stance.
+
+  **What it costs.** Against a ledger answering in about 300 ms a node now serves 444 requests
+  where it served 600, and in exchange its admission floor rises from 8 permits to 28. That is
+  a deliberate trade of one route's availability for the node's. Against a healthy ledger
+  nothing moves.
+
+  Two supporting changes ship with it. The lease ledger's claim statements now run under the
+  app-wide `tesseraql.sql.timeoutSeconds`: the pool bounded the connection borrow, nothing
+  bounded the statements, and the limiter's correctness now depends on a claim returning. And
+  a claim that never returns at all is reported at `ERROR` naming its consequence, because a
+  rate limiter has no "I don't know" to answer with.
+
+  A ledger failure also logs the throwable rather than its message. An `Error` — a driver
+  missing from the classpath, say — carries a null message, so the old line said nothing at
+  all.
+
 - **A validity window is evaluated on the application's clock.** The identity and SCIM packs
   compared `starts_at`/`ends_at` — zone-less columns written from the JVM — against
   `current_timestamp`, the database's clock. Where the two hosts sat in different zones the
