@@ -27,8 +27,36 @@ public final class JdbcRateLeaseStore implements RateBudget {
     private final DataSource dataSource;
     private final AtomicLong claims = new AtomicLong();
 
+    private int sqlTimeoutSeconds;
+
     public JdbcRateLeaseStore(DataSource dataSource) {
         this.dataSource = dataSource;
+    }
+
+    /**
+     * The query timeout every claim-path statement runs under, in seconds; 0 leaves it unset.
+     *
+     * <p>There was none. The borrow is bounded by the pool's {@code connectionTimeout}, but the
+     * statements were not, and {@code tql_rate_lease} is one row per (scope, window) that every
+     * node in the cluster UPDATEs every second — so an {@code ACCESS EXCLUSIVE} lock from a
+     * migration or a backup blocks a claim with no bound at all, and PostgreSQL sets neither
+     * {@code lock_timeout} nor {@code statement_timeout} by default. {@code ClusterRateLimiter}
+     * clears its in-flight mark only when {@link #claim} returns, so this bound is what makes
+     * that mark certain to clear.
+     *
+     * @param seconds the bound, clamped at 0
+     * @return this store, for chaining at the wiring site
+     */
+    public JdbcRateLeaseStore sqlTimeoutSeconds(int seconds) {
+        this.sqlTimeoutSeconds = Math.max(0, seconds);
+        return this;
+    }
+
+    /** Applies the configured query timeout, if any. */
+    private void applyTimeout(PreparedStatement statement) throws SQLException {
+        if (sqlTimeoutSeconds > 0) {
+            statement.setQueryTimeout(sqlTimeoutSeconds);
+        }
     }
 
     /** Creates {@code tql_rate_lease} when absent; tolerant of concurrent creation. */
@@ -81,6 +109,7 @@ public final class JdbcRateLeaseStore implements RateBudget {
         try (PreparedStatement insert = connection.prepareStatement(
                 "insert into tql_rate_lease (scope_key, window_start, granted)"
                         + " values (?, ?, ?)")) {
+            applyTimeout(insert);
             insert.setString(1, scopeKey);
             insert.setLong(2, windowStart);
             insert.setInt(3, Math.min(want, budget));
@@ -92,6 +121,7 @@ public final class JdbcRateLeaseStore implements RateBudget {
         // The row exists but the full ask does not fit: claim the remainder optimistically.
         try (PreparedStatement read = connection.prepareStatement(
                 "select granted from tql_rate_lease where scope_key = ? and window_start = ?")) {
+            applyTimeout(read);
             read.setString(1, scopeKey);
             read.setLong(2, windowStart);
             try (ResultSet row = read.executeQuery()) {
@@ -106,6 +136,7 @@ public final class JdbcRateLeaseStore implements RateBudget {
                 try (PreparedStatement grab = connection.prepareStatement(
                         "update tql_rate_lease set granted = granted + ?"
                                 + " where scope_key = ? and window_start = ? and granted = ?")) {
+                    applyTimeout(grab);
                     grab.setInt(1, remainder);
                     grab.setString(2, scopeKey);
                     grab.setLong(3, windowStart);
@@ -116,11 +147,12 @@ public final class JdbcRateLeaseStore implements RateBudget {
         }
     }
 
-    private static int update(Connection connection, String scopeKey, long windowStart,
+    private int update(Connection connection, String scopeKey, long windowStart,
             int want, int budget) throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement(
                 "update tql_rate_lease set granted = granted + ?"
                         + " where scope_key = ? and window_start = ? and granted <= ?")) {
+            applyTimeout(statement);
             statement.setInt(1, want);
             statement.setString(2, scopeKey);
             statement.setLong(3, windowStart);
@@ -129,9 +161,10 @@ public final class JdbcRateLeaseStore implements RateBudget {
         }
     }
 
-    private static void sweep(Connection connection, long olderThan) {
+    private void sweep(Connection connection, long olderThan) {
         try (PreparedStatement statement = connection.prepareStatement(
                 "delete from tql_rate_lease where window_start < ?")) {
+            applyTimeout(statement);
             statement.setLong(1, olderThan);
             statement.executeUpdate();
         } catch (SQLException ignored) {

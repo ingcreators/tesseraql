@@ -398,12 +398,18 @@ With `scope: cluster` the declared rate is one budget across every node sharing 
 database. Enforcement stays a local token bucket — the request path never touches the
 database — but tokens are *leased* from a small `tql_rate_lease` ledger (one row per route
 per second-window, plain atomic updates, every supported dialect, created on first use like
-the inbox table). At most one lease claim runs per second per node per route; claims are
+the inbox table). At most one lease claim runs per second per node per route — an upper
+bound, not a lower one, because no second claim starts while one is still out. Claims are
 first-come-first-served, so a quiet node leaves its share for the busy ones, and `burst`
 remains node-local smoothing. Precision is bounded, not perfect: a volley straddling a window
-boundary can briefly see up to two windows' budget. When the ledger is unreachable the
+boundary can briefly see up to two windows' budget. When the ledger does not answer the
 limiter degrades to the per-node budget for that window and logs with backoff — rate limiting
-protects resources; it must never become the outage itself.
+protects resources; it must never become the outage itself. "Does not answer" is measured
+against the ledger's own normal latency — four times that, or one window if it has never
+answered — because a fixed deadline cannot tell a slow ledger from an unreachable one. While
+it is down each node serves the declared rate, so a cluster of N nodes serves N times it. A
+claim that never returns at all leaves its node on the per-node budget until it ends, and is
+reported at `ERROR` naming that consequence.
 
 **Shared export files.** Spooled exports (`query-export`, `query-spool`, batch intermediate
 results) default to the producing node's local disk — fine for one node, but a download can

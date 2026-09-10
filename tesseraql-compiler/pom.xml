@@ -63,6 +63,16 @@
       <artifactId>assertj-core</artifactId>
       <scope>test</scope>
     </dependency>
+    <!-- ClusterRateLimiterTest asserts on the limiter's own degrade log. slf4j-simple is
+         test-scoped in tesseraql-identity and tesseraql-runtime for the same reason, and
+         test scope does not travel, so this module needs its own: with slf4j-api alone
+         LoggerFactory hands back NOPLoggerFactory and every log assertion is unfalsifiable. -->
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-simple</artifactId>
+      <version>${slf4j.version}</version>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 
 </project>

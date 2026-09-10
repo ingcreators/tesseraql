@@ -1198,6 +1198,11 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     && definition.admission().rateLimit().isCluster())) {
                 io.tesseraql.operations.rate.JdbcRateLeaseStore rateLeases = new io.tesseraql.operations.rate.JdbcRateLeaseStore(
                         frameworkDataSource);
+                // The limiter clears its in-flight mark only when a claim returns, so the claim
+                // path is bounded on both halves: the pool's connectionTimeout for the borrow,
+                // the app-wide statement bound for the statements.
+                rateLeases.sqlTimeoutSeconds(
+                        io.tesseraql.yaml.config.SqlDefaults.timeoutSeconds(manifest.config()));
                 rateLeases.ensureSchema();
                 context.bind(TesseraqlProperties.RATE_BUDGET_BEAN, rateLeases);
             }
