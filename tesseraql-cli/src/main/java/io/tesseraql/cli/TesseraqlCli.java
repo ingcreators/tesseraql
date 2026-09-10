@@ -200,11 +200,37 @@ public final class TesseraqlCli implements Runnable {
             // declared query string, so currentSchema isolation stays in the application's URL.
             DataSources.MainDatasourceOverride dbOverride = null;
             EmbeddedPostgresSupport.Handle embedded = null;
+            // This run's one shutdown hook, registered before anything it has to stop. JVM
+            // shutdown hooks all run at once, so a resource that registers its own cannot be
+            // ordered against this one - which is why EmbeddedPostgresSupport turns zonky's off.
+            // What this hook stops it reads from what the command below fills in as each piece
+            // starts, so every way out stops exactly what is running: with no gateway yet there
+            // is nothing to drain, with no database yet nothing to stop.
+            EmbeddedPostgresSupport.Ownership embeddedDatabase = new EmbeddedPostgresSupport.Ownership();
+            java.util.concurrent.atomic.AtomicReference<io.tesseraql.runtime.MultiAppGateway> startedGateway = new java.util.concurrent.atomic.AtomicReference<>();
+            List<Path> markedHomes = embeddedDb == null ? List.of() : homes;
+            Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+                try {
+                    io.tesseraql.runtime.MultiAppGateway running = startedGateway.get();
+                    if (running != null) {
+                        running.close();
+                    }
+                } finally {
+                    // Stop the embedded postgres only after the runtimes released their
+                    // connections - and stop it even when that drain failed, because nothing
+                    // else stops it now.
+                    try {
+                        embeddedDatabase.stop();
+                    } finally {
+                        markedHomes.forEach(EmbeddedDbMarker::delete);
+                    }
+                }
+            }, "tesseraql-dev-stop"));
             if (embeddedDb != null) {
                 Path dataDir = embeddedDb.isEmpty() ? null : Path.of(embeddedDb);
                 try {
-                    embedded = EmbeddedPostgresSupport.start(dataDir, embeddedDbPort,
-                            embeddedDbVersion, false);
+                    embedded = EmbeddedPostgresSupport.start(embeddedDatabase, dataDir,
+                            embeddedDbPort, embeddedDbVersion, false);
                 } catch (EmbeddedPostgresVersionMismatchException ex) {
                     // A recoverable operator error (incompatible data directory) - a clear
                     // message, not a stack trace.
@@ -241,16 +267,7 @@ public final class TesseraqlCli implements Runnable {
                 return 2;
             }
 
-            EmbeddedPostgresSupport.Handle embeddedToClose = embedded;
-            List<Path> markedHomes = embeddedToClose == null ? List.of() : homes;
-            Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-                gateway.close();
-                // Stop the embedded postgres only after the runtimes released their connections.
-                if (embeddedToClose != null) {
-                    embeddedToClose.close();
-                    markedHomes.forEach(EmbeddedDbMarker::delete);
-                }
-            }));
+            startedGateway.set(gateway);
 
             System.out.println("TesseraQL dev: " + gateway.appNames().size()
                     + " app(s) on port " + gateway.port() + ". Press Ctrl+C to stop.");

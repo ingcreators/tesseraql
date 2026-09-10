@@ -38,7 +38,7 @@ All 22 carried `reproduce-lens-missing` + `deliberate-lens-missing`; 21 also car
 | F97 `:target` row rules | **LIVE (reframed)** | medium | untouched |
 | F98 hypermedia-ui.md teaches a deleted stand-in | **LIVE (reframed)** | medium | untouched |
 | F106 failures logged message-only | **LIVE (reframed)** | medium | half-killed by #1291 |
-| F113 `dev --embedded-db` shutdown race | **LIVE (narrowed)** | medium | untouched |
+| F113 `dev --embedded-db` shutdown race | **LIVE** | medium | fixed #1299 |
 | F114 CLI usage errors are stack traces | **LIVE (widens)** | medium | untouched |
 | F118 `MessageCatalog.live()` per resolution | **LIVE (widens)** | medium | untouched |
 | F119 rate-limiter monitor across JDBC claim | **LIVE (reframed)** | medium | untouched |
@@ -85,6 +85,14 @@ is unscheduled work.
   next door in `DocService.schema()` without reaching this instance.
 
 ## Where measurement changed the lead
+
+- **F113's harm was measured, and the "damage is modelled" caveat is discharged.** A real signal to
+  a shipped `dev --embedded-db`, with one request inside `pg_sleep` against the embedded database,
+  returns HTTP 500 about 60 ms into a 45 s drain budget, with `57P01 FATAL: terminating connection
+  due to administrator command` in the log and a `draining 1 in-flight request(s)` line above it —
+  the `inFlight > 0` nobody had produced. The same harness on the fix returns 200 after the query's
+  own 20 s. Slice 3 also measured that the shape this plan prescribed is a **regression**: with only
+  the flag and the hoisted hook, three separate paths leave a live PostgreSQL running.
 
 - **F129 was filed as the smaller half.** The unfiled direction is the security one: with the JVM
   east of the database, a grant end-dated 60 minutes ago **still resolves**. Measured on MySQL 8.4:
@@ -192,9 +200,6 @@ Ranked. The first two are larger than most of the leads that found them.
 
 ## Verdicts not to trust without more work
 
-- **F113's harm.** The ordering fact is measured (zonky's hook stops PostgreSQL ~103 ms into
-  Ctrl+C, concurrently with the CLI's ordered drain); nobody got `relay.inFlight() > 0` at SIGINT in
-  the shipped CLI. The damage is modelled.
 - **F90's required-check picture.** `gh api repos/…/rulesets/17554230 --jq .bypass_actors` was never
   run; an admin bypass or an org-level ruleset would change it.
 - **F128's severity.** The mechanical gap is real and measured on three surfaces; the impact chain
@@ -216,8 +221,8 @@ fresh `origin/main`. Nothing here is scheduled in `remediation.json` — this is
 | # | Slice | Leads | Size | Note |
 |---|---|---|---|---|
 | 1 | Bind one clock to every identity validity window | F129 | M | The only high. Seed `now` at `IdentityService`, and separately at `ScimGroupService` — the central seam does not reach SCIM. |
-| 2 | Release the limiter monitor across the lease claim | F119 | M | Bounded park, not the lead's hoist. Four sites: `ClusterRateLimiter` plus the two in `JdbcCatalogStore`, plus `setQueryTimeout`. |
-| 3 | An interrupted `dev --embedded-db` stops the database last | F113 | M | Both halves land together: `setRegisterShutdownHook(false)` **and** hoisting the CLI's hook above `MultiAppGateway.start`. |
+| 2 | Release the limiter monitor across the lease claim | F119 | M | SHIPPED #1298. The scope written here was wrong in both directions: of the two `JdbcCatalogStore` sites one is unreachable dead code and the other needs a promise change rather than a lock change, so both are filed instead; `setQueryTimeout` does belong here, because the fix's own liveness depends on it. |
+| 3 | An interrupted `dev --embedded-db` stops the database last | F113 | M | SHIPPED #1299. Three pieces, not two, and the two written here do not work alone: the window the library's own hook covers is *inside* `builder.start()`, which no hoisted hook can reach, so the CLI must also choose the data directory and claim the instance before that call. With only the first two, an interrupt during startup — or a gateway port already in use, with no signal at all — leaves a live PostgreSQL behind. Carries a cost of its own, filed: a `kill -9` during the drain now leaks what it used to have already stopped. |
 | 4 | A download keeps its name and its bytes | F125, F128 | S+M | One response, two halves. RFC 6266 `filename*` at the single helper; `bom:` on the `export` block. |
 | 5 | An export declaration is refused, or it takes effect | F126 | M | Subsumes the two unfiled halves: the inert untyped-column zone, and the routes-only lint gate. |
 | 6 | Bound the accumulators by their unit of work | F120, F118 | M+M | Same shape, shared design review: age-swept session map; per-render catalog memo. |
