@@ -60,10 +60,12 @@ class IdentityValidityWindowClockIntegrationTest {
      * database is WEST, where an ended window has not ended yet.
      */
     @Container
+    @SuppressWarnings("resource") // lifecycle is managed by the @Container extension
     static final MySQLContainer EAST = new MySQLContainer("mysql:8.0")
             .withCommand("--default-time-zone=+09:00");
 
     @Container
+    @SuppressWarnings("resource") // lifecycle is managed by the @Container extension
     static final MySQLContainer WEST = new MySQLContainer("mysql:8.0")
             .withCommand("--default-time-zone=-09:00");
 
