@@ -167,6 +167,15 @@ class StackActivationIntegrationTest {
                 "/_tesseraql/roles?app=shop-a&redirect=%2Fshop-a%2Fadmin%2Fusers%3Ftab%3Daudit");
     }
 
+    /** The activation redirect is built from the request path and encoded at the write. */
+    @Test
+    void anActivationRedirectToAJapanesePageIsPercentEncoded() throws Exception {
+        HttpResponse<String> activated = get("/shop-a/%E5%8F%97%E6%B3%A8", solo);
+        assertThat(activated.statusCode()).isEqualTo(302);
+        assertThat(activated.headers().firstValue("Location").orElse(""))
+                .isEqualTo("/shop-a/_as/shop-a.sales/%E5%8F%97%E6%B3%A8");
+    }
+
     @Test
     void aForgedRoleNarrowsNeverWidens() throws Exception {
         // A browser gets the picker (the human fix is choosing again) …
@@ -473,6 +482,20 @@ class StackActivationIntegrationTest {
                       enabled: true
                 """.formatted(POSTGRES.getJdbcUrl(), schema,
                 POSTGRES.getUsername(), POSTGRES.getPassword()));
+        // A page at a Japanese path behind the app's role, for the activation redirect row.
+        Path jp = appHome.resolve("web").resolve("\u53d7\u6ce8");
+        Files.createDirectories(jp);
+        Files.writeString(jp.resolve("get.yml"), """
+                version: tesseraql/v1
+                id: jp.page
+                kind: route
+                recipe: query-json
+                security:
+                  policy: users.read
+                response:
+                  json:
+                    status: 200
+                """);
         new AppCatalog(installRoot).register(new InstalledApp(
                 appId, "1.0.0", appId + "/1.0.0", List.of()));
     }

@@ -1,6 +1,7 @@
 package io.tesseraql.pipeline;
 
 import io.tesseraql.core.http.BasePaths;
+import io.tesseraql.core.http.PercentEncoding;
 
 /**
  * The prefix this runtime's application is served under ({@code tesseraql.http.basePath},
@@ -45,12 +46,23 @@ public final class BasePath {
         return of(exchange.beans()) + activationSegment(exchange);
     }
 
-    /** A base-relative path as the wire URL this application serves it at. */
+    /**
+     * A base-relative path as the wire URL this application serves it at: the prefix joined on,
+     * then the whole reference percent-encoded once as a URI literal
+     * ({@link io.tesseraql.core.http.PercentEncoding#uriLiteral}) — on the joined result, the
+     * prefix included, never before the join, so an authored {@code %XX} stays one triplet.
+     * Everything inside the runtime is characters; this is the moment a URL becomes wire text
+     * (docs/base-path-emission.md decision 1), so this is where a non-ASCII route path, a
+     * non-ASCII prefix or a {@code _return} read back decoded off the request become the bytes a
+     * request line can carry. ASCII, an authored triplet included, is left alone, so a value that
+     * was already a wire URL passes unchanged. A null path passes through as null, as the join
+     * hands it back; the encoder itself treats null as a caller error.
+     */
     public static String url(Exchange exchange, String path) {
-        if (isAsset(path)) {
-            return BasePaths.join(of(exchange == null ? null : exchange.beans()), path);
-        }
-        return BasePaths.join(of(exchange), path);
+        String joined = isAsset(path)
+                ? BasePaths.join(of(exchange == null ? null : exchange.beans()), path)
+                : BasePaths.join(of(exchange), path);
+        return joined == null ? null : PercentEncoding.uriLiteral(joined);
     }
 
     /** The base-relative form of a wire URL read back off the request. */

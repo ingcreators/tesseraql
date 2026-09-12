@@ -551,6 +551,22 @@ class ErrorResponseRendererTest {
                 .contains("data-message-key=\"members.email.duplicate\"");
     }
 
+    /** {@code uri()} carries the query too; reading it doubled the query on every bounce. */
+    @Test
+    void theLoginBounceCarriesTheQueryExactlyOnce() throws Exception {
+        Exchange exchange = exchangeWith(
+                new TqlException(io.tesseraql.security.policy.PolicyEngine.UNAUTHORIZED,
+                        "no session"));
+        exchange.request().method("GET").header("Accept", "text/html")
+                .uri("/plain/secret?q=1&r=2").path("/plain/secret").query("q=1&r=2");
+
+        new ErrorResponseRenderer().process(exchange);
+
+        assertThat(exchange.response().status()).isEqualTo(302);
+        assertThat(exchange.response().header("Location"))
+                .isEqualTo("/_tesseraql/login?redirect=%2Fplain%2Fsecret%3Fq%3D1%26r%3D2");
+    }
+
     private static Exchange exchangeWith(Throwable cause) {
         Exchange exchange = new Exchange(
                 Beans.NONE);

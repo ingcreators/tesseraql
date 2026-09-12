@@ -8,6 +8,35 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A redirect to a route with a non-ASCII path now lands on that route in every client
+  measured.** Every `Location` and `HX-Redirect` the framework writes — a literal `location:`,
+  `location: back`, the import and bulk-report redirects, the post-sign-in return, an attachment
+  upload's created resource, a role activation, a SCIM create, the application's base path — was
+  written one byte per character, which turned a Japanese target into `/????` (the application
+  root, answering 200) and a Latin-1 one into a single raw byte that twelve of fourteen
+  followers, both browsers included, could not land — most requested `/caf%E9` and got a 404.
+  The target is now percent-encoded once, as its UTF-8 bytes, at the one place a framework URL
+  acquires its prefix; a target that is already encoded is left alone, and a placeholder value
+  is a path segment wherever it appears. The same seam encodes the shell's links, the transfer
+  status URLs and the OIDC cookie path — correctly, under the base-path rule that a URL is
+  encoded once, when it becomes a wire URL. A `Location` or `HX-Redirect` declared under
+  `response.*.headers:` is encoded the same way, so the documented `Location` on a 201 recipe
+  works for a non-ASCII key. The paged list's `Link` header, which named its next and previous
+  pages the same raw way, is encoded too — every framework-built URL, not only every redirect.
+
+- **The login bounce carries the original query string once.** An unauthenticated navigation to
+  `/page?q=1` was bounced to sign-in with `redirect=/page?q=1?q=1`, and the doubled value survived
+  sign-in into the post-login redirect of every application, hosted or not.
+
+- **A response header carrying a control character is refused as a 500 instead of hanging the
+  connection.** Only CR and LF were refused; every other C0 control and DEL reached the
+  transport, which refused them where nothing could answer — a buffered response held the
+  caller's connection open to their own timeout, and a streamed download went out as a 200 with
+  its `Content-Disposition` and `Content-Type` silently dropped. A tab stays accepted. A
+  `Location` or `HX-Redirect` that reaches the edge with a tab, a space or a character outside
+  ASCII is refused the same way, so a redirect that would have landed on the wrong page fails
+  loudly instead.
+
 - **A download keeps its name.** A declared download filename with any character outside ASCII
   — an `export.filename`, the route id it defaults to, a `response.file:`/`response.stream:`
   filename, a job step's export re-served by the operations console, a split export's bundle,
@@ -344,6 +373,16 @@ All notable changes to TesseraQL are documented here. The format follows
   `.github/scripts/` checks the repository out, and a job that runs `docker push` may write
   packages. Each was verified red against the workflow as it stood, naming exactly the failing
   job and no other.
+
+### Security
+
+- **A sign-in return target carrying a tab no longer sends the browser off-site.** The app-local
+  gate that guards the login `redirect`, a `location: back` return field, the OIDC return URL and
+  the SAML RelayState refused a protocol-relative or backslash target and a line break, but not a
+  tab. A browser deletes a tab from a URL before parsing it, so a crafted `/<tab>/host/page`
+  passed the gate and Chromium landed on the other host after sign-in. The gate now refuses every
+  control character, and every redirect target the framework writes is percent-encoded before the
+  wire.
 
 ## 0.16.0 - 2026-09-09
 

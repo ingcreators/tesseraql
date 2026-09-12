@@ -22,7 +22,7 @@ import java.util.Objects;
  * {@link #uriLiteral} keeps every character RFC 3986 lets a URI reference spell, including an
  * authored {@code %XX} triplet: a URI reference is already a produced URI (RFC 3986 section 2.4
  * — never encode the same string twice), and only what no URI can carry — non-ASCII, space,
- * controls, the eight ASCII characters the RFC admits nowhere, and a {@code %} that starts no
+ * controls, the nine ASCII characters the RFC admits nowhere, and a {@code %} that starts no
  * triplet — is made representable. Applying it twice is applying it once.
  */
 public final class PercentEncoding {
@@ -40,7 +40,7 @@ public final class PercentEncoding {
 
     /**
      * What RFC 3986 lets a URI reference spell, {@code %} aside: {@code unreserved}, the
-     * {@code gen-delims} and the {@code sub-delims}. The eight visible ASCII characters outside
+     * {@code gen-delims} and the {@code sub-delims}. The nine visible ASCII characters outside
      * this table ({@code " < > \ ^ ` { | }}) appear in no RFC 3986 production, and a recipient
      * that parses strictly — the JDK's own {@code java.net.URI} among them — refuses a reference
      * that carries one raw.
@@ -69,6 +69,18 @@ public final class PercentEncoding {
      */
     public static String uriLiteral(String text) {
         return encode(text, URI_CHAR, true);
+    }
+
+    /**
+     * Whether a response header's value is a URI-reference the client navigates to — the
+     * headers {@link #uriLiteral} exists for. One predicate shared by the compiler, which encodes
+     * a declared one, and the HTTP edge, which refuses one that reaches it un-encoded, so the two
+     * can never disagree on the list (the {@link ReservedHeaders} precedent). {@code HX-Redirect}
+     * is here because htmx assigns it to {@code window.location.href}, the same parser a browser
+     * applies to {@code Location}.
+     */
+    public static boolean isUriReferenceHeader(String name) {
+        return "Location".equalsIgnoreCase(name) || "HX-Redirect".equalsIgnoreCase(name);
     }
 
     private static String encode(String text, boolean[] verbatim, boolean keepTriplets) {

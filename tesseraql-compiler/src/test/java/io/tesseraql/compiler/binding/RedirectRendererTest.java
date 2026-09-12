@@ -134,7 +134,8 @@ class RedirectRendererTest {
     void backRefusesAnOffSiteReturnField() {
         RedirectRenderer back = new RedirectRenderer(new RedirectResponse(null, "back"));
         for (String hostile : java.util.List.of("https://evil.example/x", "//evil.example/x",
-                "/\\evil.example", "/x\r\nSet-Cookie: a=b", "relative/path")) {
+                "/\\evil.example", "/x\r\nSet-Cookie: a=b", "relative/path",
+                "/\t/evil.example", "/\t\\evil.example")) {
             Exchange exchange = exchange(null);
             exchange.request().formFields().put("_return", java.util.List.of(hostile));
 
@@ -154,6 +155,140 @@ class RedirectRendererTest {
 
         assertThat(exchange.response().status()).isEqualTo(204);
         assertThat(exchange.response().header("HX-Redirect")).isEqualTo("/things#row-Nw");
+    }
+
+    // The Location half of F125: a non-ASCII target reaches the header percent-encoded,
+    // once, at BasePath.url; a placeholder value is a path segment; a control in _return is
+    // refused. (Only the literal half needed a new encoder — the value half was encoded.)
+
+    @Test
+    void aLiteralJapaneseLocationIsPercentEncoded() {
+        assertThat(render("/受注一覧", null)).isEqualTo("/%E5%8F%97%E6%B3%A8%E4%B8%80%E8%A6%A7");
+    }
+
+    @Test
+    void aLatin1LocationIsPercentEncodedAsUtf8() {
+        assertThat(render("/café", null)).isEqualTo("/caf%C3%A9");
+    }
+
+    @Test
+    void aPreEncodedLocationIsNotEncodedTwice() {
+        assertThat(render("/caf%C3%A9", null)).isEqualTo("/caf%C3%A9");
+    }
+
+    @Test
+    void aPreEncodedTripletBesideAJapaneseSegmentIsNotEncodedTwice() {
+        assertThat(render("/受注/caf%C3%A9", null)).isEqualTo("/%E5%8F%97%E6%B3%A8/caf%C3%A9");
+    }
+
+    @Test
+    void theQueryAndFragmentOfALiteralLocationAreLeftAlone() {
+        assertThat(render("/受注一覧?x=1&y=%E3%81%82#top", null))
+                .isEqualTo("/%E5%8F%97%E6%B3%A8%E4%B8%80%E8%A6%A7?x=1&y=%E3%81%82#top");
+    }
+
+    @Test
+    void aFormEncodedSpaceInAQueryKeepsItsPlus() {
+        assertThat(render("/受注一覧?q=a+b", null))
+                .isEqualTo("/%E5%8F%97%E6%B3%A8%E4%B8%80%E8%A6%A7?q=a+b");
+    }
+
+    @Test
+    void anAstralLiteralIsEncodedAsFourBytes() {
+        assertThat(render("/a😀b", null)).isEqualTo("/a%F0%9F%98%80b");
+    }
+
+    @Test
+    void anAbsoluteRedirectWithANonAsciiPathIsEncodedToo() {
+        assertThat(render("https://example.test/受注", null))
+                .isEqualTo("https://example.test/%E5%8F%97%E6%B3%A8");
+    }
+
+    @Test
+    void anExpressionValueWithASpaceIsPercent20() {
+        assertThat(renderWith("/items/{params.name}", Map.of("params", Map.of("name", "a b"))))
+                .isEqualTo("/items/a%20b");
+    }
+
+    @Test
+    void anExpressionValueInJapaneseIsEncodedOnce() {
+        assertThat(renderWith("/items/{params.jp}", Map.of("params", Map.of("jp", "受注"))))
+                .isEqualTo("/items/%E5%8F%97%E6%B3%A8");
+    }
+
+    @Test
+    void anExpressionValueWithASlashStaysASegment() {
+        assertThat(renderWith("/items/{params.name}", Map.of("params", Map.of("name", "a/b"))))
+                .isEqualTo("/items/a%2Fb");
+    }
+
+    @Test
+    void anExpressionValueCannotBecomeAnOffSiteTarget() {
+        assertThat(renderWith("/{params.next}", Map.of("params", Map.of("next", "//evil.test"))))
+                .isEqualTo("/%2F%2Fevil.test");
+        assertThat(renderWith("/{params.next}", Map.of("params", Map.of("next", "x?next=y"))))
+                .isEqualTo("/x%3Fnext%3Dy");
+    }
+
+    @Test
+    void backWithAJapaneseReturnFieldIsPercentEncoded() {
+        assertThat(back("/受注一覧?page=2#row-Nw"))
+                .isEqualTo("/%E5%8F%97%E6%B3%A8%E4%B8%80%E8%A6%A7?page=2#row-Nw");
+    }
+
+    @Test
+    void backWithAnEncodedReturnFieldIsNotEncodedTwice() {
+        assertThat(back("/caf%C3%A9")).isEqualTo("/caf%C3%A9");
+    }
+
+    @Test
+    void backWithAMixedReturnFieldIsEncodedOnce() {
+        assertThat(back("/受注/caf%C3%A9")).isEqualTo("/%E5%8F%97%E6%B3%A8/caf%C3%A9");
+    }
+
+    @Test
+    void aJapaneseBasePathIsPercentEncoded() {
+        RuntimeContext context = new RuntimeContext();
+        io.tesseraql.pipeline.BasePath.bind(context, "/受注");
+        Exchange exchange = new Exchange(context.beans());
+        exchange.setProperty(TesseraqlProperties.CONTEXT, Map.of("params", Map.of("id", 42)));
+
+        renderer.process(exchange);
+
+        assertThat(exchange.response().header("Location"))
+                .isEqualTo("/%E5%8F%97%E6%B3%A8/items/42");
+    }
+
+    @Test
+    void htmxCallerGetsTheEncodedTarget() {
+        assertThat(render("/受注一覧", "true")).isEqualTo("/%E5%8F%97%E6%B3%A8%E4%B8%80%E8%A6%A7");
+    }
+
+    private static String render(String location, String hxRequest) {
+        return render(location, hxRequest, Map.of("params", Map.of("id", 42)));
+    }
+
+    private static String renderWith(String location, Map<String, Object> context) {
+        return render(location, null, context);
+    }
+
+    private static String render(String location, String hxRequest, Map<String, Object> context) {
+        Exchange exchange = new Exchange(Beans.NONE);
+        exchange.setProperty(TesseraqlProperties.CONTEXT, context);
+        if (hxRequest != null) {
+            exchange.request().header("HX-Request", hxRequest);
+        }
+        new RedirectRenderer(new RedirectResponse(null, location)).process(exchange);
+        return hxRequest == null
+                ? exchange.response().header("Location")
+                : exchange.response().header("HX-Redirect");
+    }
+
+    private static String back(String returnField) {
+        Exchange exchange = exchange(null);
+        exchange.request().formFields().put("_return", java.util.List.of(returnField));
+        new RedirectRenderer(new RedirectResponse(null, "back")).process(exchange);
+        return exchange.response().header("Location");
     }
 
     private static Exchange exchange(String hxRequest) {

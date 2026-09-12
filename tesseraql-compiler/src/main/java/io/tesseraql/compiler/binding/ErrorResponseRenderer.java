@@ -249,7 +249,12 @@ public final class ErrorResponseRenderer implements Step {
 
     /** Emits a 302 to the login page, preserving the original target as a sanitized {@code redirect}. */
     private static void redirectToLogin(Exchange exchange) {
-        String path = exchange.request().uri();
+        // The path alone: uri() carries the query string too, and the suffix below appends it,
+        // so reading the full URI doubled the query on every bounce (?q=1?q=1) and inside the
+        // post-sign-in Location — the defect AuthStep.wirePath records for the activation
+        // redirect. path() is the normalized path: dot segments resolved, "//" collapsed (so the
+        // protocol-relative arm below is belt-and-braces), non-ASCII already decoded.
+        String path = exchange.request().path();
         String query = exchange.request().query();
         String wirePath = path == null || !path.startsWith("/") || path.startsWith("//")
                 ? "/"

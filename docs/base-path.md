@@ -179,6 +179,8 @@ prefix and the request arrived at the full address.
 The rule, now stated once in `BasePaths`: **a URL is base-relative everywhere inside the runtime
 and acquires the prefix at the moment it becomes a wire URL.** In markup that moment is the link
 builder; in a response header it is `RedirectRenderer.negotiate`, the framework's one redirect.
+That moment is also where the URL is percent-encoded: a non-ASCII path, a space or a control
+character leaves as UTF-8 percent-triplets, and an already-encoded value is left as it is.
 A URL read back off the request is already a wire URL and is left alone — which is why the login
 page's `next` target is stored base-relative: it is handed back to the redirect helper after
 sign-in, and would otherwise be prefixed twice.

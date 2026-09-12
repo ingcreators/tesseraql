@@ -7,7 +7,7 @@
 > control/format fold, the split bundle's name): **shipped (#1302)**. **4b** — a redirect
 > lands where it says (the URI-literal encoder at the base-path seam, the four bypass writers, the
 > app-local gate, the edge backstop, the doubled login query, the paged list's `Link` header):
-> designed, not yet shipped. **4c** — an `export:` CSV can carry a byte-order mark (`bom:`):
+> **shipped (#nnnn)**. **4c** — an `export:` CSV can carry a byte-order mark (`bom:`):
 > designed, not yet shipped. Each pull request flips its own line here when it merges. Closes
 > F125 and F128 of [`audit-medium-leads.md`](audit-medium-leads.md).
 >
@@ -180,10 +180,10 @@ Evidence: `design-4a.md` §0, §2 item 9, §7.3.
 Rides in 4a because 4a's `splitBy` fixture would otherwise pin `__-.zip` (D2). Still filed: the
 two-part extension (`orders-{key}.tar.gz`). Evidence: `design-4a.md` §1.3; the `zip*` variants.
 
-### 7 — `uriLiteral` encodes what no URI can carry, including the eight graphics and a lone `%`
+### 7 — `uriLiteral` encodes what no URI can carry, including the nine graphics and a lone `%`
 
 Everything RFC 3986 lets a reference spell stays — unreserved, gen-delims, sub-delims, an authored
-`%XX` triplet — and everything else becomes UTF-8 octets: non-ASCII, space, controls, DEL, the eight
+`%XX` triplet — and everything else becomes UTF-8 octets: non-ASCII, space, controls, DEL, the nine
 ASCII characters no RFC 3986 production admits (`" < > \ ^ ` { | }`) and a `%` that starts no
 triplet (`/100%` → `/100%25`). Idempotent: applying it twice is applying it once, and every legal
 authored reference is unchanged. `[` and `]` stay (legal in an IPv6 host) although the JDK refuses
@@ -193,8 +193,8 @@ Settled by a probe, not a preference: the JDK client — the follower behind eve
 integration test, `LoopbackCall` and the stack-shell relay — throws `IllegalArgumentException` on
 `/landed{x`, `/landed100%` and `/landed"x` and lands on the encoded forms; curl lands on both;
 `java.net.URI` rejects each raw. **Rejected:** printable ASCII as the allow-list (the three 4b
-angle designs), keeping the eight (4a's contract design), passing a malformed `%` through (4b's
-synthesis — the same principle that encodes the eight encodes the lone `%`, and the JDK probe covers
+angle designs), keeping the nine (4a's contract design), passing a malformed `%` through (4b's
+synthesis — the same principle that encodes the nine encodes the lone `%`, and the JDK probe covers
 it). A HEXDIG is ASCII-only: `Character.digit` admits a fullwidth digit (`hexDigAnyScript`).
 Evidence: `synth-4a/logs/readers.out` (`Follow.java`), `attack-4b-minimal-spec.md`,
 `adjudicate/probe.log`.
@@ -279,11 +279,11 @@ route, a `headers:` value, a future writer. **Layering with decision 11:** a dec
 `Location` is encoded before it reaches the backstop; only a nested value or a programmatic
 writer can trip it. **Wider than D-L's letter** ("a byte ≥ 0x80"): tab and space are refused in a
 URI header too, because that is exactly what a browser or the transport silently mangles and the
-tab is the measured open redirect; the eight non-URI graphics are **not** refused (the encoder
+tab is the measured open redirect; the nine non-URI graphics are **not** refused (the encoder
 removes them from every framework value; a hand-written one is not a wire hazard, and the JDK
 follower refuses it loudly on the client side). **Rejected:** `≥ 0x80` only (`bsNonAsciiOnly`,
 red on W29/W29b/W29c); encoding at the edge instead (D-L (c): the compiler's unit tests cannot see
-the fix and the encoding moves to the wrong layer); refusing the eight at the edge (a 500 with no
+the fix and the encoding moves to the wrong layer); refusing the nine at the edge (a 500 with no
 measured defect behind it); trimming OWS off an authored literal (a silent repair of an authored
 value — `location: "/foo "` now lands on `/foo%20`, stated under *What this breaks*). Evidence:
 `design-4b.md` §1.9, §2 item 11, §9; W16-W23, W29*, W37, W41 (`noBackstop`, `noC0`, `nodel`,
@@ -911,7 +911,7 @@ Every unfiled defect the measurement surfaced, with its destination (the measure
 - **N6** — a harness "control" row absent from the shipped file is not a guard.
 - **N7** — a name-keyed check must be pinned with the non-canonical spelling (`location`,
   `hx-redirect`); one shared predicate closes the compiler/edge disagreement by construction.
-- **N8** — a `{…}` in a YAML `location:` literal is a placeholder: a fixture for the eight non-URI
+- **N8** — a `{…}` in a YAML `location:` literal is a placeholder: a fixture for the nine non-URI
   graphics must not use braces (a round of 4b's bracket was red on FIX for that alone).
 - **N9** — a variant that removes the encoder's TAB rule is green on every wire row because the
   gate and the backstop each refuse a tab independently; the encoder's rule needs its own core row.
@@ -942,7 +942,7 @@ Every unfiled defect the measurement surfaced, with its destination (the measure
 
 - From D-L (b)'s letter ("a byte ≥ 0x80"): the backstop refuses a tab and a space in a URI header
   too (decision 13; settled 2026-09-12, kept).
-- From the measurement record's §4.1 wording ("leave every ASCII byte alone"): the eight non-URI
+- From the measurement record's §4.1 wording ("leave every ASCII byte alone"): the nine non-URI
   graphics and a lone `%` are encoded (decision 7).
 - From U3's guard text (`startsWith("login_id,")`): the first cell is `user_id` (PR S).
 - From the measurement record's "two Map-wrapping branches": three (PR S).

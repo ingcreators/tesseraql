@@ -5,17 +5,12 @@ import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.pipeline.Step;
 import io.tesseraql.pipeline.TesseraqlProperties;
 import io.tesseraql.yaml.model.ResponseSpec.RedirectResponse;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
 import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * Renders a redirect response (design ch. 6.4, post/redirect/get): resolves the
  * {@code {expression}} placeholders of the location template against the execution context and
- * URL-encodes each resolved value.
+ * percent-encodes each resolved value as a path segment (docs/base-path-emission.md decision 8).
  *
  * <p>The reply branches on whether the caller is htmx (the {@code HX-Request: true} header, set on
  * every htmx request): an htmx caller gets {@code 204 No Content} with an {@code HX-Redirect}
@@ -26,8 +21,6 @@ import java.util.regex.Pattern;
  * natively.
  */
 public final class RedirectRenderer implements Step {
-
-    private static final Pattern PLACEHOLDER = Pattern.compile("\\{([^}]+)}");
 
     /**
      * The {@code location: back} sentinel (docs/list-surface.md decision 11): the redirect
@@ -73,18 +66,13 @@ public final class RedirectRenderer implements Step {
         @SuppressWarnings("unchecked")
         Map<String, Object> context = exchange.getProperty(TesseraqlProperties.CONTEXT, Map.of(),
                 Map.class);
-        EvaluationContext evaluation = new EvaluationContext(context);
-
-        Matcher matcher = PLACEHOLDER.matcher(declaredLocation);
-        StringBuilder location = new StringBuilder();
-        while (matcher.find()) {
-            Object value = evaluation.resolve(Arrays.asList(matcher.group(1).split("\\.")));
-            String encoded = URLEncoder.encode(
-                    value == null ? "" : String.valueOf(value), StandardCharsets.UTF_8);
-            matcher.appendReplacement(location, Matcher.quoteReplacement(encoded));
-        }
-        matcher.appendTail(location);
-        return location.toString();
+        // Each placeholder value is a path segment — URL-encoded with the form-encoding "+"
+        // corrected to "%20", BasePath.encodeSegment's rule — which is exactly what a view
+        // link's template gets: one interpolation rule for every URL the compiler builds. A
+        // value carrying "/", "?" or "//" therefore steers nothing; it lands as one segment.
+        // The whole reference is percent-encoded once more at BasePath.url, which leaves these
+        // triplets alone.
+        return Interpolation.interpolateUrl(declaredLocation, new EvaluationContext(context));
     }
 
     /**

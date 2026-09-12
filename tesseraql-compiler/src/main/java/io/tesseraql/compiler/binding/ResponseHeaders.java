@@ -8,6 +8,7 @@ import io.tesseraql.core.expr.EvaluationContext;
 import io.tesseraql.core.expr.Expr;
 import io.tesseraql.core.expr.ExpressionFunctions;
 import io.tesseraql.core.expr.ExpressionParser;
+import io.tesseraql.core.http.PercentEncoding;
 import io.tesseraql.pipeline.Exchange;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -64,8 +65,15 @@ final class ResponseHeaders {
             try {
                 // Resolve {expression} placeholders (recursively for a nested map/list) so a header
                 // can carry per-request data; a value with no placeholder is unchanged. Nested
-                // map/list values then serialize to JSON.
-                Object resolved = Interpolation.interpolate(value, evaluation);
+                // map/list values then serialize to JSON. A declared Location or HX-Redirect is a
+                // URI-reference: each placeholder is a path segment (the redirect: rule) and the
+                // whole value is percent-encoded once, here, where it becomes wire text — the
+                // edge refuses one that reaches it un-encoded.
+                Object resolved = value instanceof String template
+                        && PercentEncoding.isUriReferenceHeader(name)
+                                ? PercentEncoding.uriLiteral(
+                                        Interpolation.interpolateUrl(template, evaluation))
+                                : Interpolation.interpolate(value, evaluation);
                 String headerValue = resolved instanceof Map || resolved instanceof List
                         ? MAPPER.writeValueAsString(resolved)
                         : String.valueOf(resolved);

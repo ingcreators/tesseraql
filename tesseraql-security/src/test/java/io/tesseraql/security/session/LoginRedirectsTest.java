@@ -22,6 +22,9 @@ class LoginRedirectsTest {
         assertThat(LoginRedirects.isSafe("javascript:alert(1)")).isFalse();
         assertThat(LoginRedirects.isSafe("relative/path")).isFalse();
         assertThat(LoginRedirects.isSafe("/ok\r\nLocation: https://evil")).isFalse();
+        // A browser deletes a tab from a URL before parsing it: /<TAB>/host is //host.
+        assertThat(LoginRedirects.isSafe("/\t/evil.example.com")).isFalse();
+        assertThat(LoginRedirects.isSafe("/\t\\evil.example.com")).isFalse();
         assertThat(LoginRedirects.isSafe(null)).isFalse();
         assertThat(LoginRedirects.isSafe("")).isFalse();
     }

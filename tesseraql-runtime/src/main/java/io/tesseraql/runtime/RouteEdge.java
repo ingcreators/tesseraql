@@ -1,6 +1,7 @@
 package io.tesseraql.runtime;
 
 import io.tesseraql.compiler.pipeline.Pipelines;
+import io.tesseraql.core.http.PercentEncoding;
 import io.tesseraql.core.http.ReservedHeaders;
 import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.pipeline.Headers;
@@ -579,11 +580,21 @@ final class RouteEdge {
      * a declared {@code Content-Length} disagreeing with the body the edge actually writes
      * truncates the response or hangs the keep-alive connection, and {@code AppLinter} refuses
      * the declaration at build time — this is the runtime backstop for headers written by code.
-     * A value carrying a line break fails the request here, where the failure still renders a
-     * 500: Vert.x rightly refuses such a value, but its refusal fires inside
+     * A value carrying a control character fails the request here, where the failure still
+     * renders a 500: Vert.x rightly refuses such a value, but its refusal fires inside
      * {@code runOnContext}, past the virtual thread's net, and the outcome was a hung
-     * connection. Interpolated route headers can carry caller data, so this is reachable from
-     * a form field.
+     * connection on a buffered response and a header-less 200 on a streamed one. Only CR and LF
+     * were refused before; every other C0 control and DEL is refused the same way now. A tab is
+     * the one control a field value may carry (RFC 9110 section 5.5), so it stays. Interpolated
+     * route headers can carry caller data, so this is reachable from a form field.
+     *
+     * <p>A {@code Location} or {@code HX-Redirect} carrying anything outside printable ASCII —
+     * a tab, a space, a character above U+007F — fails the request here too: a URI-reference is
+     * ASCII with no whitespace, the transport would write one Latin-1 byte or a {@code ?} per
+     * character, and a browser deletes a tab and re-parses. Every framework writer encodes at
+     * {@code BasePath.url} or with the same encoder, so a value that reaches this edge
+     * un-encoded was built by a writer nobody listed, and the loud 500 is the one signal that
+     * finds it.
      */
     private static List<Map.Entry<String, String>> wireHeaders(Exchange exchange) {
         List<Map.Entry<String, String>> wire = new java.util.ArrayList<>();
@@ -597,14 +608,48 @@ final class RouteEdge {
                 if (value == null) {
                     continue;
                 }
-                if (value.indexOf('\r') >= 0 || value.indexOf('\n') >= 0) {
+                int control = controlAt(value);
+                if (control >= 0) {
                     throw new IllegalStateException("Response header '" + name + "' of route "
-                            + exchange.getFromRouteId()
-                            + " carries a line break; refusing to write it");
+                            + exchange.getFromRouteId() + " carries the control character U+"
+                            + String.format("%04X", (int) value.charAt(control))
+                            + "; refusing to write it");
+                }
+                if (PercentEncoding.isUriReferenceHeader(name)) {
+                    int outside = outsidePrintableAsciiAt(value);
+                    if (outside >= 0) {
+                        throw new IllegalStateException("Response header '" + name + "' of route "
+                                + exchange.getFromRouteId()
+                                + " is not a URI-reference: it carries U+"
+                                + String.format("%04X", value.codePointAt(outside))
+                                + " un-encoded; refusing to write it");
+                    }
                 }
                 wire.add(Map.entry(name, value));
             }
         });
         return wire;
+    }
+
+    /** The index of the first C0 control other than HTAB, or DEL, in a value; -1 if none. */
+    private static int controlAt(String value) {
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            if ((c < 0x20 && c != '\t') || c == 0x7F) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /** The index of the first char outside printable ASCII (U+0021..U+007E), or -1. */
+    private static int outsidePrintableAsciiAt(String value) {
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            if (c <= 0x20 || c >= 0x7F) {
+                return i;
+            }
+        }
+        return -1;
     }
 }

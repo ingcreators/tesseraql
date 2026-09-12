@@ -1,5 +1,6 @@
 package io.tesseraql.compiler.binding;
 
+import io.tesseraql.core.http.PercentEncoding;
 import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.pipeline.Step;
 import io.tesseraql.pipeline.TesseraqlProperties;
@@ -36,19 +37,22 @@ public final class PageHeaders implements Step {
         Object next = page.get("next");
         boolean hasNext = Boolean.TRUE.equals(page.get("hasNext"));
         long number = page.get("number") instanceof Number n ? n.longValue() : 1;
+        // Each target is a URI-reference built from the request URI, which the runtime hands
+        // over decoded, so a route under a non-ASCII path would name its next page one byte
+        // per character (</???page=2>). Percent-encoded once, here, where it becomes wire text
+        // — the same encoder as every Location, and an authored triplet in the query stays.
         if (hasNext) {
             String target = next != null
                     ? path + "?" + rewrite(query, "after", String.valueOf(next))
                     : path + "?" + rewrite(query, "page", String.valueOf(number + 1));
-            link.append('<').append(target).append(">; rel=\"next\"");
+            link.append('<').append(PercentEncoding.uriLiteral(target)).append(">; rel=\"next\"");
         }
         if (next == null && number > 1) {
             if (link.length() > 0) {
                 link.append(", ");
             }
-            link.append('<').append(path).append('?')
-                    .append(rewrite(query, "page", String.valueOf(number - 1)))
-                    .append(">; rel=\"prev\"");
+            String target = path + "?" + rewrite(query, "page", String.valueOf(number - 1));
+            link.append('<').append(PercentEncoding.uriLiteral(target)).append(">; rel=\"prev\"");
         }
         if (link.length() > 0) {
             exchange.response().header("Link", link.toString());
