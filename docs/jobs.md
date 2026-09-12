@@ -481,10 +481,12 @@ pipeline:
   Parquet, lake tables, or an attach, and the codec writes CSV, Excel, or PDF.
 - **`filename:` interpolates `{dotted.path}` context values** — `{batch.businessDate}`
   being the one that matters. `template:` resolves beside the job file; `locale:` and
-  `timezone:` are literals (a job has no request to resolve them from).
+  `timezone:` are literals (a job has no request to resolve them from), and a request source
+  on a step is refused by `tesseraql lint`, at boot and by `tesseraql job run`
+  (`TQL-YAML-1063`), as is a zone or a language tag the JDK cannot honour.
 - **`after:` runs in the extraction transaction.** `timing: download` stays route
   vocabulary — a job-produced file's download is an ops action, not a business signal
-  (`TQL-YAML-1041` at build time).
+  (`TQL-YAML-1005` at build time).
 - **Retrieval is the [operations console](ops-console.md)**: the transfers page links every completed
   export, and machine callers fetch
   `GET /_tesseraql/ops/batch/transfers/{transferId}/file` under the caller's
@@ -764,7 +766,8 @@ Lint checks jobs statically:
 | A step whose blocks are not one executable unit: `sql:` beside `notify:` or `push:`, an `http:` arm beside `export:`, or a second output block — the executor runs one unit per step, and the rest would fail at run time or be dropped in silence. A plain `sql:` arm feeding `export:` is the one designed pair | `TQL-FIELD-2008` |
 | A malformed `push:` step: no transfer reference, an unknown transport, a remote target without host or credential, or a non-bare delivered name | `TQL-YAML-1042` |
 | An incomplete `export:` step: no arm to read the rows, no format, or `splitBy:` whose `filename:` carries no `{key}`. The template checks and the datasource refusal are shared with routes | `TQL-YAML-1041` |
-| An `export:` option that cannot apply where it is declared: a `download`-timed follow-up on a step, a workbook option on a pdf, or `bom:` on a workbook or a pdf | `TQL-YAML-1005` |
+| An `export:` option that cannot apply where it is declared: a `download`-timed follow-up on a step, a workbook option on a pdf or a csv, `bom:` on a workbook or a pdf, or `locale:` on a workbook. At boot the runtime warns and serves without the key | `TQL-YAML-1005` |
+| An `export:` or `import:` literal the runtime cannot honour: a zone, a language tag, a `csv`/`pdf` column pattern, an import column type, a cell reference, a mixed-case format name, or a request source on a step or a poll job. Refused at boot and by `tesseraql job run` with the same code | `TQL-YAML-1063` |
 | A job with both a schedule and a poll trigger, or a malformed poll source | `TQL-YAML-1054` |
 | A poll job without its `import:` block | `TQL-YAML-1055` |
 | Non-allow-listed poll or HTTP egress | `TQL-SEC-4070`, `TQL-SEC-4080` |

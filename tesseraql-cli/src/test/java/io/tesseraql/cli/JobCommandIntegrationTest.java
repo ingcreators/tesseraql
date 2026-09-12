@@ -103,6 +103,140 @@ class JobCommandIntegrationTest {
         assertThat(execute(args(app, "job", "cancel", "no-such-execution"))).isEqualTo(2);
     }
 
+    /**
+     * The job arm of the export-declaration refusal on this runner (docs/export-declarations.md
+     * decision 1): {@code job run} fills its own job map and never reaches the serving runtime's
+     * registration, so it judges every job itself — a mistyped step literal is one line and
+     * exit 2 before any execution row exists, where it used to record a FAILED execution with
+     * {@code TQL-LD-2810} (a zone) or COMPLETE in {@code Locale.ROOT} (a locale). {@code list}
+     * never refuses; the valid twin runs.
+     */
+    @Test
+    void aMistypedExportStepLiteralIsRefusedBeforeAnyExecutionRowExists(@TempDir Path dir)
+            throws Exception {
+        assertThat(execute("new", "demo", "--stack", dir.toString())).isZero();
+        Path app = dir.resolve("demo");
+        assertThat(execute(args(app, "migrate", "apply"))).isZero();
+        Files.createDirectories(app.resolve("batch/report"));
+        Files.writeString(app.resolve("batch/report/report.sql"),
+                "select 1 as id, now() as created, 1234.5 as amount\n");
+        writeReportJob(app, "      locale: ja_JP\n");
+        long before = executionCount("report.daily");
+
+        Captured refused = executeCapturingErr(args(app, "job", "run", "report.daily"));
+        assertThat(refused.exitCode()).isEqualTo(2);
+        assertThat(refused.stdout()).contains("TQL-YAML-1063", "app 'demo'",
+                "job 'report.daily' step 'report'", "export.locale", "'ja_JP'");
+        assertThat(execute(args(app, "job", "list"))).isZero();
+        assertThat(executionCount("report.daily")).isEqualTo(before);
+
+        writeReportJob(app, "      locale: ja-JP\n      timezone: Asia/Tokyo\n");
+        Captured ran = executeCapturing(args(app, "job", "run", "report.daily"));
+        assertThat(ran.exitCode()).isZero();
+        assertThat(ran.stdout()).contains("report.daily COMPLETED");
+        assertThat(executionCount("report.daily")).isEqualTo(before + 1);
+    }
+
+    /**
+     * The app-wide keys, judged on the same runner before any job runs (decision 12): a step
+     * that declares no {@code timezone:} falls back to {@code tesseraql.files.timezone}, and a
+     * mistyped key used to reach the step's first write as {@code TQL-LD-2810 ... Unknown
+     * time-zone ID}, naming neither the key nor the configuration. Now one line, exit 2, no
+     * execution row; the valid key runs the same job to COMPLETED.
+     */
+    @Test
+    void aMistypedFilesConfigKeyIsRefusedBeforeAnyExecutionRowExists(@TempDir Path dir)
+            throws Exception {
+        assertThat(execute("new", "demo", "--stack", dir.toString())).isZero();
+        Path app = dir.resolve("demo");
+        assertThat(execute(args(app, "migrate", "apply"))).isZero();
+        Files.createDirectories(app.resolve("batch/report"));
+        Files.writeString(app.resolve("batch/report/report.sql"),
+                "select 1 as id, now() as created, 1234.5 as amount\n");
+        writeReportJob(app, "");
+        writeFilesTimezone(app, "Asia/Tokio");
+        long before = executionCount("report.daily");
+
+        Captured refused = executeCapturingErr(args(app, "job", "run", "report.daily"));
+        assertThat(refused.exitCode()).isEqualTo(2);
+        assertThat(refused.stdout()).contains("TQL-YAML-1063", "app 'demo'", "config",
+                "tesseraql.files.timezone", "'Asia/Tokio'");
+        assertThat(executionCount("report.daily")).isEqualTo(before);
+
+        writeFilesTimezone(app, "Asia/Tokyo");
+        Captured ran = executeCapturing(args(app, "job", "run", "report.daily"));
+        assertThat(ran.exitCode()).isZero();
+        assertThat(ran.stdout()).contains("report.daily COMPLETED");
+        assertThat(executionCount("report.daily")).isEqualTo(before + 1);
+    }
+
+    /** Sets (or replaces) the app-wide {@code tesseraql.files.timezone} of the scaffolded app. */
+    private static void writeFilesTimezone(Path app, String zone) throws Exception {
+        Path config = app.resolve("config/tesseraql.yml");
+        String text = Files.readString(config);
+        String block = "tesseraql:\n  files:\n    timezone: ";
+        int at = text.indexOf(block);
+        if (at >= 0) {
+            int end = text.indexOf('\n', at + block.length());
+            text = text.substring(0, at + block.length()) + zone + text.substring(end);
+        } else {
+            text = text.replaceFirst("^tesseraql:\n", block + zone + "\n");
+        }
+        Files.writeString(config, text);
+    }
+
+    private static void writeReportJob(Path app, String exportTail) throws Exception {
+        Files.writeString(app.resolve("batch/report/job.yml"), """
+                version: tesseraql/v1
+                id: report.daily
+                kind: job
+                recipe: batch-pipeline
+                pipeline:
+                  - id: report
+                    sql:
+                      file: report.sql
+                      mode: query
+                    export:
+                      format: csv
+                      columns:
+                        - { name: created, type: datetime }
+                        - { name: amount, type: number, format: '#,##0.00' }
+                %s""".formatted(exportTail));
+    }
+
+    /**
+     * The execution rows a job left; the refusal precedes the wiring that creates the
+     * bookkeeping schema, so a table that is not there yet is zero rows by construction. The
+     * methods share one database and one job id, so each asserts against its own start count.
+     */
+    private static long executionCount(String jobId) throws Exception {
+        try (Connection connection = DriverManager.getConnection(
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+                Statement statement = connection.createStatement();
+                ResultSet rs = statement.executeQuery(
+                        "select count(*) from tql_job_execution where job_id = '" + jobId
+                                + "'")) {
+            return rs.next() ? rs.getLong(1) : -1;
+        } catch (java.sql.SQLException undefinedTable) {
+            if ("42P01".equals(undefinedTable.getSQLState())) {
+                return 0;
+            }
+            throw undefinedTable;
+        }
+    }
+
+    private static Captured executeCapturingErr(String... args) {
+        PrintStream original = System.err;
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        try {
+            System.setErr(new PrintStream(buffer, true, StandardCharsets.UTF_8));
+            int exitCode = execute(args);
+            return new Captured(exitCode, buffer.toString(StandardCharsets.UTF_8));
+        } finally {
+            System.setErr(original);
+        }
+    }
+
     /** The demo app's batch surface: a chained pair, a calendar-gated job, a failing pipeline. */
     private void writeJobs(Path app) throws Exception {
         Files.createDirectories(app.resolve("batch/demo"));

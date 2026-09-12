@@ -71,6 +71,7 @@ public final class AppLinter {
                 new AttachmentRules(),
                 new MailRules(),
                 new CatalogLocaleRules(),
+                new FilesConfigRules(),
                 new ObjectStorageEgressRules(),
                 new ViewRules(),
                 new BasePathRules(),

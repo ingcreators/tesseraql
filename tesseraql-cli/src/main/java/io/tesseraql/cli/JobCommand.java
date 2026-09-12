@@ -156,6 +156,9 @@ final class JobCommand implements Callable<Integer> {
                     + app + "` shows what is declared");
             return 2;
         }
+        if (!declarationsHold(manifest, jobs)) {
+            return 2;
+        }
         Map<String, Object> runParams = new LinkedHashMap<>();
         for (String param : params) {
             int eq = param.indexOf('=');
@@ -211,6 +214,9 @@ final class JobCommand implements Callable<Integer> {
                     + "', which this app no longer declares");
             return 2;
         }
+        if (!declarationsHold(manifest, jobs)) {
+            return 2;
+        }
         // The rerun re-runs the same fact: the source's recorded parameters and business date,
         // not whatever today would default (docs/batch-platform.md track A+D).
         Map<String, Object> runParams = new LinkedHashMap<>();
@@ -231,6 +237,34 @@ final class JobCommand implements Callable<Integer> {
             }
         }
         return execute(manifest, jobs, wiring, job, runParams, "rerun", skipSteps);
+    }
+
+    /**
+     * The job arm of the export-declaration refusal (docs/export-declarations.md decision 1),
+     * on the CLI's own job map: the serving runtime judges every job when it registers them,
+     * and this runner never reaches that registration, so it judges them here before any
+     * execution row exists — every job, because an {@code after:} chain may fire any of them,
+     * and the two {@code tesseraql.files.*} keys the steps fall back to (decision 12), which
+     * the serving runtime judges once per compile and this runner would otherwise carry to
+     * the step's first write as a failure naming neither the key nor the configuration.
+     * One line and exit 2, the shape every refused declaration takes on this CLI.
+     */
+    private static boolean declarationsHold(AppManifest manifest, Map<String, JobFile> jobs) {
+        String appName = io.tesseraql.yaml.app.ApplicationName.of(manifest.config());
+        try {
+            io.tesseraql.yaml.app.ExportDeclarations.require(
+                    io.tesseraql.yaml.app.ExportDeclarations.configViolations(appName,
+                            manifest.config()),
+                    System.err::println);
+            for (JobFile job : jobs.values()) {
+                io.tesseraql.yaml.app.ExportDeclarations.requireJob(appName, job,
+                        System.err::println);
+            }
+            return true;
+        } catch (io.tesseraql.core.error.TqlException refused) {
+            System.err.println(refused.getMessage());
+            return false;
+        }
     }
 
     /** Runs the job, prints its summary, fires {@code after:} chains, and maps the exit code. */

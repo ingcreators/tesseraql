@@ -163,7 +163,7 @@ final class JobRules implements LintRule {
                 ChunkRules.lintChunk(context, job, step, source, findings);
             }
             if (step.export() != null) {
-                ExportRules.lintExportStep(context, job, step, source, findings);
+                ExportRules.lintExportStep(context, config, job, step, source, findings);
             }
             if (step.push() != null) {
                 PushStepRules.lintPushStep(config, step, source, findings);
@@ -315,6 +315,14 @@ final class JobRules implements LintRule {
                 job.source().getParent().resolve(rowStep.file()))) {
             findings.add(new LintFinding(LintCodes.MISSING_SQL_FILE, ERROR, source,
                     "Referenced SQL file is missing: " + rowStep.file()));
+        }
+        if (importSpec != null) {
+            ExportRules.report(context, job.source(), "import:",
+                    io.tesseraql.yaml.app.ExportDeclarations.violations(
+                            io.tesseraql.yaml.app.ExportDeclarations.Site.job(
+                                    ExportRules.appName(config), job.definition().id()),
+                            importSpec),
+                    source, findings);
         }
     }
 }

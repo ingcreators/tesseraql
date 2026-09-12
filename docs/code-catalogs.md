@@ -121,9 +121,12 @@ about the key set, so a missing translation can never turn into a failed transac
 
 An **export** answers in its own `locale:`, not the requesting browser's. An export has
 no request to negotiate a locale from — it is often generated on a schedule and read by
-someone who never made a request. When your catalogs carry per-language names, an export
-must declare `locale:` (or `tesseraql.files.locale`); the build refuses the undeclared
-case rather than letting the server's locale decide.
+someone who never made a request. When your catalogs carry per-language names, a `csv` or
+`pdf` export must declare `locale:` (or `tesseraql.files.locale`); the build refuses the
+undeclared case rather than letting the server's locale decide. A workbook never reads
+`locale:` — its cells carry values the reader's own locale renders — so an `excel` export is
+not asked for one, and is refused when it declares one
+([file-transfers.md](file-transfers.md)).
 
 ## When a table and filters are not enough
 

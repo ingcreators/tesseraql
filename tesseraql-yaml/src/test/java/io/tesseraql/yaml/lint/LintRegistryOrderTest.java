@@ -69,6 +69,9 @@ class LintRegistryOrderTest {
                         "AttachmentRules",
                         "MailRules",
                         "CatalogLocaleRules",
+                        // The app-wide files.locale/timezone literals, judged by the same
+                        // predicate as a route's declaration (docs/export-declarations.md).
+                        "FilesConfigRules",
                         "ObjectStorageEgressRules",
                         "ViewRules",
                         "BasePathRules",
