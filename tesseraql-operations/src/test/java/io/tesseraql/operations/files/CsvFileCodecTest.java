@@ -3,20 +3,34 @@ package io.tesseraql.operations.files;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.tesseraql.core.files.ColumnMapping;
+import io.tesseraql.core.files.ExportModel;
 import io.tesseraql.core.files.FileReadSpec;
 import io.tesseraql.core.files.FileWriteSpec;
+import io.tesseraql.core.files.SplitExport;
+import io.tesseraql.core.files.SpooledRows;
+import io.tesseraql.core.spool.FileTempStore;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 class CsvFileCodecTest {
 
+    private static final byte[] MARK = {(byte) 0xEF, (byte) 0xBB, (byte) 0xBF};
+
     private final CsvFileCodec codec = new CsvFileCodec();
+
+    @TempDir
+    Path dir;
 
     private List<Map<String, Object>> read(String csv, FileReadSpec spec) throws Exception {
         return read(csv.getBytes(StandardCharsets.UTF_8), spec);
@@ -175,8 +189,131 @@ class CsvFileCodecTest {
                 io.tesseraql.core.files.ExportModel.streaming(List.of(row).iterator(),
                         java.util.Map.of()));
 
+        // Byte 0 is the first header label (商 = E5 95 86): no mark unless one is declared. Pinned
+        // on bytes, because a decoded String can hide a stray mark behind a character nobody prints.
+        assertThat(out.toByteArray()).startsWith((byte) 0xE5, (byte) 0x95, (byte) 0x86);
         assertThat(out.toString(StandardCharsets.UTF_8))
                 .startsWith("商品名,数量")
                 .contains("alpha,5");
+    }
+
+    private static FileWriteSpec spec(List<ColumnMapping> columns, String locale, boolean bom) {
+        return new FileWriteSpec(columns, null, null, null, null, locale, null, null, null, bom);
+    }
+
+    private static List<ColumnMapping> labelled() {
+        return List.of(
+                new ColumnMapping("productName", "商品名", null),
+                new ColumnMapping("qty", "数量", null));
+    }
+
+    /** Enough rows to flush the writer's encoder more than once (about 20 KiB). */
+    private static List<Map<String, Object>> wide() {
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (int i = 0; i < 1200; i++) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("qty", i);
+            row.put("productName", "商品-" + i);
+            rows.add(row);
+        }
+        return rows;
+    }
+
+    private byte[] write(FileWriteSpec spec, List<Map<String, Object>> rows) throws Exception {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        codec.write(out, spec, ExportModel.streaming(rows.iterator(), Map.of()));
+        return out.toByteArray();
+    }
+
+    /**
+     * The marked-versus-plain comparison is whole-body equality over a fixture wider than the
+     * encoder's 8 KiB buffer: a mark written late, twice, or per row lands somewhere inside those
+     * bytes, and "starts with the mark" cannot see it.
+     */
+    @Test
+    void writeOpensWithTheUtf8MarkWhenDeclaredAndOnlyThere() throws Exception {
+        byte[] marked = write(spec(labelled(), null, true), wide());
+        byte[] plain = write(spec(labelled(), null, false), wide());
+
+        assertThat(plain.length).as("the fixture outruns the encoder buffer").isGreaterThan(16384);
+        assertThat(marked).startsWith(MARK);
+        // The mark is the whole difference: after it, the marked file is the plain one byte for
+        // byte - so no second mark anywhere, no row shifted, no header cell renamed.
+        assertThat(Arrays.copyOfRange(marked, 3, marked.length)).isEqualTo(plain);
+    }
+
+    /** The mark is never derived: a Japanese locale writes dates in Japanese, not a signature. */
+    @Test
+    void aJapaneseLocaleDoesNotImplyAMark() throws Exception {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("qty", 5);
+        row.put("productName", "alpha");
+        byte[] bytes = write(spec(labelled(), "ja", false), List.of(row));
+
+        assertThat(bytes).startsWith((byte) 0xE5, (byte) 0x95, (byte) 0x86);
+    }
+
+    /**
+     * The mark is written before anything asks whether a row exists, so an empty export with
+     * {@code bom: true} is exactly the mark. No columns are declared on purpose: a future header
+     * row for an empty export with declared columns would follow the mark, and this fixture stays
+     * exact either way.
+     */
+    @Test
+    void anEmptyExportWithTheMarkIsExactlyTheMark() throws Exception {
+        byte[] bytes = write(spec(List.of(), null, true), List.of());
+
+        assertThat(bytes).containsExactly(MARK);
+    }
+
+    /**
+     * {@code SplitExport.write} calls the codec once per ZIP entry, so a marked split export
+     * carries one mark inside every entry - once, at byte 0 - and none in front of the archive.
+     */
+    @Test
+    void eachSplitDocumentOpensWithItsOwnMark() throws Exception {
+        List<Map<String, Object>> rows = new ArrayList<>();
+        rows.add(row("sales", "ann"));
+        rows.add(row("sales", "bob"));
+        rows.add(row("ops", "cat"));
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        try (SpooledRows spooled = SpooledRows.drain(new FileTempStore(dir.resolve("spool")),
+                rows.iterator())) {
+            SplitExport.write(codec, spec(List.of(ColumnMapping.of("name")), null, true), spooled,
+                    Map.of(), "dept", "team-{key}.csv", out);
+        }
+        byte[] zip = out.toByteArray();
+
+        assertThat(zip).startsWith((byte) 0x50, (byte) 0x4B); // the archive itself is unmarked
+        Map<String, byte[]> entries = entries(zip);
+        assertThat(entries).containsOnlyKeys("team-sales.csv", "team-ops.csv");
+        assertThat(entries.get("team-sales.csv"))
+                .isEqualTo(concat(MARK, "name\r\nann\r\nbob\r\n".getBytes(StandardCharsets.UTF_8)));
+        assertThat(entries.get("team-ops.csv"))
+                .isEqualTo(concat(MARK, "name\r\ncat\r\n".getBytes(StandardCharsets.UTF_8)));
+    }
+
+    private static byte[] concat(byte[] a, byte[] b) {
+        byte[] out = Arrays.copyOf(a, a.length + b.length);
+        System.arraycopy(b, 0, out, a.length, b.length);
+        return out;
+    }
+
+    private static Map<String, Object> row(String dept, String name) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("dept", dept);
+        row.put("name", name);
+        return row;
+    }
+
+    private static Map<String, byte[]> entries(byte[] zip) throws Exception {
+        Map<String, byte[]> entries = new LinkedHashMap<>();
+        try (ZipInputStream in = new ZipInputStream(new ByteArrayInputStream(zip))) {
+            ZipEntry entry;
+            while ((entry = in.getNextEntry()) != null) {
+                entries.put(entry.getName(), in.readAllBytes());
+            }
+        }
+        return entries;
     }
 }

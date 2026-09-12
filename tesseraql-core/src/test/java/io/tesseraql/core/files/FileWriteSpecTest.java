@@ -27,4 +27,29 @@ class FileWriteSpecTest {
         assertThat(new FileWriteSpec(List.of(), null, null, null, "ja", "Asia/Tokyo").resources())
                 .isNull();
     }
+
+    /**
+     * {@code withFormatting} rebuilds the record field by field on every route export, so a
+     * component it forgets is dropped in silence - what happened to {@code resources} once.
+     */
+    @Test
+    void perRequestFormattingKeepsTheByteOrderMark() {
+        FileWriteSpec spec = new FileWriteSpec(List.of(ColumnMapping.of("name")), null,
+                Path.of("/app/web/print/print.html"), null, Path.of("/app"), null, null, null,
+                null, true);
+
+        FileWriteSpec resolved = spec.withFormatting("ja", "Asia/Tokyo");
+
+        assertThat(resolved.bom()).as("withFormatting keeps the declared mark").isTrue();
+        assertThat(resolved.locale()).isEqualTo("ja");
+    }
+
+    @Test
+    void compatibilityConstructorsLeaveTheMarkOff() {
+        assertThat(new FileWriteSpec(List.of(), null, null, null).bom()).isFalse();
+        assertThat(new FileWriteSpec(List.of(), null, null, null, "ja", "Asia/Tokyo").bom())
+                .isFalse();
+        assertThat(new FileWriteSpec(List.of(), null, null, null, Path.of("/app"), "ja",
+                "Asia/Tokyo").bom()).isFalse();
+    }
 }

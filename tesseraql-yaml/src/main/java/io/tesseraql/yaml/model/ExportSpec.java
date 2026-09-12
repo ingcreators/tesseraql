@@ -57,11 +57,17 @@ import java.util.List;
  *                   (docs/export-pipeline.md, decision 12)
  * @param groupBy    a column the rows are grouped by, exposed to the template as {@code groups};
  *                   the extraction must be ordered by it (docs/export-pipeline.md, decision 3)
+ * @param bom        whether a {@code csv} export opens with the UTF-8 byte-order mark, so a
+ *                   spreadsheet that sniffs the mark decodes the file as UTF-8; absent means
+ *                   no mark, because a mark is a declaration a reader must expect and many
+ *                   machine readers do not. The linter refuses it on {@code excel} and
+ *                   {@code pdf} ({@code INAPPLICABLE_EXPORT_OPTION})
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record ExportSpec(String format, String filename, String template, String sheet,
         String startCell, List<ColumnSpec> columns, String locale, String timezone,
-        AfterSpec after, Integer maxRows, String onOverflow, String groupBy, String splitBy) {
+        AfterSpec after, Integer maxRows, String onOverflow, String groupBy, String splitBy,
+        Boolean bom) {
 
     public ExportSpec {
         columns = columns == null ? List.of() : List.copyOf(columns);
@@ -78,7 +84,7 @@ public record ExportSpec(String format, String filename, String template, String
                 startCell == null || startCell.isBlank()
                         ? null
                         : io.tesseraql.core.files.CellRef.parse(startCell),
-                resources, null, null, groupBy, splitBy);
+                resources, null, null, groupBy, splitBy, Boolean.TRUE.equals(bom));
     }
 
     /**

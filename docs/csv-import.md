@@ -16,7 +16,8 @@
 >
 > **Amended 2026-09-09.** Decision 10: the file's encoding is decided by its bytes. A
 > spreadsheet's "CSV UTF-8" save was refused, and its derived-column form silently wrote
-> a null first column for every row.
+> a null first column for every row. *Amended again 2026-09-12: the writing side's mirror,
+> `bom:`, is recorded under decision 10.*
 
 Today an import is a fire-and-forget upload: `POST` the file, get `202` and a
 transfer id, poll for the outcome, and discover in the answer that row 3 had a
@@ -668,6 +669,16 @@ Three clauses:
   no reading a `Content-Type` charset parameter. Sniffing is a guess, and a wrong guess writes
   wrong data with no diagnostic — the exact failure this decision removes. A genuinely
   Shift_JIS-encoded upload is a separate trigger with a declaration behind it, not a heuristic.
+
+*Amended 2026-09-12.* The writing side holds the same principle from the other end, and the
+asymmetry is deliberate. A CSV export is mark-less UTF-8 unless the route or step declares
+`bom: true` ([file-transfers.md](file-transfers.md)), and then the codec writes the mark as
+octets on the stream before any text - an export with no rows is the three bytes alone. A read
+refuses an `import.encoding:` key because the bytes already say what they are; a write accepts
+an opt-in `bom:` because the bytes are what the consumer will sniff. Neither side guesses from
+`locale:` or `Accept-Language`, and the mark defaults off because the readers that break on one
+(PostgreSQL `COPY … HEADER MATCH`, Python's `csv`, Commons CSV without `BOMInputStream`) break
+silently. The reader above consumes the mark on the way back, so a marked export re-imports.
 
 The other two byte-to-character decodes in the tree were checked and are not the same defect:
 `ChunkRows` reads a JSONL spool the framework itself wrote from parsed rows through Jackson, and

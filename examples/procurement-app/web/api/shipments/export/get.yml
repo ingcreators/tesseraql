@@ -11,6 +11,9 @@ security:
 export:
   format: csv
   filename: shipments.csv
+  # Partner names are Japanese (V7__japanese_names.sql): the mark lets a spreadsheet that
+  # sniffs it decode the file as UTF-8 instead of its system code page.
+  bom: true
 
 sources:
   main:

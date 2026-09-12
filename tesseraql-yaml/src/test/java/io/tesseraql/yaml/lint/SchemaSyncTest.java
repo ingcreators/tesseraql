@@ -801,4 +801,69 @@ class SchemaSyncTest {
                 .isNotBlank();
         return node.path("$ref").asText("");
     }
+
+    /**
+     * The key-set gate above says a property exists; this says what type it has. Nothing did,
+     * so a {@code Boolean} component could ship as {@code "type": "string"} - every editor then
+     * flags the true value as invalid and the generated reference row says {@code string} - with
+     * every schema test green.
+     */
+    @Test
+    void everyFixedShapeScalarIsTypedAsItsModelHoldsIt() throws Exception {
+        JsonNode defs = new ObjectMapper().readTree(
+                getClass().getResourceAsStream("/schema/tesseraql-defs-v1.schema.json"))
+                .path("$defs");
+        Map<String, JsonNode> blocks = Map.of(
+                "shared/export", defs.path("shared").path("export"),
+                "shared/import", defs.path("shared").path("import"),
+                "fileColumn", defs.path("fileColumn"),
+                "notification", defs.path("notification"),
+                "push", defs.path("push"),
+                "chunk", defs.path("chunk"),
+                "enrichment", defs.path("enrichment"));
+        Map<String, Class<? extends Record>> models = Map.of(
+                "shared/export", io.tesseraql.yaml.model.ExportSpec.class,
+                "shared/import", io.tesseraql.yaml.model.ImportSpec.class,
+                "fileColumn", io.tesseraql.yaml.model.ColumnSpec.class,
+                "notification", io.tesseraql.yaml.model.NotifySpec.class,
+                "push", io.tesseraql.yaml.model.PushSpec.class,
+                "chunk", io.tesseraql.yaml.model.ChunkSpec.class,
+                "enrichment", io.tesseraql.yaml.model.EnrichSpec.class);
+        for (var entry : models.entrySet()) {
+            JsonNode properties = blocks.get(entry.getKey()).path("properties");
+            for (var component : entry.getValue().getRecordComponents()) {
+                String expected = schemaType(component.getType());
+                JsonNode property = properties.path(component.getName());
+                if (expected == null || property.has("$ref")) {
+                    continue; // a nested shape reaches its own definition
+                }
+                assertThat(property.path("type").asText())
+                        .as("%s.%s is a %s in %s", entry.getKey(), component.getName(),
+                                component.getType().getSimpleName(),
+                                entry.getValue().getSimpleName())
+                        .isEqualTo(expected);
+            }
+        }
+    }
+
+    /** The JSON-schema type a record component's Java type binds from; null for a nested shape. */
+    private static String schemaType(Class<?> type) {
+        if (type == String.class) {
+            return "string";
+        }
+        if (type == Boolean.class || type == boolean.class) {
+            return "boolean";
+        }
+        if (type == Integer.class || type == int.class || type == Long.class
+                || type == long.class) {
+            return "integer";
+        }
+        if (List.class.isAssignableFrom(type)) {
+            return "array";
+        }
+        if (Map.class.isAssignableFrom(type) || type.isRecord()) {
+            return "object";
+        }
+        return null;
+    }
 }

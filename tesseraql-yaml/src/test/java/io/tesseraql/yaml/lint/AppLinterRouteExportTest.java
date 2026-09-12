@@ -102,4 +102,106 @@ class AppLinterRouteExportTest {
                         || "TQL-YAML-1005".equals(finding.code())
                         || "TQL-YAML-1041".equals(finding.code()));
     }
+
+    /** The helper's own {@code method:}/{@code path:} keys draw unknown-key warnings, so "clean" is keyed on the message. */
+    private static boolean namesTheMark(LintFinding finding) {
+        return finding.message().contains("bom");
+    }
+
+    @Test
+    void aByteOrderMarkOnAWorkbookRouteIsAnInapplicableOption(@TempDir Path dir)
+            throws Exception {
+        List<LintFinding> findings = new AppLinter().lint(app(dir, """
+                  format: excel
+                  bom: true
+                  sql:
+                    file: dump.sql
+                    mode: query-export
+                """));
+
+        assertThat(findings).anySatisfy(finding -> {
+            assertThat(finding.code()).isEqualTo("TQL-YAML-1005");
+            assertThat(finding.severity()).isEqualTo("error");
+            assertThat(finding.message()).contains("bom:", "excel");
+        });
+    }
+
+    @Test
+    void aByteOrderMarkOnAPdfRouteIsAnInapplicableOption(@TempDir Path dir) throws Exception {
+        List<LintFinding> findings = new AppLinter().lint(app(dir, """
+                  format: pdf
+                  bom: true
+                  sql:
+                    file: dump.sql
+                    mode: query-export
+                """));
+
+        assertThat(findings).anySatisfy(finding -> {
+            assertThat(finding.code()).isEqualTo("TQL-YAML-1005");
+            assertThat(finding.severity()).isEqualTo("error");
+            assertThat(finding.message()).contains("bom:", "pdf");
+        });
+    }
+
+    /** Presence is what is refused, as with {@code sheet:} on a pdf: a declined mark is a leftover. */
+    @Test
+    void aDeclinedByteOrderMarkOnAWorkbookIsStillAnInapplicableOption(@TempDir Path dir)
+            throws Exception {
+        List<LintFinding> findings = new AppLinter().lint(app(dir, """
+                  format: excel
+                  bom: false
+                  sql:
+                    file: dump.sql
+                    mode: query-export
+                """));
+
+        assertThat(findings).anySatisfy(finding -> {
+            assertThat(finding.code()).isEqualTo("TQL-YAML-1005");
+            assertThat(finding.severity()).isEqualTo("error");
+            assertThat(finding.message()).contains("bom:");
+        });
+    }
+
+    @Test
+    void aByteOrderMarkOnACsvRouteIsAKnownAndCleanKey(@TempDir Path dir) throws Exception {
+        List<LintFinding> findings = new AppLinter().lint(app(dir, """
+                  format: csv
+                  bom: true
+                  sql:
+                    file: dump.sql
+                    mode: query-export
+                """));
+
+        // Neither inapplicable (1005) nor unknown (1043): nothing names the key.
+        assertThat(findings).noneMatch(AppLinterRouteExportTest::namesTheMark);
+    }
+
+    /** An unset {@code format:} is a route's csv default, so the mark applies. */
+    @Test
+    void aByteOrderMarkWithoutAFormatIsTheCsvDefaultAndClean(@TempDir Path dir) throws Exception {
+        List<LintFinding> findings = new AppLinter().lint(app(dir, """
+                  filename: items.csv
+                  bom: true
+                  sql:
+                    file: dump.sql
+                    mode: query-export
+                """));
+
+        assertThat(findings).noneMatch(AppLinterRouteExportTest::namesTheMark);
+    }
+
+    /** A format the framework does not ship belongs to a module codec; the linter does not judge it. */
+    @Test
+    void aByteOrderMarkOnAModuleFormatIsNotJudged(@TempDir Path dir) throws Exception {
+        List<LintFinding> findings = new AppLinter().lint(app(dir, """
+                  format: parquet
+                  bom: true
+                  sql:
+                    file: dump.sql
+                    mode: query-export
+                """));
+
+        assertThat(findings).noneMatch(finding -> "TQL-YAML-1005".equals(finding.code())
+                && namesTheMark(finding));
+    }
 }

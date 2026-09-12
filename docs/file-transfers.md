@@ -125,6 +125,13 @@ sources:
   request locale), so the requesting user decides how dates and numbers render. When a route
   declares neither, the app configuration keys `tesseraql.files.locale` and
   `tesseraql.files.timezone` apply.
+- `bom: true` opens a `csv` export with the UTF-8 byte-order mark (`EF BB BF`), so a spreadsheet
+  that sniffs the mark decodes the file as UTF-8 instead of its system code page. It is off by
+  default, because a mark is a declaration a reader must expect: PostgreSQL `COPY … HEADER MATCH`
+  and Python's `csv` module take it as part of the first header cell. It is never derived from
+  `locale:`; a split export marks every file in the bundle, and an export with no rows still
+  carries it. The linter refuses it on `excel` and `pdf` (`TQL-YAML-1005`), which are not text
+  streams.
 - Excel output has three template modes: no `template:` renders a plain grid; a template plus
   `startCell:` is placement mode — the template carries layout and styles while the YAML says
   where each column lands (`- { name: qty, column: D }`); a jx:-annotated template without

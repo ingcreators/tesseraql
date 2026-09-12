@@ -235,6 +235,7 @@ query-export / file-export output: format (csv, excel, pdf), filename, columns w
 | `onOverflow` | string | `fail` (default) refuses an export past `maxRows` (TQL-LD-2850); `warn` truncates it at the cap and logs. |
 | `groupBy` | string | A column the rows are read as ordered groups by, each exposed to the template as a `key` and its own `rows`. The rows must be ordered by it (TQL-LD-2851). |
 | `splitBy` | string | A column that splits the export into one document per value, delivered as a single ZIP; `filename:` must carry `{key}`. The rows must be ordered by it (TQL-LD-2851). |
+| `bom` | boolean | Whether a `csv` export opens with the UTF-8 byte-order mark (`EF BB BF`), so a spreadsheet that sniffs the mark decodes the file as UTF-8 rather than in its system code page. Off by default: a mark is a declaration a reader must expect, and readers such as PostgreSQL `COPY` and Python's `csv` module take it as part of the first header cell. It is never derived from `locale:`; a split export carries one per ZIP entry; an export with no rows still carries it. The linter refuses it on `excel` and `pdf` (TQL-YAML-1005), which are not text streams. |
 
 #### export.after
 
@@ -492,6 +493,7 @@ query-export / file-export output: format (csv, excel, pdf), filename, columns w
 | `onOverflow` | string | `fail` (default) refuses an export past `maxRows` (TQL-LD-2850); `warn` truncates it at the cap and logs. |
 | `groupBy` | string | A column the rows are read as ordered groups by, each exposed to the template as a `key` and its own `rows`. The rows must be ordered by it (TQL-LD-2851). |
 | `splitBy` | string | A column that splits the export into one document per value, delivered as a single ZIP; `filename:` must carry `{key}`. The rows must be ordered by it (TQL-LD-2851). |
+| `bom` | boolean | Whether a `csv` export opens with the UTF-8 byte-order mark (`EF BB BF`), so a spreadsheet that sniffs the mark decodes the file as UTF-8 rather than in its system code page. Off by default: a mark is a declaration a reader must expect, and readers such as PostgreSQL `COPY` and Python's `csv` module take it as part of the first header cell. It is never derived from `locale:`; a split export carries one per ZIP entry; an export with no rows still carries it. The linter refuses it on `excel` and `pdf` (TQL-YAML-1005), which are not text streams. |
 
 ##### pipeline.export.after
 

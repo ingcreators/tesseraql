@@ -1,14 +1,14 @@
 # A download keeps its name and its bytes
 
-> **Status: in progress.** Four pull requests, in this order, each branched from fresh
-> `origin/main` after the previous one merges. **S** — Studio's data-browser download is a CSV:
+> **Status: complete.** Four pull requests, in this order, each branched from fresh
+> `origin/main` after the previous one merged. **S** — Studio's data-browser download is a CSV:
 > **shipped with this record** (the pull request that registers this file in both internal-doc
 > lists). **4a** — a download keeps its name (RFC 6266 `filename*` with an ASCII fallback, the
 > control/format fold, the split bundle's name): **shipped (#1302)**. **4b** — a redirect
 > lands where it says (the URI-literal encoder at the base-path seam, the four bypass writers, the
 > app-local gate, the edge backstop, the doubled login query, the paged list's `Link` header):
 > **shipped (#1303)**. **4c** — an `export:` CSV can carry a byte-order mark (`bom:`):
-> designed, not yet shipped. Each pull request flips its own line here when it merges. Closes
+> **shipped (#1304)**. Each pull request flips its own line here when it merges. Closes
 > F125 and F128 of [`audit-medium-leads.md`](audit-medium-leads.md).
 >
 > **The plan this document replaces was wrong in three load-bearing places.** It called the
@@ -828,9 +828,9 @@ A new `### Security` section after `### Fixed`:
 - `:244-247` decision 3: record the user's 2026-09-09 answer ("its own campaign") and the lines
   above, so it is not re-filed a third time.
 
-**PR 4a**: `:29` append "— 4a SHIPPED #nnnn"; `:226` mark 4a SHIPPED. **PR 4b**: `:29` append
-"— 4b SHIPPED #nnnn, with the tab open redirect it uncovered"; `:226` mark 4b SHIPPED; rows 12-14
-of the surfaced list → "fixed in PR 4b (#nnnn)". **PR 4c**: `:46` → "SHIPPED #nnnn"; `:226` mark
+**PR 4a**: `:29` append "— 4a SHIPPED #1302"; `:226` mark 4a SHIPPED. **PR 4b**: `:29` append
+"— 4b SHIPPED #1303, with the tab open redirect it uncovered"; `:226` mark 4b SHIPPED; rows 12-15
+of the surfaced list → "fixed in PR 4b (#1303)". **PR 4c**: `:46` → "SHIPPED #1304"; `:226` mark
 4c SHIPPED.
 
 ## What this breaks
