@@ -7,7 +7,7 @@
 > control/format fold, the split bundle's name): **shipped (#1302)**. **4b** — a redirect
 > lands where it says (the URI-literal encoder at the base-path seam, the four bypass writers, the
 > app-local gate, the edge backstop, the doubled login query, the paged list's `Link` header):
-> **shipped (#nnnn)**. **4c** — an `export:` CSV can carry a byte-order mark (`bom:`):
+> **shipped (#1303)**. **4c** — an `export:` CSV can carry a byte-order mark (`bom:`):
 > designed, not yet shipped. Each pull request flips its own line here when it merges. Closes
 > F125 and F128 of [`audit-medium-leads.md`](audit-medium-leads.md).
 >
