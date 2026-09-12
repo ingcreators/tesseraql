@@ -8,7 +8,7 @@
 > lands where it says (the URI-literal encoder at the base-path seam, the four bypass writers, the
 > app-local gate, the edge backstop, the doubled login query, the paged list's `Link` header):
 > **shipped (#1303)**. **4c** — an `export:` CSV can carry a byte-order mark (`bom:`):
-> **shipped (#nnnn)**. Each pull request flips its own line here when it merges. Closes
+> **shipped (#1304)**. Each pull request flips its own line here when it merges. Closes
 > F125 and F128 of [`audit-medium-leads.md`](audit-medium-leads.md).
 >
 > **The plan this document replaces was wrong in three load-bearing places.** It called the
