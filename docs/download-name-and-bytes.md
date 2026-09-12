@@ -4,7 +4,7 @@
 > `origin/main` after the previous one merges. **S** — Studio's data-browser download is a CSV:
 > **shipped with this record** (the pull request that registers this file in both internal-doc
 > lists). **4a** — a download keeps its name (RFC 6266 `filename*` with an ASCII fallback, the
-> control/format fold, the split bundle's name): designed, not yet shipped. **4b** — a redirect
+> control/format fold, the split bundle's name): **shipped (#nnnn)**. **4b** — a redirect
 > lands where it says (the URI-literal encoder at the base-path seam, the four bypass writers, the
 > app-local gate, the edge backstop, the doubled login query, the paged list's `Link` header):
 > designed, not yet shipped. **4c** — an `export:` CSV can carry a byte-order mark (`bom:`):
