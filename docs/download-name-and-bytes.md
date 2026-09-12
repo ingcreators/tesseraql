@@ -786,7 +786,7 @@ A new `### Security` section after `### Fixed`:
   second to land rebases and regenerates the reference; no shared record component."
 - `:171-172` "Defects surfaced" list, appended: 11 Studio's "Download CSV" was `Map.toString()`
   since #220 on all three branches, the shipped guard's three `contains()` green on it — **fixed in
-  PR S (#nnnn)**; 12 the doubled login query (`ErrorResponseRenderer:252-257`) — PR 4b; 13 the
+  PR S (#1301)**; 12 the doubled login query (`ErrorResponseRenderer:252-257`) — PR 4b; 13 the
   C0/DEL edge gap (every C0 control but CR/LF and DEL hangs a buffered response and strips a
   streamed one; TAB passes), replacing HANDOFF #5 — PR 4b; 14 the tab open redirect through
   `BasePaths.isLocal` (security) — PR 4b; 15 the RFC 8288 `Link` header built from the decoded
@@ -813,7 +813,7 @@ A new `### Security` section after `### Fixed`:
 - `:226` slice 4 row: `| 4 | A download keeps its name and its bytes | F125, F128 | S + M + M + S |
   Not one helper: a sixth emitter (response.*.headers:) and three default-name derivations. Four
   PRs (docs/download-name-and-bytes.md): S Studio's CSV was a Map on three branches — SHIPPED
-  #nnnn; 4a conditional filename* with both halves, ASCII fallback first, a control/format fold,
+  #1301; 4a conditional filename* with both halves, ASCII fallback first, a control/format fold,
   rider #4 zipName; 4b the Location half across core/pipeline/compiler/scim/runtime plus the
   wireHeaders backstop, the app-local gate refusing controls, the doubled login query; 4c bom: in
   both tesseraql-defs-v1.schema.json copies, a ten-component FileWriteSpec, ExportSpec, one helper
