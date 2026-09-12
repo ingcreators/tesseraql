@@ -44,6 +44,30 @@ All notable changes to TesseraQL are documented here. The format follows
   works for a non-ASCII key. The paged list's `Link` header, which named its next and previous
   pages the same raw way, is encoded too — every framework-built URL, not only every redirect.
 
+- **An Excel grid or placement export with a NULL cell no longer answers 500.** The workbook
+  writers asked the temporal normalizer about every value before their own null arm, and it had
+  no null arm of its own, so one NULL — text, a typed number or a typed datetime alike — failed
+  the whole export (`TQL-SQL-2500` on a route, a FAILED transfer on a file-export, `TQL-LD-2810`
+  on a job step) since the first release. A NULL is a blank cell, as it always was in a jxls
+  report.
+
+- **An export of a `time` column no longer answers 500 on an in-range value.** pgjdbc, H2, MySQL,
+  MariaDB and SQL Server hand a `TIME` column over as `java.sql.Time`, whose `toInstant()`
+  throws, so every `csv`, `excel` grid or placement and `pdf` export selecting one failed,
+  declared or not, and no column `format:` could rescue it. A time of day now renders as
+  wall-clock text — `22:30:00`, or the column's `format:` over the time in the export's locale —
+  on `csv` and `pdf`, and as a real time cell in a workbook: the fraction of a day under
+  `hh:mm:ss` or the declared cell format in a grid, under the declared cell format else the
+  template's prototype style in placement. `timezone:` never shifts it, since a time has no date
+  to shift, and a `type: date` or `type: datetime` on it invents none. DuckDB's `LocalTime`
+  renders the same way, so a DuckDB `time` cell that read `22:30` now reads `22:30:00`; an H2 or
+  DuckDB `time with time zone` (`OffsetTime`) renders with its offset dropped on `csv` and the
+  workbook grid, and is still refused by the row spool on `pdf`, placement and split exports
+  (`TQL-LD-2853`). A PostgreSQL `time with time zone` is not an `OffsetTime`: pgjdbc hands it
+  over already moved into the server JVM's zone, and `timezone:` does not correct that. A MySQL
+  `TIME` outside `00:00:00-23:59:59` is refused by its driver before the codec sees it, and
+  MariaDB wraps one modulo a day.
+
 - **The login bounce carries the original query string once.** An unauthenticated navigation to
   `/page?q=1` was bounced to sign-in with `redirect=/page?q=1?q=1`, and the doubled value survived
   sign-in into the post-login redirect of every application, hosted or not.

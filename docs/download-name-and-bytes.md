@@ -179,6 +179,8 @@ Evidence: `design-4a.md` §0, §2 item 9, §7.3.
 `export.zip` (was `.csv.zip`), package-private so `SqlStepZipNameTest` pins it without a boot.
 Rides in 4a because 4a's `splitBy` fixture would otherwise pin `__-.zip` (D2). Still filed: the
 two-part extension (`orders-{key}.tar.gz`). Evidence: `design-4a.md` §1.3; the `zip*` variants.
+Query-export only: a file-export `splitBy:` transfer is served under the literal
+`r-{key}.<ext>` with the codec's content type over ZIP bytes (`export-declarations.md`, 5c).
 
 ### 7 — `uriLiteral` encodes what no URI can carry, including the nine graphics and a lone `%`
 
@@ -315,7 +317,11 @@ on a workbook lints clean — the rule's own arms fire on presence, `ExportRules
 unknown formats (`refuse-unknown-format`: `lintExportRowCap:263-266` answers for shipped formats
 only); a boot refusal (slice 5's row, read); a case-folded `format:` (`FileCodecs.require` is
 case-sensitive; `format: Excel` fails at boot as an unknown format, never as a silently unmarked
-workbook — unfiled #21). Evidence: `design-4c.md` §1.4, §2, §9; matrix columns 17-29.
+workbook — unfiled #21). Evidence: `design-4c.md` §1.4, §2, §9; matrix columns 17-29. **Answered by `export-declarations.md`:** WARN-and-continue at boot from the same
+predicate the linter runs, and a value is judged only where the format reads it — the measured
+cost of refusing an inert key is a whole-stack outage naming nothing. `format: Excel` fails at boot
+as an unknown format on query-export only; a `file-export` or a job step carries it to the first
+request or run.
 
 ### 16 — The mark is octets on the stream, before any text, once per stream, never derived
 
@@ -885,9 +891,16 @@ Every unfiled defect the measurement surfaced, with its destination (the measure
   format lint silence (#21, also the lint's case-sensitivity on `format:`); the zero-row export
   with no header row (#24 — a marked empty export is exactly the mark until then); the two-part
   extension in `zipName` (`orders-{key}.tar.gz`); the `defs-v1.schema.json:97` description split
-  (#19).
-- **Slice 5**: the lint/boot gap — `bom:` on `excel`/`pdf` is refused at lint only; an app that
-  skips `tesseraql lint` writes an unmarked workbook.
+  (#19). Added by `export-declarations.md`: the drain-spool leak (fix at `SpooledRows.drain` /
+  `ExportWrite.write`, never at the writer); the async reason projection (`TransferStatus.errors`,
+  the card text, the console row, the 2,000-character cliff); the Excel `format:` string written
+  verbatim as the cell format; the PDF template's `Locale.ROOT` context; the `TQL-LD-2856`
+  missing-template code; the `'null'` format text on a step without `format:`; the caller's
+  principal in `params_json`; `TQL-LD-2801`'s hint that always names the excel module;
+  `TQL-FIELD-4622` guarding nothing.
+- **The export-declarations record**: the lint/boot gap for inert export keys closes with a boot
+  warning from the linter's own predicate, never a refusal; the same un-linted app also shipped a
+  split bundle mislabelled under the per-document name on a VALID declaration.
 - **Rides in 4b** (settled 2026-09-12): the RFC 8288 `Link` header (`PageHeaders:41-54`) is F125
   outside the seam — `</???page=2>; rel="next"` on every paged list under a non-ASCII route path;
   `uriLiteral(target)` on its two lines and one wire row.

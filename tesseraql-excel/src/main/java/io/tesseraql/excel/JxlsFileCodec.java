@@ -413,9 +413,20 @@ public final class JxlsFileCodec implements FileCodec {
     /** Writes one typed grid cell, applying the column's (or the temporal default) format. */
     private static void writeValue(org.dhatim.fastexcel.Worksheet sheet, int rowIndex,
             int colIndex, ColumnMapping column, Object value, ZoneId zone) {
+        String format = column.format();
+        java.time.LocalTime time = io.tesseraql.core.files.ColumnValues.toLocalTime(value);
+        if (time != null) {
+            // A time of day is a real time cell - the fraction of a day, which sorts and
+            // subtracts - not text; fastexcel has no time overload, so the serial is written as
+            // a number under a time format.
+            sheet.value(rowIndex, colIndex, dayFraction(time));
+            sheet.style(rowIndex, colIndex)
+                    .format(format == null || format.isBlank() ? "hh:mm:ss" : format)
+                    .set();
+            return;
+        }
         java.time.ZonedDateTime temporal = io.tesseraql.core.files.ColumnValues.toZoned(value,
                 zone);
-        String format = column.format();
         if (temporal != null) {
             sheet.value(rowIndex, colIndex, temporal.toLocalDateTime());
             // A date cell without a format renders as a raw serial number; default sensibly.
@@ -440,8 +451,17 @@ public final class JxlsFileCodec implements FileCodec {
         }
     }
 
-    /** Writes a typed cell: temporals become real date cells, numbers numeric cells. */
+    /**
+     * Writes a typed cell: temporals become real date cells, a time of day a time serial (the
+     * column's declared format, else the template's prototype style, says how it displays - as
+     * for a date), numbers numeric cells.
+     */
     private static void setCell(Cell cell, Object value, ZoneId zone) {
+        java.time.LocalTime time = io.tesseraql.core.files.ColumnValues.toLocalTime(value);
+        if (time != null) {
+            cell.setCellValue(dayFraction(time));
+            return;
+        }
         java.time.ZonedDateTime temporal = io.tesseraql.core.files.ColumnValues.toZoned(value,
                 zone);
         if (temporal != null) {
@@ -454,5 +474,13 @@ public final class JxlsFileCodec implements FileCodec {
             case Boolean bool -> cell.setCellValue(bool);
             default -> cell.setCellValue(String.valueOf(value));
         }
+    }
+
+    /**
+     * A workbook's time serial: the fraction of the day elapsed ({@code 22:30} is 0.9375). Never
+     * a date-time at an epoch - POI refuses a date before 1900 and 1970 would render as a date.
+     */
+    private static double dayFraction(java.time.LocalTime time) {
+        return time.toNanoOfDay() / (double) java.time.Duration.ofDays(1).toNanos();
     }
 }

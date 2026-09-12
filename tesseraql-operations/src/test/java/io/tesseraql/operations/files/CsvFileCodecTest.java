@@ -178,6 +178,30 @@ class CsvFileCodecTest {
     }
 
     @Test
+    void writeRendersASqlTimeAsWallClockText() throws Exception {
+        // java.sql.Time is what pgjdbc, H2, MySQL, MariaDB and SQL Server hand for a TIME
+        // column; its toInstant() throws, and the old toZoned asked. Never LocalTime here: DuckDB's
+        // shape passed all along (MEASUREMENT.md section 8 hazard 24). The formatted column uses
+        // a locale-sensitive field, so the export's locale is proven on the wire, not assumed.
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("label", "late");
+        row.put("starts_at", java.sql.Time.valueOf("22:30:00"));
+        row.put("ends_at", java.sql.Time.valueOf("23:45:00"));
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        codec.write(out, new FileWriteSpec(List.of(
+                ColumnMapping.of("label"),
+                ColumnMapping.of("starts_at"),
+                new ColumnMapping("ends_at", null, null, null, "hh:mm a")),
+                null, null, null, "ja-JP", "Asia/Tokyo"),
+                io.tesseraql.core.files.ExportModel.streaming(List.of(row).iterator(),
+                        Map.of()));
+
+        assertThat(out.toString(StandardCharsets.UTF_8))
+                // untyped: ISO wall-clock text; formatted: the pattern over the time, in ja-JP
+                .contains("late,22:30:00,11:45 午後\r\n");
+    }
+
+    @Test
     void writeUsesHeaderLabelsAndColumnOrder() throws Exception {
         Map<String, Object> row = new LinkedHashMap<>();
         row.put("qty", 5);

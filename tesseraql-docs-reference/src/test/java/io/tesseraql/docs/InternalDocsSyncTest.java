@@ -47,6 +47,10 @@ class InternalDocsSyncTest {
                 .as("treated as internal by the error index but published by nav.mjs: remove "
                         + "from ErrorIndex.INTERNAL_DOCS or exclude it from the site")
                 .isEmpty();
+
+        // Two set differences are green on a record in NEITHER list: pin the registration.
+        assertThat(ErrorIndex.isInternalDoc("export-declarations.md"))
+                .as("the export-declarations record is registered").isTrue();
     }
 
     /** The {@code EXCLUDED} array's entries, read from the manifest as text. */

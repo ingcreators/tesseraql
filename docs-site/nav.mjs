@@ -323,4 +323,7 @@ export const EXCLUDED = [
   // A download keeps its name and its bytes: the RFC 6266 filename, the percent-encoded redirect,
   // the opt-in byte-order mark, and Studio's CSV that was a map — designed 2026-09-12.
   'download-name-and-bytes.md',
+  // An export declaration is refused, or it takes effect: the codec value arms, the literal
+  // judged at lint and boot, the request-sourced refusal, the split bundle - designed 2026-09-12.
+  'export-declarations.md',
 ];
