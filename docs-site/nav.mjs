@@ -320,4 +320,7 @@ export const EXCLUDED = [
   // The 22 medium leads the whole-repo audit left unverified: what survived measurement against
   // current main, what the campaigns had already killed, and the slices that follow, 2026-09-09.
   'audit-medium-leads.md',
+  // A download keeps its name and its bytes: the RFC 6266 filename, the percent-encoded redirect,
+  // the opt-in byte-order mark, and Studio's CSV that was a map — designed 2026-09-12.
+  'download-name-and-bytes.md',
 ];

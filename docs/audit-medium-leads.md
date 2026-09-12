@@ -26,7 +26,7 @@ All 22 carried `reproduce-lens-missing` + `deliberate-lens-missing`; 21 also car
 | Lead | Verdict at HEAD | Severity now | Touched since base? |
 |---|---|---|---|
 | F129 identity validity windows vs DB clock | **LIVE (widens)** | **high** (was medium) | untouched |
-| F125 Content-Disposition has no RFC 6266 | **LIVE (widens)** | medium | untouched |
+| F125 Content-Disposition has no RFC 6266 | **LIVE (widens)** | medium | filename half: PR 4a; the Location half — a silent wrong page, and a post-sign-in return to the home page — is the more severe half and is PR 4b (`download-name-and-bytes.md`); the headline reachable path is the end user's own uploaded filename via the shipped `kind: attachment` |
 | F126 export `timezone:`/`format:` → 500 | **LIVE (widens)** | medium | untouched |
 | F127 bundled apps hard-coded English | **LIVE (reframed)** | medium | untouched; class GREW in-window |
 | F82 README front-door drift | **LIVE (reframed)** | medium | partially killed |
@@ -43,7 +43,7 @@ All 22 carried `reproduce-lens-missing` + `deliberate-lens-missing`; 21 also car
 | F118 `MessageCatalog.live()` per resolution | **LIVE (widens)** | medium | untouched |
 | F119 rate-limiter monitor across JDBC claim | **LIVE (reframed)** | medium | untouched |
 | F120 `JdbcSessionStore.touched` unbounded | **LIVE (widens)** | medium | untouched |
-| F128 CSV export has no BOM option | **LIVE (widens)** | low / `dx` as filed | untouched |
+| F128 CSV export has no BOM option | **LIVE (widens)** | `dx` as filed; not low — the procurement demo's shipments export hands a user Japanese CSV data mark-less, and `query-export` has no author-level workaround until F82 slice 2 | PR 4c: `bom:` on the `export:` block, default `false` |
 | F99 Studio preview pins `data-theme="dark"` | **LIVE (reframed)** | low (was medium) | untouched |
 | F112 `serve` in CLI help text | **LIVE (narrowed)** | low | headline killed |
 | F89 development-environment.md wrapper step | **LIVE (reframed)** | low | mechanism killed, page orphaned |
@@ -102,12 +102,21 @@ is unscheduled work.
   fourth affected dialect the lead does not name, reached because `jdbc:mariadb://` infers
   `Dialect.MYSQL`. Oracle is safe *because* the SQL uses `current_timestamp` — do not "fix" it
   toward `systimestamp`.
-- **F125 is wider than its helper.** `RouteEdge.headers()` (568-572) is the single funnel for every
-  route response header and its only validation is a reserved-name drop and a CR/LF throw. Any char
-  above U+00FF becomes `0x3f` in **any** header value. `reference-yaml-surface.md:304` documents
-  `response.headers` as accepting a per-request `{expression}`, and ~15 `Location:` writers emit
-  their target raw with no outbound percent-encoding helper (`UnicodePaths` is inbound only) — a
-  `?` inside a URL is a query delimiter, so that case may be worse than the filename one.
+- **F125 is wider than its helper.** `RouteEdge.headers()` (`:567-573`, the `add` at `:571`)
+  funnels compiled-route responses only; eleven other write paths exist (assets, SSE, health,
+  admission, the gateway, the MCP transport). Any char above U+00FF became `0x3f` in any header
+  value and U+0080..U+00FF went out as its raw Latin-1 byte — a live, client- and UI-language-
+  dependent break; the fix gate is `> U+007F` on both halves. `reference-yaml-surface.md:304`
+  documents `response.headers` as accepting a per-request `{expression}`. 20 `Location`/`HX-Redirect`
+  write sites: one funnel (`BasePath.url`, nine writers) plus four raw prefixed writers
+  (`AttachmentUploadProcessor:107`, `AuthStep:414` via `activatedLocation`, `ScimRoutes:116/170`),
+  four ASCII-by-construction, one relay (`CopilotProxyRoutes:67`) and the gateway's `StackRelay:509`
+  (the router slice's). `BasePath.encodeSegment` encodes a segment, not a path; the outbound mirror
+  of `UnicodePaths` is the core `PercentEncoding.uriLiteral` (landed by 4a, used by 4b). A Japanese
+  target lands on the application root with 200 in every client. The `?` at
+  `ErrorResponseRenderer:278` is a deliberate delimiter, but the same method doubles the query
+  string (4b). The edge's CR/LF throw is widened to every C0 control and DEL in 4b; a tab stays
+  accepted except in a `Location`/`HX-Redirect`. Measured record: `download-name-and-bytes.md`.
 - **F126's quiet halves outnumber the loud one.** The filed defect (invalid zone → 500) is the
   least harmful of three. See N2/N3 below.
 - **F119's blast radius is right and its headline number was wrong.** See "Retracted" below.
@@ -146,7 +155,9 @@ Ranked. The first two are larger than most of the leads that found them.
    case** — it iterates `manifest.routes()` only, so a *job* export step with no `locale:` raises
    nothing, and there is no `timezone:` counterpart at all. `docs/jobs.md:484` says a job's
    `locale:`/`timezone:` are literals with no request to resolve them from, i.e. lint is the entire
-   answer for the batch path.
+   answer for the batch path. Slice 5 and 4c edit the same `CsvFileCodec.write` method (`:101` vs
+   `:104-116`) and the same `docs/file-transfers.md:116-132` bullet list — the second to land
+   rebases and regenerates the reference; no shared record component.
 4. **Two more instances of F119's mechanism, on a path with no opt-in key** —
    `JdbcCatalogStore.java:221-251` and `:303-316` hold a monitor across a JDBC borrow + query on the
    per-request catalog path, with no `setQueryTimeout` anywhere in the file.
@@ -170,6 +181,38 @@ Ranked. The first two are larger than most of the leads that found them.
    one, so F126's better error code does nothing for the async recipe.
 10. **`AggregatingMeter.counters/histograms`** are uncapped and nothing enforces label discipline —
     F120's mechanism one hop away, exported on every scrape.
+11. **Studio's "Download CSV" was `Map.toString()`** since #220 on all three branches — the
+    `studio.data.export` provider returned `Map.of("csv", …)` while the route bound the whole result
+    as the template's one variable, so every download began `{csv=` and ended with a final row
+    holding a lone `}`; the shipped guard's three `contains()` were green on it. Fixed in PR S
+    (#1301): the provider returns the string; the guards pin byte 0, the final CRLF, the two note
+    branches, an RFC 4180-quoted non-ASCII cell, and the delegated download on a hosted stack.
+12. **The login bounce doubles the query string** (`ErrorResponseRenderer:252-257` builds the
+    target from `uri()`, which already carries the query, then appends `?` + query) — PR 4b.
+13. **The edge refuses CR/LF only**: every other C0 control and DEL hangs a buffered response and
+    strips the headers off a streamed one; TAB passes. Replaces the earlier "TAB/NUL/DEL/VT in an
+    upload filename is a guaranteed 500", which is dead (Netty normalises upload names) — PR 4b.
+14. **The app-local gate `BasePaths.isLocal` passes a tab** — `/<TAB>/host/x` navigates off-site
+    after sign-in (a browser deletes the tab before parsing); an open redirect through `_return`,
+    the login `redirect`, the OIDC `next` and the SAML RelayState — PR 4b, as a security fix.
+15. **The RFC 8288 `Link` header** (`PageHeaders:41-49`) is built from the decoded request URI:
+    `</???page=2>; rel="next"` on every paged list under a non-ASCII route path — PR 4b.
+16. **`BasePaths.relative` on a wire-spelled `_return` under a non-ASCII base path doubles the
+    prefix** — router slice.
+17. **A declared `headers:` `Location` never acquires the base prefix** — filed.
+18. **A non-ASCII `tesseraql.app.name` is hosted but unaddressable at the gateway** (TQL-APP-4040
+    on every request) and `root.redirect` to it loops — router slice.
+19. **Route shadowing by sort order**: a Japanese literal segment beside `{param}` is unreachable —
+    router slice.
+20. **The documented `HX-Trigger` toast mangles non-ASCII** (`ResponseHeaders.java:34` escapes
+    nothing above ASCII) — its own small pull request or the edge slice.
+21. **ZIP entry names are mangled by Info-ZIP `unzip` 6.00** (the `version made by` host byte) —
+    export hygiene.
+22. **A 32768-character xlsx cell**: the grid writes it, placement throws raw, the report silently
+    blanks it and completes — export hygiene.
+23. **`tesseraql lint` is silent on an unknown `export.format`** (boot refuses it) — slice 5 or
+    export hygiene.
+24. **A zero-row CSV export writes no header row** — export hygiene.
 
 ## Retracted / corrected during this pass
 
@@ -204,8 +247,15 @@ Ranked. The first two are larger than most of the leads that found them.
   run; an admin bypass or an org-level ruleset would change it.
 - **F128's severity.** The mechanical gap is real and measured on three surfaces; the impact chain
   (Excel/CP932 on a ja-JP Windows host) is not executable in this container. Leave it at `dx` as
-  filed until someone runs it.
-- **F82's `Location:`/`response.headers` sibling of F125** — never driven through a real route.
+  filed until someone runs it. *Superseded 2026-09-12*: the CP932 decode half was run (the JVM's
+  `windows-31j` and glibc agree on every mapped character and on the first bad byte; the exact
+  mojibake string is decoder-specific and is never asserted); the Excel step stays cited from
+  Microsoft's current support page; the LibreOffice run was the headless no-options API path and is
+  not user-facing evidence; a default-on mark is measured harmful to eleven reader families. `dx`
+  stands on those grounds, and the fix is an opt-in `bom:` declaration (PR 4c).
+- **F125's `Location:`/`response.headers` half** (filed above as F82's, a slip) — driven through real
+  routes by five records and fourteen followers on 2026-09-11/12; it is PR 4b of
+  `download-name-and-bytes.md`, not a slice-10 docs sweep.
 - **The whole frontend family was specified, not executed.** No guard in F96/F97/F98/F99 was written
   or run as a JUnit test; no stack was booted for F99; the post-fix `:target` appearance is
   *disputed between two adjudicators* (F96 says the kit's dashed outline becomes visible, F97 says
@@ -223,13 +273,13 @@ fresh `origin/main`. Nothing here is scheduled in `remediation.json` — this is
 | 1 | Bind one clock to every identity validity window | F129 | M | The only high. Seed `now` at `IdentityService`, and separately at `ScimGroupService` — the central seam does not reach SCIM. |
 | 2 | Release the limiter monitor across the lease claim | F119 | M | SHIPPED #1298. The scope written here was wrong in both directions: of the two `JdbcCatalogStore` sites one is unreachable dead code and the other needs a promise change rather than a lock change, so both are filed instead; `setQueryTimeout` does belong here, because the fix's own liveness depends on it. |
 | 3 | An interrupted `dev --embedded-db` stops the database last | F113 | M | SHIPPED #1299. Three pieces, not two, and the two written here do not work alone: the window the library's own hook covers is *inside* `builder.start()`, which no hoisted hook can reach, so the CLI must also choose the data directory and claim the instance before that call. With only the first two, an interrupt during startup — or a gateway port already in use, with no signal at all — leaves a live PostgreSQL behind. Carries a cost of its own, filed: a `kill -9` during the drain now leaks what it used to have already stopped. |
-| 4 | A download keeps its name and its bytes | F125, F128 | S+M | One response, two halves. RFC 6266 `filename*` at the single helper; `bom:` on the `export` block. |
-| 5 | An export declaration is refused, or it takes effect | F126 | M | Subsumes the two unfiled halves: the inert untyped-column zone, and the routes-only lint gate. |
+| 4 | A download keeps its name and its bytes | F125, F128 | S+M+M+S | Not one helper: a sixth emitter (`response.*.headers:`) and three default-name derivations. Four PRs (`download-name-and-bytes.md`): S — Studio's CSV was a Map on three branches — SHIPPED #1301; 4a — conditional `filename*` with both halves, ASCII fallback first, a control/format fold, rider #4 `zipName`; 4b — the Location half across core/pipeline/compiler/scim/runtime plus the `wireHeaders` backstop, the app-local gate refusing controls, the doubled login query, the paged `Link` header; 4c — `bom:` in both `tesseraql-defs-v1.schema.json` copies, a ten-component `FileWriteSpec`, `ExportSpec`, one helper on the existing TQL-YAML-1005 rule on both arms, two regenerated reference pages, `ScaffoldDogfoodIntegrationTest` in `tesseraql-maven-plugin`; Studio's CSV is unreachable by `bom:`. |
+| 5 | An export declaration is refused, or it takes effect | F126 | M | Subsumes the two unfiled halves: the inert untyped-column zone, and the routes-only lint gate. Shares `CsvFileCodec.write` and the `docs/file-transfers.md` bullet list with 4c; the second to land regenerates the reference. The lint/boot gap for `bom:` on `excel`/`pdf` is this slice's, stated in 4c as lint-only. |
 | 6 | Bound the accumulators by their unit of work | F120, F118 | M+M | Same shape, shared design review: age-swept session map; per-render catalog memo. |
 | 7 | A failure leaves its throwable | F106 | M | After slice 2 — both edit `ClusterRateLimiter`. |
 | 8 | The framework's own locales are reachable | (unfiled N1), F127 | S+decision | N1 first, or the template swap has no observable effect. |
 | 9 | The CLI refuses before it works | F114 | M | Blocked on the exit-code decision below. |
-| 10 | Sweeps | F82, F87, F88, F89, F90, F91, F96, F97, F98, F99, F112 | S each | Batched; F96+F97+F98 are one file plus its doc, F89+F90 are the contributor entry points. |
+| 10 | Sweeps | F82, F87, F88, F89, F90, F91, F96, F97, F98, F99, F112 | S each | Batched; F96+F97+F98 are one file plus its doc, F89+F90 are the contributor entry points. F125's Location half is not here (it is 4b). F82 slice 2 is the `RouteCompiler:1388`/`ViewBinding:219` TCCL codec discovery (`tesseraql dev` refuses `format: excel` or an app codec on a `query-export` with TQL-LD-2801 while serving them on file-export; lint green) — its own campaign, decision 3 below. |
 
 ### Decisions this campaign needs before its slices run
 
@@ -245,6 +295,11 @@ fresh `origin/main`. Nothing here is scheduled in `remediation.json` — this is
    docs fix: the `-Pdist` archive cannot boot the example it tells the reader to run, and the
    codecs cannot be declared in `tesseraql.modules`. It is a `RouteCompiler`/`ViewBinding` change
    and is more severe than every docs lead in this set combined. It should be its own campaign.
+   *Decided 2026-09-09: its own campaign.* The mechanism, so it is not re-filed a third time:
+   `RouteCompiler:1388` discovers codecs on the thread-context loader and `TesseraqlRuntime:1045` on
+   `modules.loader()`, so a module codec boots for `file-export` and is refused for `query-export`
+   under `tesseraql dev` (TQL-LD-2801). Slice 4's guards therefore never put `format: excel` or an
+   SPI codec on a `query-export` route.
 
 ### Rules carried into every slice
 

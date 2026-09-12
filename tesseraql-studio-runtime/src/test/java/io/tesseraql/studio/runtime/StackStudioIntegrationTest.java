@@ -165,6 +165,22 @@ class StackStudioIntegrationTest {
 
     @Test
     @Order(6)
+    void aDataExportRidesTheDelegationAsAScalar() throws Exception {
+        // A delegated op whose result is a bare string, not a view model: it crosses the
+        // loopback hop in the value envelope and is unwrapped at the shell, so the file the
+        // browser saves is the provider's string and nothing else. The member has no data
+        // browser enabled, so the string is the provider's disabled notice — pinned
+        // exactly, first byte to last.
+        HttpResponse<String> export = get(
+                "/_tesseraql/studio/shop-a/ui/data/export?table=tql_users", editorCookie);
+        assertThat(export.statusCode()).as(export.body()).isEqualTo(200);
+        assertThat(export.headers().firstValue("Content-Type").orElse(""))
+                .contains("text/csv");
+        assertThat(export.body()).isEqualTo("# The data browser is disabled.\r\n");
+    }
+
+    @Test
+    @Order(7)
     void aHostShapedStackMountsNothingStudioShaped() throws Exception {
         // The same stack, host-shaped (no DevMode): no shell at the origin, no workshop API
         // on the member, and no configuration turns either on (structural decision 1).

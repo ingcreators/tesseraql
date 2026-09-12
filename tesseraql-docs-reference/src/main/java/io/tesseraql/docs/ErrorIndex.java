@@ -616,7 +616,7 @@ final class ErrorIndex {
             "http-edge-robustness.md", "two-way-sql-parser.md", "base-path-emission.md",
             "deterministic-output.md", "release-and-ci-hardening.md",
             "yaml-surface-drift.md", "module-boundary-guards.md",
-            "audit-medium-leads.md");
+            "audit-medium-leads.md", "download-name-and-bytes.md");
 
     /** Whether {@code name} is an internal planning document; shared with the config index. */
     static boolean isInternalDoc(String name) {

@@ -8,6 +8,14 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **Studio's data-browser download is a CSV.** The "Download CSV" button on the data browser
+  saved the CSV wrapped in a Java map's `toString()` — the file began `{csv=` and ended with a
+  final row holding a lone `}`, so a spreadsheet read the first header cell as `{csv=user_id` and
+  showed one extra row. The provider now returns the CSV text itself, as the OpenAPI and htmx
+  contract downloads already did, on both the standalone and the hosted (`tesseraql dev`) Studio.
+  The "data browser is disabled" and "no such table" notes download unchanged, as one-line `#`
+  comments.
+
 - **Ctrl+C on `dev --embedded-db` no longer kills the request it was draining.** The embedded
   PostgreSQL registered a JVM shutdown hook of its own, and JVM shutdown hooks all run at once. It
   stopped the server about a tenth of a second into the stop, while the CLI was still draining
