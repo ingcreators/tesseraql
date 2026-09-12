@@ -6,6 +6,26 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ## Unreleased
 
+### Added
+
+- **An `export:` CSV carries a byte-order mark when asked.** `bom: true` on a route's or a job
+  step's `export:` block opens a `csv` export with the UTF-8 mark (`EF BB BF`), so a spreadsheet
+  that sniffs the mark decodes the file as UTF-8 rather than in its system code page. The default
+  is unchanged, and an export that does not declare it is byte-identical to before: a mark is a
+  declaration a reader must expect, and PostgreSQL `COPY … HEADER MATCH`, Python's `csv` module
+  and Apache Commons CSV take it as part of the first header cell. A split export carries one
+  mark per ZIP entry, an export with no rows is the mark alone, and the mark is never derived
+  from a locale or a client. The linter refuses `bom:` on `excel` and `pdf` (`TQL-YAML-1005`).
+  Studio's data-browser download and `response.file:` templates are not `export:` blocks and
+  carry none. The procurement demo's shipments export declares it, since its partner names are
+  Japanese.
+
+### Changed
+
+- **`FileWriteSpec` has a tenth component, `bom`, and `ExportSpec` a matching `Boolean bom`.**
+  A codec that constructs the core record passes it; one that only reads the record is
+  unaffected.
+
 ### Fixed
 
 - **A redirect to a route with a non-ASCII path now lands on that route in every client

@@ -1,14 +1,14 @@
 # A download keeps its name and its bytes
 
-> **Status: in progress.** Four pull requests, in this order, each branched from fresh
-> `origin/main` after the previous one merges. **S** — Studio's data-browser download is a CSV:
+> **Status: complete.** Four pull requests, in this order, each branched from fresh
+> `origin/main` after the previous one merged. **S** — Studio's data-browser download is a CSV:
 > **shipped with this record** (the pull request that registers this file in both internal-doc
 > lists). **4a** — a download keeps its name (RFC 6266 `filename*` with an ASCII fallback, the
 > control/format fold, the split bundle's name): **shipped (#1302)**. **4b** — a redirect
 > lands where it says (the URI-literal encoder at the base-path seam, the four bypass writers, the
 > app-local gate, the edge backstop, the doubled login query, the paged list's `Link` header):
 > **shipped (#1303)**. **4c** — an `export:` CSV can carry a byte-order mark (`bom:`):
-> designed, not yet shipped. Each pull request flips its own line here when it merges. Closes
+> **shipped (#nnnn)**. Each pull request flips its own line here when it merges. Closes
 > F125 and F128 of [`audit-medium-leads.md`](audit-medium-leads.md).
 >
 > **The plan this document replaces was wrong in three load-bearing places.** It called the

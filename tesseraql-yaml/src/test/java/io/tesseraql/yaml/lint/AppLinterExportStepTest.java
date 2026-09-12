@@ -127,4 +127,55 @@ class AppLinterExportStepTest {
             assertThat(finding.message()).contains("two bindings");
         });
     }
+
+    private static boolean namesTheMark(LintFinding finding) {
+        return finding.message().contains("bom");
+    }
+
+    /** Template-less on purpose: the arm must not sit under the template checks. */
+    @Test
+    void aByteOrderMarkOnAWorkbookStepIsAnInapplicableOption(@TempDir Path dir) throws Exception {
+        List<LintFinding> findings = new AppLinter().lint(app(dir,
+                EXTRACTION + "    export:\n      format: excel\n      bom: true\n"));
+
+        assertThat(findings).anySatisfy(finding -> {
+            assertThat(finding.code()).isEqualTo("TQL-YAML-1005");
+            assertThat(finding.severity()).isEqualTo("error");
+            assertThat(finding.message()).contains("Step 'report'", "bom:", "excel");
+        });
+    }
+
+    @Test
+    void aByteOrderMarkOnAPdfStepIsAnInapplicableOption(@TempDir Path dir) throws Exception {
+        List<LintFinding> findings = new AppLinter().lint(app(dir,
+                EXTRACTION + "    export:\n      format: pdf\n      bom: true\n"));
+
+        assertThat(findings).anySatisfy(finding -> {
+            assertThat(finding.code()).isEqualTo("TQL-YAML-1005");
+            assertThat(finding.severity()).isEqualTo("error");
+            assertThat(finding.message()).contains("Step 'report'", "bom:", "pdf");
+        });
+    }
+
+    @Test
+    void aByteOrderMarkOnACsvStepIsClean(@TempDir Path dir) throws Exception {
+        List<LintFinding> findings = new AppLinter().lint(app(dir,
+                EXTRACTION + "    export:\n      format: csv\n      bom: true\n"));
+
+        assertThat(findings).noneMatch(AppLinterExportStepTest::namesTheMark);
+    }
+
+    /** A step without a format is incomplete (1041) and nothing else: the arm neither throws nor adds. */
+    @Test
+    void aByteOrderMarkOnAStepWithoutAFormatStillReportsTheMissingFormat(@TempDir Path dir)
+            throws Exception {
+        List<LintFinding> findings = new AppLinter().lint(app(dir,
+                EXTRACTION + "    export:\n      bom: true\n"));
+
+        assertThat(findings).anySatisfy(finding -> {
+            assertThat(finding.code()).isEqualTo("TQL-YAML-1041");
+            assertThat(finding.message()).contains("format:");
+        });
+        assertThat(findings).noneMatch(finding -> "TQL-YAML-1005".equals(finding.code()));
+    }
 }

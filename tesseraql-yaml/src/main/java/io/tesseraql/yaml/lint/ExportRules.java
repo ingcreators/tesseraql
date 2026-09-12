@@ -67,6 +67,7 @@ final class ExportRules {
                             + "': after.timing: download is route vocabulary — an export step supports"
                             + " timing: extract only"));
         }
+        lintByteOrderMark(export, "Step '" + step.id() + "': ", source, findings);
         if ("pdf".equals(export.format())) {
             if (export.sheet() != null || export.startCell() != null) {
                 findings.add(new LintFinding(INAPPLICABLE_EXPORT_OPTION, ERROR,
@@ -129,6 +130,7 @@ final class ExportRules {
                     "pdf export: sheet:/startCell: are workbook options - a pdf lays out"
                             + " through its template, not cell placement"));
         }
+        lintByteOrderMark(spec, "export: ", source, findings);
         if (!pdf && spec.startCell() != null && spec.template() == null) {
             findings.add(new LintFinding(INCOMPLETE_EXPORT, ERROR, source,
                     "export: startCell: places data into a template, but none is declared -"
@@ -148,6 +150,26 @@ final class ExportRules {
             findings.add(new LintFinding(UNUSABLE_EXPORT_TEMPLATE, ERROR, source,
                     "export references a missing template: " + spec.template()));
         }
+    }
+
+    /**
+     * A byte-order mark opens a text stream, and {@code bom:} is the CSV codec's to honour. A
+     * workbook is a ZIP container and a PDF is binary, so on the shipped {@code excel} and
+     * {@code pdf} formats the key is a declaration the runtime would ignore - the class this
+     * linter exists to refuse ({@code INAPPLICABLE_EXPORT_OPTION}), like {@code sheet:} on a pdf,
+     * and on presence like it: {@code bom: false} on a workbook is still a key that cannot apply.
+     * An unset {@code format:} is a route's csv default, and a format the framework does not ship
+     * belongs to a module codec that reads the write spec for itself - neither is judged here.
+     */
+    static void lintByteOrderMark(io.tesseraql.yaml.model.ExportSpec spec, String label,
+            String source, List<LintFinding> findings) {
+        if (spec.bom() == null
+                || !("excel".equals(spec.format()) || "pdf".equals(spec.format()))) {
+            return;
+        }
+        findings.add(new LintFinding(INAPPLICABLE_EXPORT_OPTION, ERROR, source, label
+                + "bom: is a csv option - " + spec.format()
+                + " output has no text stream to mark"));
     }
 
     /**

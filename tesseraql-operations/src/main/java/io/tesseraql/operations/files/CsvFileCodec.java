@@ -25,7 +25,8 @@ import org.apache.commons.io.ByteOrderMark;
 import org.apache.commons.io.input.BOMInputStream;
 
 /**
- * The built-in CSV codec (design ch. 28), RFC 4180 via Apache Commons CSV: UTF-8, quoted fields.
+ * The built-in CSV codec (design ch. 28), RFC 4180 via Apache Commons CSV: UTF-8, quoted fields,
+ * a byte-order mark on request.
  * On read the declared columns resolve to positions through the header row (matching each
  * column's header label) or their declared order, with explicit {@code column:} positions taking
  * precedence; {@code startRow} skips leading non-table rows. On write the declared columns
@@ -99,6 +100,14 @@ public final class CsvFileCodec implements FileCodec {
     public void write(OutputStream out, FileWriteSpec spec,
             io.tesseraql.core.files.ExportModel model) throws IOException {
         Iterator<Map<String, Object>> rows = model.rows();
+        if (spec.bom()) {
+            // The mark is written where characters become bytes - the mirror of where read()
+            // consumes it - as octets on the stream before any text and before the writer
+            // exists, so it marks the stream, not the rows: an empty export is exactly the
+            // mark, and no encoder buffer can put text in front of it
+            // (docs/csv-import.md, decision 10, seen from the writing side).
+            out.write(ByteOrderMark.UTF_8.getBytes());
+        }
         CSVPrinter printer = new CSVPrinter(
                 new OutputStreamWriter(out, StandardCharsets.UTF_8), CSVFormat.RFC4180);
         java.util.Locale locale = io.tesseraql.core.files.ColumnValues.locale(spec.locale());

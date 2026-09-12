@@ -144,7 +144,7 @@ it covered when a suite case exercises one of its SQL artifacts; gate it with
 
 | Code | Severity | Meaning |
 | --- | --- | --- |
-| `TQL-YAML-1005` | error | a pdf export declares workbook-only options (`sheet:`, `startCell:`) |
+| `TQL-YAML-1005` | error | a pdf export declares workbook-only options (`sheet:`, `startCell:`) or the csv-only `bom:` |
 | `TQL-YAML-1006` | error | the pdf template is not an `.html` file, or is missing |
 
 ## Error codes
