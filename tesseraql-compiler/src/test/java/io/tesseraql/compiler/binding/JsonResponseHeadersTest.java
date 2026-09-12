@@ -105,6 +105,47 @@ class JsonResponseHeadersTest {
                 .isNull();
     }
 
+    /**
+     * A declared {@code Location} (or {@code HX-Redirect}) is a URI-reference: each placeholder
+     * is a path segment, the redirect: rule, and the whole value is percent-encoded once, so
+     * the documented recipe works for a Japanese key where the edge would otherwise refuse the
+     * raw value. Any other declared header is left as it was.
+     */
+    @Test
+    void aDeclaredLocationWithAJapaneseKeyLeavesAsAUriReference() throws Exception {
+        Map<String, Object> keyed = Map.of("steps", Map.of("record",
+                Map.of("keys", Map.of("id", "受注-001"))));
+
+        assertThat(render(response(Map.of("Location", "/api/items/{steps.record.keys.id}"),
+                null, null), keyed).response().header("Location"))
+                .isEqualTo("/api/items/%E5%8F%97%E6%B3%A8-001");
+        assertThat(render(response(Map.of("HX-Redirect", "/x/{steps.record.keys.id}"),
+                null, null), keyed).response().header("HX-Redirect"))
+                .isEqualTo("/x/%E5%8F%97%E6%B3%A8-001");
+        assertThat(render(response(Map.of("location", "/api/items/{steps.record.keys.id}"),
+                null, null), keyed).response().header("Location"))
+                .as("the key's spelling does not matter")
+                .isEqualTo("/api/items/%E5%8F%97%E6%B3%A8-001");
+        assertThat(render(response(Map.of("X-Msg", "{steps.record.keys.id}"), null, null), keyed)
+                .response().header("X-Msg"))
+                .as("an ordinary header is not a URI-reference")
+                .isEqualTo("受注-001");
+    }
+
+    @Test
+    void aPlaceholderInADeclaredLocationIsAPathSegment() throws Exception {
+        assertThat(render(response(Map.of("Location", "/api/items/{steps.record.keys.id}"),
+                null, null),
+                Map.of("steps", Map.of("record", Map.of("keys", Map.of("id", "a/b?x")))))
+                .response().header("Location"))
+                .isEqualTo("/api/items/a%2Fb%3Fx");
+        assertThat(render(response(Map.of("Location", "{steps.next}"), null, null),
+                Map.of("steps", Map.of("next", "//evil.test/x")))
+                .response().header("Location"))
+                .as("a whole-value placeholder cannot steer off-site")
+                .isEqualTo("%2F%2Fevil.test%2Fx");
+    }
+
     /** The renderer owns the content type; a declared header cannot describe another body. */
     @Test
     void theRenderersOwnContentTypeWins() throws Exception {

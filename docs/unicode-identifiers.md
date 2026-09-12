@@ -205,7 +205,8 @@ route matcher decodes before binding), CSV/file export headers (landed with
 `download-name-and-bytes.md`: `DownloadFilenameIntegrationTest` pins a Japanese, a
 Latin-1, an astral, a joiner-bearing and a control-bearing name through query-export, a
 split export, an uploaded attachment and the ops console's re-serve, as the exact
-RFC 6266 value), `openapi.json`
+RFC 6266 value; `RedirectLocationIntegrationTest` pins the redirect `Location` half the
+same way), `openapi.json`
 parameters, and Studio pages over the Japanese app; a docs page stating the
 identifier contract, the verbatim policy, and the dialect matrix (byte-counted
 length limits, Oracle's Unicode-charset prerequisite).
@@ -215,7 +216,9 @@ length limits, Oracle's Unicode-charset prerequisite).
 1. **Percent-decoding at the route matcher** is an assumption until track 5's IT
    proves it: `RedirectRenderer` encodes placeholder *values*, but generated path
    *templates* are emitted raw. If Camel's REST matcher compares encoded-vs-raw, the
-   fix belongs in `restEndpoint`, and track 5 flushes it out.
+   fix belongs in `restEndpoint`, and track 5 flushes it out. **Settled.** The route
+   matcher decodes (track 5); the literal tail of a `location:` was emitted raw until the
+   redirect seam percent-encoded it (`download-name-and-bytes.md`, decisions 7-8).
 2. **Route ids and `operationId`** become Unicode under the verbatim policy. The
    OpenAPI spec permits it; some client generators do not. Accepted and documented;
    revisit only if a marketplace consumer breaks.

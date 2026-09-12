@@ -26,7 +26,7 @@ All 22 carried `reproduce-lens-missing` + `deliberate-lens-missing`; 21 also car
 | Lead | Verdict at HEAD | Severity now | Touched since base? |
 |---|---|---|---|
 | F129 identity validity windows vs DB clock | **LIVE (widens)** | **high** (was medium) | untouched |
-| F125 Content-Disposition has no RFC 6266 | **LIVE (widens)** | medium | filename half: PR 4a — 4a SHIPPED #1302; the Location half — a silent wrong page, and a post-sign-in return to the home page — is the more severe half and is PR 4b (`download-name-and-bytes.md`); the headline reachable path is the end user's own uploaded filename via the shipped `kind: attachment` |
+| F125 Content-Disposition has no RFC 6266 | **LIVE (widens)** | medium | filename half: PR 4a — 4a SHIPPED #1302; 4b SHIPPED #1303, with the tab open redirect it uncovered; the Location half — a silent wrong page, and a post-sign-in return to the home page — is the more severe half and is PR 4b (`download-name-and-bytes.md`); the headline reachable path is the end user's own uploaded filename via the shipped `kind: attachment` |
 | F126 export `timezone:`/`format:` → 500 | **LIVE (widens)** | medium | untouched |
 | F127 bundled apps hard-coded English | **LIVE (reframed)** | medium | untouched; class GREW in-window |
 | F82 README front-door drift | **LIVE (reframed)** | medium | partially killed |
@@ -188,15 +188,15 @@ Ranked. The first two are larger than most of the leads that found them.
     (#1301): the provider returns the string; the guards pin byte 0, the final CRLF, the two note
     branches, an RFC 4180-quoted non-ASCII cell, and the delegated download on a hosted stack.
 12. **The login bounce doubles the query string** (`ErrorResponseRenderer:252-257` builds the
-    target from `uri()`, which already carries the query, then appends `?` + query) — PR 4b.
+    target from `uri()`, which already carries the query, then appends `?` + query) — fixed in PR 4b (#1303).
 13. **The edge refuses CR/LF only**: every other C0 control and DEL hangs a buffered response and
     strips the headers off a streamed one; TAB passes. Replaces the earlier "TAB/NUL/DEL/VT in an
-    upload filename is a guaranteed 500", which is dead (Netty normalises upload names) — PR 4b.
+    upload filename is a guaranteed 500", which is dead (Netty normalises upload names) — fixed in PR 4b (#1303).
 14. **The app-local gate `BasePaths.isLocal` passes a tab** — `/<TAB>/host/x` navigates off-site
     after sign-in (a browser deletes the tab before parsing); an open redirect through `_return`,
-    the login `redirect`, the OIDC `next` and the SAML RelayState — PR 4b, as a security fix.
+    the login `redirect`, the OIDC `next` and the SAML RelayState — fixed in PR 4b (#1303), as a security fix.
 15. **The RFC 8288 `Link` header** (`PageHeaders:41-49`) is built from the decoded request URI:
-    `</???page=2>; rel="next"` on every paged list under a non-ASCII route path — PR 4b.
+    `</???page=2>; rel="next"` on every paged list under a non-ASCII route path — fixed in PR 4b (#1303).
 16. **`BasePaths.relative` on a wire-spelled `_return` under a non-ASCII base path doubles the
     prefix** — router slice.
 17. **A declared `headers:` `Location` never acquires the base prefix** — filed.
@@ -273,7 +273,7 @@ fresh `origin/main`. Nothing here is scheduled in `remediation.json` — this is
 | 1 | Bind one clock to every identity validity window | F129 | M | The only high. Seed `now` at `IdentityService`, and separately at `ScimGroupService` — the central seam does not reach SCIM. |
 | 2 | Release the limiter monitor across the lease claim | F119 | M | SHIPPED #1298. The scope written here was wrong in both directions: of the two `JdbcCatalogStore` sites one is unreachable dead code and the other needs a promise change rather than a lock change, so both are filed instead; `setQueryTimeout` does belong here, because the fix's own liveness depends on it. |
 | 3 | An interrupted `dev --embedded-db` stops the database last | F113 | M | SHIPPED #1299. Three pieces, not two, and the two written here do not work alone: the window the library's own hook covers is *inside* `builder.start()`, which no hoisted hook can reach, so the CLI must also choose the data directory and claim the instance before that call. With only the first two, an interrupt during startup — or a gateway port already in use, with no signal at all — leaves a live PostgreSQL behind. Carries a cost of its own, filed: a `kill -9` during the drain now leaks what it used to have already stopped. |
-| 4 | A download keeps its name and its bytes | F125, F128 | S+M+M+S | Not one helper: a sixth emitter (`response.*.headers:`) and three default-name derivations. Four PRs (`download-name-and-bytes.md`): S — Studio's CSV was a Map on three branches — SHIPPED #1301; 4a — conditional `filename*` with both halves, ASCII fallback first, a control/format fold, rider #4 `zipName` — SHIPPED #1302; 4b — the Location half across core/pipeline/compiler/scim/runtime plus the `wireHeaders` backstop, the app-local gate refusing controls, the doubled login query, the paged `Link` header; 4c — `bom:` in both `tesseraql-defs-v1.schema.json` copies, a ten-component `FileWriteSpec`, `ExportSpec`, one helper on the existing TQL-YAML-1005 rule on both arms, two regenerated reference pages, `ScaffoldDogfoodIntegrationTest` in `tesseraql-maven-plugin`; Studio's CSV is unreachable by `bom:`. |
+| 4 | A download keeps its name and its bytes | F125, F128 | S+M+M+S | Not one helper: a sixth emitter (`response.*.headers:`) and three default-name derivations. Four PRs (`download-name-and-bytes.md`): S — Studio's CSV was a Map on three branches — SHIPPED #1301; 4a — conditional `filename*` with both halves, ASCII fallback first, a control/format fold, rider #4 `zipName` — SHIPPED #1302; 4b — the Location half across core/pipeline/compiler/scim/runtime plus the `wireHeaders` backstop, the app-local gate refusing controls, the doubled login query, the paged `Link` header — SHIPPED #1303; 4c — `bom:` in both `tesseraql-defs-v1.schema.json` copies, a ten-component `FileWriteSpec`, `ExportSpec`, one helper on the existing TQL-YAML-1005 rule on both arms, two regenerated reference pages, `ScaffoldDogfoodIntegrationTest` in `tesseraql-maven-plugin`; Studio's CSV is unreachable by `bom:`. |
 | 5 | An export declaration is refused, or it takes effect | F126 | M | Subsumes the two unfiled halves: the inert untyped-column zone, and the routes-only lint gate. Shares `CsvFileCodec.write` and the `docs/file-transfers.md` bullet list with 4c; the second to land regenerates the reference. The lint/boot gap for `bom:` on `excel`/`pdf` is this slice's, stated in 4c as lint-only. |
 | 6 | Bound the accumulators by their unit of work | F120, F118 | M+M | Same shape, shared design review: age-swept session map; per-render catalog memo. |
 | 7 | A failure leaves its throwable | F106 | M | After slice 2 — both edit `ClusterRateLimiter`. |

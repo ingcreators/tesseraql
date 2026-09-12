@@ -47,18 +47,32 @@ public final class BasePaths {
 
     /**
      * Whether a caller-supplied path stays inside this application: one leading slash, not
-     * protocol-relative ({@code //host}), not a backslash trick ({@code /\}), no CR/LF. The
-     * open-redirect guard shared by the login {@code next} target and the {@code location: back}
-     * {@code _return} field (docs/list-surface.md decision 11) — anything else is discarded in
-     * favor of the caller's fallback.
+     * protocol-relative ({@code //host}), not a backslash trick ({@code /\}), no control
+     * character. The open-redirect guard shared by the login {@code next} target and the
+     * {@code location: back} {@code _return} field (docs/list-surface.md decision 11) — anything
+     * else is discarded in favor of the caller's fallback.
+     *
+     * <p>Every C0 control and DEL is refused, not only CR and LF: a browser deletes a tab, CR or
+     * LF from a URL before parsing it, so {@code /<TAB>/host/x} navigates to {@code //host/x} —
+     * off-site, past the two prefix checks above. No control character has a place in a return
+     * target, so all of them are refused together.
      */
     public static boolean isLocal(String path) {
         return path != null
                 && path.startsWith("/")
                 && !path.startsWith("//")
                 && !path.startsWith("/\\")
-                && path.indexOf('\n') < 0
-                && path.indexOf('\r') < 0;
+                && noControl(path);
+    }
+
+    private static boolean noControl(String path) {
+        for (int i = 0; i < path.length(); i++) {
+            char c = path.charAt(i);
+            if (c < 0x20 || c == 0x7F) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**

@@ -101,10 +101,13 @@ public final class AttachmentUploadProcessor implements Step {
         exchange.response().status(201);
         // 201 identifies what it created (docs/vocabulary-cleanup.md slice 3): the
         // attachment's own subtree URL under the upload path — the path, because uri()
-        // carries the query string and the id would land glued onto it.
+        // carries the query string and the id would land glued onto it; percent-encoded here,
+        // because the path is already a wire URL carrying the prefix and must not pass
+        // BasePath.url's join a second time.
         String path = exchange.request().path();
         if (path != null && !path.isBlank()) {
-            exchange.response().header("Location", path + "/" + a.id());
+            exchange.response().header("Location",
+                    io.tesseraql.core.http.PercentEncoding.uriLiteral(path + "/" + a.id()));
         }
         exchange.response().header(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
         exchange.setBody(FileImportProcessor.MAPPER.writeValueAsString(body));

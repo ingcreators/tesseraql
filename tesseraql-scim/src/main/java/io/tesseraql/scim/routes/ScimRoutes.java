@@ -112,10 +112,11 @@ public final class ScimRoutes {
         }
         // RFC 7644 §3.3: a SCIM 201 carries the created resource's Location — built from the
         // path, because uri() carries the query string too and an IdP that appends one would
-        // get a Location with the id glued onto the query.
+        // get a Location with the id glued onto the query; percent-encoded here, because the
+        // path is already a wire URL carrying the prefix.
         exchange.response().header("Location",
-                exchange.request().path()
-                        + "/" + created.id());
+                io.tesseraql.core.http.PercentEncoding.uriLiteral(
+                        exchange.request().path() + "/" + created.id()));
         respond(exchange, 201, created);
     }
 
@@ -168,8 +169,8 @@ public final class ScimRoutes {
                 ScimGroup.class);
         ScimGroup created = groups.create(request);
         exchange.response().header("Location",
-                exchange.request().path()
-                        + "/" + created.id());
+                io.tesseraql.core.http.PercentEncoding.uriLiteral(
+                        exchange.request().path() + "/" + created.id()));
         respond(exchange, 201, created);
     }
 

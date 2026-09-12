@@ -365,13 +365,18 @@ public class AuthStep implements Step {
         return accept != null && accept.contains("text/html");
     }
 
-    /** The same page under the given role's activation segment, query preserved. */
+    /**
+     * The same page under the given role's activation segment, query preserved — and
+     * percent-encoded here, because the path is read back off the request already carrying
+     * the prefix and must not pass {@code BasePath.url}'s join a second time.
+     */
     private String activatedLocation(Exchange exchange, String role) {
         String base = io.tesseraql.pipeline.BasePath.of(exchange.beans());
         String path = wirePath(exchange);
         String within = path.startsWith(base) ? path.substring(base.length()) : path;
-        return base + "/_as/" + io.tesseraql.pipeline.BasePath.encodeSegment(role) + within
-                + querySuffix(exchange);
+        return io.tesseraql.core.http.PercentEncoding.uriLiteral(base + "/_as/"
+                + io.tesseraql.pipeline.BasePath.encodeSegment(role) + within
+                + querySuffix(exchange));
     }
 
     /**

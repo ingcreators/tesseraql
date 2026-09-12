@@ -109,4 +109,114 @@ class PercentEncodingTest {
         assertThatNullPointerException().isThrownBy(() -> PercentEncoding.extValue(null));
         assertThatNullPointerException().isThrownBy(() -> PercentEncoding.uriLiteral(null));
     }
+
+    // ---- The URI-literal encoder as a Location may carry it (docs/base-path-emission.md
+    // decision 1, one layer down): each row names one defect a redirect target showed.
+
+    @Test
+    void aLatin1CodePointBecomesItsTwoUtf8Bytes() {
+        // Never the single Latin-1 byte: twelve of fourteen followers 404 on /caf%E9.
+        assertThat(PercentEncoding.uriLiteral("/café")).isEqualTo("/caf%C3%A9");
+    }
+
+    @Test
+    void aJapaneseLiteralBecomesItsUtf8Bytes() {
+        assertThat(PercentEncoding.uriLiteral("/受注一覧"))
+                .isEqualTo("/%E5%8F%97%E6%B3%A8%E4%B8%80%E8%A6%A7");
+    }
+
+    @Test
+    void anAstralCodePointBecomesFourBytes() {
+        // Walked by code point: a char-walking encoder writes %EF%BF%BD twice here.
+        assertThat(PercentEncoding.uriLiteral("/a😀b")).isEqualTo("/a%F0%9F%98%80b");
+    }
+
+    @Test
+    void aSpaceIsPercent20NeverPlus() {
+        assertThat(PercentEncoding.uriLiteral("/a b")).isEqualTo("/a%20b");
+    }
+
+    @Test
+    void c0ControlsAreEncoded() {
+        assertThat(PercentEncoding.uriLiteral("/a\u0001b\u001Fc")).isEqualTo("/a%01b%1Fc");
+    }
+
+    @Test
+    void aDelAloneIsEncoded() {
+        // DEL alone, so a fast path that opens the loop at 0x80 cannot skip it.
+        assertThat(PercentEncoding.uriLiteral("/a\u007Fb")).isEqualTo("/a%7Fb");
+    }
+
+    @Test
+    void aTabIsEncoded() {
+        // A browser deletes a raw tab from a URL before parsing; encoded, it stays a path byte.
+        assertThat(PercentEncoding.uriLiteral("/a\tb")).isEqualTo("/a%09b");
+    }
+
+    @Test
+    void aC1ControlIsEncodedAsUtf8() {
+        assertThat(PercentEncoding.uriLiteral("/a\u0085b")).isEqualTo("/a%C2%85b");
+    }
+
+    @Test
+    void everyUriCharacterIsLeftAlone() {
+        // RFC 3986 section 2: unreserved, gen-delims, sub-delims, and an authored triplet.
+        String uri = "/p/a-b_c.d~e?x=1&y=2+3#f%20!$'()*,;:@[]";
+        assertThat(PercentEncoding.uriLiteral(uri)).isEqualTo(uri);
+    }
+
+    @Test
+    void theAsciiGraphicsOutsideTheUriSetAreEncoded() {
+        // The nine printable characters RFC 3986 does not admit: the JDK follower refuses a
+        // Location carrying any of them raw, and a browser reads a raw backslash as a slash.
+        assertThat(PercentEncoding.uriLiteral("/a\"<>\\^`{|}b"))
+                .isEqualTo("/a%22%3C%3E%5C%5E%60%7B%7C%7Db");
+    }
+
+    @Test
+    void anAuthoredTripletIsIdempotent() {
+        assertThat(PercentEncoding.uriLiteral("/caf%C3%A9")).isEqualTo("/caf%C3%A9");
+    }
+
+    @Test
+    void anAuthoredTripletBesideNonAsciiIsIdempotent() {
+        // The mixed fixture: a double-encoder with an ASCII fast path is green on the pure one.
+        assertThat(PercentEncoding.uriLiteral("/受注/caf%C3%A9"))
+                .isEqualTo("/%E5%8F%97%E6%B3%A8/caf%C3%A9");
+    }
+
+    @Test
+    void aLoneSurrogateFoldsToTheReplacementCharacter() {
+        // Never %3F: in a URI that is the query delimiter.
+        assertThat(PercentEncoding.uriLiteral("/a\uD83Db")).isEqualTo("/a%EF%BF%BDb");
+    }
+
+    @Test
+    void hexIsUppercase() {
+        assertThat(PercentEncoding.uriLiteral("/é")).isEqualTo("/%C3%A9");
+    }
+
+    @Test
+    void encodingTwiceIsEncodingOnce() {
+        String once = PercentEncoding.uriLiteral("/受注 a%20b/é");
+        assertThat(once).isEqualTo("/%E5%8F%97%E6%B3%A8%20a%20b/%C3%A9");
+        assertThat(PercentEncoding.uriLiteral(once)).isEqualTo(once);
+    }
+
+    @Test
+    void anAbsoluteReferenceIsEncodedByTheSameRule() {
+        assertThat(PercentEncoding.uriLiteral("https://example.test/受注?q=café"))
+                .isEqualTo("https://example.test/%E5%8F%97%E6%B3%A8?q=caf%C3%A9");
+    }
+
+    @Test
+    void theUriReferenceHeadersAreLocationAndHxRedirectWhateverTheirCase() {
+        assertThat(PercentEncoding.isUriReferenceHeader("Location")).isTrue();
+        assertThat(PercentEncoding.isUriReferenceHeader("location")).isTrue();
+        assertThat(PercentEncoding.isUriReferenceHeader("HX-Redirect")).isTrue();
+        assertThat(PercentEncoding.isUriReferenceHeader("hx-redirect")).isTrue();
+        assertThat(PercentEncoding.isUriReferenceHeader("X-Toast")).isFalse();
+        assertThat(PercentEncoding.isUriReferenceHeader("Link")).isFalse();
+        assertThat(PercentEncoding.isUriReferenceHeader(null)).isFalse();
+    }
 }

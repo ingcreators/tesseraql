@@ -97,6 +97,19 @@ class StackIdentityIntegrationTest {
         }
     }
 
+    /** The hosted bounce carries the query once (the member's path is read, never its uri). */
+    @Test
+    void theHostedLoginBounceCarriesTheQueryExactlyOnce() throws Exception {
+        HttpResponse<String> denied = CLIENT.send(
+                HttpRequest.newBuilder(uri("/shop-a/admin/users?tab=roles&x=1"))
+                        .header("Accept", "text/html").build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertThat(denied.statusCode()).isEqualTo(302);
+        assertThat(denied.headers().firstValue("Location").orElse(""))
+                .isEqualTo(
+                        "/_tesseraql/login?redirect=%2Fshop-a%2Fadmin%2Fusers%3Ftab%3Droles%26x%3D1");
+    }
+
     /**
      * The bounce: an unauthenticated browser navigation on a member page 302s to the stack's
      * origin sign-in, carrying the original <em>prefixed</em> path as {@code redirect}; signing
