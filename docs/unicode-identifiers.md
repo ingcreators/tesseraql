@@ -201,7 +201,11 @@ bigrams so Japanese routes, tables and titles are searchable in Studio.
 order lines + a decision table + a workflow with stamped columns + Japanese i18n
 messages + a suite) exercising scaffold → lint → route → suite end-to-end; ITs for
 the percent-encoded URL round trip (browser encodes `/受注/{受注番号}` — verify the
-route matcher decodes before binding), CSV/file export headers, `openapi.json`
+route matcher decodes before binding), CSV/file export headers (landed with
+`download-name-and-bytes.md`: `DownloadFilenameIntegrationTest` pins a Japanese, a
+Latin-1, an astral, a joiner-bearing and a control-bearing name through query-export, a
+split export, an uploaded attachment and the ops console's re-serve, as the exact
+RFC 6266 value), `openapi.json`
 parameters, and Studio pages over the Japanese app; a docs page stating the
 identifier contract, the verbatim policy, and the dialect matrix (byte-counted
 length limits, Oracle's Unicode-charset prerequisite).

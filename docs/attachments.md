@@ -84,8 +84,10 @@ reconcile the side effect" discipline the framework already uses, not a new fail
 an attachment owned by a different record reads as unknown and answers `404`, never leaked
 across records. An object that did not pass virus scanning is refused with `409` (see
 [Scanning](#scanning)). Otherwise the blob streams back with the stored content type and a
-sanitized `Content-Disposition: attachment; filename="…"` header. A template renders a
-download link from the metadata it queried:
+sanitized `Content-Disposition` header. A name US-ASCII can spell is sent as `filename="…"`.
+Any other name is sent twice, as RFC 6266 asks: an ASCII `filename` fallback first, then
+`filename*` carrying the name itself, so a browser saves `請求書.pdf` under that name. A
+template renders a download link from the metadata it queried:
 
 ```html
 <a th:each="file : ${files}"

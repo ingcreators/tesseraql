@@ -432,12 +432,16 @@ public class SqlStep implements Step {
         });
     }
 
-    /** The bundle's own name: the declared filename with its placeholder and extension dropped. */
-    private static String zipName(String filename) {
-        String withoutKey = filename.replace(io.tesseraql.core.files.SplitExport.KEY, "")
-                .replaceAll("[-_.]+$", "");
+    /**
+     * The bundle's own name: the declared filename with its placeholder and extension dropped,
+     * and the separator the placeholder leaves behind dropped after them — {@code orders-{key}.csv}
+     * bundles as {@code orders.zip}, a placeholder-only {@code {key}.csv} as {@code export.zip}.
+     */
+    static String zipName(String filename) {
+        String withoutKey = filename.replace(io.tesseraql.core.files.SplitExport.KEY, "");
         int dot = withoutKey.lastIndexOf('.');
-        String stem = dot > 0 ? withoutKey.substring(0, dot) : withoutKey;
+        String stem = (dot >= 0 ? withoutKey.substring(0, dot) : withoutKey)
+                .replaceAll("[-_.]+$", "");
         return (stem.isBlank() ? "export" : stem) + ".zip";
     }
 

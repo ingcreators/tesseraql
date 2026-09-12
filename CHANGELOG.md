@@ -8,6 +8,34 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A download keeps its name.** A declared download filename with any character outside ASCII
+  — an `export.filename`, the route id it defaults to, a `response.file:`/`response.stream:`
+  filename, a job step's export re-served by the operations console, a split export's bundle,
+  and the name a user uploaded to a `kind: attachment` document — reached the wire one byte per
+  UTF-16 unit: `?` for anything above U+00FF, and a raw Latin-1 byte below it that each client
+  decoded its own way (a Japanese-UI Chromium mis-named `Übersicht.csv`; `curl -OJ` wrote an
+  undecodable byte). `受注一覧.csv` downloaded as `????.csv`. The header now carries RFC 6266's
+  two forms for any name outside US-ASCII: an ASCII `filename=` first, then
+  `filename*=UTF-8''…` (RFC 8187) with the name itself, which browsers prefer. A name that is
+  already printable ASCII is sent exactly as before.
+
+  What changes for a client that reads only `filename=` (`curl -OJ`, httpie, Python's
+  `get_filename()`): it now sees the ASCII form — a letter keeps its base letter without its
+  diacritic, every other non-ASCII character is an underscore (`café.csv` → `cafe.csv`,
+  `Übersicht.csv` → `Ubersicht.csv`, `Straße.csv` → `Stra_e.csv`, `受注一覧.csv` →
+  `____.csv`) — where it used to see raw or `?`-mangled bytes. Control characters, invisible
+  format characters (bidirectional overrides, zero-width space, byte-order mark) and the
+  quoted-string breakers are folded to `_` in both forms before either is built; the
+  zero-width joiners a Persian word or an emoji sequence is spelled with are kept. A name that
+  is blank, `.` or `..` becomes `_`. This covers declared download filenames; a
+  `Content-Disposition` an application writes itself through `response.*.headers:` is not
+  touched.
+
+- **A split export's bundle is named after its stem.** `filename: orders-{key}.csv` with
+  `splitBy:` downloaded as `orders-.zip`: the placeholder's separator was stripped before the
+  extension had been cut, so it was never found. It is now `orders.zip`, and a placeholder-only
+  `{key}.csv` bundles as `export.zip`.
+
 - **Studio's data-browser download is a CSV.** The "Download CSV" button on the data browser
   saved the CSV wrapped in a Java map's `toString()` — the file began `{csv=` and ended with a
   final row holding a lone `}`, so a spreadsheet read the first header cell as `{csv=user_id` and

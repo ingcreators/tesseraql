@@ -70,8 +70,10 @@ export:
 
 `export.sql` is an ordinary query file colocated with the route; request parameters bind into it
 like any other query route. The response carries the file with a `Content-Disposition` download
-filename. The whole `export:` block is optional — without it you get CSV, every query column,
-column names as headers, and `<route id>.csv` as the filename.
+filename. A filename outside US-ASCII is sent in RFC 6266's `filename*` form beside an ASCII
+`filename` fallback, so browsers save it under its own name and a client that reads only
+`filename` gets an ASCII one. The whole `export:` block is optional — without it you get CSV,
+every query column, column names as headers, and `<route id>.csv` as the filename.
 
 Every recipe reads the same way: `export:` says how rows are written and never what to read, so
 the extraction is a source like any other. An `export.after` block on `query-export` is a
