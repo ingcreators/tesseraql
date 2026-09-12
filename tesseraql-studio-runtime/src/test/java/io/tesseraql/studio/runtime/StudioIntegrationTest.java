@@ -3012,8 +3012,15 @@ class StudioIntegrationTest {
 
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.headers().firstValue("Content-Type").orElse("")).contains("text/csv");
-        // RFC-4180 CSV: a header row + the seeded admin row.
-        assertThat(response.body()).contains("login_id").contains("admin").contains("\r\n");
+        // RFC-4180 CSV and nothing but the CSV: byte 0 is the first header cell of
+        // `select * from tql_users`, the seeded row opens the second record, and the last
+        // bytes are the final record's CRLF. Three substring checks were green on the
+        // `{csv=…}` Map.toString() wrapper this download shipped as — pin the ends, not the
+        // middle.
+        assertThat(response.body())
+                .startsWith("user_id,login_id,")
+                .contains("\r\nu1,admin,Administrator,")
+                .endsWith("\r\n");
     }
 
     @Test
@@ -3025,7 +3032,85 @@ class StudioIntegrationTest {
                 true);
 
         assertThat(response.statusCode()).isEqualTo(200);
-        assertThat(response.body()).contains("login_id").doesNotContain("admin");
+        // Exactly one record, the header, CRLF-terminated.
+        assertThat(response.body())
+                .matches("user_id,login_id,[^\\r\\n]*\\r\\n")
+                .doesNotContain("admin");
+    }
+
+    @Test
+    void uiDataBrowserExportOfAnUnknownTableIsANote() throws Exception {
+        // A refused table still downloads as the provider's scalar: a one-line `#` note,
+        // first byte to last, not a page and not a wrapped map.
+        HttpResponse<String> response = get(
+                "/_tesseraql/studio/user-admin/ui/data/export?table=" + enc("nope"), true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).isEqualTo("# No such table: nope\r\n");
+    }
+
+    @Test
+    void uiDataBrowserExportOfAnUnreadableTableIsANote() throws Exception {
+        // The catalog walk lists every schema, the export selects on the search path: a table
+        // in a second schema resolves and then fails to read. That failure is the other
+        // exception the provider catches — the note branch must hold it too, or the download
+        // is a 500 page.
+        try (java.sql.Connection c = java.sql.DriverManager.getConnection(POSTGRES.getJdbcUrl(),
+                POSTGRES.getUsername(), POSTGRES.getPassword());
+                java.sql.Statement s = c.createStatement()) {
+            s.execute("create schema if not exists probe_other");
+            s.execute("create table if not exists probe_other.ghost (id int primary key)");
+        }
+        try {
+            HttpResponse<String> response = get(
+                    "/_tesseraql/studio/user-admin/ui/data/export?table=ghost", true);
+
+            assertThat(response.statusCode()).isEqualTo(200);
+            assertThat(response.headers().firstValue("Content-Type").orElse(""))
+                    .contains("text/csv");
+            assertThat(response.body()).startsWith("# Export failed: ").endsWith("\r\n");
+        } finally {
+            try (java.sql.Connection c = java.sql.DriverManager.getConnection(
+                    POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+                    java.sql.Statement s = c.createStatement()) {
+                s.execute("drop schema if exists probe_other cascade");
+            }
+        }
+    }
+
+    @Test
+    void aCellWithQuotesAndNonAsciiIsWrittenAsRfc4180() throws Exception {
+        // A cell that RFC 4180 must quote, that HTML would escape, and that a charset would
+        // mangle: the download is the CSV text itself, unescaped and byte for byte. Without
+        // such a cell every other export guard is green on a template in escaped mode.
+        String name = "He said \"hi\", <b>&é 受注";
+        try (java.sql.Connection c = java.sql.DriverManager.getConnection(POSTGRES.getJdbcUrl(),
+                POSTGRES.getUsername(), POSTGRES.getPassword());
+                java.sql.PreparedStatement insert = c.prepareStatement(
+                        "insert into tql_users (user_id, login_id, display_name, status) "
+                                + "values ('u9', 'probe9', ?, 'ACTIVE')")) {
+            insert.setString(1, name);
+            insert.executeUpdate();
+        }
+        try {
+            HttpResponse<String> response = get(
+                    "/_tesseraql/studio/user-admin/ui/data/export?table=tql_users"
+                            + "&fc0=login_id&fo0=contains&fv0=" + enc("probe9"),
+                    true);
+
+            assertThat(response.statusCode()).isEqualTo(200);
+            assertThat(response.body()).isEqualTo(
+                    "user_id,login_id,display_name,email,status,password_hash,password_algo,"
+                            + "password_params,tenant_id,version\r\n"
+                            + "u9,probe9,\"He said \"\"hi\"\", <b>&é 受注\","
+                            + ",ACTIVE,,,,,0\r\n");
+        } finally {
+            try (java.sql.Connection c = java.sql.DriverManager.getConnection(
+                    POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+                    java.sql.Statement delete = c.createStatement()) {
+                delete.execute("delete from tql_users where user_id = 'u9'");
+            }
+        }
     }
 
     @Test

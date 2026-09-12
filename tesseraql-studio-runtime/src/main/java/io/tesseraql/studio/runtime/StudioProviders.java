@@ -1385,19 +1385,23 @@ final class StudioProviders {
                             + "] set " + String.join(", ", changes.keySet()));
                     return Map.of("updated", table);
                 })
+                // A scalar result, like docs.openapi: the route's file response binds the
+                // whole result as the template's one variable, and the shell's delegation
+                // carries a scalar in its value envelope. Wrapped in a map, the download
+                // body was the map's toString.
                 .register("studio.data.export", params -> {
                     if (!studioData.isEnabled()) {
-                        return Map.of("csv", "# The data browser is disabled.\r\n");
+                        return "# The data browser is disabled.\r\n";
                     }
                     try {
-                        return Map.of("csv", studioData.exportCsv(
+                        return studioData.exportCsv(
                                 StudioDataService.normalizeDatasource(str(params, "ds")),
                                 str(params, "table"),
                                 str(params, "sort"),
                                 dataSortDir(params), dataCombinator(params),
-                                dataFilters(params)));
+                                dataFilters(params));
                     } catch (RuntimeException ex) {
-                        return Map.of("csv", "# " + ex.getMessage() + "\r\n");
+                        return "# " + ex.getMessage() + "\r\n";
                     }
                 });
     }
