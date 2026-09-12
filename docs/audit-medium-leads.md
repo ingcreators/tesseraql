@@ -27,7 +27,7 @@ All 22 carried `reproduce-lens-missing` + `deliberate-lens-missing`; 21 also car
 |---|---|---|---|
 | F129 identity validity windows vs DB clock | **LIVE (widens)** | **high** (was medium) | untouched |
 | F125 Content-Disposition has no RFC 6266 | **LIVE (widens)** | medium | filename half: PR 4a — 4a SHIPPED #1302; 4b SHIPPED #1303, with the tab open redirect it uncovered; the Location half — a silent wrong page, and a post-sign-in return to the home page — is the more severe half and is PR 4b (`download-name-and-bytes.md`); the headline reachable path is the end user's own uploaded filename via the shipped `kind: attachment` |
-| F126 export `timezone:`/`format:` → 500 | **LIVE (widens)** | medium | untouched |
+| F126 export `timezone:`/`format:` → 500 | **LIVE (widens)** — the code is `TQL-SQL-2500` (never `TQL-ROUTE-5000`), raised by `SqlStep.export`'s catch-all, which files the codec failure as a SQL failure naming the SQL file, after the extraction ran; "Locale is safe by contrast" is false (a mistyped locale renders `Locale.ROOT` at 200, and on the import arms `de_DE` parses `1234,50` as `123450.00`); the configuration key is not static (a per-request source resolves through it); a `zoneinfo` claim reaches `ZoneId.of` as a string, number, array or nested object; a request header of the input's name is an input; the stack trace exists only where a logging backend does | medium | measured record `export-declarations.md`; PR 5-0 SHIPPED #1305 — the two codec crashes the measurement found inside `ColumnValues.toZoned` (an Excel grid/placement NULL cell → 500; a `java.sql.Time` column → 500 on five of six drivers); 5a / 5b / 5c pending |
 | F127 bundled apps hard-coded English | **LIVE (reframed)** | medium | untouched; class GREW in-window |
 | F82 README front-door drift | **LIVE (reframed)** | medium | partially killed |
 | F87 extension test never runs | **LIVE (widens)** | medium | untouched |
@@ -117,8 +117,11 @@ is unscheduled work.
   `ErrorResponseRenderer:278` is a deliberate delimiter, but the same method doubles the query
   string (4b). The edge's CR/LF throw is widened to every C0 control and DEL in 4b; a tab stays
   accepted except in a `Location`/`HX-Redirect`. Measured record: `download-name-and-bytes.md`.
-- **F126's quiet halves outnumber the loud one.** The filed defect (invalid zone → 500) is the
-  least harmful of three. See N2/N3 below.
+- **F126's quiet halves outnumber the loud one — but the three were mis-drawn.** The filed defect
+  (invalid zone → 500) is loud and corrupts nothing. N3 below is dead on its premise, N2 is not the
+  half it describes, and the harmful defects on this path were unfiled: the Excel NULL cell and
+  `java.sql.Time` (loud), the zoneless-timestamp shift and the `import.locale` corruption (silent).
+  See `export-declarations.md`.
 - **F119's blast radius is right and its headline number was wrong.** See "Retracted" below.
 - **F118's amplifier needs two author opt-ins.** The per-row `#{}` at `table.html:52` is gated on
   `selectable`, set only when the list declares bulk `actions:` — which **no shipped example or
@@ -147,17 +150,25 @@ Ranked. The first two are larger than most of the leads that found them.
    `tesseraql.i18n.locales`. `docs/internationalization.md:54` and `docs/account.md:139` both
    promise the language picker works "with zero configuration"; it renders one option. Candidate
    one-line fix (`catalog.tags()`) is unverified and is a default-behaviour decision.
-2. **`export: timezone:`/`locale:` are silently inert for any column without `type:`**, and all four
-   shipped example exports are in exactly that shape. Measured: with `timezone: Asia/Tokyo` declared,
-   an untyped column renders in the *host* JVM zone (`2026-01-15 22:30` on UTC vs `14:30` on
-   `America/Los_Angeles`); the typed control renders `2026-01-16 07:30` on both.
+2. **`export: timezone:`/`locale:` are silently inert for any column without `type:` or `format:`**,
+   on `csv` and `pdf` only (an Excel grid or placement zones every temporal; a jxls report zones
+   nothing), and all four shipped example exports are untyped. The numbers first measured here
+   (`2026-01-15 22:30` on UTC vs `14:30` on `America/Los_Angeles`, the typed control `2026-01-16
+   07:30` on both) describe a `timestamptz` column; on a zoneless `timestamp` — the type the shipped
+   schemas use — the untyped cell is host-stable and the **typed** cell moves with the host. Only
+   the procurement export selects a temporal, and its harm is the driver's `.0` text, not an ignored
+   declaration. The fix is the temporal-semantics design's, not this campaign's.
+   **Any Excel grid or placement export with one NULL cell answered 500, and any csv/excel/pdf
+   export of a `time` column answered 500 on five of six drivers** (high / medium-high, loud; both
+   since v0.1.0; both inside `ColumnValues.toZoned` — no `case null`, and
+   `java.sql.Time.toInstant()` throws). Fixed in PR 5-0 (#1305, `export-declarations.md`).
 3. **`CatalogLocaleRules.lintExportLocale` is green on its own stated purpose for the scheduled
-   case** — it iterates `manifest.routes()` only, so a *job* export step with no `locale:` raises
-   nothing, and there is no `timezone:` counterpart at all. `docs/jobs.md:484` says a job's
-   `locale:`/`timezone:` are literals with no request to resolve them from, i.e. lint is the entire
-   answer for the batch path. Slice 5 and 4c edit the same `CsvFileCodec.write` method (`:101` vs
-   `:104-116`) and the same `docs/file-transfers.md:116-132` bullet list — the second to land
-   rebases and regenerates the reference; no shared record component.
+   case** — it iterates `manifest.routes()` only. **Dead as filed:** `codes` never reaches any
+   export surface (three runs with an HTML control), so TQL-FIELD-4622 guards a capability no export
+   has and fires on the shipped `users.export`/`users.print` the moment a multilingual catalog
+   exists. The live batch-path gaps are different — no value check on any arm, the literals-only
+   rule never enforced, no `tesseraql.files.*` fallback — and belong to `export-declarations.md`.
+   The record and 4c do NOT share `CsvFileCodec.write`; the record names its edit sites.
 4. **Two more instances of F119's mechanism, on a path with no opt-in key** —
    `JdbcCatalogStore.java:221-251` and `:303-316` hold a monitor across a JDBC borrow + query on the
    per-request catalog path, with no `setQueryTimeout` anywhere in the file.
@@ -177,8 +188,11 @@ Ranked. The first two are larger than most of the leads that found them.
 8. **`HcMarkupContractTest`'s own javadoc repeats F98's false sentence**, and
    `docs/hc-recipe-alignment.md:264` marks `confirm-action` **Adopted** while citing the page that
    describes the pre-adoption state.
-9. **A failed async file export reports FAILED with no reason** — `TransferStatus` has no field for
-   one, so F126's better error code does nothing for the async recipe.
+9. **A failed async file export reports FAILED with no reason on the wire** — `TransferStatus` HAS
+   an `errors` field the export path never fills; the reason IS recorded (`exit_message`) and served
+   by the ops execution API. The real gaps are the wire projection, the card text, the console row,
+   the 2,000-character cliff in `bindFinish`, `null` for message-less exceptions and no TQL code. A
+   refusal at the start POST gives the async recipe a 400 before any row exists (5b).
 10. **`AggregatingMeter.counters/histograms`** are uncapped and nothing enforces label discipline —
     F120's mechanism one hop away, exported on every scrape.
 11. **Studio's "Download CSV" was `Map.toString()`** since #220 on all three branches — the
@@ -210,8 +224,10 @@ Ranked. The first two are larger than most of the leads that found them.
     export hygiene.
 22. **A 32768-character xlsx cell**: the grid writes it, placement throws raw, the report silently
     blanks it and completes — export hygiene.
-23. **`tesseraql lint` is silent on an unknown `export.format`** (boot refuses it) — slice 5 or
-    export hygiene.
+23. **`tesseraql lint` is silent on an unknown `export.format`** — boot refuses it on query-export
+    only: a file-export boots and answers 500 `TQL-LD-2801` at the first POST, a job step fails at
+    the first run. The case-fold half (`Excel`) is 5a's; the unknown-name half is F82 slice 2's (the
+    boot check is the TCCL defect).
 24. **A zero-row CSV export writes no header row** — export hygiene.
 
 ## Retracted / corrected during this pass
@@ -274,7 +290,7 @@ fresh `origin/main`. Nothing here is scheduled in `remediation.json` — this is
 | 2 | Release the limiter monitor across the lease claim | F119 | M | SHIPPED #1298. The scope written here was wrong in both directions: of the two `JdbcCatalogStore` sites one is unreachable dead code and the other needs a promise change rather than a lock change, so both are filed instead; `setQueryTimeout` does belong here, because the fix's own liveness depends on it. |
 | 3 | An interrupted `dev --embedded-db` stops the database last | F113 | M | SHIPPED #1299. Three pieces, not two, and the two written here do not work alone: the window the library's own hook covers is *inside* `builder.start()`, which no hoisted hook can reach, so the CLI must also choose the data directory and claim the instance before that call. With only the first two, an interrupt during startup — or a gateway port already in use, with no signal at all — leaves a live PostgreSQL behind. Carries a cost of its own, filed: a `kill -9` during the drain now leaks what it used to have already stopped. |
 | 4 | A download keeps its name and its bytes | F125, F128 | S+M+M+S | Not one helper: a sixth emitter (`response.*.headers:`) and three default-name derivations. Four PRs (`download-name-and-bytes.md`): S — Studio's CSV was a Map on three branches — SHIPPED #1301; 4a — conditional `filename*` with both halves, ASCII fallback first, a control/format fold, rider #4 `zipName` — SHIPPED #1302; 4b — the Location half across core/pipeline/compiler/scim/runtime plus the `wireHeaders` backstop, the app-local gate refusing controls, the doubled login query, the paged `Link` header — SHIPPED #1303; 4c — `bom:` in both `tesseraql-defs-v1.schema.json` copies, a ten-component `FileWriteSpec`, `ExportSpec`, one helper on the existing TQL-YAML-1005 rule on both arms, two regenerated reference pages, `ScaffoldDogfoodIntegrationTest` in `tesseraql-maven-plugin` — SHIPPED #1304; Studio's CSV is unreachable by `bom:`. |
-| 5 | An export declaration is refused, or it takes effect | F126 | M | Subsumes the two unfiled halves: the inert untyped-column zone, and the routes-only lint gate. Shares `CsvFileCodec.write` and the `docs/file-transfers.md` bullet list with 4c; the second to land regenerates the reference. The lint/boot gap for `bom:` on `excel`/`pdf` is this slice's, stated in 4c as lint-only. |
+| 5 | An export declaration is refused, or it takes effect | F126 | S+M+M+S | Four PRs plus a record (`export-declarations.md`), not one M: N3 is dead as filed and N2 is deferred with the zoneless-shift decision; nothing is shared with 4c. What the row was missing: an Excel grid/placement NULL cell → 500 and a `java.sql.Time` column → 500 (PR 5-0), `import.locale` corruption, the unshaped boot refusals, the config-level source expression and the missing job-path config fallback (5a/5b), the request-time 4xx before any SQL and the fallback decision (5b), job-step and file-export `splitBy:` (5c). The lint/boot gap for `bom:` on `excel`/`pdf` closes by a boot WARN from the linter's own predicate, never a refusal. PR 5-0 SHIPPED #1305; 5a / 5b / 5c pending. |
 | 6 | Bound the accumulators by their unit of work | F120, F118 | M+M | Same shape, shared design review: age-swept session map; per-render catalog memo. |
 | 7 | A failure leaves its throwable | F106 | M | After slice 2 — both edit `ClusterRateLimiter`. |
 | 8 | The framework's own locales are reachable | (unfiled N1), F127 | S+decision | N1 first, or the template swap has no observable effect. |

@@ -7,7 +7,9 @@ import java.text.ParsePosition;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.OffsetDateTime;
+import java.time.OffsetTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
@@ -122,6 +124,14 @@ public final class ColumnValues {
             return new DecimalFormat(column.format(),
                     DecimalFormatSymbols.getInstance(locale)).format(number);
         }
+        LocalTime time = toLocalTime(value);
+        if (time != null) {
+            // A time of day has no date and no instant: the zone never applies, a mismatched
+            // type: does not invent a date, and a declared format may use only time fields.
+            return column.format() != null
+                    ? DateTimeFormatter.ofPattern(column.format(), locale).format(time)
+                    : DateTimeFormatter.ISO_LOCAL_TIME.format(time);
+        }
         ZonedDateTime temporal = toZoned(value, zone);
         if (temporal != null && (column.format() != null || isTemporalType(column))) {
             String pattern = column.format() != null
@@ -136,9 +146,34 @@ public final class ColumnValues {
         return "date".equals(column.type()) || "datetime".equals(column.type());
     }
 
-    /** Normalizes the JDBC/temporal types to a zoned date-time, or null for non-temporals. */
+    /**
+     * The wall-clock time of a time-of-day value ({@link java.sql.Time} from five of the six
+     * drivers, {@link LocalTime} from DuckDB, {@link OffsetTime} from a {@code time with time
+     * zone}), or null for anything else - a null value included. A time has no date and no
+     * instant, so it is never zoned; an offset is dropped, never applied.
+     */
+    public static LocalTime toLocalTime(Object value) {
+        return switch (value) {
+            case null -> null;
+            // The driver built the Time in the JVM zone and toLocalTime() reads it back in that
+            // same zone, whatever it is. Never decode getTime() as seconds since midnight UTC:
+            // that reads 22:30 as 13:30 on every JVM whose zone is not UTC.
+            case java.sql.Time time -> time.toLocalTime();
+            case LocalTime time -> time;
+            case OffsetTime time -> time.toLocalTime();
+            default -> null;
+        };
+    }
+
+    /**
+     * Normalizes the JDBC/temporal types to a zoned date-time, or null for non-temporals - a
+     * null value and a time of day included: the Excel writers ask before their own null arm,
+     * and a {@link java.sql.Time} is a {@link java.util.Date} whose {@code toInstant()} throws.
+     */
     public static ZonedDateTime toZoned(Object value, ZoneId zone) {
         return switch (value) {
+            case null -> null;
+            case java.sql.Time _ -> null;
             case java.sql.Date date -> date.toLocalDate().atStartOfDay(zone);
             case java.sql.Timestamp timestamp -> timestamp.toInstant().atZone(zone);
             case java.util.Date date -> date.toInstant().atZone(zone);

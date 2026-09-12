@@ -120,6 +120,11 @@ sources:
   its name as the header. `label:` sets the label in the file (it may be localized text).
 - `type:` (`date` / `datetime` / `number`) with `format:` renders values through a date or
   decimal pattern — and, for workbooks, a matching cell format — instead of raw text.
+- A time-of-day column renders as wall-clock text (`22:30:00`, or `format:` over the time) on
+  `csv` and `pdf`, and as a real time cell in a workbook grid or placement. `timezone:` does
+  not shift it: a time has no date to shift. A PostgreSQL `time with time zone` reaches the
+  codec already moved into the server JVM's zone by the driver, and `timezone:` does not
+  correct that.
 - `locale:` and `timezone:` drive those patterns. Each accepts a literal value or a request
   source such as `principal.claim.locale`, `query.tz`, or `request.locale` (the negotiated
   request locale), so the requesting user decides how dates and numbers render. When a route

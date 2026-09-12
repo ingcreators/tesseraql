@@ -121,6 +121,25 @@ class PdfFileCodecTest {
     }
 
     @Test
+    void gridExportRendersASqlTimeAsWallClockText() throws Exception {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("label", "late");
+        row.put("starts_at", java.sql.Time.valueOf("22:30:00"));
+        row.put("ends_at", java.sql.Time.valueOf("23:45:00"));
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        codec.write(out, new FileWriteSpec(List.of(
+                ColumnMapping.of("label"),
+                ColumnMapping.of("starts_at"),
+                new ColumnMapping("ends_at", null, null, null, "HH:mm")),
+                null, null, null, appHome, null, "Asia/Tokyo"),
+                io.tesseraql.core.files.ExportModel.repeatable(List.of(row), Map.of()));
+
+        String text = extractText(out.toByteArray());
+        assertThat(text).contains("late", "22:30:00", "23:45");
+        assertThat(text).doesNotContain("23:45:00");
+    }
+
+    @Test
     void aTemplateOutsideTheResourceRootIsRejected(@TempDir Path elsewhere) throws Exception {
         Path template = elsewhere.resolve("evil.html");
         Files.writeString(template, "<html><body>x</body></html>");

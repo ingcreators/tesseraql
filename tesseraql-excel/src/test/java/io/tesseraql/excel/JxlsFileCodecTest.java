@@ -3,6 +3,7 @@ package io.tesseraql.excel;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.within;
 
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.files.CellRef;
@@ -18,11 +19,15 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TimeZone;
 import org.apache.poi.ss.usermodel.BorderStyle;
+import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellStyle;
+import org.apache.poi.ss.usermodel.CellType;
 import org.apache.poi.ss.usermodel.ClientAnchor;
 import org.apache.poi.ss.usermodel.Comment;
 import org.apache.poi.ss.usermodel.CreationHelper;
+import org.apache.poi.ss.usermodel.DateUtil;
 import org.apache.poi.ss.usermodel.Drawing;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
@@ -34,6 +39,9 @@ class JxlsFileCodecTest {
 
     @TempDir
     Path dir;
+
+    /** The day fraction of 22:30 - what a real Excel time cell holds. */
+    private static final double TWENTY_TWO_THIRTY = 0.9375;
 
     private final JxlsFileCodec codec = new JxlsFileCodec();
 
@@ -217,6 +225,247 @@ class JxlsFileCodecTest {
     }
 
     /** A multisheet template: one sheet per group, that group's rows written inside it. */
+    @Test
+    void aGridWritesANullCellBlankAndKeepsGoing() throws Exception {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        codec.write(out, new FileWriteSpec(typedColumns(null, null, null),
+                null, null, null, null, "Asia/Tokyo"), streaming(rowsWithANullRow()));
+
+        try (XSSFWorkbook workbook = new XSSFWorkbook(
+                new ByteArrayInputStream(out.toByteArray()))) {
+            Sheet sheet = workbook.getSheetAt(0);
+            // Row 1 (after the header) is the full row - the control that typed cells wrote.
+            assertThat(sheet.getRow(1).getCell(0).getStringCellValue()).isEqualTo("alpha");
+            assertThat(sheet.getRow(1).getCell(1).getNumericCellValue()).isEqualTo(1234.5);
+            // Row 2 is the NULL row: every cell blank, never the text "null" or a zero.
+            Row nulls = sheet.getRow(2);
+            for (int i = 0; i < 3; i++) {
+                Cell cell = nulls == null ? null : nulls.getCell(i);
+                assertThat(cell == null || cell.getCellType() == CellType.BLANK)
+                        .as("NULL cell %d is blank", i).isTrue();
+            }
+            // Row 3 exists: the export went on past the NULL.
+            assertThat(sheet.getRow(3).getCell(0).getStringCellValue()).isEqualTo("gamma");
+        }
+    }
+
+    @Test
+    void aPlacementWritesANullCellBlankAndKeepsGoing() throws Exception {
+        Path template = writePlacementTemplate();
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        codec.write(out, new FileWriteSpec(typedColumns("B", "D", "F"),
+                null, template, CellRef.parse("B5"), null, "Asia/Tokyo"),
+                repeatable(rowsWithANullRow()));
+
+        try (XSSFWorkbook workbook = new XSSFWorkbook(
+                new ByteArrayInputStream(out.toByteArray()))) {
+            Sheet sheet = workbook.getSheetAt(0);
+            assertThat(sheet.getRow(4).getCell(1).getStringCellValue()).isEqualTo("alpha");
+            Row nulls = sheet.getRow(5);
+            for (int col : new int[]{1, 3, 5}) {
+                Cell cell = nulls.getCell(col);
+                assertThat(cell == null || cell.getCellType() == CellType.BLANK)
+                        .as("NULL cell at column %d is blank", col).isTrue();
+            }
+            assertThat(sheet.getRow(6).getCell(1).getStringCellValue()).isEqualTo("gamma");
+        }
+    }
+
+    /**
+     * The control, not a guard (MEASUREMENT.md section 8 hazard 23): jxls report mode never
+     * asks toZoned and rendered a NULL as an empty cell all along. Green before and after.
+     */
+    @Test
+    void aJxlsReportRendersANullCellAsEmptyControl() throws Exception {
+        Path template = writeJxlsTemplate();
+        List<Map<String, Object>> rows = new ArrayList<>();
+        Map<String, Object> first = new LinkedHashMap<>();
+        first.put("name", "alpha");
+        first.put("qty", null);
+        rows.add(first);
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        codec.write(out, new FileWriteSpec(List.of(), null, template, null), repeatable(rows));
+
+        try (XSSFWorkbook workbook = new XSSFWorkbook(
+                new ByteArrayInputStream(out.toByteArray()))) {
+            Sheet sheet = workbook.getSheetAt(0);
+            assertThat(sheet.getRow(1).getCell(0).getStringCellValue()).isEqualTo("alpha");
+            Cell qty = sheet.getRow(1).getCell(1);
+            assertThat(qty == null || qty.getCellType() == CellType.BLANK).isTrue();
+        }
+    }
+
+    @Test
+    void aGridWritesASqlTimeAsATimeCell() throws Exception {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        codec.write(out, new FileWriteSpec(List.of(
+                ColumnMapping.of("label"),
+                ColumnMapping.of("starts_at"),
+                new ColumnMapping("ends_at", null, null, null, "hh:mm"),
+                ColumnMapping.of("opens_at"),
+                ColumnMapping.of("closes_at")),
+                null, null, null, null, "Asia/Tokyo"), streaming(shiftRow()));
+
+        try (XSSFWorkbook workbook = new XSSFWorkbook(
+                new ByteArrayInputStream(out.toByteArray()))) {
+            Sheet sheet = workbook.getSheetAt(0);
+            Cell starts = sheet.getRow(1).getCell(1);
+            // A real time cell: the fraction of a day (not a date at an epoch, not text),
+            // under a time format so it displays as a time, not as 0.9375.
+            assertThat(starts.getCellType()).isEqualTo(CellType.NUMERIC);
+            assertThat(starts.getNumericCellValue()).isEqualTo(TWENTY_TWO_THIRTY);
+            assertThat(DateUtil.isCellDateFormatted(starts)).isTrue();
+            assertThat(starts.getCellStyle().getDataFormatString()).isEqualTo("hh:mm:ss");
+            assertThat(starts.getLocalDateTimeCellValue().toLocalTime())
+                    .isEqualTo(java.time.LocalTime.of(22, 30));
+            // A declared format is the cell format, as for a date column.
+            Cell ends = sheet.getRow(1).getCell(2);
+            assertThat(ends.getNumericCellValue()).isEqualTo(TWENTY_TWO_THIRTY);
+            assertThat(ends.getCellStyle().getDataFormatString()).isEqualTo("hh:mm");
+            // Decision 12 on the workbook: an OffsetTime keeps its wall clock (22:30-05:00 under
+            // Asia/Tokyo is not 12:30), and a LocalTime is the same time cell.
+            assertThat(sheet.getRow(1).getCell(3).getNumericCellValue())
+                    .as("OffsetTime 22:30-05:00 under Asia/Tokyo").isEqualTo(TWENTY_TWO_THIRTY);
+            assertThat(sheet.getRow(1).getCell(4).getNumericCellValue())
+                    .as("LocalTime 22:30").isEqualTo(TWENTY_TWO_THIRTY);
+        }
+    }
+
+    @Test
+    void aPlacementWritesASqlTimeAsATimeCell() throws Exception {
+        Path template = writePlacementTemplate();
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        codec.write(out, new FileWriteSpec(List.of(
+                new ColumnMapping("label", null, ColumnMapping.parseColumn("B")),
+                new ColumnMapping("starts_at", null, ColumnMapping.parseColumn("D")),
+                new ColumnMapping("ends_at", null, ColumnMapping.parseColumn("F"), null, "hh:mm"),
+                new ColumnMapping("opens_at", null, ColumnMapping.parseColumn("H"))),
+                null, template, CellRef.parse("B5"), null, "Asia/Tokyo"), repeatable(shiftRow()));
+
+        try (XSSFWorkbook workbook = new XSSFWorkbook(
+                new ByteArrayInputStream(out.toByteArray()))) {
+            Sheet sheet = workbook.getSheetAt(0);
+            Cell starts = sheet.getRow(4).getCell(3);
+            assertThat(starts.getCellType()).isEqualTo(CellType.NUMERIC);
+            assertThat(starts.getNumericCellValue()).isEqualTo(TWENTY_TWO_THIRTY);
+            // No declared format: the template's prototype style, as it is, says how the serial
+            // displays (General here), and its border survives on the time cell as on every cell.
+            assertThat(starts.getCellStyle().getDataFormatString()).isEqualTo("General");
+            assertThat(starts.getCellStyle().getBorderBottom()).isEqualTo(BorderStyle.THIN);
+            // A declared format is the cell format over the prototype style, as in a grid.
+            Cell ends = sheet.getRow(4).getCell(5);
+            assertThat(ends.getNumericCellValue()).isEqualTo(TWENTY_TWO_THIRTY);
+            assertThat(ends.getCellStyle().getDataFormatString()).isEqualTo("hh:mm");
+            assertThat(ends.getCellStyle().getBorderBottom()).isEqualTo(BorderStyle.THIN);
+            // Decision 12 in placement: an OffsetTime whose offset is not the export zone's
+            // keeps its wall clock here too.
+            assertThat(sheet.getRow(4).getCell(7).getNumericCellValue())
+                    .as("OffsetTime 22:30-05:00 under Asia/Tokyo").isEqualTo(TWENTY_TWO_THIRTY);
+        }
+    }
+
+    /**
+     * The time cell holds the wall clock's fraction whatever the JVM zone and the export zone:
+     * the Excel half of the core guard, and the only guard that sees a writer zoning the Time
+     * as an instant. Sequential JUnit; the default restored in finally.
+     */
+    @Test
+    void aGridTimeCellKeepsItsWallClockUnderEveryJvmAndExportZone() throws Exception {
+        TimeZone before = TimeZone.getDefault();
+        try {
+            for (String jvmZone : new String[]{"Asia/Tokyo", "America/New_York", "UTC"}) {
+                TimeZone.setDefault(TimeZone.getTimeZone(jvmZone));
+                java.sql.Time time = java.sql.Time.valueOf("22:30:00");
+                for (String exportZone : new String[]{"UTC", "Asia/Tokyo"}) {
+                    assertThat(cellAt(grid(time, exportZone), 1, 0))
+                            .as("jvm %s export %s", jvmZone, exportZone)
+                            .isEqualTo(TWENTY_TWO_THIRTY);
+                }
+            }
+        } finally {
+            TimeZone.setDefault(before);
+        }
+    }
+
+    /** A LocalTime's fraction of a second reaches the serial (a DuckDB time(6) keeps it). */
+    @Test
+    void aGridTimeCellKeepsAFractionOfASecond() throws Exception {
+        assertThat(cellAt(grid(java.time.LocalTime.of(22, 30, 0, 500_000_000), "UTC"), 1, 0))
+                .isCloseTo(TWENTY_TWO_THIRTY + 0.5 / 86_400d, within(1e-12));
+    }
+
+    /** The typed columns every NULL guard declares: text, typed number, typed datetime. */
+    private static List<ColumnMapping> typedColumns(String namePos, String feePos,
+            String heldPos) {
+        return List.of(
+                new ColumnMapping("name", null, pos(namePos), null, null),
+                new ColumnMapping("fee", null, pos(feePos), "number", "#,##0.00"),
+                new ColumnMapping("held_on", null, pos(heldPos), "datetime", "yyyy/mm/dd hh:mm"));
+    }
+
+    private static Integer pos(String column) {
+        return column == null ? null : ColumnMapping.parseColumn(column);
+    }
+
+    /**
+     * Three rows: a full one, one whose every mapped cell is NULL (text, typed number, typed
+     * datetime), and one after it - so a codec that dies on the NULL never writes "gamma". Built
+     * with LinkedHashMap: Map.of refuses a null value (a fixture hazard, red for the wrong
+     * reason).
+     */
+    private static List<Map<String, Object>> rowsWithANullRow() {
+        List<Map<String, Object>> rows = new ArrayList<>();
+        Map<String, Object> full = new LinkedHashMap<>();
+        full.put("name", "alpha");
+        full.put("fee", new java.math.BigDecimal("1234.5"));
+        full.put("held_on", java.sql.Timestamp.from(
+                java.time.Instant.parse("2026-06-10T23:30:00Z")));
+        rows.add(full);
+        Map<String, Object> nulls = new LinkedHashMap<>();
+        nulls.put("name", null);
+        nulls.put("fee", null);
+        nulls.put("held_on", null);
+        rows.add(nulls);
+        Map<String, Object> after = new LinkedHashMap<>();
+        after.put("name", "gamma");
+        after.put("fee", new java.math.BigDecimal("3"));
+        after.put("held_on", java.sql.Timestamp.from(
+                java.time.Instant.parse("2026-06-12T00:00:00Z")));
+        rows.add(after);
+        return rows;
+    }
+
+    /**
+     * One row of every time-of-day shape at 22:30: the driver's java.sql.Time twice (untyped,
+     * and under a declared format), an OffsetTime whose offset is NOT the export zone's, and
+     * a LocalTime.
+     */
+    private static List<Map<String, Object>> shiftRow() {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("label", "late");
+        row.put("starts_at", java.sql.Time.valueOf("22:30:00"));
+        row.put("ends_at", java.sql.Time.valueOf("22:30:00"));
+        row.put("opens_at", java.time.OffsetTime.of(22, 30, 0, 0,
+                java.time.ZoneOffset.ofHours(-5)));
+        row.put("closes_at", java.time.LocalTime.of(22, 30));
+        return List.of(row);
+    }
+
+    private byte[] grid(Object value, String timezone) throws Exception {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("t", value);
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        codec.write(out, new FileWriteSpec(List.of(ColumnMapping.of("t")),
+                null, null, null, null, timezone), streaming(List.of(row)));
+        return out.toByteArray();
+    }
+
+    private static double cellAt(byte[] workbookBytes, int row, int col) throws Exception {
+        try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(workbookBytes))) {
+            return workbook.getSheetAt(0).getRow(row).getCell(col).getNumericCellValue();
+        }
+    }
+
     private Path writeMultisheetTemplate() throws Exception {
         Path template = dir.resolve("by-dept.xlsx");
         try (XSSFWorkbook workbook = new XSSFWorkbook()) {
@@ -300,6 +549,7 @@ class JxlsFileCodecTest {
             Row prototype = sheet.createRow(4);
             prototype.createCell(1).setCellStyle(bordered);
             prototype.createCell(3).setCellStyle(bordered);
+            prototype.createCell(5).setCellStyle(bordered);
             try (OutputStream out = Files.newOutputStream(template)) {
                 workbook.write(out);
             }
