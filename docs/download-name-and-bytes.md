@@ -828,9 +828,9 @@ A new `### Security` section after `### Fixed`:
 - `:244-247` decision 3: record the user's 2026-09-09 answer ("its own campaign") and the lines
   above, so it is not re-filed a third time.
 
-**PR 4a**: `:29` append "— 4a SHIPPED #nnnn"; `:226` mark 4a SHIPPED. **PR 4b**: `:29` append
-"— 4b SHIPPED #nnnn, with the tab open redirect it uncovered"; `:226` mark 4b SHIPPED; rows 12-14
-of the surfaced list → "fixed in PR 4b (#nnnn)". **PR 4c**: `:46` → "SHIPPED #nnnn"; `:226` mark
+**PR 4a**: `:29` append "— 4a SHIPPED #1302"; `:226` mark 4a SHIPPED. **PR 4b**: `:29` append
+"— 4b SHIPPED #1303, with the tab open redirect it uncovered"; `:226` mark 4b SHIPPED; rows 12-15
+of the surfaced list → "fixed in PR 4b (#1303)". **PR 4c**: `:46` → "SHIPPED #1304"; `:226` mark
 4c SHIPPED.
 
 ## What this breaks
