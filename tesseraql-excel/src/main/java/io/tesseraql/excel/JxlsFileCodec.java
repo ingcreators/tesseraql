@@ -14,11 +14,13 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellStyle;
@@ -44,6 +46,28 @@ public final class JxlsFileCodec implements FileCodec {
 
     /** TQL-LD-2852: placement data reached template content below the data area. */
     private static final TqlErrorCode PLACEMENT_COLLISION = new TqlErrorCode(TqlDomain.LD, 2852);
+
+    /**
+     * TQL-LD-2836: the export holds what a workbook cannot — a cell over 32,767 characters, a
+     * worksheet past 1,048,576 rows or 16,384 columns, or a report cell the workbook refused. The
+     * message names the column and the data row (or the cell), never the driver's text: the grid
+     * used to write the long text into a file Excel repairs on open, placement failed with POI's
+     * text naming nothing, and a report completed with the cell silently blank.
+     */
+    private static final TqlErrorCode WORKBOOK_LIMIT = new TqlErrorCode(TqlDomain.LD, 2836);
+
+    /**
+     * TQL-LD-2837: the declared workbook template cannot be opened — it is missing, a directory,
+     * empty or not a workbook — named by its path. A template that vanished after boot used to
+     * fall through to the grid and fail as a row-set error, and an empty or text file as a
+     * document-write failure naming the OUTPUT file.
+     */
+    private static final TqlErrorCode TEMPLATE_UNUSABLE = new TqlErrorCode(TqlDomain.LD, 2837);
+
+    /** Excel's limits: characters per cell, rows and columns per worksheet. */
+    static final int CELL_CHARACTERS = 32_767;
+    static final int WORKSHEET_ROWS = 1_048_576;
+    static final int WORKSHEET_COLUMNS = 16_384;
 
     /** The name the rows a codec writes answer to — a document's primary source. */
     private static final String SUBJECT = io.tesseraql.core.files.ExportModel.SUBJECT;
@@ -154,15 +178,103 @@ public final class JxlsFileCodec implements FileCodec {
     @Override
     public void write(OutputStream out, FileWriteSpec spec,
             io.tesseraql.core.files.ExportModel model) throws IOException {
-        boolean hasTemplate = spec.template() != null && Files.isRegularFile(spec.template());
-        if (hasTemplate && spec.startCell() != null) {
+        if (spec.template() == null) {
+            writeGrid(out, spec, model.rows());
+            return;
+        }
+        // A declared template is used or refused, never silently replaced by the grid: the
+        // declaration chose a mode, and streams() answered for that mode.
+        requireWorkbook(spec.template());
+        if (spec.startCell() != null) {
             // Placement walks the rows once, but its mode is declared as buffering because the
             // template workbook is held whole — so the re-readable source is the one it is given.
             writePlacement(out, spec, model.repeatableRows().iterator());
-        } else if (hasTemplate) {
-            writeWithJxlsTemplate(out, spec, model);
         } else {
-            writeGrid(out, spec, model.rows());
+            writeWithJxlsTemplate(out, spec, model);
+        }
+    }
+
+    /**
+     * The template must be a workbook: present, a regular file, non-empty, and starting with the
+     * OOXML ({@code PK}) or the OLE2 signature. Anything else is refused by name before a byte of
+     * the document is written — lint and boot judge existence when the app loads, so what reaches
+     * here is a template that vanished, was replaced by a directory, or was never a workbook.
+     */
+    private static void requireWorkbook(Path template) {
+        String reason;
+        if (Files.isDirectory(template)) {
+            reason = "is a directory";
+        } else if (!Files.isRegularFile(template)) {
+            reason = "does not exist";
+        } else {
+            try {
+                if (Files.size(template) == 0) {
+                    reason = "is empty";
+                } else {
+                    reason = isWorkbookSignature(template)
+                            ? null
+                            : "is not an xlsx or xls workbook";
+                }
+            } catch (IOException ex) {
+                reason = "cannot be read: " + ex.getMessage();
+            }
+        }
+        if (reason != null) {
+            throw new TqlException(TEMPLATE_UNUSABLE, "The workbook template " + template + " "
+                    + reason + " - restore the file the export declares, or fix template:");
+        }
+    }
+
+    private static boolean isWorkbookSignature(Path template) throws IOException {
+        byte[] head = new byte[8];
+        int read;
+        try (InputStream in = Files.newInputStream(template)) {
+            read = in.readNBytes(head, 0, head.length);
+        }
+        boolean ooxml = read >= 4 && head[0] == 'P' && head[1] == 'K' && head[2] == 3
+                && head[3] == 4;
+        boolean ole2 = read >= 8 && (head[0] & 0xff) == 0xD0 && (head[1] & 0xff) == 0xCF
+                && (head[2] & 0xff) == 0x11 && (head[3] & 0xff) == 0xE0
+                && (head[4] & 0xff) == 0xA1 && (head[5] & 0xff) == 0xB1
+                && (head[6] & 0xff) == 0x1A && (head[7] & 0xff) == 0xE1;
+        return ooxml || ole2;
+    }
+
+    /** A count with thousands separators, as Excel's own limits are quoted. */
+    private static String grouped(int count) {
+        return String.format(Locale.ROOT, "%,d", count);
+    }
+
+    /** A text a cell cannot hold, refused naming the column and the data row. */
+    private static void requireCellText(String text, String column, int dataRow) {
+        if (text.length() > CELL_CHARACTERS) {
+            throw new TqlException(WORKBOOK_LIMIT, "Column '" + column + "' at data row "
+                    + dataRow + " holds " + grouped(text.length())
+                    + " characters; a workbook cell holds at most "
+                    + grouped(CELL_CHARACTERS)
+                    + " - shorten the value in the query, or export it as csv");
+        }
+    }
+
+    /** The worksheet's row limit, refused before the writer's message-less exception. */
+    private static void requireRow(int rowIndex) {
+        if (rowIndex >= WORKSHEET_ROWS) {
+            throw new TqlException(WORKBOOK_LIMIT, "The export reached data row "
+                    + grouped(rowIndex)
+                    + " and a worksheet holds at most "
+                    + grouped(WORKSHEET_ROWS)
+                    + " rows including the header - split the export with splitBy:, or export"
+                    + " it as csv");
+        }
+    }
+
+    /** The worksheet's column limit, refused before the writer's message-less exception. */
+    private static void requireColumns(int columns) {
+        if (columns > WORKSHEET_COLUMNS) {
+            throw new TqlException(WORKBOOK_LIMIT, "The export has "
+                    + grouped(columns)
+                    + " columns and a worksheet holds at most "
+                    + grouped(WORKSHEET_COLUMNS));
         }
     }
 
@@ -228,9 +340,13 @@ public final class JxlsFileCodec implements FileCodec {
                 ColumnMapping.deriveIfAbsent(columns, row);
                 if (positions == null) {
                     positions = placementPositions(columns, start.col());
+                    for (int position : positions) {
+                        requireColumns(position + 1);
+                    }
                     styles = columnStyles(workbook, columns,
                             prototypeStyles(sheet, start.row(), positions));
                 }
+                requireRow(rowIndex);
                 if (rowIndex >= firstOccupiedBelow) {
                     throw new TqlException(PLACEMENT_COLLISION,
                             "placement export reached row " + (firstOccupiedBelow + 1)
@@ -253,7 +369,11 @@ public final class JxlsFileCodec implements FileCodec {
                     if (styles[i] != null) {
                         cell.setCellStyle(styles[i]);
                     }
-                    setCell(cell, row.get(columns.get(i).name()), zone);
+                    Object value = row.get(columns.get(i).name());
+                    if (value instanceof String text) {
+                        requireCellText(text, columns.get(i).name(), rowIndex - start.row());
+                    }
+                    setCell(cell, value, zone);
                 }
             }
             workbook.write(out);
@@ -367,6 +487,10 @@ public final class JxlsFileCodec implements FileCodec {
                     // SXSSF output: the workbook stops being held whole, which is the other half
                     // of streaming a report — the re-readable row set was the first (decision 9).
                     .withStreaming(streaming)
+                    // A cell the workbook refuses fails the export naming the cell. jxls's default
+                    // logger swallows the exception and leaves the cell blank in a report that
+                    // then COMPLETES — a silent loss on a delivered document.
+                    .withLogger(new org.jxls.common.PoiExceptionThrower())
                     .build()
                     .fill(context, new JxlsOutput() {
                         @Override
@@ -374,6 +498,12 @@ public final class JxlsFileCodec implements FileCodec {
                             return out;
                         }
                     });
+        } catch (org.jxls.common.JxlsException refused) {
+            throw new TqlException(WORKBOOK_LIMIT, "The workbook refused a report cell: "
+                    + refused.getMessage() + " - a cell holds at most "
+                    + grouped(CELL_CHARACTERS)
+                    + " characters; shorten the value in the query, or export it as csv",
+                    refused);
         }
     }
 
@@ -396,11 +526,13 @@ public final class JxlsFileCodec implements FileCodec {
                 Map<String, Object> row = rows.next();
                 ColumnMapping.deriveIfAbsent(columns, row);
                 if (rowIndex == 0) {
+                    requireColumns(columns.size());
                     for (int i = 0; i < columns.size(); i++) {
                         sheet.value(rowIndex, i, columns.get(i).effectiveHeader());
                     }
                     rowIndex++;
                 }
+                requireRow(rowIndex);
                 for (int i = 0; i < columns.size(); i++) {
                     writeValue(sheet, rowIndex, i, columns.get(i),
                             row.get(columns.get(i).name()), zone);
@@ -447,7 +579,12 @@ public final class JxlsFileCodec implements FileCodec {
                 }
             }
             case Boolean bool -> sheet.value(rowIndex, colIndex, bool);
-            default -> sheet.value(rowIndex, colIndex, String.valueOf(value));
+            default -> {
+                String text = String.valueOf(value);
+                // The header occupies row 0, so the sheet row index is the data row number.
+                requireCellText(text, column.name(), rowIndex);
+                sheet.value(rowIndex, colIndex, text);
+            }
         }
     }
 

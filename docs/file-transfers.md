@@ -467,6 +467,8 @@ queries like any other query.
 | `TQL-LD-2801` | No codec for the declared format (the module is not installed) |
 | `TQL-FIELD-2001` | A request-sourced zone or locale the server cannot use (`code: timezone` / `locale`), refused before any SQL runs — 400 |
 | `TQL-LD-2802` | The document could not be written after the extraction ran — a codec, a column format or the spool; the message names the format and the file — 500 |
+| `TQL-LD-2836` | An Excel export holds what a workbook cannot: a cell over 32,767 characters, a worksheet past 1,048,576 rows or 16,384 columns, or a report cell the workbook refused — the message names the column and the data row, or the cell — 500 |
+| `TQL-LD-2837` | An Excel export's declared `template:` is not a workbook when the export runs — missing, a directory, empty or not an xlsx/xls file — named by its path — 500 |
 | `TQL-LD-2810` | The file-transfer service failed — creating its schema, recording a transfer, running an export step, the extraction's first fetch (`Export query failed`) or the `after:` statement (`Export follow-up statement failed`); the message carries the cause |
 | `TQL-LD-2820` | `file-import` received an empty request body |
 | `TQL-LD-2821` | The file transfer service is not configured in this runtime |

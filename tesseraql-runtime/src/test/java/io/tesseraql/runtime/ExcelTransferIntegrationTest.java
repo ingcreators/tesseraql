@@ -102,6 +102,52 @@ class ExcelTransferIntegrationTest {
         }
     }
 
+    /**
+     * A template that vanishes AFTER boot is refused by name on every arm (docs/export-hygiene.md
+     * P4). Lint and boot judge a template's existence when the app loads, so the codec is the
+     * only place that sees a file deleted, emptied or replaced afterwards; it used to fall through
+     * to the grid and fail as a row-set error ({@code TQL-LD-2856}) naming nothing on the route,
+     * with no code on the asynchronous arm, and as {@code TQL-LD-2810} wrapping that on a job.
+     */
+    @Test
+    void aTemplateDeletedAfterBootIsRefusedByNameOnEveryArm() throws Exception {
+        // The control: the route works while the template is there.
+        HttpResponse<String> before = HTTP.send(HttpRequest.newBuilder(
+                URI.create("http://localhost:" + runtime.port() + "/api/people/fragile-sync"))
+                .build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(before.statusCode()).isEqualTo(200);
+
+        for (String owner : new String[]{"web/api/people/fragile", "web/api/people/fragile-sync",
+                "batch/fragile"}) {
+            Files.delete(appHome.resolve(owner).resolve("fragile-frame.xlsx"));
+        }
+
+        // The synchronous route.
+        HttpResponse<String> sync = HTTP.send(HttpRequest.newBuilder(
+                URI.create("http://localhost:" + runtime.port() + "/api/people/fragile-sync"))
+                .build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(sync.statusCode()).isEqualTo(500);
+        assertThat(MAPPER.readTree(sync.body()).at("/error/code").asText())
+                .isEqualTo("TQL-LD-2837");
+
+        // The asynchronous route.
+        HttpResponse<String> started = HTTP.send(HttpRequest.newBuilder(
+                URI.create("http://localhost:" + runtime.port() + "/api/people/fragile"))
+                .POST(HttpRequest.BodyPublishers.noBody())
+                .build(), HttpResponse.BodyHandlers.ofString());
+        String transferId = MAPPER.readTree(started.body()).get("transferId").asText();
+        assertThat(awaitTerminal("/api/people/fragile/" + transferId).get("status").asText())
+                .isEqualTo("FAILED");
+        assertThat(runtime.jobRepository().findExecution(transferId).orElseThrow().exitMessage())
+                .contains("TQL-LD-2837").contains("fragile-frame.xlsx");
+
+        // The job step.
+        io.tesseraql.operations.batch.JobExecution job = runtime.runJob("people.fragileReport",
+                java.util.Map.of());
+        assertThat(job.status().name()).isEqualTo("FAILED");
+        assertThat(job.exitMessage()).contains("TQL-LD-2837").contains("fragile-frame.xlsx");
+    }
+
     @Test
     void placementModeExportLandsColumnsAtYamlDeclaredPositions() throws Exception {
         // Reuses the imported people; method order is not guaranteed, so seed independently —
@@ -328,6 +374,81 @@ class ExcelTransferIntegrationTest {
             header.createCell(3).setCellValue("Age");
             frame.write(out);
         }
+        // The fragile twins: their own template file, deleted by one test after boot — a
+        // file-export route, a query-export route and a job step that all declare it.
+        Path fragile = home.resolve("web/api/people/fragile");
+        Files.createDirectories(fragile);
+        Files.writeString(fragile.resolve("post.yml"), """
+                version: tesseraql/v1
+                id: people.fragile
+                kind: route
+                recipe: file-export
+                export:
+                  format: excel
+                  filename: people-fragile.xlsx
+                  template: fragile-frame.xlsx
+                  startCell: B3
+                  columns:
+                    - { name: full_name, column: B }
+                    - { name: age,       column: D }
+                sources:
+                  main:
+                    sql:
+                      file: select-people.sql
+                """);
+        Files.copy(reportRoute.resolve("select-people.sql"), fragile.resolve("select-people.sql"));
+        Files.copy(reportRoute.resolve("report-frame.xlsx"), fragile.resolve("fragile-frame.xlsx"));
+        Path fragileSync = home.resolve("web/api/people/fragile-sync");
+        Files.createDirectories(fragileSync);
+        Files.writeString(fragileSync.resolve("get.yml"), """
+                version: tesseraql/v1
+                id: people.fragileSync
+                kind: route
+                recipe: query-export
+                security:
+                  auth: public
+                export:
+                  format: excel
+                  filename: people-fragile.xlsx
+                  template: fragile-frame.xlsx
+                  startCell: B3
+                  columns:
+                    - { name: full_name, column: B }
+                    - { name: age,       column: D }
+                sources:
+                  main:
+                    sql:
+                      file: select-people.sql
+                """);
+        Files.copy(reportRoute.resolve("select-people.sql"),
+                fragileSync.resolve("select-people.sql"));
+        Files.copy(reportRoute.resolve("report-frame.xlsx"),
+                fragileSync.resolve("fragile-frame.xlsx"));
+        Path fragileJob = home.resolve("batch/fragile");
+        Files.createDirectories(fragileJob);
+        Files.writeString(fragileJob.resolve("job.yml"), """
+                version: tesseraql/v1
+                id: people.fragileReport
+                kind: job
+                recipe: batch-pipeline
+                pipeline:
+                  - id: report
+                    sql:
+                      file: select-people.sql
+                      mode: query
+                    export:
+                      format: excel
+                      filename: people-fragile.xlsx
+                      template: fragile-frame.xlsx
+                      startCell: B3
+                      columns:
+                        - { name: full_name, column: B }
+                        - { name: age,       column: D }
+                """);
+        Files.copy(reportRoute.resolve("select-people.sql"),
+                fragileJob.resolve("select-people.sql"));
+        Files.copy(reportRoute.resolve("report-frame.xlsx"),
+                fragileJob.resolve("fragile-frame.xlsx"));
         return home;
     }
 

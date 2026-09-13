@@ -103,6 +103,11 @@ class StatusMappingLedgerTest {
             "TQL-LD-2826", "TQL-LD-2850", "TQL-LD-2851", "TQL-LD-2852", "TQL-LD-2853",
             "TQL-LD-2854", "TQL-LD-2855", "TQL-LD-2856", "TQL-LD-2857", "TQL-LD-2858",
             "TQL-LD-2859", "TQL-LD-2831",
+            // The Excel codec's own refusals (export-hygiene.md P4): a workbook limit met while
+            // the document is written (2836) and a declared template that is not a workbook when
+            // the export runs (2837) — both after the query ran, on every arm; the route answers
+            // them as 500 through the document-write code, the other arms as a failed transfer.
+            "TQL-LD-2836", "TQL-LD-2837",
             // 2865 (the commit's parse no longer agrees with the review's) is the same shape: it
             // is decided on the executor, long after the confirm was answered 202, and reaches
             // the caller as a failed transfer carrying the reason.
