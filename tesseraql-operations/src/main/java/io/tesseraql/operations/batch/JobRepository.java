@@ -502,7 +502,7 @@ public final class JobRepository {
                 ps -> {
                     ps.setString(1, JobStatus.FAILED.name());
                     ps.setTimestamp(2, Timestamp.from(Instant.now()));
-                    ps.setString(3, message);
+                    ps.setString(3, withinColumn(message));
                     ps.setString(4, execution.id());
                     ps.setString(5, JobStatus.RUNNING.name());
                 });
@@ -568,9 +568,27 @@ public final class JobRepository {
             String message) throws SQLException {
         ps.setString(1, status.name());
         ps.setTimestamp(2, Timestamp.from(Instant.now()));
-        ps.setString(3, message);
+        ps.setString(3, withinColumn(message));
         ps.setString(4, executionId);
         ps.setString(5, JobStatus.RUNNING.name());
+    }
+
+    /** The width of {@code exit_message} and {@code error_message}, in the vendors' DDL. */
+    private static final int MESSAGE_COLUMN = 2000;
+
+    /**
+     * A message cut to its column, as {@link #recordSkip} always did. A reason past the column
+     * used to fail the UPDATE that recorded it: the async transfer surfaced {@code TQL-BATCH-5001
+     * value too long} in place of the export's own failure, and a job step's transfer execution
+     * stayed RUNNING for the reaper to finish as abandoned (docs/export-hygiene.md P3). The bound
+     * is in UTF-16 units, the width PostgreSQL and SQL Server count in; Oracle's
+     * {@code varchar2(2000)} counts bytes under its default length semantics, so a long
+     * non-ASCII reason can still exceed it there — disclosed, not solved here.
+     */
+    private static String withinColumn(String message) {
+        return message == null || message.length() <= MESSAGE_COLUMN
+                ? message
+                : message.substring(0, MESSAGE_COLUMN);
     }
 
     public String startStep(String executionId, String stepId) {
@@ -736,7 +754,7 @@ public final class JobRepository {
                 ps -> {
                     ps.setString(1, StepStatus.FAILED.name());
                     ps.setTimestamp(2, Timestamp.from(Instant.now()));
-                    ps.setString(3, message);
+                    ps.setString(3, withinColumn(message));
                     ps.setString(4, stepExecutionId);
                 });
     }

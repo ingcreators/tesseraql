@@ -578,7 +578,9 @@ public final class JdbcFileTransferService implements FileTransferService {
             try (ExecutionHeartbeats.Pulse _ = heartbeats.start(transferId)) {
                 work.run();
             } catch (Throwable ex) {
-                LOG.warn("File transfer {} failed: {}", transferId, ex.toString());
+                // The stack rides the line: the message alone named neither the codec nor the
+                // frame, and the failure was the only trace of a parse that never reached a row.
+                LOG.warn("File transfer {} failed: {}", transferId, ex.toString(), ex);
                 jobs.failExecution(transferId, ex.toString());
             }
         };
@@ -1289,7 +1291,7 @@ public final class JdbcFileTransferService implements FileTransferService {
                 try (created;
                         PreparedStatement statement = prepareExtraction(connection, bound,
                                 vendor());
-                        ResultSet results = statement.executeQuery();
+                        ResultSet results = executeExtraction(statement);
                         OutputStream out = new io.tesseraql.core.spool.SpoolOutput(writer)) {
                     io.tesseraql.core.files.ResultSetRows iterator = new io.tesseraql.core.files.ResultSetRows(
                             results, vendor(),
@@ -1303,7 +1305,7 @@ public final class JdbcFileTransferService implements FileTransferService {
                 }
                 if (AFTER_EXTRACT.equals(request.afterTiming())
                         && request.afterSqlFile() != null) {
-                    executeUpdate(connection,
+                    executeFollowUp(connection,
                             SqlRenderer.render(parse(request.afterSqlFile()), request.params()));
                 }
                 // The spool reference and the verdict join the after-extract statement's
@@ -1348,7 +1350,9 @@ public final class JdbcFileTransferService implements FileTransferService {
             span.recordError(ex);
             // An unrecorded writer spool is nobody else's to reclaim.
             discardWriterSpool(spoolRecorded ? null : writer, ex);
-            LOG.warn("File export {} failed: {}", transferId, ex.getMessage());
+            // The stack rides the line: the message alone said nothing about where a codec or a
+            // driver failed, and this WARN was the only trace of the failure anywhere.
+            LOG.warn("File export {} failed: {}", transferId, ex.getMessage(), ex);
             jobs.failExecution(transferId, ex.getMessage());
         } finally {
             span.end();
@@ -1396,6 +1400,30 @@ public final class JdbcFileTransferService implements FileTransferService {
     private int executeUpdate(Connection connection, BoundSql bound) throws SQLException {
         try (PreparedStatement statement = prepare(connection, bound)) {
             return statement.executeUpdate();
+        }
+    }
+
+    /**
+     * The extraction's first fetch, coded as the export's own failure: a database error that
+     * surfaces here — a bad expression, a missing relation, on PostgreSQL anything the first
+     * fetch batch evaluates — used to be recorded as the driver's text alone, while the same
+     * error one batch later was already {@code TQL-LD-2810} through the row iterator.
+     */
+    private static ResultSet executeExtraction(PreparedStatement statement) {
+        try {
+            return statement.executeQuery();
+        } catch (SQLException ex) {
+            throw new TqlException(TRANSFER_ERROR, "Export query failed: " + ex.getMessage(), ex);
+        }
+    }
+
+    /** The after-extract statement, coded the same way — it was the last raw-text site. */
+    private void executeFollowUp(Connection connection, BoundSql bound) {
+        try {
+            executeUpdate(connection, bound);
+        } catch (SQLException ex) {
+            throw new TqlException(TRANSFER_ERROR,
+                    "Export follow-up statement failed: " + ex.getMessage(), ex);
         }
     }
 

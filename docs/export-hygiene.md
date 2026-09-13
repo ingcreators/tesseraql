@@ -10,7 +10,8 @@
 > drops the placeholder with its separators wherever it stands: shipped as P1. **P2** the spool
 > leaks and the 65,535-byte ceiling — a failed drain releases its spool, a failed async or job
 > export releases its writer's, a long text spools under a new tag: shipped as P2. **P3** what a
-> failed export says; **P4** the Excel codec's own refusals; **P5** the zero-row header; **P6** the
+> failed export says — the document code on every arm, the SQL sites coded, the reason within its
+> column, the stack logged: shipped as P3; **P4** the Excel codec's own refusals; **P5** the zero-row header; **P6** the
 > print template's locale; **P7** the declaration path; **P8** the card and the status JSON under a
 > prefix — pending. Each pull request flips its own line here when it merges.
 >
@@ -378,6 +379,89 @@ on the previous version cannot read (`TQL-LD-2855 Unknown spool type tag 19`) �
   value fragment) — the error-hygiene line; P3 may drop it in passing.
 - A failure BEFORE `createWriter` (a named-source cap breach in `composedValues`) reaches the
   drain half only — by construction there is no writer spool to release.
+
+---
+
+## P3 — what a failed export says: logged, recorded within its column, coded the same on every arm
+
+### What was wrong
+
+Item 8 (the async FAILED reason) and item 2's arm half, plus decision 9's two SQL sites:
+
+- **No code on the async and job arms.** 5b's `TQL-LD-2802` wrap lived in `SqlStep` (the route);
+  `runExport` and `exportInline` recorded `ex.getMessage()` — the raw JDK, driver, POI or
+  Thymeleaf text (`Unsupported field: YearOfEra`, `malformed input off : 105`, `The maximum length
+  of cell contents (text) is 32767 characters`), and NULL for a message-less exception. A
+  `TqlException` carried its code as a text prefix; five of nine measured failure shapes did.
+- **The 2000-character cliff.** `exit_message` and `error_message` are `varchar(2000)`;
+  `bindFinish`, `failStep` and `markReaped` bound the message raw (only `recordSkip` cut it). A
+  longer reason failed the UPDATE: the async arm surfaced `TQL-BATCH-5001 … value too long` in
+  place of the export's failure, and on the job arm the step's transfer execution stayed RUNNING
+  until the reaper finished it as a FALSE `TQL-BATCH-4212 "owner stopped reporting … abandoned"` —
+  an infrastructure incident that never happened.
+- **No stack.** `runExport`'s and `guarded()`'s `LOG.warn` carried the message alone — one WARN
+  line, under the submitting request's span, the only trace of any failure.
+- **Two raw-text SQL sites** (decision 9): a database error at `executeQuery` (on PostgreSQL
+  anything the first fetch batch evaluates — a bad expression, a missing relation) and one in the
+  `after:` statement recorded the driver's text, while the same error one batch later was already
+  `TQL-LD-2810` through the row iterator.
+
+### The change
+
+- **The 2802 lift.** `ExportWrite.write` (core, the one write every surface shares) wraps its
+  dispatch: a `TqlException` passes through as itself, any other `IOException` or
+  `RuntimeException` becomes `TQL-LD-2802 "Writing the <format> document failed after the query
+  ran: <cause>" [<filename>]`. `DOCUMENT_WRITE_FAILED` moves to `ExportWrite`; `SqlStep` loses its
+  `DocumentWriteFailure` marker class and `documentError` — its `catch (TqlException) { throw }`
+  passes the lifted code through, so the route is byte-identical and never wraps twice. The
+  reference page's 2802 row moves its source to `ExportWrite.java`. Built and measured by the
+  adjudicator before this record existed (`s-final/lift-*.raw`).
+- `JobRepository.withinColumn` (2000 UTF-16 units) in `bindFinish`, `failStep` and `markReaped`,
+  as `recordSkip` always did. **Decision 13:** Oracle's `varchar2(2000)` counts bytes under its
+  default length semantics, so a long non-ASCII reason can still exceed it there — disclosed in
+  the Javadoc and the CHANGELOG, a dialect-suite check post-merge.
+- `runExport`'s and `guarded()`'s `LOG.warn` pass the throwable — the stack rides the line.
+- `executeExtraction` and `executeFollowUp` in `runExport` wrap the two `SQLException` sites in
+  the existing 2810 (`Export query failed: …` / `Export follow-up statement failed: …`). The job
+  arm already codes everything as `2810: Export step failed: …` and is left alone (a second wrap
+  there would read `2810: … 2810: …`).
+
+### The guards, red before the fix
+
+`ExportFailureRecordIntegrationTest` (tesseraql-runtime; the direct-service harness on
+Testcontainers PostgreSQL) and one assertion added to the route arm's existing test:
+
+| guard | asserts | HEAD `191de9633` |
+|---|---|---|
+| `aFailedAsyncExportRecordsItsCodeAndLogsItsStack` | a codec throwing `IllegalStateException("the codec broke")` through `startExport`: FAILED, `exit_message` starts `TQL-LD-2802: Writing the broken document failed after the query ran: the codec broke` and contains `[items.csv]`; the captured stderr has the WARN line AND `\tat ` frames naming the codec's class | `the codec broke`; no frames |
+| `aFailedJobArmExportRecordsItsCodeWithinTheColumn` | a 2,100-character codec message through `exportInline`: the thrown 2810 wraps 2802; the transfer execution is FAILED with a 2,000-character `exit_message` starting `TQL-LD-2802` | `TQL-BATCH-5001 … value too long`, RUNNING |
+| `aStepFailureIsRecordedWithinItsColumn` | `failStep` and `failExecution` with 2,100 characters record 2,000 | `value too long for type character varying(2000)` |
+| `aDatabaseErrorAtTheStartOfTheExtractionIsCoded` | `select 1 / 0` through `startExport`: `exit_message` starts `TQL-LD-2810: Export query failed:` and names the division | `ERROR: division by zero` |
+| `aFailingFollowUpStatementIsCoded` | an `after:` statement on a missing table: `TQL-LD-2810: Export follow-up statement failed:` naming the table | `ERROR: relation "no_such_table" does not exist` |
+| `ExportRequestFormatsIntegrationTest.aFailureWhileWritingTheDocumentIsFiledUnderItsOwnCode` (+1 assertion) | the route's ERROR line never reads `failed after the query ran: TQL-LD-2802` — raised once, where the write happens | green (the regression guard) |
+
+**Bracket** (`work/export-hygiene-measurement/p3/bracket/`, core + operations + pipeline jars
+reinstalled per column): HEAD 5 red; the fix 5/5 + the route arm's two classes green;
+**V-doublewrap** (`SqlStep` wraps a second time) — exactly the route assertion red, the five arm
+guards green; **V-bindfinish** (`withinColumn` in `bindFinish` only) — exactly the step guard red
+(hazard 53); **V-nosqlwraps** — exactly the two SQL-site guards red; **V-nostack** (the message
+without the throwable) — exactly the stack assertion red (hazard 59).
+
+### What this breaks
+
+The recorded `exit_message` of a failed async export or job step changes shape: `TQL-LD-2802: …
+[file]` for a write failure, `TQL-LD-2810: Export query failed: …` for a first-fetch SQL error, a
+2,000-character cut for a long reason; a job step's execution reads `TQL-LD-2810: Export step
+failed: TQL-LD-2802: …` (one level added, said here). Nothing on the wire changes — the status JSON
+still carries no reason until P8. No test asserted the raw shapes.
+
+### Filed, not fixed (from P3's measurement)
+
+- Studio's export preview writes (`StudioSupport:483/515`) call the codec directly, outside
+  `ExportWrite` — the Studio backlog.
+- The transfer span invisible to the ops traces API (no `app` attribute) — the ops line.
+- 2831's absolute app-home path and the 2853/2855 value snippets inside a recorded reason — the
+  error-hygiene line.
 
 ---
 

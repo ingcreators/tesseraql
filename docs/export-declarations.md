@@ -1430,7 +1430,8 @@ Every unfiled defect the measurement found, routed elsewhere with its destinatio
   (`22:30`) vs the export (`22:30:00`) on a zero-second time; `ColumnValues.locale`'s lenient parse.
 - **Export hygiene** (now [`export-hygiene.md`](export-hygiene.md), which re-measured every
   item below and found the drain-spool test as filed necessary but not sufficient — under
-  `temp.store: db` no async download was possible at all, S1, fixed in its P0): #9's reason
+  `temp.store: db` no async download was possible at all, S1, fixed in its P0; the `TQL-LD-2802`
+  wrap moved from `SqlStep` to `ExportWrite` in its P3, so every arm records it): #9's reason
   projection (`exitMessage` into the status JSON as a
   transfer-level `reason`, the card, `TransferSummary`, the console link, `bindFinish` truncation,
   the null-message fallback, a TQL code on the async reason — a documented wire-shape change); the

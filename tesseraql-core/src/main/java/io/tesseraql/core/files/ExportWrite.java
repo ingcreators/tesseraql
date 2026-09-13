@@ -1,5 +1,8 @@
 package io.tesseraql.core.files;
 
+import io.tesseraql.core.error.TqlDomain;
+import io.tesseraql.core.error.TqlErrorCode;
+import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.spool.TempStore;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -19,6 +22,14 @@ import java.util.Map;
  */
 public final class ExportWrite {
 
+    /**
+     * The document could not be written after the extraction ran: a codec, a column format or
+     * the spool it writes to — not the statement, which had run to completion. Raised here, the
+     * one write every surface shares, so the route, the asynchronous transfer and the job step
+     * record the same code naming the format and the file; the route alone used to raise it.
+     */
+    public static final TqlErrorCode DOCUMENT_WRITE_FAILED = new TqlErrorCode(TqlDomain.LD, 2802);
+
     private ExportWrite() {
     }
 
@@ -36,6 +47,25 @@ public final class ExportWrite {
      *                 source.
      */
     public static void write(FileCodec codec, FileWriteSpec spec, TempStore tempStore,
+            Iterator<Map<String, Object>> source, RowEnricher enricher, int enrichWindow,
+            Map<String, Object> values, String filename, OutputStream out) throws IOException {
+        try {
+            dispatch(codec, spec, tempStore, source, enricher, enrichWindow, values, filename, out);
+        } catch (TqlException shaped) {
+            // A row-set read error, a cap, a split rule, a spool refusal: already named by whoever
+            // raised it, and passed through as itself — never wrapped a second time.
+            throw shaped;
+        } catch (IOException | RuntimeException inTheWrite) {
+            throw TqlException.builder(DOCUMENT_WRITE_FAILED)
+                    .message("Writing the " + codec.format()
+                            + " document failed after the query ran: " + inTheWrite.getMessage())
+                    .source(filename)
+                    .cause(inTheWrite)
+                    .build();
+        }
+    }
+
+    private static void dispatch(FileCodec codec, FileWriteSpec spec, TempStore tempStore,
             Iterator<Map<String, Object>> source, RowEnricher enricher, int enrichWindow,
             Map<String, Object> values, String filename, OutputStream out) throws IOException {
         Iterator<Map<String, Object>> rows = EnrichingRows.of(source, enricher, enrichWindow);
