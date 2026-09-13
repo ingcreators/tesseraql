@@ -122,8 +122,21 @@ tql:
     progress: "{rows} rows"
     progressOf: "{rows} of {total} rows"
     failedBody: "Nothing was written. {rejected} row(s) were rejected."
+    exportFailedBody: "{reason} ({code})"
     cancelledBody: Cancelled before it finished; nothing was written.
     expiredBody: This job is no longer available.
+    reason:
+      other: The export failed.
+      TQL-LD-2802: The document could not be written after the query ran.
+      TQL-LD-2810: The export's statement failed.
+      TQL-LD-2831: The print template could not be rendered.
+      TQL-LD-2836: A value or the row count exceeds what a workbook can hold.
+      TQL-LD-2837: The workbook template is not a workbook.
+      TQL-LD-2850: The export exceeded its row cap.
+      TQL-LD-2853: A value could not be spooled.
+      TQL-LD-2855: The rows could not be spooled.
+      TQL-LD-2856: The workbook template could not be read.
+      TQL-LD-2857: Two groups named the same file.
   session:
     expiredTitle: Session expired
     expiredBody: Sign in again to continue. The action you started will complete after you sign in.

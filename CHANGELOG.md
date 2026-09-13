@@ -47,6 +47,15 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **Breaking on the record: `FileTransferService.TransferStatus` gains `exitMessage`**, the
+  reason a failed run recorded (the older constructors stay). The status JSON of a `FAILED`
+  export now carries `code` — the framework's error code the run recorded — and `reason`, the
+  framework's own sentence for it, in the request's locale; the job card says the same instead of
+  the import-shaped "Nothing was written. 0 row(s) were rejected." The driver's text, SQL fragments
+  and paths never reach this face (anyone holding a transfer id can read it); they stay on the
+  execution row behind the operations API, which the operations console's transfer row now links
+  to. The OpenAPI document's transfer-status schema gains `expectedRows`, `code` and `reason`.
+
 - **The declaration path says what the runtime will do.** A job step without `format:` (or with a
   blank one) is refused at lint and at boot naming the job and the step — it used to boot and fail
   every run with `No file codec for format 'null'`, naming nothing; `format: ""` on a route is
@@ -121,6 +130,14 @@ All notable changes to TesseraQL are documented here. The format follows
   unaffected.
 
 ### Fixed
+
+- **Under a base-path prefix — every `tesseraql dev` and `tesseraql host` deployment — a
+  completed asynchronous export's links answer.** The status JSON's `fileUrl` carried no prefix
+  (a 404 through the gateway) and the job card's Download button and cancel form carried a doubled
+  one (`/shop/shop/…`): the card's URLs were built from an already-prefixed status URL and then
+  wrapped in a link expression that prefixed them again, while the poll's URL was emitted bare and
+  worked — which is why polling succeeded and only the terminal links died. Both are wire URLs by
+  construction now.
 
 - **An export that fails while its rows are spooled leaves no spool behind, and a text value of
   any length spools.** A buffered, split or multi-source export that failed during its extraction

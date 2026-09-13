@@ -168,7 +168,11 @@ It is **deferred**, and it is deferred rather than dropped. The reason is sequen
 behavioural defects above are live on the default deployment path today, and `pagePath` touches
 the pager, the activation segment and the list surface at once. Ten by-design wire-URL sites
 (`table.html:29`, nine in `list.html`, `job-card.html:22`) stay unchecked until it lands. That is
-the cost of the deferral and it is accepted knowingly.
+the cost of the deferral and it is accepted knowingly. The job card's cancel form and Download
+link (`job-card.html:31`, `:49`) joined the by-design list in `export-hygiene.md` P8: they are
+built from a `BasePath.url`-prefixed status URL and used to be wrapped in a link expression that
+prefixed them a second time — a 404 on every stack deployment — while the status JSON's `fileUrl`
+carried no prefix at all; both are wire URLs by construction now.
 
 ### 4 — The static link lint is not extended, and its trigger is inverted instead
 

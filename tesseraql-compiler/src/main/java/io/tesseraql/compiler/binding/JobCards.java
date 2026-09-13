@@ -118,6 +118,34 @@ final class JobCards {
         };
     }
 
+    /**
+     * An export's failure line: the framework's sentence for the recorded code, and the code
+     * (docs/export-hygiene.md P8). The import-shaped "Nothing was written. 0 row(s) were rejected."
+     * used to stand here for every failed export.
+     */
+    private static String exportFailure(FileTransferService.TransferStatus status,
+            MessageCatalog catalog, Locale locale) {
+        String code = status.failureCode();
+        String reason = reason(code, catalog, locale);
+        return code == null
+                ? reason
+                : ViewMessages.text(catalog, locale, "tql.job.exportFailedBody",
+                        "{reason} ({code})", Map.of("reason", reason, "code", code));
+    }
+
+    /**
+     * The framework's own sentence for a failure code — {@code tql.job.reason.<code>} in the
+     * catalog, else the generic one. Never the recorded message: that text is the driver's, and
+     * the status face is readable by anyone holding the transfer id.
+     */
+    static String reason(String code, MessageCatalog catalog, Locale locale) {
+        String generic = ViewMessages.text(catalog, locale, "tql.job.reason.other",
+                "The export failed.");
+        return code == null
+                ? generic
+                : ViewMessages.text(catalog, locale, "tql.job.reason." + code, generic);
+    }
+
     /** "12 of 30 rows" while the total is known, "12 rows" while it is not. */
     private static String progress(FileTransferService.TransferStatus status,
             MessageCatalog catalog, Locale locale) {
@@ -138,9 +166,11 @@ final class JobCards {
     private static String failure(FileTransferService.TransferStatus status,
             MessageCatalog catalog, Locale locale) {
         return switch (state(status)) {
-            case "failed" -> ViewMessages.text(catalog, locale, "tql.job.failedBody",
-                    "Nothing was written. {rejected} row(s) were rejected.",
-                    Map.of("rejected", status.errors().size()));
+            case "failed" -> "EXPORT".equals(status.direction())
+                    ? exportFailure(status, catalog, locale)
+                    : ViewMessages.text(catalog, locale, "tql.job.failedBody",
+                            "Nothing was written. {rejected} row(s) were rejected.",
+                            Map.of("rejected", status.errors().size()));
             case "cancelled" -> ViewMessages.text(catalog, locale, "tql.job.cancelledBody",
                     "Cancelled before it finished; nothing was written.");
             default -> null;

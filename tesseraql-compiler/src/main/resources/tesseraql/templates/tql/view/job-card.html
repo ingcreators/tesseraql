@@ -28,8 +28,11 @@
       <span class="hc-spacer"></span>
       <!-- Cancel exists only while there is a run to stop, and it posts: a GET that changes a
            run would be a lie about the method. -->
-      <form th:if="${c['cancel'] != null}" method="post" th:action="@{${c['cancel']}}"
-            th:attr="hx-post=@{${c['cancel']}},hx-target=|#${c['id']}|"
+      <!-- The cancel and download URLs are wire URLs by construction (BasePath.url prefixed the
+           status URL they are built from), like the poll's hx-get above: a link expression around
+           them prefixed a second time, and the button was a 404 on every stack deployment. -->
+      <form th:if="${c['cancel'] != null}" method="post" th:action="${c['cancel']}"
+            th:attr="hx-post=${c['cancel']},hx-target=|#${c['id']}|"
             hx-swap="outerHTML" hx-disabled-elt="find button[type=submit]">
         <input type="hidden" name="_csrf" th:if="${_csrf != null}" th:value="${_csrf}">
         <button type="submit" class="hc-button" data-variant="ghost" data-size="sm"
@@ -46,7 +49,7 @@
       <th:block th:insert="~{tql/view/report :: report(${c['report']})}"/>
     </th:block>
     <a class="hc-button" data-variant="primary" th:if="${c['file'] != null}"
-       th:href="@{${c['file']}}" th:text="#{tql.job.download}">Download</a>
+       th:href="${c['file']}" th:text="#{tql.job.download}">Download</a>
     <p class="hc-field__message" data-variant="error" th:if="${c['failure'] != null}"
        th:text="${c['failure']}">The import failed.</p>
   </div>

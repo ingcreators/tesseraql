@@ -203,7 +203,9 @@ Ranked. The first two are larger than most of the leads that found them.
    refusal at the start POST gives the async recipe a 400 before any row exists (5b). Measured
    wider by `export-hygiene.md`: nine failure shapes answer the identical reason-less JSON, no
    stack is logged, the 2,000-character cliff ends as a false `TQL-BATCH-4212` on the job arm. The
-   record (code, column, stack, the two SQL sites) is fixed in its P3; the wire is its P8.
+   record (code, column, stack, the two SQL sites) is fixed in its P3; the wire — `code` and the
+   framework's sentence on the status JSON and the card, never the driver's text — in its P8,
+   with the two dead links under a base-path prefix (N1).
 10. **`AggregatingMeter.counters/histograms`** are uncapped and nothing enforces label discipline —
     F120's mechanism one hop away, exported on every scrape.
 11. **Studio's "Download CSV" was `Map.toString()`** since #220 on all three branches — the

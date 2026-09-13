@@ -764,6 +764,40 @@ class BasePathEmissionIntegrationTest {
                     view: things
                 """);
         write(home, "web/things/list.sql", "select id, name from things order by id\n;\n");
+        // Surface 5: a file-export route and a failing twin (docs/export-hygiene.md P8).
+        write(home, "web/api/things/export/post.yml", """
+                version: tesseraql/v1
+                id: things.export
+                kind: route
+                recipe: file-export
+                security:
+                  policy: master.read
+                sources:
+                  main:
+                    sql:
+                      file: all.sql
+                export:
+                  format: csv
+                  filename: things.csv
+                """);
+        write(home, "web/api/things/export/all.sql",
+                "select id, name from things order by id\n;\n");
+        write(home, "web/api/things/export-bad/post.yml", """
+                version: tesseraql/v1
+                id: things.exportBad
+                kind: route
+                recipe: file-export
+                security:
+                  policy: master.read
+                sources:
+                  main:
+                    sql:
+                      file: bad.sql
+                export:
+                  format: csv
+                  filename: things.csv
+                """);
+        write(home, "web/api/things/export-bad/bad.sql", "select 1 / 0 as id, 'x' as name\n;\n");
         write(home, "web/things/list.view.yml", """
                 version: tesseraql/v1
                 id: things
@@ -828,6 +862,94 @@ class BasePathEmissionIntegrationTest {
         write(home, "web/things/{id}/update/update.sql",
                 "update things set name = /* name */ 'x' where id = /* id */ 1\n;\n");
         return home;
+    }
+
+    // ------------------------------------------------------------ the file-export's links and its reason
+
+    /**
+     * A completed file-export's links are single-prefixed and answer (docs/export-hygiene.md P8,
+     * N1): the status JSON's {@code fileUrl} carried no prefix (a 404 through the gateway) and the
+     * card's Download button a doubled one — {@code BasePath.url} prefixed the status URL and the
+     * template's {@code @{…}} prefixed it again. The poll worked, which is why polling succeeded
+     * and only the terminal links died; an in-process boot has no prefix and is blind to both.
+     */
+    @Test
+    void aCompletedExportsLinksAreSinglePrefixedAndAnswer() throws Exception {
+        String transferId = startExport("/api/things/export");
+        com.fasterxml.jackson.databind.JsonNode status = awaitTerminal(
+                "/api/things/export/" + transferId);
+        assertThat(status.get("status").asText()).isEqualTo("COMPLETED");
+
+        String fileUrl = status.get("fileUrl").asText();
+        assertThat(fileUrl).startsWith(PREFIX + "/api/things/export/" + transferId + "/file");
+        assertThat(fetch(fileUrl).statusCode()).as("GET %s", fileUrl).isEqualTo(200);
+
+        HttpResponse<String> card = getHtml("/api/things/export/" + transferId);
+        assertThat(card.statusCode()).isEqualTo(200);
+        String href = urlsIn(card.body()).stream()
+                .filter(url -> url.startsWith("href=") && url.contains("/file"))
+                .map(url -> url.substring("href=".length())).findFirst().orElseThrow();
+        assertThat(href).isEqualTo(PREFIX + "/api/things/export/" + transferId + "/file");
+        assertThat(fetch(href).statusCode()).as("GET %s", href).isEqualTo(200);
+    }
+
+    /**
+     * A failed file-export says why — a code and the framework's own sentence, never the
+     * driver's text (docs/export-hygiene.md P8, decision 5): the status JSON used to carry no
+     * reason at all and the card the import-shaped "Nothing was written. 0 row(s) were rejected."
+     */
+    @Test
+    void aFailedExportSaysWhyWithACodeAndNoDriverText() throws Exception {
+        String transferId = startExport("/api/things/export-bad");
+        com.fasterxml.jackson.databind.JsonNode status = awaitTerminal(
+                "/api/things/export-bad/" + transferId);
+        assertThat(status.get("status").asText()).isEqualTo("FAILED");
+        assertThat(status.path("code").asText()).isEqualTo("TQL-LD-2810");
+        assertThat(status.path("reason").asText()).contains("statement");
+        assertThat(status.toString()).doesNotContain("division by zero");
+
+        String card = getHtml("/api/things/export-bad/" + transferId).body();
+        assertThat(card).contains("TQL-LD-2810").doesNotContain("division by zero")
+                .doesNotContain("Nothing was written");
+    }
+
+    private static String startExport(String path) throws Exception {
+        HttpResponse<String> response = postForm(path, "_csrf=" + csrf);
+        assertThat(response.statusCode()).as(response.body()).isEqualTo(202);
+        return new com.fasterxml.jackson.databind.ObjectMapper().readTree(response.body())
+                .get("transferId").asText();
+    }
+
+    private static com.fasterxml.jackson.databind.JsonNode awaitTerminal(String statusPath)
+            throws Exception {
+        com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        long deadline = System.currentTimeMillis() + 20_000;
+        while (true) {
+            com.fasterxml.jackson.databind.JsonNode status = mapper
+                    .readTree(get(statusPath).body());
+            String value = status.get("status").asText();
+            if (!"RUNNING".equals(value) && !"STARTED".equals(value)) {
+                return status;
+            }
+            assertThat(System.currentTimeMillis()).as("the export finishes").isLessThan(deadline);
+            Thread.sleep(100);
+        }
+    }
+
+    /** A GET of a wire URL exactly as emitted — no prefix added by the test. */
+    private static HttpResponse<String> fetch(String wireUrl) throws Exception {
+        return CLIENT.send(
+                HttpRequest.newBuilder(URI.create("http://localhost:" + runtime.port() + wireUrl))
+                        .header("Cookie", cookie).build(),
+                HttpResponse.BodyHandlers.ofString());
+    }
+
+    private static HttpResponse<String> getHtml(String path) throws Exception {
+        return CLIENT.send(
+                HttpRequest.newBuilder(URI.create(
+                        "http://localhost:" + runtime.port() + PREFIX + path))
+                        .header("Cookie", cookie).header("Accept", "text/html").build(),
+                HttpResponse.BodyHandlers.ofString());
     }
 
     private static void write(Path home, String relative, String body) throws IOException {
