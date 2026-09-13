@@ -1464,7 +1464,8 @@ Every unfiled defect the measurement found, routed elsewhere with its destinatio
   Export row, the #742 CHANGELOG framing; the two `CatalogBinder` sites' collapsed
   `formatDeclaration` — do NOT extend 4622 to jobs.
 - **Base-path emission ledger:** the status JSON's `fileUrl` drops the base path
-  (`FileTransferStatusProcessor:94`; `FileTransferIntegrationTest:138` asserts `endsWith` only).
+  (`FileTransferStatusProcessor:94`; `FileTransferIntegrationTest:138` asserts `endsWith` only) —
+  fixed by `export-hygiene.md` P8, with the card's double-prefixed Download and cancel beside it.
 - **Slice 8 / N1 (i18n):** `tesseraql.i18n.defaultLocale: ja_JP` (or a `locales[]` entry) normalizes
   to `und` and turns every error response on the app into a bare 500 `TQL-ROUTE-5000`;
   `messages.js?locale=und` hangs 300 s then 502 through the gateway; `tesseraql lint` crashes when

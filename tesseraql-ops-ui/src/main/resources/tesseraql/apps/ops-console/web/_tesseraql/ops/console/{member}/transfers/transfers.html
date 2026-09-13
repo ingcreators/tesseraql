@@ -30,7 +30,7 @@
           </tr></thead>
           <tbody class="hc-datagrid__body">
             <tr class="hc-datagrid__row" th:each="t : ${transfers.rows}">
-              <td class="hc-datagrid__cell" th:text="${t.id}"></td>
+              <td class="hc-datagrid__cell"><a th:href="@{|${transfers.shell.base}/executions/${t.id}${transfers.shell.slotQuery}|}" th:text="${t.id}"></a></td>
               <td class="hc-datagrid__cell" th:text="${t.route}"></td>
               <td class="hc-datagrid__cell" th:text="${t.app}"></td>
               <td class="hc-datagrid__cell" th:text="${t.direction}"></td>

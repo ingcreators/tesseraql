@@ -316,7 +316,11 @@ subtree:
 - `POST {path}` → `{ "transferId": ..., "statusUrl": "{path}/{transferId}", "fileUrl": "{path}/{transferId}/file" }`
 - `GET {path}/{transferId}` — the transfer state: `status` (`RUNNING`, then `COMPLETED` or
   `FAILED`), `rowCount`, `filename` (for a `splitBy:` export, the bundle's name), `downloaded`,
-  and `fileUrl` once completed
+  and `fileUrl` once completed. A `FAILED` export carries `code` — the framework's error code
+  the run recorded, such as `TQL-LD-2802` for a document that could not be written or
+  `TQL-LD-2810` for a statement that failed — and `reason`, the framework's own sentence for it.
+  The driver's text never reaches this face; it is on the execution row, behind the operations
+  API. Every URL the status carries is a wire URL, prefixed under a base path like the 202's.
 - `GET {path}/{transferId}/file` — streams the finished file; an unknown transfer is 404, a
   transfer that is still running (or failed, or is an import) is 409
 

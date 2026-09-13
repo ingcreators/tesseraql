@@ -91,7 +91,22 @@ public final class FileTransferStatusProcessor implements Step {
             body.put("filename", status.filename());
             body.put("downloaded", status.downloaded());
             if ("COMPLETED".equals(status.status())) {
-                body.put("fileUrl", urlPath + "/" + status.transferId() + "/file");
+                // A wire URL, prefixed like the 202's: unprefixed it was a 404 through the
+                // gateway on every stack deployment (docs/export-hygiene.md P8).
+                body.put("fileUrl", io.tesseraql.pipeline.BasePath.url(exchange,
+                        urlPath + "/" + status.transferId() + "/file"));
+            }
+            if ("FAILED".equals(status.status())) {
+                // Why it failed: the code and the framework's own sentence, never the recorded
+                // text — which carries the driver's words, SQL fragments and paths, and which
+                // anyone holding the transfer id could read here.
+                String code = status.failureCode();
+                if (code != null) {
+                    body.put("code", code);
+                }
+                body.put("reason", JobCards.reason(code, ImportPages.catalog(appHome),
+                        Locale.forLanguageTag(exchange.getProperty(TesseraqlProperties.LOCALE,
+                                defaultLocaleTag, String.class))));
             }
         }
         exchange.response().status(200);

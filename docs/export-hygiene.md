@@ -1,6 +1,6 @@
 # Export hygiene: what an export leaves behind, and what it says when it fails
 
-> **Status: in progress.** Nine pull requests, in this order, each branched from fresh
+> **Status: complete.** Nine pull requests, in this order, each branched from fresh
 > `origin/main` after the previous one merged. **P0** — under `tesseraql.temp.store: db` or
 > `blob` a download, a push and the retention sweep address the spool by its own id, a failed
 > download is not recorded as delivered, and `tesseraql job run` honours the declared store:
@@ -19,8 +19,10 @@
 > folded, the render inside the codec's try: shipped as P6. **P7** the declaration path — the
 > predicate refuses a format-less step and a blank format, `push.as:` and an export `filename:`
 > are judged for the placeholders the pipeline can resolve, a mismatched extension warns, a codec
-> replacing another's format is logged: shipped as P7; **P8** the card and the status JSON under a
-> prefix — pending. Each pull request flips its own line here when it merges.
+> replacing another's format is logged: shipped as P7. **P8** the card and the status JSON under a
+> prefix — both links wire URLs by construction, and a failed export's `code` and the framework's
+> sentence on the wire and the card: shipped as P8. Each pull request flipped its own line here
+> when it merged.
 >
 > **The two records that filed these items were wrong about them in a dozen places, and the
 > most severe defect on the path was in neither.** The twelve items [`download-name-and-bytes.md`](download-name-and-bytes.md)
@@ -803,7 +805,82 @@ warning.
 
 ---
 
-## Guard hazards for the pending pull requests
+## P8 — the card and the status JSON under a prefix, and what a failed export says on the wire
+
+### What was wrong
+
+- **N1 (unfiled, measured by two attackers through `host`).** Under a base-path prefix — every
+  `tesseraql dev` / `host` stack, "a prefix is universal" (`base-path-emission.md`) — the status
+  JSON's `fileUrl` was `urlPath + "/" + id + "/file"` with no `BasePath.url`
+  (`FileTransferStatusProcessor:94`) → 404 through the gateway; the card's Download href was
+  DOUBLE-prefixed: `:110-111` built `statusUrl` with `BasePath.url`, `JobCards` appended `/file`,
+  and `job-card.html:49` wrapped it in `@{…}`, which the base-path link builder prefixed again;
+  the cancel form (`:31-32`) had the same shape. The poll `hx-get` was emitted without `@{}` and
+  worked, which is why polling succeeded and only the terminal links died. `FileTransferIntegrationTest:138`
+  asserted `endsWith(transferId + "/file")` — exactly how this drifted; an in-process
+  `TesseraqlRuntime.start` has no prefix and is blind to both.
+- **Item 8, the wire half (decision 5).** Nine failure shapes on a `file-export` route answered
+  the identical reason-less status JSON (no `errors` key at all) and the import-shaped card
+  "Nothing was written. 0 row(s) were rejected." with a link-less FAILED badge. The reason existed
+  only on the execution row — since P3 with its code — and the raw `exit_message` carries the
+  driver's text, SQL fragments and 2831's absolute app-home path, readable through any
+  file-export route by anyone holding any transfer id (N2, filed to the edge line, decision 12) —
+  the argument against projecting the raw text.
+
+### The change
+
+- `FileTransferStatusProcessor`: `fileUrl` through `BasePath.url`; the card's `file` and `cancel`
+  emitted as the wire URLs they already are (`th:href="${c['file']}"`, `th:action="${c['cancel']}"`),
+  like the poll — never a second link expression.
+- **`TransferStatus` gains `exitMessage`** (breaking on the record; the two older constructors
+  stay) and `failureCode()`: the `TQL-XXX-nnnn` prefix P3 made universal, or null.
+  `JdbcFileTransferService.status()` hands the execution's message over.
+- The wire: a FAILED export's JSON carries `code` and `reason` — `JobCards.reason(code, catalog,
+  locale)`, the catalog's `tql.job.reason.<code>` (ten codes in `en.yml` and `ja.yml`) else
+  `tql.job.reason.other` ("The export failed."). The card's failure line for an export is
+  `tql.job.exportFailedBody` = "{reason} ({code})"; imports keep their sentence. The raw message
+  is never projected.
+- `OpenApiGenerator`: the transfer-status schema gains `expectedRows` (it never had it), `code`
+  and `reason`.
+- The operations console's transfer row links its id to the execution (the transfer id IS the
+  execution id) — the raw reason, one click away, behind the ops permission.
+
+### The guards, red before the fix (HEAD `71f9434a9`)
+
+`BasePathEmissionIntegrationTest` — the stack harness (`HostContext.stack().forApplication("/shop")`),
+the ONLY harness that sees a prefix — gains a `file-export` route and a failing twin
+(`select 1 / 0`); the first FAILED-export integration test in the repository:
+
+| guard | asserts | HEAD |
+|---|---|---|
+| `aCompletedExportsLinksAreSinglePrefixedAndAnswer` | POST (with the CSRF field) → COMPLETED; the status JSON's `fileUrl` starts `/shop/api/things/export/<id>/file` AND a GET of it as emitted answers 200; the card's Download `href` is the same single-prefixed URL AND answers 200 | `fileUrl` `/api/things/export/…` (no prefix); the card `/shop/shop/…` |
+| `aFailedExportSaysWhyWithACodeAndNoDriverText` | the FAILED status JSON has `code` = `TQL-LD-2810` and a `reason` containing "statement", and no `division by zero` anywhere; the card carries the code and neither the driver's text nor "Nothing was written" | no `code` key |
+
+**Bracket** (`work/export-hygiene-measurement/p8/bracket/`, core + operations + yaml + compiler
++ ops-ui jars reinstalled per column): HEAD 2 red; the fix 12/12 + `FileTransferIntegrationTest`
+19/19 green; **V-nojsonprefix** — exactly the links guard red on the JSON half; **V-cardlink**
+(`@{…}` back on the href) — exactly the links guard red on the card half, reading `/shop/shop/…`;
+**V-rawreason** (`reason` = the recorded text) — exactly the failed guard red on the driver's text
+(hazard 60: a guard reading the DB row would have been green).
+
+### What this breaks
+
+`TransferStatus` gains a component — breaking on the record per the `expectedRows` precedent; the
+older constructors stay. The status JSON of a FAILED export gains two keys; the card's failure
+sentence changes for exports. Nothing changes on a deployment without a prefix except those two
+keys and the sentence.
+
+### Filed, not fixed (from P8's measurement)
+
+- **N2**: any file-export route's status/file subtree serves any transfer id in the app (no route
+  check) — the edge/router or security line (decision 12); the `code + sentence` shape here is
+  the mitigation.
+- The transfer span invisible to the ops traces API (no `app` attribute) — the ops line.
+- `rowCount` 0 on every failed export — the error-hygiene line.
+
+---
+
+## Guard hazards the pull requests were built against
 
 Measured or found by construction during the measurement phase (record §5); each pending pull
 request builds its guards against these variants and proves them red on HEAD first.

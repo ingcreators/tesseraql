@@ -160,7 +160,15 @@ public interface FileTransferService {
      */
     record TransferStatus(String transferId, String routeId, String appName, String direction,
             String status, long rows, Long expectedRows, List<RowError> errors, String filename,
-            boolean downloaded) {
+            boolean downloaded, String exitMessage) {
+
+        /** The shape before a failed transfer carried the reason it failed for. */
+        public TransferStatus(String transferId, String routeId, String appName, String direction,
+                String status, long rows, Long expectedRows, List<RowError> errors, String filename,
+                boolean downloaded) {
+            this(transferId, routeId, appName, direction, status, rows, expectedRows, errors,
+                    filename, downloaded, null);
+        }
 
         /** The shape before a running transfer could say how far through it was. */
         public TransferStatus(String transferId, String routeId, String appName, String direction,
@@ -168,6 +176,21 @@ public interface FileTransferService {
                 boolean downloaded) {
             this(transferId, routeId, appName, direction, status, rows, null, errors, filename,
                     downloaded);
+        }
+
+        /**
+         * The code a failed run recorded, or null: the {@code TQL-XXX-nnnn} prefix of its exit
+         * message (docs/export-hygiene.md P8). The message itself carries the driver's text, SQL
+         * fragments and paths and is never projected onto the wire; the code is what a client can
+         * branch on, and the framework's own sentence for it is the catalog's.
+         */
+        public String failureCode() {
+            if (exitMessage == null) {
+                return null;
+            }
+            java.util.regex.Matcher code = java.util.regex.Pattern
+                    .compile("^(TQL-[A-Z]+-\\d{4})\\b").matcher(exitMessage);
+            return code.find() ? code.group(1) : null;
         }
     }
 

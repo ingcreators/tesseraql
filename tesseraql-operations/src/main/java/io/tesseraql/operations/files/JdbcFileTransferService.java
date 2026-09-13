@@ -413,12 +413,18 @@ public final class JdbcFileTransferService implements FileTransferService {
         // Read the execution status before the transfer detail: the run records its counts and
         // errors before completing, so a terminal status guarantees the detail row is final
         // (reading the other way round can observe COMPLETED with stale counts).
-        String executionStatus = jobs.findExecution(transferId)
-                .map(execution -> execution.status().name()).orElse("UNKNOWN");
+        Optional<io.tesseraql.operations.batch.JobExecution> execution = jobs
+                .findExecution(transferId);
+        String executionStatus = execution.map(e -> e.status().name()).orElse("UNKNOWN");
+        // The recorded reason rides the status for its CODE (TransferStatus.failureCode); the
+        // text itself is projected nowhere on the wire.
+        String exitMessage = execution.map(io.tesseraql.operations.batch.JobExecution::exitMessage)
+                .orElse(null);
         return findTransfer(transferId).map(transfer -> new TransferStatus(
                 transferId, transfer.routeId(), transfer.appName(), transfer.direction(),
                 executionStatus, transfer.rowCount(), transfer.expectedRows(),
-                transfer.errors(), transfer.filename(), transfer.downloadedAt() != null));
+                transfer.errors(), transfer.filename(), transfer.downloadedAt() != null,
+                exitMessage));
     }
 
     /** The connected vendor (for label normalization and the row-limit clause), detected once. */
