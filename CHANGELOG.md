@@ -47,6 +47,18 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **A PDF print template renders in the export's locale.** A template's `#numbers` and `#dates`
+  utilities, `${#locale}` and `#{…}` message expressions now follow `locale:` — the literal, the
+  request source or the configured default the export resolved — and an export that declares no
+  locale renders in English, as every other locale-less template does. The template context used
+  to be `Locale.ROOT` whatever the export said, so a document carried two locales (the formatted
+  columns in `de-DE`, the template's own numbers in ROOT), and any message expression failed the
+  export after the query had run. A template that cannot be rendered now fails with
+  `TQL-LD-2831` naming the template on the route, the asynchronous and the job arm alike, instead
+  of the document-write code naming the output file. Studio's export preview follows a literal
+  `locale:` / `timezone:`. The `TQL-YAML-1005` advisory no longer warns that a `locale:` on a pdf
+  template "reaches only a typed column". No shipped template changes.
+
 - **A tabular export with no rows carries its header.** A CSV or Excel-grid export of an empty
   result now writes its header row — the declared `columns:`, or the query's column names read
   from the result set's metadata — where it used to be 0 bytes (three with `bom: true`) and a

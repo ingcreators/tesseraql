@@ -146,6 +146,14 @@ final class StudioSupport {
         return model;
     }
 
+    /** A literal declaration, or null for a request-sourced one the preview cannot resolve. */
+    private static String literal(String declared) {
+        return declared == null || declared.isBlank()
+                || io.tesseraql.yaml.app.ExportDeclarations.isSourceExpression(declared)
+                        ? null
+                        : declared;
+    }
+
     /** Pretty-prints a JSON response body for the try-it console; returns it unchanged otherwise. */
     private static String prettyBody(String body) {
         if (body == null || body.isBlank()) {
@@ -477,7 +485,10 @@ final class StudioSupport {
         Path template = export.template() == null || export.template().isBlank()
                 ? null
                 : routeDir.resolve(export.template());
-        io.tesseraql.core.files.FileWriteSpec spec = export.toWriteSpec(template, appHome);
+        // The preview follows a literal locale: and timezone: (docs/export-hygiene.md P6); a
+        // request-sourced value has no request here and stays unresolved, as the codec's default.
+        io.tesseraql.core.files.FileWriteSpec spec = export.toWriteSpec(template, appHome)
+                .withFormatting(literal(export.locale()), literal(export.timezone()));
         java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
         try {
             codec.write(out, spec, io.tesseraql.core.files.ExportModel.repeatable(rows,

@@ -1066,8 +1066,9 @@ by three bullets, with 5-0's time bullet kept between the first and the second; 
   (`template:` without `startCell:`) hands the template the raw values and reads none of these
   keys.
 - (5-0's time-of-day bullet, unchanged)
-- `locale:` and `timezone:` drive those patterns, and reach only a typed or formatted column.
-  The linter warns when a `csv` or `pdf` export declares them over a column list with none; it
+- `locale:` and `timezone:` drive those patterns, and reach only a typed or formatted column
+  (since `export-hygiene.md` P6 a `pdf` template also renders in `locale:`). The linter warns
+  when a `csv` or `pdf` export declares them over a column list with none; it
   cannot see a column the query derives. Each key stands on its own. A key is a literal such
   as `ja-JP` or `Asia/Tokyo`, or on a route a request source: `principal.claim.locale`,
   `query.tz` naming a declared `input:`, `body.tz` (a declared input, unless

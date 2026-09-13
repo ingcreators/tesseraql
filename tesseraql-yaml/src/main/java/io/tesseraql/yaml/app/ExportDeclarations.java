@@ -289,7 +289,11 @@ public final class ExportDeclarations {
                                 + String.join(", ", unread) + " reach no cell today"));
             }
         }
-        if ((csv || pdf) && !spec.columns().isEmpty()
+        // On pdf with a template the locale reaches the template's utilities and messages
+        // (docs/export-hygiene.md P6), so "reaches only a typed column" is false there.
+        boolean localeReachesTemplate = pdf && spec.template() != null && spec.locale() != null
+                && !spec.locale().isBlank();
+        if ((csv || pdf) && !spec.columns().isEmpty() && !localeReachesTemplate
                 && ((spec.timezone() != null && !spec.timezone().isBlank())
                         || (spec.locale() != null && !spec.locale().isBlank()))
                 && spec.columns().stream().noneMatch(column -> column.type() != null
