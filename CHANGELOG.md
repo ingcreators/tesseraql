@@ -47,6 +47,19 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **The declaration path says what the runtime will do.** A job step without `format:` (or with a
+  blank one) is refused at lint and at boot naming the job and the step — it used to boot and fail
+  every run with `No file codec for format 'null'`, naming nothing; `format: ""` on a route is
+  refused the same way (it used to refuse boot naming neither app nor route). `tesseraql job run`
+  exits 2 on it before any execution row exists. A push `as:` carrying `{key}`, or a placeholder
+  whose root the job context does not carry (`params`, `steps`, `batch`, `tenant`) or whose
+  `params.<name>` the job never declared, is a lint error (`TQL-YAML-1042`) — the name used to be
+  delivered literally, or empty; `{steps.<id>.filename}` is the spelling for the produced file's
+  name. An export `filename:` carrying `{key}` without `splitBy:` is a lint error
+  (`TQL-YAML-1041`), and a filename whose extension is not the format's a lint warning
+  (`TQL-YAML-1045`). Boot logs a WARNING when a module codec replaces a built-in format's codec in
+  a codec set — the last one registered still wins, as before.
+
 - **A PDF print template renders in the export's locale.** A template's `#numbers` and `#dates`
   utilities, `${#locale}` and `#{…}` message expressions now follow `locale:` — the literal, the
   request source or the configured default the export resolved — and an export that declares no

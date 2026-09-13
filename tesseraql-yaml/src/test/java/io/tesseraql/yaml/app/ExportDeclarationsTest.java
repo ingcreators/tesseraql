@@ -300,16 +300,19 @@ class ExportDeclarationsTest {
     }
 
     @Test
-    void aStepWithoutAFormatIsJudgedOnItsValuesOnly() {
-        // The step's missing format: is the linter's own TQL-YAML-1041; the format-dependent
-        // arms (an inert sheet: on csv, say) must not fire against a default the step has not.
+    void aStepWithoutAFormatIsRefusedAndJudgedOnItsValues() {
+        // The missing format: is the predicate's own refusal (docs/export-hygiene.md P7 — the
+        // step DOES run, to "No file codec for format 'null'"); the format-dependent arms (an
+        // inert sheet: on csv, say) still must not fire against a default the step has not, while
+        // the value arms still judge what they can.
         Site step = Site.step("t", "report.daily", "report");
         ExportSpec noFormat = new ExportSpec(null, null, "report.xlsx", null, "B2", List.of(),
                 null, "Asia/Tokio", null, null, null, null, null, null);
 
         List<Violation> violations = ExportDeclarations.violations(step, noFormat, null);
 
-        assertThat(violations).extracting(Violation::key).containsExactly("export.timezone");
+        assertThat(violations).extracting(Violation::key)
+                .containsExactly("export.format", "export.timezone");
     }
 
     @Test
@@ -483,6 +486,41 @@ class ExportDeclarationsTest {
                 .extracting(Violation::kind).isEqualTo(Kind.ADVISORY);
         assertThat(ExportDeclarations.violations(ROUTE, csv, null)).singleElement()
                 .extracting(Violation::kind).isEqualTo(Kind.ADVISORY);
+    }
+
+    /**
+     * A step without {@code format:} is refused by the predicate (docs/export-hygiene.md P7):
+     * it used to return early on the belief that the step never runs, and every job runner ran
+     * it to {@code TQL-LD-2801 No file codec for format 'null'} naming neither job nor step. A
+     * blank format is refused on every site; an absent one on a route is the documented csv
+     * default and stays quiet.
+     */
+    @Test
+    void aMissingOrBlankFormatIsRefusedWhereTheRuntimeWouldFail(@TempDir Path dir) {
+        Site step = Site.step("t", "report.daily", "report");
+        for (String format : new String[]{null, "", "  "}) {
+            List<Violation> violations = ExportDeclarations.violations(step,
+                    export(format, null, null), dir);
+            assertThat(violations).as("job step, format " + format).singleElement()
+                    .satisfies(violation -> {
+                        assertThat(violation.code()).isEqualTo(ExportDeclarations.INCOMPLETE);
+                        assertThat(violation.kind()).isEqualTo(Kind.INVALID);
+                        assertThat(violation.key()).isEqualTo("export.format");
+                        assertThat(violation.message()).contains("report.daily", "report",
+                                "format:", "csv, excel, or pdf");
+                    });
+        }
+        for (Site route : List.of(ROUTE, FILE_EXPORT)) {
+            assertThat(ExportDeclarations.violations(route, export(null, null, null), dir))
+                    .as("absent on a route defaults to csv").isEmpty();
+            assertThat(ExportDeclarations.violations(route, export("", null, null), dir))
+                    .as("blank on a route").singleElement()
+                    .satisfies(violation -> {
+                        assertThat(violation.code()).isEqualTo(ExportDeclarations.INCOMPLETE);
+                        assertThat(violation.kind()).isEqualTo(Kind.INVALID);
+                        assertThat(violation.message()).contains("items.dump", "format:");
+                    });
+        }
     }
 
     @Test

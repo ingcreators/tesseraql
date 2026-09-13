@@ -28,6 +28,8 @@ final class ExportRules {
 
     // A source feeding the export is allowed to fail into nothing.
     private static final String EXPORT_SOURCE_DEGRADES_TO_EMPTY = "TQL-YAML-1057";
+    /** TQL-YAML-1045: the declared filename's extension is not the format's (a warning). */
+    private static final String EXPORT_EXTENSION_MISMATCH = "TQL-YAML-1045";
 
     private static final String EXPORT_GROUPS_WITHOUT_TEMPLATE = "TQL-LD-5312";
 
@@ -57,10 +59,6 @@ final class ExportRules {
                     + " sql: { file: … }"));
             return;
         }
-        if (export.format() == null || export.format().isBlank()) {
-            findings.add(new LintFinding(INCOMPLETE_EXPORT, ERROR, source, "Step '" + step.id()
-                    + "': export needs format: (csv, excel, or pdf)"));
-        }
         if (export.after() != null && io.tesseraql.core.files.FileTransferService.AFTER_DOWNLOAD
                 .equals(export.after().effectiveTiming())) {
             findings.add(new LintFinding(INAPPLICABLE_EXPORT_OPTION, ERROR, source,
@@ -80,6 +78,7 @@ final class ExportRules {
                 ExportDeclarations.Site.step(appName(config), job.definition().id(), step.id()),
                 export, job.source().getParent()), source, findings);
         lintExportRowCap(export, "Step '" + step.id() + "': ", source, findings);
+        lintExportFilename(export, "Step '" + step.id() + "': ", source, findings);
         lintExportSources(context, export, java.util.Map.of(),
                 step.sql() == null || step.sql().file() == null
                         ? null
@@ -153,6 +152,48 @@ final class ExportRules {
             findings.add(new LintFinding(violation.code().toString(),
                     violation.kind() == ExportDeclarations.Kind.ADVISORY ? WARNING : ERROR,
                     source, violation.message(), line, null));
+        }
+    }
+
+    /**
+     * The declared filename against the declaration around it (docs/export-hygiene.md P7). A
+     * {@code {key}} in a filename that does not split is delivered literally — the converse of the
+     * splitBy-needs-{key} rule, an error. An extension that is not the format's is a warning, never
+     * a refusal: {@code users-{key}.tar.gz} is not a real split declaration (csv bytes in an entry
+     * named {@code .tar.gz}), and a csv an author called {@code notes.zip} is served as csv either
+     * way — the type follows the format, so the name only misleads the reader.
+     */
+    static void lintExportFilename(io.tesseraql.yaml.model.ExportSpec spec, String label,
+            String source, List<LintFinding> findings) {
+        if (spec == null || spec.filename() == null || spec.filename().isBlank()) {
+            return;
+        }
+        String filename = spec.filename();
+        boolean splits = spec.splitBy() != null && !spec.splitBy().isBlank();
+        if (!splits && filename.contains(io.tesseraql.core.files.SplitExport.KEY)) {
+            findings.add(new LintFinding(INCOMPLETE_EXPORT, ERROR, source, label
+                    + "filename: carries " + io.tesseraql.core.files.SplitExport.KEY
+                    + " but the export declares no splitBy: - the placeholder would be delivered"
+                    + " literally; declare splitBy:, or drop the placeholder"));
+        }
+        String format = spec.format() == null || spec.format().isBlank()
+                ? "csv"
+                : spec.format().toLowerCase(java.util.Locale.ROOT);
+        String expected = switch (format) {
+            case "csv" -> ".csv";
+            case "excel" -> ".xlsx";
+            case "pdf" -> ".pdf";
+            default -> null;
+        };
+        int dot = filename.lastIndexOf('.');
+        String extension = dot < 0
+                ? ""
+                : filename.substring(dot).toLowerCase(java.util.Locale.ROOT);
+        if (expected != null && !extension.isEmpty() && !extension.equals(expected)) {
+            findings.add(new LintFinding(EXPORT_EXTENSION_MISMATCH, WARNING, source, label
+                    + "filename: ends in '" + extension + "' but the export is " + format
+                    + " (" + expected + ") - the file is served and recorded as " + format
+                    + " whatever its name, and a reader trusts the name"));
         }
     }
 

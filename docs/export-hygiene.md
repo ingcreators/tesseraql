@@ -16,7 +16,10 @@
 > that is not a workbook — `TQL-LD-2836` and `TQL-LD-2837`: shipped as P4. **P5** the zero-row
 > header — declared columns or the source's own names, on every surface, through the spool:
 > shipped as P5. **P6** the print template's locale — the export's own, English when none, `und`
-> folded, the render inside the codec's try: shipped as P6; **P7** the declaration path; **P8** the card and the status JSON under a
+> folded, the render inside the codec's try: shipped as P6. **P7** the declaration path — the
+> predicate refuses a format-less step and a blank format, `push.as:` and an export `filename:`
+> are judged for the placeholders the pipeline can resolve, a mismatched extension warns, a codec
+> replacing another's format is logged: shipped as P7; **P8** the card and the status JSON under a
 > prefix — pending. Each pull request flips its own line here when it merges.
 >
 > **The two records that filed these items were wrong about them in a dozen places, and the
@@ -705,6 +708,98 @@ or documented template moves. A template error's code changes from 2802 (route) 
   Studio backlog.
 - `InboxNotifier.java:33`'s bare `Context` (JVM default) and `MailNotifier.java:109,152`'s ROOT
   subject render — the notifications line.
+
+---
+
+## P7 — the declaration path says what the runtime will do
+
+### What was wrong
+
+Items 11, 12, 6's lint half and 3's WARN — every one a case where lint or boot said nothing (or
+the wrong thing) about a declaration the runtime then failed on:
+
+- **Item 11.** `ExportDeclarations.violations:209-217` returned early for a job step without
+  `format:` on the comment "the step never runs" — false: `ExportStepRunner:52-55` passes the null
+  into `FileCodecs.require`, and every runner (`job run` on cp-full and cp-cli, `job rerun`, the
+  runtime runner, the real scheduler, the ops API) failed with `TQL-LD-2801: No file codec for
+  format 'null' - available: […] (the excel format needs …)`, naming neither job, step nor key —
+  `job run` exit 1. Lint said `TQL-YAML-1041` first through its OWN private check
+  (`ExportRules:59-62`), boot said nothing. A blank `format: ""` on a query-export was lint-silent
+  (the predicate mapped blank → csv) and refused BOOT with `No file codec for format ''` naming
+  no app and no route (`RouteCompiler:1406` defaults null only); on a file-export it worked as csv.
+- **Item 12.** `as: delivered-{key}.zip` delivered the literal name on every runner (5c passes
+  `{key}` through, `StepContext.interpolate:442-447`); lint was silent (positive control: `../`,
+  `/`, `${` draw 1042). The same literal `{key}` was lint-silent on an export `filename:` WITHOUT
+  `splitBy:` on job steps and routes — the converse of `ExportRules:194-201` did not exist. An
+  unresolved placeholder (`{params.x}` undeclared, `{nope.nothing}`) rendered a SILENT
+  `delivered-.zip`, the pre-5c symptom alive for every other typo. A push delivers exactly one
+  file, so `{key}` can never resolve; `{steps.<id>.filename}` was the undocumented spelling.
+- **Item 6's lint half.** Nothing judged the declared extension against the format:
+  `users-{key}.tar.gz` under `format: csv` wrote csv bytes into entries named `.tar.gz`.
+- **Item 3.** `FileCodecs.discover` kept the last codec put for a format with no line in any of
+  four sinks (positive control passed): a module codec answering `csv` silently decided the async
+  export, the job step and every import arm.
+
+### The change
+
+- **`ExportDeclarations.violations`** (decision 10): a job step with no or a blank `format:`, and
+  a blank `format:` on any route, draw one `TQL-YAML-1041` INVALID violation on `export.format`
+  ("export needs format: (csv, excel, or pdf)") naming the site — lint, boot, reload, job
+  registration and `job run` (exit 2) alike, since all read the predicate. An ABSENT format on a
+  route stays the documented csv default (`export-declarations.md` decision 22);
+  `RouteCompiler:1406` is untouched for F82 slice 2. The linter's private 1041 for the step goes
+  (5a's 1006 move, again).
+- **`PushStepRules.lintDeliveredName`** (decision 7, ERROR under 1042): `{key}` in `as:`; a
+  placeholder root outside `params|steps|batch|tenant`; a `params.<name>` absent from the job's
+  `input:`. `{steps.<id>.filename}`, `{batch.businessDate}` and a plain name stay quiet.
+- **`ExportRules.lintExportFilename`**, on job steps and routes: `{key}` without `splitBy:` →
+  1041 ERROR; an extension that is not the format's (`.csv` / `.xlsx` / `.pdf`) → the new
+  **`TQL-YAML-1045`** WARNING — never a refusal (`anExportNamedZipKeepsItsCodecsType` allows
+  `notes.zip` for csv by design).
+- **`FileCodecs.put`** (decision 8): one `System.Logger` WARNING when a DIFFERENT class takes a
+  format another codec held, naming the format and both classes; last-wins kept; the same class
+  twice (one codec on two loaders) is quiet. The lint rule and any refusal stay with F82 slice 2 —
+  a refusal inside `discover` would fail every app carrying the module and crash `lint`/`job run`
+  (RUN, variant).
+- `docs/jobs.md` documents the context roots and `{steps.<id>.filename}`; `docs/file-transfers.md`
+  the `format:` rule and the two filename lints.
+
+### The guards, red before the fix (HEAD `35a66d60c`)
+
+| guard | asserts | HEAD |
+|---|---|---|
+| `ExportDeclarationsTest.aMissingOrBlankFormatIsRefusedWhereTheRuntimeWouldFail` | job step with `null`, `""`, `"  "` → one INVALID 1041 on `export.format` naming job and step; routes: absent → none, blank → one | none |
+| `ExportDeclarationsTest.aStepWithoutAFormatIsRefusedAndJudgedOnItsValues` (rewritten) | `export.format` AND `export.timezone` — the value arms still judge | pinned the early return |
+| `JobCommandIntegrationTest.aFormatLessExportStepIsRefusedBeforeAnyExecutionRowExists` | `job run` exits 2 with `TQL-YAML-1041`, `job 'report.daily' step 'report'`, never `'null'`; no execution row | exit 1 |
+| `AppLinterPushStepTest.aPushNameThePipelineCannotResolveIsAnError` | `delivered-{key}.zip`, `{nope.nothing}.csv`, `{params.x}.csv` → 1042 ERROR; `{steps.extract.filename}`, `users-{batch.businessDate}.csv`, `plain.csv` → quiet | silent |
+| `AppLinterExportStepTest.aFilenameThePipelineWouldDeliverWronglyIsSaidSo` | `report-{key}.csv` without splitBy → 1041; `users-{key}.tar.gz` + splitBy → 1045 WARNING, no 1041; `report.csv` quiet | silent |
+| `AppLinterRouteExportTest.aLiteralKeyWithoutSplitByIsAnErrorOnARouteToo` | the route arm: 1041; `notes.zip` for csv → 1045 WARNING | silent |
+| `FileCodecsTest` (new, a JUL handler with a control line) | `of(First csv, Second csv)` → one WARNING naming `'csv'` and both classes, `Second` wins; `of(First csv, Second excel)` and `of(First csv, First csv)` quiet | no line |
+
+**Bracket** (`work/export-hygiene-measurement/p7/bracket/`, core + yaml jars reinstalled per
+column): HEAD 6 red; the fix 3/3 + 75/75 + 6/6 + 17/17 + 34/34 + 1/1 green; **V-lintonly** (the
+format violation INERT) — exactly the predicate's INVALID assertion and the CLI exit-2 guard red
+(hazard 77: an `AppLinter` test alone is green); **V-keyonly** (the root arm gone) — exactly the
+`{nope.nothing}` case red; **V-nofilename** (the route arm's call gone) — exactly the route guard
+red; **V-sameclass** (WARN on any replacement) — exactly the quiet guard red.
+
+### What this breaks
+
+A job step without `format:` that "worked" (booted, then failed every run) is refused at lint,
+boot and `job run` (exit 2, was 1). `format: ""` on a file-export goes from "works as csv" to
+refused (a typo, not a choice — decision 10). A push `as:` carrying `{key}` or an unresolvable
+placeholder, and an export `filename:` carrying `{key}` without `splitBy:`, are lint errors —
+lint rules, not predicate arms, so a running app keeps delivering what it did until the
+declaration is fixed (pre-1.0, no users). An app declaring `notes.zip` for a csv gains a lint
+warning.
+
+### Filed, not fixed (from P7's measurement)
+
+- The `TQL-LD-2801` hard-coded excel hint (already filed) — untouched here.
+- `tesseraql lint` crashes with a stack trace on an unquoted `as: {nope}` (a YAML flow mapping,
+  `TQL-YAML-1001` out of `AppLinter.lint`) — the filed lint-crash family; every fixture here is
+  quoted.
+- The three-runners-two-module-sets drift for an undeclared `work/modules` jar — F82 slice 2.
 
 ---
 

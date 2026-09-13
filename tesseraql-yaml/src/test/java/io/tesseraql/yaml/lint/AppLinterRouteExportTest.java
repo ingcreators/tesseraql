@@ -37,6 +37,27 @@ class AppLinterRouteExportTest {
         return dir;
     }
 
+    /** The route arm of the filename lints (docs/export-hygiene.md P7). */
+    @Test
+    void aLiteralKeyWithoutSplitByIsAnErrorOnARouteToo(@TempDir Path dir) throws Exception {
+        List<LintFinding> findings = new AppLinter().lint(app(dir, """
+                  format: csv
+                  filename: "report-{key}.csv"
+                """));
+        assertThat(findings).anySatisfy(finding -> {
+            assertThat(finding.code()).isEqualTo("TQL-YAML-1041");
+            assertThat(finding.message()).contains("{key}", "splitBy:");
+        });
+        List<LintFinding> mismatched = new AppLinter().lint(app(dir, """
+                  format: csv
+                  filename: notes.zip
+                """));
+        assertThat(mismatched).anySatisfy(finding -> {
+            assertThat(finding.code()).isEqualTo("TQL-YAML-1045");
+            assertThat(finding.severity()).isEqualTo("warning");
+        });
+    }
+
     @Test
     void aTemplateThatIsNotThereIsAnErrorRatherThanAPlainGrid(@TempDir Path dir) throws Exception {
         List<LintFinding> findings = new AppLinter().lint(app(dir, """

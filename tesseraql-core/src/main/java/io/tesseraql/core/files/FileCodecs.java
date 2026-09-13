@@ -17,6 +17,8 @@ public final class FileCodecs {
 
     private static final TqlErrorCode UNKNOWN_FORMAT = new TqlErrorCode(TqlDomain.LD, 2801);
 
+    private static final System.Logger LOG = System.getLogger(FileCodecs.class.getName());
+
     private final Map<String, FileCodec> codecs;
 
     private FileCodecs(Map<String, FileCodec> codecs) {
@@ -26,8 +28,25 @@ public final class FileCodecs {
     public static FileCodecs discover() {
         Map<String, FileCodec> codecs = new LinkedHashMap<>();
         ServiceLoader.load(FileCodec.class)
-                .forEach(codec -> codecs.put(codec.format(), codec));
+                .forEach(codec -> put(codecs, codec));
         return new FileCodecs(codecs);
+    }
+
+    /**
+     * Registers a codec under its format, the last one put winning as it always has — and says
+     * so when a different class takes a format another codec held (docs/export-hygiene.md P7):
+     * a module codec answering {@code csv} silently decided every export and import that read
+     * this set. A refusal here would fail every app carrying the module; the lint that names the
+     * shape belongs to the codec-discovery work (F82 slice 2). The line describes THIS codec set:
+     * the synchronous route discovers on its own loader and may never see the pair.
+     */
+    private static void put(Map<String, FileCodec> codecs, FileCodec codec) {
+        FileCodec previous = codecs.put(codec.format(), codec);
+        if (previous != null && previous.getClass() != codec.getClass()) {
+            LOG.log(System.Logger.Level.WARNING, "File codec {0} replaces {1} for format ''{2}'' in"
+                    + " this codec set - the last one registered wins; declare one codec per format",
+                    codec.getClass().getName(), previous.getClass().getName(), codec.format());
+        }
     }
 
     /**
@@ -37,14 +56,14 @@ public final class FileCodecs {
     public static FileCodecs discover(ClassLoader loader) {
         Map<String, FileCodec> codecs = new LinkedHashMap<>();
         ServiceLoader.load(FileCodec.class, loader)
-                .forEach(codec -> codecs.put(codec.format(), codec));
+                .forEach(codec -> put(codecs, codec));
         return new FileCodecs(codecs);
     }
 
     public static FileCodecs of(FileCodec... codecs) {
         Map<String, FileCodec> byFormat = new LinkedHashMap<>();
         for (FileCodec codec : codecs) {
-            byFormat.put(codec.format(), codec);
+            put(byFormat, codec);
         }
         return new FileCodecs(byFormat);
     }

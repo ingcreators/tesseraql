@@ -187,6 +187,7 @@ final class RouteRules implements LintRule {
                     source, findings);
         }
         ExportRules.lintExportRowCap(definition.fileExport(), "", source, findings);
+        ExportRules.lintExportFilename(definition.fileExport(), "", source, findings);
         ExportRules.lintExportSources(context, definition.fileExport(), definition.sources(),
                 ExportRules.extractionSqlFile(route, definition), "", source, findings);
         DocumentRules.lintDatasource(context, config, route.source(), definition, source, findings);

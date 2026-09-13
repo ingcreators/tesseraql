@@ -210,9 +210,15 @@ public final class ExportDeclarations {
         }
         formatName(site, spec.format(), out);
         boolean declaredFormat = spec.format() != null && !spec.format().isBlank();
-        if (!declaredFormat && site.job()) {
-            // A step's missing format: is the linter's own TQL-YAML-1041 and the step never
-            // runs — the format-dependent arms have no format to judge against.
+        if (!declaredFormat && (site.job() || spec.format() != null)) {
+            // A step without format:, or a blank format: anywhere, is refused here — lint and
+            // boot alike, naming the site (docs/export-hygiene.md P7). The step used to be
+            // waved through on the belief that it never runs; every job runner ran it to
+            // "No file codec for format 'null'" naming neither job, step nor key, and a blank
+            // on a route refused boot naming nothing. An ABSENT format on a route is the
+            // documented csv default (export-declarations.md decision 22).
+            out.add(new Violation(INCOMPLETE, Kind.INVALID, "export.format",
+                    site.prefix("export.format") + "export needs format: (csv, excel, or pdf)"));
             zone(site, "export.timezone", spec.timezone(), false, out);
             locale(site, "export.locale", spec.locale(), false, out);
             return out;
