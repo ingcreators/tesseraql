@@ -46,6 +46,19 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **An Excel export refuses what a workbook cannot hold, naming it.** A text over 32,767
+  characters — Excel's per-cell limit — is refused with `TQL-LD-2836` naming the column and the
+  data row in grid and placement mode, and the cell in a jxls report; a report used to complete
+  with the cell silently blank, placement failed with POI's own text naming nothing, and the grid
+  wrote a workbook Excel repairs on open. A jxls report whose template holds a cell the workbook
+  cannot copy (an openpyxl-authored `inlineStr` cell) now fails instead of completing with blanks.
+  The worksheet's own limits — 1,048,576 rows including the header, 16,384 columns — are refused
+  the same way, pointing at `splitBy:` or csv, where fastexcel used to throw a message-less
+  exception that the asynchronous arm recorded as no reason at all. A declared `template:` that is
+  missing, a directory, empty or not a workbook when the export runs is refused with `TQL-LD-2837`
+  naming the template — it used to fall through to the grid and fail as `TQL-LD-2856` naming the
+  rows, or with the output file's name.
+
 - **A failed asynchronous or job export records why, with a code, within its column — and logs
   its stack.** A codec, column-format or spool failure on a `file-export` or an `export:` job step
   now records `TQL-LD-2802: Writing the <format> document failed after the query ran: … [<file>]`,

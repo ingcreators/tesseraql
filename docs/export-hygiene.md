@@ -11,7 +11,9 @@
 > leaks and the 65,535-byte ceiling — a failed drain releases its spool, a failed async or job
 > export releases its writer's, a long text spools under a new tag: shipped as P2. **P3** what a
 > failed export says — the document code on every arm, the SQL sites coded, the reason within its
-> column, the stack logged: shipped as P3; **P4** the Excel codec's own refusals; **P5** the zero-row header; **P6** the
+> column, the stack logged: shipped as P3. **P4** the Excel codec's own refusals — the 32,767
+> cell, the worksheet's row and column limits, a report cell the workbook refuses, a template
+> that is not a workbook — `TQL-LD-2836` and `TQL-LD-2837`: shipped as P4; **P5** the zero-row header; **P6** the
 > print template's locale; **P7** the declaration path; **P8** the card and the status JSON under a
 > prefix — pending. Each pull request flips its own line here when it merges.
 >
@@ -462,6 +464,97 @@ still carries no reason until P8. No test asserted the raw shapes.
 - The transfer span invisible to the ops traces API (no `app` attribute) — the ops line.
 - 2831's absolute app-home path and the 2853/2855 value snippets inside a recorded reason — the
   error-hygiene line.
+
+---
+
+## P4 — the Excel codec refuses what it cannot write and names its template
+
+### What was wrong
+
+Items 4, 4b and 10, all inside `JxlsFileCodec`:
+
+- **The 32,767-character cell (item 4).** The grid (fastexcel) wrote a longer text — LibreOffice,
+  POI, openpyxl and fastexcel-reader read it, Excel repairs the file on open (CITED; no Excel on
+  this host). Placement threw POI's `IllegalArgumentException("The maximum length of cell contents
+  (text) is 32767 characters")` naming no column — 2802 on the route since 5b, raw on the async
+  and job arms until P3. **A jxls report COMPLETED with the cell blank** on every arm:
+  `JxlsPoiTemplateFillerBuilder` installs `PoiExceptionLogger`, which logs the cell exception and
+  moves on; the only trace was jxls's own `JXLS [ERROR]` on stderr.
+- **The worksheet's dimensions (4b).** fastexcel's `Worksheet.cell(row, col)` throws a
+  MESSAGE-LESS `IllegalArgumentException` at row 1,048,576 or column 16,384 (RUN at the library
+  boundary): `exit_message` NULL on the async arm — item 8's worst shape. The row limit is
+  reachable (the grid is a streaming codec and uncapped); the column limit is not in practice
+  (PostgreSQL's table limit is 1,600 columns).
+- **A template present but unusable (item 10's live half).** `write()` chose the mode by
+  `spec.template() != null && Files.isRegularFile(template)`: a template deleted after boot fell
+  through to the GRID, whose `model.rows()` on a repeatable model raised `TQL-LD-2856` — the
+  row-set sentence, naming neither the file nor the reason; an empty or text file passed
+  `isRegularFile` and failed inside POI with the OUTPUT filename as source. Lint and boot judge
+  existence when the app loads (#1306), so the codec is the only place that sees a file deleted,
+  emptied or replaced afterwards.
+
+### The change
+
+- **`TQL-LD-2836` `WORKBOOK_LIMIT`** (decision 4, 4b): `requireCellText` in the grid's
+  `writeValue` and placement's cell loop — `Column 'body' at data row 2 holds 32,768 characters; a
+  workbook cell holds at most 32,767 - shorten the value in the query, or export it as csv`;
+  `requireRow` before every data row in both modes — `The export reached data row 1,048,576 and a
+  worksheet holds at most 1,048,576 rows including the header - split the export with splitBy:,
+  or export it as csv`; `requireColumns` once per export. Report mode installs
+  `.withLogger(new PoiExceptionThrower())` and wraps the resulting `JxlsException` (which names the
+  cell and the expression, `B2` / `${r.body}`) in the same code.
+- **`TQL-LD-2837` `TEMPLATE_UNUSABLE`** (decision 11, 2831's excel-owned sibling): `write()` no
+  longer falls through — a declared template is used or refused. `requireWorkbook` refuses a
+  directory, a missing file, an empty file, and a file whose first bytes are neither the OOXML
+  (`PK\x03\x04`) nor the OLE2 signature, each `The workbook template <path> <reason> - restore the
+  file the export declares, or fix template:`. A signature check rather than a full POI parse:
+  cheap, dependency-free, and it catches every measured shape.
+- Both codes join `StatusMappingLedgerTest`'s recorded set (raised after the query ran; the
+  route answers 500 through 2802, the other arms as a failed transfer) and `docs/file-transfers.md`'s
+  code table; `docs/reference-error-codes.md` regenerated.
+
+### The guards, red before the fix
+
+`JxlsFileCodecLimitsTest` (tesseraql-excel, POI-authored fixtures — an openpyxl-authored
+template holds `inlineStr` cells jxls cannot copy and a control would be red for the wrong reason)
+and one runtime IT:
+
+| guard | asserts | HEAD `b8d775ca1` |
+|---|---|---|
+| `theGridRefusesATextPastTheCellLimitNamingColumnAndRow` | 32,768 chars in row 2 → 2836 naming `'body'`, `row 2`, `32,767` | writes |
+| `theGridWritesATextAtTheCellLimit` | 32,767 chars round-trip (the control) | green |
+| `placementRefusesATextPastTheCellLimitNamingColumnAndRow` | 2836 naming `'body'`, `row 2` | raw POI `IllegalArgumentException` |
+| `aReportRefusesATextPastTheCellLimitNamingTheCell` | a 10-character control renders; 32,768 → 2836 naming `B2` | COMPLETES, cell blank |
+| `theGridRefusesTheRowPastTheWorksheetLimitNamingTheLimit` | 1,048,577 synthetic rows → 2836 naming `1,048,576` and `splitBy` | message-less `IllegalArgumentException` |
+| `theGridRefusesMoreColumnsThanAWorksheetHolds` | 16,385 columns → 2836 naming `16,384` | message-less `IllegalArgumentException` |
+| `aTemplateThatIsNotAWorkbookIsRefusedByName` | missing / directory / empty / text × report / placement → 2837 naming the file | `TQL-LD-2856` (report), `NoSuchFileException` etc. |
+| `ExcelTransferIntegrationTest.aTemplateDeletedAfterBootIsRefusedByNameOnEveryArm` | the fragile twins (a `file-export`, a `query-export`, a job step, each with its own template copy): the sync control 200; the template deleted BETWEEN boot and request → sync 500 `TQL-LD-2837`, async FAILED with `exit_message` naming 2837 and `fragile-frame.xlsx`, `runJob` FAILED the same | sync `TQL-LD-2856` |
+
+**Bracket** (`work/export-hygiene-measurement/p4/bracket/`, the excel jar reinstalled per column):
+HEAD 6 + 1 red; the fix 7/7 + 14/14 + 4/4 green; **V-gridwrites** — exactly the grid text guard
+red; **V-nothrower** — exactly the report guard red (the silent blank returns); **V-fallthrough**
+(`requireWorkbook` a no-op) — the template guard red in both classes (the IT reads `TQL-LD-2802`:
+P3's lift now dresses the fall-through's `NoSuchFileException`, which is why the by-name code
+matters); **V-nodimensions** — exactly the two dimension guards red.
+
+### What this breaks
+
+A grid export that COMPLETED with a text over 32,767 characters — readable in LibreOffice — now
+fails with 2836 (decision 4: one rule for the workbook). A jxls report over an openpyxl-authored
+template with static `inlineStr` cells turns from silent blanks into a hard failure (right, and
+said in the CHANGELOG). A template deleted after boot answers `TQL-LD-2837` naming the file where
+it answered `TQL-LD-2856`; `TQL-LD-2856` itself is unchanged for its own case (a repeatable model
+walked as a stream).
+
+### Filed, not fixed (from P4's measurement)
+
+- The `RouteReloader` fingerprint hole: a template in a subdirectory (`tpl/report.xlsx`) or under
+  `../shared/` is outside `digestDirectory` (immediate children), so `--watch` and Studio Apply see
+  neither its deletion nor its restoration; a stub stays until a manual reload — a reloader filing.
+- The Excel codec accepts `..` in `template:` (the pdf codec confines to the app home) — the same
+  filing.
+- Microsoft Excel's own behaviour on a >32,767-character grid cell — unmeasured (no Excel here);
+  the refusal does not depend on it.
 
 ---
 
