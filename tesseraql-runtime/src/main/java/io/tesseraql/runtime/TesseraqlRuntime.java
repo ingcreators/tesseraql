@@ -699,47 +699,12 @@ public final class TesseraqlRuntime implements AutoCloseable {
             }
             // Spooled exports and large rowsets (design ch. 28.4; docs/deployment.md "Shared
             // export files"): file (node-local default), db (the main database — any node serves
-            // the download), or blob (the configured object store, for heavy volumes).
-            String tempStoreKind = manifest.config().getString("tesseraql.temp.store")
-                    .orElse("file");
-            // Through WorkHome rather than by spelling the conventional layout against the app
-            // home: tesseraql.app.work is "honored everywhere or nowhere" by that class's own
-            // contract, and this line was one of the places it was not. It matters more since
-            // #1149 gave the same tree the request-body upload spool and made creating it a boot
-            // precondition — a relocation key that moves the temp store but not the spool moves
-            // half a subsystem. WorkHomeLedgerTest holds the rest of that class.
-            java.nio.file.Path tempScratch = io.tesseraql.yaml.config.WorkHome
-                    .resolve(appHome, manifest.config()).resolve("tmp/tesseraql");
-            io.tesseraql.core.spool.TempStore tempStore = switch (tempStoreKind) {
-                case "file" -> new io.tesseraql.core.spool.FileTempStore(tempScratch);
-                case "db" -> {
-                    io.tesseraql.operations.spool.JdbcTempStore jdbcTemp = new io.tesseraql.operations.spool.JdbcTempStore(
-                            dataSource, tempScratch,
-                            manifest.config().getString("tesseraql.temp.maxBytes")
-                                    .map(value -> io.tesseraql.core.util.Sizes.parseBytes(value,
-                                            "tesseraql.temp.maxBytes"))
-                                    .orElse(io.tesseraql.operations.spool.JdbcTempStore.DEFAULT_MAX_BYTES));
-                    jdbcTemp.ensureSchema();
-                    yield jdbcTemp;
-                }
-                case "blob" -> {
-                    io.tesseraql.core.blob.BlobStore blobStore = io.tesseraql.yaml.blob.BlobStores
-                            .create(manifest.config(), appHome, modules.loader());
-                    if (blobStore instanceof io.tesseraql.core.blob.FileBlobStore) {
-                        LOG.warn("tesseraql.temp.store: blob with the local file provider is still"
-                                + " node-local; configure tesseraql.object-storage.provider (or use"
-                                + " store: db) for multi-node downloads");
-                    }
-                    yield new io.tesseraql.core.spool.BlobTempStore(blobStore,
-                            manifest.config().getString("tesseraql.temp.bucket")
-                                    .orElse("tesseraql-temp"));
-                }
-                default -> throw new io.tesseraql.core.error.TqlException(
-                        new io.tesseraql.core.error.TqlErrorCode(
-                                io.tesseraql.core.error.TqlDomain.YAML, 1024),
-                        "tesseraql.temp.store must be 'file', 'db', or 'blob', got '"
-                                + tempStoreKind + "'");
-            };
+            // the download), or blob (the configured object store, for heavy volumes). One
+            // reading, shared with the CLI job runner (TempStores). The scratch directory is also
+            // the request-body upload spool's (#1149), so it is resolved once here.
+            java.nio.file.Path tempScratch = TempStores.scratch(manifest.config(), appHome);
+            io.tesseraql.core.spool.TempStore tempStore = TempStores.create(manifest.config(),
+                    appHome, tempScratch, modules.loader(), dataSource);
             context.bind(TesseraqlProperties.TEMP_STORE_BEAN, tempStore);
 
             // The transport this runtime serves on (docs/http-threading.md decisions 1 and 4) is

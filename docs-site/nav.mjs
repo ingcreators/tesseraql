@@ -326,4 +326,7 @@ export const EXCLUDED = [
   // An export declaration is refused, or it takes effect: the codec value arms, the literal
   // judged at lint and boot, the request-sourced refusal, the split bundle - designed 2026-09-12.
   'export-declarations.md',
+  // Export hygiene: what an export leaves behind and what it says when it fails - the shared
+  // temp store's spool id, the split bundle, the spool leaks, the failure record - measured 2026-09-13.
+  'export-hygiene.md',
 ];

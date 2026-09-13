@@ -216,6 +216,43 @@ class JobCommandIntegrationTest {
         assertThat(document).contains("2026-01-16 04:00:00").contains("\"1.234,50\"");
     }
 
+    /**
+     * The CLI runner honours {@code tesseraql.temp.store} (docs/export-hygiene.md): a step run
+     * under {@code store: db} records a {@code tql-temp-db:} spool that every served node can
+     * download and the retention sweep can free. It used to build the node-local file store
+     * whatever the app declared — a {@code file:///} URI in the shared table that no other node
+     * could serve.
+     */
+    @Test
+    void theCliJobRunHonoursTheConfiguredTempStore(@TempDir Path dir) throws Exception {
+        assertThat(execute("new", "demo", "--stack", dir.toString())).isZero();
+        Path app = dir.resolve("demo");
+        assertThat(execute(args(app, "migrate", "apply"))).isZero();
+        Files.createDirectories(app.resolve("batch/report"));
+        Files.writeString(app.resolve("batch/report/report.sql"),
+                "select 1 as id, now() as created, 1234.5 as amount\n");
+        writeReportJob(app, "");
+        writeTempStore(app, "db");
+        long before = executionCount("report.daily");
+
+        Captured ran = executeCapturing(args(app, "job", "run", "report.daily"));
+        assertThat(ran.exitCode()).isZero();
+        assertThat(ran.stdout()).contains("report.daily COMPLETED");
+        assertThat(executionCount("report.daily")).isEqualTo(before + 1);
+        assertThat(latestTransferSpool("report.daily#report"))
+                .as("the step's spool lives in the configured store").startsWith("tql-temp-db:");
+    }
+
+    /** Sets the app-wide {@code tesseraql.temp.store} of a freshly scaffolded app. */
+    private static void writeTempStore(Path app, String store) throws Exception {
+        Path config = app.resolve("config/tesseraql.yml");
+        String text = Files.readString(config);
+        assertThat(text).as("a fresh scaffold declares no temp: block")
+                .doesNotContain("\n  temp:\n");
+        Files.writeString(config, text.replaceFirst("^tesseraql:\n",
+                "tesseraql:\n  temp:\n    store: " + store + "\n"));
+    }
+
     /** Sets the app-wide {@code tesseraql.files.*} keys of a freshly scaffolded app. */
     private static void writeFilesDefaults(Path app, String zone, String locale)
             throws Exception {

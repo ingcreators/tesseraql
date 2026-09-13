@@ -14,7 +14,6 @@ import io.tesseraql.yaml.manifest.JobFile;
 import io.tesseraql.yaml.manifest.ManifestLoader;
 import io.tesseraql.yaml.model.CalendarsDocument;
 import io.tesseraql.yaml.model.TriggerSpec;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDate;
 import java.util.ArrayDeque;
@@ -424,11 +423,14 @@ final class JobCommand implements Callable<Integer> {
         io.tesseraql.operations.outbox.JdbcOutboxStore outbox = new io.tesseraql.operations.outbox.JdbcOutboxStore(
                 main);
         outbox.ensureSchema();
-        Path scratch = io.tesseraql.yaml.config.WorkHome.resolve(app, manifest.config())
-                .resolve("tmp").resolve("tesseraql");
-        Files.createDirectories(scratch);
-        io.tesseraql.core.spool.FileTempStore tempStore = new io.tesseraql.core.spool.FileTempStore(
-                scratch);
+        // The declared temp store, read the way the served runtime reads it (docs/export-hygiene.md):
+        // under store: db or blob a CLI-run step's spool lands where every served node can download
+        // it and the retention sweep can free it, instead of a file:/// reference in the shared
+        // table that only this host could resolve.
+        io.tesseraql.core.spool.TempStore tempStore = io.tesseraql.runtime.TempStores.create(
+                manifest.config(), app,
+                io.tesseraql.runtime.TempStores.scratch(manifest.config(), app),
+                Thread.currentThread().getContextClassLoader(), main);
         // export: steps write through the same transfer machinery `serve` wires
         // (docs/analytics-experience.md track 3), so a CLI-run job records the same
         // execution + transfer rows and the console download works either way.

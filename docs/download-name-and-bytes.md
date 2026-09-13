@@ -886,7 +886,9 @@ Every unfiled defect the measurement surfaced, with its destination (the measure
   a dedicated mapper, its own small pull request or here); an IDN host in an absolute `location:`
   (`java.net.IDN` is JDK and could live in core when a shipped path authors one); `[`/`]` in a path
   and the JDK follower; the declared `headers:` `Location` never acquiring the base prefix.
-- **Export-hygiene slice**: the ZIP host byte (#18 — `SplitExport` is in dependency-free core; a
+- **Export-hygiene slice** (now [`export-hygiene.md`](export-hygiene.md); every item below was
+  re-measured there — the ZIP mechanism is the absent extra field, not the host byte, and one JDK
+  call in core fixes it): the ZIP host byte (#18 — `SplitExport` is in dependency-free core; a
   hand-written central-directory platform byte or moving the writer is a design decision); the
   surrogate split in `SplitExport.safe()` and the masked TQL-LD-2857 (#3); `FileCodecs.discover`'s
   last-put-wins, under which a module codec named `csv` silently replaces the built-in and `bom:

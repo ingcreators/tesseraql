@@ -196,7 +196,9 @@ $ tesseraql job cancel <executionId> --app .   # the cooperative stop, see below
   (`--ignore-calendar` forces the run). A request that cannot run at all — an unknown job
   or execution id — exits 2. A completed run fires `after:` chains exactly as the serving
   runtime does; a failed chained job flips the exit code to 1 even though the parent's
-  success stands, because a scheduler must hear about a broken link.
+  success stands, because a scheduler must hear about a broken link. An `export:` step run this
+  way writes its file to the app's `tesseraql.temp.store` — the store the serving nodes read —
+  so the console can download it and a later `push:` step can deliver it.
 - **`job rerun`** starts a new execution with the source run's **recorded parameters and
   business date** (parameters are recorded on every execution for exactly this), so it
   re-runs the same fact — and a [chunk step](#the-chunk-step) resumes from its checkpoint.

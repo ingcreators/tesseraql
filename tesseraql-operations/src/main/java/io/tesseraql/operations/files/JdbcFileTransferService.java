@@ -463,24 +463,40 @@ public final class JdbcFileTransferService implements FileTransferService {
                         .orElse(false)) {
             return Optional.empty();
         }
-        if (claimFirstDownload(transferId)
-                && AFTER_DOWNLOAD.equals(transfer.afterTiming())
-                && transfer.afterSqlFile() != null) {
-            runAfterSql(Path.of(transfer.afterSqlFile()), transfer.params());
-        }
+        // A split bundle is a ZIP whatever codec wrote its entries (SplitExport); every other
+        // export is served as its codec says.
+        String contentType = io.tesseraql.core.files.SplitExport.BUNDLE_FORMAT
+                .equals(transfer.format())
+                        ? io.tesseraql.core.files.SplitExport.BUNDLE_CONTENT_TYPE
+                        : codecs.require(transfer.format()).contentType();
+        java.io.InputStream content;
         try {
-            // A split bundle is a ZIP whatever codec wrote its entries (SplitExport); every other
-            // export is served as its codec says.
-            String contentType = io.tesseraql.core.files.SplitExport.BUNDLE_FORMAT
-                    .equals(transfer.format())
-                            ? io.tesseraql.core.files.SplitExport.BUNDLE_CONTENT_TYPE
-                            : codecs.require(transfer.format()).contentType();
-            SpoolRef ref = new SpoolRef(transferId, SpoolKind.BINARY,
-                    URI.create(transfer.spoolUri()), 0, transfer.rowCount(), Instant.now());
-            return Optional.of(new Download(
-                    transfer.filename(), contentType, tempStore.openInput(ref)));
+            content = tempStore.openInput(
+                    exportSpool(transferId, transfer.spoolUri(), transfer.rowCount()));
         } catch (IOException ex) {
             throw new UncheckedIOException(ex);
+        }
+        // The first-download claim, and the after-download SQL it gates, follow the open: a
+        // request whose bytes could not be opened has delivered nothing and must not be recorded
+        // as if it had.
+        try {
+            if (claimFirstDownload(transferId)
+                    && AFTER_DOWNLOAD.equals(transfer.afterTiming())
+                    && transfer.afterSqlFile() != null) {
+                runAfterSql(Path.of(transfer.afterSqlFile()), transfer.params());
+            }
+        } catch (RuntimeException ex) {
+            closeQuietly(content);
+            throw ex;
+        }
+        return Optional.of(new Download(transfer.filename(), contentType, content));
+    }
+
+    private static void closeQuietly(java.io.InputStream content) {
+        try {
+            content.close();
+        } catch (IOException ignored) {
+            // the stream is being abandoned because of an earlier failure; that one is reported
         }
     }
 
@@ -505,8 +521,7 @@ public final class JdbcFileTransferService implements FileTransferService {
         int expired = 0;
         for (String[] transfer : due) {
             try {
-                tempStore.delete(new SpoolRef(transfer[0], SpoolKind.BINARY,
-                        URI.create(transfer[1]), 0, 0, Instant.now()));
+                tempStore.delete(exportSpool(transfer[0], transfer[1], 0));
             } catch (RuntimeException ex) {
                 // Delete what we can and keep going: a node-local file spool written on
                 // another node is not ours to free, and one bad reference must not stall
@@ -1011,6 +1026,21 @@ public final class JdbcFileTransferService implements FileTransferService {
                 ? null
                 : new SpoolRef(spoolId, SpoolKind.BINARY, URI.create(spoolUri), 1, 0,
                         Instant.now());
+    }
+
+    /**
+     * The reference an exported file's bytes live under — the export side's twin of
+     * {@link #spoolOf}. A transfer row stores the spool URI only, so the id is rebuilt from it:
+     * the keyed stores (database, blob) mint {@code <scheme>:<key>} and look that key up, while
+     * the file store resolves the URI and never reads the id. Rebuilding the id from the transfer
+     * id instead worked on the file store alone and found nothing on the others.
+     */
+    private static SpoolRef exportSpool(String transferId, String spoolUri, long rows) {
+        URI uri = URI.create(spoolUri);
+        String id = "file".equalsIgnoreCase(uri.getScheme())
+                ? transferId
+                : uri.getSchemeSpecificPart();
+        return new SpoolRef(id, SpoolKind.BINARY, uri, 0, rows, Instant.now());
     }
 
     private void insertBatch(String batchId, ImportRequest request, String subject,

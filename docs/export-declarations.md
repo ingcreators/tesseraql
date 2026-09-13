@@ -865,7 +865,7 @@ Asia/Tokyo`) — every fixture lint- and boot-clean under 5a.
 | I12 `anExportStepWithNoDeclarationRendersInTheConfiguredZoneAndLocale` | `runJob("nightly") == COMPLETED`; `report` document `04:00` AND `"1.234,50"`; `tokyo` `07:30` | HEAD; V-cfgwins; V-jobnoloc — 19 |
 | I15 `aPollImportWithoutALocaleReadsTheConfiguredLocale` | `omega,"2.345,60"` → `.done/`, `2345.60` | HEAD (`.error/`); V-poll-nocfg |
 | runtime · `ExportFormatDefaultsEdgeIntegrationTest` I14 | `defaultLocale: ja_JP` (folds to `und`) app: `x.reqloc` → 200 `"1,234.50"` (HEAD's bytes) | V-reqloc-judged, V-belt, V-cfgfirst (500 on every request) |
-| I16 | `temp.store: db`, `maxBytes: 100`, `x.cap` → 500 `TQL-LD-2802`, pair advanced, message has `Spool exceeds tesseraql.temp.maxBytes`, not `export.sql` | HEAD, V-io-sql, V-400 |
+| I16 | `temp.store: db`, `maxBytes: 100`, `x.cap` → 500 `TQL-LD-2802`, pair advanced, message has `Spool exceeds tesseraql.temp.maxBytes`, not `export.sql` (the sync route only: the async download under `db` answered 500 for every export until `export-hygiene.md` P0) | HEAD, V-io-sql, V-400 |
 | I17 | `tesseraql.files.timezone: ${NOPE_ENV}` + a `query-json` route + a `sql` job: boots, 200, COMPLETED | V-eager-config (`TQL-YAML-1101` at boot) |
 | cli · `JobCommandIntegrationTest` I13 `theCliJobRunReadsBothConfiguredKeys` | `job run nightly` exits 0, the `report` document `04:00` AND `"1.234,50"` | HEAD; V-onesite; V-jobnoloc |
 
@@ -1428,7 +1428,10 @@ Every unfiled defect the measurement found, routed elsewhere with its destinatio
   divergence (`time(3)` → `22:30:00` on five dialects, `22:30:00.5` on DuckDB; `HH:mm:ss.SSS` on a
   `java.sql.Time` prints `.000`); MySQL refuses / MariaDB wraps a TIME outside a day; the JSON path
   (`22:30`) vs the export (`22:30:00`) on a zero-second time; `ColumnValues.locale`'s lenient parse.
-- **Export hygiene:** #9's reason projection (`exitMessage` into the status JSON as a
+- **Export hygiene** (now [`export-hygiene.md`](export-hygiene.md), which re-measured every
+  item below and found the drain-spool test as filed necessary but not sufficient — under
+  `temp.store: db` no async download was possible at all, S1, fixed in its P0): #9's reason
+  projection (`exitMessage` into the status JSON as a
   transfer-level `reason`, the card, `TransferSummary`, the console link, `bindFinish` truncation,
   the null-message fallback, a TQL code on the async reason — a documented wire-shape change); the
   drain-spool and writer-spool leaks on every surface (fix at `SpooledRows.drain`/`ExportWrite.write`;

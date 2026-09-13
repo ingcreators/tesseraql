@@ -51,6 +51,8 @@ class InternalDocsSyncTest {
         // Two set differences are green on a record in NEITHER list: pin the registration.
         assertThat(ErrorIndex.isInternalDoc("export-declarations.md"))
                 .as("the export-declarations record is registered").isTrue();
+        assertThat(ErrorIndex.isInternalDoc("export-hygiene.md"))
+                .as("the export-hygiene record is registered").isTrue();
     }
 
     /** The {@code EXCLUDED} array's entries, read from the manifest as text. */
