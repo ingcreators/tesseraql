@@ -39,7 +39,7 @@ public final class ExportWrite {
             Iterator<Map<String, Object>> source, RowEnricher enricher, int enrichWindow,
             Map<String, Object> values, String filename, OutputStream out) throws IOException {
         Iterator<Map<String, Object>> rows = EnrichingRows.of(source, enricher, enrichWindow);
-        if (spec.splitBy() != null && !spec.splitBy().isBlank()) {
+        if (spec.splits()) {
             // One document per group, bundled (docs/export-pipeline.md, decision 12). The rows
             // are spooled whatever the codec declared: splitting is a deliberate choice, and
             // holding one group at a time is what it buys.

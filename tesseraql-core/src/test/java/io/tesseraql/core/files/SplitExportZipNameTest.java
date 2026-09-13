@@ -1,4 +1,4 @@
-package io.tesseraql.pipeline.sql;
+package io.tesseraql.core.files;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -10,8 +10,9 @@ import org.junit.jupiter.api.Test;
  * placeholder goes, the extension goes, and only then the separator the placeholder left
  * behind — a strip that used to run before the extension was cut never found it, so every
  * split export downloaded as {@code orders-.zip} (docs/download-name-and-bytes.md).
+ * Moved to core with the method: the bundle name is one derivation for every surface.
  */
-class SqlStepZipNameTest {
+class SplitExportZipNameTest {
 
     @Test
     void theBundleIsNamedForTheStemWithoutTheSeparatorThePlaceholderLeaves() {
@@ -22,14 +23,15 @@ class SqlStepZipNameTest {
                 "orders.{key}.csv", "orders.zip",
                 "受注-{key}.csv", "受注.zip",
                 "orders-{key}", "orders.zip").entrySet()) {
-            assertThat(SqlStep.zipName(row.getKey())).as(row.getKey()).isEqualTo(row.getValue());
+            assertThat(SplitExport.zipName(row.getKey())).as(row.getKey())
+                    .isEqualTo(row.getValue());
         }
     }
 
     @Test
     void aPlaceholderOnlyFilenameBundlesAsExport() {
-        assertThat(SqlStep.zipName("{key}.csv")).isEqualTo("export.zip");
-        assertThat(SqlStep.zipName("-{key}")).isEqualTo("export.zip");
-        assertThat(SqlStep.zipName(".{key}.csv")).isEqualTo("export.zip");
+        assertThat(SplitExport.zipName("{key}.csv")).isEqualTo("export.zip");
+        assertThat(SplitExport.zipName("-{key}")).isEqualTo("export.zip");
+        assertThat(SplitExport.zipName(".{key}.csv")).isEqualTo("export.zip");
     }
 }

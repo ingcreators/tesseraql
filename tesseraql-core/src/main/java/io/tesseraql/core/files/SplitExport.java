@@ -39,7 +39,26 @@ public final class SplitExport {
     /** The one placeholder a split filename may carry. */
     public static final String KEY = "{key}";
 
+    /** What a split transfer records as its format: the bundle's, not its documents'. */
+    public static final String BUNDLE_FORMAT = "zip";
+
+    /** The content type every split bundle is served under, whatever codec wrote the entries. */
+    public static final String BUNDLE_CONTENT_TYPE = "application/zip";
+
     private SplitExport() {
+    }
+
+    /**
+     * The bundle's own name: the declared filename with its placeholder and extension dropped,
+     * and the separator the placeholder leaves behind dropped after them — {@code orders-{key}.csv}
+     * bundles as {@code orders.zip}, a placeholder-only {@code {key}.csv} as {@code export.zip}.
+     */
+    public static String zipName(String filename) {
+        String withoutKey = filename.replace(KEY, "");
+        int dot = withoutKey.lastIndexOf('.');
+        String stem = (dot >= 0 ? withoutKey.substring(0, dot) : withoutKey)
+                .replaceAll("[-_.]+$", "");
+        return (stem.isBlank() ? "export" : stem) + ".zip";
     }
 
     /**

@@ -96,7 +96,7 @@ export:
   startCell: B5               # workbook placement mode: where data rows start
   maxRows: 5000               # formats that hold every row: the ceiling (see below)
   groupBy: department         # template reads the rows as groups (see below)
-  splitBy: customer_id        # one document per value, bundled as a ZIP (see below)
+  splitBy: customer_id        # one document per value, delivered as one ZIP named for the stem (see below)
   after:                      # file-export only: the follow-up statement
     timing: extract           # extract (default) | download
     sql:
@@ -258,8 +258,13 @@ export:
 ```
 
 One file still leaves the export, so downloads, push destinations and mail attachments are
-unchanged. One group still produces a ZIP and no rows produce an empty one — the output shape is
-a property of the route, not of today's data.
+unchanged. That file is the bundle: `invoice-{key}.pdf` downloads as `invoice.zip` with
+`Content-Type: application/zip`, on `query-export` and `file-export` alike. A `file-export`
+transfer records the bundle — its status reports `invoice.zip` as the `filename`, and the
+operations console lists the transfer as `zip`. The type follows the recorded format, never the
+name: a csv an author called `notes.zip` is still served as `text/csv`. A blank `splitBy:` is no
+split. One group still produces a ZIP and no rows produce an empty one — the output shape is a
+property of the route, not of today's data.
 
 **Each document reads its own values.** A source whose rows carry the split column is narrowed
 to that document; one that does not is shared by all of them. The author states which is which by
@@ -293,7 +298,8 @@ subtree:
 
 - `POST {path}` → `{ "transferId": ..., "statusUrl": "{path}/{transferId}", "fileUrl": "{path}/{transferId}/file" }`
 - `GET {path}/{transferId}` — the transfer state: `status` (`RUNNING`, then `COMPLETED` or
-  `FAILED`), `rowCount`, `filename`, `downloaded`, and `fileUrl` once completed
+  `FAILED`), `rowCount`, `filename` (for a `splitBy:` export, the bundle's name), `downloaded`,
+  and `fileUrl` once completed
 - `GET {path}/{transferId}/file` — streams the finished file; an unknown transfer is 404, a
   transfer that is still running (or failed, or is an import) is 409
 

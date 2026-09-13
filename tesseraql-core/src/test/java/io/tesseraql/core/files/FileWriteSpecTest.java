@@ -45,6 +45,21 @@ class FileWriteSpecTest {
     }
 
     @Test
+    void aBlankSplitByIsNotASplit() {
+        // The one split predicate: the lint treats a blank splitBy: as absent, and so does the
+        // writer, so the transfer must too - a blank must never record a bundle.
+        assertThat(spec(null).splits()).isFalse();
+        assertThat(spec("").splits()).isFalse();
+        assertThat(spec(" ").splits()).isFalse();
+        assertThat(spec("grp").splits()).isTrue();
+    }
+
+    private static FileWriteSpec spec(String splitBy) {
+        return new FileWriteSpec(List.of(), null, null, null, null, null, null, null, splitBy,
+                false);
+    }
+
+    @Test
     void compatibilityConstructorsLeaveTheMarkOff() {
         assertThat(new FileWriteSpec(List.of(), null, null, null).bom()).isFalse();
         assertThat(new FileWriteSpec(List.of(), null, null, null, "ja", "Asia/Tokyo").bom())

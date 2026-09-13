@@ -254,6 +254,83 @@ class BatchJobIntegrationTest {
     }
 
     @Test
+    void aSplitExportStepBundlesOneDocumentPerGroup() throws Exception {
+        String token = token(List.of("BATCH_OPERATOR"));
+        HttpResponse<String> run = send("POST",
+                "/_tesseraql/ops/batch/jobs/user.exportSplit/run", token,
+                "{\"businessDate\": \"2026-03-31\"}");
+        assertThat(run.body()).contains("COMPLETED");
+        String transferId = transferIdOf("user.exportSplit#extract");
+
+        // The row records the bundle - its name AND its format - so the status face and the
+        // ops console's transfers table name and type the ZIP; a type or a name derived at
+        // read time from the per-document pattern leaves the row (and the console) wrong.
+        io.tesseraql.core.files.FileTransferService transfers = runtime.context().lookup(
+                io.tesseraql.pipeline.TesseraqlProperties.FILE_TRANSFER_BEAN,
+                io.tesseraql.core.files.FileTransferService.class);
+        assertThat(transfers.status(transferId).orElseThrow().filename())
+                .isEqualTo("users-2026-03-31.zip");
+        io.tesseraql.core.files.FileTransferService.TransferSummary row = transfers.recent(50)
+                .stream().filter(t -> t.transferId().equals(transferId)).findFirst().orElseThrow();
+        assertThat(row.format()).isEqualTo("zip");
+        assertThat(row.filename()).isEqualTo("users-2026-03-31.zip");
+
+        HttpResponse<byte[]> file = sendBytes("GET",
+                "/_tesseraql/ops/batch/transfers/" + transferId + "/file", token);
+        assertThat(file.statusCode()).isEqualTo(200);
+        assertThat(file.headers().firstValue("Content-Type")).hasValue("application/zip");
+        assertThat(file.headers().firstValue("Content-Disposition").orElse(""))
+                .contains("filename=\"users-2026-03-31.zip\"");
+        // One entry per group, {key} replaced by the group, the date interpolated beside it.
+        assertThat(zipEntries(file.body()))
+                .containsExactly("users-2026-03-31-a.csv", "users-2026-03-31-b.csv");
+        assertThat(zipEntry(file.body(), "users-2026-03-31-a.csv"))
+                .startsWith("name,grp").contains("sato").doesNotContain("suzuki");
+
+        // The step context names the bundle too: the push step delivering
+        // {steps.extract.filename} dropped the ZIP under the bundle's name, not the pattern.
+        Path delivered = appHome.resolve("outbox/split/users-2026-03-31.zip");
+        assertThat(delivered).exists();
+        assertThat(zipEntries(Files.readAllBytes(delivered)))
+                .containsExactly("users-2026-03-31-a.csv", "users-2026-03-31-b.csv");
+    }
+
+    private static HttpResponse<byte[]> sendBytes(String method, String path, String token)
+            throws Exception {
+        java.net.http.HttpRequest.Builder builder = java.net.http.HttpRequest.newBuilder(
+                java.net.URI.create("http://localhost:" + runtime.port() + path))
+                .header("Authorization", "Bearer " + token)
+                .method(method, java.net.http.HttpRequest.BodyPublishers.noBody());
+        return java.net.http.HttpClient.newHttpClient().send(builder.build(),
+                HttpResponse.BodyHandlers.ofByteArray());
+    }
+
+    private static List<String> zipEntries(byte[] zip) throws Exception {
+        List<String> names = new java.util.ArrayList<>();
+        try (java.util.zip.ZipInputStream in = new java.util.zip.ZipInputStream(
+                new java.io.ByteArrayInputStream(zip))) {
+            java.util.zip.ZipEntry entry;
+            while ((entry = in.getNextEntry()) != null) {
+                names.add(entry.getName());
+            }
+        }
+        return names;
+    }
+
+    private static String zipEntry(byte[] zip, String name) throws Exception {
+        try (java.util.zip.ZipInputStream in = new java.util.zip.ZipInputStream(
+                new java.io.ByteArrayInputStream(zip))) {
+            java.util.zip.ZipEntry entry;
+            while ((entry = in.getNextEntry()) != null) {
+                if (entry.getName().equals(name)) {
+                    return new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+                }
+            }
+        }
+        return null;
+    }
+
+    @Test
     void retentionReclaimsOldExportFilesButKeepsTheirHistory() throws Exception {
         String token = token(List.of("BATCH_OPERATOR"));
         send("POST", "/_tesseraql/ops/batch/jobs/user.exportReport/run", token,
@@ -993,6 +1070,37 @@ class BatchJobIntegrationTest {
         Files.writeString(target.resolve("batch/report/stamp-transfer.sql"),
                 "update users set status = 'ROWS-' || cast(/* exported */ 0 as varchar)"
                         + " where name = 'pending-user'\n");
+
+        // A split export step (docs/export-pipeline.md decision 12 on a job): {key} must reach
+        // SplitExport, the produced transfer is the bundle named for the stem, and the step
+        // context names the bundle too - the push step delivers under {steps.extract.filename}.
+        // A VALUES list, not the users table: sibling tests rewrite statuses, and the group set
+        // must not depend on which ran last.
+        Files.createDirectories(target.resolve("batch/split"));
+        Files.writeString(target.resolve("batch/split/job.yml"), """
+                version: tesseraql/v1
+                id: user.exportSplit
+                kind: job
+                recipe: batch-pipeline
+                pipeline:
+                  - id: extract
+                    export:
+                      format: csv
+                      filename: users-{batch.businessDate}-{key}.csv
+                      splitBy: grp
+                    sql:
+                      file: split.sql
+                      mode: query
+                  - id: drop
+                    push:
+                      transport: local
+                      path: outbox/split
+                      file: steps.extract.transferId
+                      as: "{steps.extract.filename}"
+                """);
+        Files.writeString(target.resolve("batch/split/split.sql"),
+                "select name, grp from (values ('sato', 'a'), ('suzuki', 'b'), ('tanaka', 'b'))"
+                        + " as t(name, grp) order by grp, name\n");
         // A push step delivering the produced transfer to a local drop under the push
         // block's allowedPaths root (docs/analytics-experience.md).
         Files.createDirectories(target.resolve("batch/deliver"));

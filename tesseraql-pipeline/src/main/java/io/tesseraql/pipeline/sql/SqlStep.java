@@ -378,15 +378,17 @@ public class SqlStep implements Step {
             throw executionError(ex, statement);
         }
         exchange.response().status(200);
-        boolean split = spec.splitBy() != null && !spec.splitBy().isBlank();
+        boolean split = spec.splits();
         exchange.response().header(Headers.CONTENT_TYPE,
-                split ? "application/zip" : codec.contentType());
+                split
+                        ? io.tesseraql.core.files.SplitExport.BUNDLE_CONTENT_TYPE
+                        : codec.contentType());
         // The filename is route-author data (export.filename / the route id), but it is the one
         // Content-Disposition writer that sanitized nothing — a quote or control character in a
         // route file reached the wire verbatim.
         exchange.response().header("Content-Disposition",
                 io.tesseraql.core.http.ContentDisposition.attachment(split
-                        ? zipName(filename)
+                        ? io.tesseraql.core.files.SplitExport.zipName(filename)
                         : filename));
         exchange.addOnCompletion(done -> tempStore.delete(ref));
     }
@@ -449,19 +451,6 @@ public class SqlStep implements Step {
                         "Cannot read export query '" + query.name() + "': " + ex.getMessage());
             }
         });
-    }
-
-    /**
-     * The bundle's own name: the declared filename with its placeholder and extension dropped,
-     * and the separator the placeholder leaves behind dropped after them — {@code orders-{key}.csv}
-     * bundles as {@code orders.zip}, a placeholder-only {@code {key}.csv} as {@code export.zip}.
-     */
-    static String zipName(String filename) {
-        String withoutKey = filename.replace(io.tesseraql.core.files.SplitExport.KEY, "");
-        int dot = withoutKey.lastIndexOf('.');
-        String stem = (dot >= 0 ? withoutKey.substring(0, dot) : withoutKey)
-                .replaceAll("[-_.]+$", "");
-        return (stem.isBlank() ? "export" : stem) + ".zip";
     }
 
     private TempStore tempStore(Exchange exchange) {

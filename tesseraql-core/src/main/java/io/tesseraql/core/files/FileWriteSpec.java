@@ -57,6 +57,11 @@ public record FileWriteSpec(List<ColumnMapping> columns, String sheet, Path temp
         columns = columns == null ? List.of() : List.copyOf(columns);
     }
 
+    /** Whether this export writes one document per group, bundled (docs/export-pipeline.md, decision 12). */
+    public boolean splits() {
+        return splitBy != null && !splitBy.isBlank();
+    }
+
     /** This spec with the per-request locale and time zone resolved. */
     public FileWriteSpec withFormatting(String resolvedLocale, String resolvedTimezone) {
         return new FileWriteSpec(columns, sheet, template, startCell, resources,
