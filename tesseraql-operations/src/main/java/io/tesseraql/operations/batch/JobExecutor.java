@@ -91,6 +91,8 @@ public final class JobExecutor {
     private java.util.function.Function<String, DataSource> connectors;
     private io.tesseraql.core.files.FileTransferService fileTransfers;
     private Path appHome;
+    private io.tesseraql.yaml.config.FileDefaults fileDefaults = io.tesseraql.yaml.config.FileDefaults
+            .none();
     private FilePusher filePusher;
     private io.tesseraql.core.telemetry.Meter meter = io.tesseraql.core.telemetry.NoopMeter.INSTANCE;
 
@@ -224,6 +226,20 @@ public final class JobExecutor {
             Path appHome) {
         this.fileTransfers = transfers;
         this.appHome = appHome;
+        return this;
+    }
+
+    /**
+     * Wires the app-wide formatting literals an export step falls back to
+     * (docs/export-declarations.md): {@code tesseraql.files.locale} and
+     * {@code tesseraql.files.timezone}, the same two keys a route reads. A job has no request
+     * to read configuration from, so the runtime hands them over the way it does the SQL
+     * timeout and the result bounds. Optional; unwired, a step renders in the platform's.
+     */
+    public JobExecutor fileDefaults(io.tesseraql.yaml.config.FileDefaults defaults) {
+        this.fileDefaults = defaults == null
+                ? io.tesseraql.yaml.config.FileDefaults.none()
+                : defaults;
         return this;
     }
 
@@ -538,7 +554,8 @@ public final class JobExecutor {
                         this::dialectOf, functions),
                 new StepContext.Bounds(sqlTimeoutSeconds, maxRows, onOverflow),
                 new StepContext.Collaborators(notificationOutbox, httpCallClient, preferenceStore,
-                        fileTransfers, appHome, filePusher, filePathResolvers, connectors),
+                        fileTransfers, appHome, fileDefaults, filePusher, filePathResolvers,
+                        connectors),
                 new StepContext.Invocation(jobFile, step, dataSource, context, executionId,
                         appName, stepSpan));
     }

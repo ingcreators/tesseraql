@@ -29,8 +29,12 @@ class FormatSourcesTest {
                 "principal.claim.zoneinfo")).isEqualTo("Europe/Berlin");
     }
 
+    /**
+     * Null here is rung 2 of the chain saying nothing; {@code RequestFormatsTest} holds rungs 3
+     * and 4 — before docs/export-declarations.md an unresolved source skipped the configuration.
+     */
     @Test
-    void unresolvableExpressionsYieldNullForThePlatformDefault() {
+    void anUnresolvableExpressionAnswersNullSoTheBinderFallsToTheConfiguredLiteral() {
         assertThat(FormatSources.resolve(Map.of(), null, "principal.claim.locale")).isNull();
         assertThat(FormatSources.resolve(Map.of("query", Map.of()), null, "query.locale"))
                 .isNull();

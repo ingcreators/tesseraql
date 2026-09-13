@@ -89,6 +89,11 @@ class StatusMappingLedgerTest {
             // deployment is not, which is the server's fault and not the caller's.
             "TQL-LD-2801", "TQL-LD-2810", "TQL-LD-2821", "TQL-LD-2825", "TQL-LD-2833",
             "TQL-LD-2834", "TQL-LD-2840",
+            // 2802: the document could not be written after the extraction ran — the codec's,
+            // a column format's or the spool's fault after the request was accepted, never the
+            // caller's; 500 is its honest meaning (a request-sourced value that the codec would
+            // refuse is the binder's 400 before the SQL, a different code on purpose).
+            "TQL-LD-2802",
             // Poll-driven imports: raised on the connector's own thread against a file nobody
             // requested, and answered by moving the file rather than by a status.
             "TQL-LD-2824", "TQL-LD-2849",

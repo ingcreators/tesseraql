@@ -136,10 +136,17 @@ sources:
   as `ja-JP` or `Asia/Tokyo`, or on a route a request source: `principal.claim.locale`,
   `query.tz` naming a declared `input:`, `body.tz` (a declared input, unless
   `inputPolicy.unknownFields: ignore` admits any field), or `request.locale` (the negotiated
-  request locale). A route that declares neither key falls back to the app configuration keys
-  `tesseraql.files.locale` and `tesseraql.files.timezone`, which are literals, never source
-  expressions. `locale:` drives nothing in a workbook — a cell carries a value and a cell
-  format, and the reader's own locale renders them — so the linter refuses it on
+  request locale). Each key falls back on its own: the route's literal, else the request source
+  when it resolves to a value, else the app configuration keys `tesseraql.files.locale` and
+  `tesseraql.files.timezone` (literals, never source expressions), else the platform default. A
+  job step's declaration is a literal and falls back to the same keys. A request-sourced value
+  the server cannot use — `?tz=Tokyo`, `?loc=ja_JP` — is refused before the extraction runs, as
+  a `TQL-FIELD-2001` field error naming the input with code `timezone` or `locale`; a
+  file-export refused this way starts no transfer. A sign-in claim is held to the same rule and
+  named by its expression (`principal.claim.zoneinfo`); a locale claim spelled `en_US` is read
+  as `en-US`. An offset in a URL must be percent-encoded (`?tz=%2B09:00`), because `+` is a
+  space in a query string. `locale:` drives nothing in a workbook — a cell carries a value and a
+  cell format, and the reader's own locale renders them — so the linter refuses it on
   `format: excel`.
 - Every literal is judged where it is written, and only where the format reads it. A zone the
   JDK does not know, a language tag it cannot format, a `csv`/`pdf` pattern its parser refuses,
@@ -408,8 +415,10 @@ Import-side `import:` keys beyond `format`, `columns`, and `onError` (the per-ro
   parameter name; omitting `columns:` entirely uses the header labels as parameter names.
 - `startRow:` — the 1-based row the table starts at, for files with title rows above the data.
 - `sheet:` — workbook formats: the sheet to read (default: the first).
-- `locale:` — drives `type:`/`format:` parsing of dates and numbers, with the same literal /
-  request-source / configuration fallback rules as exports.
+- `locale:` — drives `type:`/`format:` parsing of dates and numbers: a literal,
+  `principal.claim.locale`, or `request.locale`, with the same configuration fallback as
+  exports. A file-import route binds no request inputs, so a `query.`/`body.` source cannot
+  resolve here.
 - `column:` on a column (`D` or a 1-based number) reads an explicit position instead of
   matching headers.
 
@@ -446,7 +455,9 @@ queries like any other query.
 | `TQL-YAML-1006` | The export names a template that is not there, or the wrong kind of file for the format, at lint and at boot |
 | `TQL-ROUTE-3101` | A `query-export` route declares an `export.after:` block, which only `file-export` supports |
 | `TQL-LD-2801` | No codec for the declared format (the module is not installed) |
-| `TQL-LD-2810` | The transfer bookkeeping schema could not be created |
+| `TQL-FIELD-2001` | A request-sourced zone or locale the server cannot use (`code: timezone` / `locale`), refused before any SQL runs — 400 |
+| `TQL-LD-2802` | The document could not be written after the extraction ran — a codec, a column format or the spool; the message names the format and the file — 500 |
+| `TQL-LD-2810` | The file-transfer service failed — creating its schema, recording a transfer, or running an export step; the message carries the cause |
 | `TQL-LD-2820` | `file-import` received an empty request body |
 | `TQL-LD-2821` | The file transfer service is not configured in this runtime |
 | `TQL-LD-2822` | Unknown transfer id (status or download) — 404 |

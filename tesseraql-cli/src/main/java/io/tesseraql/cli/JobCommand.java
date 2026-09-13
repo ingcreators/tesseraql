@@ -467,6 +467,9 @@ final class JobCommand implements Callable<Integer> {
                 // notify: steps enqueue on the durable outbox; the serving runtime delivers.
                 .notificationOutbox(outbox)
                 .fileTransfers(transfers, app)
+                // The same two formatting defaults the served runtime's executor reads: a
+                // CLI-run export step renders in the configured zone and locale, not the JVM's.
+                .fileDefaults(io.tesseraql.yaml.config.FileDefaults.of(manifest.config()))
                 .filePush(filePush::push)
                 .httpCall(new io.tesseraql.operations.http.HttpCallClient(
                         io.tesseraql.yaml.http.HttpOutbound.load(manifest.config()),

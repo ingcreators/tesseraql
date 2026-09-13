@@ -43,7 +43,7 @@ input:
   `{id}` routes do this) is coerced and validated like any input, and the `path.*`
   namespace carries the typed value; an undeclared path parameter stays a raw string.
 - Every rejection is the field-scoped `TQL-FIELD-2001` shape with a stable code
-  (`pattern`, `minLength`, `email`, `uuid`, `url`, …) and a localizable
+  (`pattern`, `minLength`, `email`, `uuid`, `url`, `timezone`, `locale`, …) and a localizable
   `tql.input.<code>` message (en/ja built-ins included), rendered inline on the htmx
   path like every other field error.
 - The constraints ride into the generated OpenAPI (`pattern`, `minLength`/`maxLength`,

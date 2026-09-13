@@ -41,7 +41,7 @@ class ConfigKeyLedgerTest {
             "tesseraql.scim.groups.listMembers", // ScimRuntimeExtension.readSqlOptional
             "tesseraql.security.jwt.clockSkew", // SecurityConfigFactory.duration
             "tesseraql.security.jwt.jwks.cacheTtl", // the same, on the JWKS cache
-            "tesseraql.files.timezone", // RouteCompiler.formatDeclaration
+            "tesseraql.files.timezone", // FileDefaults.timezone (RouteCompiler.formatDeclaration for the catalog binder)
             "tesseraql.oidc.enabled", // LoginMethods.flag
             "tesseraql.saml.enabled", // ManifestCoverage.flag
             "tesseraql.oidc.clientId"); // OidcSamlRules.rawString

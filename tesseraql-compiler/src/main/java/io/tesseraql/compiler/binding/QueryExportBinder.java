@@ -16,22 +16,22 @@ public final class QueryExportBinder implements Step {
 
     private final FileCodec codec;
     private final FileWriteSpec writeSpec;
-    private final String localeDeclaration;
-    private final String timezoneDeclaration;
+    private final FormatDeclaration locale;
+    private final FormatDeclaration timezone;
     private final io.tesseraql.core.files.ExportRowCap rowCap;
     private final java.util.List<io.tesseraql.core.files.ExportQuery> queries;
     private final java.util.Set<String> httpSources;
     private final java.util.List<EnrichProcessor> enrichments;
 
     public QueryExportBinder(FileCodec codec, FileWriteSpec writeSpec,
-            String localeDeclaration, String timezoneDeclaration,
+            FormatDeclaration locale, FormatDeclaration timezone,
             io.tesseraql.core.files.ExportRowCap rowCap,
             java.util.List<io.tesseraql.core.files.ExportQuery> queries,
             java.util.Set<String> httpSources, java.util.List<EnrichProcessor> enrichments) {
         this.codec = codec;
         this.writeSpec = writeSpec;
-        this.localeDeclaration = localeDeclaration;
-        this.timezoneDeclaration = timezoneDeclaration;
+        this.locale = locale;
+        this.timezone = timezone;
         this.rowCap = rowCap;
         this.queries = java.util.List.copyOf(queries);
         this.httpSources = java.util.Set.copyOf(httpSources);
@@ -41,9 +41,11 @@ public final class QueryExportBinder implements Step {
     @Override
     public void process(Exchange exchange) {
         exchange.setProperty(TesseraqlProperties.EXPORT_CODEC, codec);
+        // Resolved and judged before the SQL step that follows: a request-sourced value the
+        // codec would refuse is refused here, as the caller's 400, with no extraction run.
         exchange.setProperty(TesseraqlProperties.EXPORT_SPEC, writeSpec.withFormatting(
-                FormatSources.resolve(exchange, localeDeclaration),
-                FormatSources.resolve(exchange, timezoneDeclaration)));
+                RequestFormats.locale(exchange, locale),
+                RequestFormats.timezone(exchange, timezone)));
         exchange.setProperty(TesseraqlProperties.EXPORT_ROW_CAP, rowCap);
         exchange.setProperty(TesseraqlProperties.EXPORT_QUERIES, queries);
         exchange.setProperty(TesseraqlProperties.EXPORT_VALUES,

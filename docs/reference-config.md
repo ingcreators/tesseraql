@@ -130,8 +130,8 @@ Keys are declared in `config/application.yml` and `config/tesseraql.yml`, overri
 
 | Key | Read by | Documented in |
 | --- | --- | --- |
-| `tesseraql.files.locale` | [RouteCompiler.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-compiler/src/main/java/io/tesseraql/compiler/RouteCompiler.java), [CatalogLocaleRules.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/CatalogLocaleRules.java) | [code-catalogs](code-catalogs.md), [file-transfers](file-transfers.md) |
-| `tesseraql.files.timezone` | [RouteCompiler.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-compiler/src/main/java/io/tesseraql/compiler/RouteCompiler.java) | [file-transfers](file-transfers.md) |
+| `tesseraql.files.locale` | [RouteCompiler.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-compiler/src/main/java/io/tesseraql/compiler/RouteCompiler.java), [FileDefaults.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/config/FileDefaults.java), [CatalogLocaleRules.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/CatalogLocaleRules.java) | [code-catalogs](code-catalogs.md), [file-transfers](file-transfers.md), [jobs](jobs.md) |
+| `tesseraql.files.timezone` | [FileDefaults.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/config/FileDefaults.java) | [file-transfers](file-transfers.md), [jobs](jobs.md) |
 
 ## tesseraql.framework
 

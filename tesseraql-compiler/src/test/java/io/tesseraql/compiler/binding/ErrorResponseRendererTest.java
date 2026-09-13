@@ -592,5 +592,10 @@ class ErrorResponseRendererTest {
         // A generic SQL execution error stays 500.
         assertThat(ErrorResponseRenderer.httpStatus(new TqlErrorCode(TqlDomain.SQL, 2500)))
                 .isEqualTo(500);
+        // A failure while writing an export document after the query ran is the server's too
+        // (docs/export-declarations.md decision 33): red when it is mapped to a 400, which is
+        // logged at DEBUG and so leaves the operator nothing.
+        assertThat(ErrorResponseRenderer.httpStatus(new TqlErrorCode(TqlDomain.LD, 2802)))
+                .isEqualTo(500);
     }
 }

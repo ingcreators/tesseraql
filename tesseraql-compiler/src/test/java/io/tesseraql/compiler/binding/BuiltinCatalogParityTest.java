@@ -36,7 +36,11 @@ class BuiltinCatalogParityTest {
         assertThat(keys("en")).contains(
                 "tql.conflict.stale", "tql.conflict.title", "tql.conflict.keep",
                 "tql.conflict.reload", "tql.conflict.overwrite",
-                "tql.workflow.illegal-transition");
+                "tql.workflow.illegal-transition",
+                // The export binders' request-time refusals (docs/export-declarations.md):
+                // without these the envelope carries messageKey and no text.
+                "tql.input.timezone", "tql.input.locale",
+                "tql.input.claim.timezone", "tql.input.claim.locale");
     }
 
     private static Set<String> keys(String tag) throws Exception {

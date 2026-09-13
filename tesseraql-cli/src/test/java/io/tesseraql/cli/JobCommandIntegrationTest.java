@@ -170,6 +170,80 @@ class JobCommandIntegrationTest {
         assertThat(executionCount("report.daily")).isEqualTo(before + 1);
     }
 
+    /**
+     * The job arm of the fallback chain on this runner (docs/export-declarations.md decision
+     * 28): {@code job run} builds its own executor, and an export step that declares neither
+     * key renders in the configured {@code tesseraql.files.timezone} and
+     * {@code tesseraql.files.locale} — red when only the served runtime's executor is wired,
+     * or when the step reads the zone but not the locale. The JVM is pinned to UTC and
+     * {@code en-US} for the run, so a document that followed the host would say {@code 22:30}
+     * and {@code 1,234.50}; the configured Kolkata and {@code de} say {@code 04:00} the next
+     * day and {@code 1.234,50}.
+     */
+    @Test
+    void theCliJobRunReadsBothConfiguredKeys(@TempDir Path dir) throws Exception {
+        assertThat(execute("new", "demo", "--stack", dir.toString())).isZero();
+        Path app = dir.resolve("demo");
+        assertThat(execute(args(app, "migrate", "apply"))).isZero();
+        Files.createDirectories(app.resolve("batch/report"));
+        Files.writeString(app.resolve("batch/report/report.sql"),
+                "select 1 as id, timestamptz '2026-01-15 22:30:00+00' as created,"
+                        + " 1234.5 as amount\n");
+        writeReportJob(app, "");
+        writeFilesDefaults(app, "Asia/Kolkata", "de");
+        long before = executionCount("report.daily");
+        String previous = latestTransferSpool("report.daily#report");
+
+        java.util.TimeZone zone = java.util.TimeZone.getDefault();
+        java.util.Locale locale = java.util.Locale.getDefault();
+        Captured ran;
+        try {
+            java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("Etc/UTC"));
+            java.util.Locale.setDefault(java.util.Locale.US);
+            ran = executeCapturing(args(app, "job", "run", "report.daily"));
+        } finally {
+            java.util.TimeZone.setDefault(zone);
+            java.util.Locale.setDefault(locale);
+        }
+
+        assertThat(ran.exitCode()).isZero();
+        assertThat(ran.stdout()).contains("report.daily COMPLETED");
+        assertThat(executionCount("report.daily")).isEqualTo(before + 1);
+        String spool = latestTransferSpool("report.daily#report");
+        assertThat(spool).as("a new transfer for the step").isNotNull().isNotEqualTo(previous);
+        String document = Files.readString(Path.of(java.net.URI.create(spool)),
+                StandardCharsets.UTF_8);
+        assertThat(document).contains("2026-01-16 04:00:00").contains("\"1.234,50\"");
+    }
+
+    /** Sets the app-wide {@code tesseraql.files.*} keys of a freshly scaffolded app. */
+    private static void writeFilesDefaults(Path app, String zone, String locale)
+            throws Exception {
+        Path config = app.resolve("config/tesseraql.yml");
+        String text = Files.readString(config);
+        assertThat(text).as("a fresh scaffold declares no files: block")
+                .doesNotContain("\n  files:\n");
+        Files.writeString(config, text.replaceFirst("^tesseraql:\n",
+                "tesseraql:\n  files:\n    timezone: " + zone + "\n    locale: " + locale + "\n"));
+    }
+
+    /** The spool URI of the newest transfer a job step wrote, or null before any. */
+    private static String latestTransferSpool(String routeId) throws Exception {
+        try (Connection connection = DriverManager.getConnection(
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+                Statement statement = connection.createStatement();
+                ResultSet rs = statement.executeQuery(
+                        "select spool_uri from tql_file_transfer where route_id = '" + routeId
+                                + "' order by created_at desc limit 1")) {
+            return rs.next() ? rs.getString(1) : null;
+        } catch (java.sql.SQLException undefinedTable) {
+            if ("42P01".equals(undefinedTable.getSQLState())) {
+                return null;
+            }
+            throw undefinedTable;
+        }
+    }
+
     /** Sets (or replaces) the app-wide {@code tesseraql.files.timezone} of the scaffolded app. */
     private static void writeFilesTimezone(Path app, String zone) throws Exception {
         Path config = app.resolve("config/tesseraql.yml");

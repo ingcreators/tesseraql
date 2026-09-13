@@ -305,9 +305,10 @@ line, and the report cites it; a report that cites row 3 for what the user's edi
 shows on line 4 is a bug report waiting to be filed against the wrong thing.
 
 **The locale is a parse input, so it is frozen at upload.** The read spec is
-resolved per request — `locale: query.locale` or `principal.claim.locale` or the
-negotiated `request.locale` — and the commit is a *different* request, where that
-expression may resolve differently or not at all. `1.234,56` would then parse as a
+resolved per request — `locale: principal.claim.locale` or the negotiated
+`request.locale`; a file-import binds no request inputs, so `query.*` is not a
+source here — and the commit is a *different* request, where that expression may
+resolve differently or not at all. `1.234,56` would then parse as a
 different number, the rejection set would move, and the agreement check of decision
 5 would refuse a commit the user can never make. The resolved spec is parked with
 the batch and the commit re-parses under it, which is what makes the parse a pure

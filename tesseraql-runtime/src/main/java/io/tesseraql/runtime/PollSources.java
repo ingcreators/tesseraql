@@ -43,11 +43,14 @@ final class PollSources {
      * source never touches the database for it.
      */
     private final io.tesseraql.operations.poll.JdbcPollConsumedStore consumedStore;
+    /** The app-wide {@code tesseraql.files.locale} a job's {@code import.locale:} falls back to. */
+    private final io.tesseraql.yaml.config.FileDefaults fileDefaults;
 
     PollSources(List<JobFile> jobs, FileConnectors connectors, String appName,
             Map<String, String> jobOwners, Path appHome, Path workHome,
             io.tesseraql.opsui.PollSourceStatus status,
-            io.tesseraql.operations.poll.JdbcPollConsumedStore consumedStore) {
+            io.tesseraql.operations.poll.JdbcPollConsumedStore consumedStore,
+            io.tesseraql.yaml.config.FileDefaults fileDefaults) {
         this.jobs = List.copyOf(jobs);
         this.connectors = connectors;
         this.appName = appName;
@@ -56,6 +59,7 @@ final class PollSources {
         this.workHome = workHome;
         this.status = status;
         this.consumedStore = consumedStore;
+        this.fileDefaults = fileDefaults;
     }
 
     /** Starts a poll cycle for every job that declares one. */
@@ -109,8 +113,10 @@ final class PollSources {
         }
         Path rowSqlFile = job.source().getParent().resolve(rowStep.file()).normalize();
         String owner = jobOwners.getOrDefault(jobId, appName);
+        // A poll job has no request to resolve a locale from, so import.locale: is a literal —
+        // and, unset, the app-wide tesseraql.files.locale applies, as the schema says it does.
         io.tesseraql.core.files.FileReadSpec readSpec = importSpec.toReadSpec()
-                .withLocale(importSpec.locale());
+                .withLocale(fileDefaults.localeOr(importSpec.locale()));
         PollImportProcessor importer = new PollImportProcessor(jobId, owner,
                 importSpec.format(), readSpec, rowSqlFile, importSpec.effectiveOnError(), status);
         // Started and stopped with the context, the same lifecycle a consumer had

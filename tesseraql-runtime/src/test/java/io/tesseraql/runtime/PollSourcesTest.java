@@ -112,7 +112,8 @@ class PollSourcesTest {
                 // Wiring is decided from the declaration; nothing touches the datasource until a
                 // source that declares consumeOnce actually wires.
                 new io.tesseraql.operations.poll.JdbcPollConsumedStore(null,
-                        java.time.Duration.ofDays(30)));
+                        java.time.Duration.ofDays(30)),
+                io.tesseraql.yaml.config.FileDefaults.none());
     }
 
     private static PollSpec local(String path) {

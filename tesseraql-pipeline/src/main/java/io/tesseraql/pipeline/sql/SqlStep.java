@@ -44,6 +44,11 @@ public class SqlStep implements Step {
     /** TQL-SQL-2500: the SQL failed to execute for a reason beyond the portable constraint kinds. */
     private static final TqlErrorCode EXECUTION_ERROR = new TqlErrorCode(TqlDomain.SQL, 2500);
     private static final TqlErrorCode UNSUPPORTED_MODE = new TqlErrorCode(TqlDomain.SQL, 2501);
+    /**
+     * The document could not be written after the extraction ran: a codec, a column format or
+     * the spool it writes to — not the statement, which had run to completion.
+     */
+    private static final TqlErrorCode DOCUMENT_WRITE_FAILED = new TqlErrorCode(TqlDomain.LD, 2802);
     // Portable constraint-violation codes, mapped to HTTP statuses by ErrorResponseRenderer.
     private static final TqlErrorCode UNIQUE_VIOLATION_CODE = new TqlErrorCode(TqlDomain.SQL, 4090);
     private static final TqlErrorCode FOREIGN_KEY_VIOLATION_CODE = new TqlErrorCode(TqlDomain.SQL,
@@ -277,17 +282,29 @@ public class SqlStep implements Step {
                                     io.tesseraql.core.files.ResultSetRows extraction = new io.tesseraql.core.files.ResultSetRows(
                                             resultSet, statement.dialect(), cap,
                                             EXECUTION_ERROR);
-                                    io.tesseraql.core.files.ExportWrite.write(codec, spec,
-                                            tempStore,
-                                            extraction,
-                                            exchange.getProperty(
-                                                    TesseraqlProperties.EXPORT_ENRICHER,
-                                                    io.tesseraql.core.files.RowEnricher.class),
-                                            exchange.getProperty(
-                                                    TesseraqlProperties.EXPORT_ENRICH_WINDOW, 0,
-                                                    Integer.class),
-                                            values, filename,
-                                            new io.tesseraql.core.spool.SpoolOutput(writer));
+                                    try {
+                                        io.tesseraql.core.files.ExportWrite.write(codec, spec,
+                                                tempStore,
+                                                extraction,
+                                                exchange.getProperty(
+                                                        TesseraqlProperties.EXPORT_ENRICHER,
+                                                        io.tesseraql.core.files.RowEnricher.class),
+                                                exchange.getProperty(
+                                                        TesseraqlProperties.EXPORT_ENRICH_WINDOW, 0,
+                                                        Integer.class),
+                                                values, filename,
+                                                new io.tesseraql.core.spool.SpoolOutput(writer));
+                                    } catch (TqlException shaped) {
+                                        // A row-set read error, a cap, a split rule: already
+                                        // named by whoever raised it.
+                                        throw shaped;
+                                    } catch (java.io.IOException | RuntimeException inTheWrite) {
+                                        // The query ran; what failed is the document — the
+                                        // codec, a column format, or the spool under it.
+                                        // Marked so the catch-all below files it under its
+                                        // own code instead of the statement's.
+                                        throw new DocumentWriteFailure(inTheWrite);
+                                    }
                                     writer.incrementRows(extraction.count());
                                     span.attribute("rowCount", extraction.count());
                                 } catch (java.io.IOException ex) {
@@ -345,6 +362,8 @@ public class SqlStep implements Step {
             }
         } catch (TqlException ex) {
             throw ex;
+        } catch (DocumentWriteFailure ex) {
+            throw documentError(ex.getCause(), codec, filename);
         } catch (java.io.UncheckedIOException ex) {
             throw executionError(ex.getCause(), statement);
         } catch (Exception ex) {
@@ -544,6 +563,35 @@ public class SqlStep implements Step {
         } catch (java.sql.SQLException ex) {
             throw executionError(ex, statement);
         }
+    }
+
+    /** A document-write failure travelling out of the reader lambda to the export's catch-all. */
+    private static final class DocumentWriteFailure extends RuntimeException {
+        @java.io.Serial
+        private static final long serialVersionUID = 1L;
+
+        DocumentWriteFailure(Exception cause) {
+            super(cause);
+        }
+
+        @Override
+        public synchronized Exception getCause() {
+            return (Exception) super.getCause();
+        }
+    }
+
+    /**
+     * The document, not the statement, is what failed: the message names the format and the
+     * file being written and the source is that file — the SQL ran to completion.
+     */
+    private static TqlException documentError(Exception cause, FileCodec codec,
+            String filename) {
+        return TqlException.builder(DOCUMENT_WRITE_FAILED)
+                .message("Writing the " + codec.format() + " document failed after the query ran: "
+                        + cause.getMessage())
+                .source(filename)
+                .cause(cause)
+                .build();
     }
 
     private TqlException executionError(Exception ex, SqlSource.Statement statement) {
