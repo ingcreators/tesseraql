@@ -116,6 +116,11 @@ sources:
       file: select-order.sql    # the template reads header.first.customer
 ```
 
+- `format:` is required on a job step and may be omitted on a route, where `csv` is the default;
+  a blank `format:` is refused everywhere, at lint and at boot. A `filename:` that carries
+  `{key}` without `splitBy:` is refused too (the placeholder would be delivered literally), and a
+  filename whose extension is not the format's draws a lint warning (`TQL-YAML-1045`) — the file
+  is served and recorded as its format whatever it is called.
 - `columns:` selects and orders the exported columns; omit it to export every query column with
   its name as the header. `label:` sets the label in the file (it may be localized text). An
   export with no rows still carries its header row — the declared columns, or the query's column

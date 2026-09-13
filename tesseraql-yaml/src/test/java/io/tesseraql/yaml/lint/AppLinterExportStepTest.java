@@ -44,6 +44,41 @@ class AppLinterExportStepTest {
                 || "TQL-FIELD-2004".equals(finding.code()));
     }
 
+    /**
+     * A {@code {key}} in a filename that does not split is delivered literally
+     * (docs/export-hygiene.md P7, item 12's second site) — an error, the converse of the
+     * splitBy-needs-{key} rule. A filename whose extension is not the format's is a warning:
+     * {@code users-{key}.tar.gz} is not a real split declaration, and a csv named {@code notes.zip}
+     * is served as csv either way.
+     */
+    @Test
+    void aFilenameThePipelineWouldDeliverWronglyIsSaidSo(@TempDir Path dir) throws Exception {
+        List<LintFinding> literal = new AppLinter().lint(app(dir,
+                EXTRACTION
+                        + "    export:\n      format: csv\n      filename: \"report-{key}.csv\""));
+        assertThat(literal).anySatisfy(finding -> {
+            assertThat(finding.code()).isEqualTo("TQL-YAML-1041");
+            assertThat(finding.severity()).isEqualTo("error");
+            assertThat(finding.message()).contains("{key}", "splitBy:");
+        });
+
+        List<LintFinding> extension = new AppLinter().lint(app(dir,
+                EXTRACTION
+                        + "    export:\n      format: csv\n      filename: \"users-{key}.tar.gz\"\n"
+                        + "      splitBy: grp"));
+        assertThat(extension).anySatisfy(finding -> {
+            assertThat(finding.code()).isEqualTo("TQL-YAML-1045");
+            assertThat(finding.severity()).isEqualTo("warning");
+            assertThat(finding.message()).contains(".gz", "csv");
+        });
+        assertThat(extension).noneMatch(finding -> "TQL-YAML-1041".equals(finding.code()));
+
+        List<LintFinding> sound = new AppLinter().lint(app(dir,
+                EXTRACTION + "    export:\n      format: csv\n      filename: report.csv"));
+        assertThat(sound).noneMatch(finding -> "TQL-YAML-1041".equals(finding.code())
+                || "TQL-YAML-1045".equals(finding.code()));
+    }
+
     @Test
     void anExportStepWithoutItsQueryOrFormatIsAnError(@TempDir Path dir) throws Exception {
         List<LintFinding> findings = new AppLinter().lint(app(dir,

@@ -166,7 +166,7 @@ final class JobRules implements LintRule {
                 ExportRules.lintExportStep(context, config, job, step, source, findings);
             }
             if (step.push() != null) {
-                PushStepRules.lintPushStep(config, step, source, findings);
+                PushStepRules.lintPushStep(config, job, step, source, findings);
             }
         }
     }

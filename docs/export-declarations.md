@@ -1442,7 +1442,9 @@ Every unfiled defect the measurement found, routed elsewhere with its destinatio
   in `ExportWrite.write`; the Excel `format:` string written verbatim as the cell format and `type: date`
   getting the datetime default cell format; `sheet:` name sanitising; `groupBy` with a pdf template
   silently `GROUPS=null`; the PDF template's `Locale.ROOT` context (`PdfTemplates.java:33,38`); the
-  `TQL-LD-2856` missing-template code never naming the file; the `'null'` format text; the zero-row
+  `TQL-LD-2856` missing-template code never naming the file (its live half fixed by
+  `export-hygiene.md` P4); the `'null'` format text (fixed by its P7 — the predicate refuses the
+  step); the zero-row
   0-byte csv (#24); the 32,768-char cell trio (#22); `TQL-LD-2801`'s hard-coded excel hint; the
   5311/5312 wrong-reason lints; the caller's principal in `params_json`; "make the jxls report mode
   honour the zone" (hand jxls a `LocalDateTime` in the declared zone — after the temporal decision);

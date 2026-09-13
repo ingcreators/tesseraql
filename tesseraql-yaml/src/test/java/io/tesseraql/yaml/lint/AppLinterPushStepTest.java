@@ -107,6 +107,34 @@ class AppLinterPushStepTest {
         });
     }
 
+    /**
+     * A push delivers exactly one file, so {@code {key}} in {@code as:} can never resolve and is
+     * delivered literally (docs/export-hygiene.md P7, item 12); a placeholder whose root the job
+     * context does not know renders silently empty. Both are errors; the spellings the runtime
+     * resolves stay quiet.
+     */
+    @Test
+    void aPushNameThePipelineCannotResolveIsAnError(@TempDir Path dir) throws Exception {
+        for (String as : List.of("delivered-{key}.zip", "{nope.nothing}.csv", "{params.x}.csv")) {
+            List<LintFinding> findings = new AppLinter().lint(app(dir,
+                    "      transport: local\n      path: outbox\n"
+                            + "      file: steps.extract.transferId\n      as: \"" + as + "\""));
+            assertThat(findings).as(as).anySatisfy(finding -> {
+                assertThat(finding.code()).isEqualTo("TQL-YAML-1042");
+                assertThat(finding.severity()).isEqualTo("error");
+                assertThat(finding.message()).contains("as:");
+            });
+        }
+        for (String as : List.of("{steps.extract.filename}", "users-{batch.businessDate}.csv",
+                "plain.csv")) {
+            List<LintFinding> findings = new AppLinter().lint(app(dir,
+                    "      transport: local\n      path: outbox\n"
+                            + "      file: steps.extract.transferId\n      as: \"" + as + "\""));
+            assertThat(findings).as(as)
+                    .noneMatch(finding -> "TQL-YAML-1042".equals(finding.code()));
+        }
+    }
+
     @Test
     void anUndeclaredCredentialWarnsAndTheDeliveredNameStaysBare(@TempDir Path dir)
             throws Exception {

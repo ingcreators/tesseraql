@@ -545,7 +545,12 @@ pipeline:
   `steps.<id>.transferId`, but any transfer id the context can supply. Reading it
   counts as the transfer's first download. `as:` renames the delivery
   (`{dotted.path}` placeholders resolve against the job context; a bare filename
-  only — separators are refused at build time, `TQL-YAML-1042`).
+  only — separators are refused at build time, `TQL-YAML-1042`). The roots the context
+  carries are `params`, `steps`, `batch` and `tenant`; `{steps.<id>.filename}` is the
+  produced file's own name (for a split step, the bundle's). A placeholder the context
+  cannot resolve — a root it does not carry, a `params.<name>` the job never declared,
+  or `{key}`, which names a split group and a push delivers exactly one file — is a
+  build error (`TQL-YAML-1042`); it used to be delivered literally or as an empty name.
 - **A failed delivery fails the job** — connect, authenticate, or write errors are
   `TQL-BATCH-5315` on the step, so the rerun story and `sla:` alerting apply
   unchanged; a re-run re-delivers under the same name, which the rename semantics

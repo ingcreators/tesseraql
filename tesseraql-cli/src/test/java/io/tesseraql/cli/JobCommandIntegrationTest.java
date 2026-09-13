@@ -243,6 +243,44 @@ class JobCommandIntegrationTest {
                 .as("the step's spool lives in the configured store").startsWith("tql-temp-db:");
     }
 
+    /**
+     * A step without {@code format:} is refused before any execution row exists
+     * (docs/export-hygiene.md P7): exit 2 naming the step, where the runner used to record a
+     * FAILED execution with {@code TQL-LD-2801 No file codec for format 'null'} — exit 1, naming
+     * neither job, step nor key.
+     */
+    @Test
+    void aFormatLessExportStepIsRefusedBeforeAnyExecutionRowExists(@TempDir Path dir)
+            throws Exception {
+        assertThat(execute("new", "demo", "--stack", dir.toString())).isZero();
+        Path app = dir.resolve("demo");
+        assertThat(execute(args(app, "migrate", "apply"))).isZero();
+        Files.createDirectories(app.resolve("batch/report"));
+        Files.writeString(app.resolve("batch/report/report.sql"),
+                "select 1 as id, now() as created, 1234.5 as amount\n");
+        Files.writeString(app.resolve("batch/report/job.yml"), """
+                version: tesseraql/v1
+                id: report.daily
+                kind: job
+                recipe: batch-pipeline
+                pipeline:
+                  - id: report
+                    sql:
+                      file: report.sql
+                      mode: query
+                    export:
+                      filename: report.csv
+                """);
+        long before = executionCount("report.daily");
+
+        Captured refused = executeCapturingErr(args(app, "job", "run", "report.daily"));
+        assertThat(refused.exitCode()).isEqualTo(2);
+        assertThat(refused.stdout()).contains("TQL-YAML-1041", "job 'report.daily' step 'report'",
+                "format:");
+        assertThat(refused.stdout()).doesNotContain("'null'");
+        assertThat(executionCount("report.daily")).isEqualTo(before);
+    }
+
     /** Sets the app-wide {@code tesseraql.temp.store} of a freshly scaffolded app. */
     private static void writeTempStore(Path app, String store) throws Exception {
         Path config = app.resolve("config/tesseraql.yml");

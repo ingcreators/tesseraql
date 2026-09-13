@@ -19,6 +19,56 @@ final class PushStepRules {
     }
 
     /**
+     * The delivered name's placeholders against what the job context can resolve
+     * (docs/export-hygiene.md P7, item 12). A push delivers exactly one file — for a split step,
+     * the bundle — so {@code {key}} never resolves and was delivered literally; a root the context
+     * does not carry, or a {@code params.<name>} the job never declared, rendered silently empty
+     * ({@code delivered-.zip}). {@code {steps.<id>.filename}} is the spelling for the produced
+     * file's own name.
+     */
+    private static void lintDeliveredName(io.tesseraql.yaml.manifest.JobFile job,
+            io.tesseraql.yaml.model.PipelineStep step, String as, String source,
+            List<LintFinding> findings) {
+        if (as == null || as.isBlank()) {
+            return;
+        }
+        java.util.regex.Matcher placeholder = PLACEHOLDER.matcher(as);
+        while (placeholder.find()) {
+            String path = placeholder.group(1);
+            if (io.tesseraql.core.files.SplitExport.KEY.equals("{" + path + "}")) {
+                findings.add(new LintFinding(INCOMPLETE_PUSH_STEP, ERROR, source, "Step '"
+                        + step.id() + "': push as: carries {key}, which a push never resolves -"
+                        + " a push delivers one file (for a split step, the bundle); use"
+                        + " {steps.<id>.filename} for the produced file's name, or drop as:"));
+                continue;
+            }
+            String root = path.contains(".") ? path.substring(0, path.indexOf('.')) : path;
+            if (!CONTEXT_ROOTS.contains(root)) {
+                findings.add(new LintFinding(INCOMPLETE_PUSH_STEP, ERROR, source, "Step '"
+                        + step.id() + "': push as: placeholder {" + path + "} names no job"
+                        + " context root (params, steps, batch, tenant) - it would render empty"));
+            } else if ("params".equals(root) && job != null) {
+                String name = path.contains(".") ? path.substring(path.indexOf('.') + 1) : "";
+                String parameter = name.contains(".") ? name.substring(0, name.indexOf('.')) : name;
+                if (!job.definition().input().containsKey(parameter)) {
+                    findings.add(new LintFinding(INCOMPLETE_PUSH_STEP, ERROR, source, "Step '"
+                            + step.id() + "': push as: placeholder {" + path + "} names a"
+                            + " parameter the job does not declare under input: - it would render"
+                            + " empty"));
+                }
+            }
+        }
+    }
+
+    /** A {@code {dotted.path}} placeholder in a delivered name. */
+    private static final java.util.regex.Pattern PLACEHOLDER = java.util.regex.Pattern
+            .compile("\\{([^{}]+)}");
+
+    /** The roots a job's step context resolves ({@code StepContext.interpolate}). */
+    private static final java.util.Set<String> CONTEXT_ROOTS = java.util.Set.of("params", "steps",
+            "batch", "tenant");
+
+    /**
      * Statically checks a push step (docs/analytics-experience.md): the transfer reference and
      * target are required, a remote target needs its host and credential, and the delivered
      * name stays a bare filename — separators or placeholder-shaped values would let a YAML
@@ -26,8 +76,9 @@ final class PushStepRules {
      * refusal ({@code TQL-SEC-4141}): the allow-list is deployment config another environment
      * may declare differently.
      */
-    static void lintPushStep(AppConfig config, io.tesseraql.yaml.model.PipelineStep step,
-            String source, List<LintFinding> findings) {
+    static void lintPushStep(AppConfig config, io.tesseraql.yaml.manifest.JobFile job,
+            io.tesseraql.yaml.model.PipelineStep step, String source,
+            List<LintFinding> findings) {
         io.tesseraql.yaml.model.PushSpec push = step.push();
         if (push.file() == null || push.file().isBlank()) {
             findings.add(new LintFinding(INCOMPLETE_PUSH_STEP, ERROR, source, "Step '" + step.id()
@@ -68,6 +119,7 @@ final class PushStepRules {
                     + "': push as: must be a plain file name ({dotted.path} placeholders"
                     + " resolve against the job context)"));
         }
+        lintDeliveredName(job, step, push.as(), source, findings);
         // The poll side's server-identity nudges, mirrored (docs/connectors.md): an SFTP
         // target without host-key pinning is a warning, an FTPS target without a trust
         // store is an error — the runtime refuses it anyway, so the build says it first.
