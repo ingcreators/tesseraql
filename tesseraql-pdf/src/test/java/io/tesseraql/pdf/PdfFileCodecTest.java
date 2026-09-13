@@ -174,6 +174,94 @@ class PdfFileCodecTest {
         assertThat(text).doesNotContain("23:45:00");
     }
 
+    // ------------------------------------------------ the template renders in the export's locale
+
+    /**
+     * A print template renders in the export's locale (docs/export-hygiene.md P6): its
+     * utilities, {@code ${#locale}} and its message expressions follow {@code locale:}. The
+     * context used to be {@code Locale.ROOT} whatever the export declared — two locales in one
+     * document — and ANY message lookup threw under ROOT after the query had run.
+     */
+    @Test
+    void aTemplateRendersInTheExportsLocale() throws Exception {
+        Path template = localizedTemplate();
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        codec.write(out, new FileWriteSpec(List.of(), null, template, null, appHome, "de-DE",
+                "UTC"), io.tesseraql.core.files.ExportModel.repeatable(rows(), sample()));
+
+        String text = extractText(out.toByteArray());
+        assertThat(text).contains("1.234,50").contains("Donnerstag").contains("deutsch")
+                .contains("de-DE");
+    }
+
+    /** An export that declares no locale renders in English, whatever the JVM's default is. */
+    @Test
+    void anUndeclaredLocaleRendersInEnglishWhateverTheJvmSays() throws Exception {
+        Path template = localizedTemplate();
+        java.util.Locale jvm = java.util.Locale.getDefault();
+        String text;
+        try {
+            java.util.Locale.setDefault(java.util.Locale.GERMANY);
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            codec.write(out, new FileWriteSpec(List.of(), null, template, null, appHome, null,
+                    "UTC"), io.tesseraql.core.files.ExportModel.repeatable(rows(), sample()));
+            text = extractText(out.toByteArray());
+        } finally {
+            java.util.Locale.setDefault(jvm);
+        }
+        assertThat(text).contains("1,234.50").contains("Thursday").contains("english")
+                .doesNotContain("deutsch");
+    }
+
+    /** A tag with no language (a folding {@code request.locale}) renders in English, never ROOT. */
+    @Test
+    void anEmptyLanguageTagRendersInEnglish() throws Exception {
+        Path template = localizedTemplate();
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        codec.write(out, new FileWriteSpec(List.of(), null, template, null, appHome, "und",
+                "UTC"), io.tesseraql.core.files.ExportModel.repeatable(rows(), sample()));
+        assertThat(extractText(out.toByteArray())).contains("english").contains("1,234.50");
+    }
+
+    /** A template that cannot be rendered is the codec's own failure, naming the template. */
+    @Test
+    void aTemplateErrorIsTheCodecsOwnFailureNamingTheTemplate() throws Exception {
+        Path template = appHome.resolve("broken.html");
+        Files.writeString(template, "<html><body><p th:text=\"${#numbers.formatDecimal(}\">x</p>"
+                + "</body></html>");
+        assertThatThrownBy(() -> codec.write(new ByteArrayOutputStream(),
+                new FileWriteSpec(List.of(), null, template, null, appHome, null, null),
+                io.tesseraql.core.files.ExportModel.repeatable(rows(), java.util.Map.of())))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("TQL-LD-2831")
+                .hasMessageContaining("broken.html");
+    }
+
+    /** The template's other values: a fixed Thursday for the date utility. */
+    private static Map<String, Object> sample() {
+        return Map.of("d", java.util.Date.from(java.time.Instant.parse("2026-03-05T12:00:00Z")));
+    }
+
+    /**
+     * A template that leans on the locale three ways: a number utility with the locale's
+     * separators, a date utility with the locale's day and month names, and a message expression
+     * with a German and an English sibling.
+     */
+    private Path localizedTemplate() throws IOException {
+        Path template = appHome.resolve("greet.html");
+        Files.writeString(template, """
+                <html xmlns:th="http://www.thymeleaf.org"><body>
+                <p th:text="${#numbers.formatDecimal(1234.5, 1, 'DEFAULT', 2, 'DEFAULT')}">n</p>
+                <p th:text="${#dates.format(d, 'EEEE d MMMM yyyy')}">d</p>
+                <p th:text="${#locale.toLanguageTag()}">l</p>
+                <p th:text="#{greeting}">g</p>
+                </body></html>
+                """);
+        Files.writeString(appHome.resolve("greet_de.properties"), "greeting=deutsch\n");
+        Files.writeString(appHome.resolve("greet_en.properties"), "greeting=english\n");
+        return template;
+    }
+
     @Test
     void aTemplateOutsideTheResourceRootIsRejected(@TempDir Path elsewhere) throws Exception {
         Path template = elsewhere.resolve("evil.html");

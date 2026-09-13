@@ -460,6 +460,31 @@ class ExportDeclarationsTest {
         assertThat(ExportDeclarations.violations(ROUTE, typed, null)).isEmpty();
     }
 
+    /**
+     * On pdf with a template the locale reaches the template's utilities and message expressions
+     * (docs/export-hygiene.md P6), so "reaches only a typed column" is no longer true there and
+     * the advisory stays quiet; a zone alone still draws it, and a csv still does.
+     */
+    @Test
+    void aLocaleOnAPdfTemplateIsNotAdvisedAgainst(@TempDir Path dir) throws Exception {
+        Files.writeString(dir.resolve("print.html"), "<html/>");
+        ExportSpec localized = new ExportSpec("pdf", null, "print.html", null, null,
+                List.of(ColumnSpec.of("id"), ColumnSpec.of("name")), "de-DE", null, null, null,
+                null, null, null, null);
+        ExportSpec zoned = new ExportSpec("pdf", null, "print.html", null, null,
+                List.of(ColumnSpec.of("id"), ColumnSpec.of("name")), null, "Asia/Tokyo", null,
+                null, null, null, null, null);
+        ExportSpec csv = new ExportSpec("csv", null, null, null, null,
+                List.of(ColumnSpec.of("id"), ColumnSpec.of("name")), "de-DE", null, null, null,
+                null, null, null, null);
+
+        assertThat(ExportDeclarations.violations(ROUTE, localized, dir)).isEmpty();
+        assertThat(ExportDeclarations.violations(ROUTE, zoned, dir)).singleElement()
+                .extracting(Violation::kind).isEqualTo(Kind.ADVISORY);
+        assertThat(ExportDeclarations.violations(ROUTE, csv, null)).singleElement()
+                .extracting(Violation::kind).isEqualTo(Kind.ADVISORY);
+    }
+
     @Test
     void aFollowUpWithoutItsStatementIsIncompleteOnAFileExportOnly() {
         ExportSpec noSql = new ExportSpec("csv", null, null, null, null, List.of(), null, null,

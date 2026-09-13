@@ -95,9 +95,12 @@ public final class PdfFileCodec implements FileCodec {
             data.add(formatted);
         }
         List<PdfSource.PdfFont> fonts = PdfFonts.scan(spec.resources());
-        String xhtml = render(spec, model(columns, data, fonts, model.values()));
         ByteArrayOutputStream rendered = new ByteArrayOutputStream();
         try {
+            // The template render sits inside the try: a template that cannot be rendered — a
+            // bad expression, a failed utility — is this codec's own failure naming the template,
+            // on every arm, rather than the document-write code naming the output file.
+            String xhtml = render(spec, model(columns, data, fonts, model.values()));
             PdfEngines.selected().render(new PdfSource(xhtml, spec.resources(), fonts), rendered);
         } catch (TqlException ex) {
             throw ex;
@@ -138,8 +141,9 @@ public final class PdfFileCodec implements FileCodec {
 
     /** The template rendered against the model, or the built-in grid without one. */
     private static String render(FileWriteSpec spec, Map<String, Object> model) {
+        Locale locale = PdfTemplates.templateLocale(spec.locale());
         if (spec.template() == null) {
-            return PdfTemplates.renderGrid(model);
+            return PdfTemplates.renderGrid(model, locale);
         }
         Path template = spec.template().toAbsolutePath().normalize();
         if (!Files.isRegularFile(template)) {
@@ -152,6 +156,6 @@ public final class PdfFileCodec implements FileCodec {
                 .orElseThrow(() -> new TqlException(OUTSIDE_ROOT, "PDF template '" + template
                         + "' is outside the app resource root '" + root.root() + "'"));
         return PdfTemplates.render(root.root(),
-                root.root().relativize(confined).toString().replace('\\', '/'), model);
+                root.root().relativize(confined).toString().replace('\\', '/'), model, locale);
     }
 }

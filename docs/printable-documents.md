@@ -48,7 +48,12 @@ downloads the finished document), including `after:` follow-up statements.
 ## Print templates
 
 A print template is an app-authored XHTML file (well-formed XML, `.html`), colocated with the
-route and rendered through the standard template engine before PDF conversion.
+route and rendered through the standard template engine before PDF conversion. It renders in
+the export's `locale:` when one is declared (a literal, a request source or the configured
+default) and in English otherwise, so its `#numbers` and `#dates` utilities, `${#locale}` and
+`#{…}` message expressions follow the export; the row values were formatted with the same
+locale before they reached the model. A template that cannot be rendered fails the export with
+`TQL-LD-2831` naming the template.
 The model is:
 
 - `rows` — the query rows, values already formatted per the column mappings (locale, time

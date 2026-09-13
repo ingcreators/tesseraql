@@ -15,8 +15,8 @@
 > cell, the worksheet's row and column limits, a report cell the workbook refuses, a template
 > that is not a workbook — `TQL-LD-2836` and `TQL-LD-2837`: shipped as P4. **P5** the zero-row
 > header — declared columns or the source's own names, on every surface, through the spool:
-> shipped as P5; **P6** the
-> print template's locale; **P7** the declaration path; **P8** the card and the status JSON under a
+> shipped as P5. **P6** the print template's locale — the export's own, English when none, `und`
+> folded, the render inside the codec's try: shipped as P6; **P7** the declaration path; **P8** the card and the status JSON under a
 > prefix — pending. Each pull request flips its own line here when it merges.
 >
 > **The two records that filed these items were wrong about them in a dozen places, and the
@@ -630,6 +630,81 @@ true at zero rows.
 - Placement mode at zero rows returns the template unchanged (the template owns its headings).
 - The result-column-types design wants a `ResultSetMetaData` seam on `ResultSetRows` for TYPES;
   `NamedRows` is the names half — build the types half as a sibling accessor, not a second read.
+
+---
+
+## P6 — a print template renders in the export's locale
+
+### What was wrong
+
+Item 9, one half wider than filed. `PdfTemplates.render` / `renderGrid` built `new
+Context(Locale.ROOT, model)` whatever the export declared. The declared, request-sourced (5b) or
+configured locale reached the `ColumnValues` columns and never the Thymeleaf context: one
+document, two locales (`1.234,50` beside `1,234.50`; `05. März 2026` beside `Thu 05. Mar 2026`;
+`${#locale}` empty, tag `und`) on the route, the async file-export and the job step (RUN,
+md5-identical). A `de-DE` JVM made an UNDECLARED job export byte-identical to the declared one —
+the typed columns already followed the JVM default, so `PdfTemplates`' "reproducible" rationale
+for ROOT was hollow. **New: ANY message lookup** (`#{key}`, `#messages.msg`, `#messages.msgOrNull`)
+threw under ROOT (Thymeleaf 3.1 `StandardMessageResolutionUtils: Locale "" cannot be used`) AFTER
+the query ran — route 500 `TQL-LD-2802`, async FAILED with the raw text, job 2810 — because
+`PdfFileCodec.write` rendered the template OUTSIDE its try, so a template error was never the
+codec's own 2831. Lint is silent (1006 judges existence, never the body). No shipped or
+documented template uses a utility or a message expression; both shipped templates are
+byte-identical under every fix shape × JVM locale (12/12 md5).
+
+### The change (decision 6, shape (c))
+
+- `PdfTemplates.templateLocale(declared)`: the export's locale when declared, `Locale.ENGLISH`
+  otherwise — and for a tag with no language (`und`, what a negotiated `request.locale` becomes
+  when the i18n default folds; `export-declarations.md` decision 27), because as ROOT it would
+  bring the throw back. `render` and `renderGrid` take the locale; `PdfFileCodec.render` resolves
+  it from `spec.locale()` — the value the 5b chain already resolved (literal → source → config),
+  null when none.
+- The render moves inside `PdfFileCodec.write`'s try: a template that cannot be rendered is
+  `TQL-LD-2831 "PDF rendering failed for template '<name>': …"` on every arm (a `TqlException`
+  passes through `ExportWrite`'s lift as itself).
+- `StudioSupport.renderExportPdf` passes a literal `locale:` / `timezone:` through
+  `withFormatting`; a request-sourced value has no request in the preview and stays null.
+- `ExportDeclarations`' `TQL-YAML-1005` columns advisory is quiet for `pdf` + `template:` +
+  `locale:` — its premise ("reaches only a typed column") is false there; a zone alone still draws
+  it.
+
+### The guards, red before the fix
+
+`PdfFileCodecTest` (tesseraql-pdf, `PDFTextStripper`; the template uses a number utility with
+`'DEFAULT'` separators, a date utility with day and month names, `${#locale.toLanguageTag()}` and
+a `#{greeting}` with `_de` and `_en` property siblings — a template that only echoes `${…}` values
+is byte-identical under every shape, hazard 63):
+
+| guard | asserts | HEAD `e877cfb87` |
+|---|---|---|
+| `aTemplateRendersInTheExportsLocale` | `locale: de-DE` → `1.234,50`, `Donnerstag`, `deutsch`, `de-DE` | `Locale "" cannot be used` |
+| `anUndeclaredLocaleRendersInEnglishWhateverTheJvmSays` | no locale under `Locale.setDefault(GERMANY)` → `1,234.50`, `Thursday`, `english` | the throw |
+| `anEmptyLanguageTagRendersInEnglish` | `locale: und` → `english`, `1,234.50` | the throw |
+| `aTemplateErrorIsTheCodecsOwnFailureNamingTheTemplate` | `${#numbers.formatDecimal(}` → `TQL-LD-2831` naming `broken.html` | raw `TemplateProcessingException` |
+| `ExportDeclarationsTest.aLocaleOnAPdfTemplateIsNotAdvisedAgainst` | pdf + template + `de-DE` over untyped columns → no violation; a zone alone and a csv → the advisory | the advisory |
+
+**Bracket** (`work/export-hygiene-measurement/p6/bracket/`): HEAD 4 red; the fix 13/13 green;
+**V-jvmdefault** (shape (a): undeclared → `Locale.getDefault()`) — exactly the GERMANY guard red
+(`de-DE deutsch` rendered), hazard 67 made real; **V-nofold** (`und` used as-is) — exactly the
+`und` guard red, now as `TQL-LD-2831 … Locale "" cannot be used` (the render inside the try dresses
+it); **V-outside** (the render back outside the try) — exactly the template-error guard red.
+
+### What this breaks
+
+An undeclared export's template reads English while its typed columns follow the JVM default (the
+columns' rung-4 deviation already exists and belongs to the temporal-semantics design). A
+declared export's template now follows the declaration — the intended behaviour, and no shipped
+or documented template moves. A template error's code changes from 2802 (route) / raw text (async)
+/ 2810-wrapped raw text (job) to 2831 naming the template on every arm.
+
+### Filed, not fixed (from P6's measurement)
+
+- The Studio preview's columns are still locale- and zone-blind beyond the two keys threaded here
+  (`ExportSpec.toWriteSpec` passes null for both; the preview now applies literals only) — the
+  Studio backlog.
+- `InboxNotifier.java:33`'s bare `Context` (JVM default) and `MailNotifier.java:109,152`'s ROOT
+  subject render — the notifications line.
 
 ---
 

@@ -135,7 +135,10 @@ sources:
   not shift it: a time has no date to shift. A PostgreSQL `time with time zone` reaches the
   codec already moved into the server JVM's zone by the driver, and `timezone:` does not
   correct that.
-- `locale:` and `timezone:` drive those patterns, and reach only a typed or formatted column.
+- `locale:` and `timezone:` drive those patterns, and reach only a typed or formatted column —
+  and, on a `pdf` export with a `template:`, `locale:` also sets the locale the template renders
+  in (its `#numbers` and `#dates` utilities, `${#locale}`, and `#{…}` message expressions). A
+  template whose export declares no locale renders in English, as every locale-less template does.
   The linter warns when a `csv` or `pdf` export declares them over a column list with none; it
   cannot see a column the query derives. Each key stands on its own. A key is a literal such
   as `ja-JP` or `Asia/Tokyo`, or on a route a request source: `principal.claim.locale`,
