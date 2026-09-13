@@ -57,6 +57,18 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **An export that fails while its rows are spooled leaves no spool behind, and a text value of
+  any length spools.** A buffered, split or multi-source export that failed during its extraction
+  — the row cap, an unrepresentable value, a database error part-way — left the partial spool
+  behind on every surface and both temp stores, and the asynchronous and job arms left the
+  document writer's spool beside it: unreclaimable, because the retention sweep walks only the
+  spools a transfer row still points at. A drain that fails now releases its own spool, and a
+  failed `file-export` or job step releases its writer's. A text value over 65,535 bytes of UTF-8
+  — 21,846 Japanese characters — failed every buffered, split or multi-source export with
+  `TQL-LD-2855` naming no column, on a named source even when the csv export never read it; the
+  spool now carries any length under a new type tag, and a spool written before this change still
+  reads.
+
 - **A split bundle unpacks with its names intact, is byte-stable, and is named for its stem.** A
   `splitBy:` bundle with a non-ASCII group key unpacked as garbage under Info-ZIP `unzip` 6.00
   (stock Debian and Ubuntu) under a UTF-8 locale: the reader honours the UTF-8 name flag only on

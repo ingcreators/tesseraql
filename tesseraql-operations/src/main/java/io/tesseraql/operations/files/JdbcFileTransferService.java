@@ -319,6 +319,8 @@ public final class JdbcFileTransferService implements FileTransferService {
         // Synchronous does not mean short. This opens its own pulse because it does not pass
         // through guarded(), and an inline export of a large extraction outlives the liveness
         // window as readily as an async one.
+        SpoolWriter writer = null;
+        boolean spoolRecorded = false;
         try (ExecutionHeartbeats.Pulse _ = heartbeats.start(transferId);
                 Connection connection = extraction.getConnection()) {
             boolean autoCommit = connection.getAutoCommit();
@@ -328,8 +330,9 @@ public final class JdbcFileTransferService implements FileTransferService {
                 Map<String, Object> values = renderedValues(connection, request.queries(),
                         effectiveCap(codec, request.writeSpec(), request.rowCap()), spools);
                 long rows;
-                SpoolWriter writer = tempStore.createWriter(SpoolKind.BINARY);
-                try (writer;
+                SpoolWriter created = tempStore.createWriter(SpoolKind.BINARY);
+                writer = created;
+                try (created;
                         PreparedStatement statement = prepareExtraction(connection,
                                 request.query(), extractionDialect);
                         ResultSet results = statement.executeQuery();
@@ -355,6 +358,7 @@ public final class JdbcFileTransferService implements FileTransferService {
                 // framework pool, and the extraction's commit stays separate — a best effort,
                 // stated rather than pretended.
                 recordSpoolAndComplete(transferId, writer.toRef(), rows);
+                spoolRecorded = true;
                 return new InlineResult(transferId, recorded, rows);
             } catch (Throwable ex) {
                 // Everything, not Exception: restoring autocommit below COMMITS an open
@@ -378,9 +382,29 @@ public final class JdbcFileTransferService implements FileTransferService {
                 closeQuietly(spools);
             }
         } catch (Exception ex) {
+            // An unrecorded writer spool is nobody else's to reclaim.
+            discardWriterSpool(spoolRecorded ? null : writer, ex);
             jobs.failExecution(transferId, ex.getMessage());
             throw new TqlException(TRANSFER_ERROR,
                     "Export step failed: " + ex.getMessage(), ex);
+        }
+    }
+
+    /**
+     * Releases the spool a failed export's writer left: on the async and job arms the writer was
+     * closed by its try-with-resources (on a staging store, INSERTED) and its reference recorded
+     * nowhere, so the bytes — 0 B for a buffered codec, the partial document for a streaming one —
+     * stayed for ever, unreachable by the retention sweep. Null when the failure came before the
+     * writer existed; a delete that fails rides the failure that matters.
+     */
+    private void discardWriterSpool(SpoolWriter writer, Throwable failed) {
+        if (writer == null) {
+            return;
+        }
+        try {
+            tempStore.delete(writer.toRef());
+        } catch (RuntimeException deleting) {
+            failed.addSuppressed(deleting);
         }
     }
 
@@ -1248,6 +1272,8 @@ public final class JdbcFileTransferService implements FileTransferService {
             String filename) {
         List<SqlNode> query = parse(request.querySqlFile());
         io.tesseraql.core.telemetry.Span span = span("export", request.querySqlFile());
+        SpoolWriter writer = null;
+        boolean spoolRecorded = false;
         try (Connection connection = dataSource.getConnection()) {
             boolean autoCommit = connection.getAutoCommit();
             connection.setAutoCommit(false);
@@ -1258,8 +1284,9 @@ public final class JdbcFileTransferService implements FileTransferService {
                         request.params(), request.values(),
                         effectiveCap(codec, request.writeSpec(), request.rowCap()), spools);
                 long rows;
-                SpoolWriter writer = tempStore.createWriter(SpoolKind.BINARY);
-                try (writer;
+                SpoolWriter created = tempStore.createWriter(SpoolKind.BINARY);
+                writer = created;
+                try (created;
                         PreparedStatement statement = prepareExtraction(connection, bound,
                                 vendor());
                         ResultSet results = statement.executeQuery();
@@ -1286,6 +1313,7 @@ public final class JdbcFileTransferService implements FileTransferService {
                 // execution — and the expiry sweep collects only spools whose uri it can see, so
                 // the file would have sat there forever.
                 recordSpool(connection, transferId, writer.toRef(), rows);
+                spoolRecorded = true;
                 if (!jobs.completeExecution(connection, transferId)) {
                     connection.rollback();
                     tempStore.delete(writer.toRef());
@@ -1318,6 +1346,8 @@ public final class JdbcFileTransferService implements FileTransferService {
             }
         } catch (Exception ex) {
             span.recordError(ex);
+            // An unrecorded writer spool is nobody else's to reclaim.
+            discardWriterSpool(spoolRecorded ? null : writer, ex);
             LOG.warn("File export {} failed: {}", transferId, ex.getMessage());
             jobs.failExecution(transferId, ex.getMessage());
         } finally {

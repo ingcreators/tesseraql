@@ -6,7 +6,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.spool.FileTempStore;
 import io.tesseraql.core.spool.TempStore;
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.math.BigDecimal;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -14,6 +17,7 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -33,6 +37,15 @@ class SpooledRowsTest {
 
     private TempStore store() {
         return new FileTempStore(dir.resolve("spool"));
+    }
+
+    /** The spool files alive under the store — the sensitivity control for every leak guard. */
+    private long spoolFiles() {
+        try (var files = Files.list(dir.resolve("spool"))) {
+            return files.count();
+        } catch (IOException ex) {
+            throw new UncheckedIOException(ex);
+        }
     }
 
     @Test
@@ -91,7 +104,76 @@ class SpooledRowsTest {
         assertThat(names(spooled)).containsExactly("r0", "r1", "r2");
         assertThat(spooled.size()).isEqualTo(3);
         assertThat(spooled.columns()).containsExactly("name");
+        // The control the leak guards below rest on: a completed drain holds exactly one spool
+        // file until it is closed, and none after.
+        assertThat(spoolFiles()).isEqualTo(1);
         spooled.close();
+        assertThat(spoolFiles()).isZero();
+    }
+
+    /**
+     * A drain that fails part-way leaves nothing behind (docs/export-hygiene.md P2). The
+     * try-with-resources closed the writer — on a staging store that INSERTS the partial spool —
+     * and then nothing held the reference: every failed buffered, split or multi-source export
+     * left one orphan per run that no sweep could ever see.
+     */
+    @Test
+    void aDrainThatFailsMidWayLeavesNoSpoolBehind() {
+        // The source refuses after two rows — the row cap, a database error in hasNext().
+        Iterator<Map<String, Object>> refusing = new Iterator<>() {
+            private final Iterator<Map<String, Object>> rows = rows(2).iterator();
+
+            @Override
+            public boolean hasNext() {
+                if (rows.hasNext()) {
+                    return true;
+                }
+                throw new IllegalStateException("the source refused after two rows");
+            }
+
+            @Override
+            public Map<String, Object> next() {
+                return rows.next();
+            }
+        };
+        assertThatThrownBy(() -> SpooledRows.drain(store(), refusing))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(spoolFiles()).as("after a source failure").isZero();
+
+        // The encoder refuses a value.
+        Map<String, Object> weird = new LinkedHashMap<>();
+        weird.put("weird", new java.util.concurrent.atomic.AtomicInteger(1));
+        List<Map<String, Object>> unrepresentable = new ArrayList<>(rows(2));
+        unrepresentable.add(weird);
+        assertThatThrownBy(() -> SpooledRows.drain(store(), unrepresentable.iterator()))
+                .isInstanceOf(TqlException.class);
+        assertThat(spoolFiles()).as("after an unrepresentable value").isZero();
+
+        // A row changes shape.
+        List<Map<String, Object>> reshaped = new ArrayList<>(rows(2));
+        reshaped.add(new LinkedHashMap<>(Map.of("other", "x")));
+        assertThatThrownBy(() -> SpooledRows.drain(store(), reshaped.iterator()))
+                .isInstanceOf(TqlException.class);
+        assertThat(spoolFiles()).as("after a shape change").isZero();
+    }
+
+    /**
+     * A text past {@code writeUTF}'s ceiling — 65,535 bytes of modified UTF-8, which 21,846
+     * Japanese characters reach — round-trips through the reader as itself. It used to fail every
+     * buffered, split or multi-source export with {@code TQL-LD-2855}, naming no column.
+     */
+    @Test
+    void aTextPastTheModifiedUtf8CeilingRoundTrips() {
+        for (String text : List.of("a".repeat(65_535), "a".repeat(65_536), "い".repeat(21_846),
+                "𠮷".repeat(10_923))) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("note", text);
+            SpooledRows spooled = SpooledRows.drain(store(), List.of(row).iterator());
+            assertThat(spooled.iterator().next().get("note")).as(text.length() + " chars")
+                    .isEqualTo(text);
+            spooled.close();
+        }
+        assertThat(spoolFiles()).isZero();
     }
 
     @Test

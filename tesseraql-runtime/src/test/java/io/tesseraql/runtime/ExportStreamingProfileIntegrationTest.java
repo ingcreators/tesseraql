@@ -15,6 +15,7 @@ import io.tesseraql.operations.batch.JobRepository;
 import io.tesseraql.operations.batch.JobStatus;
 import io.tesseraql.operations.files.CsvFileCodec;
 import io.tesseraql.operations.files.JdbcFileTransferService;
+import io.tesseraql.operations.spool.JdbcTempStore;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.UncheckedIOException;
@@ -117,6 +118,119 @@ class ExportStreamingProfileIntegrationTest {
         assertThat(indexOf(calls, "closeResultSet"))
                 .as("the after: extract statement must not run while the cursor is open")
                 .isLessThan(indexOf(calls, "executeUpdate"));
+    }
+
+    /**
+     * An export that fails while its rows are spooled leaves no spool behind, on either store
+     * and on both of this service's arms (docs/export-hygiene.md P2). A buffered codec under a
+     * row cap of two over three rows fails inside the drain; the drain's own spool leaked on every
+     * surface, and the async and job arms leaked the writer's spool beside it — unreclaimable,
+     * because the retention sweep walks only rows that carry a {@code spool_uri}.
+     */
+    @Test
+    void aFailedExportLeavesNoSpoolOnEitherStore() throws Exception {
+        JobRepository jobs = new JobRepository(dataSource);
+        jobs.ensureSchema();
+        Path fileDir = Files.createTempDirectory("export-leak-file");
+        JdbcTempStore db = new JdbcTempStore(dataSource,
+                Files.createTempDirectory("export-leak-db"),
+                JdbcTempStore.DEFAULT_MAX_BYTES);
+        db.ensureSchema();
+        Path sql = Files.createTempDirectory("export-leak-sql");
+        Files.writeString(sql.resolve("all.sql"),
+                "select id, name from export_source order by id\n");
+
+        for (TempStore store : List.of(new FileTempStore(fileDir), db)) {
+            JdbcFileTransferService transfers = new JdbcFileTransferService(jobs,
+                    new io.tesseraql.operations.batch.ExecutionHeartbeats(jobs,
+                            java.time.Duration.ofSeconds(30)),
+                    store, dataSource, FileCodecs.of(new BufferedCsv()),
+                    io.tesseraql.core.expr.ExpressionFunctions.processDefault());
+            transfers.ensureSchema();
+            long before = spools(store, fileDir);
+            FileWriteSpec spec = new FileWriteSpec(
+                    List.of(ColumnMapping.of("id"), ColumnMapping.of("name")), null, null, null);
+            io.tesseraql.core.files.ExportRowCap two = new io.tesseraql.core.files.ExportRowCap(2,
+                    "fail", "buffered");
+
+            // The job arm.
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> transfers.exportInline(
+                    new FileTransferService.InlineExport("items.capped", "app", "buffered", spec,
+                            "items.csv", sql("select id, name from export_source order by id"),
+                            null, two, Map.of()),
+                    dataSource))
+                    .hasMessageContaining("TQL-LD-2850");
+            assertThat(spools(store, fileDir)).as("job arm, " + store.getClass().getSimpleName())
+                    .isEqualTo(before);
+
+            // The async arm.
+            String transferId = transfers.startExport(new FileTransferService.ExportRequest(
+                    "items.cappedAsync", "app", "buffered", spec, "items.csv",
+                    sql.resolve("all.sql"), Map.of(), null, null, two, List.of(), Map.of()));
+            long deadline = System.currentTimeMillis() + 20_000;
+            while (jobs.findExecution(transferId).map(e -> e.status() == JobStatus.RUNNING)
+                    .orElse(true)) {
+                assertThat(System.currentTimeMillis()).as("the export finishes")
+                        .isLessThan(deadline);
+                Thread.sleep(50);
+            }
+            assertThat(jobs.findExecution(transferId).orElseThrow().status())
+                    .isEqualTo(JobStatus.FAILED);
+            assertThat(spools(store, fileDir)).as("async arm, " + store.getClass().getSimpleName())
+                    .isEqualTo(before);
+            transfers.close();
+        }
+    }
+
+    /** The spools a store holds: files under the file store's directory, rows in the db store. */
+    private static long spools(TempStore store, Path fileDir) throws Exception {
+        if (store instanceof JdbcTempStore) {
+            try (Connection connection = dataSource.getConnection();
+                    Statement statement = connection.createStatement();
+                    ResultSet rs = statement.executeQuery("select count(*) from tql_temp_spool")) {
+                return rs.next() ? rs.getLong(1) : -1;
+            }
+        }
+        try (var files = Files.list(fileDir)) {
+            return files.count();
+        }
+    }
+
+    /** A csv that buffers: the capped shape, because a streaming codec is never capped. */
+    private static final class BufferedCsv implements io.tesseraql.core.files.FileCodec {
+        private final CsvFileCodec csv = new CsvFileCodec();
+
+        @Override
+        public String format() {
+            return "buffered";
+        }
+
+        @Override
+        public String contentType() {
+            return csv.contentType();
+        }
+
+        @Override
+        public String extension() {
+            return csv.extension();
+        }
+
+        @Override
+        public void read(java.io.InputStream in, io.tesseraql.core.files.FileReadSpec spec,
+                io.tesseraql.core.files.RowHandler handler) throws Exception {
+            csv.read(in, spec, handler);
+        }
+
+        @Override
+        public void write(java.io.OutputStream out, FileWriteSpec spec,
+                io.tesseraql.core.files.ExportModel model) throws IOException {
+            csv.write(out, spec, model);
+        }
+
+        @Override
+        public boolean streams(FileWriteSpec spec) {
+            return false;
+        }
     }
 
     /**

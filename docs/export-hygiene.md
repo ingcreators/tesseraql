@@ -8,7 +8,8 @@
 > lists). **P1** the split bundle — every entry carries the extended-timestamp field and the
 > ZIP epoch, the key's bound cuts on a code-point boundary and keeps its case, the bundle's name
 > drops the placeholder with its separators wherever it stands: shipped as P1. **P2** the spool
-> leaks and the 65,535-byte ceiling; **P3** what a
+> leaks and the 65,535-byte ceiling — a failed drain releases its spool, a failed async or job
+> export releases its writer's, a long text spools under a new tag: shipped as P2. **P3** what a
 > failed export says; **P4** the Excel codec's own refusals; **P5** the zero-row header; **P6** the
 > print template's locale; **P7** the declaration path; **P8** the card and the status JSON under a
 > prefix — pending. Each pull request flips its own line here when it merges.
@@ -300,6 +301,83 @@ The three pinned `{key}`-last shapes and the placeholder-only shapes are unchang
   design question for the split-export line, not this slice.
 - Whether `zipName` should cut at the codec's extension instead of the last dot — moot once P7's
   warning names a mismatched extension.
+
+---
+
+## P2 — the spool: nothing left behind, no 65,535-byte ceiling
+
+### What was wrong
+
+- **7(a), the drain spool.** `SpooledRows.drain` wrote through a `try (writer)`. When the source
+  refused part-way — the row cap (`TQL-LD-2850`), an unrepresentable value (2853), a shape
+  change (2854), a database error surfacing in `hasNext()` — the try-with-resources closed the
+  writer, which on `JdbcTempStore`/`BlobTempStore` INSERTS the partial spool, and then nothing
+  held the reference. One orphan per failed run on every surface and both stores; the retention
+  sweep walks rows that carry a `spool_uri` and never sees one. The sync route leaked on every
+  buffered codec, any `splitBy:`, and any NAMED source — a csv route whose named source failed
+  leaked too (`namedResult` calls `drain`; a fix in `ExportWrite.write` would have missed it).
+- **7(b), the writer spool.** `runExport` (async) and `exportInline` (job) created the document
+  writer inside the try; on a failure the writer was closed and its reference recorded nowhere —
+  0 B for a buffered codec, the partial document for a streaming one (46,592 B measured). The
+  route arm (`SqlStep.export`) already deleted its writer's spool.
+- **The 2855 ceiling.** `SpooledRows.write` spelt a `String` with `DataOutputStream.writeUTF`,
+  whose ceiling is 65,535 bytes of modified UTF-8 — three per BMP non-ASCII character, six per
+  astral one: 21,846 Japanese characters failed with `TQL-LD-2855 "Could not spool rows: encoded
+  string (いいいいいいいい...) too long"` on everything that spools, the named sources of a csv
+  export included, naming no column and leaking a header-only spool per breach (7's fourth
+  trigger). Since #708. Boundary pinned: 65,535 ASCII / 21,845 `あ` / 10,922 `𠮷` passed.
+
+### The change
+
+- `SpooledRows.drain` catches `IOException`, `RuntimeException` and `Error`, deletes
+  `writer.toRef()` (a delete that fails rides the failure as a suppressed exception; `toRef()`
+  throws when `close()` itself failed on a staging store — nothing to release then) and rethrows.
+- `runExport` and `exportInline` hoist the writer to method scope; the outer catch deletes its
+  spool BEFORE `failExecution`, unless the spool was recorded (a `spoolRecorded` flag set after
+  `recordSpool` / `recordSpoolAndComplete` — a throw after the record must never delete a
+  COMPLETED export's bytes).
+- `SpooledRows` gains the type tag `LONG_STRING = 19`: a `String` longer than 21,845 UTF-16 units
+  (the longest `writeUTF` is certain to accept) is written as a length-prefixed UTF-8 body; the
+  reader understands both tags. A new tag rather than a new `STRING` encoding: under `temp.store:
+  db|blob` a spool written on one node is read on another, so a spool written before this change
+  still reads. A node running the previous version cannot read a `LONG_STRING` spool — pre-1.0,
+  recorded here, no upgrade steps.
+
+### The guards, red before the fix
+
+| guard | asserts | HEAD `5cc940e91` |
+|---|---|---|
+| `SpooledRowsTest.aDrainThatFailsMidWayLeavesNoSpoolBehind` | a source that throws after two rows, an unrepresentable value, a shape change — each leaves 0 files; `theRowsCanBeWalkedMoreThanOnce` gains the control (1 file alive, 0 after close) | 1 |
+| `SpooledRowsTest.aTextPastTheModifiedUtf8CeilingRoundTrips` | 65,535 and 65,536 ASCII, 21,846 `い`, 10,923 `𠮷` round-trip through the READER | `2855 … too long: 65536 bytes` |
+| `ExportStreamingProfileIntegrationTest.aFailedExportLeavesNoSpoolOnEitherStore` | a buffered codec under `ExportRowCap(2)` over three rows, through `exportInline` (job arm) AND `startExport` (async arm), on `FileTempStore` (files) AND `JdbcTempStore` (rows): the count is unchanged; 2850 raised; the async execution FAILED | 2 files (drain + writer) |
+| `SharedTempStoreIntegrationTest.aNamedSourcePastTheUtf8CeilingExportsAndLeavesNoOrphan` | a csv route with a `note` source of `repeat('い', 21846)` under `store: db` answers 200 with the rows and `tql_temp_spool` grows by 0 | 500, +1 |
+
+**Bracket** (`work/export-hygiene-measurement/p2/bracket/`, the core and operations jars
+reinstalled before each column): the fix 7/7 + 4/4 + 8/8 green; **V-nodrain** — the drain guard
+and the IT red (1 file: the drain spool); **V-nowriter** — the IT red at the job arm (1 file: the
+writer spool), core green; **V-writeronly** (async fixed, job not) — the IT red at the job arm;
+**V-asynconly** (job fixed, async not) — the IT red at the ASYNC arm; **V-writerside** (the
+`LONG_STRING` written, the reader never taught) — exactly the round-trip guard red (`Unknown
+spool type tag 19`), every count-based guard green — hazard 45 made real.
+
+Disclosed: the named-source route guard is a CEILING guard on the sync arm — its 21,846-character
+value is drained and, on csv, never read back, so V-writerside leaves it green; the sync arm's
+named-source LEAK is covered by the core guard (`namedResult` calls `drain`), not by a route test.
+
+### What this breaks
+
+Nothing on the success path. A spool written by this version may hold a `LONG_STRING` tag a node
+on the previous version cannot read (`TQL-LD-2855 Unknown spool type tag 19`) — a mixed-version
+`db|blob` deployment during a rolling upgrade, pre-1.0.
+
+### Filed, not fixed (from P2's measurement)
+
+- The header names and the temporal/decimal `toString()`s still go through `writeUTF` — a
+  column NAME over 65,535 bytes is not a shape this framework meets.
+- 2855's message still quotes the value's first and last eight characters (`exit_message` leaks a
+  value fragment) — the error-hygiene line; P3 may drop it in passing.
+- A failure BEFORE `createWriter` (a named-source cap breach in `composedValues`) reaches the
+  drain half only — by construction there is no writer spool to release.
 
 ---
 
