@@ -117,7 +117,8 @@ template yield byte-identical PDFs.
 ## Engine and licensing
 
 No runtime module depends on the PDF engine — `tesseraql-pdf` is opt-in, and without the jar
-a `format: pdf` route fails loudly at build time (`TQL-LD-2801`). The bundled renderer is
+a `format: pdf` query-export route fails at boot (`TQL-LD-2801`), while a `file-export` route
+or a job step fails with the same code at its first request or run. The bundled renderer is
 [openhtmltopdf](https://github.com/openhtmltopdf/openhtmltopdf) (LGPL), replaceable as a
 drop-in jar via the `tesseraql.pdf.engine` system property (default `openhtml`).
 

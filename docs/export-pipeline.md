@@ -391,7 +391,7 @@ The contract:
   `order by` mentioning that column — a text heuristic over the 2-way SQL, in the shape the mail
   lints already use.
 - **The filename templates the group**: `filename: "invoice-{key}.pdf"`. `{key}` is the only
-  placeholder, and a `splitBy` without it is a build **error** (`TQL-LD-5311`), because the
+  placeholder, and a `splitBy` without it is a lint **error** (`TQL-YAML-1041`), because the
   alternative is one file overwriting the next. The substituted value is sanitized to a safe
   filename component, and two values that sanitize alike fail (`TQL-LD-2851`) naming both.
 - **The bundle is a ZIP.** One file leaves the export, so the spool, the transfer record, the

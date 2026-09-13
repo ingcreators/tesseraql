@@ -117,11 +117,11 @@
           },
           "locale": {
             "type": "string",
-            "description": "The locale date and number patterns render in. A literal, or a request source such as `principal.claim.locale`, so the requesting user decides; unset, `tesseraql.files.locale` applies. A job has no request, so a step's is a literal."
+            "description": "The locale date and number patterns render in, reaching typed or formatted columns on csv and pdf (a workbook never reads it and is refused for declaring it). A literal BCP 47 tag the JDK can format (`ja-JP`), or on a route a request source such as `principal.claim.locale`, `request.locale` or `query.lang` naming a declared input; a bad literal is refused at lint and boot (TQL-YAML-1063). Unset, `tesseraql.files.locale` applies. A job has no request, so a step's is a literal."
           },
           "timezone": {
             "type": "string",
-            "description": "The zone date and time values render in, with the same literal / request-source / `tesseraql.files.timezone` fallback as `locale`."
+            "description": "The zone date and time values render in, reaching typed or formatted columns on csv and pdf and every temporal cell of an Excel grid or placement (a jxls report ignores it). A literal `ZoneId` (`Asia/Tokyo`, `+09:00`; region ids are case-sensitive), or on a route a request source such as `query.tz` naming a declared input; a bad literal is refused at lint and boot where the format reads it (TQL-YAML-1063). Unset, `tesseraql.files.timezone` applies. A job has no request, so a step's is a literal."
           },
           "after": {
             "type": "object",

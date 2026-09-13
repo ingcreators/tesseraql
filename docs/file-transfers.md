@@ -85,7 +85,7 @@ compile-time error (`TQL-ROUTE-3101`) — follow-up statements need `file-export
 export:
   format: excel               # csv (built in) | excel | pdf (optional modules)
   filename: orders.xlsx       # default: <route id> + the format's extension
-  locale: de-DE               # or a request source, e.g. principal.claim.locale
+  locale: de-DE               # csv/pdf only (a workbook never reads it); or a request source
   timezone: Asia/Tokyo
   columns:
     - name                    # simple form: column name is also the header
@@ -118,18 +118,37 @@ sources:
 
 - `columns:` selects and orders the exported columns; omit it to export every query column with
   its name as the header. `label:` sets the label in the file (it may be localized text).
-- `type:` (`date` / `datetime` / `number`) with `format:` renders values through a date or
-  decimal pattern — and, for workbooks, a matching cell format — instead of raw text.
+- `type:` (`date` / `datetime` / `number`) with `format:` renders a typed or formatted column
+  through a date or decimal pattern on `csv` and `pdf`. On a workbook the string is the cell's
+  own number format, in Excel's vocabulary (`d-mmm-yy`, `0.00E+00`), and no Java parser ever
+  sees it. A column with neither is written as the driver's `toString()` of the value on `csv`
+  and `pdf`; the Excel grid and placement modes type every temporal cell. A jxls report
+  (`template:` without `startCell:`) hands the template the raw values and reads none of these
+  keys.
 - A time-of-day column renders as wall-clock text (`22:30:00`, or `format:` over the time) on
   `csv` and `pdf`, and as a real time cell in a workbook grid or placement. `timezone:` does
   not shift it: a time has no date to shift. A PostgreSQL `time with time zone` reaches the
   codec already moved into the server JVM's zone by the driver, and `timezone:` does not
   correct that.
-- `locale:` and `timezone:` drive those patterns. Each accepts a literal value or a request
-  source such as `principal.claim.locale`, `query.tz`, or `request.locale` (the negotiated
-  request locale), so the requesting user decides how dates and numbers render. When a route
-  declares neither, the app configuration keys `tesseraql.files.locale` and
-  `tesseraql.files.timezone` apply.
+- `locale:` and `timezone:` drive those patterns, and reach only a typed or formatted column.
+  The linter warns when a `csv` or `pdf` export declares them over a column list with none; it
+  cannot see a column the query derives. Each key stands on its own. A key is a literal such
+  as `ja-JP` or `Asia/Tokyo`, or on a route a request source: `principal.claim.locale`,
+  `query.tz` naming a declared `input:`, `body.tz` (a declared input, unless
+  `inputPolicy.unknownFields: ignore` admits any field), or `request.locale` (the negotiated
+  request locale). A route that declares neither key falls back to the app configuration keys
+  `tesseraql.files.locale` and `tesseraql.files.timezone`, which are literals, never source
+  expressions. `locale:` drives nothing in a workbook — a cell carries a value and a cell
+  format, and the reader's own locale renders them — so the linter refuses it on
+  `format: excel`.
+- Every literal is judged where it is written, and only where the format reads it. A zone the
+  JDK does not know, a language tag it cannot format, a `csv`/`pdf` pattern its parser refuses,
+  a malformed or out-of-workbook cell reference, or a mixed-case `format:` is a lint error and
+  a boot refusal with the same code (`TQL-YAML-1063`). The message names the app, the route or
+  job step, the key and the value. A key the format never reads — `bom:`, `sheet:`,
+  `startCell:` or `template:` on the wrong format, `locale:` on a workbook, a `type:` the export
+  does not render — is a lint error (`TQL-YAML-1005`) and a boot warning: the runtime serves
+  without it. `tesseraql lint`, the boot and `tesseraql job run` share the one check.
 - `bom: true` opens a `csv` export with the UTF-8 byte-order mark (`EF BB BF`), so a spreadsheet
   that sniffs the mark decodes the file as UTF-8 instead of its system code page. It is off by
   default, because a mark is a declaration a reader must expect: PostgreSQL `COPY … HEADER MATCH`
@@ -142,9 +161,10 @@ sources:
   where each column lands (`- { name: qty, column: D }`); a jx:-annotated template without
   `startCell:` is a full jxls report. PDF output uses a colocated XHTML print template instead —
   see [printable-documents.md](printable-documents.md).
-- A template path that does not exist fails the build rather than quietly producing a plain
-  grid, and `startCell:` without a template is refused: the mode a declaration selects should be
-  the mode it names.
+- A template path that does not exist is refused by the linter and at boot (`TQL-YAML-1006`)
+  on the formats that read one — a workbook, a print template, a module format — instead of
+  failing the first request; on `csv` the key is inert and warned about. `startCell:` without a
+  template is refused: the mode a declaration selects should be the mode it names.
 
 ## What a template can see
 
@@ -420,6 +440,10 @@ queries like any other query.
 
 | Code | Meaning |
 | --- | --- |
+| `TQL-YAML-1063` | An `export:`, `import:` or `tesseraql.files.*` literal the runtime cannot honour where it reads it — a zone, a language tag, a `csv`/`pdf` column pattern, an import column type, a cell reference, a mixed-case format name, or a request source naming nothing the surface binds. The linter's error and the boot refusal carry the same code |
+| `TQL-YAML-1005` | A declared key the format never reads (`bom:`, `sheet:`, `startCell:`, `template:` on the wrong format, `locale:` on a workbook, a `type:` the export does not render): a lint error, a boot warning. As a warning: a declaration honoured less than it reads |
+| `TQL-YAML-1041` | An incomplete export: a `file-export` route with no `export:` block, an `after:` without its statement, `splitBy:` without `{key}` |
+| `TQL-YAML-1006` | The export names a template that is not there, or the wrong kind of file for the format, at lint and at boot |
 | `TQL-ROUTE-3101` | A `query-export` route declares an `export.after:` block, which only `file-export` supports |
 | `TQL-LD-2801` | No codec for the declared format (the module is not installed) |
 | `TQL-LD-2810` | The transfer bookkeeping schema could not be created |

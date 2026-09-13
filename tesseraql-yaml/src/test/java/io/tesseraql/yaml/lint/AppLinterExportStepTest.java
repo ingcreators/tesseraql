@@ -141,7 +141,7 @@ class AppLinterExportStepTest {
         assertThat(findings).anySatisfy(finding -> {
             assertThat(finding.code()).isEqualTo("TQL-YAML-1005");
             assertThat(finding.severity()).isEqualTo("error");
-            assertThat(finding.message()).contains("Step 'report'", "bom:", "excel");
+            assertThat(finding.message()).contains("step 'report'", "bom:", "excel");
         });
     }
 
@@ -153,7 +153,7 @@ class AppLinterExportStepTest {
         assertThat(findings).anySatisfy(finding -> {
             assertThat(finding.code()).isEqualTo("TQL-YAML-1005");
             assertThat(finding.severity()).isEqualTo("error");
-            assertThat(finding.message()).contains("Step 'report'", "bom:", "pdf");
+            assertThat(finding.message()).contains("step 'report'", "bom:", "pdf");
         });
     }
 
@@ -177,5 +177,63 @@ class AppLinterExportStepTest {
             assertThat(finding.message()).contains("format:");
         });
         assertThat(findings).noneMatch(finding -> "TQL-YAML-1005".equals(finding.code()));
+    }
+
+    // ---- the values a step's declaration carries (docs/export-declarations.md, PR 5a) ----
+
+    /** The refusal that names the job and the step — a route arm firing would not satisfy it. */
+    private static java.util.function.Predicate<LintFinding> refusesOnStep(String key,
+            String value) {
+        return finding -> "TQL-YAML-1063".equals(finding.code()) && finding.isError()
+                && finding.message().contains("job 'report.daily' step 'report'")
+                && finding.message().contains(key)
+                && finding.message().contains("'" + value + "'");
+    }
+
+    @Test
+    void aMistypedZoneOnAStepIsRefusedNamingTheStep(@TempDir Path dir) throws Exception {
+        List<LintFinding> findings = new AppLinter().lint(app(dir, EXTRACTION
+                + "    export:\n      format: excel\n      bom: true\n      timezone: Asia/Tokio"));
+
+        assertThat(findings).anyMatch(refusesOnStep("export.timezone", "Asia/Tokio"));
+        // The positive control on the same block.
+        assertThat(findings).anyMatch(finding -> "TQL-YAML-1005".equals(finding.code())
+                && finding.message().contains("bom:"));
+    }
+
+    @Test
+    void aMistypedLocaleOnAStepIsRefusedNamingTheStep(@TempDir Path dir) throws Exception {
+        assertThat(new AppLinter().lint(app(dir, EXTRACTION
+                + "    export:\n      format: csv\n      locale: ja_JP")))
+                .anyMatch(refusesOnStep("export.locale", "ja_JP"));
+    }
+
+    @Test
+    void aSourceExpressionOnAStepIsRefusedBecauseAJobHasNoRequest(@TempDir Path dir)
+            throws Exception {
+        List<LintFinding> findings = new AppLinter().lint(app(dir, EXTRACTION
+                + "    export:\n      format: csv\n      timezone: query.tz"));
+
+        assertThat(findings).filteredOn(refusesOnStep("export.timezone", "query.tz")).first()
+                .extracting(LintFinding::message).asString().contains("a job has no request");
+    }
+
+    @Test
+    void aValidLiteralOnAStepIsClean(@TempDir Path dir) throws Exception {
+        assertThat(new AppLinter().lint(app(dir, EXTRACTION
+                + "    export:\n      format: csv\n      timezone: Asia/Tokyo\n      locale: ja-JP")))
+                .noneMatch(finding -> "TQL-YAML-1063".equals(finding.code()));
+    }
+
+    @Test
+    void aLocaleOnAWorkbookStepIsAnInapplicableOption(@TempDir Path dir) throws Exception {
+        assertThat(new AppLinter().lint(app(dir, EXTRACTION
+                + "    export:\n      format: excel\n      locale: ja-JP")))
+                .anySatisfy(finding -> {
+                    assertThat(finding.code()).isEqualTo("TQL-YAML-1005");
+                    assertThat(finding.severity()).isEqualTo("error");
+                    assertThat(finding.message()).contains("step 'report'",
+                            "drives nothing in a workbook");
+                });
     }
 }

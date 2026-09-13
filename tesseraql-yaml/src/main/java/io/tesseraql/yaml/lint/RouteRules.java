@@ -179,7 +179,13 @@ final class RouteRules implements LintRule {
                             + " supported on a queue-consume route under consume/, not the '"
                             + definition.recipe() + "' recipe"));
         }
-        ExportRules.lintRouteExport(route, definition, source, findings);
+        ExportRules.lintRouteExport(context, config, route, definition, source, findings);
+        if (definition.fileImport() != null) {
+            ExportRules.report(context, route.source(), "import:",
+                    io.tesseraql.yaml.app.ExportDeclarations.violations(
+                            ExportRules.routeSite(config, definition), definition.fileImport()),
+                    source, findings);
+        }
         ExportRules.lintExportRowCap(definition.fileExport(), "", source, findings);
         ExportRules.lintExportSources(context, definition.fileExport(), definition.sources(),
                 ExportRules.extractionSqlFile(route, definition), "", source, findings);

@@ -54,7 +54,10 @@ final class CatalogLocaleRules implements LintRule {
         }
         for (RouteFile route : manifest.routes()) {
             io.tesseraql.yaml.model.ExportSpec spec = route.definition().fileExport();
-            if (spec == null || (spec.locale() != null && !spec.locale().isBlank())) {
+            // A workbook never reads locale: (docs/export-declarations.md decision 6 refuses
+            // it there), so asking for one would set two errors against each other.
+            if (spec == null || "excel".equalsIgnoreCase(spec.format())
+                    || (spec.locale() != null && !spec.locale().isBlank())) {
                 continue;
             }
             findings.add(new LintFinding(EXPORT_WITHOUT_LOCALE, ERROR, route.source().toString(),

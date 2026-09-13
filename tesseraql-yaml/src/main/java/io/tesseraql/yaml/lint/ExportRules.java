@@ -3,6 +3,8 @@ package io.tesseraql.yaml.lint;
 import static io.tesseraql.yaml.lint.LintFinding.Severity.ERROR;
 import static io.tesseraql.yaml.lint.LintFinding.Severity.WARNING;
 
+import io.tesseraql.yaml.app.ExportDeclarations;
+import io.tesseraql.yaml.config.AppConfig;
 import io.tesseraql.yaml.manifest.RouteFile;
 import io.tesseraql.yaml.model.RouteDefinition;
 import java.nio.file.Files;
@@ -16,14 +18,13 @@ import java.util.List;
  */
 final class ExportRules {
 
-    // A piece the export needs is missing — the author adds a key.
-    private static final String INCOMPLETE_EXPORT = "TQL-YAML-1041";
+    // A piece the export needs is missing — the author adds a key. Declared once, typed, on
+    // the predicate the boot refusal shares (docs/export-declarations.md decision 3).
+    private static final String INCOMPLETE_EXPORT = ExportDeclarations.INCOMPLETE.toString();
 
     // A declared key cannot apply to this format or placement — the author removes one.
-    private static final String INAPPLICABLE_EXPORT_OPTION = "TQL-YAML-1005";
-
-    // The named template is missing, or is the wrong kind of file for the format.
-    private static final String UNUSABLE_EXPORT_TEMPLATE = "TQL-YAML-1006";
+    private static final String INAPPLICABLE_EXPORT_OPTION = ExportDeclarations.INAPPLICABLE
+            .toString();
 
     // A source feeding the export is allowed to fail into nothing.
     private static final String EXPORT_SOURCE_DEGRADES_TO_EMPTY = "TQL-YAML-1057";
@@ -44,9 +45,9 @@ final class ExportRules {
      * only follow-up a step supports is the extraction-transaction one
      * ({@code TQL-YAML-1005}).
      */
-    static void lintExportStep(LintContext context, io.tesseraql.yaml.manifest.JobFile job,
-            io.tesseraql.yaml.model.PipelineStep step, String source,
-            List<LintFinding> findings) {
+    static void lintExportStep(LintContext context, AppConfig config,
+            io.tesseraql.yaml.manifest.JobFile job, io.tesseraql.yaml.model.PipelineStep step,
+            String source, List<LintFinding> findings) {
         io.tesseraql.yaml.model.ExportSpec export = step.export();
         // The rows come from the step's own arm, never from inside export: — an output block
         // says how to write, not what to read (docs/unified-sources.md, decision 7).
@@ -67,36 +68,17 @@ final class ExportRules {
                             + "': after.timing: download is route vocabulary — an export step supports"
                             + " timing: extract only"));
         }
-        lintByteOrderMark(export, "Step '" + step.id() + "': ", source, findings);
-        if ("pdf".equals(export.format())) {
-            if (export.sheet() != null || export.startCell() != null) {
-                findings.add(new LintFinding(INAPPLICABLE_EXPORT_OPTION, ERROR,
-                        source,
-                        "pdf export: sheet:/startCell: are workbook options - a pdf lays out"
-                                + " through its template, not cell placement"));
-            }
-            if (export.template() != null && !export.template().endsWith(".html")) {
-                findings.add(
-                        new LintFinding(UNUSABLE_EXPORT_TEMPLATE, ERROR, source,
-                                "pdf export template '" + export.template()
-                                        + "' must be an .html file (it renders through the template"
-                                        + " engine before PDF conversion)"));
-            }
-        }
-        if (!"pdf".equals(export.format()) && export.startCell() != null
+        if ("excel".equals(export.format()) && export.startCell() != null
                 && export.template() == null) {
             findings.add(new LintFinding(INCOMPLETE_EXPORT, ERROR, source, "Step '" + step.id()
                     + "': startCell: places data into a template, but none is declared - add"
                     + " template:, or drop startCell: for a plain grid"));
         }
-        if (export.template() != null && (!"pdf".equals(export.format())
-                || export.template().endsWith(".html"))
-                && !Files.isRegularFile(
-                        job.source().getParent().resolve(export.template()))) {
-            findings.add(new LintFinding(UNUSABLE_EXPORT_TEMPLATE, ERROR, source,
-                    "Step '" + step.id()
-                            + "': export references a missing template: " + export.template()));
-        }
+        // The values the block carries, judged by the predicate the boot refusal shares
+        // (docs/export-declarations.md decision 1).
+        report(context, job.source(), "export:", ExportDeclarations.violations(
+                ExportDeclarations.Site.step(appName(config), job.definition().id(), step.id()),
+                export, job.source().getParent()), source, findings);
         lintExportRowCap(export, "Step '" + step.id() + "': ", source, findings);
         lintExportSources(context, export, java.util.Map.of(),
                 step.sql() == null || step.sql().file() == null
@@ -118,58 +100,60 @@ final class ExportRules {
      * apply, and its template renders through the standard template engine, so it must be
      * {@code .html}.
      */
-    static void lintRouteExport(RouteFile route, RouteDefinition definition, String source,
-            List<LintFinding> findings) {
+    static void lintRouteExport(LintContext context, AppConfig config, RouteFile route,
+            RouteDefinition definition, String source, List<LintFinding> findings) {
         io.tesseraql.yaml.model.ExportSpec spec = definition.fileExport();
         if (spec == null) {
+            if ("file-export".equals(definition.recipe())) {
+                findings.add(new LintFinding(INCOMPLETE_EXPORT, ERROR, source,
+                        ExportDeclarations.missingBlock(routeSite(config, definition))));
+            }
             return;
         }
-        boolean pdf = "pdf".equals(spec.format());
-        if (pdf && (spec.sheet() != null || spec.startCell() != null)) {
-            findings.add(new LintFinding(INAPPLICABLE_EXPORT_OPTION, ERROR, source,
-                    "pdf export: sheet:/startCell: are workbook options - a pdf lays out"
-                            + " through its template, not cell placement"));
-        }
-        lintByteOrderMark(spec, "export: ", source, findings);
-        if (!pdf && spec.startCell() != null && spec.template() == null) {
+        if ("excel".equals(spec.format()) && spec.startCell() != null
+                && spec.template() == null) {
             findings.add(new LintFinding(INCOMPLETE_EXPORT, ERROR, source,
                     "export: startCell: places data into a template, but none is declared -"
                             + " add template:, or drop startCell: for a plain grid"));
         }
-        if (spec.template() == null) {
-            return;
-        }
-        if (pdf && !spec.template().endsWith(".html")) {
-            findings.add(new LintFinding(UNUSABLE_EXPORT_TEMPLATE, ERROR, source,
-                    "pdf export template '" + spec.template()
-                            + "' must be an .html file (it renders through the template"
-                            + " engine before PDF conversion)"));
-            return;
-        }
-        if (!Files.isRegularFile(route.source().getParent().resolve(spec.template()))) {
-            findings.add(new LintFinding(UNUSABLE_EXPORT_TEMPLATE, ERROR, source,
-                    "export references a missing template: " + spec.template()));
-        }
+        report(context, route.source(), "export:",
+                ExportDeclarations.violations(routeSite(config, definition), spec,
+                        route.source().getParent()),
+                source, findings);
+    }
+
+    /** The route's declaration site: its inputs and whether a principal can be bound. */
+    static ExportDeclarations.Site routeSite(AppConfig config, RouteDefinition definition) {
+        return ExportDeclarations.Site.route(appName(config), definition);
+    }
+
+    /** The tolerant read of the app name — the name rule owns its refusal. */
+    static String appName(AppConfig config) {
+        return io.tesseraql.yaml.app.ApplicationName.ifValid(config).orElse("app");
     }
 
     /**
-     * A byte-order mark opens a text stream, and {@code bom:} is the CSV codec's to honour. A
-     * workbook is a ZIP container and a PDF is binary, so on the shipped {@code excel} and
-     * {@code pdf} formats the key is a declaration the runtime would ignore - the class this
-     * linter exists to refuse ({@code INAPPLICABLE_EXPORT_OPTION}), like {@code sheet:} on a pdf,
-     * and on presence like it: {@code bom: false} on a workbook is still a key that cannot apply.
-     * An unset {@code format:} is a route's csv default, and a format the framework does not ship
-     * belongs to a module codec that reads the write spec for itself - neither is judged here.
+     * Each violation as a finding: refused and inert are errors, an advisory is a warning. The
+     * line is the violated key's first occurrence inside the block ({@code export:} /
+     * {@code import:}), never the same word elsewhere in the document.
      */
-    static void lintByteOrderMark(io.tesseraql.yaml.model.ExportSpec spec, String label,
-            String source, List<LintFinding> findings) {
-        if (spec.bom() == null
-                || !("excel".equals(spec.format()) || "pdf".equals(spec.format()))) {
-            return;
+    static void report(LintContext context, java.nio.file.Path document, String block,
+            List<ExportDeclarations.Violation> violations, String source,
+            List<LintFinding> findings) {
+        for (ExportDeclarations.Violation violation : violations) {
+            String key = violation.key();
+            String token = key.substring(key.lastIndexOf('.') + 1).replaceAll("/.*", "") + ":";
+            int entry = key.indexOf('[');
+            Integer line = context == null || document == null
+                    ? null
+                    : entry < 0
+                            ? context.lineWithin(document, block, token)
+                            : context.lineWithin(document, block,
+                                    key.substring(entry + 1, key.indexOf(']')), token);
+            findings.add(new LintFinding(violation.code().toString(),
+                    violation.kind() == ExportDeclarations.Kind.ADVISORY ? WARNING : ERROR,
+                    source, violation.message(), line, null));
         }
-        findings.add(new LintFinding(INAPPLICABLE_EXPORT_OPTION, ERROR, source, label
-                + "bom: is a csv option - " + spec.format()
-                + " output has no text stream to mark"));
     }
 
     /**

@@ -103,6 +103,37 @@ final class LintContext {
     }
 
     /**
+     * The 1-based line of the last token's first occurrence after each earlier token's — the
+     * export block's own {@code timezone:}, or a column entry's {@code format:}, never an
+     * input's — falling back to the deepest token found; null when the file is unreadable or
+     * the first token is absent.
+     */
+    Integer lineWithin(Path source, String... tokens) {
+        String text = content(source);
+        if (text == null) {
+            return null;
+        }
+        int at = -1;
+        for (String token : tokens) {
+            int next = text.indexOf(token, at < 0 ? 0 : at);
+            if (next < 0) {
+                break;
+            }
+            at = next;
+        }
+        if (at < 0) {
+            return null;
+        }
+        int line = 1;
+        for (int i = 0; i < at; i++) {
+            if (text.charAt(i) == '\n') {
+                line++;
+            }
+        }
+        return line;
+    }
+
+    /**
      * The source tables the app's code catalogs read, for the {@code invalidates:} check.
      * Held for the run rather than threaded through every route-shaped surface: the check
      * belongs beside {@code lintEmit}, which those surfaces already share.

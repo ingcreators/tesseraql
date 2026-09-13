@@ -40,6 +40,9 @@ import java.nio.file.Path;
  */
 public final class RouteCompiler {
 
+    private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory
+            .getLogger(RouteCompiler.class);
+
     private static final TqlErrorCode UNSUPPORTED_RECIPE = new TqlErrorCode(TqlDomain.ROUTE, 3100);
     /** TQL-ROUTE-3101: a query-export route declares an after: hook, which needs file-export. */
     private static final TqlErrorCode INVALID_EXPORT = new TqlErrorCode(TqlDomain.ROUTE, 3101);
@@ -136,6 +139,15 @@ public final class RouteCompiler {
             // grants, the audit trail's app column), and a shared fallback is the bug
             // ApplicationName's javadoc records (docs/duplication-consolidation.md, camp. 4).
             this.appName = io.tesseraql.yaml.app.ApplicationName.of(config);
+        }
+        // The app-wide files.locale/timezone literals, judged by the predicate the linter
+        // reports from (docs/export-declarations.md decision 1): a typo there is every export
+        // of the app failing at its first request, so it is refused here instead — once per
+        // manifest, not once per hot-reloaded route (the reloader judges before its loop).
+        if (onlyRouteIds == null) {
+            io.tesseraql.yaml.app.ExportDeclarations.require(
+                    io.tesseraql.yaml.app.ExportDeclarations.configViolations(appName, config),
+                    LOG::warn);
         }
         // Per-route response.onError steering (HX-Retarget/HX-Reswap), resolved at error
         // time from the failing route id; the error renderer is one shared exception handler.
@@ -1384,6 +1396,9 @@ public final class RouteCompiler {
                     + " after: hook - use the file-export recipe for asynchronous extraction"
                     + " with follow-up statements");
         }
+        // The declaration's values, refused (or warned about) before any codec is looked up —
+        // the same predicate the linter reports from (docs/export-declarations.md decision 1).
+        requireValidExport(definition, spec, routeDir);
         String format = spec != null && spec.format() != null ? spec.format() : "csv";
         io.tesseraql.core.files.FileCodec codec = io.tesseraql.core.files.FileCodecs.discover()
                 .require(format);
@@ -1445,6 +1460,13 @@ public final class RouteCompiler {
         String routeId = definition.id();
         Path rowSql = routeFile.source().getParent()
                 .resolve(definition.rowStep().file()).normalize();
+        // import.locale is where a typo costs data (de_DE parses 1234,50 as 123450.00): the
+        // same predicate as the export block (docs/export-declarations.md decision 1).
+        io.tesseraql.yaml.app.ExportDeclarations.require(
+                io.tesseraql.yaml.app.ExportDeclarations.violations(
+                        io.tesseraql.yaml.app.ExportDeclarations.Site.route(appName, definition),
+                        spec),
+                LOG::warn);
 
         // `review:` accepts one word, the way `comment:` does on a transition. A misspelling
         // that silently meant "no review" would turn a two-phase import back into a one-shot
@@ -1548,6 +1570,19 @@ public final class RouteCompiler {
         io.tesseraql.yaml.model.ExportSpec spec = definition.fileExport();
         String routeId = definition.id();
         Path routeDir = routeFile.source().getParent();
+        if (spec == null) {
+            // Used to be a NullPointerException naming neither the route nor the key.
+            throw new TqlException(io.tesseraql.yaml.app.ExportDeclarations.INCOMPLETE,
+                    io.tesseraql.yaml.app.ExportDeclarations.missingBlock(
+                            io.tesseraql.yaml.app.ExportDeclarations.Site.route(appName,
+                                    definition)));
+        }
+        // The declaration's values (docs/export-declarations.md decision 1): the after:
+        // without its statement and the cell reference used to escape raw from below.
+        requireValidExport(definition, spec, routeDir);
+        // A route's unset format: is csv (as query-export says); it used to reach the
+        // processor as the literal "null" and fail the first POST as a format no codec serves.
+        String format = spec.format() == null || spec.format().isBlank() ? "csv" : spec.format();
         // The rows an export writes are the document's main source, on every export surface
         // (docs/unified-sources.md, decision 7).
         Path querySql = routeDir.resolve(definition.main().file()).normalize();
@@ -1575,12 +1610,12 @@ public final class RouteCompiler {
                         formatDeclaration(spec.locale(), "tesseraql.files.locale")));
         exportStep = httpSourcesFirst(exportStep, definition);
         exportStep.process(new io.tesseraql.compiler.binding.FileExportStartProcessor(
-                routeId, routeFile.urlPath(), appName, spec.format(),
+                routeId, routeFile.urlPath(), appName, format,
                 spec.toWriteSpec(template, appHome),
                 formatDeclaration(spec.locale(), "tesseraql.files.locale"),
                 formatDeclaration(spec.timezone(), "tesseraql.files.timezone"),
                 spec.filename(), querySql, afterTiming, afterSql,
-                declaredExportRowCap(spec, spec.format()),
+                declaredExportRowCap(spec, format),
                 exportQueries(definition, routeDir), httpSourceNames(definition),
                 enrichProcessors(routeDir, definition)));
         mountTransferStatus(context, appHome, routeFile, routeId);
@@ -1592,6 +1627,20 @@ public final class RouteCompiler {
         applySecurity(fileRoute, definition.security(), "GET",
                 routeFile.urlPath() + "/{transferId}/file");
         fileRoute.process(new io.tesseraql.compiler.binding.FileDownloadProcessor());
+    }
+
+    /**
+     * The boot twin of the export lint (docs/export-declarations.md decision 1): every
+     * refusal keeps its own code and names the app, the route, the key and the bounded value;
+     * an inert key is said out loud and served without (decision 2).
+     */
+    private void requireValidExport(RouteDefinition definition,
+            io.tesseraql.yaml.model.ExportSpec spec, Path routeDir) {
+        io.tesseraql.yaml.app.ExportDeclarations.require(
+                io.tesseraql.yaml.app.ExportDeclarations.violations(
+                        io.tesseraql.yaml.app.ExportDeclarations.Site.route(appName, definition),
+                        spec, routeDir),
+                LOG::warn);
     }
 
     /** The route's locale/timezone declaration, falling back to the app-wide configuration. */

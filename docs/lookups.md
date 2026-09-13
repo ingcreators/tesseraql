@@ -333,7 +333,7 @@ request in the log.
 | Surface | Locale |
 | --- | --- |
 | HTTP route (HTML/JSON) | the request's resolved locale |
-| Export | the export's declared `locale:` — not a request's |
+| Export | the export's declared `locale:` on `csv` and `pdf` (a literal, or a request source the route binds — see [file-transfers.md](file-transfers.md)); a workbook reads none |
 | Batch job | declared by the job; there is no request |
 | Mail | the recipient's language |
 
@@ -353,9 +353,10 @@ catalog and ships with it. The per-surface locale rule travels with each surface
 refusal cannot be written against a surface that cannot yet render a code. Export's arrived
 with slice 13a: an export's `codes` answer in the export's declared `locale:` rather than in the
 requesting browser's, since otherwise one document carries names in the reader's language and
-its numbers and dates in the export's — a mismatch nobody declared. And an export in an app
-whose catalogs carry per-language names must declare that locale (`TQL-FIELD-4622`), because an
-export has no request to negotiate one from. Mail follows with the mail slice. What ships with the language
+its numbers and dates in the export's — a mismatch nobody declared. And a `csv` or `pdf` export
+in an app whose catalogs carry per-language names must declare that locale (`TQL-FIELD-4622`),
+because an export has no request to negotiate one from; a workbook never reads one and is not
+asked. Mail follows with the mail slice. What ships with the language
 dimension is the rule for the surface that does have it (the request's resolved locale) and a
 build-time warning for the configuration that makes the whole dimension unreachable: a
 `language:` column in an app whose `tesseraql.i18n.locales` holds a single tag
@@ -763,10 +764,11 @@ join, the same answer enrichment gives.
 
 **Wave 3 — the remaining surfaces**
 
-13a. **Export's locale.** The export's `codes` answer in the export's declared locale, and an
-   export that cannot name one in an app with per-language names is refused
+13a. **Export's locale.** The export's `codes` answer in the export's declared locale, and a
+   `csv` or `pdf` export that cannot name one in an app with per-language names is refused
    (`TQL-FIELD-4622`) — decision 12's rule for the first surface that can render a code
-   without a request behind it.
+   without a request behind it. A workbook never reads `locale:`, so an `excel` export is not
+   asked ([file-transfers.md](file-transfers.md)).
 13b. **`enrich:` on an export.** The enrichment wraps the row *iterator*, which turned out to
    make the repeatable and streaming cases one case rather than two: a streaming codec reads
    through it and sees a sliding window, a buffering codec spools what comes out, and a

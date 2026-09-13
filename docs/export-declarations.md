@@ -5,7 +5,7 @@
 > driver hands it (the Excel grid/placement NULL cell, the `time` column, the `LocalTime` /
 > `OffsetTime` treatment): **shipped with this record as #1305** (the pull request that registers this file
 > in both internal-doc lists). **5a** — every literal export declaration is judged once, at lint
-> and at boot, with one code (`TQL-YAML-1063`): pending. **5b** — a request-sourced value is
+> and at boot, with one code (`TQL-YAML-1063`): shipped as #1306. **5b** — a request-sourced value is
 > refused before the SQL runs (`TQL-FIELD-2001`, code `timezone` / `locale`), the fallback chain is
 > one rule on every arm, a job reads `tesseraql.files.*`, and a failure while writing the document
 > has its own code (`TQL-LD-2802`): pending. **5c** — a valid `splitBy:` takes effect on a job step

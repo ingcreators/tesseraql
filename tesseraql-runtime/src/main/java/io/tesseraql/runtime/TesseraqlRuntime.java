@@ -1343,12 +1343,19 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             jobApp == null ? "app" : jobApp));
                 });
             }
-            Map<String, JobFile> jobs = new LinkedHashMap<>();
-            manifest.jobs().forEach(job -> jobs.put(job.definition().id(), job));
             // Required, not defaulted: the name scopes outbox claims, job ownership and
             // tql.ops.view.<name>, so a shared fallback is a shared identity (io.tesseraql.yaml.app
             // .ApplicationName).
             String appName = io.tesseraql.yaml.app.ApplicationName.of(manifest.config());
+            Map<String, JobFile> jobs = new LinkedHashMap<>();
+            for (JobFile job : manifest.jobs()) {
+                // A job's export:/import: literals are judged where the job is registered —
+                // the one placement that refuses under dev and host alike with one line —
+                // by the predicate the linter reports from (docs/export-declarations.md
+                // decision 1); routes are the compiler's arm, and jobs never reach it.
+                requireValidJobDeclarations(appName, job);
+                jobs.put(job.definition().id(), job);
+            }
             // The owning app per job id (main app jobs default), so execution records are tagged with
             // the app that declared the job, not just the hosting runtime (design ch. 26, 32).
             Map<String, String> jobOwners = new LinkedHashMap<>();
@@ -1426,6 +1433,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 // tagged with the owning app; duplicate ids across apps fail the mount.
                 for (JobFile job : mounted.manifest().jobs()) {
                     String jobId = job.definition().id();
+                    requireValidJobDeclarations(mounted.name(), job);
                     if (jobs.putIfAbsent(jobId, job) != null) {
                         throw new io.tesseraql.core.error.TqlException(DUPLICATE_JOB,
                                 "Job id '" + jobId + "' of app '" + mounted.name()
@@ -2085,6 +2093,17 @@ public final class TesseraqlRuntime implements AutoCloseable {
             throw new IllegalStateException("Failed to start TesseraQL runtime: "
                     + (ex.getMessage() != null ? ex.getMessage() : ex), ex);
         }
+    }
+
+    /**
+     * The job arm of the export-declaration refusal (docs/export-declarations.md decisions 1
+     * and 2): every export step's block and a poll job's import block, judged by the shared
+     * predicate — the same call {@code tesseraql job run} makes before it wires a job. A
+     * refusal keeps its own code and names the app, the job and the step; an inert key is said
+     * out loud and the job runs without it.
+     */
+    private static void requireValidJobDeclarations(String appName, JobFile job) {
+        io.tesseraql.yaml.app.ExportDeclarations.requireJob(appName, job, LOG::warn);
     }
 
     /** Whether any declared workflow runs in managed mode (the default or a per-workflow override). */

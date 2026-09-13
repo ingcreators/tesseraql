@@ -8,6 +8,30 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **A mistyped export declaration is refused where it was written.** A `timezone:` the JDK does
+  not know, a `locale:` it cannot format (`ja_JP`, `japanese`), a `csv`/`pdf` `columns[].format:`
+  its parser refuses, an import `columns[].type:` the parser does not know, a `startCell:` or
+  `column:` that is not a reference or lies outside a workbook, a mixed-case `format:` (`Excel`)
+  and a request source naming nothing the surface binds are now a lint error and a boot refusal
+  with one code, `TQL-YAML-1063`, on a route's `export:`, a job step's `export:`, a route's and a
+  poll job's `import:` block and the `tesseraql.files.locale` / `tesseraql.files.timezone` keys —
+  judged by one predicate, only where the format reads the key: a workbook's `columns[].format:`
+  is its cell format and is never parsed, a jxls report's `timezone:` reaches no cell, a `csv`
+  never reads a template. `tesseraql job run` judges the same predicate — every job and the two
+  configuration keys — before it records an execution, and a hot reload judges the two
+  configuration keys once, refusing the reload as a whole instead of stubbing every route. Every
+  message names the app, the route or job step, the key and the bounded value. Before this, every
+  altitude was silent: a bad zone answered 500 after the extraction SQL had run, a `file-export`
+  failed with no reason on the wire, a job step failed every firing, and `import.locale: de_DE`
+  parsed `1234,50` as `123450.00` and completed. A request source on a job step or a poll job, or
+  one naming a request input on a `file-import` (which binds none), is refused for the first
+  time; a configuration key that is a source expression is refused too. A key the format never
+  reads — `bom:`, `sheet:`, `startCell:` or `template:` on the wrong format, `locale:` on a
+  workbook, a `type:` the export does not render — stays a lint error (`TQL-YAML-1005`) and is
+  now a boot warning; a `csv`/`pdf` export declaring a locale or zone over a column list with no
+  typed or formatted column, and a jxls report declaring keys it never reads, draw a lint
+  warning. `TQL-FIELD-4622` no longer demands a `locale:` on an `excel` export.
+
 - **An `export:` CSV carries a byte-order mark when asked.** `bom: true` on a route's or a job
   step's `export:` block opens a `csv` export with the UTF-8 mark (`EF BB BF`), so a spreadsheet
   that sniffs the mark decodes the file as UTF-8 rather than in its system code page. The default
@@ -27,6 +51,17 @@ All notable changes to TesseraQL are documented here. The format follows
   unaffected.
 
 ### Fixed
+
+- **The raw boot failures of an export declaration are shaped.** `startCell: 5B` used to escape
+  as an `IllegalStateException` naming neither the route nor the key; a `file-export` route
+  without an `export:` block, or with an `after:` lacking its statement, as a
+  `NullPointerException`; a template name the file system refuses as an `InvalidPathException`;
+  `startCell: ZZZZ1` on a workbook compiled and failed the first request inside the workbook
+  library. Each is now the refusal above (`TQL-YAML-1063`, `TQL-YAML-1041`, `TQL-YAML-1006`)
+  naming the route and the key. A `file-export` route with no `format:` now defaults to `csv`, as
+  a `query-export` route always did, instead of reaching the first request as the format `null`.
+  A missing workbook or print template on a route or a job step is refused at boot as it was at
+  lint (`TQL-YAML-1006`).
 
 - **A redirect to a route with a non-ASCII path now lands on that route in every client
   measured.** Every `Location` and `HX-Redirect` the framework writes — a literal `location:`,

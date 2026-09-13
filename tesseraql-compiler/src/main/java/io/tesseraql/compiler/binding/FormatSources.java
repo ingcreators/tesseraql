@@ -52,7 +52,11 @@ final class FormatSources {
         return value == null ? null : String.valueOf(value);
     }
 
+    /**
+     * The one grammar (docs/export-declarations.md decision 4): the linter and the compiler
+     * classify a declaration by the same pattern this binder resolves by.
+     */
     private static boolean isSourceExpression(String declaration) {
-        return declaration.matches("(principal|query|body|params|request)\\..+");
+        return io.tesseraql.yaml.app.ExportDeclarations.isSourceExpression(declaration);
     }
 }

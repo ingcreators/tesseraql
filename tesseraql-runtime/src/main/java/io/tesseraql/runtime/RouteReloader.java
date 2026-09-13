@@ -135,6 +135,14 @@ public final class RouteReloader {
         // The structural guard spans every hosted app (startup parity): a new route colliding
         // with another app's endpoint aborts the reload with the conflict named.
         SystemApps.requireNoRouteConflicts(reloaded, mountedApps);
+        // The app-wide files.locale/timezone literals, judged once here rather than inside
+        // every route's compile: a typo in a key stubs no route — the reload is refused as a
+        // whole with the key named, and the last good routes keep serving
+        // (docs/export-declarations.md decision 11).
+        io.tesseraql.yaml.app.ExportDeclarations.require(
+                io.tesseraql.yaml.app.ExportDeclarations.configViolations(appName,
+                        reloaded.config()),
+                LOG::warn);
 
         Map<String, RouteFile> now = byId(reloaded);
         Map<String, RouteFile> before = byId(current);
