@@ -1446,7 +1446,8 @@ Every unfiled defect the measurement found, routed elsewhere with its destinatio
   jxls report mode's `25569.9375` for a `java.sql.Time`; the `TQL-LD-2802` message naming the format
   and file, not the column; a codec `UncheckedIOException` raised OUTSIDE the write keeping
   `TQL-SQL-2500`; the ZIP host byte, the surrogate split in `SplitExport.safe`, the masked 2857, the
-  two-part extension in `zipName` (`orders-{key}.tar.gz`); `TQL-LD-2810: Export step failed:
+  two-part extension in `zipName` (`orders-{key}.tar.gz`) — the bundle half of these is fixed by
+  `export-hygiene.md` P1; `TQL-LD-2810: Export step failed:
   TQL-LD-2858: …` double-wrapping; the FAILED-split row cosmetic.
 - **F82 slice 2:** any change to codec discovery — `FileCodecs.discover()` in `buildQueryExport:1388`
   (the TCCL defect: the shipped `users/print` cannot boot on the CLI classpath even with

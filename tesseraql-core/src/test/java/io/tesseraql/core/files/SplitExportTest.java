@@ -297,4 +297,91 @@ class SplitExportTest {
         assertThat(SplitExport.safe("../etc")).isEqualTo("__etc");
         assertThat(SplitExport.safe("")).isEqualTo("_");
     }
+
+    /**
+     * The bound cuts on a code-point boundary and keeps the key's case (docs/export-hygiene.md
+     * P1). A cut at unit 100 through a surrogate pair left a lone surrogate the ZIP encoder
+     * refuses ("malformed input"), and the over-length branch alone lower-cased — so {@code A}×101
+     * collided with {@code a}×101 while {@code A}×100 and {@code a}×100 did not.
+     */
+    @Test
+    void aLongKeyIsCutOnACodePointBoundaryAndKeepsItsCase() {
+        String odd = "X" + "𠮷".repeat(50); // 101 UTF-16 units; unit 100 is a LOW surrogate
+        String cut = SplitExport.safe(odd);
+        assertThat(cut).hasSize(99).startsWith("X𠮷");
+        assertThat(Character.isHighSurrogate(cut.charAt(cut.length() - 1))).isFalse();
+        assertThat(SplitExport.safe("A".repeat(101))).isEqualTo("A".repeat(100));
+    }
+
+    @Test
+    void twoLongKeysDifferingInCaseAreTwoDocuments() throws Exception {
+        String upper = "A".repeat(101);
+        String lower = "a".repeat(101);
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        long groups = SplitExport.write(CODEC, spec(),
+                spool(List.of(row(upper, "ann"), row(lower, "bob"))),
+                Map.of(), "dept", "team-{key}.txt", out);
+        assertThat(groups).isEqualTo(2);
+        assertThat(entries(out.toByteArray())).containsKeys(
+                "team-" + "A".repeat(100) + ".txt", "team-" + "a".repeat(100) + ".txt");
+    }
+
+    @Test
+    void aKeyEndingInAnAstralLetterPastTheBoundIsWritten() throws Exception {
+        String odd = "X" + "𠮷".repeat(50);
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        SplitExport.write(CODEC, spec(), spool(List.of(row(odd, "ann"))), Map.of(), "dept",
+                "team-{key}.txt", out);
+        assertThat(entries(out.toByteArray()).keySet()).singleElement().asString()
+                .startsWith("team-X𠮷").endsWith("𠮷.txt");
+    }
+
+    /**
+     * Every entry carries the extended-timestamp extra field, in the local header and in the
+     * central directory, stamped 1980-01-01T00:00:00Z. Info-ZIP {@code unzip} 6.00 reads the
+     * UTF-8 flag only from an entry that carries SOME extra field, so a bundle whose entries had
+     * none unpacked a Japanese name as garbage on stock Debian and Ubuntu; a fixed stamp also
+     * makes two identical exports byte-identical. The bytes are asserted, never an extracted
+     * name: {@code java.util.zip} reads the name correctly with or without the field.
+     */
+    @Test
+    void everyEntryCarriesTheExtendedTimestampInBothRecords(@TempDir Path dir) throws Exception {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        SplitExport.write(CODEC, spec(), spool(List.of(row("東京", "ann"), row("大阪", "bob"))),
+                Map.of(), "dept", "受注-{key}.txt", out);
+        byte[] bundle = out.toByteArray();
+        java.nio.file.attribute.FileTime epoch = java.nio.file.attribute.FileTime.from(
+                java.time.Instant.parse("1980-01-01T00:00:00Z"));
+
+        // The local headers, as a streaming reader sees them.
+        int local = 0;
+        try (ZipInputStream in = new ZipInputStream(new ByteArrayInputStream(bundle))) {
+            ZipEntry entry;
+            while ((entry = in.getNextEntry()) != null) {
+                assertThat(extendedTimestamp(entry.getExtra())).as("local header of " + entry)
+                        .isTrue();
+                assertThat(entry.getLastModifiedTime()).as("stamp of " + entry).isEqualTo(epoch);
+                local++;
+            }
+        }
+        assertThat(local).isEqualTo(2);
+
+        // The central directory, as unzip's listing and a random-access reader see it.
+        Path file = dir.resolve("bundle.zip");
+        java.nio.file.Files.write(file, bundle);
+        try (java.util.zip.ZipFile zip = new java.util.zip.ZipFile(file.toFile())) {
+            assertThat(zip.size()).isEqualTo(2);
+            zip.stream().forEach(entry -> {
+                assertThat(extendedTimestamp(entry.getExtra())).as("central directory of " + entry)
+                        .isTrue();
+                assertThat(entry.getLastModifiedTime()).as("stamp of " + entry).isEqualTo(epoch);
+            });
+        }
+    }
+
+    /** Whether an extra field starts with the extended-timestamp header id (0x5455, little-endian). */
+    private static boolean extendedTimestamp(byte[] extra) {
+        return extra != null && extra.length >= 4 && (extra[0] & 0xff) == 0x55
+                && (extra[1] & 0xff) == 0x54;
+    }
 }

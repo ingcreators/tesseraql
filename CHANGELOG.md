@@ -57,6 +57,18 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A split bundle unpacks with its names intact, is byte-stable, and is named for its stem.** A
+  `splitBy:` bundle with a non-ASCII group key unpacked as garbage under Info-ZIP `unzip` 6.00
+  (stock Debian and Ubuntu) under a UTF-8 locale: the reader honours the UTF-8 name flag only on
+  an entry that carries some extra field, and the entries carried none. Every entry now carries
+  the extended-timestamp field and is stamped `1980-01-01`, the ZIP epoch, so the bundle's bytes
+  no longer depend on the wall clock either. A group key of 101 or more UTF-16 units ending in an
+  astral letter no longer fails the export after the query ran (the bound cut through a surrogate
+  pair), and long keys keep their case — `A`×101 and `a`×101 used to collide as one document. The
+  bundle's name drops the `{key}` placeholder with its separators wherever it stands:
+  `{key}.users.csv` bundles as `users.zip`, not the dot-file `.users.zip`; `users-{key}-daily.csv`
+  as `users-daily.zip`, not `users--daily.zip`.
+
 - **Under `tesseraql.temp.store: db` or `blob`, a completed asynchronous or job export can be
   downloaded, pushed and reclaimed.** The download and the retention sweep addressed the spool by
   the transfer id while the database and blob stores key it by the spool id they minted, so in the
