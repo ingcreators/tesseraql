@@ -38,13 +38,26 @@ All notable changes to TesseraQL are documented here. The format follows
   is unchanged, and an export that does not declare it is byte-identical to before: a mark is a
   declaration a reader must expect, and PostgreSQL `COPY … HEADER MATCH`, Python's `csv` module
   and Apache Commons CSV take it as part of the first header cell. A split export carries one
-  mark per ZIP entry, an export with no rows is the mark alone, and the mark is never derived
+  mark per ZIP entry, an export with no rows is the mark and its header (the header when the
+  names are known — see the zero-row entry under Changed), and the mark is never derived
   from a locale or a client. The linter refuses `bom:` on `excel` and `pdf` (`TQL-YAML-1005`).
   Studio's data-browser download and `response.file:` templates are not `export:` blocks and
   carry none. The procurement demo's shipments export declares it, since its partner names are
   Japanese.
 
 ### Changed
+
+- **A tabular export with no rows carries its header.** A CSV or Excel-grid export of an empty
+  result now writes its header row — the declared `columns:`, or the query's column names read
+  from the result set's metadata — where it used to be 0 bytes (three with `bom: true`) and a
+  cell-less workbook. The empty day's file read as "no table" to pandas (`EmptyDataError`),
+  PostgreSQL `COPY … HEADER MATCH`, DuckDB (which fabricated `column0`) and this framework's own
+  `file-import` (`TQL-LD-2820`). The PDF grid already printed a declared header and now prints
+  the query's names too; the three formats agree. Every surface — the synchronous route, the
+  asynchronous `file-export`, an `export:` job step — behaves alike, and a buffered export sees
+  the names through its spool. A consumer that tested `length == 0` for "no rows" should read
+  `rowCount` from the status instead. An export whose rows are enriched (`enrich:`) and wants a
+  stable header on the empty day declares `columns:` — enrichment adds keys no metadata knows.
 
 - **An Excel export refuses what a workbook cannot hold, naming it.** A text over 32,767
   characters — Excel's per-cell limit — is refused with `TQL-LD-2836` naming the column and the

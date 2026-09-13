@@ -6,6 +6,7 @@ import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.util.OrderedCopies;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -69,6 +70,17 @@ public final class ExportModel {
                     + " because its codec declared that it holds rows - iterate repeatableRows()");
         }
         return single;
+    }
+
+    /**
+     * The column names the row source knows before any row is read (docs/export-hygiene.md P5):
+     * a cursor's metadata, a spool's header. Empty when the source knows none — a plain list, or
+     * rows an enrichment reshapes — in which case a codec derives the header from the first row
+     * as before, and a zero-row export carries none.
+     */
+    public List<String> knownColumns() {
+        Object source = single != null ? single : repeatable;
+        return source instanceof NamedRows named ? named.columns() : List.of();
     }
 
     /** The re-readable row source. Fails when this export was built for a streaming codec. */

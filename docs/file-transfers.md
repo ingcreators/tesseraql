@@ -117,7 +117,12 @@ sources:
 ```
 
 - `columns:` selects and orders the exported columns; omit it to export every query column with
-  its name as the header. `label:` sets the label in the file (it may be localized text).
+  its name as the header. `label:` sets the label in the file (it may be localized text). An
+  export with no rows still carries its header row — the declared columns, or the query's column
+  names — so a consumer always sees the table's shape; a consumer asking "were there rows?" reads
+  `rowCount` from the transfer status. An export that enriches its rows (`enrich:`) declares
+  `columns:` if it wants a stable header on the empty day, because enrichment adds keys the
+  query's metadata cannot know.
 - `type:` (`date` / `datetime` / `number`) with `format:` renders a typed or formatted column
   through a date or decimal pattern on `csv` and `pdf`. On a workbook the string is the cell's
   own number format, in Excel's vocabulary (`d-mmm-yy`, `0.00E+00`), and no Java parser ever
@@ -161,8 +166,8 @@ sources:
   default, because a mark is a declaration a reader must expect: PostgreSQL `COPY … HEADER MATCH`
   and Python's `csv` module take it as part of the first header cell. It is never derived from
   `locale:`; a split export marks every file in the bundle, and an export with no rows still
-  carries it. The linter refuses it on `excel` and `pdf` (`TQL-YAML-1005`), which are not text
-  streams.
+  carries it, before its header. The linter refuses it on `excel` and `pdf` (`TQL-YAML-1005`),
+  which are not text streams.
 - Excel output has three template modes: no `template:` renders a plain grid; a template plus
   `startCell:` is placement mode — the template carries layout and styles while the YAML says
   where each column lands (`- { name: qty, column: D }`); a jx:-annotated template without

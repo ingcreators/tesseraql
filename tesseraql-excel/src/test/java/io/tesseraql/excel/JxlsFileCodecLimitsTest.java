@@ -171,6 +171,55 @@ class JxlsFileCodecLimitsTest {
                 .hasMessageContaining("16,384");
     }
 
+    // ------------------------------------------------------------------- the zero-row header
+
+    /** A zero-row grid carries its header row when the names are known (P5). */
+    @Test
+    void aZeroRowGridWritesItsHeaderWhenTheNamesAreKnown() throws Exception {
+        ByteArrayOutputStream declared = new ByteArrayOutputStream();
+        codec.write(declared, grid(), ExportModel.streaming(
+                java.util.Collections.emptyIterator(), Map.of()));
+        try (XSSFWorkbook workbook = new XSSFWorkbook(
+                new ByteArrayInputStream(declared.toByteArray()))) {
+            Row header = workbook.getSheetAt(0).getRow(0);
+            assertThat(header).as("declared columns").isNotNull();
+            assertThat(header.getCell(0).getStringCellValue()).isEqualTo("name");
+            assertThat(header.getCell(1).getStringCellValue()).isEqualTo("body");
+        }
+
+        ByteArrayOutputStream derived = new ByteArrayOutputStream();
+        codec.write(derived, new FileWriteSpec(List.of(), null, null, null),
+                ExportModel.streaming(new NamedEmpty(), Map.of()));
+        try (XSSFWorkbook workbook = new XSSFWorkbook(
+                new ByteArrayInputStream(derived.toByteArray()))) {
+            Row header = workbook.getSheetAt(0).getRow(0);
+            assertThat(header).as("names from the source").isNotNull();
+            assertThat(header.getCell(0).getStringCellValue()).isEqualTo("id");
+            assertThat(header.getCell(1).getStringCellValue()).isEqualTo("name");
+        }
+    }
+
+    /** A row source that knows its column names before any row, as a JDBC cursor does. */
+    private static final class NamedEmpty
+            implements
+                Iterator<Map<String, Object>>,
+                io.tesseraql.core.files.NamedRows {
+        @Override
+        public List<String> columns() {
+            return List.of("id", "name");
+        }
+
+        @Override
+        public boolean hasNext() {
+            return false;
+        }
+
+        @Override
+        public Map<String, Object> next() {
+            throw new java.util.NoSuchElementException();
+        }
+    }
+
     // ------------------------------------------------------ a template that is present but unusable
 
     @Test

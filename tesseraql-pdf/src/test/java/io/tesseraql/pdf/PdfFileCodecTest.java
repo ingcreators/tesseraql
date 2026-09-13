@@ -15,6 +15,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDate;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -39,6 +40,40 @@ class PdfFileCodecTest {
         Files.createDirectories(appHome.resolve("fonts"));
         try (InputStream font = getClass().getResourceAsStream("/fonts/" + FONT)) {
             Files.copy(font, appHome.resolve("fonts").resolve(FONT));
+        }
+    }
+
+    /** A zero-row grid prints the names its source knew, as it already did declared ones (P5). */
+    @Test
+    void aZeroRowGridPrintsTheSourcesColumnNames() throws Exception {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        codec.write(out, new FileWriteSpec(List.of(), null, null, null, appHome, null, null),
+                io.tesseraql.core.files.ExportModel.repeatable(
+                        io.tesseraql.core.files.SpooledRows.drain(
+                                new io.tesseraql.core.spool.FileTempStore(appHome.resolve("spool")),
+                                new NamedEmpty()),
+                        java.util.Map.of()));
+        assertThat(extractText(out.toByteArray())).contains("id").contains("name");
+    }
+
+    /** A row source that knows its column names before any row, as a JDBC cursor does. */
+    private static final class NamedEmpty
+            implements
+                Iterator<Map<String, Object>>,
+                io.tesseraql.core.files.NamedRows {
+        @Override
+        public List<String> columns() {
+            return List.of("id", "name");
+        }
+
+        @Override
+        public boolean hasNext() {
+            return false;
+        }
+
+        @Override
+        public Map<String, Object> next() {
+            throw new java.util.NoSuchElementException();
         }
     }
 

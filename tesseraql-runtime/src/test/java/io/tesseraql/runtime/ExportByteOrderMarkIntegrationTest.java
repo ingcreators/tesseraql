@@ -105,13 +105,28 @@ class ExportByteOrderMarkIntegrationTest {
         assertThat(japanese.body()).startsWith(HEADER);
     }
 
-    /** Decision D1: an empty export with {@code bom: true} is exactly three bytes on the wire. */
+    /**
+     * An empty export with {@code bom: true} is the mark and its header (docs/export-hygiene.md
+     * P5): the declared column names follow the mark, where the file used to be exactly three
+     * bytes (decision D1, superseded there).
+     */
     @Test
-    void anEmptyMarkedExportIsExactlyTheMark() throws Exception {
+    void anEmptyMarkedExportIsTheMarkAndItsHeader() throws Exception {
         HttpResponse<byte[]> empty = get("/api/items/empty");
 
         assertThat(empty.statusCode()).isEqualTo(200);
-        assertThat(empty.body()).containsExactly(MARK);
+        byte[] expected = ("\ufeffName\r\n").getBytes(StandardCharsets.UTF_8);
+        assertThat(empty.body()).containsExactly(expected);
+        assertThat(Arrays.copyOfRange(empty.body(), 0, 3)).containsExactly(MARK);
+    }
+
+    /** An empty export with no declared columns carries the query's column names (P5, rule 2). */
+    @Test
+    void anEmptyExportWithDerivedColumnsCarriesTheQuerysNames() throws Exception {
+        HttpResponse<byte[]> empty = get("/api/items/empty-derived");
+
+        assertThat(empty.statusCode()).isEqualTo(200);
+        assertThat(new String(empty.body(), StandardCharsets.UTF_8)).isEqualTo("name,qty\r\n");
     }
 
     private static HttpResponse<byte[]> get(String path) throws Exception {
@@ -152,6 +167,23 @@ class ExportByteOrderMarkIntegrationTest {
                 "  locale: ja\n  timezone: Asia/Tokyo\n");
         export(home, "empty", "api.items.empty", "select name from items where name = 'none'",
                 "  bom: true\n");
+        Path derived = home.resolve("web/api/items/empty-derived");
+        Files.createDirectories(derived);
+        Files.writeString(derived.resolve("get.yml"), """
+                version: tesseraql/v1
+                id: api.items.emptyDerived
+                kind: route
+                recipe: query-export
+                sources:
+                  main:
+                    sql:
+                      file: items.sql
+                export:
+                  format: csv
+                  filename: items.csv
+                """);
+        Files.writeString(derived.resolve("items.sql"),
+                "select name, 1 as qty from items where name = 'none'\n");
         return home;
     }
 

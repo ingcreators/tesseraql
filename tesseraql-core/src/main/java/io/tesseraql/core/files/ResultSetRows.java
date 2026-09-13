@@ -27,7 +27,7 @@ import java.util.NoSuchElementException;
  * which converts through {@code dialect.ResultRows.value}. Labels go through the same
  * {@link Labels#normalize} every other surface uses.
  */
-public final class ResultSetRows implements Iterator<Map<String, Object>> {
+public final class ResultSetRows implements Iterator<Map<String, Object>>, NamedRows {
 
     private final ResultSet resultSet;
     private final ExportRowCap cap;
@@ -56,6 +56,12 @@ public final class ResultSetRows implements Iterator<Map<String, Object>> {
     /** How many rows have been handed over. */
     public long count() {
         return count;
+    }
+
+    /** The column labels, from the metadata — known before the first row, and with no row. */
+    @Override
+    public List<String> columns() {
+        return labels;
     }
 
     @Override

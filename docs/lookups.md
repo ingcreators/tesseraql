@@ -775,7 +775,10 @@ join, the same answer enrichment gives.
    `splitBy:` bundle spools it too. `RowEnricher` in core is the seam — the rows are read by the
    file-transfer service and the SQL producer, the enrichment knows about 2-way SQL and the
    outbound gateway and lives with the compiler, and the two halves' modules do not see each
-   other. `EnrichProcessor` splits so both paths run one implementation.
+   other. `EnrichProcessor` splits so both paths run one implementation. One consequence: an
+   enriched row set cannot name its columns before its first row (the enrichment adds keys the
+   query's metadata does not know), so an enriched export that wants a header on the empty day
+   declares `columns:` — the plain export takes its names from the result set's metadata.
 14. **`chunk:`.** Enrichment between reader and writer, merged columns visible to the writer,
    with the window/skip interaction spelled out: a lookup failure is a window-level failure and
    must not be recorded as one row's skip.

@@ -158,6 +158,42 @@ class SpooledRowsTest {
     }
 
     /**
+     * A zero-row drain keeps the column names its source knew (docs/export-hygiene.md P5): a
+     * buffered export of an empty result then sees its columns, where the spool used to answer an
+     * empty list and every codec printed no header.
+     */
+    @Test
+    void aZeroRowDrainKeepsTheSourcesColumnNames() {
+        SpooledRows spooled = SpooledRows.drain(store(), new NamedEmpty());
+        assertThat(spooled.columns()).containsExactly("id", "name");
+        assertThat(spooled.size()).isZero();
+        assertThat(spooled.iterator().hasNext()).isFalse();
+        spooled.close();
+        assertThat(spoolFiles()).isZero();
+    }
+
+    /** A row source that knows its column names before any row, as a JDBC cursor does. */
+    private static final class NamedEmpty
+            implements
+                Iterator<Map<String, Object>>,
+                io.tesseraql.core.files.NamedRows {
+        @Override
+        public List<String> columns() {
+            return List.of("id", "name");
+        }
+
+        @Override
+        public boolean hasNext() {
+            return false;
+        }
+
+        @Override
+        public Map<String, Object> next() {
+            throw new java.util.NoSuchElementException();
+        }
+    }
+
+    /**
      * A text past {@code writeUTF}'s ceiling — 65,535 bytes of modified UTF-8, which 21,846
      * Japanese characters reach — round-trips through the reader as itself. It used to fail every
      * buffered, split or multi-source export with {@code TQL-LD-2855}, naming no column.

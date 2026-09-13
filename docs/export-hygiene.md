@@ -13,7 +13,9 @@
 > failed export says — the document code on every arm, the SQL sites coded, the reason within its
 > column, the stack logged: shipped as P3. **P4** the Excel codec's own refusals — the 32,767
 > cell, the worksheet's row and column limits, a report cell the workbook refuses, a template
-> that is not a workbook — `TQL-LD-2836` and `TQL-LD-2837`: shipped as P4; **P5** the zero-row header; **P6** the
+> that is not a workbook — `TQL-LD-2836` and `TQL-LD-2837`: shipped as P4. **P5** the zero-row
+> header — declared columns or the source's own names, on every surface, through the spool:
+> shipped as P5; **P6** the
 > print template's locale; **P7** the declaration path; **P8** the card and the status JSON under a
 > prefix — pending. Each pull request flips its own line here when it merges.
 >
@@ -555,6 +557,79 @@ walked as a stream).
   filing.
 - Microsoft Excel's own behaviour on a >32,767-character grid cell — unmeasured (no Excel here);
   the refusal does not depend on it.
+
+---
+
+## P5 — a tabular export writes its header when the names are known
+
+### What was wrong
+
+Item 5, wider than filed: csv wrote 0 bytes (3 with `bom: true`) and the Excel grid a cell-less
+workbook at zero rows — **with declared `columns:` as well as derived** (the declared list was
+held and discarded, the header printed inside the row loop) — on the sync route, the async route
+and the job step under both runners. The pdf grid already printed a declared header and nothing
+for derived names. `ResultSetMetaData` labels are available before the first row on every
+`ResultSetRows` surface (RUN `MetaProbe`) and were never plumbed: `ResultSetRows` read them into
+`labels` and kept them private; `SpooledRows.drain(zero rows).columns()` was `[]`. Reachable
+today with the shipped `users/export` and `shipments/export` (derived) and `daily-price-report`
+(declared). Consumers: pandas `EmptyDataError`, PostgreSQL `COPY … HEADER MATCH` (error), DuckDB
+(fabricates `column0`), this framework's own `file-import` (400 `TQL-LD-2820`). Studio's
+data-browser CSV already wrote the header at zero rows under a comment claiming byte-for-byte
+consistency with query-export.
+
+### The change (decision 3: rules 1 and 2 in one pull request)
+
+- **`NamedRows`** (core): a row source that knows its column names before the first row.
+  `ResultSetRows` implements it from its metadata labels; `SpooledRows` from its header.
+  `EnrichingRows` does NOT — enrichment adds keys no metadata can know, so an enriched export
+  wanting a stable header on the empty day declares `columns:` (documented in `file-transfers.md`).
+- **`ExportModel.knownColumns()`**: the source's names, or an empty list. `ColumnMapping.deriveIfAbsent(columns, names)`
+  overload.
+- **Rule 1 + rule 2 in the codecs**: `CsvFileCodec.write` and the Excel grid derive the columns
+  from `knownColumns()` and write the header BEFORE the row loop when any column is known; the
+  in-loop derivation from the first row stays for a source that knows nothing (a plain list), which
+  still writes nothing at zero rows. The pdf grid derives from `knownColumns()` too.
+- **The spool**: `SpooledRows.drain` with no row takes the columns from a `NamedRows` source
+  before writing its header, so a buffered export (pdf, placement, report, a `splitBy:`) sees the
+  names through the spool.
+
+### The guards, red before the fix (HEAD `4cc419ab5` + the empty `NamedRows` interface, so the
+tests compile)
+
+| guard | asserts | HEAD |
+|---|---|---|
+| `SpooledRowsTest.aZeroRowDrainKeepsTheSourcesColumnNames` | a `NamedRows` source with no rows → `columns() == [id, name]`, size 0, no file left | `[]` |
+| `CsvFileCodecTest.aZeroRowExportWritesItsHeaderWhenTheNamesAreKnown` | declared → `ID,Name\r\n`; a `NamedRows` source → `id,name\r\n`; a plain empty iterator → 0 bytes | 0 bytes |
+| `JxlsFileCodecLimitsTest.aZeroRowGridWritesItsHeaderWhenTheNamesAreKnown` | declared and derived → a header row in the workbook | no row |
+| `PdfFileCodecTest.aZeroRowGridPrintsTheSourcesColumnNames` | a zero-row spool from a `NamedRows` source → the text carries the names | `Page 1 / 1` alone |
+| `ExportByteOrderMarkIntegrationTest.anEmptyMarkedExportIsTheMarkAndItsHeader` (G26, reasserted) | `/api/items/empty` → exactly `EF BB BF` + `Name\r\n` | exactly the mark |
+| `ExportByteOrderMarkIntegrationTest.anEmptyExportWithDerivedColumnsCarriesTheQuerysNames` | a route with no `columns:` over an empty result → `name,qty\r\n` | 0 bytes |
+| `SharedTempStoreIntegrationTest.aZeroRowExportCarriesItsHeaderOnTheAsyncAndJobArms` | a `file-export` and an export-then-push job over `where id < 0` → the download and the delivered file read `id,status\r\n` | 0 bytes |
+
+`CsvFileCodecTest.anEmptyExportWithTheMarkIsExactlyTheMark` (G20) stays green by design: no
+columns declared and a source that knows none — its Javadoc says so now.
+
+**Bracket** (`work/export-hygiene-measurement/p5/bracket/`, four module jars reinstalled per
+column): HEAD 7 red; the fix 8/8 + 16/16 + 8/8 + 9/9 + 6/6 + 9/9 green; **V-rule1only**
+(`knownColumns()` answers nothing) — every DERIVED guard red (csv, grid, pdf, the derived route,
+the async/job arms) and every declared assertion green — hazard 26 made real; **V-nospool** (the
+zero-row drain forgets the names) — exactly the spool guard and the pdf guard red, the streaming
+arms green.
+
+### What this breaks
+
+A wire change: a zero-row csv grows from 0 to N bytes, a zero-row grid from a cell-less workbook
+to a header row, a marked empty csv from 3 bytes to the mark and its header. A consumer that
+tested `length == 0` should read `rowCount`. `docs/download-name-and-bytes.md` D1 ii and G26 are
+superseded (amended there); G20 stands. The Studio data-browser CSV's byte-for-byte claim becomes
+true at zero rows.
+
+### Filed, not fixed (from P5's measurement)
+
+- `splitBy:` at zero rows stays the documented empty ZIP.
+- Placement mode at zero rows returns the template unchanged (the template owns its headings).
+- The result-column-types design wants a `ResultSetMetaData` seam on `ResultSetRows` for TYPES;
+  `NamedRows` is the names half — build the types half as a sibling accessor, not a second read.
 
 ---
 
