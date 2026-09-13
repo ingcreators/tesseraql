@@ -134,7 +134,11 @@ class StackActivationIntegrationTest {
         assertThat(get("/shop-a/_as/shop-a.sales/admin/users", kenji).statusCode())
                 .isEqualTo(200);
 
-        List<String> actingRoles = actingRolesAudited("/admin/users");
+        // The audit row is written by the exchange's completion hook (RouteAudit.process ->
+        // addOnCompletion), AFTER the response is answered: reading the table straight after the
+        // third response raced it — zero rows, the tell — three times on CI over three campaigns,
+        // green on every re-run. Wait for the hook, bounded; the assertion is the same.
+        List<String> actingRoles = awaitActingRolesAudited("/admin/users", 2);
         assertThat(actingRoles).contains("shop-a.sales", "shop-a.audit");
     }
 
@@ -231,6 +235,22 @@ class StackActivationIntegrationTest {
         // An unheld role is a refusal, not a wider token.
         assertThat(postJson("/shop-a/_tesseraql/token",
                 "{\"actingRole\":\"shop-a.boss\"}", kenji).statusCode()).isEqualTo(403);
+    }
+
+    /**
+     * The distinct acting roles audited for {@code pathContains}, once at least {@code expected}
+     * of them have landed — or whatever is there when ten seconds pass, so a real regression
+     * still fails on the assertion that follows rather than on a timeout.
+     */
+    private static List<String> awaitActingRolesAudited(String pathContains, int expected)
+            throws Exception {
+        long deadline = System.currentTimeMillis() + 10_000;
+        List<String> roles = actingRolesAudited(pathContains);
+        while (roles.size() < expected && System.currentTimeMillis() < deadline) {
+            Thread.sleep(50);
+            roles = actingRolesAudited(pathContains);
+        }
+        return roles;
     }
 
     private static List<String> actingRolesAudited(String pathContains) throws Exception {
