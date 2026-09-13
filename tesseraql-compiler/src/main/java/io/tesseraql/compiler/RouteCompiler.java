@@ -1626,7 +1626,8 @@ public final class RouteCompiler {
         PipelineBuilder fileRoute = pipelines.pipeline(routeId + ".file");
         applySecurity(fileRoute, definition.security(), "GET",
                 routeFile.urlPath() + "/{transferId}/file");
-        fileRoute.process(new io.tesseraql.compiler.binding.FileDownloadProcessor());
+        fileRoute.process(new io.tesseraql.compiler.binding.FileDownloadProcessor(appName,
+                routeId));
     }
 
     /**
@@ -1669,7 +1670,9 @@ public final class RouteCompiler {
     /**
      * GET {path}/{transferId}: the shared status endpoint, secured like its parent route — and
      * POST {path}/{transferId}/cancel beside it, because a run a page can watch is a run a page
-     * has to be able to stop (docs/csv-import.md decision 6).
+     * has to be able to stop (docs/csv-import.md decision 6). Both answer for the parent
+     * route's own transfers only ({@code TransferScope}): the parent's policy is the whole
+     * gate, so the subtree must not open onto transfers other routes' policies guard.
      *
      * <p>Both are mounted for imports and exports alike: this is the one endpoint both recipes
      * call, and the card it answers is direction-aware rather than duplicated.
@@ -1690,8 +1693,8 @@ public final class RouteCompiler {
         // refusals localized in the default locale while the parent route's did not — the same
         // gap applyAttachmentGovernance exists to have closed on the attachment routes.
         applyCommonGovernance(route, routeId + ".status", "GET", path, routeFile.definition());
-        route.process(new io.tesseraql.compiler.binding.FileTransferStatusProcessor(
-                routeFile.urlPath(), appHome, i18n.defaultTag(), format, readSpec));
+        route.process(new io.tesseraql.compiler.binding.FileTransferStatusProcessor(appName,
+                routeId, routeFile.urlPath(), appHome, i18n.defaultTag(), format, readSpec));
         String cancelPath = path + "/cancel";
         String cancelId = routeId + ".cancel";
         if (mountRest) {
@@ -1699,8 +1702,8 @@ public final class RouteCompiler {
         }
         PipelineBuilder cancel = pipelines.pipeline(cancelId);
         applyCommonGovernance(cancel, cancelId, "POST", cancelPath, routeFile.definition());
-        cancel.process(new io.tesseraql.compiler.binding.TransferCancelProcessor(
-                routeFile.urlPath(), appHome, i18n.defaultTag(), format, readSpec));
+        cancel.process(new io.tesseraql.compiler.binding.TransferCancelProcessor(appName,
+                routeId, routeFile.urlPath(), appHome, i18n.defaultTag(), format, readSpec));
     }
 
     private static String exportFilename(RouteDefinition definition,

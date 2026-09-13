@@ -878,7 +878,9 @@ Every unfiled defect the measurement surfaced, with its destination (the measure
   inbound decode before the compare, beside `CookiePath.bind`); the `Set-Cookie Path=` on a
   non-ASCII base path (#2, unreachable from `dev`/`host`, file-only); reconciling
   `unicode-identifiers.md:160` with `ApplicationName.java:59` and `base-path-emission.md`.
-- **Edge slice** ("A header value is refused before it can hang the connection"): the asset and
+- **Edge slice** ("A header value is refused before it can hang the connection"; now
+  [`edge-hygiene.md`](edge-hygiene.md), which re-measured every item below and found N2 — the
+  transfer subtree — to outrank them all): the asset and
   SSE bypass checks (`AssetRoutes:343`, `SseRoutes:145`) and the MCP `HttpTransport:68` (#17, #23);
   a literal-value lint at `ExportRules:189`'s seam for `export.filename`, `response.stream.filename`,
   `redirect.location` and `response.file.contentType` (#7 — `charset=Shift_JIS` over UTF-8 bytes;

@@ -31,25 +31,28 @@ public final class FileTransferStatusProcessor implements Step {
 
     private static final TqlErrorCode UNKNOWN = new TqlErrorCode(TqlDomain.LD, 2822);
 
+    private final String appName;
+    private final String routeId;
     private final String urlPath;
     private final Path appHome;
     private final String defaultLocaleTag;
     private final String format;
     private final FileReadSpec readSpec;
 
-    public FileTransferStatusProcessor(String urlPath) {
-        this(urlPath, null, "en", null, null);
-    }
-
     /**
+     * @param appName  the application, and
+     * @param routeId  the route, whose own transfers this subtree answers for — any other
+     *                 transfer is unknown here ({@link TransferScope})
      * @param format   the import's format, or null on an export route — what turns a data-row
      *                 ordinal into the reference the author reads (docs/csv-import.md decision 8)
      * @param readSpec the route's declared read spec, for the same reason. The route's rather
      *                 than the batch's: a reviewed import freezes the locale, and a locale moves
      *                 no rows, so the two agree on where a row sits.
      */
-    public FileTransferStatusProcessor(String urlPath, Path appHome, String defaultLocaleTag,
-            String format, FileReadSpec readSpec) {
+    public FileTransferStatusProcessor(String appName, String routeId, String urlPath,
+            Path appHome, String defaultLocaleTag, String format, FileReadSpec readSpec) {
+        this.appName = appName;
+        this.routeId = routeId;
         this.urlPath = urlPath;
         this.appHome = appHome;
         this.defaultLocaleTag = defaultLocaleTag;
@@ -63,9 +66,8 @@ public final class FileTransferStatusProcessor implements Step {
         FileTransferService transfers = exchange.beans().lookup(
                 TesseraqlProperties.FILE_TRANSFER_BEAN,
                 FileTransferService.class);
-        FileTransferService.TransferStatus status = transfers == null
-                ? null
-                : transfers.status(transferId).orElse(null);
+        FileTransferService.TransferStatus status = TransferScope
+                .own(transfers, transferId, appName, routeId).orElse(null);
         if (Negotiation.prefersHtml(exchange)) {
             respondCard(exchange, transferId, status, transfers);
             return;

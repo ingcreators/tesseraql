@@ -19,13 +19,22 @@ public final class FileDownloadProcessor implements Step {
     private static final TqlErrorCode UNKNOWN = new TqlErrorCode(TqlDomain.LD, 2822);
     private static final TqlErrorCode NOT_READY = new TqlErrorCode(TqlDomain.LD, 2823);
 
+    private final String appName;
+    private final String routeId;
+
+    /** Serves this application's {@code routeId}'s own files, no other ({@link TransferScope}). */
+    public FileDownloadProcessor(String appName, String routeId) {
+        this.appName = appName;
+        this.routeId = routeId;
+    }
+
     @Override
     public void process(Exchange exchange) {
         String transferId = exchange.request().param("transferId");
         FileTransferService transfers = exchange.beans().lookup(
                 TesseraqlProperties.FILE_TRANSFER_BEAN,
                 FileTransferService.class);
-        if (transfers == null || transfers.status(transferId).isEmpty()) {
+        if (TransferScope.own(transfers, transferId, appName, routeId).isEmpty()) {
             throw new TqlException(UNKNOWN, "Unknown transfer: " + transferId);
         }
         FileTransferService.Download download = transfers.download(transferId)
