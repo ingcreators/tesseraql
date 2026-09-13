@@ -42,10 +42,12 @@ final class ExportStepRunner {
         Path template = export.template() == null
                 ? null
                 : context.jobFile().source().getParent().resolve(export.template()).normalize();
-        // A job has no request to resolve formatting from, so locale:/timezone: are literals.
+        // A job has no request to resolve formatting from, so locale:/timezone: are literals —
+        // and, unset, the app-wide tesseraql.files.* literals apply, as they do to a route.
         io.tesseraql.core.files.FileWriteSpec writeSpec = export
                 .toWriteSpec(template, context.appHome())
-                .withFormatting(export.locale(), export.timezone());
+                .withFormatting(context.fileDefaults().localeOr(export.locale()),
+                        context.fileDefaults().timezoneOr(export.timezone()));
         io.tesseraql.core.files.FileTransferService.InlineResult result = context.fileTransfers()
                 .exportInline(new io.tesseraql.core.files.FileTransferService.InlineExport(
                         context.jobFile().definition().id() + "#" + step.id(), context.appName(),

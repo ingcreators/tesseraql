@@ -68,6 +68,7 @@ final class StepContext {
             io.tesseraql.operations.http.HttpCallClient httpCall,
             io.tesseraql.core.account.PreferenceStore preferences,
             io.tesseraql.core.files.FileTransferService fileTransfers, Path appHome,
+            io.tesseraql.yaml.config.FileDefaults fileDefaults,
             JobExecutor.FilePusher filePusher,
             java.util.function.Function<String, io.tesseraql.core.sql.FilePathResolver> filePathResolvers,
             java.util.function.Function<String, DataSource> connectors) {
@@ -155,6 +156,13 @@ final class StepContext {
 
     Path appHome() {
         return collaborators.appHome();
+    }
+
+    /** The app-wide formatting literals an export step falls back to; none when unwired. */
+    io.tesseraql.yaml.config.FileDefaults fileDefaults() {
+        return collaborators.fileDefaults() == null
+                ? io.tesseraql.yaml.config.FileDefaults.none()
+                : collaborators.fileDefaults();
     }
 
     JobExecutor.FilePusher filePusher() {

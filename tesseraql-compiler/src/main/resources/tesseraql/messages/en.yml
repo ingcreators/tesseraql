@@ -18,6 +18,11 @@ tql:
     number: Must be a number.
     date: Not a valid date.
     datetime: Not a valid date and time.
+    timezone: "Not a time zone this app can use (expected e.g. Asia/Tokyo or UTC)."
+    locale: "Not a language tag this app can format (expected e.g. en or ja-JP)."
+    claim:
+      timezone: "The time zone in your sign-in profile is not one this app can use; ask whoever manages your account to correct it."
+      locale: "The language in your sign-in profile is not one this app can format; ask whoever manages your account to correct it."
   constraint:
     duplicate: Already exists.
     invalid-reference: The referenced record does not exist.

@@ -545,13 +545,27 @@ public final class InputBinder {
         return reject(name, "required", Map.of(), "Missing required input '" + name + "'");
     }
 
-    /** A field-scoped rejection: stable code, localizable message key, constraint params. */
-    private static TqlException reject(String name, String code, Map<String, ?> params,
+    /**
+     * A field-scoped rejection: stable code, localizable message key, constraint params. Also
+     * the export binders' refusal of a request-sourced locale or zone ({@code RequestFormats}),
+     * so the envelope is minted in exactly one place.
+     */
+    static TqlException reject(String name, String code, Map<String, ?> params,
             String logMessage) {
+        return reject(name, code, "tql.input." + code, params, logMessage);
+    }
+
+    /**
+     * The same rejection under a message key other than {@code tql.input.<code>}: an
+     * identity-provider claim keeps {@code code: timezone} but reads
+     * {@code tql.input.claim.timezone}, because the caller has no field to correct.
+     */
+    static TqlException reject(String name, String code, String messageKey,
+            Map<String, ?> params, String logMessage) {
         Map<String, Object> field = new LinkedHashMap<>();
         field.put("field", name);
         field.put("code", code);
-        field.put("message", "tql.input." + code);
+        field.put("message", messageKey);
         field.putAll(params);
         return TqlException.builder(VALIDATION)
                 .message(logMessage)

@@ -1154,6 +1154,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
             // A running job says so on a clock, and overlap: skip believes a previous run only
             // while its owner keeps saying it (docs/audit-hardening.md Decision 6). The clock is
             // the shared one built above, so a transfer reports on it too.
+            io.tesseraql.yaml.config.FileDefaults fileDefaults = io.tesseraql.yaml.config.FileDefaults
+                    .of(manifest.config());
             JobExecutor jobExecutor = new JobExecutor(jobRepository, tempStore, executionHeartbeats,
                     slowSqlLog, tracer, modules.functions())
                     .livenessWindow(io.tesseraql.core.util.Durations.parse(manifest.config()
@@ -1183,6 +1185,9 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     // export: pipeline steps write through the same transfer machinery HTTP
                     // file-export routes use (docs/analytics-experience.md track 3).
                     .fileTransfers(fileTransfers, appHome)
+                    // export: steps fall back to tesseraql.files.locale/timezone as a route does
+                    // (docs/export-declarations.md); the same reader feeds the poll sources.
+                    .fileDefaults(fileDefaults)
                     .filePush(filePush::push)
                     // ETL job SQL on a duckdb datasource resolves ${scope.*} placeholders through the
                     // same declared file scopes as routes (docs/duckdb.md).
@@ -1716,7 +1721,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     new io.tesseraql.operations.poll.JdbcPollConsumedStore(dataSource,
                             io.tesseraql.core.util.Durations.parse(manifest.config()
                                     .getString("tesseraql.connectors.poll.consumedRetention")
-                                    .orElse("30d"))))
+                                    .orElse("30d"))),
+                    fileDefaults)
                     .install(context);
             // Messaging consumers (roadmap Phase 27): each queue-consume route drains its channel
             // off the durable tql_event table — that table is what makes delivery at-least-once.

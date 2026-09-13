@@ -36,7 +36,7 @@ public final class FileImportProcessor implements Step {
     private final String appName;
     private final String format;
     private final FileReadSpec readSpec;
-    private final String localeDeclaration;
+    private final FormatDeclaration locale;
     private final Path rowSqlFile;
     private final String onError;
     private final boolean review;
@@ -47,7 +47,8 @@ public final class FileImportProcessor implements Step {
     private final java.util.List<String> emit;
 
     public FileImportProcessor(String routeId, String urlPath, String appName, String format,
-            FileReadSpec readSpec, String localeDeclaration, Path rowSqlFile, String onError,
+            FileReadSpec readSpec, FormatDeclaration localeDeclaration, Path rowSqlFile,
+            String onError,
             boolean review, Map<String, io.tesseraql.yaml.model.InputField> input) {
         this(routeId, urlPath, appName, format, readSpec, localeDeclaration, rowSqlFile, onError,
                 review, input, null, java.util.List.of());
@@ -55,7 +56,8 @@ public final class FileImportProcessor implements Step {
 
     /** The shape before an import announced its own completion. */
     public FileImportProcessor(String routeId, String urlPath, String appName, String format,
-            FileReadSpec readSpec, String localeDeclaration, Path rowSqlFile, String onError,
+            FileReadSpec readSpec, FormatDeclaration localeDeclaration, Path rowSqlFile,
+            String onError,
             boolean review, Map<String, io.tesseraql.yaml.model.InputField> input, Step html) {
         this(routeId, urlPath, appName, format, readSpec, localeDeclaration, rowSqlFile, onError,
                 review, input, html, java.util.List.of());
@@ -66,7 +68,8 @@ public final class FileImportProcessor implements Step {
      *             null for the JSON-only shape — the declaration used to compile and be dropped
      */
     public FileImportProcessor(String routeId, String urlPath, String appName, String format,
-            FileReadSpec readSpec, String localeDeclaration, Path rowSqlFile, String onError,
+            FileReadSpec readSpec, FormatDeclaration localeDeclaration, Path rowSqlFile,
+            String onError,
             boolean review, Map<String, io.tesseraql.yaml.model.InputField> input, Step html,
             java.util.List<String> emit) {
         this.html = html;
@@ -76,7 +79,7 @@ public final class FileImportProcessor implements Step {
         this.appName = appName;
         this.format = format;
         this.readSpec = readSpec;
-        this.localeDeclaration = localeDeclaration;
+        this.locale = localeDeclaration;
         this.rowSqlFile = rowSqlFile;
         this.onError = onError;
         this.review = review;
@@ -102,7 +105,7 @@ public final class FileImportProcessor implements Step {
             // materialize in memory here (an empty upload fails with the same 400).
             FileTransferService.ImportRequest request = new FileTransferService.ImportRequest(
                     routeId, appName, format,
-                    readSpec.withLocale(FormatSources.resolve(exchange, localeDeclaration)),
+                    readSpec.withLocale(RequestFormats.locale(exchange, locale)),
                     rowSqlFile, onError, ImportContracts.of(exchange, input))
                     // The route's live-view topics travel WITH the request, because the run
                     // outlives it: an import announces itself when its transaction commits on

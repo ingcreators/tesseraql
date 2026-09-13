@@ -24,8 +24,8 @@ public final class FileExportStartProcessor implements Step {
     private final String appName;
     private final String format;
     private final FileWriteSpec writeSpec;
-    private final String localeDeclaration;
-    private final String timezoneDeclaration;
+    private final FormatDeclaration locale;
+    private final FormatDeclaration timezone;
     private final String filename;
     private final Path querySqlFile;
     private final String afterTiming;
@@ -37,8 +37,8 @@ public final class FileExportStartProcessor implements Step {
     private final java.util.List<EnrichProcessor> enrichments;
 
     public FileExportStartProcessor(String routeId, String urlPath, String appName, String format,
-            FileWriteSpec writeSpec, String localeDeclaration,
-            String timezoneDeclaration, String filename, Path querySqlFile,
+            FileWriteSpec writeSpec, FormatDeclaration locale,
+            FormatDeclaration timezone, String filename, Path querySqlFile,
             String afterTiming, Path afterSqlFile,
             io.tesseraql.core.files.ExportRowCap rowCap,
             java.util.List<io.tesseraql.core.files.ExportQuery> queries,
@@ -49,8 +49,8 @@ public final class FileExportStartProcessor implements Step {
         this.appName = appName;
         this.format = format;
         this.writeSpec = writeSpec;
-        this.localeDeclaration = localeDeclaration;
-        this.timezoneDeclaration = timezoneDeclaration;
+        this.locale = locale;
+        this.timezone = timezone;
         this.filename = filename;
         this.querySqlFile = querySqlFile;
         this.afterTiming = afterTiming;
@@ -71,11 +71,13 @@ public final class FileExportStartProcessor implements Step {
         }
         Map<String, Object> params = exchange.getProperty(
                 TesseraqlProperties.SQL_PARAMS, Map.of(), Map.class);
+        // Judged before startExport: a refusal here leaves no transfer row, no execution row
+        // and no spool — the caller gets a 400 where a 202-then-FAILED used to hide the reason.
+        FileWriteSpec formatted = writeSpec.withFormatting(
+                RequestFormats.locale(exchange, locale),
+                RequestFormats.timezone(exchange, timezone));
         String transferId = transfers.startExport(new FileTransferService.ExportRequest(
-                routeId, appName, format,
-                writeSpec.withFormatting(
-                        FormatSources.resolve(exchange, localeDeclaration),
-                        FormatSources.resolve(exchange, timezoneDeclaration)),
+                routeId, appName, format, formatted,
                 filename, querySqlFile, Map.copyOf(params), afterTiming, afterSqlFile,
                 rowCap, queries, ExportSources.values(exchange, httpSources),
                 ExportEnrichment.enricher(exchange, enrichments),

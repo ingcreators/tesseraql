@@ -483,7 +483,9 @@ pipeline:
   being the one that matters. `template:` resolves beside the job file; `locale:` and
   `timezone:` are literals (a job has no request to resolve them from), and a request source
   on a step is refused by `tesseraql lint`, at boot and by `tesseraql job run`
-  (`TQL-YAML-1063`), as is a zone or a language tag the JDK cannot honour.
+  (`TQL-YAML-1063`), as is a zone or a language tag the JDK cannot honour. For each key a step
+  leaves unset the app configuration (`tesseraql.files.locale`, `tesseraql.files.timezone`)
+  applies, as it does to a route.
 - **`after:` runs in the extraction transaction.** `timing: download` stays route
   vocabulary — a job-produced file's download is an ops action, not a business signal
   (`TQL-YAML-1005` at build time).

@@ -71,6 +71,7 @@ public final class RouteCompiler {
     private static final long DEFAULT_IDEMPOTENCY_TTL = java.time.Duration.ofHours(24).toMillis();
 
     private AppConfig config;
+    private io.tesseraql.yaml.config.FileDefaults fileDefaults;
     /**
      * Cached so a prefix is resolved once per compile rather than per route; {@code null} until
      * first use, and the empty string when unset (which is every deployment that has not asked
@@ -128,6 +129,7 @@ public final class RouteCompiler {
     public void compile(RuntimeContext context, AppManifest manifest, boolean mountRest,
             java.util.Set<String> onlyRouteIds) {
         this.config = manifest.config();
+        this.fileDefaults = io.tesseraql.yaml.config.FileDefaults.of(manifest.config());
         this.manifest = manifest;
         this.compiledAppHome = manifest.appHome();
         this.tenancy = io.tesseraql.compiler.binding.TenancySettings.from(config);
@@ -1440,10 +1442,8 @@ public final class RouteCompiler {
                                 "tesseraql.files.locale")));
         step = httpSourcesFirst(step, definition);
         step.process(new io.tesseraql.compiler.binding.QueryExportBinder(codec, writeSpec,
-                formatDeclaration(spec == null ? null : spec.locale(),
-                        "tesseraql.files.locale"),
-                formatDeclaration(spec == null ? null : spec.timezone(),
-                        "tesseraql.files.timezone"),
+                formatting("locale", spec == null ? null : spec.locale()),
+                formatting("timezone", spec == null ? null : spec.timezone()),
                 declaredExportRowCap(spec, format), exportQueries(definition, routeDir),
                 httpSourceNames(definition), enrichProcessors(routeDir, definition)))
                 .process(exportSql);
@@ -1510,7 +1510,7 @@ public final class RouteCompiler {
         applyCommonGovernance(route, routeFile);
         route.process(new io.tesseraql.compiler.binding.FileImportProcessor(
                 routeId, routeFile.urlPath(), appName, spec.format(),
-                spec.toReadSpec(), formatDeclaration(spec.locale(), "tesseraql.files.locale"),
+                spec.toReadSpec(), formatting("locale", spec.locale()),
                 rowSql, spec.effectiveOnError(), spec.reviewRequired(), definition.input(),
                 // The topics travel with the request because the run outlives it: an import
                 // announces itself when its transaction commits, not when the response goes
@@ -1612,8 +1612,8 @@ public final class RouteCompiler {
         exportStep.process(new io.tesseraql.compiler.binding.FileExportStartProcessor(
                 routeId, routeFile.urlPath(), appName, format,
                 spec.toWriteSpec(template, appHome),
-                formatDeclaration(spec.locale(), "tesseraql.files.locale"),
-                formatDeclaration(spec.timezone(), "tesseraql.files.timezone"),
+                formatting("locale", spec.locale()),
+                formatting("timezone", spec.timezone()),
                 spec.filename(), querySql, afterTiming, afterSql,
                 declaredExportRowCap(spec, format),
                 exportQueries(definition, routeDir), httpSourceNames(definition),
@@ -1643,11 +1643,27 @@ public final class RouteCompiler {
                 LOG::warn);
     }
 
-    /** The route's locale/timezone declaration, falling back to the app-wide configuration. */
+    /**
+     * The catalog binder's fixed locale: the route's literal, else the app-wide configuration,
+     * collapsed here because a lookup catalog has no per-request chain to walk.
+     */
     private String formatDeclaration(String declared, String configKey) {
         return declared != null && !declared.isBlank()
                 ? declared
                 : config.getString(configKey).orElse(null);
+    }
+
+    /**
+     * The route's declaration AND the app-wide literal behind it, both carried to the binder
+     * (docs/export-declarations.md): collapsing them here is what made a request source that
+     * resolves to nothing skip the configuration. The configured value is a literal by
+     * contract — a source expression in {@code tesseraql.files.*} is refused at lint and boot —
+     * so the binder never resolves it.
+     */
+    private io.tesseraql.compiler.binding.FormatDeclaration formatting(String key,
+            String declared) {
+        return io.tesseraql.compiler.binding.FormatDeclaration.of(key, declared,
+                "locale".equals(key) ? fileDefaults.locale() : fileDefaults.timezone());
     }
 
     /**

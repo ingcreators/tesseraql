@@ -46,11 +46,50 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **`JobExecutor` gains `fileDefaults(FileDefaults)`, the app-wide `tesseraql.files.locale` /
+  `tesseraql.files.timezone` an export step falls back to.** Both executors — the served
+  runtime's and `tesseraql job run`'s — wire it; an embedder that builds its own passes
+  `FileDefaults.of(config)` or keeps the platform's.
+
 - **`FileWriteSpec` has a tenth component, `bom`, and `ExportSpec` a matching `Boolean bom`.**
   A codec that constructs the core record passes it; one that only reads the record is
   unaffected.
 
 ### Fixed
+
+- **A bad request-sourced export zone or locale is refused before any SQL runs.** A
+  `query.`/`params.`/`body.` source on `export.locale:`/`export.timezone:` that resolves to a
+  value the server cannot use (`?tz=Tokyo`, `?loc=ja_JP`) answers 400 `TQL-FIELD-2001` with a
+  field error naming the input, code `timezone` or `locale`, and the catalog's text in the
+  caller's language. Nothing runs: no extraction, no transfer row, no execution row, no log line
+  at INFO or above (the DEBUG line carries the value, bounded and control-stripped). It used to
+  be a 500 `TQL-SQL-2500` after the first batch was fetched on a synchronous export, a 202 then
+  `FAILED` with no reason on a file-export, and a `Locale.ROOT` document at 200 for a mistyped
+  locale. A sign-in claim (`principal.claim.zoneinfo`, `principal.claim.locale`) is held to the
+  same rule on exports and file-imports alike and named by its expression under its own message
+  text; a claim that is a JSON number, array or object is refused as not text rather than
+  stringified; a locale claim spelled `en_US`, as OpenID Connect allows, is read as `en-US`. On
+  a file-import a `principal.claim.locale` of `japanese` used to parse `99,90` as `9990.00`
+  under `Locale.ROOT`; a `query.`/`body.` source on `import.locale:` never resolved there and
+  still does not (a file-import binds no request inputs). The negotiated `request.locale` is
+  the framework's own value and is never judged.
+
+- **An unresolved request source falls back to the app configuration.** A route whose
+  `locale:`/`timezone:` names a source that resolves to nothing (no `?tz=`, a sign-in without
+  the claim, a blank value) now uses `tesseraql.files.locale`/`tesseraql.files.timezone` before
+  the platform default, as the reference always said; it used to skip the configuration. The
+  two keys fall back independently, on `query-export`, `file-export` and `file-import` alike.
+
+- **A job reads `tesseraql.files.locale` and `tesseraql.files.timezone`.** An export step
+  renders in the configured locale and zone for each key it leaves unset, through both the
+  served runtime and `tesseraql job run`; a poll-triggered import parses in the configured
+  locale when `import.locale:` is unset. Both used to use the JVM's.
+
+- **A failure while writing an export document is filed under its own code.** `TQL-LD-2802`
+  "Writing the csv document failed after the query ran: …" names the format and the file — a
+  codec, a column format, or the spool under it (`tesseraql.temp.maxBytes`); it used to be
+  `TQL-SQL-2500` "SQL execution failed" naming the extraction's SQL file, which had run to
+  completion. A failure of the statement itself is still `TQL-SQL-2500`.
 
 - **The raw boot failures of an export declaration are shaped.** `startCell: 5B` used to escape
   as an `IllegalStateException` naming neither the route nor the key; a `file-export` route
