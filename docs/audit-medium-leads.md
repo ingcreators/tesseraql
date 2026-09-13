@@ -196,6 +196,16 @@ Ranked. The first two are larger than most of the leads that found them.
     was recorded as delivered. The synchronous route was unaffected, which is why the one
     db-store test was green. Beside it `tesseraql job run` built the file store whatever the app
     declared. Found by the export-hygiene measurement; fixed in P0 (`export-hygiene.md`).
+8b. **A file-export or file-import route's `{transferId}` subtree served every transfer in the
+    database** (HIGH within security — an authorization gap, not a leak of a sentence). The
+    status, file and cancel endpoints are secured like their parent route and resolved the id
+    alone, so an anonymous caller holding the id of an export started under an `ADMIN`-gated
+    route received its rows through any public route's `/file`, its status and card through any
+    public export or import route's, and set its cancel flag; the id is a random UUID, so a
+    capability the route's policy was meant to bound and did not. `export-hygiene.md` decision 12
+    filed it as N2, a reason leak mitigated by the coded reason; measured, it is the bytes. The
+    cancel was asked of the run before the status was read. Fixed in `edge-hygiene.md` E0: the
+    subtree answers for the parent route's own transfers, a foreign id is an unknown one.
 9. **A failed async file export reports FAILED with no reason on the wire** — `TransferStatus` HAS
    an `errors` field the export path never fills; the reason IS recorded (`exit_message`) and served
    by the ops execution API. The real gaps are the wire projection, the card text, the console row,
@@ -226,13 +236,13 @@ Ranked. The first two are larger than most of the leads that found them.
     `</???page=2>; rel="next"` on every paged list under a non-ASCII route path — fixed in PR 4b (#1303).
 16. **`BasePaths.relative` on a wire-spelled `_return` under a non-ASCII base path doubles the
     prefix** — router slice.
-17. **A declared `headers:` `Location` never acquires the base prefix** — filed.
+17. **A declared `headers:` `Location` never acquires the base prefix** — `edge-hygiene.md` E1.
 18. **A non-ASCII `tesseraql.app.name` is hosted but unaddressable at the gateway** (TQL-APP-4040
     on every request) and `root.redirect` to it loops — router slice.
 19. **Route shadowing by sort order**: a Japanese literal segment beside `{param}` is unreachable —
     router slice.
 20. **The documented `HX-Trigger` toast mangles non-ASCII** (`ResponseHeaders.java:34` escapes
-    nothing above ASCII) — its own small pull request or the edge slice.
+    nothing above ASCII) — `edge-hygiene.md` E3.
 21. **ZIP entry names are mangled by Info-ZIP `unzip` 6.00** — the mechanism is the ABSENT extra
     field, not the host byte (`do_string` returns before the UTF-8 flag is read); any extra field
     restores the name — `export-hygiene.md` P1.

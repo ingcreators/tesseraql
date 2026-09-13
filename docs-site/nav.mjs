@@ -329,4 +329,7 @@ export const EXCLUDED = [
   // Export hygiene: what an export leaves behind and what it says when it fails - the shared
   // temp store's spool id, the split bundle, the spool leaks, the failure record - measured 2026-09-13.
   'export-hygiene.md',
+  // Edge hygiene: a transfer answers under the route that created it, a declared header is
+  // wire text - the transfer subtree that opened onto every transfer - measured 2026-09-13.
+  'edge-hygiene.md',
 ];

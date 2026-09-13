@@ -119,7 +119,10 @@ costs are in the measurement record §3. Numbering follows it.
 10. **A blank `format: ""` is refused at the predicate on every site** (P7); `RouteCompiler:1406`
     stays untouched for F82 slice 2.
 11. **Item 10's code is a new excel-owned LD code**, 2831's sibling (P4).
-12. **N2 is filed to the edge/security line**, decided before P8's reason half.
+12. **N2 is filed to the edge/security line**, decided before P8's reason half. *Measured
+    there 2026-09-13 ([`edge-hygiene.md`](edge-hygiene.md) E0): N2 was not a reason leak but the
+    file — every subtree served every transfer in the database; the coded reason mitigated the
+    smaller half.*
 13. **The truncation bound is 2000 UTF-16 units** with the Oracle byte-semantics caveat
     disclosed (P3).
 14. **Nine pull requests**, not eight.
@@ -874,7 +877,8 @@ keys and the sentence.
 
 - **N2**: any file-export route's status/file subtree serves any transfer id in the app (no route
   check) — the edge/router or security line (decision 12); the `code + sentence` shape here is
-  the mitigation.
+  the mitigation. *Fixed by [`edge-hygiene.md`](edge-hygiene.md) E0, measured wider: the bytes,
+  the card, the cancel, through import routes too.*
 - The transfer span invisible to the ops traces API (no `app` attribute) — the ops line.
 - `rowCount` 0 on every failed export — the error-hygiene line.
 
@@ -941,7 +945,7 @@ request builds its guards against these variants and proves them red on HEAD fir
 - `splitBy:` uncapped for every streaming codec, lint 5310 silent; the discarded named source that
   runs, spools and can fail the export → **the export-declarations design line**.
 - N2, any transfer id through any file-export route's subtree → **the edge/router or security
-  line** (decision 12).
+  line** (decision 12) — fixed in [`edge-hygiene.md`](edge-hygiene.md) E0.
 - The transfer span invisible to the ops traces API; 2831's absolute path and the 2853/2855 value
   snippets in `exit_message`; `rowCount` 0 on every failed export → **ops and error-hygiene
   lines**.

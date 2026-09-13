@@ -625,6 +625,19 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Security
 
+- **A file transfer answers only under the route that created it.** A file-export or
+  file-import route's `{transferId}` subtree — the status endpoint, the download, the cancel —
+  is secured like its parent route, and resolved the transfer by its id alone. So the parent's
+  policy was the whole gate, and the subtree it mounted opened onto every transfer in the
+  database: an anonymous caller holding the id of an export started under an `ADMIN`-gated
+  route received its rows through any public route's `/file`, read its status and card through
+  any public export or import route's, and could ask it to stop — the cancel was asked of the
+  run before the transfer was even looked up. The id is a random UUID, so this was not
+  enumerable; it was a capability the route's policy was meant to bound. Each subtree now
+  answers for the transfers its own route created in its own application and for no other; a
+  foreign id is answered exactly as an unknown one (`TQL-LD-2822`, the tombstone card), and the
+  cancel is refused before it reaches the run. The ops console's application-wide view is
+  unchanged.
 - **A sign-in return target carrying a tab no longer sends the browser off-site.** The app-local
   gate that guards the login `redirect`, a `location: back` return field, the OIDC return URL and
   the SAML RelayState refused a protocol-relative or backslash target and a line break, but not a

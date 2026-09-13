@@ -32,14 +32,19 @@ public final class TransferCancelProcessor implements Step {
     private static final TqlErrorCode NO_SERVICE = new TqlErrorCode(TqlDomain.LD, 2821);
     private static final TqlErrorCode UNKNOWN = new TqlErrorCode(TqlDomain.LD, 2822);
 
+    private final String appName;
+    private final String routeId;
     private final String urlPath;
     private final Path appHome;
     private final String defaultLocaleTag;
     private final String format;
     private final FileReadSpec readSpec;
 
-    public TransferCancelProcessor(String urlPath, Path appHome, String defaultLocaleTag,
-            String format, FileReadSpec readSpec) {
+    /** Stops this application's {@code routeId}'s own runs and no other ({@link TransferScope}). */
+    public TransferCancelProcessor(String appName, String routeId, String urlPath, Path appHome,
+            String defaultLocaleTag, String format, FileReadSpec readSpec) {
+        this.appName = appName;
+        this.routeId = routeId;
         this.urlPath = urlPath;
         this.appHome = appHome;
         this.defaultLocaleTag = defaultLocaleTag;
@@ -55,8 +60,11 @@ public final class TransferCancelProcessor implements Step {
             throw new TqlException(NO_SERVICE, "File transfer service is not configured");
         }
         String transferId = exchange.request().param("transferId");
-        boolean requested = transfers.cancel(transferId);
-        FileTransferService.TransferStatus status = transfers.status(transferId).orElse(null);
+        // Whose it is, before anything is asked of it: a cancel that reached the run first
+        // would have stopped a transfer this route was then going to call unknown.
+        FileTransferService.TransferStatus status = TransferScope
+                .own(transfers, transferId, appName, routeId).orElse(null);
+        boolean requested = status != null && transfers.cancel(transferId);
         if (Negotiation.prefersHtml(exchange)) {
             Locale locale = Locale.forLanguageTag(exchange.getProperty(
                     TesseraqlProperties.LOCALE, defaultLocaleTag, String.class));
