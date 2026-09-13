@@ -292,7 +292,9 @@ response:
 
 A `Location` or `HX-Redirect` declared here is a URL: each placeholder is inserted as one path
 segment and the whole value is percent-encoded once before it is sent, the same way a `redirect:`
-target is. Any other declared header is emitted as written.
+target is. A root-relative value acquires the application's prefix, so the recipe above answers
+under `tesseraql dev` and `tesseraql host`; an absolute `https://` value is sent as written. Any
+other declared header is emitted as written.
 
 On an HTML fragment this is an `HX-Trigger` toast firing on success but not on a handled error. On
 a JSON response the case is narrower, because conditional payload information belongs in the body a

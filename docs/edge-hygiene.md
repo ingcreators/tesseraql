@@ -7,7 +7,7 @@
 > run: **shipped with this record** (the pull request that registers this file in both
 > internal-doc lists). **E1** — a declared `headers:` `Location`/`HX-Redirect` acquires the
 > application's prefix, so the documented 201 recipe answers under `tesseraql dev` and `host`:
-> planned. **E2** — a GET or HEAD never engages the form parser, so a form content type on one
+> shipped as E1. **E2** — a GET or HEAD never engages the form parser, so a form content type on one
 > is not an unhandled exception and a raw 500 through the gateway: planned. **E3** — a declared
 > header value is judged where it is declared: a `security.responseHeaders` value carrying a
 > control character is refused at lint and boot (the three writers that bypass the edge's
@@ -186,12 +186,50 @@ green (`fix-green.log`, `unit-green.log`).
 
 ## E1 — a declared `Location`/`HX-Redirect` under a prefix
 
-Planned. `ResponseHeaders.apply` `:64-68`: `PercentEncoding.uriLiteral(Interpolation.interpolateUrl(template, evaluation))`
-becomes `BasePath.url(exchange, Interpolation.interpolateUrl(template, evaluation))` — the same
-encoder, after the join. Guards in `BasePathEmissionIntegrationTest` (the only prefix-aware
-harness): a route declaring the documented recipe and an `HX-Redirect`, each emitted with the
-prefix exactly once and resolving to a mounted route; an absolute `https://` value untouched.
-Variants: HEAD; V-double (prefixed twice); V-absolute (an absolute value prefixed).
+### What was wrong
+
+`ResponseHeaders.apply` (`:64-68` on `836907712`) handled a URI-reference header as
+`PercentEncoding.uriLiteral(Interpolation.interpolateUrl(template, evaluation))`: the placeholders
+as path segments, the whole value encoded once — 4b's decision 11 — and never joined to the
+application's prefix. Every other URL the framework writes goes through `BasePath.url`, the one
+place the prefix goes (`base-path-emission.md` decision 1); this writer was the one nobody listed.
+Under `tesseraql dev` or `host` a prefix is universal, so the documented 201 recipe
+(`docs/response-shaping.md`, `Location: "/api/items/{steps.record.keys.id}"`) answered
+`/api/items/1` for a route served at `/shop/api/items/1` — an address no member serves, a 404
+after a successful create. The unhosted, prefix-less boot every integration test used was blind
+to it.
+
+### The change
+
+`BasePath.url(exchange, Interpolation.interpolateUrl(template, evaluation))` — the join, then the
+same encoder, in the same order as every other writer. `BasePaths.join` leaves an absolute,
+protocol-relative, fragment or empty value untouched, and without a prefix the ASCII wire is
+byte-identical (decision 5).
+
+### The guards, red before the fix
+
+`BasePathEmissionIntegrationTest.aDeclaredLocationHeaderCarriesThePrefixOnceAndAnswers`: a
+`command-json` route declaring the recipe's shape (`Location: "/things/{params.thing}/edit"`)
+beside an absolute `HX-Redirect`, under the harness's `/shop` prefix — the `Location` is
+`/shop/things/2/edit` and a GET of it answers 200; the `HX-Redirect` is `https://example.com/away`
+as written.
+
+Bracket (`work/edge-slice/e1/`): HEAD `836907712` — red, `/things/2/edit` (`head-red.log`);
+`V-double` (the value joined twice) — red, `/shop/shop/things/2/edit` (`v-double.log`);
+`V-absolute` (the prefix concatenated blindly) — red on the `HX-Redirect` row,
+`/shophttps://example.com/away` (`v-absolute.log`); the fix — 13/13 green (`fix-green.log`).
+
+### What this breaks
+
+- A route that declared an already-prefixed `Location` to work around the gap would now be
+  prefixed twice. Nothing in the repository does; a wire URL read back off the request goes
+  through `BasePath.relative` first, as the `redirect:` rule already does.
+
+### Filed, not fixed (from E1's measurement)
+
+- Nothing. An error response declares no headers block; its one address, the conflict
+  dialog's reload target, resolves through `RedirectRenderer.resolveLocation` and the redirect
+  helper, which prefix already.
 
 ## E2 — a GET never engages the form parser
 

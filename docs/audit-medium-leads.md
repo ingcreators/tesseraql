@@ -236,7 +236,8 @@ Ranked. The first two are larger than most of the leads that found them.
     `</???page=2>; rel="next"` on every paged list under a non-ASCII route path — fixed in PR 4b (#1303).
 16. **`BasePaths.relative` on a wire-spelled `_return` under a non-ASCII base path doubles the
     prefix** — router slice.
-17. **A declared `headers:` `Location` never acquires the base prefix** — `edge-hygiene.md` E1.
+17. **A declared `headers:` `Location` never acquires the base prefix** — fixed in
+    `edge-hygiene.md` E1.
 18. **A non-ASCII `tesseraql.app.name` is hosted but unaddressable at the gateway** (TQL-APP-4040
     on every request) and `root.redirect` to it loops — router slice.
 19. **Route shadowing by sort order**: a Japanese literal segment beside `{param}` is unreachable —
