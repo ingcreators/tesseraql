@@ -5,7 +5,10 @@
 > `blob` a download, a push and the retention sweep address the spool by its own id, a failed
 > download is not recorded as delivered, and `tesseraql job run` honours the declared store:
 > **shipped with this record** (the pull request that registers this file in both internal-doc
-> lists). **P1** the split bundle; **P2** the spool leaks and the 65,535-byte ceiling; **P3** what a
+> lists). **P1** the split bundle — every entry carries the extended-timestamp field and the
+> ZIP epoch, the key's bound cuts on a code-point boundary and keeps its case, the bundle's name
+> drops the placeholder with its separators wherever it stands: shipped as P1. **P2** the spool
+> leaks and the 65,535-byte ceiling; **P3** what a
 > failed export says; **P4** the Excel codec's own refusals; **P5** the zero-row header; **P6** the
 > print template's locale; **P7** the declaration path; **P8** the card and the status JSON under a
 > prefix — pending. Each pull request flips its own line here when it merges.
@@ -223,6 +226,80 @@ has none from export steps any more.
 - `temp.store: blob` is unmeasured end to end (no object store here); `BlobTempStore.blobRef`
   keys on `ref.id()` exactly as `JdbcTempStore` does (READ `:76-79`), so the helper covers it by
   construction.
+
+---
+
+## P1 — the split bundle
+
+### What was wrong
+
+Three defects in one file, `SplitExport` (dependency-free core):
+
+- **Item 1.** `write()` put entries with no extra field. Info-ZIP `unzip` 6.00 (Debian 6.0-28,
+  `fileio.c do_string`) reads the UTF-8 name flag inside its `EXTRA_FIELD` case and returns before
+  that case when the field has length 0, so an entry with no extra field is converted as OEM
+  whatever the flag says: `受注-東京.csv` unpacked as garbage under a UTF-8 locale. 7z, libarchive,
+  Python and Java read the name correctly. The host byte the filing named is neither reachable
+  through `ZipOutputStream` (`versionMadeBy` keys on the package-private external attributes) nor
+  needed. Two identical exports also differed in their bytes — the DOS "now" of each entry.
+- **Item 2, the cut.** `safe()` cut a key over 100 UTF-16 units at `substring(0, 100)`; a key with
+  an odd prefix before astral letters (`X` + `𠮷`×50) leaves a lone surrogate at unit 99, which
+  the ZIP name encoder refuses (`malformed input off : 104`) after the query ran. The over-length
+  branch alone lower-cased (since #714, no rationale, no test), so `A`×101 and `a`×101 collided
+  as `TQL-LD-2857` while `A`×100 and `a`×100 did not.
+- **Item 6.** `zipName()` dropped `{key}`, cut at the last dot, and stripped a trailing separator
+  run only: `{key}.users.csv` bundled as the dot-file `.users.zip` (RUN delivered as such into a
+  partner drop), `users-{key}-daily.csv` as `users--daily.zip`, `users-{key}.tar.gz` as
+  `users-.tar.zip`. Every documented example is `{key}`-last with a single extension and was right.
+
+### The change
+
+- `ENTRY_TIME` = `1980-01-01T00:00:00Z`; `write()` stamps every entry with
+  `setLastModifiedTime(ENTRY_TIME)`, which makes the JDK write the 0x5455 extended-timestamp field
+  into the local header and the central directory. **Decision 2.** `setTime(long)` with any time
+  in the DOS range writes no field at all (RUN, `s-final/zip/lever.log`: `setTime1980: CEN extra=0`).
+- `safe()` cuts at unit 99 when units 99 and 100 are a surrogate pair, and keeps the case.
+  **Decision 15.**
+- `zipName()` takes the stem (the name before its last dot) and collapses `[-_.]*{key}[-_.]*`:
+  to nothing at either end of the stem, to the run's first separator in the middle; the trailing
+  strip stays for a run the collapse leaves at the end. `users-{key}.tar.gz` bundles as
+  `users-tar.zip` — `.tar.gz` is not a real split declaration (csv bytes in an entry named
+  `.tar.gz`), and P7's extension-versus-format warning says so.
+
+### The guards, red before the fix
+
+`SplitExportTest` and `SplitExportZipNameTest` (core unit tests, no container):
+
+| guard | asserts | HEAD `abcbb8ff6` |
+|---|---|---|
+| `everyEntryCarriesTheExtendedTimestampInBothRecords` | two Japanese entries; the extra field starts `0x55 0x54` in the local header (`ZipInputStream`) AND the central directory (`ZipFile`); every stamp is `1980-01-01T00:00:00Z` | `extra == null` |
+| `aLongKeyIsCutOnACodePointBoundaryAndKeepsItsCase` | `X`+`𠮷`×50 → 99 units ending in a full pair; `A`×101 → `A`×100 | `x…` lower-cased, 100 units |
+| `aKeyEndingInAnAstralLetterPastTheBoundIsWritten` | the entry is written, named `team-X𠮷…𠮷.txt` | `IllegalArgumentException: malformed input off : 104` |
+| `twoLongKeysDifferingInCaseAreTwoDocuments` | `A`×101 and `a`×101 → two entries | `TQL-LD-2857` |
+| `thePlaceholderCollapsesWithItsSeparatorsAtAnyPosition` | nine shapes, including `{key}-users.csv` → `users.zip`, `{key}.users.csv` → `users.zip`, `users-{key}-daily.csv` → `users-daily.zip`, `report.{key}.2026-09.csv` → `report.2026-09.zip`, `.hidden-{key}.csv` → `.hidden.zip` (unchanged) | `-users.zip` |
+
+**Bracket** (`work/export-hygiene-measurement/p1/bracket/`): HEAD 5 red; the fix 12/12 + 3/3
+green; **V-settime** (`setTime(ENTRY_TIME.toMillis())`) — exactly the extra-field guard red, the
+stamp assertion alone would have been green (hazard 4); **V-lowercase** (the cut kept, the
+lower-casing back) — the three case guards red; **V-trailing** (HEAD's `zipName`) — exactly the
+name table red. The bytes are asserted, never an extracted name (`java.util.zip` reads the name
+correctly either way; an `unzip` shell-out is green where the binary is absent and RED on a correct
+tree under the `C` locale, where the fixed bundle prints reversible `#Uxxxx` escapes).
+
+### What this breaks
+
+Every entry's modification time reads 1980-01-01 in every reader. A bundle name changes only for
+a `{key}` that is not immediately before a single extension — no shipped or documented declaration.
+The three pinned `{key}`-last shapes and the placeholder-only shapes are unchanged.
+
+### Filed, not fixed (from P1's measurement)
+
+- The case-insensitive-filesystem collision (`Abc` and `abc` are two entries and one file on
+  Windows or macOS; the 2857 check is case-sensitive) — filed as it was.
+- The emoji fold (`😀` → `_`, so two emoji keys collide) — `safe()`'s class is `\p{L}\p{N}`; a
+  design question for the split-export line, not this slice.
+- Whether `zipName` should cut at the codec's extension instead of the last dot — moot once P7's
+  warning names a mismatched extension.
 
 ---
 

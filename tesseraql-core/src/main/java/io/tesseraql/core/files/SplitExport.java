@@ -6,10 +6,13 @@ import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.util.OrderedCopies;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.nio.file.attribute.FileTime;
+import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
@@ -45,20 +48,56 @@ public final class SplitExport {
     /** The content type every split bundle is served under, whatever codec wrote the entries. */
     public static final String BUNDLE_CONTENT_TYPE = "application/zip";
 
+    /**
+     * The modification time every entry is stamped with: the ZIP format's own epoch. Stamping
+     * through {@link ZipEntry#setLastModifiedTime} makes the JDK write the extended-timestamp
+     * extra field into the local header and the central directory, and that field is what
+     * Info-ZIP {@code unzip} 6.00 (stock Debian and Ubuntu) needs before it honours the UTF-8 name
+     * flag — an entry with no extra field at all has its name converted as if it were OEM-encoded,
+     * so a Japanese group key unpacked as garbage. A fixed time also makes two identical exports
+     * byte-identical; the wall clock used to be the one thing that differed between them.
+     * {@code setTime(long)} with any time in the DOS range writes no such field.
+     */
+    static final FileTime ENTRY_TIME = FileTime.from(Instant.parse("1980-01-01T00:00:00Z"));
+
+    /** The bound on a group key as a filename component, in UTF-16 units. */
+    private static final int KEY_BOUND = 100;
+
+    /** The placeholder together with the run of separators on either side of it. */
+    private static final Pattern KEY_WITH_SEPARATORS = Pattern.compile("[-_.]*\\{key}[-_.]*");
+
     private SplitExport() {
     }
 
     /**
-     * The bundle's own name: the declared filename with its placeholder and extension dropped,
-     * and the separator the placeholder leaves behind dropped after them — {@code orders-{key}.csv}
-     * bundles as {@code orders.zip}, a placeholder-only {@code {key}.csv} as {@code export.zip}.
+     * The bundle's own name: the declared filename's stem with the placeholder dropped together
+     * with the separators around it — {@code orders-{key}.csv} bundles as {@code orders.zip},
+     * {@code {key}.users.csv} as {@code users.zip}, {@code users-{key}-daily.csv} as
+     * {@code users-daily.zip}, and a placeholder-only {@code {key}.csv} as {@code export.zip}.
+     *
+     * <p>Wherever the placeholder stands, it goes with its separator run: at either end of the
+     * stem the run goes entirely, in the middle it collapses to its first character. A strip that
+     * ran at the end of the stem only left a leading placeholder's separator behind, so
+     * {@code {key}.users.csv} bundled as the dot-file {@code .users.zip}.
      */
     public static String zipName(String filename) {
-        String withoutKey = filename.replace(KEY, "");
-        int dot = withoutKey.lastIndexOf('.');
-        String stem = (dot >= 0 ? withoutKey.substring(0, dot) : withoutKey)
-                .replaceAll("[-_.]+$", "");
-        return (stem.isBlank() ? "export" : stem) + ".zip";
+        int dot = filename.lastIndexOf('.');
+        String stem = dot >= 0 ? filename.substring(0, dot) : filename;
+        Matcher key = KEY_WITH_SEPARATORS.matcher(stem);
+        StringBuilder collapsed = new StringBuilder();
+        while (key.find()) {
+            boolean atAnEnd = key.start() == 0 || key.end() == stem.length();
+            String run = key.group();
+            String separator = atAnEnd
+                    ? ""
+                    : run.startsWith(KEY)
+                            ? run.substring(KEY.length(), KEY.length() + 1)
+                            : run.substring(0, 1);
+            key.appendReplacement(collapsed, Matcher.quoteReplacement(separator));
+        }
+        key.appendTail(collapsed);
+        String name = collapsed.toString().replaceAll("[-_.]+$", "");
+        return (name.isBlank() ? "export" : name) + ".zip";
     }
 
     /**
@@ -88,7 +127,9 @@ public final class SplitExport {
                         + group.key() + "' both name '" + entry + "' once made safe for a"
                         + " filesystem - one document would overwrite the other");
             }
-            zip.putNextEntry(new ZipEntry(entry));
+            ZipEntry zipEntry = new ZipEntry(entry);
+            zipEntry.setLastModifiedTime(ENTRY_TIME);
+            zip.putNextEntry(zipEntry);
             Map<String, Object> documentValues = narrow(values, perDocument, group.key());
             // Each document is written by the codec exactly as an unsplit one would be, so the
             // model still follows its streaming declaration: the group's rows are re-readable in
@@ -176,6 +217,11 @@ public final class SplitExport {
      * A group key as a filename component: anything a filesystem or a zip reader would object to
      * becomes an underscore, and the result is bounded. Two keys that collide after this fail
      * rather than overwrite, which is the whole reason {@code {key}} is mandatory.
+     *
+     * <p>The bound cuts on a code-point boundary: a cut through a surrogate pair leaves a lone
+     * surrogate the ZIP name encoder refuses, and the export failed after the query ran. The
+     * key's case is kept — the over-length branch alone used to lower-case, so two long keys
+     * differing only in case collided while the same short keys did not.
      */
     static String safe(Object key) {
         String text = String.valueOf(key);
@@ -183,9 +229,14 @@ public final class SplitExport {
         if (cleaned.isBlank()) {
             return "_";
         }
-        return cleaned.length() > 100
-                ? cleaned.substring(0, 100).toLowerCase(Locale.ROOT)
-                : cleaned;
+        if (cleaned.length() <= KEY_BOUND) {
+            return cleaned;
+        }
+        int end = Character.isHighSurrogate(cleaned.charAt(KEY_BOUND - 1))
+                && Character.isLowSurrogate(cleaned.charAt(KEY_BOUND))
+                        ? KEY_BOUND - 1
+                        : KEY_BOUND;
+        return cleaned.substring(0, end);
     }
 
     /** A zip entry ends with closeEntry(), not with the codec closing the whole archive. */

@@ -262,7 +262,11 @@ unchanged. That file is the bundle: `invoice-{key}.pdf` downloads as `invoice.zi
 `Content-Type: application/zip`, on `query-export` and `file-export` alike. A `file-export`
 transfer records the bundle — its status reports `invoice.zip` as the `filename`, and the
 operations console lists the transfer as `zip`. The type follows the recorded format, never the
-name: a csv an author called `notes.zip` is still served as `text/csv`. A blank `splitBy:` is no
+name: a csv an author called `notes.zip` is still served as `text/csv`. The bundle's name is the
+declared stem without the placeholder and the separators around it, wherever the placeholder
+stands: `{key}.users.csv` bundles as `users.zip`, `users-{key}-daily.csv` as `users-daily.zip`.
+Every entry is stamped `1980-01-01`, the ZIP epoch, so two identical exports are byte-identical and
+Info-ZIP `unzip` reads a non-ASCII entry name correctly. A blank `splitBy:` is no
 split. One group still produces a ZIP and no rows produce an empty one — the output shape is a
 property of the route, not of today's data.
 
