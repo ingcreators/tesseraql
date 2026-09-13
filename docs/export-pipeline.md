@@ -72,7 +72,7 @@ without one is a **jxls report**, no template at all is a **grid**.
 | --- | --- | --- |
 | engine | fastexcel, streaming | POI `XSSFWorkbook`, whole workbook in memory |
 | worksheet | created (`sheet:`, default `data`) | must already exist; a wrong name throws |
-| header row | written from `header:` / `name` | not written — the template owns the headings |
+| header row | written from `header:` / `name`, rows or not | not written — the template owns the headings |
 | start | A1 | `startCell` |
 | columns | declared order, contiguous | `column:` per column, gaps allowed |
 | styles | `format:` only | the `startCell` row's styles, `format:` overriding |

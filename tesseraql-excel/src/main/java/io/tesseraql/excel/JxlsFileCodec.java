@@ -179,7 +179,7 @@ public final class JxlsFileCodec implements FileCodec {
     public void write(OutputStream out, FileWriteSpec spec,
             io.tesseraql.core.files.ExportModel model) throws IOException {
         if (spec.template() == null) {
-            writeGrid(out, spec, model.rows());
+            writeGrid(out, spec, model);
             return;
         }
         // A declared template is used or refused, never silently replaced by the grid: the
@@ -513,7 +513,8 @@ public final class JxlsFileCodec implements FileCodec {
      * date format for temporals) applies as the cell format.
      */
     private static void writeGrid(OutputStream out, FileWriteSpec spec,
-            Iterator<Map<String, Object>> rows) throws IOException {
+            io.tesseraql.core.files.ExportModel model) throws IOException {
+        Iterator<Map<String, Object>> rows = model.rows();
         // try-with-resources finishes the workbook even when a row iterator fails mid-write.
         try (org.dhatim.fastexcel.Workbook workbook = new org.dhatim.fastexcel.Workbook(out,
                 "TesseraQL", "1.0")) {
@@ -522,6 +523,16 @@ public final class JxlsFileCodec implements FileCodec {
             ZoneId zone = io.tesseraql.core.files.ColumnValues.zone(spec.timezone());
             List<ColumnMapping> columns = new ArrayList<>(spec.columns());
             int rowIndex = 0;
+            // The header row goes out as soon as the names are known — declared, or the
+            // source's own — so a workbook with no rows still carries it (P5).
+            ColumnMapping.deriveIfAbsent(columns, model.knownColumns());
+            if (!columns.isEmpty()) {
+                requireColumns(columns.size());
+                for (int i = 0; i < columns.size(); i++) {
+                    sheet.value(rowIndex, i, columns.get(i).effectiveHeader());
+                }
+                rowIndex++;
+            }
             while (rows.hasNext()) {
                 Map<String, Object> row = rows.next();
                 ColumnMapping.deriveIfAbsent(columns, row);

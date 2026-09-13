@@ -333,7 +333,8 @@ constructors pass `false`; `withFormatting` carries it (the line rebuilt on ever
 `drop-withFormatting` is green on every codec unit test and red only on the route integration
 test, which is why that test is mandatory). `ExportSpec.toWriteSpec` unboxes with
 `Boolean.TRUE.equals`. `CsvFileCodec.write` writes `EF BB BF` to `out` before the writer exists
-when `spec.bom()` — so an export with no rows is exactly three bytes (D1 ii), a `splitBy:` export
+when `spec.bom()` — so an export with no rows was exactly three bytes (D1 ii; since
+`export-hygiene.md` P5 the header follows the mark when the names are known), a `splitBy:` export
 carries one mark per ZIP entry and none on the archive, `marked[3..] == plain` byte for byte over a
 body wider than the 8 KiB encoder buffer, and nothing is derived from `locale:`, `timezone:`,
 `Accept-Language` or the principal. `Content-Type` stays `text/csv; charset=utf-8`. A cell that
@@ -894,7 +895,9 @@ Every unfiled defect the measurement surfaced, with its destination (the measure
   last-put-wins, under which a module codec named `csv` silently replaces the built-in and `bom:
   true` reaches a codec that may ignore it (#6); the 32768-char xlsx cell trio (#20); the unknown-
   format lint silence (#21, also the lint's case-sensitivity on `format:`); the zero-row export
-  with no header row (#24 — a marked empty export is exactly the mark until then); the two-part
+  with no header row (#24 — fixed by `export-hygiene.md` P5: the header goes out when the names are
+  known, declared or from the result set's metadata, and a marked empty export is the mark and its
+  header); the two-part
   extension in `zipName` (`orders-{key}.tar.gz`); the `defs-v1.schema.json:97` description split
   (#19). Added by `export-declarations.md`: the drain-spool leak (fix at `SpooledRows.drain` /
   `ExportWrite.write`, never at the writer); the async reason projection (`TransferStatus.errors`,

@@ -15,6 +15,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -158,6 +159,55 @@ class CsvFileCodecTest {
         assertThat(rows.get(0).get("product")).isEqualTo("アルファ");
     }
 
+    /**
+     * A zero-row export writes its header when the names are known (docs/export-hygiene.md P5):
+     * declared {@code columns:} (rule 1) or the names the row source carries (rule 2). A source
+     * that knows nothing — a plain list — still writes nothing.
+     */
+    @Test
+    void aZeroRowExportWritesItsHeaderWhenTheNamesAreKnown() throws Exception {
+        ByteArrayOutputStream declared = new ByteArrayOutputStream();
+        codec.write(declared, new FileWriteSpec(List.of(
+                new ColumnMapping("id", "ID", null), new ColumnMapping("name", "Name", null)),
+                null, null, null),
+                io.tesseraql.core.files.ExportModel.streaming(
+                        java.util.Collections.emptyIterator(), java.util.Map.of()));
+        assertThat(declared.toString(StandardCharsets.UTF_8)).isEqualTo("ID,Name\r\n");
+
+        ByteArrayOutputStream derived = new ByteArrayOutputStream();
+        codec.write(derived, new FileWriteSpec(List.of(), null, null, null),
+                io.tesseraql.core.files.ExportModel.streaming(new NamedEmpty(),
+                        java.util.Map.of()));
+        assertThat(derived.toString(StandardCharsets.UTF_8)).isEqualTo("id,name\r\n");
+
+        ByteArrayOutputStream unknown = new ByteArrayOutputStream();
+        codec.write(unknown, new FileWriteSpec(List.of(), null, null, null),
+                io.tesseraql.core.files.ExportModel.streaming(
+                        java.util.Collections.emptyIterator(), java.util.Map.of()));
+        assertThat(unknown.size()).isZero();
+    }
+
+    /** A row source that knows its column names before any row, as a JDBC cursor does. */
+    private static final class NamedEmpty
+            implements
+                Iterator<Map<String, Object>>,
+                io.tesseraql.core.files.NamedRows {
+        @Override
+        public List<String> columns() {
+            return List.of("id", "name");
+        }
+
+        @Override
+        public boolean hasNext() {
+            return false;
+        }
+
+        @Override
+        public Map<String, Object> next() {
+            throw new java.util.NoSuchElementException();
+        }
+    }
+
     @Test
     void writeFormatsDatesAndNumbersWithTheTransferLocale() throws Exception {
         Map<String, Object> row = new LinkedHashMap<>();
@@ -279,9 +329,9 @@ class CsvFileCodecTest {
 
     /**
      * The mark is written before anything asks whether a row exists, so an empty export with
-     * {@code bom: true} is exactly the mark. No columns are declared on purpose: a future header
-     * row for an empty export with declared columns would follow the mark, and this fixture stays
-     * exact either way.
+     * {@code bom: true} is exactly the mark. No columns are declared and the source knows none on
+     * purpose: an empty export whose names ARE known writes its header after the mark
+     * (docs/export-hygiene.md P5, the test above), and this fixture stays exact either way.
      */
     @Test
     void anEmptyExportWithTheMarkIsExactlyTheMark() throws Exception {

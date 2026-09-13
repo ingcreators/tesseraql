@@ -44,8 +44,18 @@ public record ColumnMapping(String name, String header, Integer index, String ty
      */
     public static void deriveIfAbsent(java.util.List<ColumnMapping> columns,
             java.util.Map<String, Object> row) {
+        deriveIfAbsent(columns, row.keySet());
+    }
+
+    /**
+     * Derives the mappings from column names known before any row — a cursor's metadata, a
+     * spool's header — so a zero-row export still has a header to write (docs/export-hygiene.md
+     * P5). Declared columns win; an empty name list changes nothing.
+     */
+    public static void deriveIfAbsent(java.util.List<ColumnMapping> columns,
+            java.util.Collection<String> names) {
         if (columns.isEmpty()) {
-            row.keySet().forEach(key -> columns.add(ColumnMapping.of(key)));
+            names.forEach(name -> columns.add(ColumnMapping.of(name)));
         }
     }
 

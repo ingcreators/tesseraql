@@ -113,6 +113,13 @@ public final class CsvFileCodec implements FileCodec {
         java.util.Locale locale = io.tesseraql.core.files.ColumnValues.locale(spec.locale());
         java.time.ZoneId zone = io.tesseraql.core.files.ColumnValues.zone(spec.timezone());
         List<ColumnMapping> columns = new ArrayList<>(spec.columns());
+        // The header goes out as soon as the names are known — declared, or the source's own —
+        // so an export with no rows still carries it (docs/export-hygiene.md P5). A source that
+        // knows nothing yet names its columns with its first row, as before.
+        ColumnMapping.deriveIfAbsent(columns, model.knownColumns());
+        if (!columns.isEmpty()) {
+            printer.printRecord(columns.stream().map(ColumnMapping::effectiveHeader).toList());
+        }
         while (rows.hasNext()) {
             Map<String, Object> row = rows.next();
             ColumnMapping.deriveIfAbsent(columns, row);

@@ -284,7 +284,8 @@ final class StudioDataService {
                     int columnCount = meta.getColumnCount();
                     // RFC 4180 via Apache Commons CSV — the same writer the framework's CSV file
                     // codec uses (comma delimiter, double-quote quoting, doubled inner quotes, CRLF),
-                    // so a browser export is byte-for-byte consistent with query-export.
+                    // so a browser export is byte-for-byte consistent with query-export — the
+                    // header at zero rows included, since docs/export-hygiene.md P5.
                     StringWriter out = new StringWriter();
                     try (CSVPrinter printer = new CSVPrinter(out, CSVFormat.RFC4180)) {
                         List<String> header = new ArrayList<>(columnCount);

@@ -44,7 +44,7 @@ import java.util.NoSuchElementException;
  * {@code toString()}. JSON was rejected for being lossy exactly where it matters (numeric scale,
  * temporal type), and Java serialization for accepting arbitrary object graphs from a driver.
  */
-public final class SpooledRows implements Iterable<Map<String, Object>>, AutoCloseable {
+public final class SpooledRows implements Iterable<Map<String, Object>>, NamedRows, AutoCloseable {
 
     /** TQL-LD-2853: a row value has no representation in the spool encoding. */
     static final TqlErrorCode UNREPRESENTABLE = new TqlErrorCode(TqlDomain.LD, 2853);
@@ -131,6 +131,12 @@ public final class SpooledRows implements Iterable<Map<String, Object>>, AutoClo
                 count++;
             }
             if (first) {
+                // No row came, so no row named the columns: the source itself may know them (a
+                // cursor's metadata), and a spool that keeps them lets a zero-row export print
+                // its header on every buffered surface.
+                if (source instanceof NamedRows named) {
+                    columns.addAll(named.columns());
+                }
                 writer.write(header(columns));
             }
             writer.write(new byte[]{END});

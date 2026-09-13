@@ -198,6 +198,27 @@ class SharedTempStoreIntegrationTest {
         assertThat(after.get("downloaded").asBoolean()).isTrue();
     }
 
+    /**
+     * A zero-row export on the asynchronous and job arms carries the query's column names (P5,
+     * rule 2): the file-export download and the job step's spool both read {@code id,status}
+     * where they used to be 0 bytes.
+     */
+    @Test
+    void aZeroRowExportCarriesItsHeaderOnTheAsyncAndJobArms() throws Exception {
+        String transferId = startExport("/api/orders/export-none");
+        assertThat(awaitTerminal("/api/orders/export-none/" + transferId).get("status").asText())
+                .isEqualTo("COMPLETED");
+        HttpResponse<String> file = get("/api/orders/export-none/" + transferId + "/file");
+        assertThat(file.statusCode()).isEqualTo(200);
+        assertThat(file.body()).isEqualTo("id,status\r\n");
+
+        JobExecution execution = runtime.runJob("orders.noneJob", Map.of());
+        assertThat(execution.status().name()).as(execution.exitMessage()).isEqualTo("COMPLETED");
+        Path delivered = appHome.resolve("outbox/partner/none.csv");
+        assertThat(delivered).exists();
+        assertThat(Files.readString(delivered)).isEqualTo("id,status\r\n");
+    }
+
     /** An export step followed by a push step delivers the file — the push reads through download. */
     @Test
     void anExportAndPushJobUnderTheDatabaseStoreDelivers() throws Exception {
@@ -407,6 +428,48 @@ class SharedTempStoreIntegrationTest {
                   filename: orders.csv
                 """);
         Files.copy(export.resolve("export.sql"), async.resolve("export.sql"));
+        Path none = target.resolve("web/api/orders/export-none");
+        Files.createDirectories(none);
+        Files.writeString(none.resolve("post.yml"), """
+                version: tesseraql/v1
+                id: orders.exportNone
+                kind: route
+                recipe: file-export
+                security:
+                  auth: public
+                sources:
+                  main:
+                    sql:
+                      file: none.sql
+                export:
+                  format: csv
+                  filename: none.csv
+                """);
+        Files.writeString(none.resolve("none.sql"),
+                "select o.id, o.status from orders o where o.id < 0 order by o.id\n");
+        Path noneJob = target.resolve("batch/none");
+        Files.createDirectories(noneJob);
+        Files.writeString(noneJob.resolve("job.yml"), """
+                version: tesseraql/v1
+                id: orders.noneJob
+                kind: job
+                recipe: batch-pipeline
+                pipeline:
+                  - id: extract
+                    sql:
+                      file: none.sql
+                      mode: query
+                    export:
+                      format: csv
+                      filename: none.csv
+                  - id: drop
+                    push:
+                      transport: local
+                      path: outbox/partner
+                      file: steps.extract.transferId
+                      as: none.csv
+                """);
+        Files.copy(none.resolve("none.sql"), noneJob.resolve("none.sql"));
         Path deliver = target.resolve("batch/deliver");
         Files.createDirectories(deliver);
         Files.writeString(deliver.resolve("job.yml"), """

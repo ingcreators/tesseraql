@@ -674,7 +674,7 @@ Three clauses:
 *Amended 2026-09-12.* The writing side holds the same principle from the other end, and the
 asymmetry is deliberate. A CSV export is mark-less UTF-8 unless the route or step declares
 `bom: true` ([file-transfers.md](file-transfers.md)), and then the codec writes the mark as
-octets on the stream before any text - an export with no rows is the three bytes alone. A read
+octets on the stream before any text - an export with no rows is the mark and its header. A read
 refuses an `import.encoding:` key because the bytes already say what they are; a write accepts
 an opt-in `bom:` because the bytes are what the consumer will sniff. Neither side guesses from
 `locale:` or `Accept-Language`, and the mark defaults off because the readers that break on one

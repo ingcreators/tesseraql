@@ -81,6 +81,8 @@ public final class PdfFileCodec implements FileCodec {
         Locale locale = ColumnValues.locale(spec.locale());
         ZoneId zone = ColumnValues.zone(spec.timezone());
         List<ColumnMapping> columns = new ArrayList<>(spec.columns());
+        // The names the source knows before any row, so a zero-row grid prints its header (P5).
+        ColumnMapping.deriveIfAbsent(columns, model.knownColumns());
         List<Map<String, Object>> data = new ArrayList<>();
         while (rows.hasNext()) {
             Map<String, Object> row = rows.next();
