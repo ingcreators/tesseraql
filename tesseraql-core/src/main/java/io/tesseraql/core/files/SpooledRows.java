@@ -72,6 +72,19 @@ public final class SpooledRows implements Iterable<Map<String, Object>>, AutoClo
     private static final byte SQL_TIME = 16;
     private static final byte SQL_TIMESTAMP = 17;
     private static final byte BYTES = 18;
+    /**
+     * A text past {@code writeUTF}'s ceiling — 65,535 bytes of modified UTF-8, which 21,846
+     * Japanese characters reach — written as a length-prefixed UTF-8 body. A new tag rather than
+     * a new {@code STRING} encoding: under a shared temp store a spool written on one node is
+     * read on another, and a spool written before this tag existed still reads.
+     */
+    private static final byte LONG_STRING = 19;
+
+    /**
+     * The longest text {@code writeUTF} is certain to accept: modified UTF-8 spends at most three
+     * bytes per UTF-16 unit, so a text within this many units always fits its 65,535-byte ceiling.
+     */
+    private static final int SHORT_STRING_UNITS = 65_535 / 3;
 
     private static final byte ROW = 1;
     private static final byte END = 0;
@@ -122,9 +135,30 @@ public final class SpooledRows implements Iterable<Map<String, Object>>, AutoClo
             }
             writer.write(new byte[]{END});
         } catch (IOException ex) {
-            throw new TqlException(SPOOL_FAILED, "Could not spool rows: " + ex.getMessage());
+            TqlException failed = new TqlException(SPOOL_FAILED,
+                    "Could not spool rows: " + ex.getMessage());
+            discard(store, writer, failed);
+            throw failed;
+        } catch (RuntimeException | Error failed) {
+            // The source refused part-way — the row cap, an unrepresentable value, a database
+            // error surfacing in hasNext(). The try-with-resources closed the writer, which on a
+            // staging store INSERTED the partial spool, and no SpooledRows exists to release it:
+            // release it here, or it is an orphan no sweep ever sees.
+            discard(store, writer, failed);
+            throw failed;
         }
         return new SpooledRows(store, writer.toRef(), List.copyOf(columns), count, firstRow);
+    }
+
+    /** Deletes a failed drain's spool; a delete that fails rides the failure that matters. */
+    private static void discard(TempStore store, SpoolWriter writer, Throwable failed) {
+        try {
+            store.delete(writer.toRef());
+        } catch (RuntimeException deleting) {
+            // toRef() throws when close() itself failed on a staging store; there is nothing to
+            // release then.
+            failed.addSuppressed(deleting);
+        }
     }
 
     /**
@@ -227,8 +261,15 @@ public final class SpooledRows implements Iterable<Map<String, Object>>, AutoClo
         switch (value) {
             case null -> out.writeByte(NULL);
             case String text -> {
-                out.writeByte(STRING);
-                out.writeUTF(text);
+                if (text.length() <= SHORT_STRING_UNITS) {
+                    out.writeByte(STRING);
+                    out.writeUTF(text);
+                } else {
+                    byte[] utf8 = text.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                    out.writeByte(LONG_STRING);
+                    out.writeInt(utf8.length);
+                    out.write(utf8);
+                }
             }
             case Boolean flag -> {
                 out.writeByte(BOOLEAN);
@@ -399,6 +440,8 @@ public final class SpooledRows implements Iterable<Map<String, Object>>, AutoClo
             return switch (tag) {
                 case NULL -> null;
                 case STRING -> in.readUTF();
+                case LONG_STRING -> new String(in.readNBytes(in.readInt()),
+                        java.nio.charset.StandardCharsets.UTF_8);
                 case BOOLEAN -> in.readBoolean();
                 case LONG -> in.readLong();
                 case INTEGER -> in.readInt();

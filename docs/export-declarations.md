@@ -1436,7 +1436,8 @@ Every unfiled defect the measurement found, routed elsewhere with its destinatio
   the null-message fallback, a TQL code on the async reason — a documented wire-shape change); the
   drain-spool and writer-spool leaks on every surface (fix at `SpooledRows.drain`/`ExportWrite.write`;
   the test must fail a BUFFERED codec during its drain and count `tql_temp_spool` rows under
-  `temp.store: db`); the Excel `format:` string written verbatim as the cell format and `type: date`
+  `temp.store: db`) — fixed by `export-hygiene.md` P2, at `drain` and in the two service arms, never
+  in `ExportWrite.write`; the Excel `format:` string written verbatim as the cell format and `type: date`
   getting the datetime default cell format; `sheet:` name sanitising; `groupBy` with a pdf template
   silently `GROUPS=null`; the PDF template's `Locale.ROOT` context (`PdfTemplates.java:33,38`); the
   `TQL-LD-2856` missing-template code never naming the file; the `'null'` format text; the zero-row

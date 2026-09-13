@@ -141,6 +141,30 @@ class SharedTempStoreIntegrationTest {
                 .hasMessageContaining("blob");
     }
 
+    /**
+     * A csv route with a named source whose value is 21,846 Japanese characters exports — and
+     * leaves no orphan spool (docs/export-hygiene.md P2). The named source is drained whatever
+     * the codec, and its drain used to fail past {@code writeUTF}'s 65,535-byte ceiling with
+     * {@code TQL-LD-2855}, leaving a header-only spool behind on every breach.
+     */
+    @Test
+    void aNamedSourcePastTheUtf8CeilingExportsAndLeavesNoOrphan() throws Exception {
+        long before = spoolRowsTotal();
+        HttpResponse<String> response = get("/orders/export-noted");
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).contains("PENDING").contains("APPROVED");
+        assertThat(spoolRowsTotal()).as("no orphan spool row").isEqualTo(before);
+    }
+
+    private static long spoolRowsTotal() throws Exception {
+        try (Connection connection = connect();
+                PreparedStatement statement = connection.prepareStatement(
+                        "select count(*) from tql_temp_spool");
+                ResultSet rs = statement.executeQuery()) {
+            return rs.next() ? rs.getLong(1) : -1;
+        }
+    }
+
     /** A real query-export route streams through the database temp store end to end. */
     @Test
     void aQueryExportStreamsThroughTheDatabaseStore() throws Exception {
@@ -343,6 +367,28 @@ class SharedTempStoreIntegrationTest {
                   format: csv
                   filename: orders.csv
                 """);
+        Path noted = target.resolve("web/orders/export-noted");
+        Files.createDirectories(noted);
+        Files.writeString(noted.resolve("get.yml"), """
+                version: tesseraql/v1
+                id: orders.exportNoted
+                kind: route
+                recipe: query-export
+                security:
+                  auth: public
+                sources:
+                  main:
+                    sql:
+                      file: export.sql
+                  note:
+                    sql:
+                      file: note.sql
+                export:
+                  format: csv
+                  filename: orders.csv
+                """);
+        Files.copy(export.resolve("export.sql"), noted.resolve("export.sql"));
+        Files.writeString(noted.resolve("note.sql"), "select repeat('い', 21846) as note\n");
         Path async = target.resolve("web/api/orders/export-async");
         Files.createDirectories(async);
         Files.writeString(async.resolve("post.yml"), """
