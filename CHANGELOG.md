@@ -57,6 +57,16 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **Under `tesseraql.temp.store: db` or `blob`, a completed asynchronous or job export can be
+  downloaded, pushed and reclaimed.** The download and the retention sweep addressed the spool by
+  the transfer id while the database and blob stores key it by the spool id they minted, so in the
+  documented multi-node shape every `file-export` download answered 500, every export-then-push
+  job failed with "Spool … not found", and the sweep nulled the pointer and kept the bytes (since
+  v0.4.0, #356; the synchronous route was unaffected). A download that cannot open its bytes is no
+  longer recorded as delivered, and no longer fires the `afterDownload` SQL. `tesseraql job run`
+  honours the declared store: it used to build the node-local file store whatever the app said,
+  leaving `file:///` references in the shared table that no served node could serve.
+
 - **A `splitBy:` export delivers as the ZIP it is, on a job step and on `file-export`.** A job
   step declaring `splitBy:` could never run: the step's filename interpolation rendered `{key}`
   empty before the split writer demanded it, so every run failed with `TQL-LD-2858` blaming the

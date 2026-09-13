@@ -188,6 +188,14 @@ Ranked. The first two are larger than most of the leads that found them.
 8. **`HcMarkupContractTest`'s own javadoc repeats F98's false sentence**, and
    `docs/hc-recipe-alignment.md:264` marks `confirm-action` **Adopted** while citing the page that
    describes the pre-adoption state.
+8a. **Under `tesseraql.temp.store: db` or `blob` no asynchronous or job export could be
+    downloaded, pushed or reclaimed** (HIGH, since #356 — the documented multi-node shape).
+    `JdbcFileTransferService.download` and `expireTransfersOlderThan` rebuilt the `SpoolRef` from
+    the transfer id; the keyed stores look the spool id up. Every `file-export` download 500, every
+    export-then-push job FAILED, the sweep nulled `spool_uri` and kept the bytes; a failed download
+    was recorded as delivered. The synchronous route was unaffected, which is why the one
+    db-store test was green. Beside it `tesseraql job run` built the file store whatever the app
+    declared. Found by the export-hygiene measurement; fixed in P0 (`export-hygiene.md`).
 9. **A failed async file export reports FAILED with no reason on the wire** — `TransferStatus` HAS
    an `errors` field the export path never fills; the reason IS recorded (`exit_message`) and served
    by the ops execution API. The real gaps are the wire projection, the card text, the console row,
@@ -220,15 +228,18 @@ Ranked. The first two are larger than most of the leads that found them.
     router slice.
 20. **The documented `HX-Trigger` toast mangles non-ASCII** (`ResponseHeaders.java:34` escapes
     nothing above ASCII) — its own small pull request or the edge slice.
-21. **ZIP entry names are mangled by Info-ZIP `unzip` 6.00** (the `version made by` host byte) —
-    export hygiene.
-22. **A 32768-character xlsx cell**: the grid writes it, placement throws raw, the report silently
-    blanks it and completes — export hygiene.
+21. **ZIP entry names are mangled by Info-ZIP `unzip` 6.00** — the mechanism is the ABSENT extra
+    field, not the host byte (`do_string` returns before the UTF-8 flag is read); any extra field
+    restores the name — `export-hygiene.md` P1.
+22. **A 32768-character xlsx cell**: the grid writes it, placement throws raw on the async and job
+    arms (2802 on the route since 5b), the report silently blanks it and completes; the band ends at
+    65,535 bytes where the spool ceiling fails first — `export-hygiene.md` P4 and P2.
 23. **`tesseraql lint` is silent on an unknown `export.format`** — boot refuses it on query-export
     only: a file-export boots and answers 500 `TQL-LD-2801` at the first POST, a job step fails at
     the first run. The case-fold half (`Excel`) is 5a's; the unknown-name half is F82 slice 2's (the
     boot check is the TCCL defect).
-24. **A zero-row CSV export writes no header row** — export hygiene.
+24. **A zero-row CSV export writes no header row** — csv AND the Excel grid, declared `columns:`
+    discarded too; the pdf grid prints a declared header — `export-hygiene.md` P5.
 
 ## Retracted / corrected during this pass
 

@@ -617,7 +617,7 @@ final class ErrorIndex {
             "deterministic-output.md", "release-and-ci-hardening.md",
             "yaml-surface-drift.md", "module-boundary-guards.md",
             "audit-medium-leads.md", "download-name-and-bytes.md",
-            "export-declarations.md");
+            "export-declarations.md", "export-hygiene.md");
 
     /** Whether {@code name} is an internal planning document; shared with the config index. */
     static boolean isInternalDoc(String name) {

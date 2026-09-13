@@ -3,10 +3,15 @@ package io.tesseraql.runtime;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.tesseraql.core.files.FileTransferService;
 import io.tesseraql.core.spool.SpoolKind;
 import io.tesseraql.core.spool.SpoolRef;
 import io.tesseraql.core.spool.SpoolWriter;
+import io.tesseraql.operations.batch.JobExecution;
 import io.tesseraql.operations.spool.JdbcTempStore;
+import io.tesseraql.pipeline.TesseraqlProperties;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
@@ -16,6 +21,13 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Map;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -30,6 +42,11 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  * {@code tesseraql.temp.store: db} a spool written through one store instance is readable
  * through another sharing the database — the export-follows-you property session affinity
  * papered over — and a real query-export route streams through the database store end to end.
+ *
+ * <p>The asynchronous faces of the same store: a completed {@code file-export} downloads, an
+ * export-then-push job delivers, and the retention sweep reclaims the rows. Each one addresses
+ * the spool by the id the store minted (docs/export-hygiene.md), never by the transfer id — the
+ * synchronous route above never touches that path, which is why it alone was green before.
  */
 @Testcontainers
 class SharedTempStoreIntegrationTest {
@@ -39,6 +56,10 @@ class SharedTempStoreIntegrationTest {
 
     static TesseraqlRuntime runtime;
     static Path appHome;
+
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final HttpClient HTTP = HttpClient.newHttpClient();
+    private static final String DB_SCHEME = "tql-temp-db:";
 
     @BeforeAll
     static void start() throws Exception {
@@ -133,6 +154,147 @@ class SharedTempStoreIntegrationTest {
         assertThat(response.body()).contains("PENDING").contains("APPROVED");
     }
 
+    /**
+     * A completed file-export under the database store answers its download. The store keys the
+     * bytes by the spool id it minted; a download that looked the transfer id up instead found
+     * nothing and answered 500 for every export the sync route did not serve.
+     */
+    @Test
+    void anAsyncExportUnderTheDatabaseStoreDownloads() throws Exception {
+        String transferId = startExport("/api/orders/export-async");
+        JsonNode status = awaitTerminal("/api/orders/export-async/" + transferId);
+        assertThat(status.get("status").asText()).isEqualTo("COMPLETED");
+        assertThat(spoolUriOf(transferId)).startsWith(DB_SCHEME);
+
+        HttpResponse<String> file = get("/api/orders/export-async/" + transferId + "/file");
+        assertThat(file.statusCode()).isEqualTo(200);
+        assertThat(file.headers().firstValue("content-type").orElse("")).contains("text/csv");
+        assertThat(file.body()).contains("PENDING").contains("APPROVED");
+        JsonNode after = MAPPER.readTree(get("/api/orders/export-async/" + transferId).body());
+        assertThat(after.get("downloaded").asBoolean()).isTrue();
+    }
+
+    /** An export step followed by a push step delivers the file — the push reads through download. */
+    @Test
+    void anExportAndPushJobUnderTheDatabaseStoreDelivers() throws Exception {
+        JobExecution execution = runtime.runJob("orders.deliver", Map.of());
+        assertThat(execution.status().name()).as(execution.exitMessage()).isEqualTo("COMPLETED");
+        Path delivered = appHome.resolve("outbox/partner/orders.csv");
+        assertThat(delivered).exists();
+        assertThat(Files.readString(delivered)).contains("PENDING").contains("APPROVED");
+    }
+
+    /**
+     * The retention sweep frees the spool rows of the transfers it expires. It used to null the
+     * pointer and leave the bytes: the delete named the transfer id, which no row carries.
+     */
+    @Test
+    void theSweepReclaimsTheSpoolRowsUnderTheDatabaseStore() throws Exception {
+        String transferId = startExport("/api/orders/export-async");
+        assertThat(awaitTerminal("/api/orders/export-async/" + transferId).get("status").asText())
+                .isEqualTo("COMPLETED");
+        String spoolUri = spoolUriOf(transferId);
+        assertThat(spoolUri).startsWith(DB_SCHEME);
+        String spoolId = spoolUri.substring(DB_SCHEME.length());
+        assertThat(spoolRows(spoolId)).isEqualTo(1);
+
+        FileTransferService transfers = runtime.context().lookup(
+                TesseraqlProperties.FILE_TRANSFER_BEAN, FileTransferService.class);
+        int expired = transfers.expireTransfersOlderThan(Instant.now().plusSeconds(60));
+        assertThat(expired).isGreaterThanOrEqualTo(1);
+
+        assertThat(spoolRows(spoolId)).as("the bytes are reclaimed, not only the pointer")
+                .isZero();
+        assertThat(spoolUriOf(transferId)).isNull();
+    }
+
+    /**
+     * A download that cannot open its bytes is not recorded as delivered: the first-download
+     * claim (and the after-download SQL it gates) follows a successful open, not the request.
+     */
+    @Test
+    void aDownloadThatFailsIsNotRecordedAsDelivered() throws Exception {
+        String transferId = startExport("/api/orders/export-async");
+        assertThat(awaitTerminal("/api/orders/export-async/" + transferId).get("status").asText())
+                .isEqualTo("COMPLETED");
+        String spoolId = spoolUriOf(transferId).substring(DB_SCHEME.length());
+        // The bytes vanish from under the transfer — an operator's delete, a foreign sweep.
+        update("delete from tql_temp_spool where spool_id = ?", spoolId);
+        assertThat(spoolRows(spoolId)).isZero();
+
+        HttpResponse<String> file = get("/api/orders/export-async/" + transferId + "/file");
+        assertThat(file.statusCode()).isNotEqualTo(200);
+        JsonNode after = MAPPER.readTree(get("/api/orders/export-async/" + transferId).body());
+        assertThat(after.get("downloaded").asBoolean())
+                .as("a failed download is not a download").isFalse();
+    }
+
+    private static String startExport(String path) throws Exception {
+        HttpResponse<String> response = HTTP.send(HttpRequest.newBuilder(
+                URI.create("http://localhost:" + runtime.port() + path))
+                .POST(HttpRequest.BodyPublishers.noBody()).build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertThat(response.statusCode()).isEqualTo(202);
+        return MAPPER.readTree(response.body()).get("transferId").asText();
+    }
+
+    private static JsonNode awaitTerminal(String statusPath) throws Exception {
+        Instant deadline = Instant.now().plus(Duration.ofSeconds(20));
+        while (true) {
+            JsonNode status = MAPPER.readTree(get(statusPath).body());
+            String value = status.get("status").asText();
+            if (!"RUNNING".equals(value) && !"STARTED".equals(value)) {
+                return status;
+            }
+            if (Instant.now().isAfter(deadline)) {
+                throw new AssertionError("Transfer did not finish: " + status);
+            }
+            Thread.sleep(100);
+        }
+    }
+
+    private static HttpResponse<String> get(String path) throws Exception {
+        return HTTP.send(HttpRequest.newBuilder(
+                URI.create("http://localhost:" + runtime.port() + path)).build(),
+                HttpResponse.BodyHandlers.ofString());
+    }
+
+    private static String spoolUriOf(String transferId) throws Exception {
+        try (Connection connection = connect();
+                PreparedStatement statement = connection.prepareStatement(
+                        "select spool_uri from tql_file_transfer where transfer_id = ?")) {
+            statement.setString(1, transferId);
+            try (ResultSet rs = statement.executeQuery()) {
+                assertThat(rs.next()).as("transfer row " + transferId).isTrue();
+                return rs.getString(1);
+            }
+        }
+    }
+
+    private static long spoolRows(String spoolId) throws Exception {
+        try (Connection connection = connect();
+                PreparedStatement statement = connection.prepareStatement(
+                        "select count(*) from tql_temp_spool where spool_id = ?")) {
+            statement.setString(1, spoolId);
+            try (ResultSet rs = statement.executeQuery()) {
+                return rs.next() ? rs.getLong(1) : -1;
+            }
+        }
+    }
+
+    private static void update(String sql, String parameter) throws Exception {
+        try (Connection connection = connect();
+                PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, parameter);
+            statement.executeUpdate();
+        }
+    }
+
+    private static Connection connect() throws Exception {
+        return DriverManager.getConnection(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
+                POSTGRES.getPassword());
+    }
+
     private static Path prepareAppHome() throws IOException {
         Path target = Files.createTempDirectory("tesseraql-temp-store-it");
         Files.createDirectories(target.resolve("config"));
@@ -145,6 +307,9 @@ class SharedTempStoreIntegrationTest {
                     name: temp-store-it
                   temp:
                     store: db
+                  connectors:
+                    push:
+                      allowedPaths: [outbox]
                   datasources:
                     main:
                       jdbcUrl: %s
@@ -178,6 +343,47 @@ class SharedTempStoreIntegrationTest {
                   format: csv
                   filename: orders.csv
                 """);
+        Path async = target.resolve("web/api/orders/export-async");
+        Files.createDirectories(async);
+        Files.writeString(async.resolve("post.yml"), """
+                version: tesseraql/v1
+                id: orders.exportAsync
+                kind: route
+                recipe: file-export
+                security:
+                  auth: public
+                sources:
+                  main:
+                    sql:
+                      file: export.sql
+                export:
+                  format: csv
+                  filename: orders.csv
+                """);
+        Files.copy(export.resolve("export.sql"), async.resolve("export.sql"));
+        Path deliver = target.resolve("batch/deliver");
+        Files.createDirectories(deliver);
+        Files.writeString(deliver.resolve("job.yml"), """
+                version: tesseraql/v1
+                id: orders.deliver
+                kind: job
+                recipe: batch-pipeline
+                pipeline:
+                  - id: extract
+                    sql:
+                      file: export.sql
+                      mode: query
+                    export:
+                      format: csv
+                      filename: orders.csv
+                  - id: drop
+                    push:
+                      transport: local
+                      path: outbox/partner
+                      file: steps.extract.transferId
+                      as: orders.csv
+                """);
+        Files.copy(export.resolve("export.sql"), deliver.resolve("export.sql"));
         return target;
     }
 }
