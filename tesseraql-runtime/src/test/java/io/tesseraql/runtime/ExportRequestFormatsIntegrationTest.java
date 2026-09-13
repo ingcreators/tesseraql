@@ -470,6 +470,9 @@ class ExportRequestFormatsIntegrationTest {
                 .contains("x.codec.csv")
                 .doesNotContain("export.sql").doesNotContain("SQL execution failed")
                 .doesNotContain("/web/api/");
+        // The code is raised once, where the write happens (docs/export-hygiene.md P3): the
+        // route's own catch passes it through rather than wrapping a second time.
+        assertThat(head).doesNotContain("failed after the query ran: TQL-LD-2802");
     }
 
     /** A statement that fails keeps the SQL code and names the SQL file. */

@@ -467,7 +467,7 @@ queries like any other query.
 | `TQL-LD-2801` | No codec for the declared format (the module is not installed) |
 | `TQL-FIELD-2001` | A request-sourced zone or locale the server cannot use (`code: timezone` / `locale`), refused before any SQL runs — 400 |
 | `TQL-LD-2802` | The document could not be written after the extraction ran — a codec, a column format or the spool; the message names the format and the file — 500 |
-| `TQL-LD-2810` | The file-transfer service failed — creating its schema, recording a transfer, or running an export step; the message carries the cause |
+| `TQL-LD-2810` | The file-transfer service failed — creating its schema, recording a transfer, running an export step, the extraction's first fetch (`Export query failed`) or the `after:` statement (`Export follow-up statement failed`); the message carries the cause |
 | `TQL-LD-2820` | `file-import` received an empty request body |
 | `TQL-LD-2821` | The file transfer service is not configured in this runtime |
 | `TQL-LD-2822` | Unknown transfer id (status or download) — 404 |

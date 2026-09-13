@@ -46,6 +46,20 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **A failed asynchronous or job export records why, with a code, within its column — and logs
+  its stack.** A codec, column-format or spool failure on a `file-export` or an `export:` job step
+  now records `TQL-LD-2802: Writing the <format> document failed after the query ran: … [<file>]`,
+  the code the synchronous route has recorded since v0.16.x; the two arms used to record the raw
+  exception text with no code, or nothing at all for a message-less exception. A database error
+  at the start of the extraction or in the `after:` statement records `TQL-LD-2810` (`Export
+  query failed` / `Export follow-up statement failed`) instead of the driver's text alone. A
+  reason over 2,000 characters is cut to its column instead of failing the record — the
+  asynchronous export used to surface `TQL-BATCH-5001 value too long` in place of its own failure,
+  and a job step's transfer execution stayed RUNNING for the reaper to finish as abandoned
+  (`TQL-BATCH-4212`) while its owner was alive. Every transfer failure is logged with its stack;
+  only the message was. On Oracle the column counts bytes, so a long non-ASCII reason can still
+  exceed it there.
+
 - **`JobExecutor` gains `fileDefaults(FileDefaults)`, the app-wide `tesseraql.files.locale` /
   `tesseraql.files.timezone` an export step falls back to.** Both executors — the served
   runtime's and `tesseraql job run`'s — wire it; an embedder that builds its own passes
