@@ -265,7 +265,10 @@ public interface FileTransferService {
         }
     }
 
-    /** The produced transfer: its id (also the download handle) and the row count written. */
+    /**
+     * The produced transfer: its id (also the download handle), the name it is recorded under (a
+     * split export's is the bundle's), and the row count written.
+     */
     record InlineResult(String transferId, String filename, long rows) {
     }
 

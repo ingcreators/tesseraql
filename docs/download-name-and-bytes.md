@@ -181,6 +181,9 @@ Rides in 4a because 4a's `splitBy` fixture would otherwise pin `__-.zip` (D2). S
 two-part extension (`orders-{key}.tar.gz`). Evidence: `design-4a.md` §1.3; the `zip*` variants.
 Query-export only: a file-export `splitBy:` transfer is served under the literal
 `r-{key}.<ext>` with the codec's content type over ZIP bytes (`export-declarations.md`, 5c).
+Moved to core as `SplitExport.zipName` with its test (`SplitExportZipNameTest`) by the
+export-declarations record's 5c, which found that the file-export and job surfaces never called
+it.
 
 ### 7 — `uriLiteral` encodes what no URI can carry, including the nine graphics and a lone `%`
 

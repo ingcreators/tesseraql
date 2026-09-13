@@ -1,6 +1,6 @@
 # An export declaration is refused, or it takes effect
 
-> **Status: designed.** Four pull requests, in this order, each branched from fresh
+> **Status: complete.** Four pull requests, in this order, each branched from fresh
 > `origin/main` after the previous one merged. **5-0** — the codec renders every value the
 > driver hands it (the Excel grid/placement NULL cell, the `time` column, the `LocalTime` /
 > `OffsetTime` treatment): **shipped with this record as #1305** (the pull request that registers this file
@@ -9,7 +9,7 @@
 > refused before the SQL runs (`TQL-FIELD-2001`, code `timezone` / `locale`), the fallback chain is
 > one rule on every arm, a job reads `tesseraql.files.*`, and a failure while writing the document
 > has its own code (`TQL-LD-2802`): shipped as #1307. **5c** — a valid `splitBy:` takes effect on a job step
-> and a `file-export` delivers its bundle as the ZIP it is: pending. Each pull request flips its own
+> and a `file-export` delivers its bundle as the ZIP it is: shipped as #1308. Each pull request flips its own
 > line here when it merges. Closes F126 of [`audit-medium-leads.md`](audit-medium-leads.md) with
 > 5a and 5b; 5-0 closes the two codec crashes the measurement found under it.
 >

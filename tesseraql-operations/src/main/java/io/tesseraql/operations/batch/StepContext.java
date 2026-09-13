@@ -439,6 +439,13 @@ final class StepContext {
                 .compile("\\{([\\p{L}\\p{N}_.]+)}").matcher(template);
         StringBuilder out = new StringBuilder();
         while (matcher.find()) {
+            if (io.tesseraql.core.files.SplitExport.KEY.equals(matcher.group())) {
+                // {key} is the split export's placeholder, replaced once per group when the
+                // bundle is written; the job context never owns it, so it passes through.
+                matcher.appendReplacement(out,
+                        java.util.regex.Matcher.quoteReplacement(matcher.group()));
+                continue;
+            }
             Object value = evaluation.resolve(Arrays.asList(matcher.group(1).split("\\.")));
             matcher.appendReplacement(out, java.util.regex.Matcher
                     .quoteReplacement(value == null ? "" : String.valueOf(value)));

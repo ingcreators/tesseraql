@@ -57,6 +57,21 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A `splitBy:` export delivers as the ZIP it is, on a job step and on `file-export`.** A job
+  step declaring `splitBy:` could never run: the step's filename interpolation rendered `{key}`
+  empty before the split writer demanded it, so every run failed with `TQL-LD-2858` blaming the
+  author for the placeholder they wrote. `{key}` now passes through interpolation untouched and
+  is replaced once per group, beside `{batch.businessDate}`. A `file-export` with `splitBy:`
+  completed, but its transfer was recorded under the per-document pattern and the codec's
+  content type — the status JSON said `orders-{key}.xlsx`, the download was served as a
+  workbook, and Excel refused the ZIP it was handed. A split transfer is now recorded as the
+  bundle: `filename` is the stem plus `.zip`, `format` is `zip`, the operations console lists
+  it so, and the download, the console's file link, a `push:` step and a mail attachment all
+  serve it as `application/zip` under that name — the same name and type the synchronous
+  `query-export` already answered. A step's `steps.<id>.filename` carries the bundle's name.
+  The bundle name derivation moved from the query-export step into core beside the split
+  writer.
+
 - **A bad request-sourced export zone or locale is refused before any SQL runs.** A
   `query.`/`params.`/`body.` source on `export.locale:`/`export.timezone:` that resolves to a
   value the server cannot use (`?tz=Tokyo`, `?loc=ja_JP`) answers 400 `TQL-FIELD-2001` with a

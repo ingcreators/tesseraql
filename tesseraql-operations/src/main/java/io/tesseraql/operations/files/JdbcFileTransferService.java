@@ -279,8 +279,13 @@ public final class JdbcFileTransferService implements FileTransferService {
                 : request.routeId() + codec.extension();
         String transferId = jobs.startExecution(request.routeId(), request.appName(), "export",
                 null);
+        // A split export delivers one ZIP, so the row records the bundle: what the status JSON
+        // names and what download() serves, not the per-document pattern the codec writes.
+        boolean split = request.writeSpec().splits();
         insertTransfer(transferId, request.routeId(), request.appName(), "EXPORT",
-                request.format(), filename, request.afterTiming(),
+                split ? io.tesseraql.core.files.SplitExport.BUNDLE_FORMAT : request.format(),
+                split ? io.tesseraql.core.files.SplitExport.zipName(filename) : filename,
+                request.afterTiming(),
                 request.afterSqlFile() == null ? null : request.afterSqlFile().toString(),
                 request.params());
         executor.submit(guarded(transferId, () -> runExport(transferId, request, codec, filename)));
@@ -295,8 +300,11 @@ public final class JdbcFileTransferService implements FileTransferService {
                 : request.routeId() + codec.extension();
         String transferId = jobs.startExecution(request.routeId(), request.appName(), "export",
                 null);
+        boolean split = request.writeSpec().splits();
+        String recorded = split ? io.tesseraql.core.files.SplitExport.zipName(filename) : filename;
         insertTransfer(transferId, request.routeId(), request.appName(), "EXPORT",
-                request.format(), filename, request.afterExtract() == null
+                split ? io.tesseraql.core.files.SplitExport.BUNDLE_FORMAT : request.format(),
+                recorded, request.afterExtract() == null
                         ? null
                         : AFTER_EXTRACT,
                 null, Map.of());
@@ -347,7 +355,7 @@ public final class JdbcFileTransferService implements FileTransferService {
                 // framework pool, and the extraction's commit stays separate — a best effort,
                 // stated rather than pretended.
                 recordSpoolAndComplete(transferId, writer.toRef(), rows);
-                return new InlineResult(transferId, filename, rows);
+                return new InlineResult(transferId, recorded, rows);
             } catch (Throwable ex) {
                 // Everything, not Exception: restoring autocommit below COMMITS an open
                 // transaction (docs/two-way-sql-parser.md decision 17). These bodies return a
@@ -461,11 +469,16 @@ public final class JdbcFileTransferService implements FileTransferService {
             runAfterSql(Path.of(transfer.afterSqlFile()), transfer.params());
         }
         try {
-            FileCodec codec = codecs.require(transfer.format());
+            // A split bundle is a ZIP whatever codec wrote its entries (SplitExport); every other
+            // export is served as its codec says.
+            String contentType = io.tesseraql.core.files.SplitExport.BUNDLE_FORMAT
+                    .equals(transfer.format())
+                            ? io.tesseraql.core.files.SplitExport.BUNDLE_CONTENT_TYPE
+                            : codecs.require(transfer.format()).contentType();
             SpoolRef ref = new SpoolRef(transferId, SpoolKind.BINARY,
                     URI.create(transfer.spoolUri()), 0, transfer.rowCount(), Instant.now());
             return Optional.of(new Download(
-                    transfer.filename(), codec.contentType(), tempStore.openInput(ref)));
+                    transfer.filename(), contentType, tempStore.openInput(ref)));
         } catch (IOException ex) {
             throw new UncheckedIOException(ex);
         }

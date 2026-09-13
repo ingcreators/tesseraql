@@ -480,7 +480,10 @@ pipeline:
   `duckdb` datasource this is the analytics report in one step — `report.sql` reads
   Parquet, lake tables, or an attach, and the codec writes CSV, Excel, or PDF.
 - **`filename:` interpolates `{dotted.path}` context values** — `{batch.businessDate}`
-  being the one that matters. `template:` resolves beside the job file; `locale:` and
+  being the one that matters. `{key}` is not a context value: on a `splitBy:` step it passes
+  through to the bundle, where each group's document replaces it, and the transfer is recorded
+  under the bundle's name (`orders-{batch.businessDate}-{key}.csv` → `orders-2026-03-31.zip`),
+  which is what `steps.<id>.filename` then carries. `template:` resolves beside the job file; `locale:` and
   `timezone:` are literals (a job has no request to resolve them from), and a request source
   on a step is refused by `tesseraql lint`, at boot and by `tesseraql job run`
   (`TQL-YAML-1063`), as is a zone or a language tag the JDK cannot honour. For each key a step

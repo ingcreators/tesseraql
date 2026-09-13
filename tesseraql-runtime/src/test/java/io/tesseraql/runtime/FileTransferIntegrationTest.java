@@ -149,6 +149,86 @@ class FileTransferIntegrationTest {
     }
 
     @Test
+    void aSplitExportDeliversTheBundleItIs() throws Exception {
+        String transferId = startTransfer("/api/orders/export-split", "");
+        JsonNode status = awaitTerminal("/api/orders/export-split/" + transferId);
+        assertThat(status.get("status").asText()).isEqualTo("COMPLETED");
+        // The status face names the bundle, not the per-document pattern.
+        assertThat(status.get("filename").asText()).isEqualTo("orders.zip");
+        // So does the row the ops console renders: the bundle's format and name are recorded,
+        // not derived on the way out from a {key} in the pattern.
+        var row = runtime.fileTransfers().recent(50).stream()
+                .filter(transfer -> transfer.transferId().equals(transferId))
+                .findFirst().orElseThrow();
+        assertThat(row.format()).isEqualTo("zip");
+        assertThat(row.filename()).isEqualTo("orders.zip");
+
+        HttpResponse<byte[]> file = getBytes("/api/orders/export-split/" + transferId + "/file");
+        assertThat(file.statusCode()).isEqualTo(200);
+        assertThat(file.headers().firstValue("content-type")).hasValue("application/zip");
+        assertThat(file.headers().firstValue("content-disposition").orElse(""))
+                .contains("filename=\"orders.zip\"");
+        // The body was a ZIP before the fix too: these two are controls, kept so a fix that
+        // re-wrapped the bytes would be caught.
+        assertThat(file.body()).startsWith((byte) 'P', (byte) 'K');
+        assertThat(zipEntries(file.body())).containsExactly("orders-a.csv", "orders-b.csv");
+    }
+
+    @Test
+    void anExportNamedZipKeepsItsCodecsType() throws Exception {
+        // The type follows the codec that wrote the bytes, the name follows the author - never
+        // the other way round: a csv an author called notes.zip is text/csv named notes.zip,
+        // even though its first header cell makes the body begin with the bytes PK.
+        String transferId = startTransfer("/api/orders/export-named-zip", "");
+        awaitTerminal("/api/orders/export-named-zip/" + transferId);
+        HttpResponse<byte[]> file = getBytes(
+                "/api/orders/export-named-zip/" + transferId + "/file");
+        assertThat(file.body()).startsWith((byte) 'P', (byte) 'K');
+        assertThat(file.headers().firstValue("content-type").orElse("")).startsWith("text/csv");
+        assertThat(file.headers().firstValue("content-disposition").orElse(""))
+                .contains("filename=\"notes.zip\"");
+    }
+
+    @Test
+    void aBlankSplitByExportsOnePlainFile() throws Exception {
+        // splitBy: "" passes the schema and the lint treats it as absent; the transfer must
+        // agree - a plain csv, never a bundle named orders-blank.zip and never a 2858.
+        String transferId = startTransfer("/api/orders/export-blank-split", "");
+        JsonNode status = awaitTerminal("/api/orders/export-blank-split/" + transferId);
+        assertThat(status.get("status").asText()).isEqualTo("COMPLETED");
+        assertThat(status.get("filename").asText()).isEqualTo("orders-blank.csv");
+        var row = runtime.fileTransfers().recent(50).stream()
+                .filter(transfer -> transfer.transferId().equals(transferId))
+                .findFirst().orElseThrow();
+        assertThat(row.format()).isEqualTo("csv");
+        HttpResponse<byte[]> file = getBytes("/api/orders/export-blank-split/" + transferId
+                + "/file");
+        assertThat(file.headers().firstValue("content-type").orElse("")).startsWith("text/csv");
+        assertThat(file.headers().firstValue("content-disposition").orElse(""))
+                .contains("filename=\"orders-blank.csv\"");
+        assertThat(new String(file.body(), java.nio.charset.StandardCharsets.UTF_8))
+                .startsWith("order_no,grp");
+    }
+
+    private static HttpResponse<byte[]> getBytes(String path) throws Exception {
+        return HTTP.send(HttpRequest.newBuilder(
+                URI.create("http://localhost:" + runtime.port() + path)).build(),
+                HttpResponse.BodyHandlers.ofByteArray());
+    }
+
+    private static java.util.List<String> zipEntries(byte[] zip) throws Exception {
+        java.util.List<String> names = new java.util.ArrayList<>();
+        try (java.util.zip.ZipInputStream in = new java.util.zip.ZipInputStream(
+                new java.io.ByteArrayInputStream(zip))) {
+            java.util.zip.ZipEntry entry;
+            while ((entry = in.getNextEntry()) != null) {
+                names.add(entry.getName());
+            }
+        }
+        return names;
+    }
+
+    @Test
     void downloadTimedFollowUpRunsOnceOnFirstFetch() throws Exception {
         seedOrder("dl-1", true);
 
@@ -461,7 +541,81 @@ class FileTransferIntegrationTest {
         writeExportRoute(home, "web/api/orders/export-on-download", "orders.exportOnDownload",
                 "download", "where download_only");
         writeTypedRoutes(home);
+        writeSplitExportRoute(home);
+        writeNamedZipRoute(home);
+        writeBlankSplitRoute(home);
         return home;
+    }
+
+    /** A split export over two groups: the transfer is the bundle, named and typed as one. */
+    private static void writeSplitExportRoute(Path home) throws IOException {
+        Path route = home.resolve("web/api/orders/export-split");
+        Files.createDirectories(route);
+        Files.writeString(route.resolve("post.yml"), """
+                version: tesseraql/v1
+                id: orders.exportSplit
+                kind: route
+                recipe: file-export
+                export:
+                  format: csv
+                  filename: orders-{key}.csv
+                  splitBy: grp
+                sources:
+                  main:
+                    sql:
+                      file: select-groups.sql
+                """);
+        Files.writeString(route.resolve("select-groups.sql"),
+                "select order_no, grp from (values ('s-1', 'a'), ('s-2', 'b'), ('s-3', 'b'))"
+                        + " as t(order_no, grp) order by grp, order_no\n;\n");
+    }
+
+    /**
+     * A csv an author named notes.zip whose bytes begin with {@code PK}: the type follows the
+     * codec that wrote the bytes, never the name and never the bytes.
+     */
+    private static void writeNamedZipRoute(Path home) throws IOException {
+        Path route = home.resolve("web/api/orders/export-named-zip");
+        Files.createDirectories(route);
+        Files.writeString(route.resolve("post.yml"), """
+                version: tesseraql/v1
+                id: orders.exportNamedZip
+                kind: route
+                recipe: file-export
+                export:
+                  format: csv
+                  filename: notes.zip
+                sources:
+                  main:
+                    sql:
+                      file: select-pk.sql
+                """);
+        Files.writeString(route.resolve("select-pk.sql"),
+                "select order_no as \"PK\", grp from (values ('s-1', 'a'), ('s-2', 'b'))"
+                        + " as t(order_no, grp) order by grp, order_no\n;\n");
+    }
+
+    /** A blank splitBy: is no split - the lint treats it as absent, and so must the transfer. */
+    private static void writeBlankSplitRoute(Path home) throws IOException {
+        Path route = home.resolve("web/api/orders/export-blank-split");
+        Files.createDirectories(route);
+        Files.writeString(route.resolve("post.yml"), """
+                version: tesseraql/v1
+                id: orders.exportBlankSplit
+                kind: route
+                recipe: file-export
+                export:
+                  format: csv
+                  filename: orders-blank.csv
+                  splitBy: ""
+                sources:
+                  main:
+                    sql:
+                      file: select-groups.sql
+                """);
+        Files.writeString(route.resolve("select-groups.sql"),
+                "select order_no, grp from (values ('s-1', 'a'), ('s-2', 'b'))"
+                        + " as t(order_no, grp) order by grp, order_no\n;\n");
     }
 
     /** Typed columns with German number formats, both directions (design ch. 28). */
