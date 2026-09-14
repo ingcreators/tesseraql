@@ -1,8 +1,8 @@
 # One codec set per application
 
-> **Status: designed 2026-09-14; decisions open.** Slices S1-S4 below, each its own pull
-> request branched from fresh `origin/main` after the previous one merged. Each pull request
-> flips its own line here when it merges.
+> **Status: designed 2026-09-14; every decision decided as recommended the same day.** Slices
+> S1-S4 below, each its own pull request branched from fresh `origin/main` after the previous
+> one merged. Each pull request flips its own line here when it merges.
 >
 > **S1** — the codec set is the application's, discovered once from its module loader and
 > handed to every consumer (the sync `query-export` route, the import view, the reloader, the
@@ -87,8 +87,9 @@ runtime's one site, and the compiler's two sites were never on the list.
 
 ## Decisions
 
-Each with a recommendation; the user decides. The mechanical ones (1, 2, 3, 5, 8) follow from
-the measurement; 4, 6 and 7 change a contract or a document a reader follows.
+Each with a recommendation. The mechanical ones (1, 2, 3, 5, 8) follow from the measurement;
+4, 6 and 7 change a contract or a document a reader follows. *Decided 2026-09-14: all nine as
+recommended, implemented in slice order.*
 
 ### 1. The codec set is the application's, discovered once, and every consumer receives that instance
 
