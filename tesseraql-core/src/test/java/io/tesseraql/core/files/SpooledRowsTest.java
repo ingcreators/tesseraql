@@ -64,6 +64,11 @@ class SpooledRowsTest {
         row.put("day", LocalDate.of(2026, 8, 10));
         row.put("clock", LocalTime.of(13, 45, 30));
         row.put("moment", LocalDateTime.of(2026, 8, 10, 13, 45, 30));
+        // docs/temporal-semantics.md decision 8: a time with zone and a UUID spool as themselves
+        // — a pdf or split export of a PostgreSQL timetz or uuid column used to fail with 2853.
+        row.put("zonedClock", java.time.OffsetTime.of(22, 30, 0, 500_000_000,
+                java.time.ZoneOffset.ofHours(9)));
+        row.put("key", java.util.UUID.fromString("a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"));
         row.put("instant", Instant.parse("2026-08-10T04:45:30Z"));
         row.put("offset", OffsetDateTime.parse("2026-08-10T13:45:30+09:00"));
         row.put("sqlDay", java.sql.Date.valueOf("2026-08-10"));

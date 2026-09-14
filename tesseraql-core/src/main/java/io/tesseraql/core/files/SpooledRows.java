@@ -20,6 +20,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
+import java.time.OffsetTime;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -79,6 +80,10 @@ public final class SpooledRows implements Iterable<Map<String, Object>>, NamedRo
      * read on another, and a spool written before this tag existed still reads.
      */
     private static final byte LONG_STRING = 19;
+    /** A time with its offset (docs/temporal-semantics.md decision 8): {@code timetz} as read. */
+    private static final byte OFFSET_TIME = 20;
+    /** PostgreSQL's ordinary key type, spooled as itself rather than refused. */
+    private static final byte UUID = 21;
 
     /**
      * The longest text {@code writeUTF} is certain to accept: modified UTF-8 spends at most three
@@ -351,6 +356,15 @@ public final class SpooledRows implements Iterable<Map<String, Object>>, NamedRo
                 out.writeInt(blob.length);
                 out.write(blob);
             }
+            case OffsetTime time -> {
+                out.writeByte(OFFSET_TIME);
+                out.writeUTF(time.toString());
+            }
+            case java.util.UUID uuid -> {
+                out.writeByte(UUID);
+                out.writeLong(uuid.getMostSignificantBits());
+                out.writeLong(uuid.getLeastSignificantBits());
+            }
             default -> throw new TqlException(UNREPRESENTABLE, "Column '" + column + "' holds a "
                     + value.getClass().getName() + ", which the row spool cannot carry without"
                     + " changing it - select it as a supported type in the query");
@@ -465,6 +479,8 @@ public final class SpooledRows implements Iterable<Map<String, Object>>, NamedRo
                 case SQL_TIME -> java.sql.Time.valueOf(in.readUTF());
                 case SQL_TIMESTAMP -> timestamp();
                 case BYTES -> in.readNBytes(in.readInt());
+                case OFFSET_TIME -> OffsetTime.parse(in.readUTF());
+                case UUID -> new java.util.UUID(in.readLong(), in.readLong());
                 default -> throw new TqlException(SPOOL_FAILED,
                         "Unknown spool type tag " + tag + " - the spool is corrupt");
             };

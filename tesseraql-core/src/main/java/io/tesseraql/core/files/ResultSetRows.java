@@ -22,10 +22,14 @@ import java.util.NoSuchElementException;
  * fix to any one of them had to be re-discovered in the others. One class, and the one real
  * variation is explicit: the caller reads {@link #count()} when the walk is done.
  *
- * <p>Values are raw JDBC objects on purpose: a codec's {@code ColumnValues} formatting decides
- * how temporals and numbers render, which is the export contract — unlike a JSON response,
- * which converts through {@code dialect.ResultRows.value}. Labels go through the same
- * {@link Labels#normalize} every other surface uses.
+ * <p>Values are each column's kind on purpose (docs/temporal-semantics.md T1): a wall clock as a
+ * {@code LocalDateTime}, an instant as an {@code OffsetDateTime}, read through
+ * {@link io.tesseraql.core.dialect.JdbcValues} so no value depends on the JVM's zone — and left
+ * as objects, because a codec's {@code ColumnValues} formatting decides how temporals and
+ * numbers render, which is the export contract. Raw {@code getObject} values used to arrive here,
+ * and a zoneless {@code timestamp} then reached the codec as a {@code java.sql.Timestamp} built
+ * in the JVM's zone, which {@code type: datetime} moved by (declared zone − host zone). Labels
+ * go through the same {@link Labels#normalize} every other surface uses.
  */
 public final class ResultSetRows implements Iterator<Map<String, Object>>, NamedRows {
 
@@ -33,6 +37,7 @@ public final class ResultSetRows implements Iterator<Map<String, Object>>, Named
     private final ExportRowCap cap;
     private final TqlErrorCode readError;
     private final List<String> labels;
+    private final io.tesseraql.core.dialect.JdbcValues.Reader values;
     private Boolean pending;
     private long count;
 
@@ -51,6 +56,7 @@ public final class ResultSetRows implements Iterator<Map<String, Object>>, Named
             columnLabels.add(Labels.normalize(dialect, metaData.getColumnLabel(col)));
         }
         this.labels = List.copyOf(columnLabels);
+        this.values = io.tesseraql.core.dialect.JdbcValues.reader(metaData);
     }
 
     /** How many rows have been handed over. */
@@ -87,7 +93,7 @@ public final class ResultSetRows implements Iterator<Map<String, Object>>, Named
         try {
             Map<String, Object> row = new LinkedHashMap<>();
             for (int col = 1; col <= labels.size(); col++) {
-                row.put(labels.get(col - 1), resultSet.getObject(col));
+                row.put(labels.get(col - 1), values.read(resultSet, col));
             }
             count++;
             return row;

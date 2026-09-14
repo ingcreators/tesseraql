@@ -63,6 +63,13 @@ All notable changes to TesseraQL are documented here. The format follows
   Anything the framework does not know — a `jsonb` column, an `interval`, an array — is the text
   the driver gives it, as a string, where the JSON mapper used to write the driver object's bean
   shape (`{"type":"jsonb","value":…,"null":false}`). Wire changes, recorded here; no migration.
+- **An untyped export cell is one SQL-style text per temporal kind** (`temporal-semantics.md`,
+  T1): a wall clock as stored (`2026-01-15 22:30:00.123456`), an instant presented in the
+  export's zone, a date, a time with its seconds, a time with zone with its offset
+  (`22:30:00+09:00`). It used to be the driver object's `toString()` — pgjdbc's space, DuckDB's
+  and H2's ISO `2026-01-15T22:30Z`, Oracle's object hash — for the same declared column, and a
+  PostgreSQL `timetz` arrived host-zoned with its offset dropped. Wire changes on those cells;
+  the PostgreSQL wall-clock text is byte-identical.
 - **Breaking on the record: `FileTransferService.TransferStatus` gains `exitMessage`**, the
   reason a failed run recorded (the older constructors stay). The status JSON of a `FAILED`
   export now carries `code` — the framework's error code the run recorded — and `reason`, the
@@ -147,6 +154,17 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **An exported wall clock is printed as stored; `timezone:` converts instants only.** The
+  export reader handed the codec a zoneless `timestamp` as a `java.sql.Timestamp` built in the
+  server's zone, and `type: datetime` then treated it as an instant: a stored `22:30` rendered
+  as `07:30` the next day under `timezone: Asia/Tokyo` on a UTC host, `15:30` on a Los Angeles
+  host, and a wall clock inside the host zone's DST gap moved by an hour with no declaration at
+  all. The reader now reads every column in the kind the database declares (`JdbcValues`), so a
+  wall clock never moves, an instant is presented in the export's zone, Oracle's
+  `TIMESTAMP WITH TIME ZONE` renders its value rather than `oracle.sql.TIMESTAMPTZ@…`, and SQL
+  Server's `datetimeoffset` honours the declaration it used to ignore.
+- **A spooled export — pdf, a template, `splitBy:` — carries a `uuid` and a `timetz` column**,
+  where the spool refused both with `TQL-LD-2853` while the same SELECT streamed as csv.
 - **A DuckDB `date`, `time` or `timestamptz` column answers on a JSON route instead of 500.**
   The driver hands those columns over as `java.time` values, the row reader passed them through,
   and the JSON mapper has no module for them — every analytics route selecting a date answered

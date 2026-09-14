@@ -131,15 +131,17 @@ sources:
 - `type:` (`date` / `datetime` / `number`) with `format:` renders a typed or formatted column
   through a date or decimal pattern on `csv` and `pdf`. On a workbook the string is the cell's
   own number format, in Excel's vocabulary (`d-mmm-yy`, `0.00E+00`), and no Java parser ever
-  sees it. A column with neither is written as the driver's `toString()` of the value on `csv`
-  and `pdf`; the Excel grid and placement modes type every temporal cell. A jxls report
-  (`template:` without `startCell:`) hands the template the raw values and reads none of these
-  keys.
-- A time-of-day column renders as wall-clock text (`22:30:00`, or `format:` over the time) on
-  `csv` and `pdf`, and as a real time cell in a workbook grid or placement. `timezone:` does
-  not shift it: a time has no date to shift. A PostgreSQL `time with time zone` reaches the
-  codec already moved into the server JVM's zone by the driver, and `timezone:` does not
-  correct that.
+  sees it. A column with neither is written as one text per kind on `csv` and `pdf`: a wall
+  clock as stored (`2026-01-15 22:30:00.123456`), an instant in the export's zone, a date as
+  `2026-01-15`, a time as `22:30:00`, a time with zone as `22:30:00+09:00`. The Excel grid and
+  placement modes type every temporal cell. A jxls report (`template:` without `startCell:`)
+  hands the template the raw values and reads none of these keys.
+- A column is read in the kind the database declares for it, and the server's own time zone
+  never enters. A zoneless `timestamp` or `datetime` is a wall clock: `timezone:` leaves it
+  alone, typed or not. A `timestamptz`, `datetimeoffset` or `TIMESTAMP WITH TIME ZONE` is an
+  instant: `timezone:` presents it in that zone (the platform's when none is declared). A
+  time-of-day column has no date to shift and keeps its wall clock; a time with zone keeps its
+  offset as text and its wall clock in a workbook cell.
 - `locale:` and `timezone:` drive those patterns, and reach only a typed or formatted column —
   and, on a `pdf` export with a `template:`, `locale:` also sets the locale the template renders
   in (its `#numbers` and `#dates` utilities, `${#locale}`, and `#{…}` message expressions). A

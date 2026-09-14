@@ -7,7 +7,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.OffsetDateTime;
 import java.time.OffsetTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
@@ -51,13 +53,24 @@ class ColumnValuesTest {
                 .hasMessageContaining("yyyy/MM/dd");
     }
 
+    /**
+     * An instant is presented in the export's zone; a wall clock is printed as stored
+     * (docs/temporal-semantics.md decision 6). The fixture used to be a {@code Timestamp} built
+     * from an instant, which encoded instant semantics for a class a zoneless column also
+     * arrived as — the shift this design removes.
+     */
     @Test
     void formattingRendersWithLocaleAndTimeZone() {
         ColumnMapping stamp = new ColumnMapping("createdAt", null, null, null, "yyyy/MM/dd HH:mm");
-        Timestamp utcMidnight = Timestamp.from(java.time.Instant.parse("2026-06-10T23:30:00Z"));
-        assertThat(ColumnValues.format(stamp, utcMidnight,
+        assertThat(ColumnValues.format(stamp, OffsetDateTime.parse("2026-06-10T23:30:00Z"),
                 Locale.JAPAN, ZoneId.of("Asia/Tokyo")))
-                .isEqualTo("2026/06/11 08:30");
+                .as("an instant, presented in the export's zone").isEqualTo("2026/06/11 08:30");
+        assertThat(ColumnValues.format(stamp, LocalDateTime.parse("2026-06-10T23:30:00"),
+                Locale.JAPAN, ZoneId.of("Asia/Tokyo")))
+                .as("a wall clock, as stored").isEqualTo("2026/06/10 23:30");
+        // A legacy Timestamp from a reader outside the seam is the wall clock it was built from.
+        assertThat(ColumnValues.format(stamp, Timestamp.valueOf("2026-06-10 23:30:00"),
+                Locale.JAPAN, ZoneId.of("Asia/Tokyo"))).isEqualTo("2026/06/10 23:30");
 
         ColumnMapping fee = new ColumnMapping("fee", null, null, "number", "#,##0.00");
         assertThat(ColumnValues.format(fee, new BigDecimal("1234.5"),
@@ -105,27 +118,71 @@ class ColumnValuesTest {
 
     @Test
     void aLocalOrOffsetTimeRendersLikeASqlTime() {
-        // Decision 12: DuckDB's LocalTime and H2/DuckDB's OffsetTime render as wall-clock text
-        // like the java.sql.Time arm. An offset is dropped, never applied - and the fixture's
-        // offset is NOT the export zone's, so a codec that shifts the time into the export zone
-        // (12:30 / 13:30) is told from one that keeps the wall clock.
+        // A time of day is never zoned: the fixture's offset is NOT the export zone's, so a
+        // codec that shifts the time into the export zone (12:30 / 13:30) is told from one
+        // that keeps the wall clock. An offset is printed, never applied
+        // (docs/temporal-semantics.md decision 5; export-declarations.md decision 12 dropped it,
+        // when the only time with zone a driver handed over was already host-shifted).
         assertThat(ColumnValues.format(ColumnMapping.of("t"), LocalTime.of(22, 30), Locale.US,
                 TOKYO)).isEqualTo("22:30:00");
         assertThat(ColumnValues.format(ColumnMapping.of("t"),
                 OffsetTime.of(22, 30, 0, 0, ZoneOffset.ofHours(-5)), Locale.US, TOKYO))
-                .as("22:30-05:00 under Asia/Tokyo keeps its wall clock").isEqualTo("22:30:00");
+                .as("22:30-05:00 under Asia/Tokyo keeps its wall clock")
+                .isEqualTo("22:30:00-05:00");
         assertThat(ColumnValues.format(ColumnMapping.of("t"),
                 OffsetTime.of(22, 30, 0, 0, ZoneOffset.ofHours(9)), Locale.US, UTC))
-                .as("22:30+09:00 under UTC keeps its wall clock").isEqualTo("22:30:00");
+                .as("22:30+09:00 under UTC keeps its wall clock").isEqualTo("22:30:00+09:00");
         ColumnMapping formatted = new ColumnMapping("t", null, null, null, "HH:mm");
         assertThat(ColumnValues.format(formatted, LocalTime.of(22, 30, 5), Locale.US, TOKYO))
                 .isEqualTo("22:30");
-        // A LocalTime keeps its fraction of a second, and ISO prints it only when present.
+        assertThat(ColumnValues.format(formatted,
+                OffsetTime.of(22, 30, 5, 0, ZoneOffset.ofHours(9)), Locale.US, TOKYO))
+                .as("a declared format reads the time fields only").isEqualTo("22:30");
+        // A fraction of a second prints only when present, at the value's own precision.
         assertThat(ColumnValues.format(ColumnMapping.of("t"),
                 LocalTime.of(22, 30, 0, 500_000_000), Locale.US, UTC)).isEqualTo("22:30:00.5");
         assertThat(ColumnValues.format(ColumnMapping.of("t"),
                 OffsetTime.of(22, 30, 0, 500_000_000, ZoneOffset.ofHours(9)), Locale.US, UTC))
-                .isEqualTo("22:30:00.5");
+                .isEqualTo("22:30:00.5+09:00");
+    }
+
+    /**
+     * An untyped cell is one SQL-style text per kind (docs/temporal-semantics.md decision 5):
+     * a wall clock as stored, an instant presented in the export's zone, seconds always. It
+     * used to be the driver object's {@code toString()} — pgjdbc's {@code 2026-01-15 22:30:00.0},
+     * DuckDB's {@code 2026-01-15T22:30Z}, Oracle's {@code oracle.sql.TIMESTAMPTZ@4089713} —
+     * for the same declared column.
+     */
+    @Test
+    void anUntypedTemporalCellIsItsSqlText() {
+        ColumnMapping plain = ColumnMapping.of("at");
+        assertThat(ColumnValues.format(plain, LocalDateTime.parse("2026-01-15T22:30:00.123456"),
+                Locale.US, TOKYO)).as("a wall clock, whatever the export zone")
+                .isEqualTo("2026-01-15 22:30:00.123456");
+        assertThat(ColumnValues.format(plain, LocalDateTime.parse("2026-03-08T02:30"), Locale.US,
+                TOKYO)).isEqualTo("2026-03-08 02:30:00");
+        assertThat(ColumnValues.format(plain, OffsetDateTime.parse("2026-01-15T22:30:00Z"),
+                Locale.US, TOKYO)).as("an instant, in the export zone")
+                .isEqualTo("2026-01-16 07:30:00");
+        assertThat(ColumnValues.format(plain, OffsetDateTime.parse("2026-01-15T22:30:00Z"),
+                Locale.US, UTC)).isEqualTo("2026-01-15 22:30:00");
+        assertThat(ColumnValues.format(plain, LocalDate.parse("2026-01-15"), Locale.US, TOKYO))
+                .isEqualTo("2026-01-15");
+        // Not a temporal: the value itself, for the codec to print.
+        assertThat(ColumnValues.format(plain, new BigDecimal("1.50"), Locale.US, TOKYO))
+                .isEqualTo(new BigDecimal("1.50"));
+    }
+
+    /** The arms the seam made unreachable are gone: a legacy value is converted, not zoned. */
+    @Test
+    void aLegacyTimestampIsAWallClockNotAnInstant() {
+        ZoneId losAngeles = ZoneId.of("America/Los_Angeles");
+        assertThat(ColumnValues.toZoned(Timestamp.valueOf("2026-01-15 22:30:00"), losAngeles))
+                .isEqualTo(LocalDateTime.parse("2026-01-15T22:30").atZone(losAngeles));
+        assertThat(ColumnValues.toZoned(java.sql.Date.valueOf("2026-01-15"), TOKYO))
+                .isEqualTo(LocalDate.parse("2026-01-15").atStartOfDay(TOKYO));
+        assertThat(ColumnValues.toZoned(OffsetDateTime.parse("2026-01-15T22:30:00Z"), TOKYO))
+                .isEqualTo(LocalDateTime.parse("2026-01-16T07:30").atZone(TOKYO));
     }
 
     /**
