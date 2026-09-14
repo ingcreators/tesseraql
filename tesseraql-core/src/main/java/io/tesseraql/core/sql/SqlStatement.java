@@ -352,6 +352,8 @@ public final class SqlStatement {
                 return values;
             }
             ResultSetMetaData metaData = resultSet.getMetaData();
+            io.tesseraql.core.dialect.JdbcValues.Reader reader = io.tesseraql.core.dialect.JdbcValues
+                    .reader(metaData);
             Map<String, Integer> byLabel = new LinkedHashMap<>();
             for (int col = 1; col <= metaData.getColumnCount(); col++) {
                 byLabel.put(metaData.getColumnLabel(col).toLowerCase(Locale.ROOT), col);
@@ -367,7 +369,7 @@ public final class SqlStatement {
                     // label a binding will read, so dialect normalization does not apply here.
                     values.put(key,
                             io.tesseraql.core.dialect.ResultRows.value(
-                                    resultSet.getObject(column)));
+                                    reader.read(resultSet, column)));
                 }
             }
         }
@@ -460,6 +462,11 @@ public final class SqlStatement {
         ResultSetMetaData metaData = resultSet.getMetaData();
         int columns = metaData.getColumnCount();
         List<Map<String, Object>> rows = new ArrayList<>();
+        // Each column in the kind the database declares for it (docs/temporal-semantics.md):
+        // getObject handed a zoneless timestamp over as the JVM zone's wall clock, and the
+        // JSON text then moved with the host.
+        io.tesseraql.core.dialect.JdbcValues.Reader values = io.tesseraql.core.dialect.JdbcValues
+                .reader(metaData);
         while (resultSet.next()) {
             if (maxRows >= 0 && rows.size() >= maxRows) {
                 onOverflow.onRowPastCap();
@@ -471,7 +478,7 @@ public final class SqlStatement {
                 row.put(rawLabels
                         ? label
                         : io.tesseraql.core.dialect.ResultRows.label(dialect, label),
-                        io.tesseraql.core.dialect.ResultRows.value(resultSet.getObject(col)));
+                        io.tesseraql.core.dialect.ResultRows.value(values.read(resultSet, col)));
             }
             rows.add(row);
         }

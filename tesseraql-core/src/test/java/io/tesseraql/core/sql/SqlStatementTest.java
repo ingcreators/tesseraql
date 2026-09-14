@@ -358,14 +358,13 @@ class SqlStatementTest {
      * the driver's object. So one store answered the same timestamp column two ways depending on
      * which reader asked, and seven shipped templates render an identity temporal directly.
      *
-     * <p>The fixture builds its {@code Timestamp} from a fixed {@code Instant} rather than from
-     * {@code Timestamp.valueOf}: {@code ResultRows.value} renders UTC, so a wall-clock literal
-     * would make this assertion depend on the machine's zone.
+     * <p>The fixture hands the column over as the wall clock it is — a {@code LocalDateTime},
+     * which is what the reader asks a zoneless column for (docs/temporal-semantics.md) — and the
+     * text carries no zone designator, so nothing here depends on the machine's zone.
      */
     @Test
     void anUncappedReadShapesItsTemporalsLikeACappedOne() throws SqlStatementException {
-        java.sql.Timestamp occurred = java.sql.Timestamp
-                .from(java.time.Instant.parse("2026-09-05T14:30:00Z"));
+        java.time.LocalDateTime occurred = java.time.LocalDateTime.parse("2026-09-05T14:30:00");
         FakeDatabase database = new FakeDatabase(List.of("occurred_at"), List.of(occurred));
 
         List<Map<String, Object>> rows = read(SqlStatement.on(database.dataSource()),
@@ -373,7 +372,7 @@ class SqlStatementTest {
 
         assertThat(rows).singleElement()
                 .extracting(row -> row.get("occurred_at"))
-                .isEqualTo("2026-09-05T14:30:00Z");
+                .isEqualTo("2026-09-05T14:30:00");
     }
 
     /**

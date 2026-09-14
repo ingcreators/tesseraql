@@ -1,6 +1,9 @@
 # Temporal semantics: a column's kind comes from the database, and every path renders it the same way
 
-> **Status: design — decisions pending.** Nothing below is implemented. The record merges the
+> **Status: in progress.** All thirteen decisions taken by the user on 2026-09-14, as
+> recommended. **T0** — the read seam (`JdbcValues`), `ResultRows.value` canonical and
+> allow-listed, the route and transition readers through it: shipped as T0. **T1**, **T2**,
+> **T3**: planned. The record merges the
 > temporal-semantics design that [`export-declarations.md`](export-declarations.md) decision 13
 > deferred (the typed zoneless-`timestamp` shift, the three semantics across five dialects, the
 > Oracle object hash) with the result-column-types design of 2026-09-10 (the `jsonb` bean leak,
@@ -210,6 +213,15 @@ T0 → T1 → T2 in order (T1 and T2 read through T0's seam); T3 after its own d
 ---
 
 ## T0 — the read seam and the bindable paths
+
+Shipped. Bracket (`work/temporal-semantics/t0/`): HEAD `99d318820` — the four integration guards
+red with the predicted shapes (the DuckDB 500, the wall clock's `Z`, the `jsonb` bean, the
+zero-seconds `Z`), five of six `ResultRowsTest` rows and `SqlStatementTest`'s temporal row red;
+`V-offset-first` — exactly the two TIMESTAMP order tests; `V-no-fallback` — exactly the DuckDB
+time test; `V-seconds` — exactly the seconds and legacy rows; `V-passthrough` — exactly the
+vendor-text row; the fix — 9/9, 6/6, 4/4 green. One deviation from the plan: the seam is
+`JdbcValues.reader(metaData)` returning a per-result-set `Reader`, so a refused typed read is
+remembered per column rather than paid once per cell.
 
 ### The change
 

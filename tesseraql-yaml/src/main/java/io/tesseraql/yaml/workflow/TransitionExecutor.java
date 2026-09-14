@@ -394,11 +394,14 @@ public final class TransitionExecutor {
                         return Map.of();
                     }
                     java.sql.ResultSetMetaData metaData = rs.getMetaData();
+                    io.tesseraql.core.dialect.JdbcValues.Reader values = io.tesseraql.core.dialect.JdbcValues
+                            .reader(metaData);
                     Map<String, Object> row = new LinkedHashMap<>();
                     for (int col = 1; col <= metaData.getColumnCount(); col++) {
                         row.put(io.tesseraql.core.dialect.ResultRows.label(dialect,
                                 metaData.getColumnLabel(col)),
-                                io.tesseraql.core.dialect.ResultRows.value(rs.getObject(col)));
+                                io.tesseraql.core.dialect.ResultRows.value(
+                                        values.read(rs, col)));
                     }
                     return row;
                 });
