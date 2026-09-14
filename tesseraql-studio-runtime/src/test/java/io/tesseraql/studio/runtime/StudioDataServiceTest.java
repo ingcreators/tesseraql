@@ -36,6 +36,10 @@ class StudioDataServiceTest {
             statement.execute("CREATE VIEW low_stock AS SELECT * FROM stock WHERE qty < 5");
             statement.execute("CREATE TABLE lake.price_summary (category VARCHAR, total INT)");
             statement.execute("INSERT INTO lake.price_summary VALUES ('tools', 42)");
+            statement.execute(
+                    "CREATE TABLE events (occurred TIMESTAMP, on_day DATE, tz TIMESTAMPTZ)");
+            statement.execute("INSERT INTO events VALUES (TIMESTAMP '2026-01-15 22:30:00',"
+                    + " DATE '2026-01-15', TIMESTAMPTZ '2026-01-15 22:30:00+09')");
         }
         DataSource dataSource = keepAlive(engine);
         service = new StudioDataService(name -> dataSource, List.of("main", "analytics"),
@@ -83,6 +87,24 @@ class StudioDataServiceTest {
                 "and", List.of());
 
         assertThat(csv).startsWith("item,qty").contains("widget,3").doesNotContain("gadget");
+    }
+
+    /**
+     * A temporal column browses and exports as the text a route answers
+     * (docs/temporal-semantics.md T2): a wall clock without a zone, an instant at UTC. It used
+     * to be the driver object's {@code toString()} — {@code 2026-01-15 22:30:00.0} for the wall
+     * clock — a third spelling beside the JSON route's and the export's.
+     */
+    @Test
+    void aTemporalColumnBrowsesAndExportsAsCanonicalText() {
+        StudioDataService.DataPage page = service.browse("analytics", "memory.main.events", 0,
+                null, null, "and", List.of());
+        assertThat(page.rows()).containsExactly(java.util.Arrays.asList(
+                "2026-01-15T22:30:00", "2026-01-15", "2026-01-15T13:30:00Z"));
+
+        String csv = service.exportCsv("analytics", "memory.main.events", null, null, "and",
+                List.of());
+        assertThat(csv).contains("2026-01-15T22:30:00,2026-01-15,2026-01-15T13:30:00Z");
     }
 
     @Test

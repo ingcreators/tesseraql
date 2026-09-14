@@ -1,5 +1,6 @@
 package io.tesseraql.operations.batch;
 
+import io.tesseraql.core.dialect.JdbcValues;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
@@ -121,6 +122,11 @@ final class SqlStepRunner {
         List<Map<String, Object>> rows = new java.util.ArrayList<>();
         ResultSetMetaData metaData = rs.getMetaData();
         int columns = metaData.getColumnCount();
+        // Each column in the kind the database declares for it (docs/temporal-semantics.md
+        // T2): a wall clock as a LocalDateTime, an instant as an OffsetDateTime — the kinds a
+        // later step's bind carries back on every supported driver.
+        JdbcValues.Reader values = JdbcValues
+                .reader(metaData);
         while (rs.next()) {
             if (cap >= 0 && rows.size() >= cap) {
                 if (!"warn".equals(overflow)) {
@@ -140,7 +146,7 @@ final class SqlStepRunner {
                 // Values stay typed — a later step binds them, and an ISO string is not a
                 // timestamp (docs/sql-execution-shapes.md structural decision 1).
                 row.put(io.tesseraql.core.dialect.ResultRows.label(dialect,
-                        metaData.getColumnLabel(col)), rs.getObject(col));
+                        metaData.getColumnLabel(col)), values.read(rs, col));
             }
             rows.add(row);
         }
@@ -187,6 +193,8 @@ final class SqlStepRunner {
             io.tesseraql.core.telemetry.Span span) throws SQLException {
         ResultSetMetaData metaData = rs.getMetaData();
         int columns = metaData.getColumnCount();
+        JdbcValues.Reader values = JdbcValues
+                .reader(metaData);
         SpoolRef ref;
         try {
             ref = io.tesseraql.core.files.SpooledRows
@@ -217,7 +225,7 @@ final class SqlStepRunner {
                                 for (int col = 1; col <= columns; col++) {
                                     row.put(io.tesseraql.core.dialect.ResultRows.label(
                                             dialect, metaData.getColumnLabel(col)),
-                                            rs.getObject(col));
+                                            values.read(rs, col));
                                 }
                                 return row;
                             } catch (SQLException ex) {

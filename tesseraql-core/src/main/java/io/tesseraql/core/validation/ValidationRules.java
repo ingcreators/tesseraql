@@ -1,5 +1,6 @@
 package io.tesseraql.core.validation;
 
+import io.tesseraql.core.dialect.JdbcValues;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
@@ -184,11 +185,14 @@ public final class ValidationRules {
                 rule.sourcePath() == null ? rule.id() : rule.sourcePath(), bound,
                 (resultSet, span) -> {
                     ResultSetMetaData metaData = resultSet.getMetaData();
+                    JdbcValues.Reader values = JdbcValues
+                            .reader(metaData);
                     List<Map<String, Object>> violations = new ArrayList<>();
                     while (resultSet.next()) {
                         Map<String, Object> violation = violation(rule);
                         for (int col = 1; col <= metaData.getColumnCount(); col++) {
-                            Object value = resultSet.getObject(col);
+                            Object value = io.tesseraql.core.dialect.ResultRows.value(
+                                    values.read(resultSet, col));
                             if (value != null) {
                                 // Lower-cased by contract, not by dialect: the columns that
                                 // override a violation's defaults (field, code, message) match

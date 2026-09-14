@@ -1,5 +1,6 @@
 package io.tesseraql.yaml.enrich;
 
+import io.tesseraql.core.dialect.JdbcValues;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
@@ -398,6 +399,8 @@ public final class KeyedReference {
         return statements.read(connection, sourcePath == null ? name : sourcePath, bound,
                 (resultSet, span) -> {
                     ResultSetMetaData metaData = resultSet.getMetaData();
+                    JdbcValues.Reader values = JdbcValues
+                            .reader(metaData);
                     List<Map<String, Object>> rows = new ArrayList<>();
                     int maxRows = bounds.maxRows();
                     while (resultSet.next()) {
@@ -419,7 +422,7 @@ public final class KeyedReference {
                             // label with a lowercase shadow — a quoted mixed-case alias keeps
                             // exactly its own spelling now.
                             row.put(io.tesseraql.core.dialect.ResultRows.label(dialect,
-                                    metaData.getColumnLabel(col)), resultSet.getObject(col));
+                                    metaData.getColumnLabel(col)), values.read(resultSet, col));
                         }
                         rows.add(row);
                     }

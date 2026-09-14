@@ -1,5 +1,6 @@
 package io.tesseraql.studio.runtime;
 
+import io.tesseraql.core.dialect.JdbcValues;
 import java.io.IOException;
 import java.io.StringWriter;
 import java.math.BigDecimal;
@@ -240,6 +241,10 @@ final class StudioDataService {
                     }
                     List<List<String>> rows = new ArrayList<>();
                     boolean hasNext = false;
+                    // The bindable form (docs/temporal-semantics.md T2): the browser shows the
+                    // text a route answers, not the driver object's toString().
+                    JdbcValues.Reader values = JdbcValues
+                            .reader(meta);
                     while (rs.next()) {
                         if (rows.size() == PAGE_SIZE) {
                             hasNext = true;
@@ -247,7 +252,8 @@ final class StudioDataService {
                         }
                         List<String> row = new ArrayList<>();
                         for (int i = 1; i <= columnCount; i++) {
-                            Object value = rs.getObject(i);
+                            Object value = io.tesseraql.core.dialect.ResultRows.value(
+                                    values.read(rs, i));
                             row.add(value == null ? null : truncate(String.valueOf(value)));
                         }
                         rows.add(row);
@@ -293,10 +299,13 @@ final class StudioDataService {
                             header.add(meta.getColumnLabel(i));
                         }
                         printer.printRecord(header);
+                        JdbcValues.Reader values = JdbcValues
+                                .reader(meta);
                         while (rs.next()) {
                             List<String> cells = new ArrayList<>(columnCount);
                             for (int i = 1; i <= columnCount; i++) {
-                                Object value = rs.getObject(i);
+                                Object value = io.tesseraql.core.dialect.ResultRows.value(
+                                        values.read(rs, i));
                                 cells.add(value == null ? "" : String.valueOf(value));
                             }
                             printer.printRecord(cells);
@@ -453,11 +462,14 @@ final class StudioDataService {
                         throw new IllegalArgumentException("No row matches that key");
                     }
                     ResultSetMetaData meta = rs.getMetaData();
+                    JdbcValues.Reader values = JdbcValues
+                            .reader(meta);
                     List<Map<String, Object>> fields = new ArrayList<>();
                     for (int i = 1; i <= meta.getColumnCount(); i++) {
                         Map<String, Object> field = new java.util.LinkedHashMap<>();
                         String name = meta.getColumnLabel(i);
-                        Object value = rs.getObject(i);
+                        Object value = io.tesseraql.core.dialect.ResultRows.value(
+                                values.read(rs, i));
                         field.put("name", name);
                         field.put("value", value == null ? null : String.valueOf(value));
                         field.put("pk", containsIgnoreCase(pkColumns, name));

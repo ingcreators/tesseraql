@@ -24,8 +24,10 @@ package io.tesseraql.core.dialect;
  * for the label and answer the value themselves.
  *
  * <p>Said plainly because a sweeping claim stood here and was false: this class does not know its
- * callers and cannot enforce the rule. Readers outside the framework's own row paths — the
- * reference lookup's, the declarative suite's and Studio's — do not ask here at all.
+ * callers and cannot enforce the rule. Since docs/temporal-semantics.md T2 every reader of user
+ * data — the reference lookup's, the decision table's, the validation rule's, the declarative
+ * suite's and Studio's included — reads through {@link JdbcValues} and asks here for the bindable
+ * form; the typed readers (batch step, keyset, enrich) read through the seam and keep the kind.
  */
 public final class ResultRows {
 

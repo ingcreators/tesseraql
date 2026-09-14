@@ -63,6 +63,15 @@ All notable changes to TesseraQL are documented here. The format follows
   Anything the framework does not know — a `jsonb` column, an `interval`, an array — is the text
   the driver gives it, as a string, where the JSON mapper used to write the driver object's bean
   shape (`{"type":"jsonb","value":…,"null":false}`). Wire changes, recorded here; no migration.
+- **Every reader of user data reads a column in the kind the database declares, and every
+  text surface renders it the same way** (`temporal-semantics.md`, T2): Studio's data browser,
+  its CSV download and its row view, a declarative suite's expectation, a reference lookup's
+  rows, a decision table's outputs and a validation rule's violation fields all show the text a
+  JSON route answers (`2026-01-15T22:30:00`), where each used to show the driver object's own
+  `toString()` (`2026-01-15 22:30:00.0`, a different spelling per driver) — a suite pinning a
+  temporal column changes its literal. The batch step, keyset and enrich readers keep the kind
+  (a `LocalDateTime` where a `Timestamp` was) and bind it back unchanged on every supported
+  driver.
 - **An untyped export cell is one SQL-style text per temporal kind** (`temporal-semantics.md`,
   T1): a wall clock as stored (`2026-01-15 22:30:00.123456`), an instant presented in the
   export's zone, a date, a time with its seconds, a time with zone with its offset

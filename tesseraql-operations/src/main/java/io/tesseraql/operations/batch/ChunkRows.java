@@ -1,6 +1,7 @@
 package io.tesseraql.operations.batch;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.tesseraql.core.dialect.JdbcValues;
 import io.tesseraql.core.dialect.ResultRows;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
@@ -68,10 +69,14 @@ interface ChunkRows extends AutoCloseable {
             public Map<String, Object> row() {
                 try {
                     ResultSetMetaData metaData = rows.getMetaData();
+                    // The kind the database declares, so a keyset boundary re-bound from a
+                    // wall clock is the wall clock (docs/temporal-semantics.md T2).
+                    JdbcValues.Reader values = JdbcValues
+                            .reader(metaData);
                     Map<String, Object> row = new LinkedHashMap<>();
                     for (int col = 1; col <= metaData.getColumnCount(); col++) {
                         row.put(ResultRows.label(dialect, metaData.getColumnLabel(col)),
-                                rows.getObject(col));
+                                values.read(rows, col));
                     }
                     return row;
                 } catch (SQLException ex) {

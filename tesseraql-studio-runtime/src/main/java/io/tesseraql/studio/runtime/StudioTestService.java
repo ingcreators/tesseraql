@@ -1,5 +1,6 @@
 package io.tesseraql.studio.runtime;
 
+import io.tesseraql.core.dialect.JdbcValues;
 import io.tesseraql.core.expr.EvaluationContext;
 import io.tesseraql.core.sql.BoundSql;
 import io.tesseraql.core.sql.Sql2WayParser;
@@ -372,11 +373,14 @@ final class StudioTestService {
     private static List<Map<String, Object>> readRows(ResultSet resultSet) throws SQLException {
         ResultSetMetaData metaData = resultSet.getMetaData();
         int columns = metaData.getColumnCount();
+        JdbcValues.Reader values = JdbcValues
+                .reader(metaData);
         List<Map<String, Object>> rows = new ArrayList<>();
         while (resultSet.next()) {
             Map<String, Object> row = new LinkedHashMap<>();
             for (int col = 1; col <= columns; col++) {
-                row.put(metaData.getColumnLabel(col), resultSet.getObject(col));
+                row.put(metaData.getColumnLabel(col), io.tesseraql.core.dialect.ResultRows
+                        .value(values.read(resultSet, col)));
             }
             rows.add(row);
         }

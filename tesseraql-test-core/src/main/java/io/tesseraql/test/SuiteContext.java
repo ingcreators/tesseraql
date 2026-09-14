@@ -1,5 +1,6 @@
 package io.tesseraql.test;
 
+import io.tesseraql.core.dialect.JdbcValues;
 import io.tesseraql.core.expr.ExpressionFunctions;
 import io.tesseraql.core.sql.BoundParameter;
 import io.tesseraql.core.sql.BoundSql;
@@ -168,11 +169,16 @@ final class SuiteContext {
             throws java.sql.SQLException {
         ResultSetMetaData metaData = resultSet.getMetaData();
         int columns = metaData.getColumnCount();
+        // The bindable form (docs/temporal-semantics.md T2): a suite's expectation compares
+        // against the same canonical text a route answers, not the driver object's toString().
+        JdbcValues.Reader values = JdbcValues
+                .reader(metaData);
         List<Map<String, Object>> rows = new ArrayList<>();
         while (resultSet.next()) {
             Map<String, Object> row = new LinkedHashMap<>();
             for (int col = 1; col <= columns; col++) {
-                row.put(metaData.getColumnLabel(col), resultSet.getObject(col));
+                row.put(metaData.getColumnLabel(col), io.tesseraql.core.dialect.ResultRows
+                        .value(values.read(resultSet, col)));
             }
             rows.add(row);
         }

@@ -4,7 +4,8 @@
 > recommended. **T0** — the read seam (`JdbcValues`), `ResultRows.value` canonical and
 > allow-listed, the route and transition readers through it: shipped as T0. **T1** — the export
 > reader through the seam, the untyped cell's SQL text, the legacy arms gone, the spool's two
-> tags: shipped as T1. **T2**, **T3**: planned. The record merges the
+> tags: shipped as T1. **T2** — the other eleven readers through the seam, the text surfaces
+> through the bindable form: shipped as T2. **T3**: planned. The record merges the
 > temporal-semantics design that [`export-declarations.md`](export-declarations.md) decision 13
 > deferred (the typed zoneless-`timestamp` shift, the three semantics across five dialects, the
 > Oracle object hash) with the result-column-types design of 2026-09-10 (the `jsonb` bean leak,
@@ -302,13 +303,29 @@ V-keep-timestamp-arm (the shift returns on any driver that falls back); V-no-zon
 
 ## T2 — the other readers
 
-Each site swaps `getObject(col)` for `JdbcValues.read`, and where the value is bound back into
-SQL (batch step params, keyset boundaries, enrich keys) a `java.time` value binds through
-`setObject` — JDBC 4.2 on every supported driver; the guard for each is the existing test of that
-path with one temporal column added, red on HEAD only where the path re-binds the value (a
-`LocalDateTime` where a `Timestamp` was) — the design expects most to be green-by-construction
-and says so up front rather than claiming a red proof it cannot have. Studio's data browser and
-the suite runner render canonical text; `docs/…`'s "do not ask here" sentence is deleted.
+Shipped. Eleven sites (the twelfth, `SqlStep`'s `count(*)`, reads no user column): the typed
+readers — `SqlStepRunner` ×2, `ChunkRows`, `KeyedReference` — read through the seam and keep
+the kind; the text readers — `LookupReferences` ×2, `DecisionTables`, `ValidationRules`,
+`StudioTestService`, `StudioDataService` ×3, `SuiteContext` — read through the seam and ask
+`ResultRows.value` for the bindable form. `ResultRows`' Javadoc no longer names readers that
+"do not ask here at all".
+
+**The re-bind was measured, not assumed** (`work/temporal-semantics/probe/rebind/`,
+`BindOne.java`, five drivers × two JVM zones): `LocalDateTime`, `OffsetDateTime`, `LocalDate`
+and `LocalTime` bind through `setObject` on all five and round-trip as the same value — the
+instant as the same instant, presented in the session zone where the driver normalizes
+(pgjdbc, Connector/J, DuckDB) and with its offset where it does not (mssql-jdbc, ojdbc). The
+one gap is DuckDB × `OffsetTime` ("Unsupported parameter type"), which predates the seam
+(DuckDB already handed `OffsetTime` over from `getObject`) — a `timetz` re-bound as a keyset
+boundary on DuckDB is filed.
+
+Bracket (`work/temporal-semantics/t2/`): HEAD `7cf87ad27` — the suite expectation red
+(`expected 2026-01-15T13:30:00Z but was 2026-01-15 13:30:00.0`) and Studio's browser row red
+(the `Timestamp` text); the batch re-bind guard green on HEAD too, as the plan said it would be
+(a `Timestamp` bound the same wall clock) — it guards the seam's bind, not a defect; the fix —
+6/6, 1/1, 1/1. The lookup, decision-table and validation paths are rewired and exercised by
+their existing tests, none of which carries a temporal column: green by construction,
+disclosed rather than dressed as a red proof.
 
 ## T3 — `result:` declarations
 
