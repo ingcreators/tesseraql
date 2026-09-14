@@ -9,7 +9,10 @@ target/
 .github/
 docs-site/node_modules/
 docs-site/dist/
-editor/node_modules/
-editor/*.vsix
+docs-site/.astro/
+vscode-extension/node_modules/
+vscode-extension/out/
+vscode-extension/*.vsix
+.pnpm-store/
 **/work/
 *.log

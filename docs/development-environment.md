@@ -42,8 +42,10 @@ Verify with `gh auth status`. Rebuild the container after changing `devcontainer
 
 ## Maven Wrapper
 
-The initial scaffold does not commit `maven-wrapper.jar`. Generate the wrapper after opening the devcontainer:
+The wrapper is committed (`mvnw`, `mvnw.cmd`, `.mvn/wrapper/maven-wrapper.properties` —
+`distributionType=only-script`, so no jar is ever needed) and Dependabot bumps it. Nothing to
+generate: run the same command CI runs.
 
 ```bash
-./scripts/bootstrap-maven-wrapper.sh
+./mvnw -B -ntp verify
 ```
