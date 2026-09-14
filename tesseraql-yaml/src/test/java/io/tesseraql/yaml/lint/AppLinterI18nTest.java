@@ -53,6 +53,52 @@ class AppLinterI18nTest {
                 && f.message().contains("'de'"));
     }
 
+    /**
+     * A declared locale the runtime cannot serve is one finding per entry, at its key — and
+     * not a crash: with {@code ja_JP} folded to {@code und} the catalog walk below used to throw
+     * out of the linter, and the catalog-language rule would build the settings the boot
+     * refuses. Both rules see the same predicate.
+     */
+    @Test
+    void aDeclaredLocaleTheJdkCannotFormatIsAnErrorAtItsKey(@TempDir Path dir)
+            throws Exception {
+        baseApp(dir);
+        Files.writeString(dir.resolve("config/tesseraql.yml"), """
+                tesseraql:
+                  app:
+                    name: t
+                  i18n:
+                    defaultLocale: ja_JP
+                    locales: [en, ja_JP]
+                """);
+        Files.createDirectories(dir.resolve("messages"));
+        Files.writeString(dir.resolve("messages/en.yml"), "a: A\n");
+        Files.createDirectories(dir.resolve("catalogs"));
+        Files.writeString(dir.resolve("catalogs/codes.yml"), """
+                version: tesseraql/v1
+                catalogs:
+                  kinds:
+                    table: kind_master
+                    key: code
+                    label: name
+                    language: lang
+                """);
+
+        List<LintFinding> findings = new AppLinter().lint(dir);
+
+        assertThat(findings)
+                .filteredOn(f -> f.code().equals("TQL-YAML-1065"))
+                .allMatch(LintFinding::isError)
+                .extracting(LintFinding::message)
+                .containsExactly(
+                        "tesseraql.i18n.defaultLocale: 'ja_JP' is not a language tag the JDK"
+                                + " can format (expected e.g. en, ja-JP)",
+                        "tesseraql.i18n.locales[1]: 'ja_JP' is not a language tag the JDK"
+                                + " can format (expected e.g. en, ja-JP)");
+        assertThat(findings).extracting(LintFinding::code)
+                .doesNotContain("TQL-YAML-1103", "TQL-YAML-1008", "TQL-FIELD-4619");
+    }
+
     @Test
     void unresolvableValidationMessageKeysWarn(@TempDir Path dir) throws Exception {
         baseApp(dir);

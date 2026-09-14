@@ -13,6 +13,7 @@ import java.util.Map;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 class LocaleResolutionTest {
 
@@ -122,6 +123,30 @@ class LocaleResolutionTest {
         } finally {
             context.unbind(TesseraqlProperties.PREFERENCE_STORE_BEAN);
         }
+    }
+
+    /**
+     * The framework's own Japanese is reachable with no configuration: an app with no
+     * {@code messages/} directory and no {@code locales:} still serves the built-in {@code ja}
+     * catalog (the module that owns {@code tesseraql/messages/ja.yml} is this one), so a
+     * browser's {@code Accept-Language: ja} negotiates to {@code ja} and the framework's
+     * chrome, error texts and input messages render in it. The served set used to be the
+     * app's files alone, so the header negotiated to English by default.
+     */
+    @Test
+    void theBuiltInJapaneseNegotiatesWithoutAnAppCatalog(@TempDir java.nio.file.Path home) {
+        I18nSettings settings = I18nSettings.from(
+                new io.tesseraql.yaml.config.AppConfig(Map.of()), home);
+        assertThat(settings.supportedTags()).containsExactly("en", "ja");
+        assertThat(settings.catalog().resolve("ja", "tql.view.empty"))
+                .isEqualTo("データがありません");
+
+        Exchange exchange = exchange();
+        exchange.request().header("Accept-Language", "ja, en;q=0.5");
+        new LocaleResolution(settings).process(exchange);
+
+        assertThat(exchange.getProperty(TesseraqlProperties.LOCALE, String.class))
+                .isEqualTo("ja");
     }
 
     @Test

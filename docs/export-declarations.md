@@ -443,7 +443,11 @@ caller's 400, and RUN turns a route that serves 200 today into a 500 `TQL-ROUTE-
 request under `tesseraql.i18n.defaultLocale: ja_JP`: I14 on V-belt and V-reqloc-judged); curing
 that by having 5a refuse the `und`-folding default so the negotiated tag can be judged (guard-first
 coverage #47 — the negotiated tag is the framework's whatever 5a does; the folding default IS a
-config defect and is filed). Evidence: `s-5b/out/MATRIX.txt` U1/U14/U15/I8c/I14.
+config defect and is filed). Evidence: `s-5b/out/MATRIX.txt` U1/U14/U15/I8c/I14. *2026-09-14: the
+folding default is refused at boot and lint (`TQL-YAML-1065`, `audit-medium-leads.md` slice 8a),
+so `und` no longer reaches `request.locale`; the guard that pinned the `und` case
+(`ExportFormatDefaultsEdgeIntegrationTest.theNegotiatedLocaleUnderAnUndDefaultIsServedAsToday`)
+is deleted, and the rule itself — NEGOTIATED is never judged — stands.*
 
 **28 — The chain is one rule, per key, on every arm: literal → source → config → platform.** For
 `locale` and `timezone` independently: (1) the route's (or step's) literal when declared and not

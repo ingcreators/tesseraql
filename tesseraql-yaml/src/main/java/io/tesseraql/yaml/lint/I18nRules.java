@@ -4,6 +4,7 @@ import static io.tesseraql.yaml.lint.LintFinding.Severity.ERROR;
 import static io.tesseraql.yaml.lint.LintFinding.Severity.WARNING;
 
 import io.tesseraql.yaml.config.AppConfig;
+import io.tesseraql.yaml.i18n.I18nSettings;
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.RouteFile;
 import java.nio.file.Files;
@@ -33,7 +34,11 @@ final class I18nRules implements LintRule {
     }
 
     /**
-     * Statically checks the app's message catalogs (roadmap Phase 22) when a {@code messages/}
+     * Statically checks the app's message catalogs (roadmap Phase 22): first the declared
+     * locales themselves — a {@code defaultLocale} or {@code locales} entry the runtime cannot
+     * serve is an error from the predicate the boot refuses with
+     * ({@link I18nSettings#declarationProblems}), and ends the check, because every lookup
+     * below would fold the misspelling to {@code und} and throw — then, when a {@code messages/}
      * directory exists: catalog files parse and carry valid BCP-47 names (TQL-YAML-1007), every
      * locale declared in {@code tesseraql.i18n.locales} has catalog entries to read
      * (TQL-YAML-1103), translation gaps against the default locale surface per catalog
@@ -43,6 +48,13 @@ final class I18nRules implements LintRule {
      */
     void lintI18n(Path appHome, AppManifest manifest, List<LintFinding> findings) {
         AppConfig config = manifest.config();
+        java.util.Map<String, String> problems = I18nSettings.declarationProblems(config);
+        if (!problems.isEmpty()) {
+            problems.forEach((key, reason) -> findings.add(new LintFinding(
+                    I18nSettings.UNSERVABLE_LOCALE.toString(), ERROR, "config",
+                    key + ": " + reason)));
+            return;
+        }
         String defaultTag = java.util.Locale.forLanguageTag(
                 config.getString("tesseraql.i18n.defaultLocale").orElse("en")).toLanguageTag();
         boolean hasCatalog = Files.isDirectory(appHome.resolve("messages"));

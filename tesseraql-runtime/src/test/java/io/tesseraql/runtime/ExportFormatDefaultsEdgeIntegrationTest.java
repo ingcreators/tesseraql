@@ -30,11 +30,13 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
- * Three edges of the export formatting chain, each on an app of its own
- * (docs/export-declarations.md decisions 27, 33 and 34): the negotiated locale is served even
- * when the app's i18n default folds to {@code und}; a spool cap hit inside the document write is
- * the document's failure, not the statement's; and an unresolvable placeholder in a
- * {@code tesseraql.files.*} key stops nothing that never reads it.
+ * Two edges of the export formatting chain, each on an app of its own
+ * (docs/export-declarations.md decisions 33 and 34): a spool cap hit inside the document write
+ * is the document's failure, not the statement's; and an unresolvable placeholder in a
+ * {@code tesseraql.files.*} key stops nothing that never reads it. The third edge this class
+ * carried — the negotiated locale served under an i18n default that folded to {@code und}
+ * (decision 27) — is unreachable since the folding default is refused at boot
+ * ({@code DefaultLocalesIntegrationTest}, audit-medium-leads.md slice 8a).
  */
 @Testcontainers
 class ExportFormatDefaultsEdgeIntegrationTest {
@@ -44,31 +46,6 @@ class ExportFormatDefaultsEdgeIntegrationTest {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final HttpClient HTTP = HttpClient.newHttpClient();
-
-    /**
-     * {@code tesseraql.i18n.defaultLocale: ja_JP} folds to {@code und} at boot, so
-     * {@code request.locale} carries {@code und}. It is the framework's own value, never judged:
-     * the export renders in the root locale as it always did, at 200 — red when the judge holds
-     * every provenance to the literal rule, which turns every request into a 500.
-     */
-    @Test
-    void theNegotiatedLocaleUnderAnUndDefaultIsServedAsToday() throws Exception {
-        Path home = app("und", "ja_JP", "Asia/Kolkata", "");
-        writeQueryExport(home, "reqloc", "x.reqloc", "  locale: request.locale\n", "", ROWS_SQL);
-        writeQueryExport(home, "plain", "x.plain", "", "", ROWS_SQL);
-        try (TesseraqlRuntime runtime = TesseraqlRuntime.start(home, 0)) {
-            HttpResponse<String> negotiated = get(runtime, "/api/x/reqloc");
-            HttpResponse<String> english = get(runtime, "/api/x/reqloc", "Accept-Language", "en");
-            HttpResponse<String> plain = get(runtime, "/api/x/plain");
-
-            assertThat(negotiated.statusCode()).isEqualTo(200);
-            assertThat(negotiated.body()).contains("\"1,234.50\"");
-            assertThat(english.statusCode()).isEqualTo(200);
-            assertThat(plain.statusCode()).isEqualTo(200);
-        } finally {
-            deleteRecursively(home);
-        }
-    }
 
     /**
      * The spool under the codec refuses twenty rows at a hundred bytes: the extraction ran (the
