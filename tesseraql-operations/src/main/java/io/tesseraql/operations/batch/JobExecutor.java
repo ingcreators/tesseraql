@@ -402,7 +402,10 @@ public final class JobExecutor {
         } catch (RuntimeException ex) {
             jobSpan.recordError(ex);
             repository.failExecution(executionId, ex.getMessage());
-            LOG.warn("Job {} execution {} failed: {}", job.id(), executionId, ex.getMessage());
+            // The throwable rides the line: the execution row keeps the message alone, so
+            // this is the only place a step's stack — which class failed, and where — exists.
+            LOG.warn("Job {} execution {} failed: {}", job.id(), executionId, ex.getMessage(),
+                    ex);
             notifyFailure(job.id(), executionId, appName, ex.getMessage());
         } finally {
             ownedExecutions.remove(executionId);

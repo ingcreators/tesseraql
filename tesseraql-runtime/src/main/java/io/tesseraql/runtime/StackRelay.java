@@ -624,7 +624,9 @@ final class StackRelay {
                     name -> proxyFor(name, () -> portOf.applyAsInt(name)))
                     .handle(request);
         } catch (RuntimeException ex) {
-            LOG.warn("Gateway error: {}", ex.getMessage());
+            // The 502 names no cause; the path and the throwable here are the only record of
+            // which forward failed and why.
+            LOG.warn("Gateway error forwarding {}: {}", rawPath(request), ex.getMessage(), ex);
             respond(request, 502, GATEWAY_ERROR,
                     "The gateway could not forward the request to the application");
         }

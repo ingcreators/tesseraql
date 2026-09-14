@@ -188,7 +188,7 @@ public final class RouteWatcher implements AutoCloseable {
                                 .forEach(file -> debounce.offer(relative(file)));
                     }
                 } catch (IOException ex) {
-                    LOG.warn("Could not watch new directory {}: {}", child, ex.getMessage());
+                    LOG.warn("Could not watch new directory {}: {}", child, ex.getMessage(), ex);
                 }
             }
             return;

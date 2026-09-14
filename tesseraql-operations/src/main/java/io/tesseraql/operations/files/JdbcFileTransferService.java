@@ -751,7 +751,7 @@ public final class JdbcFileTransferService implements FileTransferService {
             span.attribute("affectedRows", applied[0]);
         } catch (Exception ex) {
             span.recordError(ex);
-            LOG.warn("File import {} failed: {}", transferId, ex.getMessage());
+            LOG.warn("File import {} failed: {}", transferId, ex.getMessage(), ex);
             if (committed) {
                 // The rows and the verdict are already committed together. Whatever failed after
                 // that — the completion signal, a span — must not overwrite the count with zero
@@ -1033,7 +1033,7 @@ public final class JdbcFileTransferService implements FileTransferService {
         try {
             tempStore.delete(spool);
         } catch (RuntimeException ex) {
-            LOG.warn("Could not reclaim import spool {}: {}", spool.id(), ex.toString());
+            LOG.warn("Could not reclaim import spool {}: {}", spool.id(), ex.toString(), ex);
         }
     }
 
@@ -1042,7 +1042,8 @@ public final class JdbcFileTransferService implements FileTransferService {
         try (java.io.InputStream probe = tempStore.openInput(spool)) {
             return probe.read() >= 0;
         } catch (IOException | RuntimeException ex) {
-            LOG.warn("Parked import spool {} is unreadable here: {}", spool.id(), ex.toString());
+            LOG.warn("Parked import spool {} is unreadable here: {}", spool.id(), ex.toString(),
+                    ex);
             return false;
         }
     }
