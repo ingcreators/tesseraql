@@ -149,10 +149,16 @@ held_on, domain: held_date }` on a route's `import:` or `export:` — and takes 
 `type:` and `format:`, the two keys a file column and a field share; the column's own win. The
 records stay separate: `label:` and `column:` are the file's, and a `columns:` list is positional
 where a field map is keyed. A domain's `locale:` is not applied to a column (a file has one
-locale, the block's), nor are its constraint keys. A job's columns are not resolved — a job's
-own `input:` domains are not either, a lead filed in
-[temporal-semantics.md](temporal-semantics.md) — so a `domain:` on a job's column is refused
-(`TQL-YAML-1063`) rather than accepted and applied nowhere.
+locale, the block's), nor are its constraint keys.
+
+### A domain on a job
+
+A job's declarations resolve domains exactly as a route's do, in the manifest loader: its
+`input:` fields (a job's parameters bind through the route's binder), each export step's columns
+and a poll job's import columns. The lints follow: the domain lint counts a job's references and
+warns on a loosening, and a job input of a type no request binds is refused (`TQL-YAML-1064`)
+at lint and at registration. Before, a job's `domain:` was parsed and never merged — a parameter
+bound as an untyped string with the domain's keys applied nowhere, and no finding said so.
 
 ## Resolution is compile-time
 

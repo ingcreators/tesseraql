@@ -45,20 +45,7 @@ final class FieldDomainRules implements LintRule {
         Set<String> referenced = new HashSet<>();
         for (Map.Entry<Path, RouteDefinition> document : LintSupport.authoringDocuments(manifest)) {
             String source = appHome.relativize(document.getKey()).toString();
-            document.getValue().input().forEach((name, field) -> {
-                if (field.domain() == null) {
-                    return;
-                }
-                referenced.add(field.domain());
-                InputField domain = domains.domains().get(field.domain());
-                if (domain == null) {
-                    return;
-                }
-                loosened(field, domain).forEach(what -> findings.add(new LintFinding(
-                        DOMAIN_LOOSENED, WARNING, source,
-                        "Field '" + name + "' loosens domain '" + field.domain() + "': " + what
-                                + " — a loosened copy is the drift domains exist to prevent")));
-            });
+            lintInputs(document.getValue().input(), domains, source, referenced, findings);
             // A result: entry reads a domain too (docs/temporal-semantics.md T3) - the
             // date a legacy column stores as text is the business field the request binds.
             // It restates at most format:, which is neither tightening nor loosening: the
@@ -83,11 +70,52 @@ final class FieldDomainRules implements LintRule {
                     .filter(java.util.Objects::nonNull)
                     .forEach(referenced::add);
         }
+        // A job's declarations reference and loosen a domain exactly as a route's do
+        // (docs/temporal-semantics.md decision 27): its input:, each export step's columns,
+        // a poll job's import columns.
+        for (io.tesseraql.yaml.manifest.JobFile job : manifest.jobs()) {
+            String source = LintSupport.relative(appHome, job.source());
+            lintInputs(job.definition().input(), domains, source, referenced, findings);
+            for (io.tesseraql.yaml.model.PipelineStep step : job.definition().pipeline()) {
+                if (step.export() != null) {
+                    step.export().columns().stream()
+                            .map(io.tesseraql.yaml.model.ColumnSpec::domain)
+                            .filter(java.util.Objects::nonNull)
+                            .forEach(referenced::add);
+                }
+            }
+            if (job.definition().fileImport() != null) {
+                job.definition().fileImport().columns().stream()
+                        .map(io.tesseraql.yaml.model.ColumnSpec::domain)
+                        .filter(java.util.Objects::nonNull)
+                        .forEach(referenced::add);
+            }
+        }
         domains.domains().keySet().stream()
                 .filter(name -> !referenced.contains(name))
                 .forEach(name -> findings.add(new LintFinding(UNREFERENCED_DOMAIN, WARNING,
                         "domains",
                         "Domain '" + name + "' is declared but never referenced")));
+    }
+
+    /** One document's {@code input:} block: the references it makes and the domains it loosens. */
+    private static void lintInputs(Map<String, InputField> input,
+            io.tesseraql.yaml.domain.FieldDomains domains, String source,
+            Set<String> referenced, List<LintFinding> findings) {
+        input.forEach((name, field) -> {
+            if (field.domain() == null) {
+                return;
+            }
+            referenced.add(field.domain());
+            InputField domain = domains.domains().get(field.domain());
+            if (domain == null) {
+                return;
+            }
+            loosened(field, domain).forEach(what -> findings.add(new LintFinding(
+                    DOMAIN_LOOSENED, WARNING, source,
+                    "Field '" + name + "' loosens domain '" + field.domain() + "': " + what
+                            + " — a loosened copy is the drift domains exist to prevent")));
+        });
     }
 
     /** The ways the merged field is looser than its domain, as human-readable clauses. */

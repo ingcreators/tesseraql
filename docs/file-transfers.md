@@ -141,8 +141,7 @@ sources:
   request's `input:` binds and a `result:` entry reads back — and the column's own `type:` or
   `format:` wins over the domain's. `label:` and `column:` stay the file's. A domain's `locale:`
   is not applied to a column (a file has one locale, the block's), nor are its constraint keys.
-  A route's columns only: a job's export step or poll import does not resolve domains, so a
-  reference there is a lint error and a registration refusal (`TQL-YAML-1063`).
+  A job's export step and poll import resolve it the same way.
 - A column is read in the kind the database declares for it, and the server's own time zone
   never enters. A zoneless `timestamp` or `datetime` is a wall clock: `timezone:` leaves it
   alone, typed or not. A `timestamptz`, `datetimeoffset` or `TIMESTAMP WITH TIME ZONE` is an

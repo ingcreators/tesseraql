@@ -10,7 +10,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 /**
  * A file column's {@code domain:} (docs/temporal-semantics.md decision 25): a reference the
- * domain lint counts, on a route; refused on a job's column, whose domains are never resolved.
+ * domain lint counts, on a route and — since decision 28 — on a job.
  */
 class AppLinterColumnDomainTest {
 
@@ -61,8 +61,13 @@ class AppLinterColumnDomainTest {
         assertThat(findings).noneMatch(f -> f.code().equals("TQL-YAML-1063"));
     }
 
+    /**
+     * A job's columns resolve their domains too (docs/temporal-semantics.md decision 28, which
+     * lifted F-B's refusal once a job's own domains were resolved): the reference counts and
+     * nothing refuses it.
+     */
     @Test
-    void aDomainOnAJobsColumnIsAnError(@TempDir Path dir) throws Exception {
+    void aDomainOnAJobsColumnResolvesLikeARoutes(@TempDir Path dir) throws Exception {
         Path app = app(dir);
         Files.createDirectories(app.resolve("batch/report"));
         Files.writeString(app.resolve("batch/report/job.yml"), """
@@ -87,9 +92,8 @@ class AppLinterColumnDomainTest {
 
         List<LintFinding> findings = new AppLinter().lint(app);
 
-        assertThat(findings).anyMatch(f -> f.code().equals("TQL-YAML-1063") && f.isError()
-                && f.source().equals("batch/report/job.yml")
-                && f.message().contains("columns[held_on].domain: a job's column does not"
-                        + " resolve a domain - declare type: and format: on the column"));
+        assertThat(findings).noneMatch(f -> f.code().equals("TQL-YAML-1063")
+                && f.source().equals("batch/report/job.yml"));
+        assertThat(findings).noneMatch(f -> f.code().equals("TQL-FIELD-4611"));
     }
 }

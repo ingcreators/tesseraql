@@ -143,6 +143,28 @@ class BatchJobIntegrationTest {
         }
     }
 
+    /**
+     * A job parameter typed through its domain binds in the domain's type
+     * (docs/temporal-semantics.md decision 26, audit lead 27): {@code count=42} through an
+     * integer domain lands as the integer 42. Before, a job's {@code domain:} was parsed and
+     * never merged, so the parameter bound as the string {@code "42"}, which PostgreSQL refuses
+     * for an integer column, and the job failed.
+     */
+    @Test
+    void aJobParameterTypedThroughItsDomainBindsInItsType() throws Exception {
+        JobExecution execution = runtime.runJob("user.domainParam", Map.of("count", "42"));
+
+        assertThat(execution.status()).as(String.valueOf(execution.exitMessage()))
+                .isEqualTo(JobStatus.COMPLETED);
+        try (Connection connection = DriverManager.getConnection(
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+                Statement statement = connection.createStatement();
+                ResultSet rs = statement
+                        .executeQuery("select at from temporal_marks where id = 42")) {
+            assertThat(rs.next()).as("the row the integer bind wrote").isTrue();
+        }
+    }
+
     @Test
     void querySpoolStepStreamsRowsToTempStore() throws Exception {
         JobExecution execution = runtime.runJob("user.exportActive", Map.of());
@@ -1492,6 +1514,35 @@ class BatchJobIntegrationTest {
         Files.writeString(target.resolve("batch/temporal/stamp.sql"),
                 "insert into temporal_marks (id, at)"
                         + " values (1, /* at */ timestamp '2000-01-01')\n");
+        // A job parameter typed through a domain (docs/temporal-semantics.md decision 26).
+        Files.createDirectories(target.resolve("domains"));
+        Files.writeString(target.resolve("domains/batch.yml"), """
+                version: tesseraql/v1
+                domains:
+                  batch_count:
+                    type: integer
+                    min: 1
+                    max: 500
+                """);
+        Files.createDirectories(target.resolve("batch/domain-param"));
+        Files.writeString(target.resolve("batch/domain-param/job.yml"), """
+                version: tesseraql/v1
+                id: user.domainParam
+                kind: job
+                recipe: batch-pipeline
+                input:
+                  count: { domain: batch_count, required: true }
+                pipeline:
+                  - id: mark
+                    sql:
+                      file: mark.sql
+                      mode: update
+                      params:
+                        count: params.count
+                """);
+        Files.writeString(target.resolve("batch/domain-param/mark.sql"),
+                "insert into temporal_marks (id, at)"
+                        + " values (/* count */ 2, timestamp '2026-01-01')\n");
         Files.writeString(target.resolve("batch/chunk/extract-e.sql"),
                 "select item_key, payload from chunk_items_e order by item_key\n");
         Files.writeString(target.resolve("batch/chunk/writer-e.sql"), """

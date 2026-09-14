@@ -19,7 +19,8 @@ import java.util.Map;
  * that publishes no rows — all {@code TQL-YAML-1064}, reported from the predicate the
  * compiler refuses from — and a {@code result:} on a job's chunk reader or writer, which the
  * typed batch readers never apply (they keep the kind the read seam gives them), the same
- * code.
+ * code — and a job's {@code input:}, which binds through the route's binder, judged by the
+ * route's predicate.
  */
 final class DeclaredKindRules implements LintRule {
 
@@ -42,6 +43,13 @@ final class DeclaredKindRules implements LintRule {
         }
         for (JobFile job : manifest.jobs()) {
             String source = LintSupport.relative(appHome, job.source());
+            // A job binds its input: through the route's binder (decision 27), so its kinds
+            // are judged by the route's predicate.
+            for (DeclaredKinds.Violation violation : DeclaredKinds.inputViolations(
+                    job.definition())) {
+                findings.add(new LintFinding(UNSUPPORTED, ERROR, source, violation.message(),
+                        context.lineWithin(job.source(), "input:", token(violation)), null));
+            }
             for (PipelineStep step : job.definition().pipeline()) {
                 if (step.chunk() == null) {
                     continue;

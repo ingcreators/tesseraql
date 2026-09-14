@@ -120,7 +120,7 @@ public final class ManifestLoader {
                 .load(home, parser);
         List<RouteFile> routes = applySharedDefinitions(domains, ruleSets, decisions,
                 applySecurityDefaults(config, loadRoutes(home, brokenSink)), functions);
-        List<JobFile> jobs = loadJobs(home);
+        List<JobFile> jobs = loadJobs(home, domains);
         List<ToolFile> tools = new ArrayList<>();
         List<ResourceFile> resources = new ArrayList<>();
         List<UiResourceFile> uiResources = new ArrayList<>();
@@ -704,7 +704,7 @@ public final class ManifestLoader {
         return root.getMessage() == null ? root.toString() : root.getMessage();
     }
 
-    private List<JobFile> loadJobs(Path home) {
+    private List<JobFile> loadJobs(Path home, io.tesseraql.yaml.domain.FieldDomains domains) {
         Path batchRoot = home.resolve("batch");
         if (!Files.isDirectory(batchRoot)) {
             return List.of();
@@ -716,12 +716,45 @@ public final class ManifestLoader {
                     .sorted()
                     .forEach(file -> {
                         requireInside(home, file);
-                        jobs.add(new JobFile(file, parser.parseJob(file)));
+                        jobs.add(new JobFile(file,
+                                withFieldDomains(domains, file, parser.parseJob(file))));
                     });
         } catch (IOException ex) {
             throw new UncheckedIOException(ex);
         }
         return jobs;
+    }
+
+    /**
+     * A job's domain references resolved exactly as a route's are (docs/temporal-semantics.md
+     * decision 26): its {@code input:} fields, each export step's columns, a poll job's import
+     * columns. Three binders read a job's map — the ops API, {@code tesseraql job run}, the
+     * per-tenant run — and none of them used to see a domain's keys.
+     */
+    private static io.tesseraql.yaml.model.JobDefinition withFieldDomains(
+            io.tesseraql.yaml.domain.FieldDomains domains, Path source,
+            io.tesseraql.yaml.model.JobDefinition def) {
+        Map<String, io.tesseraql.yaml.model.InputField> input = def.input();
+        if (input.values().stream().anyMatch(field -> referencesDomain(field))) {
+            Map<String, io.tesseraql.yaml.model.InputField> merged = new java.util.LinkedHashMap<>();
+            input.forEach((name, field) -> merged.put(name,
+                    resolveDomains(domains, source, field)));
+            input = merged;
+        }
+        List<io.tesseraql.yaml.model.PipelineStep> pipeline = def.pipeline();
+        if (pipeline.stream().anyMatch(step -> step.export() != null
+                && step.export().columns().stream().anyMatch(column -> column.domain() != null))) {
+            pipeline = pipeline.stream().map(step -> step.export() == null
+                    ? step
+                    : step.withExport(step.export().withColumns(
+                            withColumnDomains(domains, source, step.export().columns()))))
+                    .toList();
+        }
+        io.tesseraql.yaml.model.ImportSpec fileImport = def.fileImport() == null
+                ? null
+                : def.fileImport().withColumns(
+                        withColumnDomains(domains, source, def.fileImport().columns()));
+        return def.withResolved(input, pipeline, fileImport);
     }
 
     /**

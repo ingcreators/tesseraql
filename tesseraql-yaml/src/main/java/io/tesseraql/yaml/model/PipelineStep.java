@@ -90,6 +90,13 @@ public record PipelineStep(String id, Binding sql,
                         null, when, enrich);
     }
 
+    /** This step with its {@code export:} block replaced — how the loader stamps a column's domain. */
+    public PipelineStep withExport(ExportSpec resolved) {
+        return resolved == export
+                ? this
+                : new PipelineStep(id, sql, notification, chunk, resolved, push);
+    }
+
     /** Convenience constructor for a SQL step (the pre-Phase-20 shape). */
     public PipelineStep(String id, Binding sql) {
         this(id, sql, null, null, null, null);

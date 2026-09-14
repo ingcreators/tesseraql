@@ -503,7 +503,7 @@ reading.
 | F1 | `locale:` on a read declaration | `DeclaredKinds.read` parses a `number`/`date`/`datetime` entry with `Locale.ROOT`; `InputField` has no `locale` key; `input:` parses in the request's negotiated locale (`InputBinder.bind(…, Locale)`), `export:`/`import:` in the block's `locale:` or `tesseraql.files.locale`. A column holding `1.234,50` has no way to say so. |
 | F2 | constraint keys on a `result:` entry | `InputField.mergedWith` merges every domain key under a `result:` entry, and a route-local `maxLength: 5` on one is accepted and applied nowhere — the shape `refuseWriteKeysOnSources` refuses for `expect:` on a source. The merged model cannot tell a route-local key from an inherited one. |
 | F3 | decision 22, `ColumnSpec` vs `InputField` | `ColumnSpec` has five keys — `name`, `label`, `column`, `type`, `format` — and 16 raise sites in six files; `InputField` has 22. The overlap is exactly `type` (date/datetime/number) and `format`, the same parsers (`ColumnValues.parse`). `label` and `column` are file-side and positional (a `columns:` list); nothing in `InputField` corresponds. `ImportSpec`/`ExportSpec` turn the list into `ColumnMapping`s through `toMapping()`; the loader never touches it. |
-| F4 (new lead) | a job's `input:` with `domain:` | `ManifestLoader.loadJobs` parses jobs with no domain resolution and nothing else merges one into a `JobDefinition`; `FieldDomainRules` walks routes, consumers and tools only. A job input `{ domain: sku }` binds as an untyped string with the domain's keys applied nowhere and no finding — while the shared schema says a job's parameters "bind and validate exactly like a route's". Filed for [`audit-medium-leads.md`](audit-medium-leads.md), not this slice. |
+| F4 (new lead) | a job's `input:` with `domain:` | `ManifestLoader.loadJobs` parses jobs with no domain resolution and nothing else merges one into a `JobDefinition`; `FieldDomainRules` walks routes, consumers and tools only. A job input `{ domain: sku }` binds as an untyped string with the domain's keys applied nowhere and no finding — while the shared schema says a job's parameters "bind and validate exactly like a route's". Filed as [`audit-medium-leads.md`](audit-medium-leads.md) lead 27, then fixed (decisions 26-28 below). |
 
 ### The decisions
 
@@ -568,6 +568,47 @@ reading.
   domain-only format, own format wins, unknown domain fails the load);
   `AppLinterColumnDomainTest` (the reference counts; a job's column refused).
   `work/temporal-semantics/t3/fb-*`.
+
+### F4 — a job's domains, designed and shipped 2026-09-14 (audit lead 27)
+
+**The measured premise** (`29c15a53f`, by reading, and the guards below run before the fix):
+`ManifestLoader.loadJobs` hands `parser.parseJob(file)` to a `JobFile` untouched, and nothing
+downstream merges a domain into a `JobDefinition`. Three binders read the unresolved map —
+`TesseraqlRuntime.bindJobParams` (the ops API and the scheduler), `JobCommand.runOne`
+(`tesseraql job run`) and the per-tenant variant, all through `InputBinder.bind` — so
+`count: { domain: batch_count }` with a domain of `type: integer` binds `"10"` as a string
+and the domain's `min`/`max` apply nowhere; PostgreSQL then refuses the string for an integer
+column at parse time. The lint is blind the same way: `FieldDomainRules`, `DeclaredKindRules`'s
+input arm and the reference count walk `authoringDocuments` (routes, consumers, tools), so a
+job-only domain is "declared but never referenced" and a job input of `type: json` or a typo'd
+type is nothing. F-B (decision 25) refused a `domain:` on a job's file column for this reason.
+
+**The decisions**
+
+26. **A job resolves domains exactly as a route does, in the loader** — its `input:` (elements
+    of an object array included), each pipeline step's `export.columns`, and a poll job's
+    `import.columns` — through the same `resolveDomains` and `ColumnSpec.mergedWith` a route's
+    go through, once per manifest. The alternative, resolving at each binder, is the
+    three-sites-one-working shape `bindJobParams` was written to remove.
+27. **The lint families that judge a route's declarations judge a job's**: the domain lint
+    (loosening, and the reference count), and the declared-kind input arm (`json`, an unknown
+    type, `locale:` on an input) — one predicate over a `(subject, input)` pair, so a job and a
+    route cannot be classified differently. The boot twin is the job registration, which
+    refuses a job input of a kind no request binds (`TQL-YAML-1064`), as the route compiler
+    does for a route.
+28. **F-B's refusal of `domain:` on a job's column is lifted**: a job's columns arrive at
+    `ExportDeclarations` merged, like a route's, and the refusal would now refuse a working
+    declaration.
+
+**The guards, red before the fix**: `JobDomainResolutionTest` (yaml) — a job input typed and
+bounded through its domain alone carries the domain's `type` and `max` (values only the domain
+has), an element of its `items.fields` too, an export step's column and a poll import's column
+carry the domain's `format`, an unknown domain fails the load; `AppLinterJobDomainTest` — a
+job-only domain is not "never referenced", a job input loosening its domain warns
+(`TQL-FIELD-4610`), a job input of `type: json` is `TQL-YAML-1064`, a job column's `domain:` is
+no longer `TQL-YAML-1063`; `BatchJobIntegrationTest.aJobParameterTypedThroughItsDomainBindsInItsType`
+— `count=42` through an integer domain lands as the integer 42 (HEAD: the job fails, the string
+refused for an integer column).
 
 ---
 
