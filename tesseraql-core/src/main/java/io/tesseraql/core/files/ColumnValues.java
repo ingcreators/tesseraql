@@ -116,7 +116,9 @@ public final class ColumnValues {
      * Renders one value for text output: formatted per the column's format (with the transfer's
      * locale and time zone) when one applies, the value itself otherwise.
      */
-    public static Object format(ColumnMapping column, Object value, Locale locale, ZoneId zone) {
+    public static Object format(ColumnMapping column, Object raw, Locale locale, ZoneId zone) {
+        // A legacy java.sql temporal from a reader outside the seam is its java.time kind first.
+        Object value = io.tesseraql.core.dialect.JdbcValues.normalize(raw);
         if (value == null) {
             return null;
         }
@@ -125,12 +127,10 @@ public final class ColumnValues {
                     DecimalFormatSymbols.getInstance(locale)).format(number);
         }
         LocalTime time = toLocalTime(value);
-        if (time != null) {
+        if (time != null && column.format() != null) {
             // A time of day has no date and no instant: the zone never applies, a mismatched
             // type: does not invent a date, and a declared format may use only time fields.
-            return column.format() != null
-                    ? DateTimeFormatter.ofPattern(column.format(), locale).format(time)
-                    : DateTimeFormatter.ISO_LOCAL_TIME.format(time);
+            return DateTimeFormatter.ofPattern(column.format(), locale).format(time);
         }
         ZonedDateTime temporal = toZoned(value, zone);
         if (temporal != null && (column.format() != null || isTemporalType(column))) {
@@ -139,7 +139,12 @@ public final class ColumnValues {
                     : "date".equals(column.type()) ? DEFAULT_DATE : DEFAULT_DATETIME;
             return DateTimeFormatter.ofPattern(pattern, locale).format(temporal);
         }
-        return value;
+        // Untyped: one SQL-style text per temporal kind (docs/temporal-semantics.md decision 5)
+        // — a wall clock as stored, an instant presented in the export's zone, a time with its
+        // offset. It used to be the driver object's toString(): pgjdbc's space, DuckDB's
+        // ISO `T…Z`, Oracle's object hash, for the same declared column.
+        String canonical = io.tesseraql.core.dialect.TemporalText.sql(value, zone);
+        return canonical != null ? canonical : value;
     }
 
     private static boolean isTemporalType(ColumnMapping column) {
@@ -153,12 +158,10 @@ public final class ColumnValues {
      * instant, so it is never zoned; an offset is dropped, never applied.
      */
     public static LocalTime toLocalTime(Object value) {
-        return switch (value) {
+        // A legacy java.sql.Time from a reader outside the seam is converted first (the driver
+        // built it in the JVM zone and toLocalTime() reads it back in that same zone).
+        return switch (io.tesseraql.core.dialect.JdbcValues.normalize(value)) {
             case null -> null;
-            // The driver built the Time in the JVM zone and toLocalTime() reads it back in that
-            // same zone, whatever it is. Never decode getTime() as seconds since midnight UTC:
-            // that reads 22:30 as 13:30 on every JVM whose zone is not UTC.
-            case java.sql.Time time -> time.toLocalTime();
             case LocalTime time -> time;
             case OffsetTime time -> time.toLocalTime();
             default -> null;
@@ -171,12 +174,13 @@ public final class ColumnValues {
      * and a {@link java.sql.Time} is a {@link java.util.Date} whose {@code toInstant()} throws.
      */
     public static ZonedDateTime toZoned(Object value, ZoneId zone) {
-        return switch (value) {
+        // The java.sql arms are gone with the read seam (docs/temporal-semantics.md decision 6):
+        // a Timestamp treated as an instant is what moved a zoneless column by the host's zone.
+        // A legacy value from a reader outside the seam is converted first, as a wall clock.
+        return switch (io.tesseraql.core.dialect.JdbcValues.normalize(value)) {
             case null -> null;
-            case java.sql.Time _ -> null;
-            case java.sql.Date date -> date.toLocalDate().atStartOfDay(zone);
-            case java.sql.Timestamp timestamp -> timestamp.toInstant().atZone(zone);
-            case java.util.Date date -> date.toInstant().atZone(zone);
+            case LocalTime _ -> null;
+            case OffsetTime _ -> null;
             case Instant instant -> instant.atZone(zone);
             case LocalDate date -> date.atStartOfDay(zone);
             case LocalDateTime dateTime -> dateTime.atZone(zone);

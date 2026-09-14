@@ -2,8 +2,9 @@
 
 > **Status: in progress.** All thirteen decisions taken by the user on 2026-09-14, as
 > recommended. **T0** — the read seam (`JdbcValues`), `ResultRows.value` canonical and
-> allow-listed, the route and transition readers through it: shipped as T0. **T1**, **T2**,
-> **T3**: planned. The record merges the
+> allow-listed, the route and transition readers through it: shipped as T0. **T1** — the export
+> reader through the seam, the untyped cell's SQL text, the legacy arms gone, the spool's two
+> tags: shipped as T1. **T2**, **T3**: planned. The record merges the
 > temporal-semantics design that [`export-declarations.md`](export-declarations.md) decision 13
 > deferred (the typed zoneless-`timestamp` shift, the three semantics across five dialects, the
 > Oracle object hash) with the result-column-types design of 2026-09-10 (the `jsonb` bean leak,
@@ -265,6 +266,25 @@ on the zero-seconds row); V-passthrough (`PGobject` still through — the `jsonb
 ---
 
 ## T1 — the export path
+
+Shipped. `TemporalText` (core/dialect) now holds both spellings — the wire's (`T`, an instant at
+UTC) and the SQL one (a space, an instant in the export's zone) — and `ResultRows.value` uses
+the former, `ColumnValues.format`'s untyped branch the latter. `ColumnValues.format`,
+`toZoned` and `toLocalTime` convert a legacy `java.sql` value at entry (`JdbcValues.normalize`)
+and the `java.sql.*` / `java.util.Date` arms are gone; the Excel and PDF writers needed no
+change of their own, because their `toZoned` calls already had the right `LocalDateTime` and
+`OffsetDateTime` arms and now receive those kinds. Slice 5's decision 12 ("an offset is dropped,
+never applied") is superseded for a time with zone: the offset is printed, never applied.
+
+Bracket (`work/temporal-semantics/t1/`): HEAD `b73201148` — the four export guards red with the
+filed shapes (`07:30` for the typed wall clock under UTC; DuckDB `2026-01-15T22:30:00.123456Z`;
+2853 on the split export; `timetz` `13:30:00`), four `ColumnValuesTest` rows and the spool's
+round trip red; `V-keep-timestamp-arm` — exactly the legacy-wall-clock row; `V-no-zone-on-untyped`
+— exactly the untyped-instant row; `V-no-spool-tag` — exactly the round trip;
+`V-reader-getobject` (the export reader not through the seam) — the typed instant row, the
+untyped row and the split export red; the fix — 12/12, 8/8, 4/4.
+
+### The plan, as written
 
 `ResultSetRows` reads through the seam (its Javadoc's "raw JDBC objects, deliberately" becomes
 "the column's kind, deliberately"); `ColumnValues.format`'s untyped branch renders decision 5's

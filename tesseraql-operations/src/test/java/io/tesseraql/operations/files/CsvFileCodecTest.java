@@ -211,8 +211,10 @@ class CsvFileCodecTest {
     @Test
     void writeFormatsDatesAndNumbersWithTheTransferLocale() throws Exception {
         Map<String, Object> row = new LinkedHashMap<>();
-        row.put("held_on", java.sql.Timestamp.from(
-                java.time.Instant.parse("2026-06-10T23:30:00Z")));
+        // An instant, in the kind the reader hands over (docs/temporal-semantics.md): a
+        // Timestamp here used to encode instant semantics for the class a wall clock also
+        // arrived as.
+        row.put("held_on", java.time.OffsetDateTime.parse("2026-06-10T23:30:00Z"));
         row.put("fee", new java.math.BigDecimal("1234.5"));
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         codec.write(out, new FileWriteSpec(List.of(
