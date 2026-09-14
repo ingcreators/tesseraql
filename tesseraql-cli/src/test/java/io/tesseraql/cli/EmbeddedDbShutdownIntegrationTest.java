@@ -103,6 +103,12 @@ class EmbeddedDbShutdownIntegrationTest {
      * <em>inside</em> the start, after spawning the postmaster and before waiting for readiness.
      * Interrupting there must not leave a server running.
      *
+     * <p>Where in the window the signal lands is the runner's: "postmaster started as" names
+     * {@code pg_ctl}, and the server it spawns is not a process yet for the next tens of
+     * milliseconds — three CI runs on 2026-09-14 landed there and found nothing to stop. This case
+     * keeps the real signal; {@link EmbeddedPostgresOwnershipTest} places the stop at a moment
+     * nothing can be found and is the guard that is red without the timing.
+     *
      * <p>Retries the window a few times and then fails. It never skips: a case that quietly passes
      * when it could not set itself up is indistinguishable from one that works.
      */

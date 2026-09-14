@@ -178,6 +178,13 @@ All notable changes to TesseraQL are documented here. The format follows
   `/受注/エクスポート` with `受注番号=エクスポート`. A route's order is now its specificity — a
   literal before a parameter at the first segment where two routes differ, whatever the
   characters — and a route the file watcher adds lands in its place.
+- **Ctrl+C while the embedded PostgreSQL is starting no longer leaves it running.** The stop
+  looked for the `postgres` process at the instant the interrupt arrived, and in the first
+  moments after the library announces the postmaster there is none to find — the process it
+  names is `pg_ctl`, still on its way to spawning the server in a session of its own — so the
+  stop returned empty-handed and the server came up after the process was gone. A stop that
+  arrives while the start is in progress now waits for the start to conclude and stops what it
+  produced; a stop that arrives before the start has claimed a directory refuses the start.
 - **An exported wall clock is printed as stored; `timezone:` converts instants only.** The
   export reader handed the codec a zoneless `timestamp` as a `java.sql.Timestamp` built in the
   server's zone, and `type: datetime` then treated it as an instant: a stored `22:30` rendered
