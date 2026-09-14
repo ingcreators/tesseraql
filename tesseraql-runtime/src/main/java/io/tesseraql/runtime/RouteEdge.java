@@ -102,7 +102,7 @@ final class RouteEdge {
         edge.router = router;
         for (io.tesseraql.pipeline.HttpMounts.Mount mount : io.tesseraql.pipeline.HttpMounts
                 .of(runtimeContext).all()) {
-            edge.mount(router, mount);
+            edge.mount(mount);
         }
         LOG.debug("HTTP edge serving {} route(s) on the router", edge.mounted.size());
         return edge;
@@ -159,10 +159,7 @@ final class RouteEdge {
         unmount(mountKey);
         at.put(mountKey, mount);
         declaredNames.put(mountKey, wireToDeclared(mount.path()));
-        mounted.put(mountKey, router.route(HttpMethod.valueOf(mount.method()), path(mount.path()))
-                .order(AFTER_THE_GATE)
-                .handler(HttpEdgeBeans.bodyHandler(runtimeContext))
-                .handler(ctx -> serve(ctx, routeId, mountKey)));
+        mounted.put(mountKey, mountRoute(mount, routeId, mountKey));
     }
 
     /** Takes a route off the router, so a deleted route answers 404 rather than its last body. */
@@ -185,8 +182,7 @@ final class RouteEdge {
         return mount.method() + " " + mount.pipeline();
     }
 
-    private void mount(io.vertx.ext.web.Router router,
-            io.tesseraql.pipeline.HttpMounts.Mount mount) {
+    private void mount(io.tesseraql.pipeline.HttpMounts.Mount mount) {
         String routeId = mount.pipeline();
         String mountKey = key(mount);
         if (!Pipelines.of(runtimeContext).contains(routeId)) {
@@ -195,13 +191,37 @@ final class RouteEdge {
         }
         at.put(mountKey, mount);
         declaredNames.put(mountKey, wireToDeclared(mount.path()));
-        // The body handler is the router's own — the instance the platform consumer would have used,
-        // with whatever the server configured on it — so an upload spools where it already
-        // spooled and a form parses the way it already parsed.
-        mounted.put(mountKey, router.route(HttpMethod.valueOf(mount.method()), path(mount.path()))
-                .order(AFTER_THE_GATE)
-                .handler(HttpEdgeBeans.bodyHandler(runtimeContext))
-                .handler(ctx -> serve(ctx, routeId, mountKey)));
+        mounted.put(mountKey, mountRoute(mount, routeId, mountKey));
+    }
+
+    /**
+     * The route on the router: the body handler, then the pipeline.
+     *
+     * <p>The body handler is the router's own — the instance the platform consumer would have
+     * used, with whatever the server configured on it — so an upload spools where it already
+     * spooled and a form parses the way it already parsed. It is mounted on the methods that
+     * carry a body and on no other (docs/edge-hygiene.md E2): a GET or HEAD carries its
+     * parameters in the URL, and no route reads {@code body.*} on one. It used to sit on every
+     * method, and Vert.x's handler engages on every HTTP/2 request and on any HTTP/1.1 request
+     * with framing — where a form content type on a GET, a client's default header, made it ask
+     * the transport to parse a form the method cannot carry: an unhandled
+     * {@code IllegalStateException}, a raw 500 with no envelope, and through the gateway (which
+     * forwards over h2c) the header alone was enough.
+     */
+    private Route mountRoute(io.tesseraql.pipeline.HttpMounts.Mount mount, String routeId,
+            String mountKey) {
+        HttpMethod method = HttpMethod.valueOf(mount.method());
+        Route route = router.route(method, path(mount.path())).order(AFTER_THE_GATE);
+        if (carriesABody(method)) {
+            route.handler(HttpEdgeBeans.bodyHandler(runtimeContext));
+        }
+        return route.handler(ctx -> serve(ctx, routeId, mountKey));
+    }
+
+    /** The methods a request body rides on; the ones the transport will parse a form for. */
+    private static boolean carriesABody(HttpMethod method) {
+        return method == HttpMethod.POST || method == HttpMethod.PUT
+                || method == HttpMethod.PATCH || method == HttpMethod.DELETE;
     }
 
     /**

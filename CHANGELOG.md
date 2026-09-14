@@ -131,6 +131,15 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A GET carrying a form content type answers, instead of an unhandled exception.** The body
+  handler sat on every route whatever its method, and it engages on every HTTP/2 request and on
+  any HTTP/1.1 request with framing — where a `multipart/form-data` or
+  `application/x-www-form-urlencoded` content type on a GET, a client's default header, made it
+  ask the transport to parse a form a GET cannot carry: a raw 500 with no error envelope, logged
+  as `Unhandled exception in router`. The gateway forwards over h2c, so through it the header
+  alone was enough; the JDK `HttpClient` frames every GET with `Content-Length: 0`, so a Java
+  caller met it directly too. The body handler is now mounted on POST, PUT, PATCH and DELETE
+  only; a GET or HEAD carries its parameters in the URL.
 - **A declared `headers:` `Location` or `HX-Redirect` answers under a base-path prefix.** The
   documented 201 recipe (`Location: "/api/items/{steps.record.keys.id}"`) was percent-encoded and
   never prefixed, so under every `tesseraql dev` and `tesseraql host` deployment it named an
