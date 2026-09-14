@@ -58,6 +58,8 @@ public final class RouteReloader {
     /** Ran after every successful reload — the workshop extension hooks its cache epochs here. */
     private final List<Runnable> reloadListeners = new java.util.concurrent.CopyOnWriteArrayList<>();
     private final io.tesseraql.core.expr.ExpressionFunctions functions;
+    /** The application's codec set, the one the boot compiled with (docs/codec-discovery.md). */
+    private final io.tesseraql.core.files.FileCodecs codecs;
     private AppManifest current;
     /**
      * The routes currently serving a compile-failure stub. A stubbed route left the manifest on
@@ -75,9 +77,11 @@ public final class RouteReloader {
 
     RouteReloader(RuntimeContext context, Path appHome, AppManifest current,
             String appName, List<SystemApps.MountedApp> mountedApps,
-            io.tesseraql.core.expr.ExpressionFunctions functions) {
+            io.tesseraql.core.expr.ExpressionFunctions functions,
+            io.tesseraql.core.files.FileCodecs codecs) {
         this.context = context;
         this.functions = functions;
+        this.codecs = codecs;
         this.appHome = appHome;
         this.current = current;
         this.appName = appName;
@@ -239,7 +243,7 @@ public final class RouteReloader {
                 // so a request racing this save runs the old chain or the new one. Removing
                 // before compiling opened a window in which a mounted URL answered 404 on
                 // every save under live traffic.
-                new RouteCompiler().appName(appName).functions(functions)
+                new RouteCompiler().appName(appName).functions(functions).codecs(codecs)
                         .compile(context, reloaded, true, Set.of(id));
                 (before.containsKey(id) ? reloadedIds : addedIds).add(id);
                 stubbed.remove(id);
@@ -284,7 +288,7 @@ public final class RouteReloader {
             for (Map.Entry<String, String> transition : nowWorkflow.entrySet()) {
                 String id = transition.getKey();
                 try {
-                    new RouteCompiler().appName(appName).functions(functions)
+                    new RouteCompiler().appName(appName).functions(functions).codecs(codecs)
                             .compile(context, reloaded, true, Set.of(id));
                     (beforeWorkflow.containsKey(id) ? reloadedIds : addedIds).add(id);
                 } catch (Exception ex) {

@@ -146,10 +146,14 @@ public final class ViewBinding {
      * {@code postRouteByPath} looks up the POST route serving a path (the form's
      * {@code action:}). Slot and {@code template:} references inside the document resolve
      * against the view file's own directory, then {@code templates/} — a shared document
-     * resolves the same fragments for every referencing route.
+     * resolves the same fragments for every referencing route. {@code codecs} is the
+     * application's codec set (docs/codec-discovery.md decision 1): an import page's accepted
+     * file types come from the codec its action route's format names, and that codec is one
+     * the transfer service will read with — never one this class went looking for itself.
      */
     public static ViewBinding of(Path appHome, String viewRef, RouteDefinition route,
-            Function<String, RouteDefinition> postRouteByPath, Function<String, Path> viewById) {
+            Function<String, RouteDefinition> postRouteByPath, Function<String, Path> viewById,
+            io.tesseraql.core.files.FileCodecs codecs) {
         Path home = appHome.toAbsolutePath().normalize();
         Path file = viewById.apply(viewRef);
         if (file == null) {
@@ -163,9 +167,9 @@ public final class ViewBinding {
                 ? formFields(viewRef, spec, postRouteByPath)
                 : List.of();
         Map<Integer, Embed> childEmbeds = childEmbeds(home, viewRef, spec, route,
-                postRouteByPath, viewById);
+                postRouteByPath, viewById, codecs);
         Map<Integer, Embed> panelEmbeds = panelEmbeds(home, viewRef, spec, route,
-                postRouteByPath, viewById);
+                postRouteByPath, viewById, codecs);
         ReadSide readSide = readSide(home, viewRef, spec, childEmbeds, panelEmbeds);
         String entry = spec.template() != null
                 ? TemplateResolution.resolve(home, viewDir, spec.template())
@@ -192,7 +196,7 @@ public final class ViewBinding {
                 readSide.catalogs(), filterFields,
                 route == null ? null : route.pagination(),
                 ViewSpec.IMPORT.equals(spec.view())
-                        ? importTarget(viewRef, spec, postRouteByPath)
+                        ? importTarget(viewRef, spec, postRouteByPath, codecs)
                         : null,
                 lock);
     }
@@ -204,7 +208,8 @@ public final class ViewBinding {
      * second copy of the import, free to disagree with the one the parse enforces.
      */
     private static ImportTarget importTarget(String viewRef, ViewSpec spec,
-            Function<String, RouteDefinition> postRouteByPath) {
+            Function<String, RouteDefinition> postRouteByPath,
+            io.tesseraql.core.files.FileCodecs codecs) {
         RouteDefinition action = postRouteByPath.apply(spec.action());
         if (action == null) {
             throw new TqlException(UNKNOWN_ACTION, "View " + viewRef + ": action "
@@ -216,7 +221,6 @@ public final class ViewBinding {
                     + action.id() + " is not a file-import route — an import view renders one"
                     + " import's upload, report and confirm");
         }
-        io.tesseraql.core.files.FileCodecs codecs = io.tesseraql.core.files.FileCodecs.discover();
         String format = importSpec.format();
         String accept = null;
         if (format != null && codecs.supports(format)) {
@@ -275,13 +279,13 @@ public final class ViewBinding {
      */
     private static Map<Integer, Embed> childEmbeds(Path home, String viewRef, ViewSpec spec,
             RouteDefinition route, Function<String, RouteDefinition> postRouteByPath,
-            Function<String, Path> viewById) {
+            Function<String, Path> viewById, io.tesseraql.core.files.FileCodecs codecs) {
         Map<Integer, Embed> childEmbeds = new LinkedHashMap<>();
         for (int index = 0; index < spec.children().size(); index++) {
             ViewSpec.Child child = spec.children().get(index);
             if (child.view() != null) {
                 childEmbeds.put(index, embed(home, viewRef, child.view(), child.source(),
-                        route, postRouteByPath, viewById));
+                        route, postRouteByPath, viewById, codecs));
                 if (child.source() == null) {
                     continue;
                 }
@@ -298,13 +302,13 @@ public final class ViewBinding {
     /** The same for a dashboard's {@code panels:}: the embedding ones, and the source guard. */
     private static Map<Integer, Embed> panelEmbeds(Path home, String viewRef, ViewSpec spec,
             RouteDefinition route, Function<String, RouteDefinition> postRouteByPath,
-            Function<String, Path> viewById) {
+            Function<String, Path> viewById, io.tesseraql.core.files.FileCodecs codecs) {
         Map<Integer, Embed> panelEmbeds = new LinkedHashMap<>();
         for (int index = 0; index < spec.panels().size(); index++) {
             ViewSpec.Panel panel = spec.panels().get(index);
             if (panel.view() != null) {
                 panelEmbeds.put(index, embed(home, viewRef, panel.view(), panel.source(),
-                        route, postRouteByPath, viewById));
+                        route, postRouteByPath, viewById, codecs));
                 if (panel.source() == null) {
                     continue;
                 }
@@ -392,7 +396,8 @@ public final class ViewBinding {
      */
     private static Embed embed(Path home, String hostRef, String embeddedId,
             String sourceOverride, RouteDefinition route,
-            Function<String, RouteDefinition> postRouteByPath, Function<String, Path> viewById) {
+            Function<String, RouteDefinition> postRouteByPath, Function<String, Path> viewById,
+            io.tesseraql.core.files.FileCodecs codecs) {
         Path file = viewById.apply(embeddedId);
         if (file == null) {
             throw new TqlException(UNRESOLVED_VIEW, "View " + hostRef + ": embedded view "
@@ -405,7 +410,7 @@ public final class ViewBinding {
             throw new TqlException(EMBED_DEPTH, "View " + hostRef + ": embedded view "
                     + embeddedId + " embeds views itself — embedding depth is 1");
         }
-        return new Embed(of(home, embeddedId, route, postRouteByPath, viewById),
+        return new Embed(of(home, embeddedId, route, postRouteByPath, viewById, codecs),
                 sourceOverride);
     }
 

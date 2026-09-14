@@ -25,6 +25,10 @@ import org.junit.jupiter.api.io.TempDir;
  */
 class HtmlResponseRendererViewTest {
 
+    /** The compiler's test classpath carries the csv codec (tesseraql-operations, test scope). */
+    private static final io.tesseraql.core.files.FileCodecs CODECS = io.tesseraql.core.files.FileCodecs
+            .discover(HtmlResponseRendererViewTest.class.getClassLoader());
+
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     /** A POST action route with the input: block a form view derives its fields from. */
@@ -65,7 +69,7 @@ class HtmlResponseRendererViewTest {
                     case "/items/update" -> lockedActionRoute();
                     default -> null;
                 },
-                id -> dir.resolve("page.view.yml"));
+                id -> dir.resolve("page.view.yml"), CODECS);
         return new HtmlResponseRenderer(new HtmlResponse(200, null, "page", null, null,
                 Map.of(), Map.of(), Map.of(), null), dir, dir, "en", binding);
     }
@@ -91,7 +95,7 @@ class HtmlResponseRendererViewTest {
         Files.writeString(dir.resolve("page.view.yml"),
                 "version: tesseraql/v1\nkind: view\nrecipe: list\ntitle: Items\n");
         ViewBinding binding = ViewBinding.of(dir, "page", null, path -> null,
-                id -> dir.resolve("page.view.yml"));
+                id -> dir.resolve("page.view.yml"), CODECS);
         return new HtmlResponseRenderer(new HtmlResponse(200, null, "page", shell, null,
                 Map.of(), Map.of(), Map.of(), null), dir, dir, "en", binding);
     }
@@ -174,7 +178,8 @@ class HtmlResponseRendererViewTest {
                 "id", "board", "kind", "route", "recipe", "query-html",
                 "sources", Map.of("recent", Map.of("sql", Map.of("file", "recent.sql")))),
                 RouteDefinition.class);
-        ViewBinding binding = ViewBinding.of(dir, "page", route, path -> null, registry(dir));
+        ViewBinding binding = ViewBinding.of(dir, "page", route, path -> null, registry(dir),
+                CODECS);
         HtmlResponseRenderer renderer = new HtmlResponseRenderer(new HtmlResponse(200, null,
                 "page", null, null, Map.of(), Map.of(), Map.of(), null), dir, dir, "en",
                 binding);
@@ -207,7 +212,8 @@ class HtmlResponseRendererViewTest {
                 "id", "item", "kind", "route", "recipe", "query-html",
                 "sources", Map.of("audit", Map.of("sql", Map.of("file", "audit.sql")))),
                 RouteDefinition.class);
-        ViewBinding binding = ViewBinding.of(dir, "page", route, path -> null, registry(dir));
+        ViewBinding binding = ViewBinding.of(dir, "page", route, path -> null, registry(dir),
+                CODECS);
         HtmlResponseRenderer renderer = new HtmlResponseRenderer(new HtmlResponse(200, null,
                 "page", null, null, Map.of(), Map.of(), Map.of(), null), dir, dir, "en",
                 binding);
@@ -236,7 +242,8 @@ class HtmlResponseRendererViewTest {
                 panels:
                   - { type: view, view: middle }
                 """);
-        assertThatThrownBy(() -> ViewBinding.of(dir, "page", null, path -> null, registry(dir)))
+        assertThatThrownBy(
+                () -> ViewBinding.of(dir, "page", null, path -> null, registry(dir), CODECS))
                 .isInstanceOf(TqlException.class)
                 .hasMessageContaining("TQL-VIEW-3318");
     }
@@ -254,7 +261,8 @@ class HtmlResponseRendererViewTest {
                 title: Items
                 template: banner.html
                 """);
-        ViewBinding binding = ViewBinding.of(dir, "page", null, path -> null, registry(dir));
+        ViewBinding binding = ViewBinding.of(dir, "page", null, path -> null, registry(dir),
+                CODECS);
         HtmlResponseRenderer renderer = new HtmlResponseRenderer(new HtmlResponse(200, null,
                 "page", null, null, Map.of("banner", "notice.text"), Map.of(), Map.of(), null),
                 dir, dir, "en", binding);
@@ -268,7 +276,8 @@ class HtmlResponseRendererViewTest {
     void modelDeclaringVIsReserved(@TempDir Path dir) throws Exception {
         Files.writeString(dir.resolve("page.view.yml"),
                 "version: tesseraql/v1\nkind: view\nrecipe: list\n");
-        ViewBinding binding = ViewBinding.of(dir, "page", null, path -> null, registry(dir));
+        ViewBinding binding = ViewBinding.of(dir, "page", null, path -> null, registry(dir),
+                CODECS);
         assertThatThrownBy(() -> new HtmlResponseRenderer(new HtmlResponse(200, null, "page",
                 null, null, Map.of("v", "main.rows"), Map.of(), Map.of(), null), dir, dir, "en",
                 binding))
@@ -299,7 +308,7 @@ class HtmlResponseRendererViewTest {
                 """);
         ViewBinding binding = ViewBinding.of(dir, "page", null,
                 path -> "/items/create".equals(path) ? action : null,
-                id -> dir.resolve("page.view.yml"));
+                id -> dir.resolve("page.view.yml"), CODECS);
         HtmlResponseRenderer renderer = new HtmlResponseRenderer(new HtmlResponse(200, null,
                 "page", null, null, Map.of(), Map.of(), Map.of(), null), dir, dir, "en",
                 binding);
@@ -330,7 +339,7 @@ class HtmlResponseRendererViewTest {
                   - { name: card, domain: cardNumber }
                 """);
         ViewBinding binding = ViewBinding.of(dir, "page", null, path -> null,
-                id -> dir.resolve("page.view.yml"));
+                id -> dir.resolve("page.view.yml"), CODECS);
         HtmlResponseRenderer renderer = new HtmlResponseRenderer(new HtmlResponse(200, null,
                 "page", null, null, Map.of(), Map.of(), Map.of(), null), dir, dir, "en",
                 binding);
@@ -352,7 +361,7 @@ class HtmlResponseRendererViewTest {
                   - { name: sku, domain: ghost }
                 """);
         assertThatThrownBy(() -> ViewBinding.of(dir, "page", null, path -> null,
-                id -> dir.resolve("page.view.yml")))
+                id -> dir.resolve("page.view.yml"), CODECS))
                 .isInstanceOf(TqlException.class)
                 .hasMessageContaining("unknown domain 'ghost'");
     }
@@ -368,7 +377,8 @@ class HtmlResponseRendererViewTest {
                 recipe: list
                 title: Recent items
                 """);
-        ViewBinding bound = ViewBinding.of(dir, "recent", null, path -> null, registry(dir));
+        ViewBinding bound = ViewBinding.of(dir, "recent", null, path -> null, registry(dir),
+                CODECS);
         HtmlResponseRenderer renderer = new HtmlResponseRenderer(new HtmlResponse(200,
                 "overview.html", null, null, List.of("recent"), Map.of(), Map.of(), Map.of(),
                 null), dir, dir, "en", null, Map.of("recent", bound));
@@ -526,7 +536,7 @@ class HtmlResponseRendererViewTest {
                 """);
         ViewBinding binding = ViewBinding.of(dir, "page", null,
                 path -> "/items/ordered".equals(path) ? action : null,
-                id -> dir.resolve("page.view.yml"));
+                id -> dir.resolve("page.view.yml"), CODECS);
         HtmlResponseRenderer renderer = new HtmlResponseRenderer(new HtmlResponse(200, null,
                 "page", null, null, Map.of(), Map.of(), Map.of(), null), dir, dir, "en", binding);
 
@@ -815,7 +825,7 @@ class HtmlResponseRendererViewTest {
                 "version: tesseraql/v1\nkind: view\nrecipe: list\n");
         Files.writeString(dir.resolve("index.html"), "<p>x</p>");
         ViewBinding binding = ViewBinding.of(dir, "page", null, path -> null,
-                id -> dir.resolve("page.view.yml"));
+                id -> dir.resolve("page.view.yml"), CODECS);
         assertThatThrownBy(() -> new HtmlResponseRenderer(
                 new HtmlResponse(200, "index.html", "page.view.yml", null, null, Map.of(), Map.of(),
                         Map.of(),
@@ -829,7 +839,7 @@ class HtmlResponseRendererViewTest {
         Files.writeString(dir.resolve("page.view.yml"),
                 "version: tesseraql/v1\nkind: view\nrecipe: form\naction: /nowhere\n");
         assertThatThrownBy(() -> ViewBinding.of(dir, "page", null, path -> null,
-                id -> dir.resolve("page.view.yml")))
+                id -> dir.resolve("page.view.yml"), CODECS))
                 .isInstanceOf(TqlException.class).hasMessageContaining("matches no POST route");
     }
 
@@ -875,7 +885,7 @@ class HtmlResponseRendererViewTest {
                   - source: ghost
                 """);
         assertThatThrownBy(() -> ViewBinding.of(dir, "page", null, path -> null,
-                id -> dir.resolve("page.view.yml")))
+                id -> dir.resolve("page.view.yml"), CODECS))
                 .isInstanceOf(TqlException.class).hasMessageContaining("ghost");
     }
 
@@ -906,7 +916,7 @@ class HtmlResponseRendererViewTest {
                   sidebar: frags.html::x
                 """);
         assertThatThrownBy(() -> ViewBinding.of(dir, "page", null, path -> null,
-                id -> dir.resolve("page.view.yml")))
+                id -> dir.resolve("page.view.yml"), CODECS))
                 .isInstanceOf(TqlException.class).hasMessageContaining("unknown slot");
     }
 
@@ -975,7 +985,7 @@ class HtmlResponseRendererViewTest {
                     column: c
                 """);
         assertThatThrownBy(() -> ViewBinding.of(dir, "page", null, path -> null,
-                id -> dir.resolve("page.view.yml")))
+                id -> dir.resolve("page.view.yml"), CODECS))
                 .isInstanceOf(TqlException.class).hasMessageContaining("panel source ghost");
     }
 

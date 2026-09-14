@@ -994,8 +994,10 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     dataSource);
             documentSequences.ensureSchema();
             context.bind(TesseraqlProperties.DOCUMENT_SEQUENCES_BEAN, documentSequences);
-            // Asynchronous file imports/exports (design ch. 28); codecs arrive via ServiceLoader, so
-            // adding the optional tesseraql-excel module to the classpath is the whole install.
+            // Asynchronous file imports/exports (design ch. 28); the codecs are the application's
+            // one set, discovered with its modules and shared with the route compiler
+            // (docs/codec-discovery.md decision 1), so an export declared on a file-export and
+            // the same declaration on a query-export read the same formats.
             // One clock for the process, shared by runs and transfers: both are executions, and
             // both are read against tesseraql.batch.heartbeat.livenessWindow. Bound so the
             // shutdown path can find it after the transfer executor has stopped accepting work.
@@ -1006,9 +1008,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
             context.bind(TesseraqlProperties.EXECUTION_HEARTBEATS_BEAN, executionHeartbeats);
             io.tesseraql.operations.files.JdbcFileTransferService fileTransfers = new io.tesseraql.operations.files.JdbcFileTransferService(
                     jobRepository, executionHeartbeats,
-                    tempStore, dataSource,
-                    io.tesseraql.core.files.FileCodecs.discover(modules.loader()),
-                    modules.functions());
+                    tempStore, dataSource, modules.codecs(), modules.functions());
             // The same bound routes and commands run under: an export query or an after-SQL
             // statement held a pooled connection for as long as the driver allowed.
             fileTransfers
@@ -1383,7 +1383,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             idleTimeoutSeconds(manifest.config())));
             context.addService(httpServer);
             new RouteCompiler().appName(appName)
-                    .functions(modules.functions()).compile(context, manifest);
+                    .functions(modules.functions()).codecs(modules.codecs())
+                    .compile(context, manifest);
             // Mounted apps (jar-bundled system apps and config-listed directories, design ch. 32)
             // are plain yaml/sql/template trees compiled exactly like the main app. They load before
             // the MCP endpoint is wired so their MCP surface joins the main app's on one endpoint and
@@ -1399,7 +1400,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 AppMigrations.migrate(mounted.name(), mounted.manifest().appHome(),
                         manifest.config(), dataSource, tenantDataSources, dataSources::get);
                 new RouteCompiler().appName(mounted.name())
-                        .functions(modules.functions()).compile(context, mounted.manifest());
+                        .functions(modules.functions()).codecs(modules.codecs())
+                        .compile(context, mounted.manifest());
                 // Mounted apps' batch jobs join the same scheduler and manual-run surface,
                 // tagged with the owning app; duplicate ids across apps fail the mount.
                 for (JobFile job : mounted.manifest().jobs()) {
@@ -1894,7 +1896,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
             // unstarted (independent of any extension) so watchRoutes() can start it on
             // demand without threading it through the runtime constructor.
             RouteReloader reloader = new RouteReloader(context, appHome, manifest, appName,
-                    mountedApps, modules.functions());
+                    mountedApps, modules.functions(), modules.codecs());
             context.bind(RouteWatcher.BEAN, new RouteWatcher(appHome, reloader));
             // The boot facts a runtime extension may need beyond its ExtensionContext
             // (docs/studio-shell.md structural decision 3): published as one bean, before the

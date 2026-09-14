@@ -403,6 +403,10 @@ runtime-extension discovery take the loader". Only the codec side shipped that w
 runtime extensions kept reading the thread context classloader, so an application that declared
 either in `tesseraql.modules` was served by neither — a blob store answered `TQL-YAML-1108` and an
 extension was simply never found. Both take the loader now, and a test pins each direction.
+*Second correction, 2026-09-14.* "The codec side shipped that way" meant the runtime's one
+discovery for the transfer service; the route compiler's two — the `query-export` route and the
+import page — kept reading the thread context loader until [`codec-discovery.md`](codec-discovery.md)
+S1 handed every consumer the one set `AppModules` discovers.
 - **Module hot-swap under `--watch`.** Restart is the contract, stated in the docs sweep.
 - **Widening the module SPI surface** (secret resolvers, app sources, scanners from module
   jars). Plugins already cover per-app extension jars with an allowlist; merging the two

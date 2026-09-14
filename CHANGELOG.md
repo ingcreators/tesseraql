@@ -222,6 +222,16 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A `query-export` route and an import page read the application's codec set.** The route
+  compiler discovered file codecs on the thread context class loader while the transfer service
+  discovered them on the application's module loader, so a codec declared under
+  `tesseraql.modules` — the pdf and excel modules, an application's own — served the
+  asynchronous `file-export` and every job step but refused the whole application at boot on a
+  `query-export` (`TQL-LD-2801`) under `tesseraql dev` and `host`, and an import page over a
+  module format rendered its file picker with no `accept` list. The set is discovered once, with
+  the application's modules, and handed to the compiler, the reloader and the transfer service;
+  the overload that discovered on the context loader is gone, so every discovery names its
+  loader. Recorded in `docs/codec-discovery.md` (F82 slice 2), slice S1.
 - **The account, inbox, task-queue, sign-in, invitation, password-recovery, consent and portal
   pages render in the user's language.** The bundled end-user system apps carried hard-coded
   English under a `lang="ja"` root — the language a user picked on `/_tesseraql/account`
