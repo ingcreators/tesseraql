@@ -61,10 +61,38 @@ public final class ResponseHeaderDefaults {
                 throw new TqlException(INVALID, "Default response header '" + entry.getKey()
                         + "' has no value — a default exists to be sent");
             }
-            headers.put(String.valueOf(entry.getKey()),
-                    config.resolve(String.valueOf(entry.getValue())));
+            String name = String.valueOf(entry.getKey());
+            String value = config.resolve(String.valueOf(entry.getValue()));
+            // Judged here, where it is declared, and nowhere else (docs/edge-hygiene.md E3):
+            // the compiled routes' edge refuses a control character per request, but the
+            // asset, SSE and MCP surfaces write these values straight to the transport, where
+            // a control character hangs the connection. The lint calls this same method, so
+            // the author learns it at build time with the header named, and boot refuses it.
+            int control = controlAt(value);
+            if (control >= 0) {
+                throw new TqlException(INVALID, "Default response header '" + name
+                        + "' carries the control character " + unicodeName(value.charAt(control))
+                        + " — a header value is one line of printable text");
+            }
+            headers.put(name, value);
         }
         return new ResponseHeaderDefaults(headers);
+    }
+
+    /** The character as the U+XXXX name a message reads. */
+    public static String unicodeName(char c) {
+        return String.format("U+%04X", (int) c);
+    }
+
+    /** The index of the first C0 control other than HTAB, or DEL, in a value; -1 if none. */
+    public static int controlAt(String value) {
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            if ((c < 0x20 && c != '\t') || c == 0x7F) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     /** The declared default headers, in declaration order. */

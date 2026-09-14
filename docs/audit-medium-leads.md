@@ -243,7 +243,7 @@ Ranked. The first two are larger than most of the leads that found them.
 19. **Route shadowing by sort order**: a Japanese literal segment beside `{param}` is unreachable —
     router slice.
 20. **The documented `HX-Trigger` toast mangles non-ASCII** (`ResponseHeaders.java:34` escapes
-    nothing above ASCII) — `edge-hygiene.md` E3.
+    nothing above ASCII) — fixed in `edge-hygiene.md` E3.
 21. **ZIP entry names are mangled by Info-ZIP `unzip` 6.00** — the mechanism is the ABSENT extra
     field, not the host byte (`do_string` returns before the UTF-8 flag is read); any extra field
     restores the name — `export-hygiene.md` P1.

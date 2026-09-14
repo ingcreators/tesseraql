@@ -120,6 +120,47 @@ class AppLinterResponseHeadersTest {
     }
 
     /**
+     * A literal control character in a route's declared header is named at build time
+     * (docs/edge-hygiene.md E3), where the edge would refuse it on every request; a
+     * placeholder's value is judged only there, and a map value serializes to JSON, which
+     * escapes its own.
+     */
+    @Test
+    void refusesADeclaredHeaderValueWithAControlCharacter(@TempDir Path dir) throws Exception {
+        List<LintFinding> findings = new AppLinter().lint(app(dir,
+                "    headers:\n      X-Note: \"line one\\nline two\"\n      X-Tab: \"a\\tb\""));
+
+        assertThat(findings).anySatisfy(finding -> {
+            assertThat(finding.code()).isEqualTo("TQL-SEC-4151");
+            assertThat(finding.isError()).isTrue();
+            assertThat(finding.message()).contains("X-Note").contains("U+000A");
+        });
+        // HTAB is the one control a field value may carry (RFC 9110 section 5.5).
+        assertThat(findings).noneSatisfy(finding -> assertThat(finding.message())
+                .contains("X-Tab"));
+    }
+
+    /** The config twin: the same predicate the boot runs, so lint and boot cannot disagree. */
+    @Test
+    void refusesADefaultHeaderValueWithAControlCharacter(@TempDir Path dir) throws Exception {
+        Path home = app(dir, "");
+        Files.writeString(home.resolve("config/tesseraql.yml"), """
+                tesseraql:
+                  app:
+                    name: t
+                  security:
+                    responseHeaders:
+                      X-Frame-Options: "DENY\\u0000"
+                """);
+
+        assertThat(new AppLinter().lint(home)).anySatisfy(finding -> {
+            assertThat(finding.code()).isEqualTo("TQL-SEC-4135");
+            assertThat(finding.isError()).isTrue();
+            assertThat(finding.message()).contains("X-Frame-Options").contains("U+0000");
+        });
+    }
+
+    /**
      * A declared header the transport owns is refused at build time (TQL-SEC-4139): the edge
      * would drop it at the wire, and a declaration that is never sent is a promise the app
      * cannot keep — framing names corrupt the response, and the {@code tql.} namespace never

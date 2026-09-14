@@ -188,10 +188,12 @@ response:
 
 htmx dispatches each event on `<body>` after the swap, and the kit's auto-installed `installToast`
 behavior renders the notification (a `data-hc-toast-region` container must exist in the shell). A
+map value is written as ASCII-only JSON, so a Japanese message arrives intact. A
 value with no `{…}` placeholder (the CSP, `X-Frame-Options`, …) is emitted verbatim. A header
 value is refused with a 500 when it carries a control character other than a tab, and a `Location`
 or `HX-Redirect` is refused when it carries a tab, a space or a character outside ASCII — the
-framework's own redirects encode theirs.
+framework's own redirects encode theirs. A control character written into the declaration itself,
+or into a `security.responseHeaders` default, is refused at lint and at boot, naming the header.
 
 For a command route, the success/error split makes this conditional for free: a successful render
 emits these headers, while a validation failure takes the field-errors renderer (above), which does

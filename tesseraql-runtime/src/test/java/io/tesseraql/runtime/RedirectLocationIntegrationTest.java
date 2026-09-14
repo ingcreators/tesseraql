@@ -2,6 +2,8 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.compiler.pipeline.Pipelines;
 import io.tesseraql.identity.DefaultIdentityPack;
 import io.tesseraql.operations.attachment.JdbcAttachmentStore;
@@ -275,6 +277,24 @@ class RedirectLocationIntegrationTest {
     @Test
     void aPlaceholderInADeclaredLocationIsAPathSegmentOnTheWire() throws Exception {
         assertThat(location(get(root, "/go/hdr?id=a%2Fb"))).isEqualTo("/api/items/a%2Fb");
+    }
+
+    /**
+     * The documented toast (docs/hypermedia-ui.md) with a Japanese message arrives intact
+     * (docs/edge-hygiene.md E3): the JSON is written ASCII-only, so the edge's one-byte-per-
+     * character fold has nothing to fold, and htmx reads the text back through JSON's own
+     * escapes. It used to arrive as a row of {@code ?}.
+     */
+    @Test
+    void aDeclaredHxTriggerToastWithAJapaneseMessageArrivesIntact() throws Exception {
+        HttpResponse<Void> response = get(root, "/go/toast?id=" + JU + "-001");
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        String trigger = response.headers().firstValue("HX-Trigger").orElseThrow();
+        assertThat(trigger).matches("[\\x20-\\x7E]+").doesNotContain("?");
+        JsonNode event = new ObjectMapper().readTree(trigger);
+        assertThat(event.at("/hc:toast/message").asText()).isEqualTo("保存しました 受注-001");
+        assertThat(event.at("/hc:toast/variant").asText()).isEqualTo("success");
     }
 
     @Test

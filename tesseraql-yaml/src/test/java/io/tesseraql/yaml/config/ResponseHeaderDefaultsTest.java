@@ -61,6 +61,24 @@ class ResponseHeaderDefaultsTest {
                 .containsEntry("Content-Security-Policy", "frame-ancestors 'self'");
     }
 
+    /**
+     * A control character in a declared default is refused where it is declared
+     * (docs/edge-hygiene.md E3): the asset, SSE and MCP surfaces write these values straight to
+     * the transport, where a control character hangs the connection. HTAB stays a field value's
+     * one permitted control (RFC 9110 section 5.5).
+     */
+    @Test
+    void aControlCharacterInADefaultIsRefusedNamingTheHeader() {
+        assertThatThrownBy(() -> defaults(Map.of("X-Frame-Options", "DENY\u0000")))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("X-Frame-Options")
+                .hasMessageContaining("U+0000");
+        assertThatThrownBy(() -> defaults(Map.of("Content-Security-Policy",
+                "default-src 'self'\u007F")))
+                .hasMessageContaining("U+007F");
+        assertThat(defaults(Map.of("X-Note", "a\tb")).headers()).containsEntry("X-Note", "a\tb");
+    }
+
     @Test
     void theDefaultsKeepTheOrderTheyWereDeclaredIn() {
         // The security block every bundled app ships, verbatim. Its four names have exactly eight
