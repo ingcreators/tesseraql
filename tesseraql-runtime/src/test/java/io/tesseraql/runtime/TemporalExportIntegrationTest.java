@@ -83,6 +83,18 @@ class TemporalExportIntegrationTest {
         }
     }
 
+    /**
+     * A column typed through its domain alone writes the domain's format (docs/temporal-semantics.md
+     * decision 25) — the value only the domain has; before, the reference was an unknown key and
+     * the cell was the untyped SQL text.
+     */
+    @Test
+    void aColumnTypedThroughItsDomainWritesTheDomainsFormat() throws Exception {
+        List<String> rows = csv("/api/export/domain");
+        assertThat(rows.get(0)).isEqualTo("id,d");
+        assertThat(rows.get(1)).isEqualTo("1,2026/01/15");
+    }
+
     /** An untyped cell is one SQL-style text per kind; an untyped instant takes the export zone. */
     @Test
     void anUntypedCellIsItsSqlText() throws Exception {
@@ -173,6 +185,22 @@ class TemporalExportIntegrationTest {
                     - { name: tstz, type: datetime }
                     - { name: d, type: date }
                 """, "select id, ts, tstz, d from probe order by id\n;\n");
+        Files.createDirectories(home.resolve("domains"));
+        Files.writeString(home.resolve("domains/fields.yml"), """
+                version: tesseraql/v1
+                domains:
+                  order_date:
+                    type: date
+                    format: yyyy/MM/dd
+                """);
+        route(home, "web/api/export/domain", "export.domain", null, """
+                export:
+                  format: csv
+                  filename: domain.csv
+                  columns:
+                    - { name: id }
+                    - { name: d, domain: order_date }
+                """, "select id, d from probe where id = 1\n;\n");
         route(home, "web/api/export/untyped", "export.untyped", null, """
                 export:
                   format: csv

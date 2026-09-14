@@ -70,6 +70,18 @@ final class FieldDomainRules implements LintRule {
                     .map(InputField::domain)
                     .filter(java.util.Objects::nonNull)
                     .forEach(referenced::add);
+            // A file column reads a domain too (docs/temporal-semantics.md decision 25): its
+            // type: and format:, the two keys a column and a field share.
+            java.util.stream.Stream.of(document.getValue().fileImport() == null
+                    ? List.<io.tesseraql.yaml.model.ColumnSpec>of()
+                    : document.getValue().fileImport().columns(),
+                    document.getValue().fileExport() == null
+                            ? List.<io.tesseraql.yaml.model.ColumnSpec>of()
+                            : document.getValue().fileExport().columns())
+                    .flatMap(List::stream)
+                    .map(io.tesseraql.yaml.model.ColumnSpec::domain)
+                    .filter(java.util.Objects::nonNull)
+                    .forEach(referenced::add);
         }
         domains.domains().keySet().stream()
                 .filter(name -> !referenced.contains(name))

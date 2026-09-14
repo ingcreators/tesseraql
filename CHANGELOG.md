@@ -32,6 +32,15 @@ All notable changes to TesseraQL are documented here. The format follows
   tag the pattern parses in (`de-DE` for a column holding `1.234,50`; the root locale when
   absent), declarable on a domain and read only on the way back out: an `input:` parses in the
   request's own locale, so `locale:` written on an input entry is refused too.
+- **A file column says its type and pattern through a domain.** `columns: [{ name: held_on,
+  domain: held_date }]` on a route's `import:` or `export:` takes `type:` and `format:` from
+  the app-level field domain — the same domain the request's `input:` binds and a `result:`
+  entry reads back — with the column's own keys winning; `label:` and `column:` stay the
+  file's, and a domain's `locale:` and constraint keys are not applied to a column. Resolved by
+  the manifest loader, judged by the export declarations as before, counted as a reference by
+  the domain lint. A job's export step or poll import does not resolve domains, so a `domain:`
+  on a job's column is a lint error and a registration refusal (`TQL-YAML-1063`) instead of a
+  key that validates and does nothing.
 - **A control character in a declared response header is refused where it is declared.** A
   `security.responseHeaders` default carrying a C0 control (other than a tab) or DEL is refused
   at lint and at boot with `TQL-SEC-4135`, naming the header and the character — the asset, SSE

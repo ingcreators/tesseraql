@@ -259,6 +259,13 @@ Ranked. The first two are larger than most of the leads that found them.
     boot check is the TCCL defect). The BLANK spelling — `format: ""` lint-silent on a query-export,
     boot refusing it naming nothing — and the format-LESS job step (every runner failing with
     `'null'`) are fixed by `export-hygiene.md` P7.
+27. **A job's `input:` with `domain:` is never resolved and never linted** — `ManifestLoader.loadJobs`
+    parses a job with no domain resolution and nothing else merges one into a `JobDefinition`;
+    `FieldDomainRules` walks routes, consumers and tools only. `{ domain: sku }` on a job
+    parameter binds as an untyped string with the domain's keys applied nowhere and no finding,
+    while the shared schema says a job's parameters "bind and validate exactly like a route's".
+    A job's file columns are refused a `domain:` (`TQL-YAML-1063`) until this is fixed, so the
+    two halves ship together. Found by `temporal-semantics.md` F4; filed.
 26. **Every DuckDB JSON route that selects a `date`, `time` or `timestamptz` column answers
     500 `TQL-ROUTE-3001`** (HIGH, loud, since the analytics stack shipped in v0.11.0) — the
     driver hands the framework a `java.time` value, `ResultRows.value` passes it through, and

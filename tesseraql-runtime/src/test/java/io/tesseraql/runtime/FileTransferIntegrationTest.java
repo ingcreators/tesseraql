@@ -313,6 +313,29 @@ class FileTransferIntegrationTest {
     }
 
     /**
+     * Columns typed through their domains parse exactly as the spelled-out ones do
+     * (docs/temporal-semantics.md decision 25): the domain alone carries the type and the
+     * pattern. Before, the reference was an unknown key and the text was bound as a string,
+     * which PostgreSQL refuses for a date column.
+     */
+    @Test
+    void columnsTypedThroughTheirDomainsParseOnImport() throws Exception {
+        String transferId = startTransfer("/api/events/import-by-domain",
+                "name,held_on,fee\nfair,2026/06/12,\"2.345,67\"\n");
+        JsonNode status = awaitTerminal("/api/events/import-by-domain/" + transferId);
+        assertThat(status.get("status").asText()).as(status.toString()).isEqualTo("COMPLETED");
+        try (Connection connection = connect();
+                Statement statement = connection.createStatement();
+                ResultSet rs = statement.executeQuery(
+                        "select held_on, fee from events where name = 'fair'")) {
+            assertThat(rs.next()).isTrue();
+            assertThat(rs.getDate("held_on").toLocalDate())
+                    .isEqualTo(java.time.LocalDate.of(2026, 6, 12));
+            assertThat(rs.getBigDecimal("fee")).isEqualByComparingTo("2345.67");
+        }
+    }
+
+    /**
      * A file-export's {@code params:} reach its query.
      *
      * <p>They did not. {@code resolveSqlParams} read {@code route.main()}, which was null for a
@@ -620,6 +643,43 @@ class FileTransferIntegrationTest {
 
     /** Typed columns with German number formats, both directions (design ch. 28). */
     private static void writeTypedRoutes(Path home) throws IOException {
+        // The same two columns typed through domains (docs/temporal-semantics.md decision 25).
+        Files.createDirectories(home.resolve("domains"));
+        Files.writeString(home.resolve("domains/transfer.yml"), """
+                version: tesseraql/v1
+                domains:
+                  held_date:
+                    type: date
+                    format: yyyy/MM/dd
+                  fee_amount:
+                    type: number
+                    format: "#,##0.00"
+                """);
+        Path byDomain = home.resolve("web/api/events/import-by-domain");
+        Files.createDirectories(byDomain);
+        Files.writeString(byDomain.resolve("post.yml"), """
+                version: tesseraql/v1
+                id: events.importByDomain
+                kind: route
+                recipe: file-import
+                import:
+                  format: csv
+                  locale: de-DE
+                  columns:
+                    - name
+                    - { name: held_on, domain: held_date }
+                    - { name: fee, domain: fee_amount }
+                steps:
+                  - id: row
+                    sql:
+                      file: upsert-event.sql
+                """);
+        Files.writeString(byDomain.resolve("upsert-event.sql"), """
+                insert into events (name, held_on, fee)
+                values ( /* name */ 'sample', /* held_on */ '2026-01-01', /* fee */ 0 )
+                on conflict (name) do update set held_on = excluded.held_on, fee = excluded.fee
+                ;
+                """);
         Path importRoute = home.resolve("web/api/events/import");
         Files.createDirectories(importRoute);
         Files.writeString(importRoute.resolve("post.yml"), """

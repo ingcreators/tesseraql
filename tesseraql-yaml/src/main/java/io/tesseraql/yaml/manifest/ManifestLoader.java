@@ -574,7 +574,33 @@ public final class ManifestLoader {
         }
         return def.withInputAndErrors(input, errors)
                 .withBindings(withResultDomains(domains, source, def.sources()),
-                        withResultDomains(domains, source, def.steps()));
+                        withResultDomains(domains, source, def.steps()))
+                .withTransfers(
+                        def.fileImport() == null
+                                ? null
+                                : def.fileImport().withColumns(withColumnDomains(domains, source,
+                                        def.fileImport().columns())),
+                        def.fileExport() == null
+                                ? null
+                                : def.fileExport().withColumns(withColumnDomains(domains, source,
+                                        def.fileExport().columns())));
+    }
+
+    /**
+     * The file columns with every {@code domain:} resolved (docs/temporal-semantics.md decision
+     * 25): the domain's {@code type} and {@code format} under the column's own — the two keys a
+     * file column and a field share.
+     */
+    private static List<io.tesseraql.yaml.model.ColumnSpec> withColumnDomains(
+            io.tesseraql.yaml.domain.FieldDomains domains, Path source,
+            List<io.tesseraql.yaml.model.ColumnSpec> columns) {
+        if (columns.stream().noneMatch(column -> column.domain() != null)) {
+            return columns;
+        }
+        return columns.stream().map(column -> column.domain() == null
+                ? column
+                : column.mergedWith(domains.require(column.domain(), source.toString())))
+                .toList();
     }
 
     /**
