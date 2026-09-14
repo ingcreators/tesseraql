@@ -5,7 +5,8 @@
 > allow-listed, the route and transition readers through it: shipped as T0. **T1** — the export
 > reader through the seam, the untyped cell's SQL text, the legacy arms gone, the spool's two
 > tags: shipped as T1. **T2** — the other eleven readers through the seam, the text surfaces
-> through the bindable form: shipped as T2. **T3**: planned. The record merges the
+> through the bindable form: shipped as T2. **T3** — `result:` declarations: designed below, its
+> nine decisions (14-22) pending. The record merges the
 > temporal-semantics design that [`export-declarations.md`](export-declarations.md) decision 13
 > deferred (the typed zoneless-`timestamp` shift, the three semantics across five dialects, the
 > Oracle object hash) with the result-column-types design of 2026-09-10 (the `jsonb` bean leak,
@@ -329,12 +330,86 @@ disclosed rather than dressed as a red proof.
 
 ## T3 — `result:` declarations
 
-Designed here after T0-T2 ship. The 2026-09-10 shape stands as the starting point: a sparse
-per-source `result:` block whose values are `InputField`s (so `domain:` reuse is free), resolved
-at compile time; `date`/`datetime`/`number` handled by `ColumnValues`; `type: json` installed
-from outside core through an `ExpressionFunctions`-style hook, producing a `Map`-implementing
-value whose `toString()` is canonical JSON so all six consumers agree. Its open questions are
-decision 11's.
+**Status: designed 2026-09-14 after T0-T2 shipped; decisions pending.** T0-T2 changed what
+T3 is for. The seam gives every temporal its kind from the database's own metadata, so nothing
+has to be declared to get a date, a wall clock or an instant right — the 2026-09-10 design's
+`date`/`datetime` arms are done without a declaration. What a declaration still adds is
+**parsing a value the database holds as text**: a `jsonb`/`json`/text column an author wants to
+navigate (`payload.sku` in an expression, a template, a response binding) rather than receive
+as one string (decision 7); a date or a number a legacy schema stores as text (`'20240103'`,
+`'1,234.50'`); and, for those, the `domain:` vocabulary `input:` already has.
+
+### The shape (unchanged from 2026-09-10 where it still applies)
+
+A sparse `result:` block on a source, its values `InputField`s so a `domain:` is reusable and
+`type`, `format` and the constraint keys mean what `field-domains.md` says they mean:
+
+```yaml
+sources:
+  main:
+    sql: { file: orders.sql }
+    result:
+      payload: { type: json }
+      ordered_on: { domain: order_date }        # a domain saying "date written yyyy/MM/dd"
+      amount: { type: number, format: "#,##0.00" }
+```
+
+Resolved at compile time, applied after the seam and before `ResultRows.value`: a declared
+column's text is parsed into the declared kind (a `LocalDate`, a `BigDecimal`, a JSON value)
+and then rendered exactly as a native column of that kind is — so a `date` stored as text and a
+`date` column become the same case on every surface. Undeclared columns pass through as today
+(sparse: the opposite default from `input:`, which rejects undeclared parameters).
+
+`type: json` produces a value that is a `Map` (or a `List`) for navigation and whose
+`toString()` is canonical JSON, so the five `String.valueOf` consumers print JSON text and the
+JSON mapper writes the structure; the parser lives outside core (`tesseraql-yaml` upward,
+where Jackson is) and installs through the same hook `ExpressionFunctions` uses — core stays
+dependency-free (decision 13's rule).
+
+### The decisions (T3 does not start until they are taken)
+
+14. **`type: json` is a read-only kind: legal in `result:` and in a domain, refused in `input:`
+    with the existing TQL-FIELD code for an unknown type** — until a JSON input has a validation
+    story of its own. Alternative: define input semantics now (parse the body field as JSON) —
+    more than this slice needs.
+15. **A value that cannot be parsed into its declared kind fails the read with one coded error
+    naming the column, the row and the kind** (the silent-tolerance rule) — never silently passes
+    the text through, which would flip a consumer's `payload.sku` from a value to null with no
+    signal. One code for bad JSON and an unparseable date or number alike.
+16. **A parsed text datetime is a wall clock** — a `LocalDateTime`, exactly what a zoneless
+    column is under decision 1 — and a parsed date a `LocalDate`; there is no `timezone:` on a
+    read declaration. The 2026-09-10 question (an instant from text?) is answered by the
+    temporal rule: text has no zone, so it is not an instant.
+17. **A `result:` entry may restate `format:` over its domain's** (the API takes ISO, the legacy
+    column holds `20240103`): the restatement is neither tightening nor loosening, so the
+    domain lint gains a third classification, "restated", which is not a finding.
+18. **A domain's constraint keys (`maxLength`, `pattern`, `enum`, …) are not applied on read**,
+    and the record and the reference page say so; validating what the database returned is a
+    different feature.
+19. **A declared column the query does not produce is a boot-time WARNING, not a refusal** —
+    the columns of a `/*%if*/`-shaped query are not derivable, so the honest twin is the
+    runtime: a declared column absent from every row of a response is logged once per route,
+    never silently ignored, never a 500.
+20. **The declaration applies on the bindable paths only** — the route reader, the workflow
+    reader, the lookup, the decision table — where a value is navigated or rendered; the export
+    reader keeps the `columns:` vocabulary it has, and the typed batch/keyset/enrich readers
+    keep the kind the seam gives them. One declaration, one place it applies.
+21. **No bare-string shorthand in this slice** (`result: [ordered_on]` meaning "a like-named
+    domain"); `field-domains.md` open question 1 asks the same of `input:`, and the two stay in
+    step by deciding neither alone.
+22. **`ColumnSpec` (the export's `columns:`) is not folded into `InputField`** here; a later
+    slice may unify the vocabularies once `result:` has shipped and the overlap is measured.
+
+### Guards the slice will carry (each red on HEAD by construction of the feature)
+
+A `jsonb` column declared `type: json` navigates in a response binding (`payload.sku`), renders
+as JSON text in HTML and CSV, and serializes as a structure in JSON; a NULL is `null`; bad JSON
+is the coded error naming the column and row. A text date declared through a domain becomes
+`2026-01-15` on JSON and a real date cell on a workbook. The compiled artifact carries the
+domain-resolved declaration (resolution is compile-time — a value only the domain has, so a
+route-local match cannot make the test green for the wrong reason). The four green-on-defect
+traps the 2026-09-10 design recorded stand: a JSON guard must go through CSV or HTML as well as
+the mapper; a date guard must go through the mapper as well as `String.valueOf`.
 
 ---
 
