@@ -7,7 +7,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Accept invitation &middot; TesseraQL</title>
+<title th:text="#{tql.invite.pageTitle}">Accept invitation &middot; TesseraQL</title>
 <link rel="stylesheet" th:href="@{/assets/vendor/hypermedia-components__core/dist/hc.min.css}">
 <link rel="stylesheet" th:if="${_neutral}"
       th:href="@{|/assets/vendor/hypermedia-components__core/dist/hc.tokens.neutral-${_neutral}.css|}">
@@ -24,27 +24,27 @@
 <body>
 <main class="hc-stack" style="max-width: 24rem; margin: 4rem auto; padding: 0 1rem;">
   <section class="hc-card hc-stack">
-    <h1>Accept your invitation</h1>
+    <h1 th:text="#{tql.invite.heading}">Accept your invitation</h1>
 
     <div class="hc-empty" th:if="${invalid}">
-      <p class="hc-empty__title">This invitation is no longer valid.</p>
-      <p class="hc-empty__description">Invitations work once and expire. Ask your administrator
+      <p class="hc-empty__title" th:text="#{tql.invite.invalid}">This invitation is no longer valid.</p>
+      <p class="hc-empty__description" th:text="#{tql.invite.invalidDescription}">Invitations work once and expire. Ask your administrator
         to invite you again.</p>
     </div>
 
     <th:block th:unless="${invalid}">
       <div th:if="${error}" class="hc-alert" data-variant="error" role="alert">
-        <p class="hc-alert__title">The password needs at least 8 characters.</p>
+        <p class="hc-alert__title" th:text="#{tql.invite.tooShort}">The password needs at least 8 characters.</p>
       </div>
       <form class="hc-stack" method="post" th:action="@{/_tesseraql/invite}">
-        <p>Choose the password you will sign in with.</p>
+        <p th:text="#{tql.invite.choose}">Choose the password you will sign in with.</p>
         <input type="hidden" name="token" th:value="${token}">
         <div class="hc-field">
-          <label class="hc-field__label" for="next">Password (8+ characters)</label>
+          <label class="hc-field__label" for="next" th:text="#{tql.invite.password}">Password (8+ characters)</label>
           <input class="hc-input" id="next" name="next" type="password" minlength="8"
                  autocomplete="new-password" required autofocus>
         </div>
-        <button class="hc-button" data-variant="primary" type="submit">Activate account</button>
+        <button class="hc-button" data-variant="primary" type="submit" th:text="#{tql.invite.submit}">Activate account</button>
       </form>
     </th:block>
   </section>

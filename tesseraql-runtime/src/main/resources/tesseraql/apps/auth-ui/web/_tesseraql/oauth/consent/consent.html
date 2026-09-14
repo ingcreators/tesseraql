@@ -5,7 +5,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Authorize access &middot; TesseraQL</title>
+<title th:text="#{tql.consent.pageTitle}">Authorize access &middot; TesseraQL</title>
 <link rel="stylesheet" th:href="@{/assets/vendor/hypermedia-components__core/dist/hc.min.css}">
 <link rel="stylesheet" th:if="${_neutral}"
       th:href="@{|/assets/vendor/hypermedia-components__core/dist/hc.tokens.neutral-${_neutral}.css|}">
@@ -23,13 +23,13 @@
 <main class="hc-stack" style="max-width: 30rem; margin: 4rem auto; padding: 0 1rem;">
   <section class="hc-card hc-stack">
     <div class="hc-stack">
-      <h1>Authorize access</h1>
+      <h1 th:text="#{tql.consent.heading}">Authorize access</h1>
 
       <th:block th:if="${requestError != null or review.error != null}">
-        <p class="hc-alert" data-variant="error" role="alert">
-          This authorization request cannot proceed
-          (<span th:text="${requestError != null ? requestError : review.error}">error</span>).
-          Close this page and start again from the application that sent you here.
+        <p class="hc-alert" data-variant="error" role="alert"
+           th:text="#{tql.consent.cannotProceed(${requestError != null ? requestError : review.error})}">
+          This authorization request cannot proceed (error). Close this page and start again
+          from the application that sent you here.
         </p>
       </th:block>
 
@@ -38,11 +38,11 @@
              (docs/token-issuance.md decision 4): rendered escaped, and never presented as
              though the framework vouched for it. -->
         <p><strong th:text="${review.clientName}">a client</strong>
-          (<code th:text="${review.clientId}">client-id</code>) asks to access
-          <strong th:text="${review.member}">an application</strong> as you.</p>
-        <p class="hc-field__message">Resource: <code th:text="${review.resource}">resource</code>.
-          Consent is recorded for this application and this resource only; other applications in
-          this stack ask separately.</p>
+          (<code th:text="${review.clientId}">client-id</code>) <span th:text="#{tql.consent.asksToAccess}">asks to access</span>
+          <strong th:text="${review.member}">an application</strong> <span th:text="#{tql.consent.asYou}">as you.</span></p>
+        <p class="hc-field__message"><span th:text="#{tql.consent.resource}">Resource:</span> <code th:text="${review.resource}">resource</code>.
+          <span th:text="#{tql.consent.scope}">Consent is recorded for this application and this resource only; other applications in
+          this stack ask separately.</span></p>
 
         <form method="post" th:action="@{/_tesseraql/oauth/decision}" class="hc-stack">
           <input type="hidden" name="_csrf" th:value="${_csrf}">
@@ -57,9 +57,9 @@
                pre-selected — the browser's one-role auto-confirm in consent form. Changing a
                connection's capacity later is a re-authorization. -->
           <label class="hc-field" th:if="${!#lists.isEmpty(review.roles)}">
-            <span class="hc-field__label">Acting as</span>
+            <span class="hc-field__label" th:text="#{tql.consent.actingAs}">Acting as</span>
             <select class="hc-select" name="actingRole">
-              <option value="" th:if="${#lists.size(review.roles) > 1}">
+              <option value="" th:if="${#lists.size(review.roles) > 1}" th:text="#{tql.consent.noRole}">
                 No application role</option>
               <option th:each="grant : ${review.roles}" th:value="${grant.role}"
                       th:text="${grant.role}"
@@ -69,8 +69,8 @@
 
           <div class="hc-cluster">
             <button type="submit" name="decision" value="approve" class="hc-button"
-                    data-variant="primary">Allow</button>
-            <button type="submit" name="decision" value="deny" class="hc-button">Deny</button>
+                    data-variant="primary" th:text="#{tql.consent.allow}">Allow</button>
+            <button type="submit" name="decision" value="deny" class="hc-button" th:text="#{tql.consent.deny}">Deny</button>
           </div>
         </form>
       </th:block>

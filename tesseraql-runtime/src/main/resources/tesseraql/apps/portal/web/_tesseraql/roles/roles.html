@@ -3,24 +3,24 @@
      address — no JS, no session state, the address is the only carrier. Member addresses
      are origin-absolute by definition, so hrefs bind plainly like the portal's tiles. -->
 <html xmlns:th="http://www.thymeleaf.org"
-      th:replace="~{tql/shell :: shell('Select a role', ~{:: #roles-nav}, ~{:: #page-header}, ~{:: #page-content})}">
+      th:replace="~{tql/shell :: shell(#{tql.portal.selectRole}, ~{:: #roles-nav}, ~{:: #page-header}, ~{:: #page-content})}">
 <th:block id="roles-nav">
-  <a class="hc-item" th:href="@{/_tesseraql/portal}"><span class="hc-item__title">Portal</span></a>
+  <a class="hc-item" th:href="@{/_tesseraql/portal}"><span class="hc-item__title" th:text="#{tql.portal.title}">Portal</span></a>
 </th:block>
 <th:block id="page-header">
   <span class="hc-spacer"></span>
 </th:block>
 <div id="page-content" class="hc-stack">
 <section class="hc-card">
-  <div class="hc-card__header" th:text="${picker.known} ? |Act in ${picker.app} as| : 'Select a role'">Act as</div>
+  <div class="hc-card__header" th:text="${picker.known} ? #{tql.portal.actAs(${picker.app})} : #{tql.portal.selectRole}">Act as</div>
   <div class="hc-card__body hc-stack">
     <div class="hc-empty" th:if="${!picker.known || #lists.isEmpty(picker.roles)}">
-      <p class="hc-empty__title">No role to choose here.</p>
-      <p class="hc-empty__description">The application is unknown, or you hold no roles
+      <p class="hc-empty__title" th:text="#{tql.portal.noRole}">No role to choose here.</p>
+      <p class="hc-empty__description" th:text="#{tql.portal.noRoleDescription}">The application is unknown, or you hold no roles
         scoped to it — an administrator assigns application roles in IAM Admin.</p>
     </div>
     <nav class="hc-stack" th:if="${picker.known && !#lists.isEmpty(picker.roles)}"
-         aria-label="Roles">
+         th:aria-label="#{tql.portal.roles}">
       <a class="hc-item" th:each="role : ${picker.roles}" th:href="${role.href}">
         <span class="hc-item__title" th:text="${role.name}"></span>
         <span class="hc-item__description" th:if="${role.name != role.role}"
