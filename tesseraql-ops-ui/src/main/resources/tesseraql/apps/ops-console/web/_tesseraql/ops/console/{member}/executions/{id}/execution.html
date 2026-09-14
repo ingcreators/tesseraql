@@ -1,52 +1,52 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org"
-      th:replace="~{tql/shell :: ops-member-page(|Execution ${execution.id} — ${execution.shell.label}|, ${execution.shell}, ~{:: #page-header}, ~{:: #page-content})}">
+      th:replace="~{tql/shell :: ops-member-page(#{tql.ops.page.executionExecutionId(${execution.id}, ${execution.shell.label})}, ${execution.shell}, ~{:: #page-header}, ~{:: #page-content})}">
 <th:block id="page-header">
   <span class="hc-spacer"></span>
   <div class="hc-cluster">
-    <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{|${execution.shell.base}${execution.shell.slotQuery}|}">&larr; overview</a>
+    <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{|${execution.shell.base}${execution.shell.slotQuery}|}" th:text="#{tql.ops.larrOverview}">&larr; overview</a>
   </div>
 </th:block>
 <div id="page-content" class="hc-stack">
 <section class="hc-card" th:unless="${execution.found}">
   <div class="hc-card__body hc-stack">
-    <div class="hc-empty"><p class="hc-empty__title">Execution not found.</p></div>
+    <div class="hc-empty"><p class="hc-empty__title" th:text="#{tql.ops.executionNotFound}">Execution not found.</p></div>
   </div>
 </section>
 <th:block th:if="${execution.found}">
 <section class="hc-card">
-  <div class="hc-card__header">Summary</div>
+  <div class="hc-card__header" th:text="#{tql.ops.summary}">Summary</div>
   <div class="hc-card__body hc-stack">
-    <p class="hc-alert" data-variant="success" role="status" th:if="${!#strings.isEmpty(started)}">Job started.</p>
+    <p class="hc-alert" data-variant="success" role="status" th:if="${!#strings.isEmpty(started)}" th:text="#{tql.ops.jobStarted}">Job started.</p>
     <div class="hc-table-scroll">
       <table class="hc-table" data-variant="kv"><tbody>
-        <tr><th scope="row">Job</th><td th:text="${execution.jobId}"></td></tr>
-        <tr><th scope="row">App</th><td th:text="${execution.app}"></td></tr>
-        <tr><th scope="row">Status</th><td class="hc-status" th:attr="data-variant=${execution.statusVariant}" th:text="${execution.status}"></td></tr>
-        <tr><th scope="row">Trigger</th><td th:text="${execution.trigger}"></td></tr>
-        <tr><th scope="row">Triggered by</th><td th:text="${execution.triggeredBy}"></td></tr>
-        <tr><th scope="row">Started</th><td th:text="${execution.startTime}"></td></tr>
-        <tr><th scope="row">Ended</th><td th:text="${execution.endTime}"></td></tr>
-        <tr><th scope="row">Duration (ms)</th><td th:text="${execution.durationMs}"></td></tr>
-        <tr><th scope="row">Exit message</th><td th:text="${execution.exitMessage}"></td></tr>
+        <tr><th scope="row" th:text="#{tql.ops.job}">Job</th><td th:text="${execution.jobId}"></td></tr>
+        <tr><th scope="row" th:text="#{tql.ops.app}">App</th><td th:text="${execution.app}"></td></tr>
+        <tr><th scope="row" th:text="#{tql.ops.status}">Status</th><td class="hc-status" th:attr="data-variant=${execution.statusVariant}" th:text="${execution.status}"></td></tr>
+        <tr><th scope="row" th:text="#{tql.ops.trigger}">Trigger</th><td th:text="${execution.trigger}"></td></tr>
+        <tr><th scope="row" th:text="#{tql.ops.triggeredBy}">Triggered by</th><td th:text="${execution.triggeredBy}"></td></tr>
+        <tr><th scope="row" th:text="#{tql.ops.started}">Started</th><td th:text="${execution.startTime}"></td></tr>
+        <tr><th scope="row" th:text="#{tql.ops.ended}">Ended</th><td th:text="${execution.endTime}"></td></tr>
+        <tr><th scope="row" th:text="#{tql.ops.durationMs}">Duration (ms)</th><td th:text="${execution.durationMs}"></td></tr>
+        <tr><th scope="row" th:text="#{tql.ops.exitMessage}">Exit message</th><td th:text="${execution.exitMessage}"></td></tr>
       </tbody></table>
     </div>
   </div>
 </section>
 <section class="hc-card" id="steps">
-  <div class="hc-card__header">Steps</div>
+  <div class="hc-card__header" th:text="#{tql.ops.steps}">Steps</div>
   <div class="hc-card__body hc-stack">
-    <div class="hc-empty" th:unless="${execution.hasSteps}"><p class="hc-empty__title">No steps recorded.</p></div>
+    <div class="hc-empty" th:unless="${execution.hasSteps}"><p class="hc-empty__title" th:text="#{tql.ops.noStepsRecorded}">No steps recorded.</p></div>
     <div class="hc-datagrid" th:if="${execution.hasSteps}">
       <div class="hc-datagrid__scroll">
         <table class="hc-datagrid__table">
           <thead class="hc-datagrid__head"><tr>
-            <th class="hc-datagrid__headcell">Step</th>
-            <th class="hc-datagrid__headcell">Status</th>
-            <th class="hc-datagrid__headcell" data-numeric>Rows</th>
-            <th class="hc-datagrid__headcell" data-numeric>Skipped</th>
-            <th class="hc-datagrid__headcell" data-numeric>Duration (ms)</th>
-            <th class="hc-datagrid__headcell">Error</th>
+            <th class="hc-datagrid__headcell" th:text="#{tql.ops.step}">Step</th>
+            <th class="hc-datagrid__headcell" th:text="#{tql.ops.status}">Status</th>
+            <th class="hc-datagrid__headcell" data-numeric th:text="#{tql.ops.rows}">Rows</th>
+            <th class="hc-datagrid__headcell" data-numeric th:text="#{tql.ops.skipped}">Skipped</th>
+            <th class="hc-datagrid__headcell" data-numeric th:text="#{tql.ops.durationMs}">Duration (ms)</th>
+            <th class="hc-datagrid__headcell" th:text="#{tql.ops.error}">Error</th>
           </tr></thead>
           <tbody class="hc-datagrid__body">
             <tr class="hc-datagrid__row" th:each="s : ${execution.steps}">

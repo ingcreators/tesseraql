@@ -1,31 +1,31 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org"
-      th:replace="~{tql/shell :: page('IAM Admin · Access requests', ~{:: #page-header}, ~{:: #page-content})}">
+      th:replace="~{tql/shell :: page(#{tql.iam.page.accessRequests}, ~{:: #page-header}, ~{:: #page-content})}">
 <th:block id="page-header">
   <span class="hc-spacer"></span>
-  <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/admin/roles}">Roles</a>
-  <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/admin/history}">History</a>
+  <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/admin/roles}" th:text="#{tql.iam.roles}">Roles</a>
+  <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/admin/history}" th:text="#{tql.iam.history}">History</a>
 </th:block>
 <div id="page-content" class="hc-stack">
-<p class="hc-alert" data-variant="success" role="status" th:if="${decided != null}">Decision recorded.</p>
-<p class="hc-alert" data-variant="success" role="status" th:if="${owned != null}">Role owners updated.</p>
+<p class="hc-alert" data-variant="success" role="status" th:if="${decided != null}" th:text="#{tql.iam.decisionRecorded}">Decision recorded.</p>
+<p class="hc-alert" data-variant="success" role="status" th:if="${owned != null}" th:text="#{tql.iam.roleOwnersUpdated}">Role owners updated.</p>
 <div th:if="${available == 0}" class="hc-alert" data-variant="warning" role="status">
-  <p class="hc-alert__title">Access requests are unavailable for this realm.</p>
+  <p class="hc-alert__title" th:text="#{tql.iam.accessRequestsAreUnavailable}">Access requests are unavailable for this realm.</p>
   <p th:text="${reason}">reason</p>
 </div>
 <section class="hc-card" th:if="${available == 1}">
-  <div class="hc-card__header">Waiting for you</div>
+  <div class="hc-card__header" th:text="#{tql.iam.waitingForYou}">Waiting for you</div>
   <div class="hc-card__body">
     <!-- Only requests for roles this caller owns: the queue is filtered against their own
          principal, so it cannot show what they may not decide. -->
     <div class="hc-empty" th:if="${#lists.isEmpty(rows)}">
-      <p class="hc-empty__title">No requests are waiting for you.</p>
-      <p class="hc-empty__description">A request reaches you when you own the role it asks
+      <p class="hc-empty__title" th:text="#{tql.iam.noRequestsAreWaiting}">No requests are waiting for you.</p>
+      <p class="hc-empty__description" th:text="#{tql.iam.aRequestReachesYou}">A request reaches you when you own the role it asks
         for — by name, or through a group you are in.</p>
     </div>
     <div class="hc-table-scroll" th:if="${!#lists.isEmpty(rows)}">
       <table class="hc-table">
-        <thead><tr><th>Who</th><th>Role</th><th>Reason</th><th>For</th><th>Asked</th><th></th></tr></thead>
+        <thead><tr><th th:text="#{tql.iam.who}">Who</th><th th:text="#{tql.iam.role}">Role</th><th th:text="#{tql.iam.reason}">Reason</th><th th:text="#{tql.iam.for}">For</th><th th:text="#{tql.iam.asked}">Asked</th><th></th></tr></thead>
         <tbody>
           <tr th:each="q : ${rows}">
             <td><a th:href="@{'/_tesseraql/admin/users/' + ${q.requester_id}}"
@@ -39,11 +39,11 @@
                 <input type="hidden" name="_csrf" th:value="${_csrf}">
                 <input type="hidden" name="requestId" th:value="${q.request_id}">
                 <select class="hc-input" data-size="sm" name="decision">
-                  <option value="approved">approve</option>
-                  <option value="rejected">reject</option>
+                  <option value="approved" th:text="#{tql.iam.approve}">approve</option>
+                  <option value="rejected" th:text="#{tql.iam.reject}">reject</option>
                 </select>
-                <input class="hc-input" data-size="sm" name="note" placeholder="note">
-                <button class="hc-button" data-variant="ghost" data-size="sm" type="submit">Decide</button>
+                <input class="hc-input" data-size="sm" name="note" th:placeholder="#{tql.iam.note}">
+                <button class="hc-button" data-variant="ghost" data-size="sm" type="submit" th:text="#{tql.iam.decide}">Decide</button>
               </form>
             </td>
           </tr>
@@ -53,16 +53,16 @@
   </div>
 </section>
 <section class="hc-card" th:if="${available == 1}">
-  <div class="hc-card__header">Role owners</div>
+  <div class="hc-card__header" th:text="#{tql.iam.roleOwners}">Role owners</div>
   <div class="hc-card__body hc-stack">
-    <p class="hc-field__message">A role with no owner cannot be requested at all. That is the
+    <p class="hc-field__message" th:text="#{tql.iam.aRoleWithNo}">A role with no owner cannot be requested at all. That is the
       answer to "who approves this" — not whoever happens to administer the store.</p>
     <div class="hc-empty" th:if="${#lists.isEmpty(owners)}">
-      <p class="hc-empty__title">No role has an owner yet.</p>
+      <p class="hc-empty__title" th:text="#{tql.iam.noRoleHasAn}">No role has an owner yet.</p>
     </div>
     <div class="hc-table-scroll" th:if="${!#lists.isEmpty(owners)}">
       <table class="hc-table">
-        <thead><tr><th>Role</th><th>Owner</th><th>Kind</th><th></th></tr></thead>
+        <thead><tr><th th:text="#{tql.iam.role}">Role</th><th th:text="#{tql.iam.owner}">Owner</th><th th:text="#{tql.iam.kind}">Kind</th><th></th></tr></thead>
         <tbody>
           <tr th:each="o : ${owners}">
             <td><code th:text="${o.role_code}"></code></td>
@@ -74,7 +74,7 @@
                 <input type="hidden" name="roleCode" th:value="${o.role_code}">
                 <input type="hidden" name="ownerKind" th:value="${o.owner_kind}">
                 <input type="hidden" name="ownerRef" th:value="${o.owner_ref}">
-                <button class="hc-button" data-variant="ghost" data-size="sm" type="submit">Remove</button>
+                <button class="hc-button" data-variant="ghost" data-size="sm" type="submit" th:text="#{tql.iam.remove}">Remove</button>
               </form>
             </td>
           </tr>
@@ -84,18 +84,18 @@
     <form th:if="${writable == 1}" method="post"
           th:action="@{/_tesseraql/admin/requests/owners/add}" class="hc-cluster">
       <input type="hidden" name="_csrf" th:value="${_csrf}">
-      <label class="hc-field"><span class="hc-field__label">Role</span>
+      <label class="hc-field"><span class="hc-field__label" th:text="#{tql.iam.role}">Role</span>
         <select class="hc-input" name="roleCode" required>
           <option th:each="r : ${allRoles}" th:value="${r.role_code}" th:text="${r.role_code}"></option>
         </select></label>
-      <label class="hc-field"><span class="hc-field__label">Kind</span>
+      <label class="hc-field"><span class="hc-field__label" th:text="#{tql.iam.kind}">Kind</span>
         <select class="hc-input" name="ownerKind">
-          <option value="user">user</option>
-          <option value="group">group</option>
+          <option value="user" th:text="#{tql.iam.user2}">user</option>
+          <option value="group" th:text="#{tql.iam.group}">group</option>
         </select></label>
-      <label class="hc-field"><span class="hc-field__label">Owner (subject or group code)</span>
+      <label class="hc-field"><span class="hc-field__label" th:text="#{tql.iam.ownerSubjectOrGroup}">Owner (subject or group code)</span>
         <input class="hc-input" name="ownerRef" required></label>
-      <button class="hc-button" data-variant="primary" type="submit">Add owner</button>
+      <button class="hc-button" data-variant="primary" type="submit" th:text="#{tql.iam.addOwner}">Add owner</button>
     </form>
   </div>
 </section>

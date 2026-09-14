@@ -1,32 +1,32 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org"
-      th:replace="~{tql/shell :: ops-member-page(|File Transfers — ${transfers.shell.label}|, ${transfers.shell}, ~{:: #page-header}, ~{:: #page-content})}">
+      th:replace="~{tql/shell :: ops-member-page(#{tql.ops.page.fileTransfers(${transfers.shell.label})}, ${transfers.shell}, ~{:: #page-header}, ~{:: #page-content})}">
 <th:block id="page-header">
   <span class="hc-spacer"></span>
   <div class="hc-cluster">
-    <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{|${transfers.shell.base}${transfers.shell.slotQuery}|}">&larr; overview</a>
+    <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{|${transfers.shell.base}${transfers.shell.slotQuery}|}" th:text="#{tql.ops.larrOverview}">&larr; overview</a>
   </div>
 </th:block>
 <div id="page-content" class="hc-stack" th:hx-get="@{|${transfers.shell.base}/transfers${transfers.shell.slotQuery}|}" hx-trigger="every 15s"
      hx-select="#page-content" hx-target="this" hx-swap="outerHTML">
 <section class="hc-card">
-  <div class="hc-card__header">File transfers</div>
+  <div class="hc-card__header" th:text="#{tql.ops.fileTransfers}">File transfers</div>
   <div class="hc-card__body hc-stack">
-    <div class="hc-empty" th:unless="${transfers.hasRows}"><p class="hc-empty__title">No file transfers recorded.</p></div>
+    <div class="hc-empty" th:unless="${transfers.hasRows}"><p class="hc-empty__title" th:text="#{tql.ops.noFileTransfersRecorded}">No file transfers recorded.</p></div>
     <div class="hc-datagrid" th:if="${transfers.hasRows}">
       <div class="hc-datagrid__scroll">
         <table class="hc-datagrid__table">
           <thead class="hc-datagrid__head"><tr>
-            <th class="hc-datagrid__headcell">Transfer</th>
-            <th class="hc-datagrid__headcell">Route</th>
-            <th class="hc-datagrid__headcell">App</th>
-            <th class="hc-datagrid__headcell">Direction</th>
-            <th class="hc-datagrid__headcell">Format</th>
-            <th class="hc-datagrid__headcell">Status</th>
-            <th class="hc-datagrid__headcell" data-numeric>Rows</th>
-            <th class="hc-datagrid__headcell">File</th>
-            <th class="hc-datagrid__headcell">Downloaded</th>
-            <th class="hc-datagrid__headcell">Started</th>
+            <th class="hc-datagrid__headcell" th:text="#{tql.ops.transfer}">Transfer</th>
+            <th class="hc-datagrid__headcell" th:text="#{tql.ops.route}">Route</th>
+            <th class="hc-datagrid__headcell" th:text="#{tql.ops.app}">App</th>
+            <th class="hc-datagrid__headcell" th:text="#{tql.ops.direction}">Direction</th>
+            <th class="hc-datagrid__headcell" th:text="#{tql.ops.format}">Format</th>
+            <th class="hc-datagrid__headcell" th:text="#{tql.ops.status}">Status</th>
+            <th class="hc-datagrid__headcell" data-numeric th:text="#{tql.ops.rows}">Rows</th>
+            <th class="hc-datagrid__headcell" th:text="#{tql.ops.file}">File</th>
+            <th class="hc-datagrid__headcell" th:text="#{tql.ops.downloaded}">Downloaded</th>
+            <th class="hc-datagrid__headcell" th:text="#{tql.ops.started}">Started</th>
           </tr></thead>
           <tbody class="hc-datagrid__body">
             <tr class="hc-datagrid__row" th:each="t : ${transfers.rows}">
@@ -42,7 +42,7 @@
                    th:text="${t.filename}">file</a>
                 <span th:if="${t.downloadHref == null}" th:text="${t.filename}"></span>
                 <span class="hc-badge"
-                      th:if="${t.expired}">expired</span>
+                      th:if="${t.expired}" th:text="#{tql.ops.expired}">expired</span>
               </td>
               <td class="hc-datagrid__cell" th:text="${t.downloaded}"></td>
               <td class="hc-datagrid__cell" th:text="${t.createdAt}"></td>

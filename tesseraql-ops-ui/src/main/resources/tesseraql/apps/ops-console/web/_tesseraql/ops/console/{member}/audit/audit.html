@@ -1,21 +1,21 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org"
-      th:replace="~{tql/shell :: ops-member-page(|Route Audit — ${audit.shell.label}|, ${audit.shell}, ~{:: #page-header}, ~{:: #page-content})}">
+      th:replace="~{tql/shell :: ops-member-page(#{tql.ops.page.routeAudit(${audit.shell.label})}, ${audit.shell}, ~{:: #page-header}, ~{:: #page-content})}">
 <th:block id="page-header">
   <span class="hc-spacer"></span>
   <div class="hc-cluster">
-    <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{|${audit.shell.base}${audit.shell.slotQuery}|}">&larr; overview</a>
+    <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{|${audit.shell.base}${audit.shell.slotQuery}|}" th:text="#{tql.ops.larrOverview}">&larr; overview</a>
   </div>
 </th:block>
 <div id="page-content" class="hc-stack">
 <section class="hc-card">
-  <div class="hc-card__header">Route audit trail</div>
+  <div class="hc-card__header" th:text="#{tql.ops.routeAuditTrail}">Route audit trail</div>
   <div class="hc-card__body hc-stack">
     <!-- The store is flag-gated; a disabled store names its flag instead of rendering an
          empty table that pretends nothing happened (docs/ops-console-coverage.md). -->
     <div class="hc-empty" th:unless="${audit.enabled}">
-      <p class="hc-empty__title">Route audit is not enabled.</p>
-      <p>Set <code>tesseraql.audit.routes.enabled: true</code> to record business-route
+      <p class="hc-empty__title" th:text="#{tql.ops.routeAuditIsNot}">Route audit is not enabled.</p>
+      <p th:utext="#{tql.ops.setCodeTesseraqlAudit}">Set <code>tesseraql.audit.routes.enabled: true</code> to record business-route
         writes; the newest entries appear here.</p>
     </div>
     <th:block th:if="${audit.enabled}">
@@ -25,39 +25,39 @@
       <form method="get" th:action="@{|${audit.shell.base}/audit|}" class="hc-cluster">
         <input type="hidden" name="slot" th:value="${audit.shell.canary ? 'canary' : ''}">
         <label class="hc-field">
-          <span class="hc-field__label">Route contains</span>
+          <span class="hc-field__label" th:text="#{tql.ops.routeContains}">Route contains</span>
           <input class="hc-input" data-size="sm" name="route" th:value="${route}">
         </label>
         <label class="hc-field">
-          <span class="hc-field__label">Actor contains</span>
+          <span class="hc-field__label" th:text="#{tql.ops.actorContains}">Actor contains</span>
           <input class="hc-input" data-size="sm" name="actor" th:value="${actor}">
         </label>
         <label class="hc-field">
-          <span class="hc-field__label">Status starts with</span>
+          <span class="hc-field__label" th:text="#{tql.ops.statusStartsWith}">Status starts with</span>
           <input class="hc-input" data-size="sm" name="status" th:value="${status}">
         </label>
-        <button class="hc-button" data-size="sm" type="submit">Filter</button>
+        <button class="hc-button" data-size="sm" type="submit" th:text="#{tql.ops.filter}">Filter</button>
         <a class="hc-button" data-variant="ghost" data-size="sm"
            th:if="${route != null or actor != null or status != null}"
-           th:href="@{|${audit.shell.base}/audit${audit.shell.slotQuery}|}">Clear</a>
+           th:href="@{|${audit.shell.base}/audit${audit.shell.slotQuery}|}" th:text="#{tql.ops.clear}">Clear</a>
       </form>
       <div id="audit-results" class="hc-stack" hx-trigger="every 15s"
            hx-select="#audit-results" hx-target="this" hx-swap="outerHTML"
            th:attr="hx-get=@{|${audit.shell.base}/audit?slot=${audit.shell.canary ? 'canary' : ''}&amp;route=${#uris.escapeQueryParam(route != null ? route : '')}&amp;actor=${#uris.escapeQueryParam(actor != null ? actor : '')}&amp;status=${#uris.escapeQueryParam(status != null ? status : '')}|}">
-      <div class="hc-empty" th:unless="${audit.hasRows}"><p class="hc-empty__title">No audited requests recorded yet.</p></div>
+      <div class="hc-empty" th:unless="${audit.hasRows}"><p class="hc-empty__title" th:text="#{tql.ops.noAuditedRequestsRecorded}">No audited requests recorded yet.</p></div>
       <div class="hc-datagrid" th:if="${audit.hasRows}">
         <div class="hc-datagrid__scroll">
           <table class="hc-datagrid__table">
             <thead class="hc-datagrid__head"><tr>
-              <th class="hc-datagrid__headcell">When</th>
-              <th class="hc-datagrid__headcell">App</th>
-              <th class="hc-datagrid__headcell">Route</th>
-              <th class="hc-datagrid__headcell">Request</th>
-              <th class="hc-datagrid__headcell">Actor</th>
-              <th class="hc-datagrid__headcell">Status</th>
-              <th class="hc-datagrid__headcell" data-numeric>Duration (ms)</th>
-              <th class="hc-datagrid__headcell">Params</th>
-              <th class="hc-datagrid__headcell">Trace</th>
+              <th class="hc-datagrid__headcell" th:text="#{tql.ops.when}">When</th>
+              <th class="hc-datagrid__headcell" th:text="#{tql.ops.app}">App</th>
+              <th class="hc-datagrid__headcell" th:text="#{tql.ops.route}">Route</th>
+              <th class="hc-datagrid__headcell" th:text="#{tql.ops.request}">Request</th>
+              <th class="hc-datagrid__headcell" th:text="#{tql.ops.actor}">Actor</th>
+              <th class="hc-datagrid__headcell" th:text="#{tql.ops.status}">Status</th>
+              <th class="hc-datagrid__headcell" data-numeric th:text="#{tql.ops.durationMs}">Duration (ms)</th>
+              <th class="hc-datagrid__headcell" th:text="#{tql.ops.params}">Params</th>
+              <th class="hc-datagrid__headcell" th:text="#{tql.ops.trace}">Trace</th>
             </tr></thead>
             <tbody class="hc-datagrid__body">
               <tr class="hc-datagrid__row" th:each="a : ${audit.rows}">
@@ -75,7 +75,7 @@
           </table>
         </div>
       </div>
-      <p class="hc-field__message">The newest 200 audited requests, narrowed to the apps
+      <p class="hc-field__message" th:utext="#{tql.ops.theNewest200Audited}">The newest 200 audited requests, narrowed to the apps
         your <code>tql.ops.view</code> grants cover; the filter narrows within that window.</p>
       </div>
     </th:block>

@@ -92,6 +92,25 @@ class IamAdminIntegrationTest {
                 .contains("Administrator").doesNotContain("User not found.");
     }
 
+    /**
+     * The console renders in the negotiated language (docs/audit-medium-leads.md slice 8c,
+     * F127): every visible string of the sixteen IAM Admin templates is a catalog key.
+     */
+    @Test
+    void theConsoleRendersInTheNegotiatedLocale() throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(
+                URI.create("http://localhost:" + runtime.port() + "/_tesseraql/admin/users"))
+                .header("Authorization", "Bearer " + token()).header("Cookie", adminCookie)
+                .header("Accept-Language", "ja, en;q=0.5").build();
+        HttpResponse<String> page = HttpClient.newHttpClient().send(request,
+                HttpResponse.BodyHandlers.ofString());
+
+        assertThat(page.statusCode()).isEqualTo(200);
+        assertThat(page.body()).contains("lang=\"ja\"").contains("IAM Admin · ユーザー")
+                .contains(">ユーザーを招待<")
+                .doesNotContain(">Invite user<");
+    }
+
     @Test
     void listsUsersForAuthorizedCaller() throws Exception {
         HttpResponse<String> response = get("/_tesseraql/admin/users", true);

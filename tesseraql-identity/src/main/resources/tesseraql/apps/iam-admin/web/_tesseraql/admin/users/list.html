@@ -1,65 +1,65 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org"
-      th:replace="~{tql/shell :: page('IAM Admin · Users', ~{:: #page-header}, ~{:: #page-content})}">
+      th:replace="~{tql/shell :: page(#{tql.iam.page.users}, ~{:: #page-header}, ~{:: #page-content})}">
 <th:block id="page-header">
   <span class="hc-spacer"></span>
-  <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/admin/applications}">Applications</a>
-  <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/admin/roles}">Roles</a>
-  <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/admin/sessions}">Sessions</a>
-  <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/admin/delegations}">Delegations</a>
-  <span class="hc-badge" th:each="t : ${total}">[[${t.count}]] total</span>
+  <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/admin/applications}" th:text="#{tql.iam.applications}">Applications</a>
+  <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/admin/roles}" th:text="#{tql.iam.roles}">Roles</a>
+  <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/admin/sessions}" th:text="#{tql.iam.sessions}">Sessions</a>
+  <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/admin/delegations}" th:text="#{tql.iam.delegations}">Delegations</a>
+  <span class="hc-badge" th:each="t : ${total}" th:text="#{tql.iam.total(${t.count})}">0 total</span>
 </th:block>
 <div id="page-content" class="hc-stack">
 <div th:if="${invited}" class="hc-alert" data-variant="success" role="status">
-  <p class="hc-alert__title">Invitation sent. The account stays INVITED until it is accepted.</p>
+  <p class="hc-alert__title" th:text="#{tql.iam.invitationSentTheAccount}">Invitation sent. The account stays INVITED until it is accepted.</p>
 </div>
 <!-- What actually changed, not what was selected: a stale id updates no rows, and
      reporting the request size made a partial action read as a completed one. -->
 <div th:if="${bulk != null}" class="hc-alert"
      th:attr="data-variant=${selected != null and selected != bulk} ? 'warning' : 'success'" role="status">
   <p class="hc-alert__title" th:if="${selected == null or selected == bulk}"
-     th:text="|${bulk} user(s) disabled. Their active sessions have ended.|">users disabled</p>
+     th:text="#{tql.iam.bulkDisabled(${bulk})}">users disabled</p>
   <p class="hc-alert__title" th:if="${selected != null and selected != bulk}"
-     th:text="|${bulk} of ${selected} selected user(s) disabled - the rest matched no user. Active sessions have ended.|">users disabled</p>
+     th:text="#{tql.iam.bulkDisabledPartly(${bulk}, ${selected})}">users disabled</p>
 </div>
 <!-- Invite a user (roadmap Phase 50 slice 2): created INVITED - unable to sign in - and
      mailed a one-time accept link; the operator never knows a password. -->
 <section class="hc-card">
-  <div class="hc-card__header">Invite user</div>
+  <div class="hc-card__header" th:text="#{tql.iam.inviteUser}">Invite user</div>
   <div class="hc-card__body hc-stack">
     <form method="post" th:action="@{/_tesseraql/admin/users/invite}" class="hc-cluster">
       <input type="hidden" name="_csrf" th:value="${_csrf}">
       <label class="hc-field">
-        <span class="hc-field__label">Login</span>
+        <span class="hc-field__label" th:text="#{tql.iam.login}">Login</span>
         <input class="hc-input" name="loginId" required>
       </label>
       <label class="hc-field">
-        <span class="hc-field__label">Display name</span>
+        <span class="hc-field__label" th:text="#{tql.iam.displayName}">Display name</span>
         <input class="hc-input" name="displayName">
       </label>
       <label class="hc-field">
-        <span class="hc-field__label">Email</span>
+        <span class="hc-field__label" th:text="#{tql.iam.email}">Email</span>
         <input class="hc-input" name="email" type="email" required>
       </label>
-      <button class="hc-button" data-variant="primary" type="submit">Invite</button>
+      <button class="hc-button" data-variant="primary" type="submit" th:text="#{tql.iam.invite}">Invite</button>
     </form>
   </div>
 </section>
 <section class="hc-card">
-  <div class="hc-card__header">Users</div>
+  <div class="hc-card__header" th:text="#{tql.iam.users}">Users</div>
   <div class="hc-card__body hc-stack">
   <!-- Server-side contains-filter over login, display name and email (the sessions page's
        filter idiom; docs/console-ux-refresh.md slice 5). -->
   <form method="get" th:action="@{/_tesseraql/admin/users}" class="hc-cluster">
     <label class="hc-field">
-      <span class="hc-field__label">Login, name or email contains</span>
+      <span class="hc-field__label" th:text="#{tql.iam.loginNameOrEmail}">Login, name or email contains</span>
       <input class="hc-input" data-size="sm" name="q" th:value="${q}">
     </label>
-    <button class="hc-button" data-size="sm" type="submit">Filter</button>
+    <button class="hc-button" data-size="sm" type="submit" th:text="#{tql.iam.filter}">Filter</button>
     <a class="hc-button" data-variant="ghost" data-size="sm" th:if="${q != null}"
-       th:href="@{/_tesseraql/admin/users}">Clear</a>
+       th:href="@{/_tesseraql/admin/users}" th:text="#{tql.iam.clear}">Clear</a>
   </form>
-  <div class="hc-empty" th:if="${#lists.isEmpty(users)}"><p class="hc-empty__title">No users found.</p></div>
+  <div class="hc-empty" th:if="${#lists.isEmpty(users)}"><p class="hc-empty__title" th:text="#{tql.iam.noUsersFound}">No users found.</p></div>
   <!-- Bulk actions (the kit's datagrid-bulk-actions recipe, docs/hypermedia-ui.md): the form
        wraps the grid, row checkboxes serialize as repeated `ids`, the header's select-all
        carries no name so it never posts, and installDatagridActions reveals the toolbar with
@@ -68,26 +68,26 @@
        per-user actions. -->
   <form method="post" th:action="@{/_tesseraql/admin/users/bulk}" th:unless="${#lists.isEmpty(users)}">
     <input type="hidden" name="_csrf" th:value="${_csrf}">
-    <div class="hc-toolbar" role="toolbar" aria-label="Bulk actions"
+    <div class="hc-toolbar" role="toolbar" th:aria-label="#{tql.iam.bulkActions}"
          data-hc-datagrid-actions="#iam-users" hidden>
       <span data-hc-datagrid-count></span>
       <button class="hc-button" data-variant="error" data-size="sm" type="submit"
               name="action" value="disable"
-              data-hc-confirm="Disable the selected users?"
-              data-hc-confirm-title="Confirm disable"
-              data-hc-confirm-label="Disable" data-hc-confirm-variant="error">Disable selected</button>
+              th:data-hc-confirm="#{tql.iam.disableTheSelectedUsers}"
+              th:data-hc-confirm-title="#{tql.iam.confirmDisable}"
+              th:data-hc-confirm-label="#{tql.iam.disable}" data-hc-confirm-variant="error" th:text="#{tql.iam.disableSelected}">Disable selected</button>
     </div>
     <div class="hc-datagrid" id="iam-users">
       <div class="hc-datagrid__scroll">
         <table class="hc-datagrid__table">
           <thead class="hc-datagrid__head">
             <tr>
-              <th class="hc-datagrid__headcell"><input type="checkbox" class="hc-checkbox" aria-label="Select all"></th>
-              <th class="hc-datagrid__headcell" scope="col">Login</th>
-              <th class="hc-datagrid__headcell" scope="col">Display name</th>
-              <th class="hc-datagrid__headcell" scope="col">Email</th>
-              <th class="hc-datagrid__headcell" scope="col">Status</th>
-              <th class="hc-datagrid__headcell" scope="col">Tenant</th>
+              <th class="hc-datagrid__headcell"><input type="checkbox" class="hc-checkbox" th:aria-label="#{tql.iam.selectAll}"></th>
+              <th class="hc-datagrid__headcell" scope="col" th:text="#{tql.iam.login}">Login</th>
+              <th class="hc-datagrid__headcell" scope="col" th:text="#{tql.iam.displayName}">Display name</th>
+              <th class="hc-datagrid__headcell" scope="col" th:text="#{tql.iam.email}">Email</th>
+              <th class="hc-datagrid__headcell" scope="col" th:text="#{tql.iam.status}">Status</th>
+              <th class="hc-datagrid__headcell" scope="col" th:text="#{tql.iam.tenant}">Tenant</th>
             </tr>
           </thead>
           <tbody class="hc-datagrid__body">
@@ -111,18 +111,18 @@
        checkbox per row of tql_users, which the transport refused past its form-field count.
        Paged rather than capped because a cap is a ceiling a growing deployment eventually hits
        and cannot see past. The cost, stated: select-all selects this page. -->
-  <nav class="hc-pagination" aria-label="Pagination"
+  <nav class="hc-pagination" th:aria-label="#{tql.iam.pagination}"
        th:if="${page != null and (page['hasPrev'] == true or page['hasNext'] == true)}">
     <a th:if="${page['hasPrev'] == true}" class="hc-pagination__item"
-       th:href="@{/_tesseraql/admin/users(q=${q},page=${page['number'] - 1})}">&lsaquo; Prev</a>
+       th:href="@{/_tesseraql/admin/users(q=${q},page=${page['number'] - 1})}" th:text="#{tql.iam.lsaquoPrev}">&lsaquo; Prev</a>
     <span th:unless="${page['hasPrev'] == true}" class="hc-pagination__item"
-          aria-disabled="true">&lsaquo; Prev</span>
+          aria-disabled="true" th:text="#{tql.iam.lsaquoPrev}">&lsaquo; Prev</span>
     <span class="hc-pagination__item" aria-current="page"
-          th:text="|Page ${page['number']}|">Page 1</span>
+          th:text="#{tql.iam.pageNumber(${page['number']})}">Page 1</span>
     <a th:if="${page['hasNext'] == true}" class="hc-pagination__item"
-       th:href="@{/_tesseraql/admin/users(q=${q},page=${page['number'] + 1})}">Next &rsaquo;</a>
+       th:href="@{/_tesseraql/admin/users(q=${q},page=${page['number'] + 1})}" th:text="#{tql.iam.nextRsaquo}">Next &rsaquo;</a>
     <span th:unless="${page['hasNext'] == true}" class="hc-pagination__item"
-          aria-disabled="true">Next &rsaquo;</span>
+          aria-disabled="true" th:text="#{tql.iam.nextRsaquo}">Next &rsaquo;</span>
   </nav>
   </div>
 </section>

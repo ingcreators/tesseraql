@@ -1,27 +1,27 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org"
-      th:replace="~{tql/shell :: ops-shell-page('Issue a token', ${shellnav}, ~{:: #page-header}, ~{:: #page-content})}">
+      th:replace="~{tql/shell :: ops-shell-page(#{tql.ops.page.issueAToken}, ${shellnav}, ~{:: #page-header}, ~{:: #page-content})}">
 <th:block id="page-header">
   <span class="hc-spacer"></span>
   <div class="hc-cluster">
-    <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/ops/console}">&larr; console</a>
+    <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/ops/console}" th:text="#{tql.ops.larrConsole}">&larr; console</a>
   </div>
 </th:block>
 <!-- No auto-refresh here, unlike its sibling pages: a poll would either discard the token the
      page was opened to show or mint a new one every fifteen seconds. -->
 <div id="page-content" class="hc-stack">
 <section class="hc-card">
-  <div class="hc-card__header">Bearer token</div>
+  <div class="hc-card__header" th:text="#{tql.ops.bearerToken}">Bearer token</div>
   <div class="hc-card__body hc-stack">
-    <p class="hc-field__message">A token carries the subject, roles and permissions this session
+    <p class="hc-field__message" th:text="#{tql.ops.aTokenCarriesThe}">A token carries the subject, roles and permissions this session
       already holds &mdash; nothing more. It is for callers that have an account but cannot carry
       a cookie: CI, scripts, and the assistants that run on your own machine.</p>
 
     <!-- Issuing is opt-in, so the page has to be able to say so. Naming the key is the whole
          value of this branch: an operator who lands here with it off should not have to search. -->
     <div class="hc-empty" th:unless="${issue.enabled}">
-      <p class="hc-empty__title">This application does not issue tokens.</p>
-      <p class="hc-empty__description">Set <code>tesseraql.security.token.enabled</code> to
+      <p class="hc-empty__title" th:text="#{tql.ops.thisApplicationDoesNot}">This application does not issue tokens.</p>
+      <p class="hc-empty__description" th:utext="#{tql.ops.setCodeTesseraqlSecurity}">Set <code>tesseraql.security.token.enabled</code> to
         <code>true</code> in the application configuration. It only works where TesseraQL holds
         the signing key &mdash; an application verifying <code>RS256</code> against a
         <code>publicKey</code> or <code>jwksUri</code> has no private key to sign with, and
@@ -34,19 +34,19 @@
       <form method="post" th:action="@{/_tesseraql/ops/console/token}" class="hc-stack"
             th:unless="${issue.token}">
         <input type="hidden" name="_csrf" th:value="${_csrf}">
-        <p class="hc-field__message">Tokens from this application last
-          <strong th:text="${issue.ttl}">15m</strong>. They cannot be revoked before they expire
+        <p class="hc-field__message"><span th:text="#{tql.ops.tokensFromThisApplication}">Tokens from this application last</span>
+          <strong th:text="${issue.ttl}">15m</strong><span th:text="#{tql.ops.theyCannotBeRevoked}">. They cannot be revoked before they expire
           &mdash; a password change ends every session and does not reach a token already minted
-          from one.</p>
+          from one.</span></p>
         <!-- The member selector (docs/token-issuance.md decision 9): naming a member mints
              the token for that member's address — its audience — and the member's active
              view, so a token for one application refuses at the next. Nothing selected keeps
              the stack-wide token, exactly as before. Rendered only on a stack surface, where
              a member list exists. -->
         <label class="hc-field" th:if="${!#lists.isEmpty(issue.applications)}">
-          <span class="hc-field__label">For application</span>
+          <span class="hc-field__label" th:text="#{tql.ops.forApplication}">For application</span>
           <select class="hc-select" name="appName">
-            <option value="">The whole stack</option>
+            <option value="" th:text="#{tql.ops.theWholeStack}">The whole stack</option>
             <option th:each="member : ${issue.applications}" th:value="${member}"
                     th:text="${member}"></option>
           </select>
@@ -57,35 +57,35 @@
              an acting_role claim, so the audit writes the same capacity sentence for a machine
              caller as for a tab. Rendered only when the caller holds application roles. -->
         <label class="hc-field" th:if="${!#lists.isEmpty(roles)}">
-          <span class="hc-field__label">Acting as</span>
+          <span class="hc-field__label" th:text="#{tql.ops.actingAs}">Acting as</span>
           <select class="hc-select" name="actingRole">
-            <option value="">All held roles (the union)</option>
+            <option value="" th:text="#{tql.ops.allHeldRolesThe}">All held roles (the union)</option>
             <option th:each="grant : ${roles}" th:value="${grant.role}"
                     th:text="|${grant.role} (${grant.application})|"></option>
           </select>
         </label>
         <!-- A native submit, not htmx: the browser's own navigation indicator is the feedback,
              and an hx-post would have to swap a fragment carrying a credential. -->
-        <button type="submit" class="hc-button" data-variant="primary">Issue a token</button>
+        <button type="submit" class="hc-button" data-variant="primary" th:text="#{tql.ops.issueAToken}">Issue a token</button>
       </form>
 
       <th:block th:if="${issue.token}">
-        <p class="hc-alert" data-variant="warning" role="status">Copy it now. It is a credential
+        <p class="hc-alert" data-variant="warning" role="status" th:text="#{tql.ops.copyItNowIt}">Copy it now. It is a credential
           that carries none of the session cookie's protections and outlives it, and this page
           cannot show it again.</p>
         <div class="hc-cluster">
-          <span class="hc-field__label">Token</span>
+          <span class="hc-field__label" th:text="#{tql.ops.token}">Token</span>
           <span class="hc-spacer"></span>
           <button type="button" class="hc-button" data-variant="ghost" data-size="sm"
-                  data-hc-copy="#issued-token">Copy</button>
+                  data-hc-copy="#issued-token" th:text="#{tql.ops.copy}">Copy</button>
         </div>
         <pre class="hc-code"><code id="issued-token" th:text="${issue.token}"></code></pre>
-        <p class="hc-field__message">Expires <span th:text="${issue.expiresAt}">…</span>. Send it
-          as <code>Authorization: Bearer &lt;token&gt;</code>.</p>
+        <p class="hc-field__message"><span th:text="#{tql.ops.expires}">Expires</span> <span th:text="${issue.expiresAt}">…</span><span th:text="#{tql.ops.sendItAs}">. Send it
+          as</span> <code>Authorization: Bearer &lt;token&gt;</code>.</p>
         <div class="hc-cluster">
           <form method="post" th:action="@{/_tesseraql/ops/console/token}">
             <input type="hidden" name="_csrf" th:value="${_csrf}">
-            <button type="submit" class="hc-button" data-variant="ghost" data-size="sm">Issue another</button>
+            <button type="submit" class="hc-button" data-variant="ghost" data-size="sm" th:text="#{tql.ops.issueAnother}">Issue another</button>
           </form>
         </div>
       </th:block>
@@ -93,14 +93,14 @@
   </div>
 </section>
 <section class="hc-card">
-  <div class="hc-card__header">From a terminal</div>
+  <div class="hc-card__header" th:text="#{tql.ops.fromATerminal}">From a terminal</div>
   <div class="hc-card__body hc-stack">
-    <p class="hc-field__message">The same exchange without a browser &mdash; signs in and mints
+    <p class="hc-field__message" th:text="#{tql.ops.theSameExchangeWithout}">The same exchange without a browser &mdash; signs in and mints
       in one step, and prints only the token on stdout so it pipes.</p>
     <div class="hc-cluster">
       <span class="hc-spacer"></span>
       <button type="button" class="hc-button" data-variant="ghost" data-size="sm"
-              data-hc-copy="#token-cli">Copy</button>
+              data-hc-copy="#token-cli" th:text="#{tql.ops.copy}">Copy</button>
     </div>
     <pre class="hc-code"><code id="token-cli">tesseraql token --url https://this-host --login you</code></pre>
   </div>

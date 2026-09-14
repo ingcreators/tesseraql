@@ -229,8 +229,10 @@ All notable changes to TesseraQL are documented here. The format follows
   notification times as `Instant.toString()`, an ISO UTC microsecond instant for everyone.
   Every visible string of the eleven templates is a `tql.*` catalog key now, in English and
   Japanese, overridable per app like every framework text; the inbox formats its instants in
-  the request locale. A test scans the three apps for a hard-coded string, so the class cannot
-  grow again. The operator consoles (IAM Admin, Operations) are still English.
+  the request locale. The IAM Admin and Operations consoles follow: their 27 templates
+  carry 446 more keys (`tql.iam.*`, `tql.ops.*`), so an operator who picked Japanese reads the
+  user, role, group, review, session, deploy, job, trace and outbox pages in it. A test scans
+  all five apps for a hard-coded string, so the class cannot grow again.
 - **The framework stylesheet reads only tokens the kit defines, and a list's refocused row is
   the kit's.** `tesseraql.css` read three `--hc-*` names no kit release ever defined, so their
   fallbacks always won: a dark literal border around the Studio preview in the light theme, a

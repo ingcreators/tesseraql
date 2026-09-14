@@ -37,7 +37,10 @@ class BundledTemplateTextTest {
     private static final List<Path> ROOTS = List.of(
             Path.of("src/main/resources/tesseraql/apps/account"),
             Path.of("src/main/resources/tesseraql/apps/auth-ui"),
-            Path.of("src/main/resources/tesseraql/apps/portal"));
+            Path.of("src/main/resources/tesseraql/apps/portal"),
+            // The operator consoles live in sibling modules (slice 8c).
+            Path.of("../tesseraql-identity/src/main/resources/tesseraql/apps/iam-admin"),
+            Path.of("../tesseraql-ops-ui/src/main/resources/tesseraql/apps/ops-console"));
 
     private static final Pattern WORD = Pattern.compile("[A-Za-z]{2,}");
     /** A tag, its attributes read quote-aware so a {@code >} inside an expression stays inside. */
@@ -138,7 +141,14 @@ class BundledTemplateTextTest {
             "use", "path", "circle", "rect", "line", "polyline", "polygon");
 
     private static void report(String file, String text, List<String> found, String kind) {
-        String plain = text.replaceAll("&[a-z]+;|&#[0-9]+;", " ").strip();
+        // An inline expression ([[${x}]]) is dynamic, not text; a dotted identifier with no
+        // space in it (a placeholder such as `.approver`, a code such as `tql.app.use.*`) is
+        // a name, not prose.
+        String plain = text.replaceAll("\\[\\[.*?\\]\\]|\\[\\(.*?\\)\\]", " ")
+                .replaceAll("&[a-z]+;|&#[0-9]+;", " ").strip();
+        if (plain.matches("[A-Za-z0-9_.*-]*\\.[A-Za-z0-9_.*-]*")) {
+            return;
+        }
         if (WORD.matcher(plain).find()) {
             found.add(file + " (" + kind + "): " + plain.replaceAll("\\s+", " "));
         }

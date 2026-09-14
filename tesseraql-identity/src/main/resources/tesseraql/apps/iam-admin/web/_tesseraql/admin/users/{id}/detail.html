@@ -1,71 +1,71 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org"
-      th:replace="~{tql/shell :: page('IAM Admin · User', ~{:: #page-header}, ~{:: #page-content})}">
+      th:replace="~{tql/shell :: page(#{tql.iam.page.user}, ~{:: #page-header}, ~{:: #page-content})}">
 <th:block id="page-header">
   <span class="hc-spacer"></span>
   <div class="hc-cluster">
     <span class="hc-badge" th:each="u : ${user}" th:text="${u.login_id}"></span>
-    <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/admin/users}">&larr; users</a>
+    <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/admin/users}" th:text="#{tql.iam.larrUsers}">&larr; users</a>
   </div>
 </th:block>
 <div id="page-content" class="hc-stack">
 <!-- Every action confirms (docs/console-ux-refresh.md slice 2): the post/redirect/get
      lands back here with a flag naming what it did. -->
 <p class="hc-alert" data-variant="success" role="status"
-   th:if="${enabled != null}">User enabled. They can sign in again.</p>
+   th:if="${enabled != null}" th:text="#{tql.iam.userEnabledTheyCan}">User enabled. They can sign in again.</p>
 <p class="hc-alert" data-variant="success" role="status"
-   th:if="${disabled != null}">User disabled. Their active sessions have ended.</p>
+   th:if="${disabled != null}" th:text="#{tql.iam.userDisabledTheirActive}">User disabled. Their active sessions have ended.</p>
 <p class="hc-alert" data-variant="success" role="status"
-   th:if="${signedout == 'one'}">Device signed out.</p>
+   th:if="${signedout == 'one'}" th:text="#{tql.iam.deviceSignedOut}">Device signed out.</p>
 <p class="hc-alert" data-variant="success" role="status"
-   th:if="${signedout == 'all'}">Signed out everywhere. All of this user's sessions have ended.</p>
+   th:if="${signedout == 'all'}" th:text="#{tql.iam.signedOutEverywhereAll}">Signed out everywhere. All of this user's sessions have ended.</p>
 <section class="hc-card" th:if="${#lists.isEmpty(user)}">
   <div class="hc-card__body hc-stack">
-    <div class="hc-empty"><p class="hc-empty__title">User not found.</p></div>
+    <div class="hc-empty"><p class="hc-empty__title" th:text="#{tql.iam.userNotFound}">User not found.</p></div>
   </div>
 </section>
 <th:block th:each="u : ${user}">
 <section class="hc-card">
-  <div class="hc-card__header">Summary</div>
+  <div class="hc-card__header" th:text="#{tql.iam.summary}">Summary</div>
   <div class="hc-card__body hc-stack">
     <div class="hc-table-scroll">
       <table class="hc-table" data-variant="kv"><tbody>
-        <tr><th scope="row">User id</th><td th:text="${u.user_id}"></td></tr>
-        <tr><th scope="row">Display name</th><td th:text="${u.display_name}"></td></tr>
-        <tr><th scope="row">Email</th><td th:text="${u.email}"></td></tr>
-        <tr><th scope="row">Status</th><td class="hc-status" th:attr="data-variant=${u.status == 'ACTIVE' ? 'success' : (u.status == 'INVITED' ? 'info' : 'error')}" th:text="${u.status}"></td></tr>
-        <tr><th scope="row">Tenant</th><td th:text="${u.tenant_id}"></td></tr>
+        <tr><th scope="row" th:text="#{tql.iam.userId}">User id</th><td th:text="${u.user_id}"></td></tr>
+        <tr><th scope="row" th:text="#{tql.iam.displayName}">Display name</th><td th:text="${u.display_name}"></td></tr>
+        <tr><th scope="row" th:text="#{tql.iam.email}">Email</th><td th:text="${u.email}"></td></tr>
+        <tr><th scope="row" th:text="#{tql.iam.status}">Status</th><td class="hc-status" th:attr="data-variant=${u.status == 'ACTIVE' ? 'success' : (u.status == 'INVITED' ? 'info' : 'error')}" th:text="${u.status}"></td></tr>
+        <tr><th scope="row" th:text="#{tql.iam.tenant}">Tenant</th><td th:text="${u.tenant_id}"></td></tr>
       </tbody></table>
     </div>
   </div>
 </section>
 <section class="hc-card" id="actions">
-  <div class="hc-card__header">Actions</div>
+  <div class="hc-card__header" th:text="#{tql.iam.actions}">Actions</div>
   <div class="hc-card__body hc-stack">
     <div class="hc-cluster">
       <form method="post" th:action="@{|/_tesseraql/admin/users/${u.user_id}/enable|}" th:if="${u.status != 'ACTIVE'}">
         <input type="hidden" name="_csrf" th:value="${_csrf}">
-        <button type="submit" class="hc-button" data-variant="primary">Enable user</button>
+        <button type="submit" class="hc-button" data-variant="primary" th:text="#{tql.iam.enableUser}">Enable user</button>
       </form>
       <form method="post" th:action="@{|/_tesseraql/admin/users/${u.user_id}/disable|}" th:if="${u.status == 'ACTIVE'}">
         <input type="hidden" name="_csrf" th:value="${_csrf}">
         <button type="submit" class="hc-button" data-variant="error"
                 th:attr="data-hc-confirm=|Disable user ${u.login_id}? Their active sessions end immediately.|"
                 data-hc-confirm-title="Confirm disable"
-                data-hc-confirm-label="Disable" data-hc-confirm-variant="error">Disable user</button>
+                data-hc-confirm-label="Disable" data-hc-confirm-variant="error" th:text="#{tql.iam.disableUser}">Disable user</button>
       </form>
     </div>
   </div>
 </section>
 <section class="hc-card" id="sessions">
-  <div class="hc-card__header">Active sessions</div>
+  <div class="hc-card__header" th:text="#{tql.iam.activeSessions}">Active sessions</div>
   <div class="hc-card__body hc-stack">
-    <div class="hc-empty" th:if="${#lists.isEmpty(sessions)}"><p class="hc-empty__title">No active sessions.</p></div>
+    <div class="hc-empty" th:if="${#lists.isEmpty(sessions)}"><p class="hc-empty__title" th:text="#{tql.iam.noActiveSessions}">No active sessions.</p></div>
     <th:block th:unless="${#lists.isEmpty(sessions)}">
-      <p class="hc-field__message" th:text="|${sessionCount} active ${sessionCount == 1 ? 'session' : 'sessions'}.|"></p>
+      <p class="hc-field__message" th:text="${sessionCount == 1} ? #{tql.iam.oneActiveSession} : #{tql.iam.activeSessionCount(${sessionCount})}"></p>
       <div class="hc-table-scroll">
         <table class="hc-table">
-          <thead><tr><th>Signed in</th><th>Last active</th><th>Device</th><th>Address</th><th>Expires</th><th></th></tr></thead>
+          <thead><tr><th th:text="#{tql.iam.signedIn}">Signed in</th><th th:text="#{tql.iam.lastActive}">Last active</th><th th:text="#{tql.iam.device}">Device</th><th th:text="#{tql.iam.address}">Address</th><th th:text="#{tql.iam.expires}">Expires</th><th></th></tr></thead>
           <tbody>
             <tr th:each="s : ${sessions}">
               <td th:text="${s.createdAt}"></td>
@@ -81,7 +81,7 @@
                   <button type="submit" class="hc-button" data-variant="ghost" data-size="sm"
                           th:attr="data-hc-confirm=|Sign this device of ${u.login_id} out?|"
                           data-hc-confirm-title="Confirm sign-out"
-                          data-hc-confirm-label="Sign out device" data-hc-confirm-variant="error">Sign out</button>
+                          data-hc-confirm-label="Sign out device" data-hc-confirm-variant="error" th:text="#{tql.iam.signOut}">Sign out</button>
                 </form>
               </td>
             </tr>
@@ -93,19 +93,19 @@
         <button type="submit" class="hc-button" data-variant="error"
                 th:attr="data-hc-confirm=|Sign ${u.login_id} out everywhere?|"
                 data-hc-confirm-title="Confirm sign-out"
-                data-hc-confirm-label="Sign out everywhere" data-hc-confirm-variant="error">Sign out everywhere</button>
+                data-hc-confirm-label="Sign out everywhere" data-hc-confirm-variant="error" th:text="#{tql.iam.signOutEverywhere}">Sign out everywhere</button>
       </form>
     </th:block>
   </div>
 </section>
 </th:block>
 <section class="hc-card" id="roles">
-  <div class="hc-card__header">Roles</div>
+  <div class="hc-card__header" th:text="#{tql.iam.roles}">Roles</div>
   <div class="hc-card__body hc-stack">
-    <div class="hc-empty" th:if="${#lists.isEmpty(roles)}"><p class="hc-empty__title">No roles assigned.</p></div>
+    <div class="hc-empty" th:if="${#lists.isEmpty(roles)}"><p class="hc-empty__title" th:text="#{tql.iam.noRolesAssigned}">No roles assigned.</p></div>
     <div class="hc-table-scroll">
       <table class="hc-table">
-        <thead><tr><th>Code</th><th>Name</th><th>Grant</th></tr></thead>
+        <thead><tr><th th:text="#{tql.iam.code}">Code</th><th th:text="#{tql.iam.name}">Name</th><th th:text="#{tql.iam.grant}">Grant</th></tr></thead>
         <tbody>
           <tr th:each="r : ${roles}">
             <td th:text="${r.role_code}"></td><td th:text="${r.role_name}"></td><td th:text="${r.grant_type}"></td>
@@ -116,12 +116,12 @@
   </div>
 </section>
 <section class="hc-card" id="groups">
-  <div class="hc-card__header">Groups</div>
+  <div class="hc-card__header" th:text="#{tql.iam.groups}">Groups</div>
   <div class="hc-card__body hc-stack">
-    <div class="hc-empty" th:if="${#lists.isEmpty(groups)}"><p class="hc-empty__title">No groups assigned.</p></div>
+    <div class="hc-empty" th:if="${#lists.isEmpty(groups)}"><p class="hc-empty__title" th:text="#{tql.iam.noGroupsAssigned}">No groups assigned.</p></div>
     <div class="hc-table-scroll">
       <table class="hc-table">
-        <thead><tr><th>Code</th><th>Name</th><th>Tenant</th></tr></thead>
+        <thead><tr><th th:text="#{tql.iam.code}">Code</th><th th:text="#{tql.iam.name}">Name</th><th th:text="#{tql.iam.tenant}">Tenant</th></tr></thead>
         <tbody>
           <tr th:each="g : ${groups}">
             <td th:text="${g.group_code}"></td><td th:text="${g.group_name}"></td><td th:text="${g.tenant_id}"></td>
@@ -132,12 +132,12 @@
   </div>
 </section>
 <section class="hc-card" id="permissions">
-  <div class="hc-card__header">Effective permissions</div>
+  <div class="hc-card__header" th:text="#{tql.iam.effectivePermissions}">Effective permissions</div>
   <div class="hc-card__body hc-stack">
-    <div class="hc-empty" th:if="${#lists.isEmpty(permissions)}"><p class="hc-empty__title">No permissions granted.</p></div>
+    <div class="hc-empty" th:if="${#lists.isEmpty(permissions)}"><p class="hc-empty__title" th:text="#{tql.iam.noPermissionsGranted}">No permissions granted.</p></div>
     <div class="hc-table-scroll">
       <table class="hc-table">
-        <thead><tr><th>Code</th><th>Name</th></tr></thead>
+        <thead><tr><th th:text="#{tql.iam.code}">Code</th><th th:text="#{tql.iam.name}">Name</th></tr></thead>
         <tbody>
           <tr th:each="p : ${permissions}">
             <td th:text="${p.permission_code}"></td><td th:text="${p.permission_name}"></td>
@@ -150,22 +150,22 @@
 <!-- The grant editor (docs/application-roles.md slice 2): direct role assignments and
      direct permission grants, validity windows included; forms render only where the
      realm's role capability allows writes. -->
-<p class="hc-alert" data-variant="success" role="status" th:if="${assigned != null}">Role assigned.</p>
-<p class="hc-alert" data-variant="success" role="status" th:if="${unassigned != null}">Role unassigned.</p>
-<p class="hc-alert" data-variant="success" role="status" th:if="${granted != null}">Permission granted.</p>
-<p class="hc-alert" data-variant="success" role="status" th:if="${revoked != null}">Permission revoked.</p>
-<p class="hc-alert" data-variant="success" role="status" th:if="${attrset != null}">Attribute set. Rules apply at the next sign-in, or recompute now.</p>
-<p class="hc-alert" data-variant="success" role="status" th:if="${attrdeleted != null}">Attribute deleted.</p>
-<p class="hc-alert" data-variant="success" role="status" th:if="${recomputed != null}">Rule assignments recomputed.</p>
+<p class="hc-alert" data-variant="success" role="status" th:if="${assigned != null}" th:text="#{tql.iam.roleAssigned}">Role assigned.</p>
+<p class="hc-alert" data-variant="success" role="status" th:if="${unassigned != null}" th:text="#{tql.iam.roleUnassigned}">Role unassigned.</p>
+<p class="hc-alert" data-variant="success" role="status" th:if="${granted != null}" th:text="#{tql.iam.permissionGranted}">Permission granted.</p>
+<p class="hc-alert" data-variant="success" role="status" th:if="${revoked != null}" th:text="#{tql.iam.permissionRevoked}">Permission revoked.</p>
+<p class="hc-alert" data-variant="success" role="status" th:if="${attrset != null}" th:text="#{tql.iam.attributeSetRulesApply}">Attribute set. Rules apply at the next sign-in, or recompute now.</p>
+<p class="hc-alert" data-variant="success" role="status" th:if="${attrdeleted != null}" th:text="#{tql.iam.attributeDeleted}">Attribute deleted.</p>
+<p class="hc-alert" data-variant="success" role="status" th:if="${recomputed != null}" th:text="#{tql.iam.ruleAssignmentsRecomputed}">Rule assignments recomputed.</p>
 <section class="hc-card" th:if="${editorAvailable == 1}">
-  <div class="hc-card__header">Attributes</div>
+  <div class="hc-card__header" th:text="#{tql.iam.attributes}">Attributes</div>
   <div class="hc-card__body hc-stack">
     <div class="hc-empty" th:if="${#lists.isEmpty(attributes)}">
-      <p class="hc-empty__title">No attributes.</p>
+      <p class="hc-empty__title" th:text="#{tql.iam.noAttributes}">No attributes.</p>
     </div>
     <div class="hc-table-scroll" th:if="${!#lists.isEmpty(attributes)}">
       <table class="hc-table" data-density="compact">
-        <thead><tr><th>Name</th><th>Value</th><th></th></tr></thead>
+        <thead><tr><th th:text="#{tql.iam.name}">Name</th><th th:text="#{tql.iam.value}">Value</th><th></th></tr></thead>
         <tbody>
           <tr th:each="at : ${attributes}">
             <td><code th:text="${at.name}"></code></td>
@@ -175,7 +175,7 @@
                     th:action="@{/_tesseraql/admin/users/{id}/attributes/delete(id=${u.user_id})}">
                 <input type="hidden" name="_csrf" th:value="${_csrf}">
                 <input type="hidden" name="name" th:value="${at.name}">
-                <button class="hc-button" data-variant="ghost" data-size="sm" type="submit">Delete</button>
+                <button class="hc-button" data-variant="ghost" data-size="sm" type="submit" th:text="#{tql.iam.delete}">Delete</button>
               </form>
             </td>
           </tr>
@@ -185,28 +185,28 @@
     <form th:if="${editorWritable == 1}" th:each="u : ${user}" method="post"
           th:action="@{/_tesseraql/admin/users/{id}/attributes/set(id=${u.user_id})}" class="hc-cluster">
       <input type="hidden" name="_csrf" th:value="${_csrf}">
-      <label class="hc-field"><span class="hc-field__label">Name</span>
+      <label class="hc-field"><span class="hc-field__label" th:text="#{tql.iam.name}">Name</span>
         <input class="hc-input" name="name" required></label>
-      <label class="hc-field"><span class="hc-field__label">Value</span>
+      <label class="hc-field"><span class="hc-field__label" th:text="#{tql.iam.value}">Value</span>
         <input class="hc-input" name="value"></label>
-      <button class="hc-button" data-variant="primary" type="submit">Set</button>
+      <button class="hc-button" data-variant="primary" type="submit" th:text="#{tql.iam.set}">Set</button>
     </form>
     <form th:if="${editorWritable == 1}" th:each="u : ${user}" method="post"
           th:action="@{/_tesseraql/admin/users/{id}/recompute(id=${u.user_id})}">
       <input type="hidden" name="_csrf" th:value="${_csrf}">
-      <button class="hc-button" data-size="sm" type="submit">Recompute rule assignments now</button>
+      <button class="hc-button" data-size="sm" type="submit" th:text="#{tql.iam.recomputeRuleAssignmentsNow}">Recompute rule assignments now</button>
     </form>
   </div>
 </section>
 <section class="hc-card" th:if="${editorAvailable == 1}">
-  <div class="hc-card__header">Role assignments</div>
+  <div class="hc-card__header" th:text="#{tql.iam.roleAssignments}">Role assignments</div>
   <div class="hc-card__body hc-stack">
     <div class="hc-empty" th:if="${#lists.isEmpty(assignments)}">
-      <p class="hc-empty__title">No direct role assignments.</p>
+      <p class="hc-empty__title" th:text="#{tql.iam.noDirectRoleAssignments}">No direct role assignments.</p>
     </div>
     <div class="hc-table-scroll" th:if="${!#lists.isEmpty(assignments)}">
       <table class="hc-table">
-        <thead><tr><th>Code</th><th>Application</th><th>Source</th><th>From</th><th>Until</th><th></th></tr></thead>
+        <thead><tr><th th:text="#{tql.iam.code}">Code</th><th th:text="#{tql.iam.application}">Application</th><th th:text="#{tql.iam.source}">Source</th><th th:text="#{tql.iam.from}">From</th><th th:text="#{tql.iam.until}">Until</th><th></th></tr></thead>
         <tbody>
           <tr th:each="a : ${assignments}">
             <td><code th:text="${a.role_code}"></code></td>
@@ -219,7 +219,7 @@
                     th:action="@{/_tesseraql/admin/users/{id}/roles/unassign(id=${u.user_id})}">
                 <input type="hidden" name="_csrf" th:value="${_csrf}">
                 <input type="hidden" name="roleCode" th:value="${a.role_code}">
-                <button class="hc-button" data-variant="ghost" data-size="sm" type="submit">Unassign</button>
+                <button class="hc-button" data-variant="ghost" data-size="sm" type="submit" th:text="#{tql.iam.unassign}">Unassign</button>
               </form>
             </td>
           </tr>
@@ -230,33 +230,33 @@
           th:action="@{/_tesseraql/admin/users/{id}/roles/assign(id=${u.user_id})}" class="hc-cluster">
       <input type="hidden" name="_csrf" th:value="${_csrf}">
       <label class="hc-field">
-        <span class="hc-field__label">Role</span>
+        <span class="hc-field__label" th:text="#{tql.iam.role}">Role</span>
         <select class="hc-input" name="roleCode" required>
           <option th:each="r : ${allRoles}" th:value="${r.role_code}"
-                  th:text="|${r.role_code} (${r.application != null ? r.application : 'stack-wide'})|"></option>
+                  th:text="|${r.role_code} (${r.application != null ? r.application : #messages.msg('tql.iam.stackWide')})|"></option>
         </select>
       </label>
       <label class="hc-field">
-        <span class="hc-field__label">From</span>
+        <span class="hc-field__label" th:text="#{tql.iam.from}">From</span>
         <input class="hc-input" name="startsAt" type="datetime-local">
       </label>
       <label class="hc-field">
-        <span class="hc-field__label">Until</span>
+        <span class="hc-field__label" th:text="#{tql.iam.until}">Until</span>
         <input class="hc-input" name="endsAt" type="datetime-local">
       </label>
-      <button class="hc-button" data-variant="primary" type="submit">Assign</button>
+      <button class="hc-button" data-variant="primary" type="submit" th:text="#{tql.iam.assign}">Assign</button>
     </form>
   </div>
 </section>
 <section class="hc-card" th:if="${editorAvailable == 1}">
-  <div class="hc-card__header">Direct permissions</div>
+  <div class="hc-card__header" th:text="#{tql.iam.directPermissions}">Direct permissions</div>
   <div class="hc-card__body hc-stack">
     <div class="hc-empty" th:if="${#lists.isEmpty(grants)}">
-      <p class="hc-empty__title">No direct permission grants.</p>
+      <p class="hc-empty__title" th:text="#{tql.iam.noDirectPermissionGrants}">No direct permission grants.</p>
     </div>
     <div class="hc-table-scroll" th:if="${!#lists.isEmpty(grants)}">
       <table class="hc-table">
-        <thead><tr><th>Code</th><th>From</th><th>Until</th><th></th></tr></thead>
+        <thead><tr><th th:text="#{tql.iam.code}">Code</th><th th:text="#{tql.iam.from}">From</th><th th:text="#{tql.iam.until}">Until</th><th></th></tr></thead>
         <tbody>
           <tr th:each="g : ${grants}">
             <td><code th:text="${g.permission_code}"></code></td>
@@ -267,7 +267,7 @@
                     th:action="@{/_tesseraql/admin/users/{id}/permissions/revoke(id=${u.user_id})}">
                 <input type="hidden" name="_csrf" th:value="${_csrf}">
                 <input type="hidden" name="code" th:value="${g.permission_code}">
-                <button class="hc-button" data-variant="ghost" data-size="sm" type="submit">Revoke</button>
+                <button class="hc-button" data-variant="ghost" data-size="sm" type="submit" th:text="#{tql.iam.revoke}">Revoke</button>
               </form>
             </td>
           </tr>
@@ -278,18 +278,18 @@
           th:action="@{/_tesseraql/admin/users/{id}/permissions/grant(id=${u.user_id})}" class="hc-cluster">
       <input type="hidden" name="_csrf" th:value="${_csrf}">
       <label class="hc-field">
-        <span class="hc-field__label">Permission code</span>
+        <span class="hc-field__label" th:text="#{tql.iam.permissionCode}">Permission code</span>
         <input class="hc-input" name="code" required>
       </label>
       <label class="hc-field">
-        <span class="hc-field__label">From</span>
+        <span class="hc-field__label" th:text="#{tql.iam.from}">From</span>
         <input class="hc-input" name="startsAt" type="datetime-local">
       </label>
       <label class="hc-field">
-        <span class="hc-field__label">Until</span>
+        <span class="hc-field__label" th:text="#{tql.iam.until}">Until</span>
         <input class="hc-input" name="endsAt" type="datetime-local">
       </label>
-      <button class="hc-button" data-variant="primary" type="submit">Grant</button>
+      <button class="hc-button" data-variant="primary" type="submit" th:text="#{tql.iam.grant}">Grant</button>
     </form>
   </div>
 </section>
@@ -297,21 +297,21 @@
      take when they need it. It grants nothing until they take it, and never reaches the
      principal, so it is invisible to every policy until an elevation lands. -->
 <section class="hc-card" th:if="${eligibilityAvailable == 1}">
-  <div class="hc-card__header">Eligible roles</div>
+  <div class="hc-card__header" th:text="#{tql.iam.eligibleRoles}">Eligible roles</div>
   <div class="hc-card__body hc-stack">
     <div class="hc-empty" th:if="${#lists.isEmpty(eligibility)}">
-      <p class="hc-empty__title">No eligible roles.</p>
-      <p class="hc-empty__description">An eligibility lets this person take a role for a
+      <p class="hc-empty__title" th:text="#{tql.iam.noEligibleRoles}">No eligible roles.</p>
+      <p class="hc-empty__description" th:text="#{tql.iam.anEligibilityLetsThis}">An eligibility lets this person take a role for a
         bounded window from their own account page, without holding it the rest of the
         time.</p>
     </div>
     <div class="hc-table-scroll" th:if="${!#lists.isEmpty(eligibility)}">
       <table class="hc-table">
-        <thead><tr><th>Role</th><th>Limit</th><th>Reason required</th><th>Active until</th><th></th></tr></thead>
+        <thead><tr><th th:text="#{tql.iam.role}">Role</th><th th:text="#{tql.iam.limit}">Limit</th><th th:text="#{tql.iam.reasonRequired}">Reason required</th><th th:text="#{tql.iam.activeUntil}">Active until</th><th></th></tr></thead>
         <tbody>
           <tr th:each="e : ${eligibility}">
             <td><code th:text="${e.role_code}"></code></td>
-            <td th:text="|${e.max_minutes} min|"></td>
+            <td th:text="#{tql.iam.minutesShort(${e.max_minutes})}"></td>
             <td th:text="${e.requires_reason == 1 ? 'yes' : 'no'}"></td>
             <td th:text="${e.held_until != null ? e.held_until : '—'}"></td>
             <td th:if="${editorWritable == 1}">
@@ -319,7 +319,7 @@
                     th:action="@{/_tesseraql/admin/users/{id}/eligibility/revoke(id=${u.user_id})}">
                 <input type="hidden" name="_csrf" th:value="${_csrf}">
                 <input type="hidden" name="roleCode" th:value="${e.role_code}">
-                <button class="hc-button" data-variant="ghost" data-size="sm" type="submit">Remove</button>
+                <button class="hc-button" data-variant="ghost" data-size="sm" type="submit" th:text="#{tql.iam.remove}">Remove</button>
               </form>
             </td>
           </tr>
@@ -329,29 +329,29 @@
     <form th:if="${editorWritable == 1}" th:each="u : ${user}" method="post"
           th:action="@{/_tesseraql/admin/users/{id}/eligibility/grant(id=${u.user_id})}" class="hc-cluster">
       <input type="hidden" name="_csrf" th:value="${_csrf}">
-      <label class="hc-field"><span class="hc-field__label">Role</span>
+      <label class="hc-field"><span class="hc-field__label" th:text="#{tql.iam.role}">Role</span>
         <select class="hc-input" name="roleCode" required>
           <option th:each="r : ${allRoles}" th:value="${r.role_code}" th:text="${r.role_code}"></option>
         </select></label>
-      <label class="hc-field"><span class="hc-field__label">Limit (minutes)</span>
+      <label class="hc-field"><span class="hc-field__label" th:text="#{tql.iam.limitMinutes}">Limit (minutes)</span>
         <input class="hc-input" name="maxMinutes" type="number" min="1" value="60"></label>
-      <label class="hc-field"><span class="hc-field__label">Reason required</span>
+      <label class="hc-field"><span class="hc-field__label" th:text="#{tql.iam.reasonRequired}">Reason required</span>
         <input class="hc-checkbox" name="requiresReason" type="checkbox" value="1" checked></label>
-      <button class="hc-button" data-variant="primary" type="submit">Make eligible</button>
+      <button class="hc-button" data-variant="primary" type="submit" th:text="#{tql.iam.makeEligible}">Make eligible</button>
     </form>
   </div>
 </section>
 <!-- This person's grant trail (docs/access-governance.md structural decision 1): both
      write paths, so a rule-produced assignment is as visible as an administrator's. -->
 <section class="hc-card" th:if="${historyAvailable == 1}">
-  <div class="hc-card__header">Grant history</div>
+  <div class="hc-card__header" th:text="#{tql.iam.grantHistory}">Grant history</div>
   <div class="hc-card__body">
     <div class="hc-empty" th:if="${#lists.isEmpty(history)}">
-      <p class="hc-empty__title">No recorded grant changes for this user.</p>
+      <p class="hc-empty__title" th:text="#{tql.iam.noRecordedGrantChanges2}">No recorded grant changes for this user.</p>
     </div>
     <div class="hc-table-scroll" th:if="${!#lists.isEmpty(history)}">
       <table class="hc-table">
-        <thead><tr><th>When</th><th>Actor</th><th>Change</th><th>Code</th><th>Source</th></tr></thead>
+        <thead><tr><th th:text="#{tql.iam.when}">When</th><th th:text="#{tql.iam.actor}">Actor</th><th th:text="#{tql.iam.change}">Change</th><th th:text="#{tql.iam.code}">Code</th><th th:text="#{tql.iam.source}">Source</th></tr></thead>
         <tbody>
           <tr th:each="h : ${history}">
             <td th:text="${h.occurred_at}"></td>
@@ -364,7 +364,7 @@
       </table>
     </div>
     <a class="hc-button" data-variant="ghost" data-size="sm" th:each="u : ${user}"
-       th:href="@{/_tesseraql/admin/history(user=${u.user_id})}">Open in grant history</a>
+       th:href="@{/_tesseraql/admin/history(user=${u.user_id})}" th:text="#{tql.iam.openInGrantHistory}">Open in grant history</a>
   </div>
 </section>
 </div>

@@ -1,38 +1,38 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org"
-      th:replace="~{tql/shell :: ops-member-page(|Queue Events — ${events.shell.label}|, ${events.shell}, ~{:: #page-header}, ~{:: #page-content})}">
+      th:replace="~{tql/shell :: ops-member-page(#{tql.ops.page.queueEvents(${events.shell.label})}, ${events.shell}, ~{:: #page-header}, ~{:: #page-content})}">
 <th:block id="page-header">
   <span class="hc-spacer"></span>
   <div class="hc-cluster">
-    <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{|${events.shell.base}${events.shell.slotQuery}|}">&larr; overview</a>
+    <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{|${events.shell.base}${events.shell.slotQuery}|}" th:text="#{tql.ops.larrOverview}">&larr; overview</a>
   </div>
 </th:block>
 <div id="page-content" class="hc-stack" th:hx-get="@{|${events.shell.base}/events${events.shell.slotQuery}|}" hx-trigger="every 15s"
      hx-select="#page-content" hx-target="this" hx-swap="outerHTML">
 <section class="hc-card">
-  <div class="hc-card__header">Queue events</div>
+  <div class="hc-card__header" th:text="#{tql.ops.queueEvents}">Queue events</div>
   <div class="hc-card__body hc-stack">
-    <p class="hc-alert" data-variant="success" role="status" th:if="${!#strings.isEmpty(redelivered)}">Requeued
+    <p class="hc-alert" data-variant="success" role="status" th:if="${!#strings.isEmpty(redelivered)}" th:text="#{tql.ops.requeuedMdashTheConsumer}">Requeued
       &mdash; the consumer picks the message up on its next drain.</p>
     <ul class="hc-chips">
       <li th:each="s : ${events.byStatus}" class="hc-badge"
           th:attr="data-variant=${s.statusVariant}">[[${s.status}]]: [[${s.count}]]</li>
     </ul>
-    <div class="hc-empty" th:unless="${events.hasRows}"><p class="hc-empty__title">No queue events recorded.</p></div>
+    <div class="hc-empty" th:unless="${events.hasRows}"><p class="hc-empty__title" th:text="#{tql.ops.noQueueEventsRecorded}">No queue events recorded.</p></div>
     <div class="hc-datagrid" th:if="${events.hasRows}">
       <div class="hc-datagrid__scroll">
         <table class="hc-datagrid__table">
           <thead class="hc-datagrid__head"><tr>
-            <th class="hc-datagrid__headcell">Event</th>
-            <th class="hc-datagrid__headcell">Channel</th>
-            <th class="hc-datagrid__headcell">Topic</th>
-            <th class="hc-datagrid__headcell">Key</th>
-            <th class="hc-datagrid__headcell">App</th>
-            <th class="hc-datagrid__headcell">Status</th>
-            <th class="hc-datagrid__headcell" data-numeric>Attempts</th>
-            <th class="hc-datagrid__headcell">Last error</th>
-            <th class="hc-datagrid__headcell">Published</th>
-            <th class="hc-datagrid__headcell">Consumed</th>
+            <th class="hc-datagrid__headcell" th:text="#{tql.ops.event}">Event</th>
+            <th class="hc-datagrid__headcell" th:text="#{tql.ops.channel}">Channel</th>
+            <th class="hc-datagrid__headcell" th:text="#{tql.ops.topic}">Topic</th>
+            <th class="hc-datagrid__headcell" th:text="#{tql.ops.key}">Key</th>
+            <th class="hc-datagrid__headcell" th:text="#{tql.ops.app}">App</th>
+            <th class="hc-datagrid__headcell" th:text="#{tql.ops.status}">Status</th>
+            <th class="hc-datagrid__headcell" data-numeric th:text="#{tql.ops.attempts}">Attempts</th>
+            <th class="hc-datagrid__headcell" th:text="#{tql.ops.lastError}">Last error</th>
+            <th class="hc-datagrid__headcell" th:text="#{tql.ops.published}">Published</th>
+            <th class="hc-datagrid__headcell" th:text="#{tql.ops.consumed}">Consumed</th>
             <th class="hc-datagrid__headcell"></th>
           </tr></thead>
           <tbody class="hc-datagrid__body">
@@ -53,7 +53,7 @@
                   <input type="hidden" name="_csrf" th:value="${_csrf}">
                   <input type="hidden" name="slot" th:value="${events.shell.canary ? 'canary' : ''}">
                   <input type="hidden" name="id" th:value="${e.id}">
-                  <button class="hc-button" data-size="sm" type="submit">Redeliver</button>
+                  <button class="hc-button" data-size="sm" type="submit" th:text="#{tql.ops.redeliver}">Redeliver</button>
                 </form>
               </td>
             </tr>
@@ -61,7 +61,7 @@
         </table>
       </div>
     </div>
-    <p class="hc-field__message">Redeliver requeues a dead-lettered message; failed messages
+    <p class="hc-field__message" th:text="#{tql.ops.redeliverRequeuesADead}">Redeliver requeues a dead-lettered message; failed messages
       below their attempt limit retry on their own.</p>
   </div>
 </section>

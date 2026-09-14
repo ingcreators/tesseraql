@@ -86,6 +86,25 @@ class OpsConsoleIntegrationTest {
         }
     }
 
+    /**
+     * The console renders in the negotiated language (docs/audit-medium-leads.md slice 8c,
+     * F127): every visible string of the eleven Operations templates is a catalog key.
+     */
+    @Test
+    void theConsoleRendersInTheNegotiatedLocale() throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(
+                URI.create("http://localhost:" + runtime.port()
+                        + "/_tesseraql/ops/console/user-admin"))
+                .header("Cookie", scopedCookie).header("Accept-Language", "ja, en;q=0.5").build();
+        HttpResponse<String> page = HttpClient.newHttpClient().send(request,
+                HttpResponse.BodyHandlers.ofString());
+
+        assertThat(page.statusCode()).isEqualTo(200);
+        assertThat(page.body()).contains("lang=\"ja\"").contains("運用 — ")
+                .contains(">バッチ実行<").contains(">ヘルス<")
+                .doesNotContain(">Batch executions<");
+    }
+
     @Test
     void rendersHtmlDashboardForAuthorizedCaller() throws Exception {
         HttpResponse<String> response = getWith("/_tesseraql/ops/console/user-admin",
