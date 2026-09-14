@@ -372,6 +372,83 @@ public final class StudioViews {
      * the actual styled result.
      */
     public static Map<String, Object> render(RenderResult result, String basePath) {
+        return render(result, basePath, PreviewChrome.defaults());
+    }
+
+    /**
+     * The shell's theme trio and token sheets, as the preview must render them
+     * (docs/audit-medium-leads.md slice 10, F99): the preview pinned {@code data-theme="dark"}
+     * and linked no ramp, density or app sheet, so with the framework defaults (slate, compact)
+     * an author judged layout and contrast against a dark, warm-gray, comfortable-density page
+     * the app never produces. Values are the runtime's UI beans — operator defaults, validated
+     * the way {@code ShellChrome} validates them; the kit's own defaults ({@code neutral} ramp,
+     * {@code comfortable} density, the {@code default} accent) publish nothing, as the shell's
+     * do. The signed-in user's stored theme is a per-request fact the preview provider has no
+     * request for; the operator's default is what it renders.
+     *
+     * @param theme      {@code light} or {@code dark}, or null for the kit's default
+     * @param neutral    the ramp attribute, or null for the kit's default
+     * @param density    the density attribute, or null for the kit's default
+     * @param color      the accent axis attribute, or null for the kit's default
+     * @param colorSheet whether the kit ships a token sheet for {@code color}
+     * @param stylesheet the app's own token stylesheet under {@code /assets/}, or null
+     */
+    public record PreviewChrome(String theme, String neutral, String density, String color,
+            boolean colorSheet, String stylesheet) {
+
+        /** The framework defaults the shell renders with nothing configured: slate, compact. */
+        public static PreviewChrome defaults() {
+            return of(null, null, null, null, null);
+        }
+
+        /** Validates the raw bean values the way the shell does, and fills the defaults. */
+        public static PreviewChrome of(String theme, String neutral, String density,
+                String color, String stylesheet) {
+            String validTheme = "light".equals(theme) || "dark".equals(theme) ? theme : null;
+            String ramp = neutral != null && NEUTRALS.contains(neutral) ? neutral : "slate";
+            String size = density != null && DENSITIES.contains(density) ? density : "compact";
+            String axis = color != null && AXIS_NAME.matcher(color).matches()
+                    && !"default".equals(color) ? color : null;
+            String sheet = stylesheet != null && ASSET_STYLESHEET.matcher(stylesheet).matches()
+                    && !stylesheet.contains("..") ? stylesheet : null;
+            return new PreviewChrome(validTheme, "neutral".equals(ramp) ? null : ramp,
+                    "comfortable".equals(size) ? null : size, axis,
+                    axis != null && COLOR_SHEETS.contains(axis), sheet);
+        }
+
+        private static final java.util.Set<String> NEUTRALS = java.util.Set.of("neutral",
+                "slate", "zinc", "stone");
+        private static final java.util.Set<String> DENSITIES = java.util.Set.of("comfortable",
+                "compact", "dense");
+        private static final java.util.Set<String> COLOR_SHEETS = java.util.Set.of("teal",
+                "lime", "orange", "fuchsia");
+        private static final java.util.regex.Pattern AXIS_NAME = java.util.regex.Pattern
+                .compile("[a-z][a-z0-9-]{0,31}");
+        private static final java.util.regex.Pattern ASSET_STYLESHEET = java.util.regex.Pattern
+                .compile("[A-Za-z0-9_./-]+\\.css");
+
+        /** The root element's attributes, in the shell's order; empty when nothing applies. */
+        String attributes() {
+            StringBuilder out = new StringBuilder();
+            if (theme != null) {
+                out.append(" data-theme=\"").append(theme).append('"');
+            }
+            if (density != null) {
+                out.append(" data-density=\"").append(density).append('"');
+            }
+            if (neutral != null) {
+                out.append(" data-neutral=\"").append(neutral).append('"');
+            }
+            if (color != null) {
+                out.append(" data-color=\"").append(color).append('"');
+            }
+            return out.toString();
+        }
+    }
+
+    /** {@link #render(RenderResult, String)} with the shell's chrome the preview renders in. */
+    public static Map<String, Object> render(RenderResult result, String basePath,
+            PreviewChrome chrome) {
         Map<String, Object> model = new LinkedHashMap<>();
         model.put("ok", result.ok());
         model.put("kind", result.kind());
@@ -390,7 +467,7 @@ public final class StudioViews {
                     Highlighter.highlight(isHtml ? "output.html" : "output.txt", output));
         }
         if (result.ok() && isHtml) {
-            model.put("previewDoc", previewDoc(output, basePath));
+            model.put("previewDoc", previewDoc(output, basePath, chrome));
         }
         return model;
     }
@@ -509,12 +586,29 @@ public final class StudioViews {
      * <p>Built here rather than written in a template, so the prefix is applied by hand: this is
      * markup for an iframe {@code srcdoc}, which no link expression reaches (docs/base-path.md).
      */
-    private static String previewHead(String basePath) {
+    private static String previewHead(String basePath, PreviewChrome chrome) {
         String base = basePath == null ? "" : basePath;
-        return "<meta charset=\"utf-8\">"
-                + "<link rel=\"stylesheet\" href=\"" + base
-                + "/assets/vendor/hypermedia-components__core/dist/hc.min.css\">"
-                + "<link rel=\"stylesheet\" href=\"" + base + "/assets/_tesseraql/tesseraql.css\">"
+        String vendor = base + "/assets/vendor/hypermedia-components__core/dist/";
+        StringBuilder head = new StringBuilder("<meta charset=\"utf-8\">")
+                .append("<link rel=\"stylesheet\" href=\"").append(vendor).append("hc.min.css\">");
+        // The token layer in the shell's order: the neutral ramp, the accent axis the kit ships
+        // a sheet for, then the app's own stylesheet so its block wins inside @layer hc.tokens.
+        if (chrome.neutral() != null) {
+            head.append("<link rel=\"stylesheet\" href=\"").append(vendor)
+                    .append("hc.tokens.neutral-").append(chrome.neutral()).append(".css\">");
+        }
+        if (chrome.colorSheet()) {
+            head.append("<link rel=\"stylesheet\" href=\"").append(vendor)
+                    .append("hc.tokens.color-").append(chrome.color()).append(".css\">");
+        }
+        if (chrome.stylesheet() != null) {
+            head.append("<link rel=\"stylesheet\" href=\"").append(base).append("/assets/")
+                    .append(chrome.stylesheet()).append("\">");
+        }
+        return head
+                .append("<link rel=\"stylesheet\" href=\"" + base
+                        + "/assets/_tesseraql/tesseraql.css\">")
+                .toString()
                 + "<script src=\"" + base
                 + "/assets/vendor/htmx.org/dist/htmx.min.js\" defer></script>"
                 + "<script type=\"module\" src=\"" + base
@@ -524,16 +618,17 @@ public final class StudioViews {
     /**
      * Wraps rendered HTML for a sandboxed iframe {@code srcdoc}: a full-page render (one that brings
      * its own {@code <html>}, e.g. via the {@code tql/shell} layout) is shown verbatim, while a bare
-     * fragment is wrapped in a minimal document linking the hc stylesheet so it is styled like the
-     * real app. The dark theme matches the Studio shell.
+     * fragment is wrapped in a minimal document linking the hc stylesheets so it is styled like the
+     * real app — the shell's theme trio and token sheets ({@link PreviewChrome}), not a pinned
+     * dark theme.
      */
-    private static String previewDoc(String html, String basePath) {
+    private static String previewDoc(String html, String basePath, PreviewChrome chrome) {
         String lower = html.stripLeading().toLowerCase(java.util.Locale.ROOT);
         if (lower.startsWith("<!doctype") || lower.startsWith("<html")) {
             return html;
         }
-        return "<!DOCTYPE html><html lang=\"en\" data-theme=\"dark\"><head>"
-                + previewHead(basePath) + "</head><body>" + html + "</body></html>";
+        return "<!DOCTYPE html><html lang=\"en\"" + chrome.attributes() + "><head>"
+                + previewHead(basePath, chrome) + "</head><body>" + html + "</body></html>";
     }
 
     /**

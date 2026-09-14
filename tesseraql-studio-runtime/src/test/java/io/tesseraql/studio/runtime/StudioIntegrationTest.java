@@ -1432,7 +1432,13 @@ class StudioIntegrationTest {
                 // the rendered HTML is server-tokenized for the text surface
                 .contains("hc-code__tok")
                 // the sample data flows into the render
-                .contains("Alice");
+                .contains("Alice")
+                // the preview renders in the shell's chrome — the framework's slate + compact
+                // and the ramp's token sheet — not a pinned dark theme over the kit's defaults
+                // (F99); the srcdoc is attribute-escaped, hence the entities
+                .contains("data-density=&quot;compact&quot; data-neutral=&quot;slate&quot;")
+                .contains("hc.tokens.neutral-slate.css")
+                .doesNotContain("data-theme=&quot;dark&quot;");
     }
 
     @Test

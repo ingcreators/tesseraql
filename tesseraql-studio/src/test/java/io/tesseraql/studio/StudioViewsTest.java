@@ -360,10 +360,39 @@ class StudioViewsTest {
         assertThat(ok).containsEntry("ok", true).containsEntry("isHtml", true)
                 .containsEntry("output", "<p class=\"hc-alert\">Hi</p>");
         assertThat((String) ok.get("outputHtml")).contains("hc-code__tok");
+        // The framework defaults (slate, compact) ride the root element and their token
+        // sheet is linked; no theme is pinned — the preview used to hard-code dark and link
+        // no ramp, so it rendered a page the app never produces (F99).
         assertThat((String) ok.get("previewDoc"))
-                .startsWith("<!DOCTYPE html>")
+                .startsWith("<!DOCTYPE html><html lang=\"en\" data-density=\"compact\""
+                        + " data-neutral=\"slate\">")
+                .doesNotContain("data-theme=")
                 .contains("hypermedia-components__core/dist/hc.min.css")
+                .contains("hypermedia-components__core/dist/hc.tokens.neutral-slate.css")
                 .contains("<p class=\"hc-alert\">Hi</p>");
+
+        // The operator's chrome: theme, ramp, density, a kit accent (its sheet linked) and the
+        // app's own token stylesheet, in the shell's order ahead of tesseraql.css.
+        Map<String, Object> themed = StudioViews.render(
+                StudioService.RenderResult.ok("html", "<p>Hi</p>"), "/shop",
+                StudioViews.PreviewChrome.of("light", "zinc", "dense", "teal", "theme.css"));
+        String doc = (String) themed.get("previewDoc");
+        assertThat(doc)
+                .startsWith("<!DOCTYPE html><html lang=\"en\" data-theme=\"light\""
+                        + " data-density=\"dense\" data-neutral=\"zinc\" data-color=\"teal\">")
+                .contains(
+                        "/shop/assets/vendor/hypermedia-components__core/dist/hc.tokens.neutral-zinc.css")
+                .contains(
+                        "/shop/assets/vendor/hypermedia-components__core/dist/hc.tokens.color-teal.css")
+                .contains("/shop/assets/theme.css");
+        assertThat(doc.indexOf("theme.css")).isLessThan(doc.indexOf("tesseraql.css"));
+        assertThat(doc.indexOf("neutral-zinc")).isLessThan(doc.indexOf("color-teal"));
+
+        // A theme-builder accent has no kit sheet, and the kit defaults publish nothing.
+        StudioViews.PreviewChrome custom = StudioViews.PreviewChrome.of(null, "neutral",
+                "comfortable", "brand", null);
+        assertThat(custom.attributes()).isEqualTo(" data-color=\"brand\"");
+        assertThat(custom.colorSheet()).isFalse();
 
         // A full-page render (its own <html>) is previewed verbatim, not double-wrapped.
         Map<String, Object> page = StudioViews.render(
