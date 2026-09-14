@@ -493,15 +493,28 @@ class SchemaSyncTest {
                 .containsExactlyInAnyOrderElementsOf(AppLinter.knownAuthModes());
     }
 
+    /**
+     * One {@code inputField} shape serves {@code input:}, {@code domains/} and a binding's
+     * {@code result:} (docs/temporal-semantics.md T3), so its enum is the union: the input types
+     * plus the read-only {@code json}. Which surface honours which is {@code DeclaredKinds}'
+     * judgement (TQL-YAML-1064), and the {@code resultField} shape lists the read kinds alone.
+     */
     @Test
-    void schemaInputTypeEnumMatchesTheFrameworkInputTypes() throws Exception {
+    void schemaInputTypeEnumMatchesTheFrameworkFieldTypes() throws Exception {
         JsonNode schema = new ObjectMapper().readTree(
                 getClass().getResourceAsStream("/schema/tesseraql-defs-v1.schema.json"));
         List<String> types = new ArrayList<>();
         schema.path("$defs").path("inputField").path("properties").path("type").path("enum")
                 .forEach(node -> types.add(node.asText()));
         assertThat(types)
-                .containsExactlyInAnyOrderElementsOf(AppLinter.knownInputTypes());
+                .containsExactlyInAnyOrderElementsOf(AppLinter.knownFieldTypes());
+        List<String> kinds = new ArrayList<>();
+        schema.path("$defs").path("resultField").path("properties").path("type").path("enum")
+                .forEach(node -> kinds.add(node.asText()));
+        assertThat(kinds)
+                .containsExactlyInAnyOrderElementsOf(
+                        io.tesseraql.yaml.app.DeclaredKinds.RESULT_KINDS);
+        assertThat(AppLinter.knownInputTypes()).doesNotContain("json");
     }
 
     /**

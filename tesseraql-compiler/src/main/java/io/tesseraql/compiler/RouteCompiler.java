@@ -494,6 +494,7 @@ public final class RouteCompiler {
         requireRotationHonoured(definition);
         requireLockHonoured(definition, null);
         refuseWriteKeysOnSources(definition);
+        requireDeclaredKinds(definition);
         switch (definition.recipe()) {
             case "query-json", "command-json" -> buildJson(context, routeFile);
             case "query-html", "page" -> buildTemplatePage(context, appHome, routeFile);
@@ -702,6 +703,20 @@ public final class RouteCompiler {
                         + " honour — move the statement to steps:");
             }
         });
+    }
+
+    /**
+     * Refuses a declared field type the surface would silently pass through as text
+     * (docs/temporal-semantics.md T3): an {@code input:} whose {@code type:} no request binds,
+     * a {@code result:} entry whose kind no read parses or whose {@code format:} its parser
+     * refuses, a {@code result:} on a binding that publishes no rows — from the predicate the
+     * linter reports from, with one code ({@code TQL-YAML-1064}).
+     */
+    private static void requireDeclaredKinds(RouteDefinition definition) {
+        java.util.List<io.tesseraql.yaml.app.DeclaredKinds.Violation> violations = new java.util.ArrayList<>(
+                io.tesseraql.yaml.app.DeclaredKinds.inputViolations(definition));
+        violations.addAll(io.tesseraql.yaml.app.DeclaredKinds.resultViolations(definition));
+        io.tesseraql.yaml.app.DeclaredKinds.require(violations, LOG::warn);
     }
 
     /** The terminal renderer: a redirect when declared, otherwise the JSON response. */
@@ -1342,6 +1357,7 @@ public final class RouteCompiler {
         RouteDefinition definition = routeFile.definition();
         requireLockHonoured(definition, "a queue consumer");
         refuseWriteKeysOnSources(definition);
+        requireDeclaredKinds(definition);
         io.tesseraql.yaml.model.ConsumeSpec consume = definition.consume();
         if (consume == null || consume.channel() == null || consume.channel().isBlank()
                 || consume.topic() == null || consume.topic().isBlank()) {
@@ -1906,25 +1922,37 @@ public final class RouteCompiler {
      */
     private PipelineBuilder source(PipelineBuilder step, RouteFile routeFile,
             String name, io.tesseraql.yaml.model.Binding binding) {
-        if (binding.isHttp()) {
-            return step.process(new io.tesseraql.compiler.binding.HttpSourceProcessor(
-                    name, binding.http()));
-        }
-        return step
-                .process(new io.tesseraql.compiler.binding.NamedQueryBinder(binding))
-                .process(execution(routeFile, binding, name));
+        PipelineBuilder acquired = binding.isHttp()
+                ? step.process(new io.tesseraql.compiler.binding.HttpSourceProcessor(
+                        name, binding.http()))
+                : step.process(new io.tesseraql.compiler.binding.NamedQueryBinder(binding))
+                        .process(execution(routeFile, binding, name));
+        return declaredKinds(acquired, routeFile.definition().id(), name, binding);
     }
 
     /** The same, for the {@code direct:} pipelines that carry a directory instead of a route. */
     private PipelineBuilder source(PipelineBuilder step, Path dir, String name,
             io.tesseraql.yaml.model.Binding binding, String datasource) {
-        if (binding.isHttp()) {
-            return step.process(new io.tesseraql.compiler.binding.HttpSourceProcessor(
-                    name, binding.http()));
+        PipelineBuilder acquired = binding.isHttp()
+                ? step.process(new io.tesseraql.compiler.binding.HttpSourceProcessor(
+                        name, binding.http()))
+                : step.process(new io.tesseraql.compiler.binding.NamedQueryBinder(binding))
+                        .process(execution(dir, binding, name, datasource));
+        return declaredKinds(acquired, dir.getFileName().toString(), name, binding);
+    }
+
+    /**
+     * The source's {@code result:} declaration, applied to its rows right after they are
+     * acquired and before an enrichment or a response reads them (docs/temporal-semantics.md
+     * T3); a source that declares none mounts nothing.
+     */
+    private static PipelineBuilder declaredKinds(PipelineBuilder step, String routeId,
+            String name, io.tesseraql.yaml.model.Binding binding) {
+        if (binding.result().isEmpty()) {
+            return step;
         }
-        return step
-                .process(new io.tesseraql.compiler.binding.NamedQueryBinder(binding))
-                .process(execution(dir, binding, name, datasource));
+        return step.process(new io.tesseraql.compiler.binding.ResultDeclarationProcessor(
+                routeId, name, binding.result()));
     }
 
     /**
@@ -1997,6 +2025,7 @@ public final class RouteCompiler {
         RouteDefinition definition = toolFile.definition();
         requireLockHonoured(definition, "an MCP tool");
         refuseWriteKeysOnSources(definition);
+        requireDeclaredKinds(definition);
         Path toolDir = toolFile.source().getParent();
         String routeId = "mcp." + definition.id();
 
@@ -2061,6 +2090,7 @@ public final class RouteCompiler {
         RouteDefinition definition = resourceFile.definition();
         requireLockHonoured(definition, "an MCP resource");
         refuseWriteKeysOnSources(definition);
+        requireDeclaredKinds(definition);
         Path resourceDir = resourceFile.source().getParent();
         String routeId = "mcp.resource." + definition.id();
 
@@ -2103,6 +2133,7 @@ public final class RouteCompiler {
         RouteDefinition definition = uiFile.definition();
         requireLockHonoured(definition, "an MCP UI resource");
         refuseWriteKeysOnSources(definition);
+        requireDeclaredKinds(definition);
         Path uiDir = uiFile.source().getParent();
         String routeId = "mcp.ui." + definition.id();
 
@@ -2139,6 +2170,7 @@ public final class RouteCompiler {
         RouteDefinition definition = promptFile.definition();
         requireLockHonoured(definition, "an MCP prompt");
         refuseWriteKeysOnSources(definition);
+        requireDeclaredKinds(definition);
         Path promptDir = promptFile.source().getParent();
         if (!"prompt-text".equals(definition.recipe())) {
             throw new TqlException(UNSUPPORTED_RECIPE, "Prompt '" + definition.id()

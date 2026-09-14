@@ -572,7 +572,32 @@ public final class ManifestLoader {
             }
             errors = new io.tesseraql.yaml.model.ErrorsSpec(catalog);
         }
-        return def.withInputAndErrors(input, errors);
+        return def.withInputAndErrors(input, errors)
+                .withBindings(withResultDomains(domains, source, def.sources()),
+                        withResultDomains(domains, source, def.steps()));
+    }
+
+    /**
+     * The bindings with every {@code result:} entry's {@code domain:} resolved
+     * (docs/temporal-semantics.md T3): a date a legacy column stores as text is the same
+     * business field the request binds, so the declaration reads the same domain.
+     */
+    private static Map<String, io.tesseraql.yaml.model.Binding> withResultDomains(
+            io.tesseraql.yaml.domain.FieldDomains domains, Path source,
+            Map<String, io.tesseraql.yaml.model.Binding> bindings) {
+        if (bindings.values().stream().noneMatch(binding -> binding.result().values().stream()
+                .anyMatch(field -> field.domain() != null))) {
+            return bindings;
+        }
+        Map<String, io.tesseraql.yaml.model.Binding> resolved = new java.util.LinkedHashMap<>();
+        bindings.forEach((name, binding) -> {
+            Map<String, io.tesseraql.yaml.model.InputField> result = new java.util.LinkedHashMap<>();
+            binding.result().forEach((column, field) -> result.put(column, field.domain() == null
+                    ? field
+                    : field.mergedWith(domains.require(field.domain(), source.toString()))));
+            resolved.put(name, binding.withResult(result));
+        });
+        return resolved;
     }
 
     /** Whether this field, or one of an object array's element fields, names a domain. */

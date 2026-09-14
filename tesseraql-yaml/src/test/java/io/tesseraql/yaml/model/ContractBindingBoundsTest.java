@@ -27,7 +27,7 @@ class ContractBindingBoundsTest {
         Binding binding = Binding.of(null,
                 new Binding.ContractCall("identity.list-users", null, null, null,
                         new Binding.Materialize(2, "warn"), null),
-                null, null, null, null, null, null);
+                null, null, null, null, null, null, null);
 
         assertThat(binding.isContract()).isTrue();
         assertThat(binding.materialize()).isNotNull();
@@ -39,7 +39,7 @@ class ContractBindingBoundsTest {
     void aContractBindingCarriesItsOwnStatementTimeout() {
         Binding binding = Binding.of(null,
                 new Binding.ContractCall("identity.list-users", null, null, null, null, 5),
-                null, null, null, null, null, null);
+                null, null, null, null, null, null, null);
 
         assertThat(binding.timeoutSeconds()).isEqualTo(5);
     }
@@ -52,7 +52,7 @@ class ContractBindingBoundsTest {
     void aServiceBindingHasNoPlaceToDeclareBounds() {
         Binding binding = Binding.of(null, null,
                 new Binding.NamedCall("iam.grantHistory", null),
-                null, null, null, null, null);
+                null, null, null, null, null, null);
 
         assertThat(binding.isService()).isTrue();
         assertThat(binding.materialize()).isNull();
@@ -70,7 +70,7 @@ class ContractBindingBoundsTest {
         Binding binding = Binding.of(null,
                 new Binding.ContractCall("identity.enable-user", "update",
                         java.util.Map.of("userId", "path.id"), null, null, null),
-                null, null, null, null, null, null);
+                null, null, null, null, null, null, null);
 
         assertThat(binding.effectiveMode()).isEqualTo("update");
         assertThat(binding.params()).containsEntry("userId", "path.id");

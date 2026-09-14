@@ -315,6 +315,53 @@ when it is not zero. None of these depends on the server's time zone.
 Numbers, booleans, strings, UUIDs and binary values pass through as JSON kinds. Anything else —
 a `jsonb` column, an `interval`, an array — is the text the driver gives it, as a string.
 
+### Declaring a column's kind (`result:`)
+
+What the database declares, the framework reads. What a column holds *as text* — a `jsonb` or
+`json` document, a date a legacy schema stores as `20240103`, an amount stored as `1,234.50` — is
+text to the database, so a binding may say what the text is:
+
+```yaml
+sources:
+  main:
+    sql: { file: orders.sql }
+    result:
+      payload:    { type: json }                    # navigable: payload.sku
+      ordered_on: { domain: order_date }            # a domain saying "a date written yyyy/MM/dd"
+      amount:     { type: number, format: "#,##0.00" }
+```
+
+Each entry is a field, the same vocabulary `input:` uses, so a `domain:` says it once for the
+request that binds the value and the query that reads it back. The block is sparse: an
+undeclared column keeps the kind the database gave it. A declared column is parsed after the
+read and then rendered exactly as a native column of that kind is — a `date` stored as text and
+a `date` column are the same case on every surface. The kinds a declaration parses:
+
+- `json` — the text becomes a value an expression, a template or a response binding navigates
+  (`payload.sku`, `payload.tags.size`) and the JSON response writes as a structure; wherever a
+  surface prints the value (an HTML cell, a CSV field, Studio), it prints compact JSON. A
+  `jsonb` column and a text column holding JSON are the same case. `json` reads no `format:`.
+- `date` and `datetime` — the text is parsed with `format:` (the kind's default when absent) and
+  rendered as `2026-01-15` or `2026-01-15T22:30:00`. A parsed text datetime is a wall clock:
+  text has no zone, so it is never an instant and never moved. Text already in that canonical
+  form is accepted too, so a native column declared for its domain's sake reads unchanged.
+- `number` — the text is parsed with `format:` (a `DecimalFormat` pattern, in the root locale)
+  into a decimal.
+
+A declaration applies where a binding publishes rows: a route source and a command step in
+`mode: query`, whose `steps.<name>.rows` get the same treatment. The export reader keeps its own
+`columns:` vocabulary, and the batch readers keep the kind the database declares.
+
+A value that cannot be parsed into its kind fails the read with `TQL-SQL-2503`, naming the
+source, the column, the row index and the kind — never silently passed through as text, which
+would turn a consumer's `payload.sku` into `null` with no signal. A declared column the query
+never produces cannot be linted (a query with conditional directives has no derivable column
+list), so a declared column absent from every row of a non-empty result is logged once per
+route and source, never a 500. A kind the read does not parse, a `format:` its parser refuses,
+or a `result:` on a binding that publishes no rows is a lint error and a boot refusal with one
+code, `TQL-YAML-1064`; the same code refuses `type: json` on an `input:`, where nothing binds
+it.
+
 ## Where to go next
 
 - [pagination.md](pagination.md) — the `page` context entry maps into shaped bodies the

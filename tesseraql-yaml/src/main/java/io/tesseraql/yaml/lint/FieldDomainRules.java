@@ -59,6 +59,17 @@ final class FieldDomainRules implements LintRule {
                         "Field '" + name + "' loosens domain '" + field.domain() + "': " + what
                                 + " — a loosened copy is the drift domains exist to prevent")));
             });
+            // A result: entry reads a domain too (docs/temporal-semantics.md T3) - the
+            // date a legacy column stores as text is the business field the request binds.
+            // It restates at most format:, which is neither tightening nor loosening: the
+            // API takes ISO and the column holds 20240103, so the restatement is not a finding.
+            // The constraint keys are not applied on read, so there is nothing to loosen.
+            java.util.stream.Stream.concat(document.getValue().sources().values().stream(),
+                    document.getValue().steps().values().stream())
+                    .flatMap(binding -> binding.result().values().stream())
+                    .map(InputField::domain)
+                    .filter(java.util.Objects::nonNull)
+                    .forEach(referenced::add);
         }
         domains.domains().keySet().stream()
                 .filter(name -> !referenced.contains(name))

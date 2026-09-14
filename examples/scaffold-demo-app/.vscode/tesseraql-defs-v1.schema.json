@@ -416,9 +416,10 @@
             "date",
             "datetime",
             "array",
-            "sort"
+            "sort",
+            "json"
           ],
-          "description": "The declared type. A supplied value is coerced to it and refused when it does not fit. `datetime` binds a date and time — with no `format:` it accepts the `yyyy-MM-ddTHH:mm` a datetime-local widget submits as well as the column default. `sort` is an ordered sort set (`-ship,order` - a leading `-` for descending) validated against `columns:`; the bound `params.<name>Sql` sibling carries the safe ORDER BY fragment."
+          "description": "The declared type. A supplied value is coerced to it and refused when it does not fit. `datetime` binds a date and time — with no `format:` it accepts the `yyyy-MM-ddTHH:mm` a datetime-local widget submits as well as the column default. `sort` is an ordered sort set (`-ship,order` - a leading `-` for descending) validated against `columns:`; the bound `params.<name>Sql` sibling carries the safe ORDER BY fragment. `json` is a read-only kind: legal on a domain and on a binding's `result:` entry, where a column's text is parsed into a JSON value; an `input:` declaring it is refused (TQL-YAML-1064)."
         },
         "required": {
           "type": "boolean",
@@ -1101,10 +1102,45 @@
             "$ref": "#/$defs/enrichment"
           },
           "description": "Keyed references folded into this binding's rows before anything reads them (docs/lookups.md), keyed by enrichment name and applied in authored order. An enrichment nests under the source it transforms, so any arm's rows can be enriched. Each entry names one reference — sql: (fetch by key), http: (call by key), or source: (a result already in the context, joined without a fetch, named by its context path: a route source by name, a job step as steps.&lt;id&gt;) — plus the on: join and one of as:/merge:. Only a binding that holds rows can carry one: a write publishes affectedRows, and a query-spool extract never held its rows."
+        },
+        "result": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/resultField"
+          },
+          "description": "The columns whose text this binding parses into a declared kind, each name to a field: `type: json` for a jsonb, json or text column an expression, a template or a response should navigate rather than receive as one string; `type: date`, `datetime` or `number` with a `format:` for a value a legacy column stores as text (`20240103`, `1,234.50`); or a `domain:` that says so once. Sparse — an undeclared column keeps the kind the database gave it. A parsed value renders exactly as a native column of that kind does, so a date stored as text and a date column are the same case on every surface; a value that cannot be parsed fails the read with TQL-SQL-2503, naming the column and the row. Applies where a binding publishes rows: a route source or a command step in mode query. Documented in response-shaping.md."
         }
       },
       "additionalProperties": true,
-      "description": "One acquisition or one statement. Exactly one mechanism arm names the means — sql (a colocated 2-way SQL file), contract (a named identity contract), service (a runtime provider), http (an outbound call) — or the write-side sequence, and that arm nests the keys the mechanism owns. Beside the arms sit the three questions no mechanism answers: the when: guard, the enrich: folded into the rows, and the spool: another step filled. Documented in unified-sources.md."
+      "description": "One acquisition or one statement. Exactly one mechanism arm names the means — sql (a colocated 2-way SQL file), contract (a named identity contract), service (a runtime provider), http (an outbound call) — or the write-side sequence, and that arm nests the keys the mechanism owns. Beside the arms sit the questions no mechanism answers: the when: guard, the enrich: folded into the rows, the result: kinds the rows are read in, and the spool: another step filled. Documented in unified-sources.md."
+    },
+    "resultField": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "enum": [
+            "json",
+            "date",
+            "datetime",
+            "number"
+          ],
+          "description": "The kind the column's text is parsed into. `json` yields a value an expression navigates (`payload.sku`) whose text is compact JSON; `date` and `datetime` yield the canonical wire text of the parsed value (`2026-01-15`, `2026-01-15T22:30:00`), never moved across zones; `number` yields a decimal. Anything else is refused (TQL-YAML-1064)."
+        },
+        "format": {
+          "type": "string",
+          "description": "The parse pattern for `date`/`datetime` (a DateTimeFormatter pattern, `yyyy/MM/dd`) or `number` (a DecimalFormat pattern, `#,##0.00`); the kind's default when absent. Text already in the canonical form is accepted too, so a native column declared for its domain's sake reads unchanged. Not read by `json`. A restatement over the domain's own format is neither a tightening nor a loosening and is not a finding."
+        },
+        "domain": {
+          "type": "string",
+          "description": "An app-level field domain (docs/field-domains.md) supplying `type:` and `format:` once — the same domain the request's `input:` binds. The domain's constraint keys (`maxLength`, `pattern`, `enum`, `min`, `max`) are not applied on read."
+        },
+        "description": {
+          "type": "string",
+          "description": "What the column holds, in the words a reader of the declaration needs."
+        }
+      },
+      "additionalProperties": true,
+      "description": "One `result:` entry: the kind a column's text is parsed into, spelled out or through a domain. Documented in response-shaping.md."
     }
   }
 }

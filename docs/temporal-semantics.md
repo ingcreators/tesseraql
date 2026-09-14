@@ -1,12 +1,15 @@
 # Temporal semantics: a column's kind comes from the database, and every path renders it the same way
 
-> **Status: in progress.** All thirteen decisions taken by the user on 2026-09-14, as
-> recommended. **T0** — the read seam (`JdbcValues`), `ResultRows.value` canonical and
-> allow-listed, the route and transition readers through it: shipped as T0. **T1** — the export
-> reader through the seam, the untyped cell's SQL text, the legacy arms gone, the spool's two
-> tags: shipped as T1. **T2** — the other eleven readers through the seam, the text surfaces
-> through the bindable form: shipped as T2. **T3** — `result:` declarations: designed below, its
-> nine decisions (14-22) pending. The record merges the
+> **Status: complete.** All thirteen decisions taken by the user on 2026-09-14, as
+> recommended, and T3's nine (14-22) the same day, as recommended. **T0** — the read seam
+> (`JdbcValues`), `ResultRows.value` canonical and allow-listed, the route and transition
+> readers through it: shipped as T0. **T1** — the export reader through the seam, the untyped
+> cell's SQL text, the legacy arms gone, the spool's two tags: shipped as T1. **T2** — the other
+> eleven readers through the seam, the text surfaces through the bindable form: shipped as T2.
+> **T3** — `result:` declarations on a route source and a command step, the `json`/`date`/
+> `datetime`/`number` kinds through a domain, one lint-and-boot code for a kind a surface does
+> not honour, one read code for text that will not parse: shipped as T3 (the precisions
+> building it forced are under "T3 as built"). The record merges the
 > temporal-semantics design that [`export-declarations.md`](export-declarations.md) decision 13
 > deferred (the typed zoneless-`timestamp` shift, the three semantics across five dialects, the
 > Oracle object hash) with the result-column-types design of 2026-09-10 (the `jsonb` bean leak,
@@ -330,7 +333,7 @@ disclosed rather than dressed as a red proof.
 
 ## T3 — `result:` declarations
 
-**Status: designed 2026-09-14 after T0-T2 shipped; decisions pending.** T0-T2 changed what
+**Status: shipped 2026-09-14; decisions 14-22 taken as recommended.** T0-T2 changed what
 T3 is for. The seam gives every temporal its kind from the database's own metadata, so nothing
 has to be declared to get a date, a wall clock or an instant right — the 2026-09-10 design's
 `date`/`datetime` arms are done without a declaration. What a declaration still adds is
@@ -366,7 +369,7 @@ JSON mapper writes the structure; the parser lives outside core (`tesseraql-yaml
 where Jackson is) and installs through the same hook `ExpressionFunctions` uses — core stays
 dependency-free (decision 13's rule).
 
-### The decisions (T3 does not start until they are taken)
+### The decisions (taken 2026-09-14, as recommended)
 
 14. **`type: json` is a read-only kind: legal in `result:` and in a domain, refused in `input:`
     with the existing TQL-FIELD code for an unknown type** — until a JSON input has a validation
@@ -400,16 +403,91 @@ dependency-free (decision 13's rule).
 22. **`ColumnSpec` (the export's `columns:`) is not folded into `InputField`** here; a later
     slice may unify the vocabularies once `result:` has shipped and the overlap is measured.
 
-### Guards the slice will carry (each red on HEAD by construction of the feature)
+### T3 as built — where the decisions met the code
 
-A `jsonb` column declared `type: json` navigates in a response binding (`payload.sku`), renders
-as JSON text in HTML and CSV, and serializes as a structure in JSON; a NULL is `null`; bad JSON
-is the coded error naming the column and row. A text date declared through a domain becomes
-`2026-01-15` on JSON and a real date cell on a workbook. The compiled artifact carries the
-domain-resolved declaration (resolution is compile-time — a value only the domain has, so a
-route-local match cannot make the test green for the wrong reason). The four green-on-defect
-traps the 2026-09-10 design recorded stand: a JSON guard must go through CSV or HTML as well as
-the mapper; a date guard must go through the mapper as well as `String.valueOf`.
+- **Where a declaration lives, and so where it applies (decision 20, made precise).** The
+  declaration is a key on a `Binding` — `result:` beside the arm, like `enrich:`, because it is
+  about the rows whatever fetched them — so it applies where a `Binding` publishes rows: a
+  route's `sources:` (every recipe that mounts them, tools and prompts included) and a
+  command's `steps:` in `mode: query`, whose `steps.<name>.rows` get the same application
+  (`ResultDeclarationProcessor.apply`, one method for both). "The workflow reader, the lookup,
+  the decision table" in decision 20's list have no binding to declare on: the workflow loads
+  its document row by key, a `lookup:` borrows a route's SQL and reads three identifier
+  columns, a decision table's outputs are typed by their own `domain:`. They keep the seam's
+  kind and are not reached by a declaration; the sentence "one declaration, one place it
+  applies" is the rule kept. An enrichment (`enrich:`) folds *into* declared rows after the
+  declaration has run, so an enriched row's declared columns are already parsed.
+- **Decision 14's "existing TQL-FIELD code for an unknown type" did not exist.** An
+  `input:` with `type: json` — or `type: integr` — was bound as its raw text with no lint and
+  no refusal (`InputBinder.coerce`'s default arm). One new code, `TQL-YAML-1064`, judged by one
+  predicate (`DeclaredKinds`) at lint and at boot: a `type:` no request binds on `input:`, a
+  kind outside json/date/datetime/number on `result:`, a `format:` the kind's parser refuses or
+  one on `json`, a `result:` on a binding that publishes no rows (`update`, `call`, a sequence,
+  a spool), and — lint only, jobs have no boot compile of their own here — a `result:` on a
+  chunk reader or writer, which the typed batch readers never apply. The unknown-input-type
+  refusal is new behaviour: an application carrying a typo'd type today boots; after T3 it does
+  not, and says which field.
+- **The read code is `TQL-SQL-2503`** (decision 15): the message names the source, the column,
+  the 0-based row index, the value (bounded) and the kind; the wire body of a 5xx carries the
+  code and the structured details (`source`, `column`, `row`, `kind`) and not the message — the
+  error renderer's confidentiality rule — so the message is the log's.
+- **The canonical form is always accepted** (decision 16, made precise): a `date`/`datetime`
+  entry parses with its `format:` (the kind's default when absent) and, when that fails, tries
+  the wire form (`2026-01-15`, `2026-01-15T22:30:00`). A native column declared for its domain's
+  sake arrives canonical already (T0), and the declaration must not turn it into a 500.
+- **A number pattern parses in the root locale**: `#,##0.00` reads `1,234.50`; a `locale:` on a
+  read declaration is not in the decisions and is filed below.
+- **The JSON value is a `Map`/`List` whose `toString()` is compact JSON** (`JsonValues`, in
+  `tesseraql-yaml`, where Jackson is; core stays dependency-free), fractions as `BigDecimal`
+  so `1.10` stays `1.10`; a scalar document is the scalar; a container an outbound call
+  produced is re-wrapped. It never passes through `ResultRows.value` — the declaration runs
+  after the read seam, on the published rows — so decision 7's allow-list is untouched.
+- **A `format:` restatement is not a finding** (decision 17): the domain lint never classified
+  `format:` at all, so nothing was added — what changed is that a domain referenced only from a
+  `result:` entry is no longer "declared but never referenced" (`TQL-FIELD-4611`).
+- **The schema's one `inputField` shape serves `input:`, `domains/` and `result:`**, so its
+  `type` enum gains `json`; a separate `resultField` shape lists the four kinds; which surface
+  honours which is the predicate's judgement, and `SchemaSyncTest` now compares the enum to the
+  union.
+
+### The guards, red before the fix
+
+- `ResultDeclarationIntegrationTest` (runtime, PostgreSQL): a `jsonb` column and a text column
+  holding JSON declared `type: json` are structures on JSON and a SQL NULL is `null`; a
+  template navigates `row.payload.sku` and prints `row.payload_text` as
+  `{&quot;sku&quot;:&quot;B-2&quot;}` (the `String.valueOf` half); `ordered_on` stored as
+  `2026/01/15` and declared through a domain that alone carries `format: yyyy/MM/dd` is
+  `2026-01-15`; `amount` stored as `1,234.50` is the number `1234.50`; `{not json` in row 1 is
+  500 `TQL-SQL-2503` with details `column=payload, row=1, kind=json`; a declared column no row
+  carries is 200 and one warning; a command step's `steps.read.rows` get the same.
+- `DeclaredKindsTest`, `AppLinterDeclaredKindsTest` (the predicate on both surfaces, the chunk
+  reader, the domain reference), `ResultDomainResolutionTest` (the compiled binding carries the
+  domain's `format:` — a value only the domain has — on a source and on a step; a restated
+  `format:` wins; an unknown domain fails the load), `SchemaSyncTest`.
+
+Bracket (`work/temporal-semantics/t3/`): HEAD `35a17cc06` — 6 of the 7 integration rows red
+(the JSON structure was the string `{"qty": 2, "sku": "A-1", "price": 1.10}`, the date the
+string `2026/01/15`, the number `1,234.50`, the template 500 on `row.payload.sku`, the broken
+row 200 with its text; the absent-column row is a non-regression row, green by nature).
+`V-plain-map` (the wrapper without its `toString()`) — exactly the template row, the mapper
+row green: the first trap the 2026-09-10 design recorded. `V-localdate` (the parsed
+`LocalDate` returned as is) — every JSON row 500 `TQL-ROUTE-3001`, the template row green: the
+second trap. `V-no-domain` (the loader not merging the domain into `result:`) — refused at
+boot (`type: ''`), and `ResultDomainResolutionTest` 3/3 red. Fix — 7/7, and the yaml units.
+
+### Filed, not fixed
+
+- `locale:` on a read declaration (a European `1.234,50`): the pattern parses in the root
+  locale; the export side has `locale:`, and unifying the vocabularies is decision 22's later
+  slice.
+- The constraint keys on a `result:` entry directly (`maxLength: 5` on a read) are accepted
+  and not applied — documented (decision 18), not linted; a lint would be one more arm of
+  `TQL-YAML-1064`.
+- A `result:` on a job step's own `sql:` arm is an unknown key (`TQL-YAML-1043`, the step's
+  creator does not read it); on a chunk reader or writer it is the lint error above and no boot
+  refusal, since a job's chunk compiles at run time.
+- A route's `result:` does not reach a `lookup:` that borrows its SQL, a Studio data browse, or
+  the suite runner's own reads — the readers outside a route's pipeline.
 
 ---
 
@@ -421,7 +499,9 @@ the mapper; a date guard must go through the mapper as well as `String.valueOf`.
 - `connectionTimeZone` / session-zone configuration per datasource → the datasource line
   (decision 12 documents, does not add a key).
 - Excel's own rendering of a date cell in the viewer's locale → the Excel codec line.
-- `time` in the `type:` vocabulary (slice 5's "5a's own vocabulary question") → T3.
+- `time` in the `type:` vocabulary (slice 5's "5a's own vocabulary question") → not taken up
+  in T3, whose kinds are json/date/datetime/number; a `time` stored as text is filed with the
+  `locale:` question above.
 
 ## The audit records, amended by this design
 
