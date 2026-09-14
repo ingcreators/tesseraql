@@ -23,7 +23,7 @@ final class DocsProviders {
      * exactly as the inline lambdas did.
      */
     record Deps(AppManifest manifest, Path appHome, StudioEdit studioEdit,
-            ClassLoader modulesLoader, String member) {
+            io.tesseraql.core.files.FileCodecs codecs, String member) {
     }
 
     /** Registers every {@code docs.*} provider on {@code serviceProviders}, in boot order. */
@@ -183,8 +183,7 @@ final class DocsProviders {
                 // table through the canonical PDF codec, shown as a data: URL (degrades to a
                 // note when the optional tesseraql-pdf module is absent, like the editor).
                 .register("docs.routesPdf", params -> {
-                    byte[] pdf = renderRoutesPdf(doc.routeCatalog(), appHome,
-                            deps.modulesLoader());
+                    byte[] pdf = renderRoutesPdf(doc.routeCatalog(), appHome, deps.codecs());
                     return io.tesseraql.studio.DocViews.routesPdf(doc.appName(),
                             pdf == null
                                     ? null

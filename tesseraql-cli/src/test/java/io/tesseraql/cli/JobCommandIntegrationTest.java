@@ -281,6 +281,45 @@ class JobCommandIntegrationTest {
         assertThat(executionCount("report.daily")).isEqualTo(before);
     }
 
+    /**
+     * A step whose format no codec on this command's classpath serves is refused before any
+     * execution row exists (docs/codec-discovery.md decision 2): exit 2 naming the step and the
+     * key, where the runner used to wire the job, run the extraction, and record a FAILED
+     * execution naming the format alone.
+     */
+    @Test
+    void aStepWhoseFormatNoCodecServesIsRefusedBeforeAnyExecutionRowExists(@TempDir Path dir)
+            throws Exception {
+        assertThat(execute("new", "demo", "--stack", dir.toString())).isZero();
+        Path app = dir.resolve("demo");
+        assertThat(execute(args(app, "migrate", "apply"))).isZero();
+        Files.createDirectories(app.resolve("batch/report"));
+        Files.writeString(app.resolve("batch/report/report.sql"),
+                "select 1 as id, now() as created, 1234.5 as amount\n");
+        Files.writeString(app.resolve("batch/report/job.yml"), """
+                version: tesseraql/v1
+                id: report.daily
+                kind: job
+                recipe: batch-pipeline
+                pipeline:
+                  - id: report
+                    sql:
+                      file: report.sql
+                      mode: query
+                    export:
+                      format: fixedwidth
+                      filename: report.txt
+                """);
+        long before = executionCount("report.daily");
+
+        Captured refused = executeCapturingErr(args(app, "job", "run", "report.daily"));
+        assertThat(refused.exitCode()).isEqualTo(2);
+        assertThat(refused.stdout()).contains("TQL-LD-2801", "job 'report.daily' step 'report'",
+                "export.format", "'fixedwidth'", "tesseraql.modules");
+        assertThat(refused.stdout()).doesNotContain("excel format needs");
+        assertThat(executionCount("report.daily")).isEqualTo(before);
+    }
+
     /** Sets the app-wide {@code tesseraql.temp.store} of a freshly scaffolded app. */
     private static void writeTempStore(Path app, String store) throws Exception {
         Path config = app.resolve("config/tesseraql.yml");

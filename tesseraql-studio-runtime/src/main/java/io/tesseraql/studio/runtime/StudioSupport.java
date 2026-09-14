@@ -470,15 +470,15 @@ final class StudioSupport {
 
     /**
      * Renders a {@code query-export} {@code format: pdf} route's PDF for the Studio preview (backlog
-     * A1 follow-up) through the canonical PDF codec, or {@code null} when no {@code pdf} codec is on
-     * the classpath (the optional {@code tesseraql-pdf} module is absent).
+     * A1 follow-up) through the application's PDF codec, or {@code null} when its codec set has
+     * no {@code pdf} (the optional {@code tesseraql-pdf} module is not declared).
      */
     static byte[] renderExportPdf(io.tesseraql.yaml.model.ExportSpec export,
             Path routeDir, Path appHome, List<Map<String, Object>> rows,
-            ClassLoader modulesLoader) {
+            io.tesseraql.core.files.FileCodecs codecs) {
         io.tesseraql.core.files.FileCodec codec;
         try {
-            codec = io.tesseraql.core.files.FileCodecs.discover(modulesLoader).require("pdf");
+            codec = codecs.require("pdf");
         } catch (io.tesseraql.core.error.TqlException ex) {
             return null;
         }
@@ -501,15 +501,15 @@ final class StudioSupport {
 
     /**
      * Renders the documentation portal's route catalog (one row per route) to a PDF table through
-     * the canonical PDF codec's built-in grid (no template), reusing the same {@code FileCodecs}
-     * discovery the export routes use. Returns {@code null} when the optional {@code tesseraql-pdf}
-     * module is absent so the portal degrades to a clear note rather than failing (F8, slice 2).
+     * the PDF codec's built-in grid (no template), from the same codec set the export routes
+     * compile against. Returns {@code null} when the optional {@code tesseraql-pdf} module is
+     * absent so the portal degrades to a clear note rather than failing (F8, slice 2).
      */
     static byte[] renderRoutesPdf(List<Map<String, Object>> rows, Path appHome,
-            ClassLoader modulesLoader) {
+            io.tesseraql.core.files.FileCodecs codecs) {
         io.tesseraql.core.files.FileCodec codec;
         try {
-            codec = io.tesseraql.core.files.FileCodecs.discover(modulesLoader).require("pdf");
+            codec = codecs.require("pdf");
         } catch (io.tesseraql.core.error.TqlException ex) {
             return null;
         }

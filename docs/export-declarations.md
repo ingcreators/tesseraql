@@ -398,11 +398,12 @@ and non-blank && no `startCell:`. *Rejected:* judging existence on csv (contract
 refusal for a file nothing opens).
 
 **22 — Format name: case-fold only; `file-export` defaults to csv.** `Excel` → 1063 "format names
-are lower-case (excel)" (closes 4c's unfiled #21 lint half); an unknown name is never judged (F82
-slice 2 — `FileCodecs.discover()` is classpath-dependent: TQL-YAML-1408 fires on the CLI classpath
-and not on the full one; the yaml test classpath carries no codec). `buildFileExport` defaults an
-absent `format:` to `csv` at compile with no codec lookup, as `buildQueryExport:1387` does; a job
-step's missing `format:` stays the linter's 1041 and the format-dependent arms do not fire.
+are lower-case (excel)" (closes 4c's unfiled #21 lint half); an unknown name is never judged by
+the predicate (the lint judges it against the run's codec set and boot against the application's,
+[`codec-discovery.md`](codec-discovery.md) S2; the yaml test classpath carries no codec).
+`buildFileExport` defaults an absent `format:` to `csv` at compile, as `buildQueryExport` does,
+and since S2 both look the codec up there; a job step's missing `format:` stays the linter's 1041
+and the format-dependent arms do not fire.
 
 **23 — Message shape.** `app '<app>': <route 'id' | job 'id' step 'id' | job 'id' | config>
 <key>: '<bounded value>' <why>` — every author-controlled fragment (value, column name, derived

@@ -260,7 +260,9 @@ Ranked. The first two are larger than most of the leads that found them.
 23. **`tesseraql lint` is silent on an unknown `export.format`** — boot refuses it on query-export
     only: a file-export boots and answers 500 `TQL-LD-2801` at the first POST, a job step fails at
     the first run. The case-fold half (`Excel`) is 5a's; the unknown-name half is F82 slice 2's (the
-    boot check is the TCCL defect). The BLANK spelling — `format: ""` lint-silent on a query-export,
+    boot check is the TCCL defect) — *shipped as [`codec-discovery.md`](codec-discovery.md) S2:
+    lint warns on every arm, boot refuses on every arm naming the site*. The BLANK spelling —
+    `format: ""` lint-silent on a query-export,
     boot refusing it naming nothing — and the format-LESS job step (every runner failing with
     `'null'`) are fixed by `export-hygiene.md` P7.
 27. **A job's `input:` with `domain:` is never resolved and never linted** — `ManifestLoader.loadJobs`

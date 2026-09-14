@@ -192,6 +192,13 @@ public final class TesseraqlProperties {
      */
     public static final String FUNCTIONS_BEAN = "tesseraqlExpressionFunctions";
 
+    /**
+     * Registry bean name for this runtime's {@code FileCodecs} — the one codec set the
+     * application's routes, transfers, jobs and workshop read (docs/codec-discovery.md
+     * decision 1), discovered once with its modules.
+     */
+    public static final String CODECS_BEAN = "tesseraqlFileCodecs";
+
     /** Registry bean name for the business-route audit sink (roadmap Phase 45), if enabled. */
     public static final String ROUTE_AUDIT_SINK_BEAN = "tesseraqlRouteAuditSink";
     /** Registry bean name for the per-user preference store (roadmap Phase 48), if enabled. */

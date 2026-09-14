@@ -188,7 +188,8 @@ public final class ExportDeclarations {
             return surface == Surface.JOB;
         }
 
-        String prefix(String key) {
+        /** The message head every refusal at this site carries: the app, the subject, the key. */
+        public String prefix(String key) {
             return "app '" + bounded(app) + "': " + subject + " " + key + ": ";
         }
     }
@@ -401,6 +402,31 @@ public final class ExportDeclarations {
         }
         if (job.definition().fileImport() != null) {
             require(violations(Site.job(app, jobId), job.definition().fileImport()), warn);
+        }
+    }
+
+    /**
+     * The job arm of the codec refusal (docs/codec-discovery.md decision 2): every export
+     * step's format and a poll job's import format must name a codec in {@code codecs} — the
+     * runtime's set at registration, the CLI's before {@code tesseraql job run} wires a job —
+     * or the job refuses with the site named, where it used to fail at its first run. Runs
+     * after {@link #requireJob}, so a missing or blank format is still that refusal.
+     */
+    public static void requireCodecs(String app, JobFile job,
+            io.tesseraql.core.files.FileCodecs codecs) {
+        String jobId = job.definition().id();
+        for (PipelineStep step : job.definition().pipeline()) {
+            if (step.export() != null) {
+                codecs.require(step.export().format(),
+                        Site.step(app, jobId, step.id()).prefix("export.format"));
+            }
+        }
+        ImportSpec poll = job.definition().fileImport();
+        if (poll != null) {
+            String format = poll.format() == null || poll.format().isBlank()
+                    ? "csv"
+                    : poll.format();
+            codecs.require(format, Site.job(app, jobId).prefix("import.format"));
         }
     }
 

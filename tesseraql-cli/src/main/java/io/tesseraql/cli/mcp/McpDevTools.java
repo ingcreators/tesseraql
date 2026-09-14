@@ -191,6 +191,14 @@ public final class McpDevTools {
         return functions.get(appName(args));
     }
 
+    /** One application's codec set, discovered once on its module loader and kept. */
+    private final Map<String, io.tesseraql.core.files.FileCodecs> codecs = new java.util.concurrent.ConcurrentHashMap<>();
+
+    private io.tesseraql.core.files.FileCodecs codecs(JsonNode args) {
+        return codecs.computeIfAbsent(appName(args),
+                name -> io.tesseraql.core.files.FileCodecs.discover(loaders.get(name)));
+    }
+
     /** Resolves a call's {@code application} argument to its module classloader. */
     private ClassLoader loader(JsonNode args) {
         return loaders.get(appName(args));
@@ -289,7 +297,7 @@ public final class McpDevTools {
                 .inputSchema(schema())
                 .handler((args, ctx) -> {
                     List<LintFinding> findings = new AppLinter().lint(appHome(args),
-                            functions(args));
+                            functions(args), codecs(args));
                     long errors = findings.stream().filter(LintFinding::isError).count();
                     return McpToolResult.json(obj(
                             "errors", errors,

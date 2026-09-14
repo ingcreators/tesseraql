@@ -1433,7 +1433,8 @@ public final class RouteCompiler {
         // the same predicate the linter reports from (docs/export-declarations.md decision 1).
         requireValidExport(definition, spec, routeDir);
         String format = spec != null && spec.format() != null ? spec.format() : "csv";
-        io.tesseraql.core.files.FileCodec codec = codecs.require(format);
+        io.tesseraql.core.files.FileCodec codec = requireCodec(definition, format,
+                "export.format");
         Path template = spec == null || spec.template() == null
                 ? null
                 : routeDir.resolve(spec.template()).normalize();
@@ -1497,6 +1498,11 @@ public final class RouteCompiler {
                         io.tesseraql.yaml.app.ExportDeclarations.Site.route(appName, definition),
                         spec),
                 LOG::warn);
+        // An unset import format: is csv, as the export's is; and the codec is looked up here,
+        // at boot, so a format nothing serves refuses the application rather than the first
+        // upload (docs/codec-discovery.md decision 2).
+        String format = spec.format() == null || spec.format().isBlank() ? "csv" : spec.format();
+        requireCodec(definition, format, "import.format");
 
         // `review:` accepts one word, the way `comment:` does on a transition. A misspelling
         // that silently meant "no review" would turn a two-phase import back into a one-shot
@@ -1539,7 +1545,7 @@ public final class RouteCompiler {
         PipelineBuilder route = pipelines.pipeline(routeId);
         applyCommonGovernance(route, routeFile);
         route.process(new io.tesseraql.compiler.binding.FileImportProcessor(
-                routeId, routeFile.urlPath(), appName, spec.format(),
+                routeId, routeFile.urlPath(), appName, format,
                 spec.toReadSpec(), formatting("locale", spec.locale()),
                 rowSql, spec.effectiveOnError(), spec.reviewRequired(), definition.input(),
                 // The topics travel with the request because the run outlives it: an import
@@ -1549,7 +1555,8 @@ public final class RouteCompiler {
                 page, definition.emit()));
         mountTransferStatus(context, appHome, routeFile, routeId);
         if (spec.reviewRequired()) {
-            mountImportCommit(context, appHome, routeFile, routeId, appName, spec, rowSql);
+            mountImportCommit(context, appHome, routeFile, routeId, appName, spec, format,
+                    rowSql);
         }
     }
 
@@ -1577,7 +1584,8 @@ public final class RouteCompiler {
      * status endpoint, and carries the full common governance because it is a write.
      */
     private void mountImportCommit(RuntimeContext context, Path appHome, RouteFile routeFile,
-            String routeId, String appName, io.tesseraql.yaml.model.ImportSpec spec, Path rowSql) {
+            String routeId, String appName, io.tesseraql.yaml.model.ImportSpec spec,
+            String format, Path rowSql) {
         String path = routeFile.urlPath() + "/{batchId}/commit";
         String pipelineId = routeId + ".commit";
         if (mountRest) {
@@ -1586,7 +1594,7 @@ public final class RouteCompiler {
         PipelineBuilder route = pipelines.pipeline(pipelineId);
         applyCommonGovernance(route, pipelineId, "POST", path, routeFile.definition());
         route.process(new io.tesseraql.compiler.binding.ImportCommitProcessor(
-                routeId, routeFile.urlPath(), appName, spec.format(), spec.toReadSpec(),
+                routeId, routeFile.urlPath(), appName, format, spec.toReadSpec(),
                 rowSql, spec.effectiveOnError(), appHome, i18n.defaultTag(),
                 routeFile.definition().emit()));
     }
@@ -1614,6 +1622,10 @@ public final class RouteCompiler {
         // A route's unset format: is csv (as query-export says); it used to reach the
         // processor as the literal "null" and fail the first POST as a format no codec serves.
         String format = spec.format() == null || spec.format().isBlank() ? "csv" : spec.format();
+        // Judged against the application's set now, not at the first POST: the asynchronous
+        // recipe refuses at boot exactly as the synchronous one (docs/codec-discovery.md
+        // decision 2).
+        requireCodec(definition, format, "export.format");
         // The rows an export writes are the document's main source, on every export surface
         // (docs/unified-sources.md, decision 7).
         Path querySql = routeDir.resolve(definition.main().file()).normalize();
@@ -1673,6 +1685,18 @@ public final class RouteCompiler {
                         io.tesseraql.yaml.app.ExportDeclarations.Site.route(appName, definition),
                         spec, routeDir),
                 LOG::warn);
+    }
+
+    /**
+     * The codec a route's declared format names, from the application's set, or the boot
+     * refusal naming the app, the route and the key (docs/codec-discovery.md decision 2) —
+     * one predicate for the three file recipes, so a format no codec serves refuses every
+     * arm the same way.
+     */
+    private io.tesseraql.core.files.FileCodec requireCodec(RouteDefinition definition,
+            String format, String key) {
+        return codecs.require(format, io.tesseraql.yaml.app.ExportDeclarations.Site
+                .route(appName, definition).prefix(key));
     }
 
     /**

@@ -119,6 +119,9 @@ record RuntimePools(Map<String, HikariDataSource> dataSources, HikariDataSource 
             // This runtime's function set, bound where the tracer and lanes bind so the SQL
             // producers parse against it (docs/module-scope.md).
             context.bind(TesseraqlProperties.FUNCTIONS_BEAN, modules.functions());
+            // And its codec set, for the workshop's previews and health lint
+            // (docs/codec-discovery.md decision 3).
+            context.bind(TesseraqlProperties.CODECS_BEAN, modules.codecs());
 
             lanes = LaneConfigs.load(manifest.config());
             context.bind(TesseraqlProperties.LANES_BEAN, lanes);

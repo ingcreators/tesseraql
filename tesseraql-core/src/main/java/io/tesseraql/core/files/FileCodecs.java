@@ -77,11 +77,23 @@ public final class FileCodecs {
     }
 
     public FileCodec require(String format) {
+        return require(format, "");
+    }
+
+    /**
+     * The codec for {@code format}, or the refusal prefixed with the declaration's site — the
+     * app, the route or the job step and the key (docs/codec-discovery.md decision 2) — so a
+     * boot that refuses names what to fix. The formats that live in modules are named as such
+     * whatever was asked for: the old text hinted at excel for every absent format.
+     */
+    public FileCodec require(String format, String at) {
         FileCodec codec = codecs.get(format);
         if (codec == null) {
-            throw new TqlException(UNKNOWN_FORMAT, "No file codec for format '" + format
-                    + "' - available: " + codecs.keySet()
-                    + " (the excel format needs the tesseraql-excel module on the classpath)");
+            throw new TqlException(UNKNOWN_FORMAT, at + "no file codec for format '" + format
+                    + "' - available: " + codecs.keySet() + "; pdf and excel are modules,"
+                    + " declared under tesseraql.modules (docs/printable-documents.md,"
+                    + " docs/file-transfers.md), and an application's own codec arrives the"
+                    + " same way");
         }
         return codec;
     }

@@ -484,10 +484,18 @@ class ExportDeclarationCompileTest {
                 """ + configTail);
     }
 
+    /**
+     * The declarations compile against a set that names the workbook format: these tests are
+     * about the export block's literals, and since docs/codec-discovery.md decision 2 every
+     * recipe looks its codec up at compile.
+     */
     private static Map<String, List<String>> compileApp(Path dir) throws Exception {
         AppManifest manifest = new ManifestLoader().load(dir);
         try (RuntimeContext context = new RuntimeContext()) {
             new RouteCompiler().appName("export-test")
+                    .codecs(io.tesseraql.core.files.FileCodecs.of(
+                            new io.tesseraql.operations.files.CsvFileCodec(),
+                            NamedCodec.excel()))
                     .compile(context, manifest, false, null);
             return CompiledPipelines.stepsById(context);
         }

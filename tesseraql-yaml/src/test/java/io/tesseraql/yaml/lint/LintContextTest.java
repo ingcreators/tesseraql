@@ -29,7 +29,8 @@ class LintContextTest {
         try {
             List<LintFinding> findings = new ArrayList<>();
             LintContext context = new LintContext(dir, findings, Set.of(),
-                    io.tesseraql.core.expr.ExpressionFunctions.processDefault());
+                    io.tesseraql.core.expr.ExpressionFunctions.processDefault(),
+                    io.tesseraql.core.files.FileCodecs.of());
 
             assertThat(context.content(sql)).isNull();
             // Every reader of the same file answers null off the memo, and the failure
@@ -53,7 +54,8 @@ class LintContextTest {
         Files.writeString(sql, "select 1 where id = /* body.id */1\n");
         List<LintFinding> findings = new ArrayList<>();
         LintContext context = new LintContext(dir, findings, Set.of(),
-                io.tesseraql.core.expr.ExpressionFunctions.processDefault());
+                io.tesseraql.core.expr.ExpressionFunctions.processDefault(),
+                io.tesseraql.core.files.FileCodecs.of());
 
         assertThat(context.content(sql)).contains("select 1");
         // A differently spelled path to the same file hits the same memo entry.
@@ -71,7 +73,8 @@ class LintContextTest {
         Files.writeString(sql, "select /*%if body.x */ 1\n"); // unterminated directive
         List<LintFinding> findings = new ArrayList<>();
         LintContext context = new LintContext(dir, findings, Set.of(),
-                io.tesseraql.core.expr.ExpressionFunctions.processDefault());
+                io.tesseraql.core.expr.ExpressionFunctions.processDefault(),
+                io.tesseraql.core.files.FileCodecs.of());
 
         assertThat(context.tree(yml)).isNull();
         assertThat(context.sqlNodes(sql)).isNull();

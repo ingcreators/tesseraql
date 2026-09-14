@@ -35,6 +35,7 @@ final class LintContext {
     private final List<LintFinding> findings;
     private final Set<String> catalogTables;
     private final ExpressionFunctions functions;
+    private final io.tesseraql.core.files.FileCodecs codecs;
     private final io.tesseraql.yaml.SimpleYamlParser parser = new io.tesseraql.yaml.SimpleYamlParser();
     private final Map<Path, Optional<String>> contents = new HashMap<>();
     private final Map<Path, Optional<Map<String, Object>>> trees = new HashMap<>();
@@ -43,13 +44,14 @@ final class LintContext {
             .empty();
 
     LintContext(Path appHome, List<LintFinding> findings, Set<String> catalogTables,
-            ExpressionFunctions functions) {
+            ExpressionFunctions functions, io.tesseraql.core.files.FileCodecs codecs) {
         this.appHome = appHome;
         this.findings = findings;
         // Not Set.copyOf: the declaration order feeds finding messages, and copyOf randomizes it.
         this.catalogTables = java.util.Collections
                 .unmodifiableSet(new java.util.LinkedHashSet<>(catalogTables));
         this.functions = functions;
+        this.codecs = codecs;
     }
 
     /**
@@ -63,6 +65,15 @@ final class LintContext {
     /** The expression-function set every parse of this run resolves custom calls against. */
     ExpressionFunctions functions() {
         return functions;
+    }
+
+    /**
+     * The codec set this run judges every export and import format against
+     * (docs/codec-discovery.md decision 3) — the application's own where the caller has it (a
+     * runtime's workshop), the composed context loader's on the CLI.
+     */
+    io.tesseraql.core.files.FileCodecs codecs() {
+        return codecs;
     }
 
     /**

@@ -85,6 +85,7 @@ public final class StudioService {
     private final JobPolicyForms jobPolicyForms;
     private final RouteForms routeForms;
     private final ExpressionFunctions functions;
+    private final io.tesseraql.core.files.FileCodecs codecs;
     private AppManifest manifest;
     private Path appHome;
 
@@ -94,13 +95,26 @@ public final class StudioService {
 
     /**
      * As {@link #StudioService(AppManifest, boolean)}, resolving custom calls against
-     * {@code functions}.
+     * {@code functions}; the codecs are this class's own loader's, which is what a test's
+     * classpath carries — a runtime passes the application's set.
      */
     public StudioService(AppManifest manifest, boolean readOnly, ExpressionFunctions functions) {
+        this(manifest, readOnly, functions, io.tesseraql.core.files.FileCodecs
+                .discover(StudioService.class.getClassLoader()));
+    }
+
+    /**
+     * As {@link #StudioService(AppManifest, boolean, ExpressionFunctions)}, with the
+     * application's codec set (docs/codec-discovery.md decision 3): the health lint judges
+     * every export and import format against the codecs the application serves with.
+     */
+    public StudioService(AppManifest manifest, boolean readOnly, ExpressionFunctions functions,
+            io.tesseraql.core.files.FileCodecs codecs) {
         this.manifest = manifest;
         this.appHome = manifest.appHome();
         this.readOnly = readOnly;
         this.functions = functions;
+        this.codecs = codecs;
         // The collaborators read the app home through a supplier — reload() reassigns the field,
         // and a captured value would pin them to a stale manifest.
         this.auditTrail = new AuditTrail(() -> appHome);
@@ -1400,9 +1414,14 @@ public final class StudioService {
         return overlayEditor.menuItems();
     }
 
-    /** Lints the app home for the Studio health dashboard (the same engine as the CLI/Maven lint). */
+    /**
+     * Lints the app home for the Studio health dashboard (the same engine as the CLI/Maven
+     * lint), against the application's own function and codec sets — the process default saw
+     * neither a module function nor a module codec, so the dashboard warned about formats the
+     * application was serving.
+     */
     public List<LintFinding> health() {
-        return new AppLinter().lint(appHome);
+        return new AppLinter().lint(appHome, functions, codecs);
     }
 
     /** Distinct roles named across the app's {@code tesseraql.security.policies} (menu autocomplete). */

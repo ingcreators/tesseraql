@@ -79,8 +79,12 @@ public final class StudioRuntimeExtension implements RuntimeExtension {
         // tesseraql.studio.readOnly master switch's two jobs moved to better owners —
         // per-caller write authority is the tql.studio.edit.<name> atom (deny-by-default),
         // per-deployment safety is topology (a host mounts no Studio at all, slice 3).
+        // The application's codec set, the one its routes compiled against
+        // (docs/codec-discovery.md decision 3): the health lint and the previews read it.
+        io.tesseraql.core.files.FileCodecs codecs = extension.bean(
+                TesseraqlProperties.CODECS_BEAN, io.tesseraql.core.files.FileCodecs.class);
         io.tesseraql.studio.StudioService studio = new io.tesseraql.studio.StudioService(
-                manifest, false, functions);
+                manifest, false, functions, codecs);
         // The data browser's column contracts, read from decisions/. A hot reload is the right
         // epoch for them: the reload's app-wide scope covers that tree, and every reload path
         // funnels through the reloader. The schema overlay is deliberately NOT here — it is
@@ -164,12 +168,11 @@ public final class StudioRuntimeExtension implements RuntimeExtension {
                 ctx) -> new io.tesseraql.compiler.binding.FieldPolicyApplier(fields,
                         studioPolicyEngine, StudioSupport.samplePrincipal(ctx)).apply(body);
         // PDF preview for query-export pdf routes (Studio backlog A1 follow-up): the runtime
-        // renders through the canonical PDF codec when the optional tesseraql-pdf module is on
-        // the classpath, returning null (a graceful "module absent" message) otherwise — so
+        // renders through the application's PDF codec when the optional tesseraql-pdf module is
+        // declared, returning null (a graceful "module absent" message) otherwise — so
         // Studio stays free of the heavy openhtmltopdf/pdfbox stack.
         io.tesseraql.studio.StudioService.PdfRender studioPdf = (export, routeDir,
-                rows) -> StudioSupport.renderExportPdf(export, routeDir, appHome, rows,
-                        seams.modulesLoader());
+                rows) -> StudioSupport.renderExportPdf(export, routeDir, appHome, rows, codecs);
         new StudioRoutes(studio, reloader, studioTests,
                 studioScaffold, studioEdit, studioMask, studioPdf).install(context);
         // The member's workshop API: what the studio shell delegates to
@@ -200,8 +203,7 @@ public final class StudioRuntimeExtension implements RuntimeExtension {
                 seams.tenantDataSources(), seams.calendarDecisions(),
                 seams.notificationChannels(), studioDocCache));
         DocsProviders.register(serviceProviders,
-                new DocsProviders.Deps(manifest, appHome, studioEdit,
-                        seams.modulesLoader(), seams.appName()));
+                new DocsProviders.Deps(manifest, appHome, studioEdit, codecs, seams.appName()));
         if (!seams.hosted()) {
             // The unhosted boot (integration tests, library embedding) is a stack of one:
             // the same shell chrome over an in-process target, so the one studio app tree

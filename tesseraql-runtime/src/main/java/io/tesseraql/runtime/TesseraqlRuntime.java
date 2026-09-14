@@ -1324,7 +1324,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 // the one placement that refuses under dev and host alike with one line —
                 // by the predicate the linter reports from (docs/export-declarations.md
                 // decision 1); routes are the compiler's arm, and jobs never reach it.
-                requireValidJobDeclarations(appName, job);
+                requireValidJobDeclarations(appName, job, modules.codecs());
                 jobs.put(job.definition().id(), job);
             }
             // The owning app per job id (main app jobs default), so execution records are tagged with
@@ -1406,7 +1406,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 // tagged with the owning app; duplicate ids across apps fail the mount.
                 for (JobFile job : mounted.manifest().jobs()) {
                     String jobId = job.definition().id();
-                    requireValidJobDeclarations(mounted.name(), job);
+                    requireValidJobDeclarations(mounted.name(), job, modules.codecs());
                     if (jobs.putIfAbsent(jobId, job) != null) {
                         throw new io.tesseraql.core.error.TqlException(DUPLICATE_JOB,
                                 "Job id '" + jobId + "' of app '" + mounted.name()
@@ -1907,7 +1907,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     httpServer::actualPort, appName,
                     java.util.Map.copyOf(dataSources), tenantDataSources,
                     calendarDecisions, notificationChannels, reloader, sseEndpoints::add,
-                    httpOutbound, modules.loader(), datasourceDialect(manifest.config()),
+                    httpOutbound, datasourceDialect(manifest.config()),
                     hostContext != null,
                     hostContext != null && hostContext.workshop(),
                     hostContext == null || hostContext.stackMembers() == null
@@ -2074,10 +2074,14 @@ public final class TesseraqlRuntime implements AutoCloseable {
      * and 2): every export step's block and a poll job's import block, judged by the shared
      * predicate — the same call {@code tesseraql job run} makes before it wires a job. A
      * refusal keeps its own code and names the app, the job and the step; an inert key is said
-     * out loud and the job runs without it.
+     * out loud and the job runs without it. Then the format's codec, from the application's
+     * set (docs/codec-discovery.md decision 2): a step no codec serves refuses the boot, not
+     * its first run.
      */
-    private static void requireValidJobDeclarations(String appName, JobFile job) {
+    private static void requireValidJobDeclarations(String appName, JobFile job,
+            io.tesseraql.core.files.FileCodecs codecs) {
         io.tesseraql.yaml.app.ExportDeclarations.requireJob(appName, job, LOG::warn);
+        io.tesseraql.yaml.app.ExportDeclarations.requireCodecs(appName, job, codecs);
     }
 
     /** Whether any declared workflow runs in managed mode (the default or a per-workflow override). */

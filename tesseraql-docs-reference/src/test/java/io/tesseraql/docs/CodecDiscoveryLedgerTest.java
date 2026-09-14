@@ -34,8 +34,9 @@ class CodecDiscoveryLedgerTest {
 
     /**
      * Each main-source site that discovers, and the loader expression it discovers on. The
-     * context loader appears exactly where a CLI verb composed it (docs/cli-surface.md), and in
-     * the lint's default, which the CLI's lint verb calls after composing it.
+     * context loader appears exactly where a CLI verb composed it (docs/cli-surface.md) and in
+     * the linter's two-argument default, which the CLI's lint verb calls after composing it;
+     * a class's own loader is a unit-test default a runtime always overrides.
      */
     private static final Map<String, List<String>> LEDGER = Map.of(
             "tesseraql-runtime/src/main/java/io/tesseraql/runtime/AppModules.java",
@@ -43,11 +44,14 @@ class CodecDiscoveryLedgerTest {
             List.of("loader", "AppModules.class.getClassLoader()"),
             "tesseraql-compiler/src/main/java/io/tesseraql/compiler/RouteCompiler.java",
             List.of("RouteCompiler.class.getClassLoader()"),
-            "tesseraql-studio-runtime/src/main/java/io/tesseraql/studio/runtime/StudioSupport.java",
-            List.of("modulesLoader"),
+            "tesseraql-studio/src/main/java/io/tesseraql/studio/StudioService.java",
+            List.of("StudioService.class.getClassLoader()"),
             "tesseraql-cli/src/main/java/io/tesseraql/cli/JobCommand.java",
             List.of("Thread.currentThread().getContextClassLoader()"),
-            "tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/ModuleDeclarationRules.java",
+            // The MCP dev tools serve several applications, each on its own module loader.
+            "tesseraql-cli/src/main/java/io/tesseraql/cli/mcp/McpDevTools.java",
+            List.of("loaders.get(name)"),
+            "tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/AppLinter.java",
             List.of("Thread.currentThread().getContextClassLoader()"));
 
     @Test

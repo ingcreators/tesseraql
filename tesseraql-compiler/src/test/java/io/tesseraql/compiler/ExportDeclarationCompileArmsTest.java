@@ -45,8 +45,8 @@ class ExportDeclarationCompileArmsTest {
     // lint (decision 10) would be gone.
     @Test
     void aMissingTemplateOnARouteIsRefusedAtCompile(@TempDir Path dir) throws Exception {
-        // A workbook reads its template (file-export looks no codec up, so excel compiles on
-        // the csv-only classpath); csv never does, and is warned about below.
+        // A workbook reads its template, and the template is judged before the codec (excel
+        // is no codec on the csv-only classpath); csv never reads one, and is warned about below.
         assertThatThrownBy(() -> compile(dir, "file-export",
                 "export:\n  format: excel\n  template: nowhere.xlsx\n", ""))
                 .isInstanceOf(TqlException.class)
@@ -138,6 +138,69 @@ class ExportDeclarationCompileArmsTest {
         assertThat(pipelines.get("items.dump")).contains("QueryExportBinder");
     }
 
+    /**
+     * The codec arm (docs/codec-discovery.md decision 2): a format no codec in the
+     * application's set serves refuses the compile on every file recipe, naming the app, the
+     * route and the key — the asynchronous recipes used to compile and answer 500 at the first
+     * request.
+     */
+    @Test
+    void aFormatNoCodecServesIsRefusedAtCompileOnEveryArm(@TempDir Path dir) throws Exception {
+        for (String recipe : List.of("query-export", "file-export")) {
+            assertThatThrownBy(() -> compile(dir, recipe, "export:\n  format: fixedwidth\n", ""))
+                    .as(recipe)
+                    .isInstanceOf(TqlException.class)
+                    .hasMessageContaining("TQL-LD-2801")
+                    .hasMessageContaining("app 'export-test'")
+                    .hasMessageContaining("route 'items.dump'")
+                    .hasMessageContaining("export.format")
+                    .hasMessageContaining("'fixedwidth'")
+                    .hasMessageContaining("tesseraql.modules")
+                    .hasMessageNotContaining("excel format needs");
+        }
+        assertThatThrownBy(() -> compileImport(dir.resolve("import"), "",
+                "import:\n  format: fixedwidth\n  columns:\n    - name\n"))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("TQL-LD-2801")
+                .hasMessageContaining("route 'items.import'")
+                .hasMessageContaining("import.format")
+                .hasMessageContaining("'fixedwidth'");
+    }
+
+    /** The same declarations compile against a set that carries the format. */
+    @Test
+    void aFormatInTheApplicationsSetCompilesOnEveryArm(@TempDir Path dir) throws Exception {
+        io.tesseraql.core.files.FileCodecs codecs = io.tesseraql.core.files.FileCodecs.of(
+                new io.tesseraql.operations.files.CsvFileCodec(), NamedCodec.fixedWidth());
+        for (String recipe : List.of("query-export", "file-export")) {
+            writeConfig(dir, "");
+            Path route = Files.createDirectories(dir.resolve("web/api/items/dump"));
+            Files.writeString(route.resolve("get.yml"), """
+                    version: tesseraql/v1
+                    id: items.dump
+                    kind: route
+                    recipe: %s
+                    security:
+                      auth: public
+                    export:
+                      format: fixedwidth
+                    sources:
+                      main:
+                        sql:
+                          file: dump.sql
+                    """.formatted(recipe));
+            Files.writeString(route.resolve("dump.sql"), "select id from items\n");
+            assertThat(compileApp(dir, codecs)).as(recipe).containsKey("items.dump");
+        }
+    }
+
+    /** An import without {@code format:} is csv, as an export's is (docs/file-transfers.md). */
+    @Test
+    void anImportWithoutAFormatIsCsvAtCompile(@TempDir Path dir) throws Exception {
+        assertThat(compileImport(dir, "", "import:\n  columns:\n    - name\n"))
+                .containsKey("items.import");
+    }
+
     private static Map<String, List<String>> compileNoSecurity(Path dir, String body)
             throws Exception {
         writeConfig(dir, "");
@@ -216,9 +279,15 @@ class ExportDeclarationCompileArmsTest {
     }
 
     private static Map<String, List<String>> compileApp(Path dir) throws Exception {
+        return compileApp(dir, io.tesseraql.core.files.FileCodecs
+                .discover(ExportDeclarationCompileArmsTest.class.getClassLoader()));
+    }
+
+    private static Map<String, List<String>> compileApp(Path dir,
+            io.tesseraql.core.files.FileCodecs codecs) throws Exception {
         AppManifest manifest = new ManifestLoader().load(dir);
         try (RuntimeContext context = new RuntimeContext()) {
-            new RouteCompiler().appName("export-test")
+            new RouteCompiler().appName("export-test").codecs(codecs)
                     .compile(context, manifest, false, null);
             return CompiledPipelines.stepsById(context);
         }

@@ -25,7 +25,6 @@ import java.util.function.Consumer;
  * @param postStart             registers a hook run after the platform HTTP server starts —
  *                              the SSE endpoints' registration window
  * @param httpOutbound          the deny-by-default egress allow-list every outbound call obeys
- * @param modulesLoader         the app's module class loader (docs/module-scope.md)
  * @param mainDatasourceDialect the main datasource's configured or inferred dialect id
  * @param hosted                whether a host is speaking at all ({@code false} on the unhosted
  *                              boot — integration tests, library embedding)
@@ -45,7 +44,7 @@ public record RuntimeSeams(java.util.function.IntSupplier port, String appName,
         TenantDataSources tenantDataSources, CalendarDecisions calendarDecisions,
         io.tesseraql.yaml.notify.NotificationChannels notificationChannels,
         RouteReloader reloader, Consumer<Runnable> postStart,
-        io.tesseraql.yaml.http.HttpOutbound httpOutbound, ClassLoader modulesLoader,
+        io.tesseraql.yaml.http.HttpOutbound httpOutbound,
         String mainDatasourceDialect, boolean hosted, boolean workshop,
         java.util.List<String> stackMembers, HostContext.MemberOrigins memberOrigins) {
 }
