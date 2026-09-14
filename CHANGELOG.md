@@ -222,6 +222,36 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **The framework stylesheet reads only tokens the kit defines, and a list's refocused row is
+  the kit's.** `tesseraql.css` read three `--hc-*` names no kit release ever defined, so their
+  fallbacks always won: a dark literal border around the Studio preview in the light theme, a
+  fixed blue focus ring on the mail-composer block that ignored the accent axis, and a 6px
+  radius on the editor bar, builder frame, mail block, stat tiles and fieldsets whatever the
+  theme set. They read `--hc-color-border`, `--hc-color-focus-ring` and `--hc-control-radius`
+  now. The two app rules on `.hc-datagrid__row:target` — a fixed-blue tint and a constant 3rem
+  scroll margin — are deleted: the `#row-<token>` refocus renders with the kit's
+  accent-following tint and its header-aware scroll margin (hc 0.3.0); under forced colors the
+  kit marks the row with a dashed outline. A test refuses any token the resolved WebJar
+  neither defines nor reads.
+- **The Studio render preview and the page-builder canvas render in the shell's chrome.** The
+  preview pinned `data-theme="dark"` and linked no ramp, density or app token sheet, so with the
+  framework defaults it showed a dark, warm-gray, comfortable-density page inside a light,
+  slate, compact Studio; the canvas copied the theme but not the ramp or density. Both now carry
+  the operator's theme, `data-neutral`, `data-density` and `data-color` and link the same token
+  sheets the shell links. The preview renders the operator's default theme, not the signed-in
+  user's stored one.
+- **The VS Code extension's email-fragment test runs, and the Marketplace listing names the
+  commands that exist.** `emailFragments.test.ts` lived outside the test runner's glob and never
+  ran; the README and `docs/vscode-extension.md` advertised *TesseraQL: Serve* and *Open Server*
+  two releases after they became *Dev* and *Open Served App*. `.dockerignore` excluded an
+  `editor/` directory that never existed and so sent the extension's `node_modules`, its `.vsix`
+  files and the pnpm store into every image build context. The README's Studio URL is the
+  stack's (`/_tesseraql/studio`) and its recipe list is the whole surface; twenty-two Javadoc
+  sentences that still said `serve --embedded-db` or `serve --watch` say `dev`; the contributor
+  entry points (PR template, CONTRIBUTING, `run-ci-local.sh`, `development-environment.md`)
+  name every check CI gates on, and no longer a wrapper bootstrap script that was deleted.
+  `docs/hypermedia-ui.md` no longer describes the confirm submit as a bootstrap stand-in the
+  kit has owned since hc 0.1.13 — following it added a second submit.
 - **The JDBC session store's touch throttle no longer grows for the life of the process.** The
   node-local map of last-touch instants — one entry per session, to write `last_seen_at` at
   most once a minute — shrank only on logout and rotation, and browser sessions end by expiry,
