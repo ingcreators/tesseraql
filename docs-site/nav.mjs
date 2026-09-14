@@ -335,4 +335,7 @@ export const EXCLUDED = [
   // Temporal semantics: a column's kind comes from the database and every path renders it the
   // same way - the java.time read seam, the wall clock that is not an instant - designed 2026-09-14.
   'temporal-semantics.md',
+  // Unicode names at the router: a member named in Japanese is addressed at the gateway,
+  // redirected to, returned to, and shadowed by nothing - fixed 2026-09-14.
+  'router-unicode-names.md',
 ];

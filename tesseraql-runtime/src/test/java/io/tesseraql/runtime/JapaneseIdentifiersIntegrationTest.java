@@ -95,6 +95,25 @@ class JapaneseIdentifiersIntegrationTest {
         assertThat(row.path("状態").asText()).isEqualTo("出荷済");
     }
 
+    /**
+     * A Japanese literal segment beside a {@code {parameter}} directory answers as itself
+     * (docs/router-unicode-names.md R2). Every route mounted at one order and ties fell to the
+     * manifest's file order, where {@code {} sorts after every ASCII letter and before every
+     * CJK character — so {@code /受注/{受注番号}} came first and answered {@code /受注/エクスポート}
+     * with {@code 受注番号=エクスポート}: the detail route's empty result, 200, the wrong route.
+     */
+    @Test
+    void aJapaneseLiteralSegmentIsNotShadowedByItsParameterSibling() throws Exception {
+        HttpResponse<String> response = get(
+                "/%E5%8F%97%E6%B3%A8/%E3%82%A8%E3%82%AF%E3%82%B9%E3%83%9D%E3%83%BC%E3%83%88");
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        JsonNode data = MAPPER.readTree(response.body()).path("data");
+        // The detail route's answer for 受注番号=エクスポート is an empty list: the wrong route.
+        assertThat(data.size()).as(response.body()).isEqualTo(1);
+        assertThat(data.get(0).path("surface").asText()).isEqualTo("export");
+    }
+
     @Test
     void aDoubleEncodedPathStaysUnmatched() throws Exception {
         // %25E5… decodes to the literal text "%E5…", not to 受注 — one decode only, so an
@@ -119,6 +138,28 @@ class JapaneseIdentifiersIntegrationTest {
                     password: %s
                 """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
                 POSTGRES.getPassword()));
+        // A literal sibling of the gallery's {受注番号} directory — here, not in the gallery,
+        // so the shipped app stays what it is (docs/router-unicode-names.md R2).
+        Path export = target.resolve("web/受注/エクスポート");
+        Files.createDirectories(export);
+        Files.writeString(export.resolve("get.yml"), """
+                version: tesseraql/v1
+                id: 受注.export
+                kind: route
+                recipe: query-json
+                security:
+                  auth: public
+                sources:
+                  main:
+                    sql:
+                      file: marker.sql
+                      mode: query
+                response:
+                  json:
+                    body:
+                      data: main.rows
+                """);
+        Files.writeString(export.resolve("marker.sql"), "select 'export' as surface\n");
         return target;
     }
 

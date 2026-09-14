@@ -17,10 +17,17 @@ public final class CookiePath {
     private CookiePath() {
     }
 
-    /** Publishes the cookie path for every surface that issues or expires a session cookie. */
+    /**
+     * Publishes the cookie path for every surface that issues or expires a session cookie —
+     * as wire text (docs/router-unicode-names.md R1): a {@code Path=} attribute is compared by
+     * the browser against the request path it sent, which is percent-encoded, so a path named
+     * in Japanese is published encoded, and an ASCII one exactly as given.
+     */
     public static void bind(RuntimeContext context, String cookiePath) {
         context.bind(TesseraqlProperties.COOKIE_PATH_BEAN,
-                cookiePath == null || cookiePath.isBlank() ? "/" : cookiePath);
+                cookiePath == null || cookiePath.isBlank()
+                        ? "/"
+                        : io.tesseraql.core.http.PercentEncoding.uriLiteral(cookiePath));
     }
 
     /** This runtime's cookie path; {@code /} unless a host said otherwise. */

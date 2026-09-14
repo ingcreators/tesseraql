@@ -163,6 +163,21 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **An application named in Japanese is addressed at the gateway.** A member's prefix was
+  compared to the request line raw — `/受注` against `/%E5%8F%97%E6%B3%A8` — so a stack member
+  with a non-ASCII `tesseraql.app.name` answered 404 `TQL-APP-4040` on every request, and
+  `root.redirect` to it wrote a `Location` the transport folded to `/???`. The gateway now
+  compares in the wire's spelling (either case of hex digits), the redirect's `Location` is
+  percent-encoded like every framework redirect, a `_return` read back under a non-ASCII base
+  path is returned to base-relative form instead of doubling its prefix, and the session
+  cookie's `Path=` is published as wire text. `docs/unicode-identifiers.md` no longer says an
+  application name stays ASCII — it never did in the code.
+- **A Japanese literal path segment beside a `{parameter}` directory answers as itself.** Every
+  route mounted at one order and ties fell to the manifest's file order, where `{` sorts after
+  every ASCII letter and before every CJK character: `/受注/{受注番号}` came first and answered
+  `/受注/エクスポート` with `受注番号=エクスポート`. A route's order is now its specificity — a
+  literal before a parameter at the first segment where two routes differ, whatever the
+  characters — and a route the file watcher adds lands in its place.
 - **An exported wall clock is printed as stored; `timezone:` converts instants only.** The
   export reader handed the codec a zoneless `timestamp` as a `java.sql.Timestamp` built in the
   server's zone, and `type: datetime` then treated it as an instant: a stored `22:30` rendered

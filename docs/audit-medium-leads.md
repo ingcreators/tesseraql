@@ -237,13 +237,14 @@ Ranked. The first two are larger than most of the leads that found them.
 15. **The RFC 8288 `Link` header** (`PageHeaders:41-49`) is built from the decoded request URI:
     `</???page=2>; rel="next"` on every paged list under a non-ASCII route path — fixed in PR 4b (#1303).
 16. **`BasePaths.relative` on a wire-spelled `_return` under a non-ASCII base path doubles the
-    prefix** — router slice.
+    prefix** — fixed in `router-unicode-names.md` R1.
 17. **A declared `headers:` `Location` never acquires the base prefix** — fixed in
     `edge-hygiene.md` E1.
 18. **A non-ASCII `tesseraql.app.name` is hosted but unaddressable at the gateway** (TQL-APP-4040
-    on every request) and `root.redirect` to it loops — router slice.
+    on every request) and `root.redirect` to it loops — fixed in `router-unicode-names.md` R0
+    (the redirect was a 404 after a folded `Location`, not a loop).
 19. **Route shadowing by sort order**: a Japanese literal segment beside `{param}` is unreachable —
-    router slice.
+    fixed in `router-unicode-names.md` R2.
 20. **The documented `HX-Trigger` toast mangles non-ASCII** (`ResponseHeaders.java:34` escapes
     nothing above ASCII) — fixed in `edge-hygiene.md` E3.
 21. **ZIP entry names are mangled by Info-ZIP `unzip` 6.00** — the mechanism is the ABSENT extra
