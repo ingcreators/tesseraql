@@ -53,6 +53,16 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **A temporal column reaches a JSON response in the kind the database declares for it, and
+  every kind has one text** (`docs/temporal-semantics.md`, T0). A zoneless `timestamp` or
+  `datetime` is a wall clock and prints without a zone designator —
+  `2026-01-15T22:30:00.123456`, where it used to print as a UTC instant built in the server's
+  zone (`…Z`, and a different instant on every host). An instant column prints at UTC with `Z`
+  as before. A `time` prints its seconds (`22:30:00`, not `22:30`); a time with zone keeps its
+  offset (`22:30:00+09:00`, where it used to be moved into the server's zone and stripped).
+  Anything the framework does not know — a `jsonb` column, an `interval`, an array — is the text
+  the driver gives it, as a string, where the JSON mapper used to write the driver object's bean
+  shape (`{"type":"jsonb","value":…,"null":false}`). Wire changes, recorded here; no migration.
 - **Breaking on the record: `FileTransferService.TransferStatus` gains `exitMessage`**, the
   reason a failed run recorded (the older constructors stay). The status JSON of a `FAILED`
   export now carries `code` — the framework's error code the run recorded — and `reason`, the
@@ -137,6 +147,13 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A DuckDB `date`, `time` or `timestamptz` column answers on a JSON route instead of 500.**
+  The driver hands those columns over as `java.time` values, the row reader passed them through,
+  and the JSON mapper has no module for them — every analytics route selecting a date answered
+  500 `TQL-ROUTE-3001`. MySQL `DATETIME` and H2 `timestamptz` failed the same way. Every column
+  is now read through one seam (`JdbcValues`) in the kind the database declares, host-independent
+  and DST-gap-proof on all five supported drivers, and rendered as text before it reaches the
+  mapper.
 - **An `HX-Trigger` toast with a Japanese message arrives intact.** A map or list value in a
   declared `headers:` block is serialized to JSON, and the serializer wrote the text raw; the
   transport carries one byte per character, so everything above U+00FF reached the browser as

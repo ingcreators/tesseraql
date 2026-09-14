@@ -98,7 +98,9 @@ class DeclaredReadParityIntegrationTest {
      *
      * <p>It did not. The uncapped reader behind the contract path returned the driver's own
      * temporal while every route read passed values through {@code ResultRows}, so one store
-     * answered the same column two ways depending on which arm asked.
+     * answered the same column two ways depending on which arm asked. The column is a zoneless
+     * {@code timestamp}, a wall clock, so the text carries no zone designator
+     * (docs/temporal-semantics.md decision 1).
      */
     @Test
     void bothArmsShapeATemporalTheSameWay() throws Exception {
@@ -107,7 +109,7 @@ class DeclaredReadParityIntegrationTest {
 
         assertThat(sqlRows.get(0).get("occurred_at").asText())
                 .isEqualTo(contractRows.get(0).get("occurred_at").asText())
-                .isEqualTo("2026-09-05T14:30:00Z");
+                .isEqualTo("2026-09-05T14:30:00");
     }
 
     /** And the row shape itself: the same keys, in the same order, from the same statement. */

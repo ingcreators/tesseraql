@@ -303,6 +303,18 @@ can already vary its status through `statusWhen:`, so `Location` on a 201, `Retr
 or 503, and `WWW-Authenticate` on a 401 have to vary with it. A route that can
 change its status but not the header describing that status is the asymmetry these close.
 
+## What a column value becomes
+
+A column reaches the response in the kind the database declares for it, and every kind has one
+text. A zoneless `timestamp` or `datetime` is a wall clock and prints without a zone designator:
+`2026-01-15T22:30:00.123456`. A `timestamptz`, `datetimeoffset` or `TIMESTAMP WITH TIME ZONE` is
+an instant and prints at UTC: `2026-01-15T22:30:00Z`. A `date` prints as `2026-01-15`, a `time`
+as `22:30:00`, a time with zone as `22:30:00+09:00`. Seconds always print; a fraction prints only
+when it is not zero. None of these depends on the server's time zone.
+
+Numbers, booleans, strings, UUIDs and binary values pass through as JSON kinds. Anything else —
+a `jsonb` column, an `interval`, an array — is the text the driver gives it, as a string.
+
 ## Where to go next
 
 - [pagination.md](pagination.md) — the `page` context entry maps into shaped bodies the
