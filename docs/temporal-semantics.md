@@ -489,6 +489,76 @@ boot (`type: ''`), and `ResultDomainResolutionTest` 3/3 red. Fix — 7/7, and th
 - A route's `result:` does not reach a `lookup:` that borrows its SQL, a Studio data browse, or
   the suite runner's own reads — the readers outside a route's pipeline.
 
+## T3 follow-ups — the three filed items, designed 2026-09-14
+
+**Status: decisions 23-25 taken 2026-09-14, as recommended; F-A shipped, F-B follows.** The
+user chose the filed items as the next move after T3 shipped. Measured on `ffedc6e0b` by
+reading.
+
+### The measured premise
+
+| # | item | what the code says |
+|---|---|---|
+| F1 | `locale:` on a read declaration | `DeclaredKinds.read` parses a `number`/`date`/`datetime` entry with `Locale.ROOT`; `InputField` has no `locale` key; `input:` parses in the request's negotiated locale (`InputBinder.bind(…, Locale)`), `export:`/`import:` in the block's `locale:` or `tesseraql.files.locale`. A column holding `1.234,50` has no way to say so. |
+| F2 | constraint keys on a `result:` entry | `InputField.mergedWith` merges every domain key under a `result:` entry, and a route-local `maxLength: 5` on one is accepted and applied nowhere — the shape `refuseWriteKeysOnSources` refuses for `expect:` on a source. The merged model cannot tell a route-local key from an inherited one. |
+| F3 | decision 22, `ColumnSpec` vs `InputField` | `ColumnSpec` has five keys — `name`, `label`, `column`, `type`, `format` — and 16 raise sites in six files; `InputField` has 22. The overlap is exactly `type` (date/datetime/number) and `format`, the same parsers (`ColumnValues.parse`). `label` and `column` are file-side and positional (a `columns:` list); nothing in `InputField` corresponds. `ImportSpec`/`ExportSpec` turn the list into `ColumnMapping`s through `toMapping()`; the loader never touches it. |
+| F4 (new lead) | a job's `input:` with `domain:` | `ManifestLoader.loadJobs` parses jobs with no domain resolution and nothing else merges one into a `JobDefinition`; `FieldDomainRules` walks routes, consumers and tools only. A job input `{ domain: sku }` binds as an untyped string with the domain's keys applied nowhere and no finding — while the shared schema says a job's parameters "bind and validate exactly like a route's". Filed for [`audit-medium-leads.md`](audit-medium-leads.md), not this slice. |
+
+### The decisions
+
+23. **`locale:` is a key a `result:` entry and a domain may carry** — the language tag the
+    entry's `format:` parses in (`de-DE` for `1.234,50`, `MMM` month names), judged by the
+    strict parse `export.locale` is judged by (`TQL-YAML-1064` when the JDK cannot format it);
+    the root locale when absent, as today. On `input:` it is not applied — a request parses in
+    its own negotiated locale, and a form's user types in the UI's locale, not the column's —
+    so a domain carrying it stays legal on an input (documented, the mirror of the constraint
+    keys not applied on read), while `locale:` written directly on an `input:` entry is refused
+    (`TQL-YAML-1064`), since it can never apply there. Alternatives: honour it on `input:` too
+    (a field's text is always in its locale) — no, the storage locale is the column's, not the
+    request's; default it from `tesseraql.files.locale` — no, that couples a read to the file
+    defaults, and the platform default already reads `1,234.50`.
+24. **A `result:` entry reads four keys — `type`, `format`, `locale`, `domain` — plus
+    `description`, and is refused with anything else written on it** (`TQL-YAML-1064`, lint and
+    boot). The mechanism that makes the refusal exact on both sides: the loader merges a domain
+    into a `result:` entry by the read keys alone (`InputField.mergedForRead`), never
+    `maxLength` and its kind, so a merged entry carrying a constraint key can only have been
+    written with it — no domain lookup, no raw-tree walk, one predicate. Decision 18 stands
+    (a domain's constraint keys are not applied on read); what changes is that writing one on
+    the entry itself is no longer silent. Alternative: a warning — no; an accepted key that
+    does nothing is the shape swept twice.
+25. **Decision 22, measured: a file column gains `domain:`, and the records stay separate.**
+    The only value unification would buy is declaring `type:` and `format:` once, and
+    `domain:` buys exactly that: `columns: [ { name: ordered_on, domain: order_date } ]` on a
+    route's `import:` or `export:` takes the domain's `type:` and `format:` (its own restating
+    either), resolved by the manifest loader as `result:` is, judged by `ExportDeclarations`
+    on the merged column as today, and counted as a reference by the domain lint. `label` and
+    `column` stay file-side. A domain's `locale:` is not applied to a file column — a file has
+    one locale, the block's — and is documented so. Folding `ColumnSpec` into `InputField` is
+    rejected: two file-only keys would enter the input vocabulary as accepted-and-ignored, and
+    a `columns:` list is positional where an `InputField` map is keyed. A job's columns are not
+    resolved here — a job's own `input:` domains are not either (F4), and the job side is one
+    fix, not two halves.
+
+### The slices
+
+- **F-A** (decisions 23, 24), shipped: `InputField.locale` (the 23rd key; not merged into an
+  input by `mergedWith`, merged into a `result:` entry by `mergedForRead` with `type`, `format`
+  and `description` alone), `DeclaredKinds` gains the locale judge (`localeProblem`, the export
+  side's), the `locale:`-on-input arm and the strict read-key arm (`unreadKeys`, exact by
+  construction of the merge); the read parses in the entry's locale. Guards, red on `ffedc6e0b`:
+  a `de-DE` number through a domain on its own route (`/api/docs/de`) — on HEAD the domain
+  cannot even carry `locale:` (`TQL-FIELD-4602`), so the whole suite is red there;
+  `DeclaredKindsTest` (the input arm, the bad tag, the sixteen refused keys named, the German
+  number and the German month name), `AppLinterDeclaredKindsTest` (written vs inherited
+  `maxLength`, written vs inherited `locale`, `ja_JP`), `ResultDomainResolutionTest` (the
+  domain's `maxLength`/`pattern` do not reach the entry, its `locale` does). Variant
+  `V-mergedWith` (the full merge on a result entry) — four units red: the inherited key is
+  reported as written, the resolution assertion fails. `work/temporal-semantics/t3/fa-*`.
+- **F-B** (decision 25): `ColumnSpec.domain`, resolved in `withFieldDomains` for a route's
+  `import:`/`export:`; schema `fileColumn.domain`; the domain lint counts it; guards: an
+  export column typed only through its domain writes a typed cell (the value only the domain
+  has), an unknown domain fails the load, the domain-only reference is not "never referenced".
+
 ---
 
 ## Scope out, each with its destination

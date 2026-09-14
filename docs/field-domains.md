@@ -133,7 +133,14 @@ request binds, declared once. Two things follow:
   until an input has a validation story of its own.
 - The domain's constraint keys — `maxLength`, `minLength`, `pattern`, `enum`, `min`, `max` — are
   **not applied on read**. A read declaration says what the column's text is, not what it may
-  be; validating what the database returned against the domain is a different feature.
+  be; validating what the database returned against the domain is a different feature. The
+  loader merges a domain into a `result:` entry by the read keys alone — `type`, `format`,
+  `locale`, `description` — so a constraint key *written on the entry itself* can only have been
+  written there, and is refused (`TQL-YAML-1064`).
+- A domain may carry `locale:`, the language tag its `format:` parses in on the way back out
+  (`de-DE` for a column holding `1.234,50`). It is **not applied on `input:`**, which parses in
+  the request's own negotiated locale — the mirror of the constraint keys on read: legal on the
+  domain, not merged into an input, and refused when written on an input entry.
 
 ## Resolution is compile-time
 

@@ -65,7 +65,12 @@ public record InputField(
         // above the catalog size line (docs/lookups.md decision 10) the value set is a business
         // master, searched through a declared query route instead of held in memory. Like codes:
         // it describes what the field is, so a domain may carry it.
-        LookupSpec lookup) {
+        LookupSpec lookup,
+        // The language tag a result: entry's format: parses in (docs/temporal-semantics.md
+        // decision 23): the column holds 1.234,50, so the declaration says de-DE. A domain may
+        // carry it. Not applied on input:, which parses in the request's own locale - and so
+        // never merged into an input field, which is what lets the lint refuse it there.
+        String locale) {
 
     /**
      * The keys that belong to a route's <em>use</em> of a field rather than to the field itself
@@ -76,6 +81,21 @@ public record InputField(
      */
     public static final java.util.Set<String> OPERATIONAL_KEYS = java.util.Set.of("required",
             "requiredWhen", "default", "writable", "policy", "domain");
+
+    /**
+     * The 22-key shape every caller predating {@code locale:} constructs
+     * (docs/temporal-semantics.md decision 23); the read key defaults to absent.
+     */
+    public InputField(String type, boolean required, Object defaultValue,
+            java.math.BigDecimal min, java.math.BigDecimal max, Integer maxLength,
+            List<String> enumValues, Boolean writable, String classification, String mask,
+            String format, InputItems items, String pattern, Integer minLength,
+            String requiredWhen, List<String> columns, String domain, String widget,
+            String codes, String policy, String description, LookupSpec lookup) {
+        this(type, required, defaultValue, min, max, maxLength, enumValues, writable,
+                classification, mask, format, items, pattern, minLength, requiredWhen, columns,
+                domain, widget, codes, policy, description, lookup, null);
+    }
 
     /**
      * The 21-key shape every caller predating {@code lookup:} constructs
@@ -90,7 +110,7 @@ public record InputField(
             String codes, String policy, String description) {
         this(type, required, defaultValue, min, max, maxLength, enumValues, writable,
                 classification, mask, format, items, pattern, minLength, requiredWhen, columns,
-                domain, widget, codes, policy, description, null);
+                domain, widget, codes, policy, description, null, null);
     }
 
     /** The semantic string formats {@code format:} validates (roadmap Phase 40). */
@@ -112,7 +132,9 @@ public record InputField(
      * This field with the referenced domain's keys merged underneath (docs/field-domains.md):
      * route-declared keys win, and the operational keys — {@code required}, {@code requiredWhen},
      * {@code default}, {@code writable}, {@code policy} — are never taken from the domain, which
-     * cannot declare them.
+     * cannot declare them. Nor is {@code locale}: an input parses in the request's locale, and
+     * a key the surface never applies is not merged into it, so one written on the field itself
+     * is the only way it can be there (docs/temporal-semantics.md decision 23).
      */
     public InputField mergedWith(InputField d) {
         return new InputField(
@@ -137,14 +159,35 @@ public record InputField(
                 codes != null ? codes : d.codes(),
                 policy,
                 description != null ? description : d.description(),
-                lookup != null ? lookup : d.lookup());
+                lookup != null ? lookup : d.lookup(),
+                locale);
+    }
+
+    /**
+     * This field as a {@code result:} entry with its domain merged underneath by the keys a
+     * read applies — {@code type}, {@code format}, {@code locale}, {@code description} — and
+     * nothing else (docs/temporal-semantics.md decision 24). The constraint keys are not
+     * applied on read, so they are not merged; a merged entry carrying one can only have been
+     * written with it, which is what lets the lint and the compiler refuse it exactly.
+     */
+    public InputField mergedForRead(InputField d) {
+        return new InputField(
+                type != null ? type : d.type(),
+                required, defaultValue, min, max, maxLength, enumValues, writable,
+                classification, mask,
+                format != null ? format : d.format(),
+                items, pattern, minLength, requiredWhen, columns, domain, widget, codes, policy,
+                description != null ? description : d.description(),
+                lookup,
+                locale != null ? locale : d.locale());
     }
 
     /** This field with a resolved element contract in place of its own. */
     public InputField withItems(InputItems replacement) {
         return new InputField(type, required, defaultValue, min, max, maxLength, enumValues,
                 writable, classification, mask, format, replacement, pattern, minLength,
-                requiredWhen, columns, domain, widget, codes, policy, description, lookup);
+                requiredWhen, columns, domain, widget, codes, policy, description, lookup,
+                locale);
     }
 
     /**

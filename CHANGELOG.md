@@ -27,7 +27,11 @@ All notable changes to TesseraQL are documented here. The format follows
   code, `TQL-YAML-1064` — which also refuses `type: json` on an `input:`, where nothing binds
   it, and any `type:` outside the input vocabulary, which the binder used to pass through as
   text without a word. A domain may carry `type: json`; a domain's constraint keys are not
-  applied on read.
+  applied on read, and one written on the entry itself is refused with the same code — a read
+  declaration reads exactly `type`, `format`, `locale` and `domain`. `locale:` is the language
+  tag the pattern parses in (`de-DE` for a column holding `1.234,50`; the root locale when
+  absent), declarable on a domain and read only on the way back out: an `input:` parses in the
+  request's own locale, so `locale:` written on an input entry is refused too.
 - **A control character in a declared response header is refused where it is declared.** A
   `security.responseHeaders` default carrying a C0 control (other than a tab) or DEL is refused
   at lint and at boot with `TQL-SEC-4135`, naming the header and the character — the asset, SSE

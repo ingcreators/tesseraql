@@ -121,6 +121,18 @@ class ResultDeclarationIntegrationTest {
         assertThat(amount.decimalValue()).isEqualByComparingTo("1234.50");
     }
 
+    /**
+     * Decision 23: the column's own locale, declared once on the domain — {@code 1.234,50} in
+     * a German column is the same number; without the locale the root-locale parse refused it.
+     */
+    @Test
+    void aTextNumberInItsDomainsLocaleIsANumberOnJson() throws Exception {
+        JsonNode amount = data(get("/api/docs/de")).get(0).get("amount_de");
+
+        assertThat(amount.isNumber()).as("a number, not text: " + amount).isTrue();
+        assertThat(amount.decimalValue()).isEqualByComparingTo("1234.50");
+    }
+
     @Test
     void textThatWillNotParseIsTheCodedErrorNamingTheColumnAndTheRow() throws Exception {
         HttpResponse<String> response = get("/api/broken");
@@ -195,10 +207,10 @@ class ResultDeclarationIntegrationTest {
         Files.createDirectories(migrations);
         Files.writeString(migrations.resolve("V1__docs.sql"), """
                 create table docs (id integer primary key, payload jsonb, payload_text text,
-                    ordered_on text, amount text);
+                    ordered_on text, amount text, amount_de text);
                 insert into docs values (1, '{"sku": "A-1", "qty": 2, "price": 1.10}',
-                    '{"sku": "B-2"}', '2026/01/15', '1,234.50');
-                insert into docs values (2, null, null, null, null);
+                    '{"sku": "B-2"}', '2026/01/15', '1,234.50', '1.234,50');
+                insert into docs values (2, null, null, null, null, null);
                 create table broken (id integer primary key, payload text);
                 insert into broken values (1, '{"ok": true}');
                 insert into broken values (2, '{not json');
@@ -210,6 +222,10 @@ class ResultDeclarationIntegrationTest {
                   order_date:
                     type: date
                     format: yyyy/MM/dd
+                  eur_amount:
+                    type: number
+                    format: "#,##0.00"
+                    locale: de-DE
                 """);
         String declared = """
                     result:
@@ -220,6 +236,13 @@ class ResultDeclarationIntegrationTest {
                 """;
         query(home, "web/api/docs", "docs.json", "select * from docs order by id\n", declared,
                 """
+                        response:
+                          json:
+                            body:
+                              data: main.rows
+                        """);
+        query(home, "web/api/docs/de", "docs.de", "select id, amount_de from docs order by id\n",
+                "    result:\n      amount_de: { domain: eur_amount }\n", """
                         response:
                           json:
                             body:

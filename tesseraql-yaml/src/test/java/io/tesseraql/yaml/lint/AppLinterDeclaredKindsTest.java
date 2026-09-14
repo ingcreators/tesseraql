@@ -30,8 +30,13 @@ class AppLinterDeclaredKindsTest {
                   order_date:
                     type: date
                     format: yyyy/MM/dd
+                    maxLength: 10
                   payload:
                     type: json
+                  eur_amount:
+                    type: number
+                    format: "#,##0.00"
+                    locale: de-DE
                 """);
         Files.createDirectories(dir.resolve("web/orders"));
         Files.writeString(dir.resolve("web/orders/get.yml"), """
@@ -106,7 +111,8 @@ class AppLinterDeclaredKindsTest {
 
         assertThat(findings).noneMatch(f -> f.code().equals(KIND));
         // Both domains are referenced from result: only; before T3 that was "never referenced".
-        assertThat(findings).noneMatch(f -> f.code().equals("TQL-FIELD-4611"));
+        assertThat(findings).noneMatch(f -> f.code().equals("TQL-FIELD-4611")
+                && (f.message().contains("'order_date'") || f.message().contains("'payload'")));
     }
 
     @Test
@@ -117,6 +123,52 @@ class AppLinterDeclaredKindsTest {
 
         assertThat(findings).noneMatch(f -> f.code().equals(KIND)
                 || f.code().equals("TQL-FIELD-4610"));
+    }
+
+    /**
+     * Decision 24: the domain's constraint key is not applied on read and is not a finding;
+     * the same key written on the entry is refused — exactly, because the loader merges a
+     * domain into a result: entry by the read keys alone.
+     */
+    @Test
+    void aConstraintKeyWrittenOnAResultEntryIsAnErrorWhileTheDomainsIsNot(@TempDir Path dir)
+            throws Exception {
+        List<LintFinding> clean = new AppLinter().lint(app(dir.resolve("clean"), "",
+                "    result:\n      ordered_on: { domain: order_date }"));
+        assertThat(clean).noneMatch(f -> f.code().equals(KIND));
+
+        List<LintFinding> findings = new AppLinter().lint(app(dir.resolve("written"), "",
+                "    result:\n      ordered_on: { domain: order_date, maxLength: 10 }"));
+        assertThat(findings).anyMatch(f -> f.code().equals(KIND) && f.isError()
+                && f.message().contains("sources.main.result.ordered_on.maxLength: 'maxLength'"
+                        + " is not a key a result: declaration reads"));
+    }
+
+    /** Decision 23: a domain's locale is legal on an input (not applied); written there it is not. */
+    @Test
+    void aLocaleOnAnInputIsAnErrorUnlessItComesFromTheDomain(@TempDir Path dir)
+            throws Exception {
+        List<LintFinding> clean = new AppLinter().lint(app(dir.resolve("clean"),
+                "input:\n  amount: { domain: eur_amount }",
+                "    result:\n      amount: { domain: eur_amount }"));
+        assertThat(clean).noneMatch(f -> f.code().equals(KIND));
+
+        List<LintFinding> findings = new AppLinter().lint(app(dir.resolve("written"),
+                "input:\n  amount: { type: number, format: \"#,##0.00\", locale: de-DE }",
+                "    result: {}"));
+        assertThat(findings).anyMatch(f -> f.code().equals(KIND) && f.isError()
+                && f.message().contains("input.amount.locale: locale: is not applied on an"
+                        + " input"));
+    }
+
+    @Test
+    void aLocaleTheJdkCannotFormatOnAResultEntryIsAnError(@TempDir Path dir) throws Exception {
+        List<LintFinding> findings = new AppLinter().lint(app(dir, "",
+                "    result:\n      amount: { type: number, locale: ja_JP }"));
+
+        assertThat(findings).anyMatch(f -> f.code().equals(KIND) && f.isError()
+                && f.message().contains("sources.main.result.amount.locale: 'ja_JP' is not a"
+                        + " language tag the JDK can format"));
     }
 
     @Test
