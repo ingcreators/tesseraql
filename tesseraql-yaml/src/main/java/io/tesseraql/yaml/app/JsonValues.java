@@ -51,7 +51,6 @@ public final class JsonValues {
     }
 
     /** Every container in a parsed tree replaced by its canonical-text twin, scalars kept. */
-    @SuppressWarnings("unchecked")
     public static Object wrap(Object value) {
         if (value instanceof Map<?, ?> map) {
             Map<String, Object> members = new LinkedHashMap<>();
