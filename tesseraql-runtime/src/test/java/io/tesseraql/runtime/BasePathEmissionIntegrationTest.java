@@ -238,6 +238,26 @@ class BasePathEmissionIntegrationTest {
         assertThat(post.headers().firstValue("Location")).hasValue(PREFIX + "/things?page=2");
     }
 
+    /**
+     * A declared {@code headers:} {@code Location} or {@code HX-Redirect} is a URL the browser
+     * will ask for, so it carries the prefix exactly once and names an address this runtime
+     * serves (docs/edge-hygiene.md E1): the documented 201 recipe used to be percent-encoded and
+     * never prefixed, a 404 under every {@code tesseraql dev} and {@code host} stack. An absolute
+     * value is not this application's to prefix and passes as written.
+     */
+    @Test
+    void aDeclaredLocationHeaderCarriesThePrefixOnceAndAnswers() throws Exception {
+        HttpResponse<String> post = postForm("/api/orders/create",
+                "customer_id=cus-1&thing=2&_csrf=" + csrf);
+
+        assertThat(post.statusCode()).as(post.body()).isEqualTo(201);
+        String location = post.headers().firstValue("Location").orElseThrow();
+        assertThat(location).isEqualTo(PREFIX + "/things/2/edit");
+        assertThat(fetch(location).statusCode()).as("GET %s", location).isEqualTo(200);
+        assertThat(post.headers().firstValue("HX-Redirect"))
+                .hasValue("https://example.com/away");
+    }
+
     /** The same rule through the workflow transition's own redirect. */
     @Test
     void aWorkflowTransitionReturnsToThePageThatSentIt() throws Exception {
@@ -596,6 +616,42 @@ class BasePathEmissionIntegrationTest {
         write(home, "web/orders/new/create.sql", """
                 insert into orders (customer_id, note)
                 values (/* customer_id */'cus-x', /* note */'a note')
+                """);
+        // The documented 201 recipe (docs/response-shaping.md): a declared Location with a
+        // placeholder, beside an absolute HX-Redirect that must pass as written.
+        write(home, "web/api/orders/create/post.yml", """
+                version: tesseraql/v1
+                id: orders.createApi
+                kind: route
+                recipe: command-json
+                security:
+                  policy: order.write
+                input:
+                  customer_id:
+                    type: string
+                    required: true
+                  thing:
+                    type: integer
+                    required: true
+                steps:
+                  - id: main
+                    sql:
+                      file: create.sql
+                      mode: update
+                      params:
+                        customer_id: params.customer_id
+                response:
+                  json:
+                    status: 201
+                    headers:
+                      Location: "/things/{params.thing}/edit"
+                      HX-Redirect: "https://example.com/away"
+                    body:
+                      created: steps.main.affectedRows
+                """);
+        write(home, "web/api/orders/create/create.sql", """
+                insert into orders (customer_id, note)
+                values (/* customer_id */'cus-x', 'declared location')
                 """);
 
         // Surface 5: the grid page's bulk action. Its round trip reads _return off the request

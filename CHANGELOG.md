@@ -131,6 +131,12 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A declared `headers:` `Location` or `HX-Redirect` answers under a base-path prefix.** The
+  documented 201 recipe (`Location: "/api/items/{steps.record.keys.id}"`) was percent-encoded and
+  never prefixed, so under every `tesseraql dev` and `tesseraql host` deployment it named an
+  address no member served — a 404 after a successful create. A root-relative declared value
+  now goes through the same join every framework link does; an absolute value is sent as
+  written, and without a prefix the wire is byte-identical.
 - **Under a base-path prefix — every `tesseraql dev` and `tesseraql host` deployment — a
   completed asynchronous export's links answer.** The status JSON's `fileUrl` carried no prefix
   (a 404 through the gateway) and the job card's Download button and cancel form carried a doubled

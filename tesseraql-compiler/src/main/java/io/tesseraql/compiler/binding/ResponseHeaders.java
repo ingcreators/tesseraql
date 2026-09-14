@@ -66,12 +66,15 @@ final class ResponseHeaders {
                 // Resolve {expression} placeholders (recursively for a nested map/list) so a header
                 // can carry per-request data; a value with no placeholder is unchanged. Nested
                 // map/list values then serialize to JSON. A declared Location or HX-Redirect is a
-                // URI-reference: each placeholder is a path segment (the redirect: rule) and the
-                // whole value is percent-encoded once, here, where it becomes wire text — the
-                // edge refuses one that reaches it un-encoded.
+                // URI-reference: each placeholder is a path segment (the redirect: rule), and the
+                // whole value goes through BasePath.url — the application's prefix joined on when
+                // the value is root-relative (an absolute or protocol-relative one passes as
+                // written), then percent-encoded once, there, where it becomes wire text. It used
+                // to be encoded here and never prefixed, so the documented 201 recipe named an
+                // address no member served under tesseraql dev or host (docs/edge-hygiene.md E1).
                 Object resolved = value instanceof String template
                         && PercentEncoding.isUriReferenceHeader(name)
-                                ? PercentEncoding.uriLiteral(
+                                ? io.tesseraql.pipeline.BasePath.url(exchange,
                                         Interpolation.interpolateUrl(template, evaluation))
                                 : Interpolation.interpolate(value, evaluation);
                 String headerValue = resolved instanceof Map || resolved instanceof List
