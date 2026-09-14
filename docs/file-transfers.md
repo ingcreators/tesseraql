@@ -136,6 +136,13 @@ sources:
   `2026-01-15`, a time as `22:30:00`, a time with zone as `22:30:00+09:00`. The Excel grid and
   placement modes type every temporal cell. A jxls report (`template:` without `startCell:`)
   hands the template the raw values and reads none of these keys.
+- `domain:` says `type:` and `format:` once: `{ name: held_on, domain: held_date }` takes them
+  from the app-level field domain ([field-domains.md](field-domains.md)) — the same domain the
+  request's `input:` binds and a `result:` entry reads back — and the column's own `type:` or
+  `format:` wins over the domain's. `label:` and `column:` stay the file's. A domain's `locale:`
+  is not applied to a column (a file has one locale, the block's), nor are its constraint keys.
+  A route's columns only: a job's export step or poll import does not resolve domains, so a
+  reference there is a lint error and a registration refusal (`TQL-YAML-1063`).
 - A column is read in the kind the database declares for it, and the server's own time zone
   never enters. A zoneless `timestamp` or `datetime` is a wall clock: `timezone:` leaves it
   alone, typed or not. A `timestamptz`, `datetimeoffset` or `TIMESTAMP WITH TIME ZONE` is an
@@ -442,6 +449,8 @@ Import-side `import:` keys beyond `format`, `columns`, and `onError` (the per-ro
 - `headerRow:` (default `true`) — whether the table starts with a header row. With a header,
   simple-form columns match by header label; `label:` matches a localized label to a SQL
   parameter name; omitting `columns:` entirely uses the header labels as parameter names.
+- `domain:` on a column — the type and pattern from a field domain, exactly as on an export
+  column above; the block's `locale:` still drives the parse.
 - `startRow:` — the 1-based row the table starts at, for files with title rows above the data.
 - `sheet:` — workbook formats: the sheet to read (default: the first).
 - `locale:` — drives `type:`/`format:` parsing of dates and numbers: a literal,

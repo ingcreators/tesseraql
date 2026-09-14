@@ -75,6 +75,15 @@ public record ImportSpec(String format, List<ColumnSpec> columns, Boolean header
         return REVIEW_REQUIRED.equalsIgnoreCase(review);
     }
 
+    /** This block with its columns replaced — how the loader stamps a column's {@code domain:}. */
+    public ImportSpec withColumns(List<ColumnSpec> resolved) {
+        if (resolved == columns) {
+            return this;
+        }
+        return new ImportSpec(format, resolved, headerRow, startRow, sheet, locale, onError,
+                review);
+    }
+
     /** The core read spec with column references resolved. */
     public io.tesseraql.core.files.FileReadSpec toReadSpec() {
         return new io.tesseraql.core.files.FileReadSpec(

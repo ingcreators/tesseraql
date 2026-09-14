@@ -142,6 +142,18 @@ request binds, declared once. Two things follow:
   the request's own negotiated locale — the mirror of the constraint keys on read: legal on the
   domain, not merged into an input, and refused when written on an input entry.
 
+### A domain on a file column
+
+A file column ([file-transfers.md](file-transfers.md)) may say `domain:` too — `{ name:
+held_on, domain: held_date }` on a route's `import:` or `export:` — and takes the domain's
+`type:` and `format:`, the two keys a file column and a field share; the column's own win. The
+records stay separate: `label:` and `column:` are the file's, and a `columns:` list is positional
+where a field map is keyed. A domain's `locale:` is not applied to a column (a file has one
+locale, the block's), nor are its constraint keys. A job's columns are not resolved — a job's
+own `input:` domains are not either, a lead filed in
+[temporal-semantics.md](temporal-semantics.md) — so a `domain:` on a job's column is refused
+(`TQL-YAML-1063`) rather than accepted and applied nowhere.
+
 ## Resolution is compile-time
 
 Domain references resolve in the route compiler, before input binding. The resolved route carries
@@ -186,7 +198,7 @@ a migration is one edit in one file.
 - **Lint** (`TQL-DOMAIN-*` family; final numbers assigned against the registry at
   implementation): unknown domain reference (error), duplicate domain name (error), loosening
   override (warning), domain declared but never referenced (info). A reference from a `result:`
-  entry counts as a reference.
+  entry or a file column counts as a reference.
 
 ## Out of scope
 

@@ -187,6 +187,20 @@ public record RouteDefinition(
     }
 
     /**
+     * A copy carrying {@code import:} and {@code export:} blocks whose columns' {@code domain:}
+     * references are resolved (docs/temporal-semantics.md decision 25).
+     */
+    public RouteDefinition withTransfers(ImportSpec effectiveImport, ExportSpec effectiveExport) {
+        if (effectiveImport == fileImport && effectiveExport == fileExport) {
+            return this;
+        }
+        return new RouteDefinition(version, id, kind, recipe, input, inputPolicy, security,
+                idempotency, admission, outbox, steps, sources, validate, decide, notifications,
+                errors, effectiveImport, effectiveExport, webhook, publish, consume, response,
+                pagination, datasource, cache, emit, invalidates, lock);
+    }
+
+    /**
      * A copy carrying resolved {@code validate:} rules — how the manifest loader stamps shared
      * rule-set references (docs/validation-rule-sets.md) into the route.
      */

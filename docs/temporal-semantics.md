@@ -491,7 +491,8 @@ boot (`type: ''`), and `ResultDomainResolutionTest` 3/3 red. Fix — 7/7, and th
 
 ## T3 follow-ups — the three filed items, designed 2026-09-14
 
-**Status: decisions 23-25 taken 2026-09-14, as recommended; F-A shipped, F-B follows.** The
+**Status: complete — decisions 23-25 taken 2026-09-14, as recommended; F-A and F-B shipped.**
+The
 user chose the filed items as the next move after T3 shipped. Measured on `ffedc6e0b` by
 reading.
 
@@ -554,10 +555,19 @@ reading.
   domain's `maxLength`/`pattern` do not reach the entry, its `locale` does). Variant
   `V-mergedWith` (the full merge on a result entry) — four units red: the inherited key is
   reported as written, the resolution assertion fails. `work/temporal-semantics/t3/fa-*`.
-- **F-B** (decision 25): `ColumnSpec.domain`, resolved in `withFieldDomains` for a route's
-  `import:`/`export:`; schema `fileColumn.domain`; the domain lint counts it; guards: an
-  export column typed only through its domain writes a typed cell (the value only the domain
-  has), an unknown domain fails the load, the domain-only reference is not "never referenced".
+- **F-B** (decision 25), shipped: `ColumnSpec.domain` (the sixth key) and `mergedWith` (type
+  and format alone), resolved in `withFieldDomains` for a route's `import:`/`export:`
+  (`RouteDefinition.withTransfers`, `ImportSpec`/`ExportSpec.withColumns`); schema
+  `fileColumn.domain`; the domain lint counts it; `ExportDeclarations.columns` refuses a
+  `domain:` on a job site (`TQL-YAML-1063`, lint and `job run`/registration through the one
+  predicate). Guards, red on `0e4611d8b`: `TemporalExportIntegrationTest` — a `date` column
+  typed through its domain alone writes `2026/01/15` (HEAD: the untyped `2026-01-15`);
+  `FileTransferIntegrationTest` — two import columns typed through domains parse `2026/06/12`
+  and `2.345,67` (HEAD: bound as strings, "column held_on is of type date but expression is of
+  type character varying"); `ColumnDomainResolutionTest` (the compiled column carries the
+  domain-only format, own format wins, unknown domain fails the load);
+  `AppLinterColumnDomainTest` (the reference counts; a job's column refused).
+  `work/temporal-semantics/t3/fb-*`.
 
 ---
 

@@ -751,7 +751,7 @@ Restartable per-row processing: a reader, a writer, and committed checkpoints, s
 
 ### fileColumn
 
-One column of a file transfer, in either form: the bare name, or an object adding the file-side heading, an explicit position, and a type with its pattern. Documented in file-transfers.md.
+One column of a file transfer, in either form: the bare name, or an object adding the file-side heading, an explicit position, and a type with its pattern — or a domain that says the type and pattern once. Documented in file-transfers.md.
 
 | Property | Type | Description |
 | --- | --- | --- |
@@ -760,6 +760,7 @@ One column of a file transfer, in either form: the bare name, or an object addin
 | `column` | string | An explicit position instead of matching by header: a column letter (`D`) or a 1-based number. |
 | `type` | string | Parses the file's text into a typed bind on import, and writes a typed cell on export. Omit it for plain text. |
 | `format` | string | The parse/render pattern the `type:` uses, e.g. `yyyy/MM/dd` or `#,##0.00` — and, for workbooks, the matching cell format. |
+| `domain` | string | An app-level field domain (docs/field-domains.md) supplying `type:` and `format:` once — the same domain the request's `input:` binds and a `result:` entry reads; the column's own `type:`/`format:` win. The domain's `locale:` is not applied (a file has one locale, the block's), nor are its constraint keys. A route's columns only: on a job's export step or poll import the reference is refused (TQL-YAML-1063). |
 
 ### inputField
 

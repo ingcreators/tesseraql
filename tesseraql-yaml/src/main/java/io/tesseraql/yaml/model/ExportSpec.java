@@ -73,6 +73,15 @@ public record ExportSpec(String format, String filename, String template, String
         columns = columns == null ? List.of() : List.copyOf(columns);
     }
 
+    /** This block with its columns replaced — how the loader stamps a column's {@code domain:}. */
+    public ExportSpec withColumns(List<ColumnSpec> resolved) {
+        if (resolved == columns) {
+            return this;
+        }
+        return new ExportSpec(format, filename, template, sheet, startCell, resolved, locale,
+                timezone, after, maxRows, onOverflow, groupBy, splitBy, bom);
+    }
+
     /**
      * The core write spec with column and cell references resolved; {@code resources} is the
      * app home, the confinement root for template-referenced resources (fonts, stylesheets).
