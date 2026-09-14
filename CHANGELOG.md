@@ -38,9 +38,7 @@ All notable changes to TesseraQL are documented here. The format follows
   entry reads back — with the column's own keys winning; `label:` and `column:` stay the
   file's, and a domain's `locale:` and constraint keys are not applied to a column. Resolved by
   the manifest loader, judged by the export declarations as before, counted as a reference by
-  the domain lint. A job's export step or poll import does not resolve domains, so a `domain:`
-  on a job's column is a lint error and a registration refusal (`TQL-YAML-1063`) instead of a
-  key that validates and does nothing.
+  the domain lint — on a route's and a job's columns alike.
 - **A control character in a declared response header is refused where it is declared.** A
   `security.responseHeaders` default carrying a C0 control (other than a tab) or DEL is refused
   at lint and at boot with `TQL-SEC-4135`, naming the header and the character — the asset, SSE
@@ -211,6 +209,15 @@ All notable changes to TesseraQL are documented here. The format follows
   `/受注/エクスポート` with `受注番号=エクスポート`. A route's order is now its specificity — a
   literal before a parameter at the first segment where two routes differ, whatever the
   characters — and a route the file watcher adds lands in its place.
+- **A job's `domain:` references are resolved.** A job's `input:` fields, each export step's
+  columns and a poll job's import columns now take their domain's keys in the manifest loader,
+  exactly as a route's do. Before, `count: { domain: batch_count }` on a job was parsed and
+  never merged: the parameter bound as an untyped string — which PostgreSQL refuses for an
+  integer column — with the domain's `type`, `min` and `max` applied nowhere, and neither the
+  domain lint nor the declared-kind lint looked at a job, so a job-only domain was reported as
+  never referenced and a job input of `type: json` drew no finding. Both lints now judge a job's
+  declarations, and a job input of a type no request binds is refused at registration
+  (`TQL-YAML-1064`).
 - **Ctrl+C while the embedded PostgreSQL is starting no longer leaves it running.** The stop
   looked for the `postgres` process at the instant the interrupt arrived, and in the first
   moments after the library announces the postmaster there is none to find — the process it

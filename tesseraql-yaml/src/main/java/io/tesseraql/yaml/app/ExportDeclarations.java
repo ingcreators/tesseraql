@@ -384,9 +384,13 @@ public final class ExportDeclarations {
     /**
      * The job arm (decision 1), for every place a job map is filled — the runtime's two fills
      * and {@code tesseraql job run}: each export step's block (its template resolving beside
-     * the job file) and a poll job's import block, refused or warned about like a route's.
+     * the job file) and a poll job's import block, refused or warned about like a route's; and
+     * the job's {@code input:} kinds, judged by the predicate the route compiler refuses from
+     * (docs/temporal-semantics.md decision 27) — a job binds its parameters through the same
+     * binder a route does.
      */
     public static void requireJob(String app, JobFile job, Consumer<String> warn) {
+        DeclaredKinds.require(DeclaredKinds.inputViolations(job.definition()), warn);
         String jobId = job.definition().id();
         Path directory = job.source() == null ? null : job.source().getParent();
         for (PipelineStep step : job.definition().pipeline()) {
@@ -639,14 +643,6 @@ public final class ExportDeclarations {
         boolean parses = importing || "csv".equals(format) || "pdf".equals(format);
         for (ColumnSpec column : columns) {
             String at = key + "[" + bounded(column.name()) + "]";
-            // A route's columns arrive with their domain: merged by the manifest loader; a
-            // job's are never resolved (docs/temporal-semantics.md F4), so a reference there
-            // would be accepted and applied nowhere - refused instead, on both sides.
-            if (site.job() && column.domain() != null) {
-                out.add(new Violation(INVALID_VALUE, Kind.INVALID, at + ".domain",
-                        site.prefix(at + ".domain") + "a job's column does not resolve a domain"
-                                + " - declare type: and format: on the column"));
-            }
             String type = column.type();
             if (type != null && !COLUMN_TYPES.contains(type)) {
                 if (importing) {

@@ -264,8 +264,9 @@ Ranked. The first two are larger than most of the leads that found them.
     `FieldDomainRules` walks routes, consumers and tools only. `{ domain: sku }` on a job
     parameter binds as an untyped string with the domain's keys applied nowhere and no finding,
     while the shared schema says a job's parameters "bind and validate exactly like a route's".
-    A job's file columns are refused a `domain:` (`TQL-YAML-1063`) until this is fixed, so the
-    two halves ship together. Found by `temporal-semantics.md` F4; filed.
+    Found by `temporal-semantics.md` F4; **fixed the same day** (decisions 26-28 there): a job
+    resolves its domains in the loader as a route does, both lints judge a job's declarations,
+    and F-B's refusal of a `domain:` on a job's column is lifted.
 26. **Every DuckDB JSON route that selects a `date`, `time` or `timestamptz` column answers
     500 `TQL-ROUTE-3001`** (HIGH, loud, since the analytics stack shipped in v0.11.0) — the
     driver hands the framework a `java.time` value, `ResultRows.value` passes it through, and

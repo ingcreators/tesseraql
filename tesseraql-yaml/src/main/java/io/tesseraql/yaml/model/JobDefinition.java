@@ -90,4 +90,19 @@ public record JobDefinition(
     public List<PipelineStep> effectiveSteps() {
         return pipeline;
     }
+
+    /**
+     * A copy with its domain references resolved — the {@code input:} fields, the pipeline
+     * (each export step's columns) and a poll job's {@code import:} columns — how the manifest
+     * loader stamps a job the way it stamps a route (docs/temporal-semantics.md decision 26).
+     */
+    public JobDefinition withResolved(Map<String, InputField> effectiveInput,
+            List<PipelineStep> effectivePipeline, ImportSpec effectiveImport) {
+        if (effectiveInput == input && effectivePipeline == pipeline
+                && effectiveImport == fileImport) {
+            return this;
+        }
+        return new JobDefinition(version, id, kind, recipe, datasource, trigger, effectiveInput,
+                effectivePipeline, perTenant, effectiveImport, overlap, sla);
+    }
 }

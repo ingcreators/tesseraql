@@ -394,7 +394,7 @@
         },
         "domain": {
           "type": "string",
-          "description": "An app-level field domain (docs/field-domains.md) supplying `type:` and `format:` once — the same domain the request's `input:` binds and a `result:` entry reads; the column's own `type:`/`format:` win. The domain's `locale:` is not applied (a file has one locale, the block's), nor are its constraint keys. A route's columns only: on a job's export step or poll import the reference is refused (TQL-YAML-1063)."
+          "description": "An app-level field domain (docs/field-domains.md) supplying `type:` and `format:` once — the same domain the request's `input:` binds and a `result:` entry reads; the column's own `type:`/`format:` win. The domain's `locale:` is not applied (a file has one locale, the block's), nor are its constraint keys. A route's and a job's columns alike."
         }
       },
       "additionalProperties": false,

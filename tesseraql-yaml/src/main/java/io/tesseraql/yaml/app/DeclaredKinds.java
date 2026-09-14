@@ -87,15 +87,29 @@ public final class DeclaredKinds {
      * input has declared a value the binder would pass through as its raw text.
      */
     public static List<Violation> inputViolations(RouteDefinition route) {
+        return inputViolations(subject(route), route.input());
+    }
+
+    /**
+     * The same, for a job's parameters (docs/temporal-semantics.md decision 27): a job binds
+     * its {@code input:} exactly as a route does, through the same binder.
+     */
+    public static List<Violation> inputViolations(io.tesseraql.yaml.model.JobDefinition job) {
+        return inputViolations("job '" + ExportDeclarations.bounded(job.id()) + "'",
+                job.input());
+    }
+
+    private static List<Violation> inputViolations(String subject,
+            Map<String, InputField> input) {
         List<Violation> out = new ArrayList<>();
-        route.input().forEach((name, field) -> inputField(route, "input." + name, field, out));
+        input.forEach((name, field) -> inputField(subject, "input." + name, field, out));
         return out;
     }
 
-    private static void inputField(RouteDefinition route, String key, InputField field,
+    private static void inputField(String subject, String key, InputField field,
             List<Violation> out) {
         if (field.type() != null && !INPUT_TYPES.contains(field.type())) {
-            out.add(new Violation(key + ".type", prefix(route, key + ".type") + "'"
+            out.add(new Violation(key + ".type", prefix(subject, key + ".type") + "'"
                     + ExportDeclarations.bounded(field.type()) + "' is not a type a request"
                     + " binds (" + sorted(INPUT_TYPES) + ")"
                     + (JSON.equals(field.type())
@@ -105,13 +119,13 @@ public final class DeclaredKinds {
         }
         // A domain's locale is never merged into an input, so one here was written here.
         if (field.locale() != null) {
-            out.add(new Violation(key + ".locale", prefix(route, key + ".locale")
+            out.add(new Violation(key + ".locale", prefix(subject, key + ".locale")
                     + "locale: is not applied on an input, which parses in the request's own"
                     + " locale - declare it on the result: entry or the domain that reads the"
                     + " column back"));
         }
         if (field.items() != null && field.items().hasFields()) {
-            field.items().fields().forEach((element, spec) -> inputField(route,
+            field.items().fields().forEach((element, spec) -> inputField(subject,
                     key + ".items.fields." + element, spec, out));
         }
     }
@@ -136,7 +150,7 @@ public final class DeclaredKinds {
             return;
         }
         if (!publishesRows(binding)) {
-            out.add(new Violation(key + ".result", prefix(route, key + ".result")
+            out.add(new Violation(key + ".result", prefix(subject(route), key + ".result")
                     + "a result: declaration applies to the rows a binding publishes, and this"
                     + " one publishes none (mode: " + ExportDeclarations.bounded(
                             binding.effectiveMode())
@@ -158,32 +172,33 @@ public final class DeclaredKinds {
     private static void entry(RouteDefinition route, String key, InputField field,
             List<Violation> out) {
         for (String written : unreadKeys(field)) {
-            out.add(new Violation(key + "." + written, prefix(route, key + "." + written)
+            out.add(new Violation(key + "." + written, prefix(subject(route), key + "." + written)
                     + "'" + written + "' is not a key a result: declaration reads (" + READ_KEYS
                     + ") - a read says what the column's text is, not what it may be"));
         }
         String type = field.type();
         if (type == null || !RESULT_KINDS.contains(type)) {
-            out.add(new Violation(key + ".type", prefix(route, key + ".type") + "'"
+            out.add(new Violation(key + ".type", prefix(subject(route), key + ".type") + "'"
                     + ExportDeclarations.bounded(type) + "' is not a kind a result: declaration"
                     + " parses (" + sorted(RESULT_KINDS) + ")"));
             return;
         }
         if (field.locale() != null) {
             ExportDeclarations.localeProblem(field.locale()).ifPresent(problem -> out.add(
-                    new Violation(key + ".locale", prefix(route, key + ".locale") + problem)));
+                    new Violation(key + ".locale",
+                            prefix(subject(route), key + ".locale") + problem)));
         }
         if (field.format() == null) {
             return;
         }
         if (JSON.equals(type)) {
-            out.add(new Violation(key + ".format", prefix(route, key + ".format")
+            out.add(new Violation(key + ".format", prefix(subject(route), key + ".format")
                     + "a json declaration reads no format: - the text is parsed as JSON"));
             return;
         }
         String problem = ExportDeclarations.patternProblem(type, field.format());
         if (problem != null) {
-            out.add(new Violation(key + ".format", prefix(route, key + ".format") + "'"
+            out.add(new Violation(key + ".format", prefix(subject(route), key + ".format") + "'"
                     + ExportDeclarations.bounded(field.format()) + "' " + problem));
         }
     }
@@ -265,8 +280,12 @@ public final class DeclaredKinds {
         }
     }
 
-    private static String prefix(RouteDefinition route, String key) {
-        return "route '" + ExportDeclarations.bounded(route.id()) + "' " + key + ": ";
+    private static String subject(RouteDefinition route) {
+        return "route '" + ExportDeclarations.bounded(route.id()) + "'";
+    }
+
+    private static String prefix(String subject, String key) {
+        return subject + " " + key + ": ";
     }
 
     private static String sorted(Set<String> names) {
