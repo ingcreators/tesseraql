@@ -67,12 +67,20 @@ import java.util.Map;
  *                 (docs/sql-execution-shapes.md structural decision 7): each name to its
  *                 declared JDBC type keyword; the statement binds them as {@code out.<name>}
  *                 bind sites, and the values publish as {@code steps.<name>.out.<name>}
+ * @param result   the columns whose text this binding parses into a declared kind
+ *                 (docs/temporal-semantics.md T3): each column name to an {@link InputField}
+ *                 whose {@code type:} is {@code json}, {@code date}, {@code datetime} or
+ *                 {@code number}, with its {@code format:} — or a {@code domain:} that says
+ *                 so once. Sparse: an undeclared column passes through in the kind the
+ *                 database gave it. Beside the arms like {@code enrich:}, because it is about
+ *                 the rows whatever fetched them
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record Binding(String file, String contract, String mode, Map<String, String> params,
         String service, HttpSourceSpec http, Materialize materialize, String sequence,
         java.util.List<String> keys, Expect expect, Integer timeoutSeconds, String datasource,
-        String spool, String when, Map<String, EnrichSpec> enrich, Map<String, String> out) {
+        String spool, String when, Map<String, EnrichSpec> enrich, Map<String, String> out,
+        Map<String, InputField> result) {
 
     public Binding {
         params = params == null ? Map.of() : OrderedCopies.map(params);
@@ -83,6 +91,18 @@ public record Binding(String file, String contract, String mode, Map<String, Str
         out = out == null
                 ? Map.of()
                 : java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(out));
+        result = result == null
+                ? Map.of()
+                : java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(result));
+    }
+
+    /** The shape before a binding could declare the kinds of its result columns. */
+    public Binding(String file, String contract, String mode, Map<String, String> params,
+            String service, HttpSourceSpec http, Materialize materialize, String sequence,
+            java.util.List<String> keys, Expect expect, Integer timeoutSeconds, String datasource,
+            String spool, String when, Map<String, EnrichSpec> enrich, Map<String, String> out) {
+        this(file, contract, mode, params, service, http, materialize, sequence, keys, expect,
+                timeoutSeconds, datasource, spool, when, enrich, out, null);
     }
 
     /** The shape before a call step could declare OUT parameters. */
@@ -91,7 +111,17 @@ public record Binding(String file, String contract, String mode, Map<String, Str
             java.util.List<String> keys, Expect expect, Integer timeoutSeconds, String datasource,
             String spool, String when, Map<String, EnrichSpec> enrich) {
         this(file, contract, mode, params, service, http, materialize, sequence, keys, expect,
-                timeoutSeconds, datasource, spool, when, enrich, null);
+                timeoutSeconds, datasource, spool, when, enrich, null, null);
+    }
+
+    /**
+     * This binding with its {@code result:} entries replaced — how the manifest loader stamps
+     * a {@code domain:} reference's keys under each entry (docs/field-domains.md), so the
+     * compiler reads a fully-populated declaration.
+     */
+    public Binding withResult(Map<String, InputField> resolved) {
+        return new Binding(file, contract, mode, params, service, http, materialize, sequence,
+                keys, expect, timeoutSeconds, datasource, spool, when, enrich, out, resolved);
     }
 
     /** The shape before an enrichment could nest under the source it transforms. */
@@ -106,10 +136,11 @@ public record Binding(String file, String contract, String mode, Map<String, Str
     /**
      * The authoring form: one arm key whose value carries that mechanism's keys.
      *
-     * <p>{@code sequence}, the step-level {@code when:} and {@code enrich:} sit beside the arm
-     * rather than inside one — a guard is about whether the step runs at all, an enrichment is
-     * about the rows whatever fetched them, and a sequence allocation has no body beyond its
-     * name. None of the three is a question for the mechanism.
+     * <p>{@code sequence}, the step-level {@code when:}, {@code enrich:} and {@code result:} sit
+     * beside the arm rather than inside one — a guard is about whether the step runs at all, an
+     * enrichment and a result declaration are about the rows whatever fetched them, and a
+     * sequence allocation has no body beyond its name. None of the four is a question for the
+     * mechanism.
      */
     @com.fasterxml.jackson.annotation.JsonCreator
     static Binding of(
@@ -120,7 +151,8 @@ public record Binding(String file, String contract, String mode, Map<String, Str
             @com.fasterxml.jackson.annotation.JsonProperty("sequence") String sequence,
             @com.fasterxml.jackson.annotation.JsonProperty("spool") String spool,
             @com.fasterxml.jackson.annotation.JsonProperty("when") String when,
-            @com.fasterxml.jackson.annotation.JsonProperty("enrich") Map<String, EnrichSpec> enrich) {
+            @com.fasterxml.jackson.annotation.JsonProperty("enrich") Map<String, EnrichSpec> enrich,
+            @com.fasterxml.jackson.annotation.JsonProperty("result") Map<String, InputField> result) {
         return new Binding(
                 sql == null ? null : sql.file(),
                 contract == null ? null : contract.name(),
@@ -144,7 +176,8 @@ public record Binding(String file, String contract, String mode, Map<String, Str
                 spool,
                 when,
                 enrich,
-                sql == null ? null : sql.out());
+                sql == null ? null : sql.out(),
+                result);
     }
 
     /**

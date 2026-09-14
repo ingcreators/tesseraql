@@ -78,6 +78,9 @@ class LintRegistryOrderTest {
                         "DuckDbRules",
                         "ModuleDeclarationRules",
                         "InputRules",
+                        // The declared kinds on both surfaces, judged by the predicate the
+                        // compiler refuses from (docs/temporal-semantics.md T3).
+                        "DeclaredKindRules",
                         // Last: the sweep for files no loader claims at all.
                         "UnclaimedFileRules");
     }

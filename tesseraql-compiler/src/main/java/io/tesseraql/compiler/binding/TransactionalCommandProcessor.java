@@ -139,7 +139,10 @@ public final class TransactionalCommandProcessor implements Step {
     private record Step(String name, List<SqlNode> nodes, String sourcePath,
             String mode, Map<String, String> params, List<String> keys, Binding.Expect expect,
             String sequence, ExecutionBounds bounds, io.tesseraql.core.expr.Expr when,
-            Map<String, Integer> outTypes, boolean locked) {
+            Map<String, Integer> outTypes, boolean locked,
+            // The step's result: declaration (docs/temporal-semantics.md T3), applied to a
+            // query step's rows before they publish; empty for every other step.
+            Map<String, io.tesseraql.yaml.model.InputField> result) {
 
         boolean isSequence() {
             return sequence != null;
@@ -277,7 +280,7 @@ public final class TransactionalCommandProcessor implements Step {
             if (binding.isSequence()) {
                 compiled.add(new Step(name, null, null, "sequence",
                         binding.params(), List.of(), null, binding.sequence(),
-                        boundsFor(binding), when, Map.of(), false));
+                        boundsFor(binding), when, Map.of(), false, Map.of()));
             } else {
                 Path file = stepFile.apply(binding.file());
                 // Steps default to update: a command writes.
@@ -307,7 +310,8 @@ public final class TransactionalCommandProcessor implements Step {
                 compiled.add(new Step(name, nodes,
                         file.toString(), mode,
                         binding.params(), binding.keys(), expect, null,
-                        boundsFor(binding), when, outTypes(name, mode, binding), locked));
+                        boundsFor(binding), when, outTypes(name, mode, binding), locked,
+                        binding.result()));
             }
             seen.add(name);
         }
@@ -934,6 +938,12 @@ public final class TransactionalCommandProcessor implements Step {
                     stepStatements.rows(step.bounds().maxRows(),
                             overflow("Step '" + step.name() + "'", step.sourcePath(),
                                     step.bounds())));
+            if (!step.result().isEmpty()) {
+                // The declared kinds, before the rows publish as steps.<name>.rows
+                // (docs/temporal-semantics.md T3) - the same application a route source gets.
+                rows = ResultDeclarationProcessor.apply(routeId, "steps." + step.name(),
+                        step.result(), rows);
+            }
             result.put("rows", rows);
             result.put("rowCount", rows.size());
         } else {

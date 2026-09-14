@@ -78,6 +78,7 @@ public final class AppLinter {
                 new DuckDbRules(),
                 new ModuleDeclarationRules(),
                 new InputRules(),
+                new DeclaredKindRules(),
                 new UnclaimedFileRules());
     }
 
@@ -98,12 +99,27 @@ public final class AppLinter {
         return KNOWN_AUTH_MODES;
     }
 
-    private static final Set<String> KNOWN_INPUT_TYPES = Set.of("string", "integer", "number",
-            "boolean", "date", "datetime", "array", "sort");
+    private static final Set<String> KNOWN_INPUT_TYPES = io.tesseraql.yaml.app.DeclaredKinds.INPUT_TYPES;
+
+    /**
+     * Every {@code type:} an {@code inputField} shape may carry — the input types plus the
+     * read-only {@code json} a {@code result:} entry or a domain declares — which is what the
+     * shipped schema's enum lists, since one shape serves {@code input:}, {@code domains/} and
+     * {@code result:} alike; which surface honours which is {@code DeclaredKinds}' judgement.
+     */
+    private static final Set<String> KNOWN_FIELD_TYPES = java.util.stream.Stream
+            .concat(KNOWN_INPUT_TYPES.stream(),
+                    io.tesseraql.yaml.app.DeclaredKinds.RESULT_KINDS.stream())
+            .collect(java.util.stream.Collectors.toUnmodifiableSet());
 
     /** The declared-input types — exposed for the same drift tests as {@link #knownAuthModes()}. */
     public static Set<String> knownInputTypes() {
         return KNOWN_INPUT_TYPES;
+    }
+
+    /** The union the {@code inputField} schema enum lists (see {@link #knownInputTypes()}). */
+    public static Set<String> knownFieldTypes() {
+        return KNOWN_FIELD_TYPES;
     }
 
     /** Loads and lints the app home, returning all findings. */

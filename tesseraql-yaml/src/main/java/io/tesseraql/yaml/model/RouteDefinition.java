@@ -171,6 +171,22 @@ public record RouteDefinition(
     }
 
     /**
+     * A copy carrying {@code sources:} and {@code steps:} whose {@code result:} entries are
+     * resolved — how the manifest loader stamps a field-domain reference's keys under a result
+     * declaration (docs/field-domains.md), the way it does for {@code input:}.
+     */
+    public RouteDefinition withBindings(Map<String, Binding> effectiveSources,
+            Map<String, Binding> effectiveSteps) {
+        if (effectiveSources == sources && effectiveSteps == steps) {
+            return this;
+        }
+        return new RouteDefinition(version, id, kind, recipe, input, inputPolicy, security,
+                idempotency, admission, outbox, effectiveSteps, effectiveSources, validate,
+                decide, notifications, errors, fileImport, fileExport, webhook, publish, consume,
+                response, pagination, datasource, cache, emit, invalidates, lock);
+    }
+
+    /**
      * A copy carrying resolved {@code validate:} rules — how the manifest loader stamps shared
      * rule-set references (docs/validation-rule-sets.md) into the route.
      */

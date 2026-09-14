@@ -8,6 +8,26 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **A binding declares the kind of a column the database holds as text (`result:`).** A route
+  source or a command step may name the columns whose text it parses into a declared kind, each
+  entry a field like an `input:` entry, so a `domain:` says it once for the request that binds a
+  value and the query that reads it back: `payload: { type: json }` turns a `jsonb`, `json` or
+  text column into a value an expression, a template or a response binding navigates
+  (`payload.sku`) and the JSON response writes as a structure — and wherever a surface prints
+  the value it prints compact JSON, never `{sku=A-1}`; `ordered_on: { domain: order_date }`
+  turns a date a legacy column stores as `yyyy/MM/dd` text into `2026-01-15`; `amount: { type:
+  number, format: "#,##0.00" }` turns `1,234.50` into a number. A parsed value renders exactly
+  as a native column of that kind does, and a parsed text datetime is a wall clock, never an
+  instant. The block is sparse — an undeclared column keeps the kind the database gave it — and
+  applies where a binding publishes rows; a value that cannot be parsed fails the read with
+  `TQL-SQL-2503`, naming the source, the column, the row index and the kind, and a declared
+  column no row of a result carries is logged once per route rather than ignored. A kind the
+  read does not parse, a `format:` its parser refuses, a declaration on a binding that publishes
+  no rows, or a `result:` on a job's chunk reader is a lint error and a boot refusal with one
+  code, `TQL-YAML-1064` — which also refuses `type: json` on an `input:`, where nothing binds
+  it, and any `type:` outside the input vocabulary, which the binder used to pass through as
+  text without a word. A domain may carry `type: json`; a domain's constraint keys are not
+  applied on read.
 - **A control character in a declared response header is refused where it is declared.** A
   `security.responseHeaders` default carrying a C0 control (other than a tab) or DEL is refused
   at lint and at boot with `TQL-SEC-4135`, naming the header and the character — the asset, SSE

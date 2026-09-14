@@ -115,7 +115,25 @@ The line is a design invariant, not a convention:
 A route may restate a domain key to specialize it. Restating is legal in both directions but
 linted asymmetrically: tightening (`maxLength: 20` under a 40-character domain) is silent;
 loosening (raising a bound, widening an `enum`, dropping `mask`, downgrading `classification`)
-produces a warning, because a loosened copy is exactly the drift domains exist to prevent.
+produces a warning, because a loosened copy is exactly the drift domains exist to prevent. A
+restated `format:` is a third case, neither tightening nor loosening: the API takes ISO and the
+legacy column holds `20240103`, so a `result:` entry restating the pattern over its domain's is
+not a finding.
+
+### A domain on the way back out (`result:`)
+
+The same domain describes the column a query reads back. A binding's `result:` entry
+(documented in [response-shaping.md](response-shaping.md#declaring-a-columns-kind-result))
+is a field like an `input:` entry, so it may say `domain: order_date` and inherit the domain's
+`type:` and `format:` — the date a legacy column stores as text is the business field the
+request binds, declared once. Two things follow:
+
+- A domain may carry `type: json`, the read-only kind: legal on a domain and on a `result:`
+  entry, refused on an `input:` that binds it (`TQL-YAML-1064`), since no request binds JSON
+  until an input has a validation story of its own.
+- The domain's constraint keys — `maxLength`, `minLength`, `pattern`, `enum`, `min`, `max` — are
+  **not applied on read**. A read declaration says what the column's text is, not what it may
+  be; validating what the database returned against the domain is a different feature.
 
 ## Resolution is compile-time
 
@@ -123,7 +141,8 @@ Domain references resolve in the route compiler, before input binding. The resol
 plain, fully-populated `input:` fields — the runtime binder, the `TQL-FIELD-4220` error model,
 OpenAPI emission, and validation coverage all consume what they consume today, unchanged. There is
 no runtime lookup, and the compiled artifact shows effective values, keeping generated artifacts
-reproducible and reviewable.
+reproducible and reviewable. A `result:` entry's `domain:` resolves the same way, in the manifest
+loader, so the compiled binding carries the domain's `type:` and `format:`.
 
 ## Constraint catalog
 
@@ -159,7 +178,8 @@ a migration is one edit in one file.
   documentation portal lists domains with the routes that reference them.
 - **Lint** (`TQL-DOMAIN-*` family; final numbers assigned against the registry at
   implementation): unknown domain reference (error), duplicate domain name (error), loosening
-  override (warning), domain declared but never referenced (info).
+  override (warning), domain declared but never referenced (info). A reference from a `result:`
+  entry counts as a reference.
 
 ## Out of scope
 
@@ -174,7 +194,9 @@ a migration is one edit in one file.
 
 1. Should a bare-string shorthand (`sku: sku`) be accepted where the field name equals the domain
    name, or is the explicit `domain:` key always required? Leaning explicit-only: the shorthand
-   collides with a future scalar syntax and saves little.
+   collides with a future scalar syntax and saves little. The `result:` block asks the same
+   (`result: [ordered_on]`) and stays in step: neither surface decides it alone
+   (temporal-semantics.md decision 21).
 2. ~~Should `enum` domains double as the source for form `<select>` options in declarative
    views?~~ **Resolved — it already does, by construction**: the load-time merge populates the
    route's `input:` with the domain's `enum`, and view form derivation renders a `select` from
