@@ -7,7 +7,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Reset password &middot; TesseraQL</title>
+<title th:text="#{tql.reset.pageTitle}">Reset password &middot; TesseraQL</title>
 <link rel="stylesheet" th:href="@{/assets/vendor/hypermedia-components__core/dist/hc.min.css}">
 <link rel="stylesheet" th:if="${_neutral}"
       th:href="@{|/assets/vendor/hypermedia-components__core/dist/hc.tokens.neutral-${_neutral}.css|}">
@@ -24,29 +24,29 @@
 <body>
 <main class="hc-stack" style="max-width: 24rem; margin: 4rem auto; padding: 0 1rem;">
   <section class="hc-card hc-stack">
-    <h1>Reset password</h1>
+    <h1 th:text="#{tql.reset.heading}">Reset password</h1>
 
     <div class="hc-empty" th:unless="${methods.recovery}">
-      <p class="hc-empty__title">Password recovery is not enabled.</p>
-      <p class="hc-empty__description">Ask your operator, or see
+      <p class="hc-empty__title" th:text="#{tql.reset.disabled}">Password recovery is not enabled.</p>
+      <p class="hc-empty__description" th:utext="#{tql.reset.disabledDescription}">Ask your operator, or see
         <code>tesseraql.identity.recovery</code> in <code>docs/credential-lifecycle.md</code>.</p>
     </div>
 
     <th:block th:if="${methods.recovery}">
       <div th:if="${sent}" class="hc-alert" data-variant="success" role="status">
-        <p class="hc-alert__title">If that account can be recovered, a link is on its way.</p>
-        <p>The link is valid for a short time and works once.</p>
+        <p class="hc-alert__title" th:text="#{tql.reset.sent}">If that account can be recovered, a link is on its way.</p>
+        <p th:text="#{tql.reset.sentDescription}">The link is valid for a short time and works once.</p>
       </div>
       <form th:unless="${sent}" class="hc-stack" method="post" th:action="@{/_tesseraql/reset}">
-        <p>Enter your login and we will mail you a one-time reset link.</p>
+        <p th:text="#{tql.reset.instructions}">Enter your login and we will mail you a one-time reset link.</p>
         <div class="hc-field">
-          <label class="hc-field__label" for="loginId">Login</label>
+          <label class="hc-field__label" for="loginId" th:text="#{tql.login.loginId}">Login</label>
           <input class="hc-input" id="loginId" name="loginId" autocomplete="username"
                  required autofocus>
         </div>
-        <button class="hc-button" data-variant="primary" type="submit">Send reset link</button>
+        <button class="hc-button" data-variant="primary" type="submit" th:text="#{tql.reset.submit}">Send reset link</button>
       </form>
-      <p class="hc-field__message"><a th:href="@{/_tesseraql/login}">Back to sign in</a></p>
+      <p class="hc-field__message"><a th:href="@{/_tesseraql/login}" th:text="#{tql.reset.backToSignIn}">Back to sign in</a></p>
     </th:block>
   </section>
 </main>

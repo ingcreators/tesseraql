@@ -8,7 +8,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Choose a new password &middot; TesseraQL</title>
+<title th:text="#{tql.reset.confirmPageTitle}">Choose a new password &middot; TesseraQL</title>
 <link rel="stylesheet" th:href="@{/assets/vendor/hypermedia-components__core/dist/hc.min.css}">
 <link rel="stylesheet" th:if="${_neutral}"
       th:href="@{|/assets/vendor/hypermedia-components__core/dist/hc.tokens.neutral-${_neutral}.css|}">
@@ -25,26 +25,26 @@
 <body>
 <main class="hc-stack" style="max-width: 24rem; margin: 4rem auto; padding: 0 1rem;">
   <section class="hc-card hc-stack">
-    <h1>Choose a new password</h1>
+    <h1 th:text="#{tql.reset.confirmHeading}">Choose a new password</h1>
 
     <div class="hc-empty" th:if="${invalid}">
-      <p class="hc-empty__title">This link is no longer valid.</p>
-      <p class="hc-empty__description">Reset links work once and expire quickly.
+      <p class="hc-empty__title" th:text="#{tql.reset.linkInvalid}">This link is no longer valid.</p>
+      <p class="hc-empty__description" th:utext="#{tql.reset.linkInvalidDescription(@{/_tesseraql/reset})}">Reset links work once and expire quickly.
         <a th:href="@{/_tesseraql/reset}">Request a new one</a>.</p>
     </div>
 
     <th:block th:unless="${invalid}">
       <div th:if="${error}" class="hc-alert" data-variant="error" role="alert">
-        <p class="hc-alert__title">The new password needs at least 8 characters.</p>
+        <p class="hc-alert__title" th:text="#{tql.reset.tooShort}">The new password needs at least 8 characters.</p>
       </div>
       <form class="hc-stack" method="post" th:action="@{/_tesseraql/reset/confirm}">
         <input type="hidden" name="token" th:value="${token}">
         <div class="hc-field">
-          <label class="hc-field__label" for="next">New password (8+ characters)</label>
+          <label class="hc-field__label" for="next" th:text="#{tql.reset.newPassword}">New password (8+ characters)</label>
           <input class="hc-input" id="next" name="next" type="password" minlength="8"
                  autocomplete="new-password" required autofocus>
         </div>
-        <button class="hc-button" data-variant="primary" type="submit">Set password</button>
+        <button class="hc-button" data-variant="primary" type="submit" th:text="#{tql.reset.setPassword}">Set password</button>
       </form>
     </th:block>
   </section>

@@ -26,7 +26,9 @@ users:
 
 Lookup walks the exact tag, then the bare language (`ja-JP` → `ja`), then the app default
 locale. App catalogs layer over the framework's built-in texts (`tql.*`, shipped in English
-and Japanese), so any framework message can be overridden per app. Texts may carry `{name}`
+and Japanese — the error and input texts, the list and form chrome, and every string of the
+account, inbox, task-queue, sign-in, invitation, password-recovery, consent and portal
+pages), so any framework message can be overridden per app. Texts may carry `{name}`
 placeholders — the same syntax the Hypermedia Components client catalog interpolates — filled
 from the error entry they describe (constraint params, violation row columns).
 

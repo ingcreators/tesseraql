@@ -78,6 +78,23 @@ class DefaultLocalesIntegrationTest {
         assertThat(unserved.body()).contains("lang=\"en\"").contains("No rows");
     }
 
+    /**
+     * The bundled sign-in surface follows the negotiated locale too (slice 8b, F127): the
+     * auth-ui system app carried hard-coded English under a {@code lang="ja"} root, so the
+     * language the framework negotiated stopped at the surface every end user meets first.
+     */
+    @Test
+    void theSignInPageRendersInTheNegotiatedLocale() throws Exception {
+        HttpResponse<String> japanese = get("/_tesseraql/login", "ja");
+        assertThat(japanese.statusCode()).isEqualTo(200);
+        assertThat(japanese.body()).contains("lang=\"ja\"")
+                .contains("<h1>サインイン</h1>").contains("ログイン ID")
+                .doesNotContain("<h1>Sign in</h1>");
+
+        HttpResponse<String> english = get("/_tesseraql/login", "en");
+        assertThat(english.body()).contains("<h1>Sign in</h1>").doesNotContain("サインイン");
+    }
+
     @Test
     void aDefaultLocaleTheRuntimeCannotServeRefusesTheBootAtItsKey() throws Exception {
         Path misspelled = prepareAppHome("""

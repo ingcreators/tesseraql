@@ -503,6 +503,26 @@ class AccountSurfaceIntegrationTest {
     }
 
     /**
+     * The account page itself is in the negotiated language (docs/audit-medium-leads.md slice
+     * 8b, F127): it promised the picker works with zero configuration and then rendered its
+     * own labels in English under {@code lang="ja"}.
+     */
+    @Test
+    void theAccountPageRendersInTheNegotiatedLocale() throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(
+                URI.create("http://localhost:" + runtime.port() + "/_tesseraql/account"))
+                .header("Cookie", sessionCookie).header("Accept-Language", "ja, en;q=0.5")
+                .build();
+        HttpResponse<String> page = HttpClient.newHttpClient().send(request,
+                HttpResponse.BodyHandlers.ofString());
+
+        assertThat(page.statusCode()).isEqualTo(200);
+        assertThat(page.body()).contains("lang=\"ja\"")
+                .contains(">表示言語<").contains(">言語を保存<").contains(">セッション<")
+                .doesNotContain(">Display language<").doesNotContain(">Save language<");
+    }
+
+    /**
      * Elevation, end to end (docs/access-governance.md structural decision 3): the store
      * write is ordinary, and the part that only a live request can prove is the session
      * refresh — a frozen principal would hold the elevation no sooner than the next login.

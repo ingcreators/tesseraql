@@ -5,24 +5,24 @@
      (docs/root-portal.md). Member addresses are origin-absolute by definition — /<name> —
      so hrefs bind plainly rather than through the base-path link helper. -->
 <html xmlns:th="http://www.thymeleaf.org"
-      th:replace="~{tql/shell :: shell('Portal', ~{:: #portal-nav}, ~{:: #page-header}, ~{:: #page-content})}">
+      th:replace="~{tql/shell :: shell(#{tql.portal.title}, ~{:: #portal-nav}, ~{:: #page-header}, ~{:: #page-content})}">
 <th:block id="portal-nav">
-  <a class="hc-item" th:href="@{/_tesseraql/portal}"><span class="hc-item__title">Portal</span></a>
+  <a class="hc-item" th:href="@{/_tesseraql/portal}"><span class="hc-item__title" th:text="#{tql.portal.title}">Portal</span></a>
 </th:block>
 <th:block id="page-header">
   <span class="hc-spacer"></span>
 </th:block>
 <div id="page-content" class="hc-stack">
 <section class="hc-card">
-  <div class="hc-card__header">Applications</div>
+  <div class="hc-card__header" th:text="#{tql.portal.applications}">Applications</div>
   <div class="hc-card__body hc-stack">
     <div class="hc-empty" th:if="${#lists.isEmpty(apps)}">
-      <p class="hc-empty__title">No applications are reachable from here.</p>
-      <p class="hc-empty__description">Nothing is installed in this stack yet, none of it is
+      <p class="hc-empty__title" th:text="#{tql.portal.none}">No applications are reachable from here.</p>
+      <p class="hc-empty__description" th:text="#{tql.portal.noneDescription}">Nothing is installed in this stack yet, none of it is
         entitled to your tenant, or you hold no application grants — an administrator assigns
         them in IAM Admin.</p>
     </div>
-    <nav class="hc-stack" th:unless="${#lists.isEmpty(apps)}" aria-label="Applications">
+    <nav class="hc-stack" th:unless="${#lists.isEmpty(apps)}" th:aria-label="#{tql.portal.applications}">
       <a class="hc-item" th:each="app : ${apps}" th:href="${app.href}">
         <span class="hc-item__title" th:text="${app.name}"></span>
       </a>

@@ -5,35 +5,35 @@
      where the transitions region offers exactly the legal moves. A task records the state it
      is open in, not the transition owed. -->
 <html xmlns:th="http://www.thymeleaf.org"
-      th:replace="~{tql/shell :: shell(|Tasks &middot; TesseraQL|, ~{:: #tasks-nav}, ~{}, ~{:: #page-content})}">
+      th:replace="~{tql/shell :: shell(#{tql.tasks.pageTitle}, ~{:: #tasks-nav}, ~{}, ~{:: #page-content})}">
 <th:block id="tasks-nav">
-  <a class="hc-item" th:href="@{/_tesseraql/tasks}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#list-checks}"/></svg></span><span class="hc-item__title">Tasks</span></a>
-  <a class="hc-item" th:href="@{/_tesseraql/inbox}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#bell}"/></svg></span><span class="hc-item__title">Inbox</span></a>
-  <a class="hc-item" th:href="@{/_tesseraql/account}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#users}"/></svg></span><span class="hc-item__title">Account</span></a>
+  <a class="hc-item" th:href="@{/_tesseraql/tasks}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#list-checks}"/></svg></span><span class="hc-item__title" th:text="#{tql.tasks.title}">Tasks</span></a>
+  <a class="hc-item" th:href="@{/_tesseraql/inbox}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#bell}"/></svg></span><span class="hc-item__title" th:text="#{tql.inbox.title}">Inbox</span></a>
+  <a class="hc-item" th:href="@{/_tesseraql/account}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#users}"/></svg></span><span class="hc-item__title" th:text="#{tql.account.title}">Account</span></a>
 </th:block>
 <div id="page-content" class="hc-stack">
   <section class="hc-card">
     <div class="hc-card__header">
-      <h1>My tasks</h1>
+      <h1 th:text="#{tql.tasks.heading}">My tasks</h1>
       <span class="hc-spacer"></span>
-      <p th:if="${tasks.enabled}" th:text="${tasks.truncated} ? |${tasks.count}+ open| : |${tasks.count} open|">0 open</p>
+      <p th:if="${tasks.enabled}" th:text="${tasks.truncated} ? #{tql.tasks.openOrMore(${tasks.count})} : #{tql.tasks.open(${tasks.count})}">0 open</p>
     </div>
     <div class="hc-card__body hc-stack">
     <div class="hc-empty" th:unless="${tasks.enabled}">
-      <p class="hc-empty__title">Workflow tasks are not available on this runtime.</p>
+      <p class="hc-empty__title" th:text="#{tql.tasks.unavailable}">Workflow tasks are not available on this runtime.</p>
     </div>
     <th:block th:if="${tasks.enabled}">
       <!-- Over the cap the count above hedges (the result-cap stance): finish or reassign
            some, and the rest surface. -->
       <div class="hc-alert" data-variant="warning" role="status" th:if="${tasks.truncated}">
-        <p class="hc-alert__title">Showing your first 200 open tasks.</p>
+        <p class="hc-alert__title" th:text="#{tql.tasks.truncated}">Showing your first 200 open tasks.</p>
       </div>
       <div class="hc-empty" th:if="${#lists.isEmpty(tasks.rows)}">
-        <p class="hc-empty__title">Nothing waiting on you.</p>
+        <p class="hc-empty__title" th:text="#{tql.tasks.none}">Nothing waiting on you.</p>
       </div>
       <table class="hc-table" th:unless="${#lists.isEmpty(tasks.rows)}">
         <thead><tr>
-          <th>Document</th><th>State</th><th>Due</th><th>Via</th>
+          <th th:text="#{tql.tasks.document}">Document</th><th th:text="#{tql.tasks.state}">State</th><th th:text="#{tql.tasks.due}">Due</th><th th:text="#{tql.tasks.via}">Via</th>
         </tr></thead>
         <tbody>
           <tr th:each="task : ${tasks.rows}">
@@ -48,7 +48,7 @@
             <td>
               <span th:if="${task.group != ''}" th:text="${task.group}">approvers</span>
               <span th:if="${task.delegatedFrom != ''}"
-                    th:text="|for ${task.delegatedFrom}|">for approver-1</span>
+                    th:text="#{tql.tasks.for(${task.delegatedFrom})}">for approver-1</span>
             </td>
           </tr>
         </tbody>

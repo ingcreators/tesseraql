@@ -8,7 +8,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Sign in &middot; TesseraQL</title>
+<title th:text="#{tql.login.pageTitle}">Sign in &middot; TesseraQL</title>
 <link rel="stylesheet" th:href="@{/assets/vendor/hypermedia-components__core/dist/hc.min.css}">
 <!-- The configured neutral ramp rides on top of hc.min.css exactly as the app shell links
      it: the sign-in screen must match everything behind it. -->
@@ -27,60 +27,60 @@
 <body>
 <main class="hc-stack" style="max-width: 24rem; margin: 4rem auto; padding: 0 1rem;">
   <section class="hc-card hc-stack">
-    <h1>Sign in</h1>
+    <h1 th:text="#{tql.login.heading}">Sign in</h1>
 
     <div th:if="${reset}" class="hc-alert" data-variant="success" role="status">
-      <p class="hc-alert__title">Password updated. Sign in with your new password.</p>
+      <p class="hc-alert__title" th:text="#{tql.login.passwordUpdated}">Password updated. Sign in with your new password.</p>
     </div>
     <div th:if="${invited}" class="hc-alert" data-variant="success" role="status">
-      <p class="hc-alert__title">Account activated. Sign in with your new password.</p>
+      <p class="hc-alert__title" th:text="#{tql.login.accountActivated}">Account activated. Sign in with your new password.</p>
     </div>
     <!-- Changing the password signs the account out everywhere (credential-lifecycle);
          this is the only place that fact can be explained to the user. -->
     <div th:if="${reason == 'password-changed'}" class="hc-alert" data-variant="success" role="status">
-      <p class="hc-alert__title">Password changed. Sign in again with your new password.</p>
-      <p>For safety, changing your password signed you out on every device.</p>
+      <p class="hc-alert__title" th:text="#{tql.login.passwordChanged}">Password changed. Sign in again with your new password.</p>
+      <p th:text="#{tql.login.passwordChangedDescription}">For safety, changing your password signed you out on every device.</p>
     </div>
     <div th:if="${error == 'rate'}" class="hc-alert" data-variant="error" role="alert">
-      <p class="hc-alert__title">Too many attempts. Wait a few minutes and try again.</p>
+      <p class="hc-alert__title" th:text="#{tql.login.rateLimited}">Too many attempts. Wait a few minutes and try again.</p>
     </div>
     <div th:if="${error != null && error != 'rate'}" class="hc-alert" data-variant="error" role="alert">
-      <p class="hc-alert__title">Invalid credentials. Please try again.</p>
+      <p class="hc-alert__title" th:text="#{tql.login.invalid}">Invalid credentials. Please try again.</p>
     </div>
 
     <form th:if="${methods.password}" class="hc-stack" method="post" th:action="@{/_tesseraql/login}">
       <input type="hidden" name="redirect" th:value="${redirect}">
       <div class="hc-field">
-        <label class="hc-field__label" for="loginId">Login</label>
+        <label class="hc-field__label" for="loginId" th:text="#{tql.login.loginId}">Login</label>
         <input class="hc-input" id="loginId" name="loginId" autocomplete="username"
                required autofocus>
       </div>
       <div class="hc-field">
-        <label class="hc-field__label" for="password">Password</label>
+        <label class="hc-field__label" for="password" th:text="#{tql.login.password}">Password</label>
         <input class="hc-input" id="password" name="password" type="password"
                autocomplete="current-password" required>
       </div>
       <div class="hc-field">
-        <label class="hc-field__label" for="otp">6-digit code or a recovery code (if two-factor is enabled)</label>
+        <label class="hc-field__label" for="otp" th:text="#{tql.login.otp}">6-digit code or a recovery code (if two-factor is enabled)</label>
         <input class="hc-input" id="otp" name="otp" pattern="[0-9]{6}|[a-z0-9]{4}-?[a-z0-9]{4}"
                maxlength="9" autocomplete="one-time-code">
       </div>
-      <button class="hc-button" data-variant="primary" type="submit">Sign in</button>
+      <button class="hc-button" data-variant="primary" type="submit" th:text="#{tql.login.submit}">Sign in</button>
       <p class="hc-field__message" th:if="${methods.recovery}">
-        <a th:href="@{/_tesseraql/reset}">Forgot password?</a>
+        <a th:href="@{/_tesseraql/reset}" th:text="#{tql.login.forgot}">Forgot password?</a>
       </p>
     </form>
 
     <div th:if="${methods.sso}" class="hc-stack">
-      <p th:if="${methods.password}" class="hc-field__message" aria-hidden="true">or</p>
+      <p th:if="${methods.password}" class="hc-field__message" aria-hidden="true" th:text="#{tql.login.or}">or</p>
       <a th:if="${methods.oidc.enabled}" class="hc-button" data-variant="secondary"
-         th:href="@{${methods.oidc.url}(next=${redirect})}">Sign in with OIDC</a>
+         th:href="@{${methods.oidc.url}(next=${redirect})}" th:text="#{tql.login.oidc}">Sign in with OIDC</a>
       <a th:if="${methods.saml.enabled}" class="hc-button" data-variant="secondary"
-         th:href="@{${methods.saml.url}(RelayState=${redirect})}">Sign in with SAML</a>
+         th:href="@{${methods.saml.url}(RelayState=${redirect})}" th:text="#{tql.login.saml}">Sign in with SAML</a>
     </div>
 
     <p class="hc-field__message">
-      First time? Seed an administrator, then sign in:
+      <span th:text="#{tql.login.firstTime}">First time? Seed an administrator, then sign in:</span>
       <br><code th:text="${methods.seedHint}">tesseraql identity-schema --app &lt;dir&gt; --admin-login &lt;id&gt;</code>
     </p>
   </section>

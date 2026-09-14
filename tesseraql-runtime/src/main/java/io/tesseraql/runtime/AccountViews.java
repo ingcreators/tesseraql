@@ -278,7 +278,9 @@ final class AccountViews {
                 row.put("title", message.title());
                 row.put("body", message.body() == null ? "" : message.body());
                 row.put("source", message.source());
-                row.put("createdAt", message.createdAt().toString());
+                // The instant itself: the template formats it in the request locale, where it
+                // used to print Instant.toString() — an ISO UTC microsecond stamp — for everyone.
+                row.put("createdAt", message.createdAt());
                 row.put("read", message.readAt() != null);
                 messages.add(row);
             }

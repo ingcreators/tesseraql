@@ -222,6 +222,15 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **The account, inbox, task-queue, sign-in, invitation, password-recovery, consent and portal
+  pages render in the user's language.** The bundled end-user system apps carried hard-coded
+  English under a `lang="ja"` root — the language a user picked on `/_tesseraql/account`
+  reached the framework's chrome around the page and not the page — and the inbox stamped
+  notification times as `Instant.toString()`, an ISO UTC microsecond instant for everyone.
+  Every visible string of the eleven templates is a `tql.*` catalog key now, in English and
+  Japanese, overridable per app like every framework text; the inbox formats its instants in
+  the request locale. A test scans the three apps for a hard-coded string, so the class cannot
+  grow again. The operator consoles (IAM Admin, Operations) are still English.
 - **The framework stylesheet reads only tokens the kit defines, and a list's refocused row is
   the kit's.** `tesseraql.css` read three `--hc-*` names no kit release ever defined, so their
   fallbacks always won: a dark literal border around the Studio preview in the light theme, a
