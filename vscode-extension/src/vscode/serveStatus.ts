@@ -58,7 +58,7 @@ export class ServeStatus {
       }
     } catch {
       this.item.text = '$(circle-slash) TesseraQL: offline';
-      this.item.tooltip = `${base} is not reachable — run TesseraQL: Serve`;
+      this.item.tooltip = `${base} is not reachable — run TesseraQL: Dev`;
       this.item.backgroundColor = undefined;
     }
   }

@@ -13,7 +13,7 @@ never disagree with the build.
   `config/tesseraql.yml`) runs `tesseraql lint --format json` and publishes every
   finding to the Problems panel at its source, line, and column. Finding codes link
   to the published error-code reference.
-- **Commands.** *TesseraQL: Serve / Test / Migrate / Admission / Package* run the
+- **Commands.** *TesseraQL: Dev / Test / Migrate / Admission / Package* run the
   CLI verb in the integrated terminal; *TesseraQL: Lint* runs headless into the
   Problems panel.
 - **The explorer.** A *TesseraQL* view in the Explorer sidebar: routes grouped by
@@ -39,8 +39,8 @@ never disagree with the build.
 - **Reference navigation.** `file:` and `template:` values in app YAML are
   clickable links when the target exists (`view:` is an id into the view registry,
   not a path, and completes instead).
-- **Serve status.** A status-bar item polls the dev server's readiness endpoint;
-  *TesseraQL: Open Server* jumps to it.
+- **Dev server status.** A status-bar item polls the dev server's readiness endpoint;
+  *TesseraQL: Open Served App* jumps to it.
 - **Open in Studio.** Any app file opens at its source view in the running Studio.
 - **Register MCP Server.** Writes the app's MCP endpoint into `.vscode/mcp.json` /
   `.mcp.json` for MCP-capable editors and agents.
