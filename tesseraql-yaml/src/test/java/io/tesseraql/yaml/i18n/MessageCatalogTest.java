@@ -142,6 +142,42 @@ class MessageCatalogTest {
                 .hasMessageContaining("must be a map");
     }
 
+    /**
+     * A render reads the catalog once (docs/audit-medium-leads.md slice 6, F118): twenty
+     * {@code #{key}} lookups on one page cost one directory listing, not twenty — and a catalog
+     * edit still lands on the very next render. Every {@code #{}} used to call {@code live()},
+     * which lists {@code messages/} and stats each file, so a list page paid twenty listings and
+     * forty stats per render, tens of milliseconds on a container's overlay volume.
+     */
+    @Test
+    void aRenderListsTheCatalogDirectoryOnce() throws Exception {
+        Path messages = Files.createDirectories(home.resolve("messages"));
+        StringBuilder catalog = new StringBuilder();
+        StringBuilder page = new StringBuilder(
+                "<html xmlns:th=\"http://www.thymeleaf.org\"><body>");
+        for (int i = 1; i <= 20; i++) {
+            catalog.append("k").append(i).append(": value-").append(i).append('\n');
+            page.append("<span th:text=\"#{k").append(i).append("}\">x</span>");
+        }
+        page.append("</body></html>");
+        Files.writeString(messages.resolve("en.yml"), catalog.toString());
+        Files.writeString(home.resolve("page.html"), page.toString());
+
+        long before = MessageCatalog.directoryListings();
+        String html = io.tesseraql.yaml.template.Templates.render(home, "page.html", Map.of());
+        assertThat(html).contains("value-1</span>").contains("value-20</span>");
+        assertThat(MessageCatalog.directoryListings() - before)
+                .as("directory listings for one render of twenty keys").isEqualTo(1);
+
+        // Liveness kept: the edit is on the next render, at the same cost.
+        Files.writeString(messages.resolve("en.yml"),
+                catalog.toString().replace("k1: value-1\n", "k1: edited-1\n"));
+        before = MessageCatalog.directoryListings();
+        html = io.tesseraql.yaml.template.Templates.render(home, "page.html", Map.of());
+        assertThat(html).contains("edited-1</span>").doesNotContain("value-1</span>");
+        assertThat(MessageCatalog.directoryListings() - before).isEqualTo(1);
+    }
+
     private static InputStream yaml(String content) {
         return new ByteArrayInputStream(content.getBytes(StandardCharsets.UTF_8));
     }

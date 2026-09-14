@@ -47,7 +47,11 @@ the absolute TTL stays as the ceiling. The auth path touches `last_seen_at` when
 resolves a browser session, throttled to once per 60 seconds per session, because the
 naive version turns every request into an UPDATE on the shared store. A lost throttled
 touch costs at most 60 seconds of staleness in the "last active" column and slightly
-early idle expiry — recorded here as the accepted trade.
+early idle expiry — recorded here as the accepted trade. The throttle is a node-local map of
+last-touch instants; it holds the sessions seen in the last minute, swept once per minute on
+the touch path, and forgets a session on logout and rotation as before. It used to shrink only
+on those two, and sessions end by expiry, so it grew for the life of the process
+(audit-medium-leads.md, F120).
 
 ### 5. The cross-subject page is IAM Admin's, not the ops console's
 

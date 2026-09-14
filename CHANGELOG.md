@@ -222,6 +222,20 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **The JDBC session store's touch throttle no longer grows for the life of the process.** The
+  node-local map of last-touch instants — one entry per session, to write `last_seen_at` at
+  most once a minute — shrank only on logout and rotation, and browser sessions end by expiry,
+  so on the multi-node store it grew by one entry per login until the process died (about
+  4 MB a day per node at twenty thousand logins). An entry means nothing after the minute it
+  throttles, so the touch path now sweeps the expired ones once per minute: the map holds the
+  sessions seen in the last minute. The store takes a `Clock`, which is how the guard drives it.
+- **A page render reads the message catalog once.** Every `#{key}` on a page called
+  `MessageCatalog.live()`, which lists the app's `messages/` directory and stats each file to
+  see whether a Studio edit landed — twenty listings and forty stats per list page, tens of
+  milliseconds on a container's overlay volume — where the Javadoc had always said an
+  unchanged directory costs a single `list`. `Templates.render` reads the catalog once per
+  render and publishes it to the template context; the resolver takes it from there. A
+  catalog edit still lands on the very next render.
 - **A failure leaves its throwable in the log.** A job run that died, a file import that died
   outside its row bracket, a gateway forward that failed (the 502), a cross-node topic bridge
   that did not start, a hosted app or pool or Vert.x instance that failed to close, an import

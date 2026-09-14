@@ -1,6 +1,7 @@
 package io.tesseraql.yaml.template;
 
 import io.tesseraql.yaml.i18n.I18nSettings;
+import io.tesseraql.yaml.i18n.MessageCatalog;
 import java.nio.file.Path;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -32,11 +33,18 @@ public final class Templates {
         return render(templateRoot, templateName, model, java.util.Locale.ENGLISH);
     }
 
+    /**
+     * The context variable a render's message catalog rides in: read once per render, so a
+     * page's twenty {@code #{key}} lookups list the {@code messages/} directory once, not twenty
+     * times — and a Studio edit still lands on the very next render.
+     */
+    static final String CATALOG_VARIABLE = "__tesseraqlMessageCatalog";
+
     /** Renders with an explicit locale: {@code #{key}} lookups and {@code #locale} follow it. */
     public static String render(Path templateRoot, String templateName, Map<String, Object> model,
             java.util.Locale locale) {
-        Context context = new Context(locale, model);
-        return engineFor(templateRoot.toAbsolutePath().normalize()).process(templateName, context);
+        Path root = templateRoot.toAbsolutePath().normalize();
+        return engineFor(root).process(templateName, context(root, locale, model));
     }
 
     /**
@@ -48,11 +56,18 @@ public final class Templates {
      */
     public static String render(Path templateRoot, String templateName, Map<String, Object> model,
             java.util.Locale locale, String selector) {
-        Context context = new Context(locale, model);
-        return engineFor(templateRoot.toAbsolutePath().normalize()).process(
+        Path root = templateRoot.toAbsolutePath().normalize();
+        return engineFor(root).process(
                 new org.thymeleaf.TemplateSpec(templateName, java.util.Set.of(selector),
                         (TemplateMode) null, null),
-                context);
+                context(root, locale, model));
+    }
+
+    /** The render's context: the model, the locale, and the app catalog read once for it. */
+    private static Context context(Path root, java.util.Locale locale, Map<String, Object> model) {
+        Context context = new Context(locale, model);
+        context.setVariable(CATALOG_VARIABLE, MessageCatalog.live(root.resolve("messages")));
+        return context;
     }
 
     private static TemplateEngine engineFor(Path root) {

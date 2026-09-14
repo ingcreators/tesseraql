@@ -41,9 +41,16 @@ final class CatalogMessageResolver implements IMessageResolver {
         String tag = locale == null || locale.getLanguage().isEmpty()
                 ? "en"
                 : locale.toLanguageTag();
-        // Read the app catalog live (re-parsed only when messages/ changes) so a Studio message edit
-        // is served on the next render without a restart; the framework built-ins are the fallback.
-        String message = MessageCatalog.live(messagesDir).withFallback(fallback).resolve(tag, key);
+        // The app catalog the render read once (Templates.render publishes it to the context —
+        // re-parsed only when messages/ changes, so a Studio message edit is served on the next
+        // render without a restart); a context without one reads it live here. Reading it per
+        // key used to list the directory and stat every file for each #{} on the page. The
+        // framework built-ins are the fallback.
+        Object shared = context == null ? null : context.getVariable(Templates.CATALOG_VARIABLE);
+        MessageCatalog catalog = shared instanceof MessageCatalog c
+                ? c
+                : MessageCatalog.live(messagesDir);
+        String message = catalog.withFallback(fallback).resolve(tag, key);
         if (message == null) {
             return null;
         }
