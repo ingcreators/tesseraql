@@ -18,6 +18,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -65,8 +66,15 @@ final class EmbeddedPostgresSupport {
         }
     }
 
-    /** How long a stop waits for a postmaster an unfinished start left running. */
+    /** How long a stop waits for a postmaster a failed start left running. */
     private static final Duration POSTMASTER_STOP_WAIT = Duration.ofSeconds(10);
+
+    /**
+     * How long a stop waits for a start in progress to conclude before it looks for the server by
+     * hand: the library's own 10 s readiness bound, with {@code initdb} and a slow runner's margin
+     * on top. A start that has not returned or thrown by then is treated as failed.
+     */
+    private static final Duration START_CONCLUSION_WAIT = Duration.ofSeconds(30);
 
     /**
      * What this process started, so the command's own shutdown can stop it whether or not the
@@ -74,17 +82,36 @@ final class EmbeddedPostgresSupport {
      * hook is turned off (it would race the ordered stop rather than extend it), and the window
      * between spawning the postmaster and returning a handle is real - the interrupt can land
      * inside it, and a server nobody owns outlives the process.
+     *
+     * <p>A stop that lands inside that window waits for the start to conclude and stops what it
+     * produced; it does not look for the server by hand at that instant. Measured on CI
+     * (2026-09-14, three runs, one of them on main): at the moment the library logs "postmaster
+     * started as", the process the log names is {@code pg_ctl}, which has yet to fork, put its
+     * child in a session of its own and exec the shell that execs {@code postgres} - a scan finds
+     * nothing, the hook returns, and the server comes up after the JVM is gone. The start's own
+     * thread keeps running while the shutdown hooks do, so the start does conclude, and its
+     * handle is the ordinary way to stop the instance. A stop that lands before the start has
+     * claimed a directory refuses the start instead: nothing would stop what it brought up.
      */
     static final class Ownership {
 
-        private volatile Path directory;
-        private volatile boolean ephemeral;
+        private final CountDownLatch concluded = new CountDownLatch(1);
+        private Path directory;
+        private boolean ephemeral;
+        private boolean stopping;
         private volatile Handle started;
 
-        /** The directory the server is about to be started in - recorded before it exists. */
-        void startingIn(Path directory, boolean ephemeral) {
+        /**
+         * Records the directory the server is about to be started in - before it exists. False
+         * once a stop has been here, in which case the start must not begin.
+         */
+        synchronized boolean startingIn(Path directory, boolean ephemeral) {
+            if (stopping) {
+                return false;
+            }
             this.directory = directory;
             this.ephemeral = ephemeral;
+            return true;
         }
 
         /** The start finished, and this handle stops the instance the ordinary way. */
@@ -92,32 +119,57 @@ final class EmbeddedPostgresSupport {
             this.started = handle;
         }
 
+        /** The start returned or threw; a stop waiting on it may proceed. */
+        void concluded() {
+            concluded.countDown();
+        }
+
         /**
-         * Stops whatever this process started. A finished start is stopped through zonky, which
-         * also releases its lock and removes a directory it owns; an unfinished or failed one
-         * leaves only a {@code postmaster.pid}, so the process is stopped by hand and a directory
-         * this CLI created is removed. Best effort by contract - this runs in a shutdown hook.
+         * Stops whatever this process started. A start in progress is waited for. A finished
+         * start is stopped through zonky, which also releases its lock and removes a directory it
+         * owns; a failed one leaves only a {@code postmaster.pid}, so the process is stopped by
+         * hand and a directory this CLI created is removed. Best effort by contract - this runs
+         * in a shutdown hook.
          */
         void stop() {
+            Path claimed;
+            boolean own;
+            synchronized (this) {
+                stopping = true;
+                claimed = directory;
+                own = ephemeral;
+            }
+            if (claimed == null) {
+                return;
+            }
+            awaitConclusion(claimed);
             Handle running = started;
             if (running != null) {
                 running.close();
                 return;
             }
-            Path abandoned = directory;
-            if (abandoned == null) {
-                return;
+            stopPostmasterIn(claimed);
+            if (own) {
+                deleteRecursively(claimed);
             }
-            stopPostmasterIn(abandoned);
-            if (ephemeral) {
-                deleteRecursively(abandoned);
+        }
+
+        private void awaitConclusion(Path claimed) {
+            try {
+                if (!concluded.await(START_CONCLUSION_WAIT.toSeconds(), TimeUnit.SECONDS)) {
+                    System.err.println("Warning: the embedded PostgreSQL start in " + claimed
+                            + " did not conclude within " + START_CONCLUSION_WAIT.toSeconds()
+                            + " s; stopping what it left.");
+                }
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
             }
         }
     }
 
     private static void stopPostmasterIn(Path directory) {
         postmasterIn(directory).ifPresent(postmaster -> {
-            System.err.println("Stopping the embedded PostgreSQL an unfinished start left"
+            System.err.println("Stopping the embedded PostgreSQL a failed start left"
                     + " running (pid " + postmaster.pid() + ").");
             postmaster.destroy();
             try {
@@ -146,6 +198,11 @@ final class EmbeddedPostgresSupport {
      * <p>The identity test is the same either way, and it is what makes this safe: the command
      * must be {@code postgres} and one of its arguments must name exactly this directory. One
      * directory can only have one postmaster, so a process passing both is this one.
+     *
+     * <p>Nor is a scan the address while the start is in progress: at that same instant the
+     * process is not there to be found either, only the {@code pg_ctl} about to spawn it (see
+     * {@link Ownership}). This is called once the start has concluded, when what it left is
+     * whatever there is.
      */
     private static Optional<ProcessHandle> postmasterIn(Path directory) {
         return ProcessHandle.allProcesses()
@@ -241,30 +298,47 @@ final class EmbeddedPostgresSupport {
             // never finished. Left to itself zonky picks the same kind of temporary directory
             // inside its own start, where nothing outside it can see the choice.
             Path directory = dataDir != null ? dataDir : Files.createTempDirectory("epg");
-            ownership.startingIn(directory, dataDir == null);
-            EmbeddedPostgres.Builder builder = EmbeddedPostgres.builder()
-                    .setPgBinaryResolver((system, hardware) -> openBinary(binaryJar))
-                    // This process stops its own database, in order, after the runtimes holding
-                    // connections to it. A hook of zonky's own would not extend that stop; JVM
-                    // shutdown hooks all run at once, so it would race it - and win.
-                    .setRegisterShutdownHook(false)
-                    .setDataDirectory(directory.toFile());
-            if (dataDir != null) {
-                builder.setCleanDataDirectory(false);
+            if (!ownership.startingIn(directory, dataDir == null)) {
+                if (dataDir == null) {
+                    Files.deleteIfExists(directory);
+                }
+                throw new IllegalStateException(
+                        "Embedded PostgreSQL not started: the process is stopping");
             }
-            if (port != null) {
-                builder.setPort(port);
+            try {
+                return start(ownership, binaryJar, directory, dataDir, port, version);
+            } finally {
+                // Returned or threw: a stop waiting on this start may now see what it left.
+                ownership.concluded();
             }
-            EmbeddedPostgres postgres = builder.start();
-            DataSources.MainDatasourceOverride override = new DataSources.MainDatasourceOverride(
-                    postgres.getJdbcUrl("postgres", "postgres"), "postgres", "");
-            Handle handle = new Handle(override, postgres, version);
-            ownership.started(handle);
-            EmbeddedPostgresDataDir.writePinnedVersion(dataDir, version);
-            return handle;
         } catch (IOException ex) {
             throw new UncheckedIOException("Failed to start embedded PostgreSQL", ex);
         }
+    }
+
+    /** The start itself, between the claim of {@code directory} and its conclusion. */
+    private static Handle start(Ownership ownership, Path binaryJar, Path directory, Path dataDir,
+            Integer port, String version) throws IOException {
+        EmbeddedPostgres.Builder builder = EmbeddedPostgres.builder()
+                .setPgBinaryResolver((system, hardware) -> openBinary(binaryJar))
+                // This process stops its own database, in order, after the runtimes holding
+                // connections to it. A hook of zonky's own would not extend that stop; JVM
+                // shutdown hooks all run at once, so it would race it - and win.
+                .setRegisterShutdownHook(false)
+                .setDataDirectory(directory.toFile());
+        if (dataDir != null) {
+            builder.setCleanDataDirectory(false);
+        }
+        if (port != null) {
+            builder.setPort(port);
+        }
+        EmbeddedPostgres postgres = builder.start();
+        DataSources.MainDatasourceOverride override = new DataSources.MainDatasourceOverride(
+                postgres.getJdbcUrl("postgres", "postgres"), "postgres", "");
+        Handle handle = new Handle(override, postgres, version);
+        ownership.started(handle);
+        EmbeddedPostgresDataDir.writePinnedVersion(dataDir, version);
+        return handle;
     }
 
     /**
