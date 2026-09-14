@@ -592,9 +592,11 @@ public final class ManifestLoader {
         Map<String, io.tesseraql.yaml.model.Binding> resolved = new java.util.LinkedHashMap<>();
         bindings.forEach((name, binding) -> {
             Map<String, io.tesseraql.yaml.model.InputField> result = new java.util.LinkedHashMap<>();
+            // By the read keys alone (docs/temporal-semantics.md decision 24): a constraint
+            // key on the merged entry can then only have been written on the entry.
             binding.result().forEach((column, field) -> result.put(column, field.domain() == null
                     ? field
-                    : field.mergedWith(domains.require(field.domain(), source.toString()))));
+                    : field.mergedForRead(domains.require(field.domain(), source.toString()))));
             resolved.put(name, binding.withResult(result));
         });
         return resolved;

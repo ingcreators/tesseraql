@@ -785,6 +785,7 @@ One column of a file transfer, in either form: the bare name, or an object addin
 | `widget` | enum: `text` \| `textarea` \| `number` \| `date` \| `datetime-local` \| `checkbox` \| `select` \| `hidden` \| `lookup` | Presentation hint (docs/declarative-views.md): the form widget this field renders as, declared once on a domain; a per-view fields: override wins. Never part of the HTTP contract. |
 | `codes` | string | The code catalog this field's values come from (docs/lookups.md): the binder accepts only that catalog's active codes, and the violation is the enum field error. Declared on a domain, so the value set has one home instead of an enum that drifts from the master. |
 | `lookup` | [object](#inputfieldlookup) | The master reference this field holds a key of (docs/reference-lookup.md): direct code entry resolved through a synthesized companion route, existence-checked again at submit. Declarable on a domain, like codes:. |
+| `locale` | string | The language tag a `result:` entry's `format:` parses in (`de-DE` for a column holding `1.234,50`); the root locale when absent. Declarable on a domain. Not applied on an `input:`, which parses in the request's own locale — a domain carrying it stays legal there, but one written on an input entry is refused (TQL-YAML-1064). |
 | `policy` | string | Write authorization (docs/declarative-views.md): a security policy the principal must satisfy to supply this field; a failing principal's value follows the route's readOnly behavior, and the derived form omits the field. Operational — never accepted inside a domain. |
 | `items` | [object](#inputfielditems) | Element constraints for `type: array`: `type:`/`enum:` for scalar elements, `fields:` for object elements. |
 
@@ -1015,11 +1016,12 @@ The service arm: a runtime provider answering rows from process state. It takes 
 
 ### resultField
 
-One `result:` entry: the kind a column's text is parsed into, spelled out or through a domain. Documented in response-shaping.md.
+One `result:` entry: the kind a column's text is parsed into, spelled out or through a domain. Only these keys: a read says what the column's text is, not what it may be, so a constraint or operational key here is refused (TQL-YAML-1064). Documented in response-shaping.md.
 
 | Property | Type | Description |
 | --- | --- | --- |
 | `type` | enum: `json` \| `date` \| `datetime` \| `number` | The kind the column's text is parsed into. `json` yields a value an expression navigates (`payload.sku`) whose text is compact JSON; `date` and `datetime` yield the canonical wire text of the parsed value (`2026-01-15`, `2026-01-15T22:30:00`), never moved across zones; `number` yields a decimal. Anything else is refused (TQL-YAML-1064). |
 | `format` | string | The parse pattern for `date`/`datetime` (a DateTimeFormatter pattern, `yyyy/MM/dd`) or `number` (a DecimalFormat pattern, `#,##0.00`); the kind's default when absent. Text already in the canonical form is accepted too, so a native column declared for its domain's sake reads unchanged. Not read by `json`. A restatement over the domain's own format is neither a tightening nor a loosening and is not a finding. |
-| `domain` | string | An app-level field domain (docs/field-domains.md) supplying `type:` and `format:` once — the same domain the request's `input:` binds. The domain's constraint keys (`maxLength`, `pattern`, `enum`, `min`, `max`) are not applied on read. |
+| `locale` | string | The language tag the `format:` parses in — `de-DE` for a column holding `1.234,50`, or month names in a language; the root locale when absent. A domain may carry it. Judged like `export.locale`: a tag the JDK cannot format is refused (TQL-YAML-1064). |
+| `domain` | string | An app-level field domain (docs/field-domains.md) supplying `type:`, `format:` and `locale:` once — the same domain the request's `input:` binds. The domain's constraint keys (`maxLength`, `pattern`, `enum`, `min`, `max`) are not applied on read, and one written on the entry itself is refused (TQL-YAML-1064). |
 | `description` | string | What the column holds, in the words a reader of the declaration needs. |

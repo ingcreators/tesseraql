@@ -31,19 +31,24 @@ import java.util.function.Consumer;
  * <p>A result declaration is sparse: an undeclared column keeps the kind the database gave it.
  * A declared one is parsed after the read seam and rendered as a native column of that kind
  * is — a {@code date} stored as text and a {@code date} column become the same case on every
- * surface. The domain's constraint keys ({@code maxLength}, {@code pattern}, {@code enum},
- * {@code min}, {@code max}) are not applied on read: validating what the database returned is
- * a different feature, and the declaration only says what the text is.
+ * surface. A {@code result:} entry reads {@code type}, {@code format}, {@code locale} and
+ * {@code domain} (and carries a {@code description}); the domain's constraint keys
+ * ({@code maxLength}, {@code pattern}, {@code enum}, {@code min}, {@code max}) are not applied
+ * on read — validating what the database returned is a different feature — and one written on
+ * the entry itself is refused (decision 24), since the loader merges a domain into an entry
+ * by the read keys alone and a constraint key can then only have been written there.
  */
 public final class DeclaredKinds {
 
     /**
-     * TQL-YAML-1064: a declared field type its surface does not honour — a {@code type:} no
+     * TQL-YAML-1064: a declared field key its surface does not honour — a {@code type:} no
      * request binds on {@code input:} ({@code json}, or a name outside the input vocabulary), a
-     * {@code type:} no read parses on {@code result:} (anything but json, date, datetime and
-     * number), a {@code format:} the kind's parser refuses, or a {@code result:} on a binding
-     * that holds no rows to apply it to. Reported at lint and refused at boot from the same
-     * predicate.
+     * {@code locale:} written on an {@code input:} entry (a request parses in its own locale),
+     * a {@code type:} no read parses on {@code result:} (anything but json, date, datetime and
+     * number), a {@code format:} the kind's parser refuses, a {@code locale:} the JDK cannot
+     * format, a constraint or operational key written on a {@code result:} entry (applied
+     * nowhere on a read), or a {@code result:} on a binding that holds no rows to apply it to.
+     * Reported at lint and refused at boot from the same predicate.
      */
     public static final TqlErrorCode UNSUPPORTED = new TqlErrorCode(TqlDomain.YAML, 1064);
 
@@ -98,6 +103,13 @@ public final class DeclaredKinds {
                                     + " input binds"
                             : "")));
         }
+        // A domain's locale is never merged into an input, so one here was written here.
+        if (field.locale() != null) {
+            out.add(new Violation(key + ".locale", prefix(route, key + ".locale")
+                    + "locale: is not applied on an input, which parses in the request's own"
+                    + " locale - declare it on the result: entry or the domain that reads the"
+                    + " column back"));
+        }
         if (field.items() != null && field.items().hasFields()) {
             field.items().fields().forEach((element, spec) -> inputField(route,
                     key + ".items.fields." + element, spec, out));
@@ -145,12 +157,21 @@ public final class DeclaredKinds {
 
     private static void entry(RouteDefinition route, String key, InputField field,
             List<Violation> out) {
+        for (String written : unreadKeys(field)) {
+            out.add(new Violation(key + "." + written, prefix(route, key + "." + written)
+                    + "'" + written + "' is not a key a result: declaration reads (" + READ_KEYS
+                    + ") - a read says what the column's text is, not what it may be"));
+        }
         String type = field.type();
         if (type == null || !RESULT_KINDS.contains(type)) {
             out.add(new Violation(key + ".type", prefix(route, key + ".type") + "'"
                     + ExportDeclarations.bounded(type) + "' is not a kind a result: declaration"
                     + " parses (" + sorted(RESULT_KINDS) + ")"));
             return;
+        }
+        if (field.locale() != null) {
+            ExportDeclarations.localeProblem(field.locale()).ifPresent(problem -> out.add(
+                    new Violation(key + ".locale", prefix(route, key + ".locale") + problem)));
         }
         if (field.format() == null) {
             return;
@@ -165,6 +186,73 @@ public final class DeclaredKinds {
             out.add(new Violation(key + ".format", prefix(route, key + ".format") + "'"
                     + ExportDeclarations.bounded(field.format()) + "' " + problem));
         }
+    }
+
+    /** The keys a {@code result:} entry reads, in the words the refusal lists them. */
+    private static final String READ_KEYS = "type, format, locale, domain, description";
+
+    /**
+     * The keys written on a {@code result:} entry that no read applies. Exact, because the
+     * loader merges a domain into an entry by the read keys alone ({@code mergedForRead}): a
+     * constraint or operational key on the merged entry was written on the entry.
+     */
+    private static List<String> unreadKeys(InputField field) {
+        List<String> written = new ArrayList<>();
+        if (field.required()) {
+            written.add("required");
+        }
+        if (field.requiredWhen() != null) {
+            written.add("requiredWhen");
+        }
+        if (field.defaultValue() != null) {
+            written.add("default");
+        }
+        if (field.writable() != null) {
+            written.add("writable");
+        }
+        if (field.policy() != null) {
+            written.add("policy");
+        }
+        if (field.min() != null) {
+            written.add("min");
+        }
+        if (field.max() != null) {
+            written.add("max");
+        }
+        if (field.minLength() != null) {
+            written.add("minLength");
+        }
+        if (field.maxLength() != null) {
+            written.add("maxLength");
+        }
+        if (field.pattern() != null) {
+            written.add("pattern");
+        }
+        if (field.enumValues() != null) {
+            written.add("enum");
+        }
+        if (field.items() != null) {
+            written.add("items");
+        }
+        if (field.columns() != null) {
+            written.add("columns");
+        }
+        if (field.classification() != null) {
+            written.add("classification");
+        }
+        if (field.mask() != null) {
+            written.add("mask");
+        }
+        if (field.widget() != null) {
+            written.add("widget");
+        }
+        if (field.codes() != null) {
+            written.add("codes");
+        }
+        if (field.lookup() != null) {
+            written.add("lookup");
+        }
+        return written;
     }
 
     /** The boot backstop: the first violation as the refusal, every one first through {@code warn}. */
@@ -195,7 +283,8 @@ public final class DeclaredKinds {
      * Null stays null. A value that is not text is already in a kind: a number stays a
      * number, and a JSON container an outbound call produced is re-wrapped so its text is JSON.
      * Text that is not in the declared format is tried as the canonical form, since a native
-     * column declared for the sake of its domain arrives that way already.
+     * column declared for the sake of its domain arrives that way already. A pattern parses in
+     * the entry's {@code locale:}, else the root locale.
      *
      * @throws ColumnValueException when the text cannot be parsed into the kind, its
      *                              {@code complaint()} saying why
@@ -219,8 +308,13 @@ public final class DeclaredKinds {
             return value;
         }
         ColumnMapping mapping = new ColumnMapping(column, null, null, type, declared.format());
+        // The column's own locale when the entry declares one (decision 23); the root locale -
+        // 1,234.50, English month names - otherwise, never the platform's or the request's.
+        Locale locale = declared.locale() == null
+                ? Locale.ROOT
+                : Locale.forLanguageTag(declared.locale());
         try {
-            Object parsed = ColumnValues.parse(mapping, text, Locale.ROOT);
+            Object parsed = ColumnValues.parse(mapping, text, locale);
             return parsed instanceof Number ? parsed : TemporalText.wire(parsed);
         } catch (ColumnValueException notInTheDeclaredFormat) {
             String canonical = canonical(type, text);

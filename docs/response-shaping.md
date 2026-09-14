@@ -345,8 +345,15 @@ a `date` column are the same case on every surface. The kinds a declaration pars
   rendered as `2026-01-15` or `2026-01-15T22:30:00`. A parsed text datetime is a wall clock:
   text has no zone, so it is never an instant and never moved. Text already in that canonical
   form is accepted too, so a native column declared for its domain's sake reads unchanged.
-- `number` — the text is parsed with `format:` (a `DecimalFormat` pattern, in the root locale)
-  into a decimal.
+- `number` — the text is parsed with `format:` (a `DecimalFormat` pattern) into a decimal.
+
+A pattern parses in the entry's `locale:` — `de-DE` for a column holding `1.234,50`, or month
+names in a language — and in the root locale (`1,234.50`, English names) when none is declared;
+a domain may carry it. A read declaration reads exactly `type`, `format`, `locale` and `domain`
+(and carries a `description`). A read says what the column's text is, not what it may be, so a
+constraint or operational key written on the entry — `maxLength`, `pattern`, `enum`, `required`
+and the rest — is refused (`TQL-YAML-1064`); the same key on the entry's domain is simply not
+applied on read.
 
 A declaration applies where a binding publishes rows: a route source and a command step in
 `mode: query`, whose `steps.<name>.rows` get the same treatment. The export reader keeps its own
@@ -359,8 +366,8 @@ never produces cannot be linted (a query with conditional directives has no deri
 list), so a declared column absent from every row of a non-empty result is logged once per
 route and source, never a 500. A kind the read does not parse, a `format:` its parser refuses,
 or a `result:` on a binding that publishes no rows is a lint error and a boot refusal with one
-code, `TQL-YAML-1064`; the same code refuses `type: json` on an `input:`, where nothing binds
-it.
+code, `TQL-YAML-1064`. The same code refuses `type: json` on an `input:`, where nothing binds
+it, and `locale:` written on an `input:` entry, which parses in the request's own locale.
 
 ## Where to go next
 

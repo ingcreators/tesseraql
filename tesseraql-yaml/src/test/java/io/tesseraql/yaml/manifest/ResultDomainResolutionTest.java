@@ -29,7 +29,10 @@ class ResultDomainResolutionTest {
                   order_date:
                     type: date
                     format: yyyy/MM/dd
+                    locale: de-DE
                     description: the day the order was placed
+                    maxLength: 10
+                    pattern: "[0-9/]+"
                 """);
         Files.createDirectories(dir.resolve("web/orders"));
         Files.writeString(dir.resolve("web/orders/get.yml"), """
@@ -96,7 +99,12 @@ class ResultDomainResolutionTest {
         // A value only the domain has: the compiled declaration carries it.
         assertThat(orderedOn.format()).isEqualTo("yyyy/MM/dd");
         assertThat(orderedOn.description()).isEqualTo("the day the order was placed");
+        assertThat(orderedOn.locale()).isEqualTo("de-DE");
         assertThat(orderedOn.domain()).isEqualTo("order_date");
+        // By the read keys alone (decision 24): the domain's constraint keys do not reach a
+        // result: entry, which is what makes one written on the entry refusable exactly.
+        assertThat(orderedOn.maxLength()).isNull();
+        assertThat(orderedOn.pattern()).isNull();
         // A route-local entry is untouched.
         assertThat(list.sources().get("main").result().get("amount").format())
                 .isEqualTo("#,##0.00");

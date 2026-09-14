@@ -98,6 +98,65 @@ class DeclaredKindsTest {
                 .contains("publishes none (mode: update)");
     }
 
+    /** Decision 23: an input parses in the request's locale, so locale: written there is refused. */
+    @Test
+    void aLocaleWrittenOnAnInputIsRefused() {
+        RouteDefinition route = route(
+                Map.of("amount", withLocale(field("number", "#,##0.00", null), "de-DE")), Map.of());
+
+        assertThat(DeclaredKinds.inputViolations(route)).singleElement()
+                .satisfies(violation -> {
+                    assertThat(violation.key()).isEqualTo("input.amount.locale");
+                    assertThat(violation.message())
+                            .contains("locale: is not applied on an input")
+                            .contains("declare it on the result: entry or the domain");
+                });
+    }
+
+    /** Decision 23: a result: entry's locale is judged like export.locale. */
+    @Test
+    void aLocaleTheJdkCannotFormatIsRefusedOnAResultEntry() {
+        RouteDefinition route = route(Map.of(), Map.of("main", source(Map.of(
+                "ok", withLocale(field("number", "#,##0.00", null), "de-DE"),
+                "bad", withLocale(field("number", "#,##0.00", null), "ja_JP")))));
+
+        assertThat(DeclaredKinds.resultViolations(route)).singleElement()
+                .satisfies(violation -> {
+                    assertThat(violation.key()).isEqualTo("sources.main.result.bad.locale");
+                    assertThat(violation.message())
+                            .contains("'ja_JP' is not a language tag the JDK can format");
+                });
+    }
+
+    /**
+     * Decision 24: a read says what the column's text is, not what it may be — every key
+     * outside the read keys, written on the entry, is refused and named.
+     */
+    @Test
+    void aConstraintOrOperationalKeyWrittenOnAResultEntryIsRefused() {
+        InputField written = new InputField("number", true, "0", new BigDecimal("1"),
+                new BigDecimal("9"), 5, List.of("a"), Boolean.FALSE, "personal", "fixed",
+                "#,##0.00", null, "[0-9]+", 1, "x > 1", List.of("c"), null, "code", "cat",
+                "inv.write", "a description", null, "de-DE");
+        RouteDefinition route = route(Map.of(), Map.of("main", source(Map.of("n", written))));
+
+        List<DeclaredKinds.Violation> violations = DeclaredKinds.resultViolations(route);
+
+        assertThat(violations).extracting(DeclaredKinds.Violation::key)
+                .containsExactlyInAnyOrder("sources.main.result.n.required",
+                        "sources.main.result.n.requiredWhen", "sources.main.result.n.default",
+                        "sources.main.result.n.writable", "sources.main.result.n.policy",
+                        "sources.main.result.n.min", "sources.main.result.n.max",
+                        "sources.main.result.n.minLength", "sources.main.result.n.maxLength",
+                        "sources.main.result.n.pattern", "sources.main.result.n.enum",
+                        "sources.main.result.n.columns", "sources.main.result.n.classification",
+                        "sources.main.result.n.mask", "sources.main.result.n.widget",
+                        "sources.main.result.n.codes");
+        assertThat(violations.get(0).message())
+                .contains("is not a key a result: declaration reads (type, format, locale,"
+                        + " domain, description)");
+    }
+
     @Test
     void requireThrowsTheFirstViolationWithItsCode() {
         RouteDefinition route = route(Map.of("payload", field("json", null, null)), Map.of());
@@ -195,6 +254,19 @@ class DeclaredKindsTest {
                         .isEqualTo("is not a valid date (yyyy/MM/dd)"));
     }
 
+    /** Decision 23: the entry's locale, else the root locale — never the platform's. */
+    @Test
+    void aTextNumberParsesInTheEntrysLocale() {
+        InputField german = withLocale(field("number", "#,##0.00", null), "de-DE");
+
+        assertThat(DeclaredKinds.read("n", german, "1.234,50"))
+                .isEqualTo(new BigDecimal("1234.50"));
+        assertThatThrownBy(() -> DeclaredKinds.read("n", german, "1,234.50"))
+                .isInstanceOf(ColumnValueException.class);
+        assertThat(DeclaredKinds.read("d", withLocale(field("date", "d. MMMM yyyy", null), "de-DE"),
+                "15. Januar 2026")).isEqualTo("2026-01-15");
+    }
+
     @Test
     void aTextNumberInTheDeclaredPatternBecomesADecimalAndANumberStaysOne() {
         assertThat(DeclaredKinds.read("n", field("number", "#,##0.00", null), "1,234.50"))
@@ -228,6 +300,15 @@ class DeclaredKindsTest {
     private static InputField field(String type, String format, String domain) {
         return new InputField(type, false, null, null, null, null, null, null, null, null,
                 format, null, null, null, null, null, domain, null, null, null, null);
+    }
+
+    /** The same field with a locale — the 23-key shape spelled out once. */
+    private static InputField withLocale(InputField f, String locale) {
+        return new InputField(f.type(), f.required(), f.defaultValue(), f.min(), f.max(),
+                f.maxLength(), f.enumValues(), f.writable(), f.classification(), f.mask(),
+                f.format(), f.items(), f.pattern(), f.minLength(), f.requiredWhen(),
+                f.columns(), f.domain(), f.widget(), f.codes(), f.policy(), f.description(),
+                f.lookup(), locale);
     }
 
     private static Binding source(Map<String, InputField> result) {
