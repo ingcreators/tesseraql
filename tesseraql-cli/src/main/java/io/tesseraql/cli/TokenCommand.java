@@ -407,9 +407,15 @@ public final class TokenCommand implements Callable<Integer> {
         return value;
     }
 
-    /** Parses {@code 30m}/{@code 12h}/{@code 7d} (bare numbers are seconds). */
+    /**
+     * Parses {@code 30m}/{@code 12h}/{@code 7d} (bare numbers are seconds); anything else, or a
+     * lifetime of zero, is a {@link UsageRefusal} — a mistyped flag, not a failure.
+     */
     static long ttlSeconds(String ttl) {
         String trimmed = ttl.trim().toLowerCase(java.util.Locale.ROOT);
+        if (trimmed.isEmpty()) {
+            throw new UsageRefusal("--ttl must be a lifetime such as 30m, 12h or 7d, not ''.");
+        }
         long unit = switch (trimmed.charAt(trimmed.length() - 1)) {
             case 'm' -> 60;
             case 'h' -> 3600;
@@ -419,9 +425,16 @@ public final class TokenCommand implements Callable<Integer> {
         String number = Character.isDigit(trimmed.charAt(trimmed.length() - 1))
                 ? trimmed
                 : trimmed.substring(0, trimmed.length() - 1);
-        long value = Long.parseLong(number);
+        long value;
+        try {
+            value = Long.parseLong(number);
+        } catch (NumberFormatException ex) {
+            throw new UsageRefusal("--ttl must be a lifetime such as 30m, 12h or 7d, not '"
+                    + ttl + "'.");
+        }
         if (value <= 0) {
-            throw new IllegalArgumentException("ttl must be positive: " + ttl);
+            throw new UsageRefusal("--ttl must be a positive lifetime such as 30m, 12h or 7d,"
+                    + " not '" + ttl + "'.");
         }
         return value * unit;
     }

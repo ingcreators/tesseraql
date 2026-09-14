@@ -8,20 +8,24 @@ package io.tesseraql.cli.modules;
  */
 public record ModuleCoordinate(String groupId, String artifactId, String version) {
 
-    /** Parses {@code group:artifact} or {@code group:artifact:version}; rejects anything else. */
+    /**
+     * Parses {@code group:artifact} or {@code group:artifact:version}; anything else is a
+     * {@link io.tesseraql.cli.UsageRefusal} — the coordinate is the operator's argument or
+     * declaration, and the CLI answers it in one line.
+     */
     public static ModuleCoordinate parse(String coordinate) {
         if (coordinate == null) {
-            throw new IllegalArgumentException("Null module coordinate");
+            throw new io.tesseraql.cli.UsageRefusal("Null module coordinate.");
         }
         String[] parts = coordinate.trim().split(":");
         if (parts.length < 2 || parts.length > 3) {
-            throw new IllegalArgumentException("Module coordinate must be group:artifact or"
-                    + " group:artifact:version: '" + coordinate + "'");
+            throw new io.tesseraql.cli.UsageRefusal("Module coordinate must be group:artifact or"
+                    + " group:artifact:version: '" + coordinate + "'.");
         }
         for (String part : parts) {
             if (part.isBlank()) {
-                throw new IllegalArgumentException("Blank segment in module coordinate: '"
-                        + coordinate + "'");
+                throw new io.tesseraql.cli.UsageRefusal("Blank segment in module coordinate: '"
+                        + coordinate + "'.");
             }
         }
         return new ModuleCoordinate(parts[0], parts[1], parts.length == 3 ? parts[2] : null);

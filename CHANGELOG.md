@@ -84,6 +84,21 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **A CLI request that cannot run at all is one line on stderr and exit 2, before any work.**
+  The shared connection options and the commands' own pre-flight checks used to throw into
+  picocli's default handling — a twenty-line stack trace and exit 1, the code a genuine failure
+  exits with — so `tesseraql identity-schema --admin-login admin` with no `--app` or
+  `--jdbc-url` (the first-login step the login page teaches) was a stack trace a script could
+  not tell from a broken bootstrap, and with a database but no password source it applied the
+  schema first and threw after. Now: no database to connect to, no password source, an
+  unreadable `--admin-password-file`, a `--ttl` that is not a duration, a job's undeclared
+  datasource, a module coordinate that does not parse, a `modules.lock` that does not match, and
+  `modules add` on a config with no `tesseraql:` mapping each answer one line and exit 2 with
+  nothing done; `identity-schema` resolves the password before it touches the database. The
+  four exit codes — 0 done, 1 ran and failed (an unreachable database stays 1, as published in
+  0.12.0), 2 nothing ran, 3 `job run` did not run by policy — are declared once on both
+  binaries, printed by `--help`, and rendered in `reference-cli.md`; `docs/cli-surface.md`
+  decision 10 records the rule. The login page's hint gained `--app <dir>`.
 - **Every application serves the framework's Japanese with zero configuration.** With no
   `tesseraql.i18n.locales` declared, the served locale set is every catalog the app can answer
   in — its own `messages/` files and the framework's built-in `en` and `ja` — where it used to

@@ -634,6 +634,39 @@ directory is an accident of the supervisor and an implicit start is a hazard rat
 convenience. The development loop guesses so the developer does not have to type; production does
 not guess.
 
+### 10. A request that cannot run exits 2; a command that ran and failed exits 1
+
+*Decided 2026-09-09, recorded 2026-09-14 ([audit-medium-leads.md](audit-medium-leads.md) slice 9,
+F114).* Two conventions were live and this page said nothing about either: 51 hand-written
+`System.err.println(…); return 2;` refusals and [jobs.md](jobs.md) publishing 2 for "a request
+that cannot run at all", while the shared option sets and the commands' own pre-flight checks
+threw `IllegalArgumentException` into picocli's default handling — a twenty-line stack trace and
+exit 1, the code a genuine failure exits with. `tesseraql identity-schema --admin-login admin`,
+the first-login step the login page itself teaches, was the headline: no `--app`, no `--jdbc-url`,
+a stack trace, and a CI script that could not tell a mistyped invocation from a broken bootstrap.
+Worse, with a database and no password source it applied the schema first and threw after.
+
+**The rule.** `2` means nothing ran: the request could not be run at all — a missing or
+unparseable flag, a directory that is not an application, a declaration the command cannot act
+on, a `modules.lock` that does not match. `1` means the command ran and failed: a database it
+could not reach, a job that ended `FAILED`, an unexpected error with its stack trace. `3` stays
+`job run`'s "did not run by policy". `0` is success. The unreachable-database shaping **stays at
+1**, deliberately: the command ran — it tried the connection — and the 0.12.0 changelog published
+that code; a script that retries on 1 and fixes its arguments on 2 is the reader this serves.
+
+**The mechanism.** A `UsageRefusal` (an `IllegalArgumentException` subclass, thrown before any
+work) is what a command or option set throws when it cannot run; `CliExceptionHandler` — the one
+exception shaper, on both binaries — prints its message as one line on stderr and returns 2. A
+plain `IllegalArgumentException` is still a bug's and keeps its stack trace: the handler shapes
+the subclass only. The four codes are declared once (`ExitCodes`) as the root commands' picocli
+`exitCodeList`, so `tesseraql --help` and `tesseraql-host --help` print the same list and
+[reference-cli.md](reference-cli.md) renders it from the model. Converted: the connection set's
+two refusals, `identity-schema`'s password (now resolved *before* the schema is applied) and an
+unreadable `--admin-password-file`, `token`'s `--ttl`, a job's undeclared datasource, a module
+coordinate that does not parse, a `modules.lock` mismatch, and `modules add` on a config with no
+`tesseraql:` mapping. The login page's hint gained `--app <dir>`, the flag the CLI's own
+first-admin hint always carried.
+
 ## The complete mapping
 
 Every command, and what these decisions do to it. `+set` means the command joins a Decision 5 set

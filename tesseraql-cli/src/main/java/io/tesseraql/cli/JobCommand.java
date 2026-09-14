@@ -408,8 +408,8 @@ final class JobCommand implements Callable<Integer> {
         }
         String prefix = "tesseraql.datasources." + declared;
         String url = manifest.config().getString(prefix + ".jdbcUrl").orElseThrow(
-                () -> new IllegalArgumentException("Job datasource '" + declared
-                        + "' declares no " + prefix + ".jdbcUrl"));
+                () -> new UsageRefusal("Job datasource '" + declared
+                        + "' declares no " + prefix + ".jdbcUrl."));
         return new DriverManagerDataSource(url,
                 manifest.config().getString(prefix + ".username").orElse(null),
                 manifest.config().getString(prefix + ".password").orElse(null));

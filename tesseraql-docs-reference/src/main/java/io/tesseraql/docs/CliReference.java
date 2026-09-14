@@ -43,6 +43,7 @@ final class CliReference {
         md.append('\n').append(String.join(" · ", toc)).append('\n');
 
         appendHostRoster(md);
+        appendExitCodes(md, root);
 
         for (CommandSpec command : commands) {
             renderCommand(md, command, command.name(), 2);
@@ -78,6 +79,24 @@ final class CliReference {
                             String.join(" ", command.usageMessage().description())))
                     .append(" |\n");
         }
+    }
+
+    /**
+     * The exit codes, from the root command's own {@code exitCodeList} — the list
+     * {@code tesseraql --help} prints, declared once for both binaries (docs/cli-surface.md
+     * decision 10). Rendered here so a script author finds the contract on the page that
+     * documents the commands, and so the page cannot publish a code the binary does not
+     * declare.
+     */
+    private static void appendExitCodes(StringBuilder md, CommandSpec root) {
+        md.append("\n## Exit codes\n\n")
+                .append("Every command, on both binaries, answers with one of these; "
+                        + "`tesseraql --help` prints the same list. The rule: `2` means nothing "
+                        + "ran, `1` means the command ran and failed.\n\n")
+                .append("| Code | Meaning |\n| --- | --- |\n");
+        root.usageMessage().exitCodeList().forEach((code, meaning) -> md.append("| `")
+                .append(code).append("` | ").append(ReferenceGenerator.cell(meaning))
+                .append(" |\n"));
     }
 
     /** A command's own section: its description, its arguments, then its subcommands. */

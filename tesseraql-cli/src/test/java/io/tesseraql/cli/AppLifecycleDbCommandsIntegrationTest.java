@@ -75,6 +75,21 @@ class AppLifecycleDbCommandsIntegrationTest {
         assertThat(execute(args(app, "schema"))).isZero();
         assertThat(app.resolve(".tesseraql/docs/schema.json")).exists();
 
+        // A refusal comes before any work (docs/cli-surface.md decision 10): a database but no
+        // password source is one line and exit 2, and the schema is NOT applied — it used to be
+        // applied first, with the refusal thrown after it as a stack trace.
+        CommandLine refusing = TesseraqlCli.commandLine();
+        java.io.StringWriter err = new java.io.StringWriter();
+        refusing.setErr(new java.io.PrintWriter(err, true));
+        assertThat(refusing.execute(args(app, "identity-schema", "--admin-login", "admin")))
+                .isEqualTo(2);
+        assertThat(err.toString().strip().lines()).hasSize(1);
+        try (var connection = java.sql.DriverManager.getConnection(POSTGRES.getJdbcUrl(),
+                POSTGRES.getUsername(), POSTGRES.getPassword());
+                var tables = connection.getMetaData().getTables(null, null, "tql_users", null)) {
+            assertThat(tables.next()).as("the schema must not have been applied").isFalse();
+        }
+
         // The managed IAM schema applies idempotently.
         assertThat(execute(args(app, "identity-schema"))).isZero();
         assertThat(execute(args(app, "identity-schema"))).isZero();

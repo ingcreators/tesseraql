@@ -42,8 +42,8 @@ public final class ModulesYaml {
         List<String> lines = new ArrayList<>(List.of(yaml.split("\n", -1)));
         int tesseraqlIndex = indexOfLine(lines, 0, "tesseraql:");
         if (tesseraqlIndex < 0) {
-            throw new IllegalStateException(
-                    "config/tesseraql.yml has no top-level 'tesseraql:' mapping");
+            throw new io.tesseraql.cli.UsageRefusal(
+                    "config/tesseraql.yml has no top-level 'tesseraql:' mapping.");
         }
         int modulesIndex = indexOfLine(lines, tesseraqlIndex + 1, "  modules:");
         if (modulesIndex < 0) {

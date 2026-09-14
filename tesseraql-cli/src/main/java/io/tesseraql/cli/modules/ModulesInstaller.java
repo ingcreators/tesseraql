@@ -64,7 +64,7 @@ public final class ModulesInstaller {
         if (!writeLock) {
             ModulesLock.read(lockFile).map(lock -> lock.verify(resolved)).ifPresent(problems -> {
                 if (!problems.isEmpty()) {
-                    throw new IllegalStateException("modules.lock verification failed:\n  "
+                    throw new io.tesseraql.cli.UsageRefusal("modules.lock verification failed:\n  "
                             + String.join("\n  ", problems)
                             + "\nRun 'tesseraql modules resolve' to refresh the lock.");
                 }

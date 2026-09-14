@@ -16,18 +16,19 @@ import picocli.CommandLine.Command;
  * <p>It lives in {@code io.tesseraql.cli} so the package-private command classes are reachable;
  * the deployment runs on a plain {@code -cp lib/*} classpath, where the split package is legal.
  */
-@Command(name = "tesseraql-host", mixinStandardHelpOptions = true, versionProvider = TesseraqlHostCli.VersionProvider.class, description = "TesseraQL deployment host: serve and operate an installed stack.", subcommands = {
-        HostCommand.class,
-        DeployCommand.class,
-        RoutesCommand.class,
-        TokenCommand.class,
-        MigrateCommand.class,
-        JobCommand.class,
-        IdentitySchemaCommand.class,
-        VerifyCommand.class,
-        AdmissionCommand.class,
-        DuckDbCommand.class
-})
+@Command(name = "tesseraql-host", mixinStandardHelpOptions = true, versionProvider = TesseraqlHostCli.VersionProvider.class, description = "TesseraQL deployment host: serve and operate an installed stack.", exitCodeListHeading = "%nExit codes:%n", exitCodeList = {
+        ExitCodes.OK, ExitCodes.FAILED, ExitCodes.REFUSED, ExitCodes.SKIPPED}, subcommands = {
+                HostCommand.class,
+                DeployCommand.class,
+                RoutesCommand.class,
+                TokenCommand.class,
+                MigrateCommand.class,
+                JobCommand.class,
+                IdentitySchemaCommand.class,
+                VerifyCommand.class,
+                AdmissionCommand.class,
+                DuckDbCommand.class
+        })
 public final class TesseraqlHostCli implements Runnable {
 
     @Override
@@ -59,6 +60,6 @@ public final class TesseraqlHostCli implements Runnable {
      */
     static CommandLine commandLine() {
         return new CommandLine(new TesseraqlHostCli())
-                .setExecutionExceptionHandler(new UnreachableDatabaseHandler());
+                .setExecutionExceptionHandler(new CliExceptionHandler());
     }
 }
