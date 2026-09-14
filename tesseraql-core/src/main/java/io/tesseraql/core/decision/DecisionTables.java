@@ -1,5 +1,6 @@
 package io.tesseraql.core.decision;
 
+import io.tesseraql.core.dialect.JdbcValues;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
@@ -490,10 +491,15 @@ public final class DecisionTables {
                 hits = statements.surface("decision").read(connection, name, sql, values,
                         (results, span) -> {
                             java.util.List<Map<String, Object>> read = new ArrayList<>();
+                            // An output in its kind, then its bindable form: a temporal output
+                            // used to reach a JSON body as the driver's object.
+                            JdbcValues.Reader reader = JdbcValues
+                                    .reader(results.getMetaData());
                             while (results.next() && read.size() < 2) {
                                 Map<String, Object> row = new LinkedHashMap<>();
                                 for (String output : outputs) {
-                                    row.put(output, results.getObject(output));
+                                    row.put(output, io.tesseraql.core.dialect.ResultRows.value(
+                                            reader.read(results, results.findColumn(output))));
                                 }
                                 read.add(row);
                             }

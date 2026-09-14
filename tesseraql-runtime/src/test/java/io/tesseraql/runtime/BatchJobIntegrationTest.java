@@ -120,6 +120,29 @@ class BatchJobIntegrationTest {
         assertThat(runtime.jobRepository().listExecutions(10)).isNotEmpty();
     }
 
+    /**
+     * A wall clock read by one step binds unchanged in the next (docs/temporal-semantics.md
+     * T2): the step reader hands a {@code LocalDateTime} over and the statement binds it with
+     * {@code setObject}, which every supported driver takes (measured, the design record's
+     * re-bind matrix). Green by construction on the old reader too — a {@code Timestamp} bound
+     * the same wall clock — and said so: this row guards the seam's bind, not a defect.
+     */
+    @Test
+    void aWallClockReadByOneStepBindsUnchangedInTheNext() throws Exception {
+        JobExecution execution = runtime.runJob("user.temporalRebind", Map.of());
+        assertThat(execution.status()).isEqualTo(JobStatus.COMPLETED);
+
+        try (Connection connection = DriverManager.getConnection(
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+                Statement statement = connection.createStatement();
+                ResultSet rs = statement
+                        .executeQuery("select at from temporal_marks where id = 1")) {
+            assertThat(rs.next()).isTrue();
+            assertThat(rs.getObject(1, java.time.LocalDateTime.class))
+                    .isEqualTo(java.time.LocalDateTime.parse("2026-03-08T02:30"));
+        }
+    }
+
     @Test
     void querySpoolStepStreamsRowsToTempStore() throws Exception {
         JobExecution execution = runtime.runJob("user.exportActive", Map.of());
@@ -1442,6 +1465,33 @@ class BatchJobIntegrationTest {
         }
         Files.writeString(target.resolve("db/migration/V3__chunk_fixtures.sql"),
                 chunkFixtures.toString());
+        // A wall clock read by one step and bound by the next (docs/temporal-semantics.md T2):
+        // the read hands a LocalDateTime over now, and the bind carries it back unchanged.
+        Files.writeString(target.resolve("db/migration/V4__temporal_marks.sql"),
+                "create table temporal_marks (id integer primary key, at timestamp);\n");
+        Files.createDirectories(target.resolve("batch/temporal"));
+        Files.writeString(target.resolve("batch/temporal/job.yml"), """
+                version: tesseraql/v1
+                id: user.temporalRebind
+                kind: job
+                recipe: batch-pipeline
+                pipeline:
+                  - id: mark
+                    sql:
+                      file: mark.sql
+                      mode: query
+                  - id: stamp
+                    sql:
+                      file: stamp.sql
+                      mode: update
+                      params:
+                        at: steps.mark.first.at
+                """);
+        Files.writeString(target.resolve("batch/temporal/mark.sql"),
+                "select timestamp '2026-03-08 02:30:00' as at\n");
+        Files.writeString(target.resolve("batch/temporal/stamp.sql"),
+                "insert into temporal_marks (id, at)"
+                        + " values (1, /* at */ timestamp '2000-01-01')\n");
         Files.writeString(target.resolve("batch/chunk/extract-e.sql"),
                 "select item_key, payload from chunk_items_e order by item_key\n");
         Files.writeString(target.resolve("batch/chunk/writer-e.sql"), """

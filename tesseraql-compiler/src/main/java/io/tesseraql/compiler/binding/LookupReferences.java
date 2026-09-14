@@ -1,5 +1,6 @@
 package io.tesseraql.compiler.binding;
 
+import io.tesseraql.core.dialect.JdbcValues;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
@@ -88,10 +89,13 @@ public final class LookupReferences {
                 (resultSet, span) -> {
                     List<Map<String, Object>> rows = new ArrayList<>();
                     java.sql.ResultSetMetaData meta = resultSet.getMetaData();
+                    JdbcValues.Reader reader = JdbcValues
+                            .reader(meta);
                     while (rows.size() < 2 && resultSet.next()) {
                         Map<String, Object> row = new LinkedHashMap<>();
                         for (int i = 1; i <= meta.getColumnCount(); i++) {
-                            row.put(meta.getColumnLabel(i), resultSet.getObject(i));
+                            row.put(meta.getColumnLabel(i), io.tesseraql.core.dialect.ResultRows
+                                    .value(reader.read(resultSet, i)));
                         }
                         rows.add(row);
                     }
@@ -122,10 +126,13 @@ public final class LookupReferences {
                 (resultSet, span) -> {
                     List<Map<String, Object>> rows = new ArrayList<>();
                     java.sql.ResultSetMetaData meta = resultSet.getMetaData();
+                    JdbcValues.Reader reader = JdbcValues
+                            .reader(meta);
                     while (rows.size() <= cap && resultSet.next()) {
                         Map<String, Object> row = new LinkedHashMap<>();
                         for (int i = 1; i <= meta.getColumnCount(); i++) {
-                            row.put(meta.getColumnLabel(i), resultSet.getObject(i));
+                            row.put(meta.getColumnLabel(i), io.tesseraql.core.dialect.ResultRows
+                                    .value(reader.read(resultSet, i)));
                         }
                         rows.add(row);
                     }
