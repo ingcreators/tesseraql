@@ -21,7 +21,7 @@ import java.util.function.Consumer;
  * @param tenantDataSources     the per-tenant pool resolver (empty when untenanted)
  * @param calendarDecisions     the declared business calendars (the Studio calendar editor's model)
  * @param notificationChannels  the declared notification channels (the mail composer's targets)
- * @param reloader              the hot reloader {@code serve --watch} and Studio's apply share
+ * @param reloader              the hot reloader {@code dev --watch} and Studio's apply share
  * @param postStart             registers a hook run after the platform HTTP server starts —
  *                              the SSE endpoints' registration window
  * @param httpOutbound          the deny-by-default egress allow-list every outbound call obeys

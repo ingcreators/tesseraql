@@ -24,7 +24,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * The {@code serve --watch} file watcher (the editor-first instant loop): saves under the
+ * The {@code dev --watch} file watcher (the editor-first instant loop): saves under the
  * app's {@code web/} tree hot-reload through the exact {@link RouteReloader} Studio's apply
  * uses, so "save in your own editor and it is serving" holds without a click in Studio.
  *

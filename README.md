@@ -12,8 +12,9 @@ file transfers, observability, and supply-chain tooling.
   whitelists live in SQL comments, so every file runs unchanged in plain SQL tools. Rendering
   produces coverage traces and source maps.
 - **Declarative routes** - `query-json`, `command-json`, `query-html`, `page`, `query-export`,
-  `file-import`, and `file-export` recipes compile YAML route definitions into compiled
-  pipelines. No integration DSL in application code.
+  `file-import`, `file-export`, `webhook`, `queue-consume`, and `prompt-text` recipes compile
+  YAML route definitions into compiled pipelines — the full surface is the generated
+  [YAML reference](docs/reference-yaml-surface.md). No integration DSL in application code.
 - **Security by default** - deny-by-default policies (role/permission/claim), JWT bearer and
   session auth, CSRF, field-level authorization, data masking, CSP, and per-app operations
   scopes (`tql.ops.view.<name>`).
@@ -44,7 +45,7 @@ resolved Maven artifacts — no need to clone this monorepo. Full guide:
 tesseraql new myapp                  # scaffold into your own repo
 cd myapp
 docker compose up -d                 # a local PostgreSQL (or point config at your own)
-tesseraql dev                        # runs the stack; your app at /<name>/, Studio at /<name>/_tesseraql/studio
+tesseraql dev                        # runs the stack; your app at /<name>/, Studio at /_tesseraql/studio
 tesseraql scaffold crud --app . --table items
 tesseraql lint | test | coverage     # verify, all CLI-native
 tesseraql package --app .            # build a .tqlapp

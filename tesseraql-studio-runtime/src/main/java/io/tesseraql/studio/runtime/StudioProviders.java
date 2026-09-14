@@ -1891,7 +1891,7 @@ final class StudioProviders {
                     return java.util.Map.of("captured", true);
                 })
                 // Migrate now (roadmap Phase 42): applies the app's pending migrations to
-                // the dev datasource on demand, closing the schema -> scaffold -> serve
+                // the dev datasource on demand, closing the schema -> scaffold -> dev
                 // loop without a process bounce. Same Flyway path as startup (main set +
                 // tenant pools + named per-datasource sets); edit-gated, confirm-gated
                 // like apply, and recorded to the audit trail.
