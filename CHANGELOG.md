@@ -222,6 +222,18 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A format no codec serves is refused at boot on every arm, naming the site, and lint warns
+  on every arm.** A `file-export` route with such a format booted and answered 500
+  `TQL-LD-2801` at its first POST, a job step booted and failed its first run, and the message
+  named the format alone and hinted at the excel module whatever was asked for; `tesseraql lint`
+  judged `pdf` and `excel` only, on routes and export steps only. Now the compiler, the job
+  registration and `tesseraql job run` look every export and import format up in the
+  application's codec set before anything runs — `app 'x': route 'y' export.format: 'z' - no
+  file codec …` — and `TQL-YAML-1408` judges every declared format, import formats and poll
+  jobs included, against the run's set, naming the coordinate for the opt-in formats and the
+  mechanism for an application's own. An import route's absent `format:` is `csv`, as an
+  export's is. Studio's health lint and the Copilot's `lint` tool read the application's
+  function and codec sets instead of the process default. `docs/codec-discovery.md` S2.
 - **A `query-export` route and an import page read the application's codec set.** The route
   compiler discovered file codecs on the thread context class loader while the transfer service
   discovered them on the application's module loader, so a codec declared under

@@ -75,6 +75,82 @@ class AppLinterModuleDeclarationTest {
         assertThat(findings).noneMatch(finding -> CODE.equals(finding.code()));
     }
 
+    /**
+     * A name no codec in the run's set serves — an application's own codec before it is
+     * declared, or a typo — warns naming the mechanism (docs/codec-discovery.md decision 3);
+     * the same name against a set that carries it is silent, and so is an import's.
+     */
+    @Test
+    void aFormatOutsideTheRunsSetWarnsAndInsideItIsSilent(@TempDir Path dir) throws Exception {
+        Path app = app(dir, "", "fixedwidth");
+        Files.createDirectories(app.resolve("web/api/items/import"));
+        Files.writeString(app.resolve("web/api/items/import/post.yml"), """
+                version: tesseraql/v1
+                id: items.import
+                kind: route
+                recipe: file-import
+                security:
+                  auth: public
+                import:
+                  format: fixedwidth
+                  columns:
+                    - name
+                steps:
+                  - id: row
+                    sql:
+                      file: upsert.sql
+                """);
+        Files.writeString(app.resolve("web/api/items/import/upsert.sql"),
+                "insert into items (name) values (/* name */ 'x')\n");
+
+        List<LintFinding> findings = new AppLinter().lint(app);
+
+        assertThat(findings).filteredOn(finding -> CODE.equals(finding.code()))
+                .singleElement().satisfies(finding -> {
+                    assertThat(finding.level()).isEqualTo(LintFinding.Severity.WARNING);
+                    assertThat(finding.message()).contains("format: fixedwidth")
+                            .contains("names no codec").contains("tesseraql.modules")
+                            .contains("--modules");
+                });
+
+        io.tesseraql.core.files.FileCodecs withIt = io.tesseraql.core.files.FileCodecs
+                .of(new FixedWidth());
+        assertThat(new AppLinter().lint(app,
+                io.tesseraql.core.expr.ExpressionFunctions.processDefault(), withIt))
+                .noneMatch(finding -> CODE.equals(finding.code()));
+    }
+
+    /** A codec by name only: the lint asks whether it exists and never writes. */
+    private static final class FixedWidth implements io.tesseraql.core.files.FileCodec {
+
+        @Override
+        public String format() {
+            return "fixedwidth";
+        }
+
+        @Override
+        public String contentType() {
+            return "text/plain";
+        }
+
+        @Override
+        public String extension() {
+            return ".txt";
+        }
+
+        @Override
+        public void read(java.io.InputStream in, io.tesseraql.core.files.FileReadSpec spec,
+                io.tesseraql.core.files.RowHandler handler) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public void write(java.io.OutputStream out, io.tesseraql.core.files.FileWriteSpec spec,
+                io.tesseraql.core.files.ExportModel model) {
+            throw new UnsupportedOperationException();
+        }
+    }
+
     /** A built-in format needs no module, so it never reaches this rule. */
     @Test
     void aBuiltInFormatIsSilent(@TempDir Path dir) throws Exception {

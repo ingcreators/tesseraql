@@ -81,10 +81,19 @@ final class JobCommand implements Callable<Integer> {
 
     private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
 
+    /**
+     * This command's codec set: the loader {@code installAppExtensions} composed over the
+     * application's modules, discovered once and named as such (docs/codec-discovery.md
+     * decision 1) — what judges every step before a run and what the transfers write with.
+     */
+    private io.tesseraql.core.files.FileCodecs codecs;
+
     @Override
     public Integer call() throws Exception {
         configOptions.apply();
         CliModules.installAppExtensions(app, compile.modules);
+        codecs = io.tesseraql.core.files.FileCodecs.discover(
+                Thread.currentThread().getContextClassLoader());
         AppManifest manifest = new ManifestLoader().load(app);
         Map<String, JobFile> jobs = new LinkedHashMap<>();
         manifest.jobs().forEach(job -> jobs.put(job.definition().id(), job));
@@ -155,7 +164,7 @@ final class JobCommand implements Callable<Integer> {
                     + app + "` shows what is declared");
             return 2;
         }
-        if (!declarationsHold(manifest, jobs)) {
+        if (!declarationsHold(manifest, jobs, codecs)) {
             return 2;
         }
         Map<String, Object> runParams = new LinkedHashMap<>();
@@ -213,7 +222,7 @@ final class JobCommand implements Callable<Integer> {
                     + "', which this app no longer declares");
             return 2;
         }
-        if (!declarationsHold(manifest, jobs)) {
+        if (!declarationsHold(manifest, jobs, codecs)) {
             return 2;
         }
         // The rerun re-runs the same fact: the source's recorded parameters and business date,
@@ -248,7 +257,8 @@ final class JobCommand implements Callable<Integer> {
      * the step's first write as a failure naming neither the key nor the configuration.
      * One line and exit 2, the shape every refused declaration takes on this CLI.
      */
-    private static boolean declarationsHold(AppManifest manifest, Map<String, JobFile> jobs) {
+    private static boolean declarationsHold(AppManifest manifest, Map<String, JobFile> jobs,
+            io.tesseraql.core.files.FileCodecs codecs) {
         String appName = io.tesseraql.yaml.app.ApplicationName.of(manifest.config());
         try {
             io.tesseraql.yaml.app.ExportDeclarations.require(
@@ -258,6 +268,9 @@ final class JobCommand implements Callable<Integer> {
             for (JobFile job : jobs.values()) {
                 io.tesseraql.yaml.app.ExportDeclarations.requireJob(appName, job,
                         System.err::println);
+                // The codec each export step and poll import names, from the set this
+                // command composed — before any row (docs/codec-discovery.md decision 2).
+                io.tesseraql.yaml.app.ExportDeclarations.requireCodecs(appName, job, codecs);
             }
             return true;
         } catch (io.tesseraql.core.error.TqlException refused) {
@@ -442,12 +455,8 @@ final class JobCommand implements Callable<Integer> {
                 repository,
                 io.tesseraql.core.util.Durations.parse(manifest.config()
                         .getString("tesseraql.batch.heartbeat.interval").orElse("30s")));
-        // The codecs installAppExtensions composed onto the context loader - the resolved
-        // declared modules and --modules - named as such (docs/codec-discovery.md decision 1).
         io.tesseraql.operations.files.JdbcFileTransferService transfers = new io.tesseraql.operations.files.JdbcFileTransferService(
-                repository, heartbeats, tempStore, main,
-                io.tesseraql.core.files.FileCodecs.discover(
-                        Thread.currentThread().getContextClassLoader()),
+                repository, heartbeats, tempStore, main, codecs,
                 io.tesseraql.core.expr.ExpressionFunctions.processDefault());
         transfers.sqlTimeoutSeconds(
                 io.tesseraql.yaml.config.SqlDefaults.timeoutSeconds(manifest.config()));

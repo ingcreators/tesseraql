@@ -7,7 +7,6 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
-import io.tesseraql.yaml.lint.AppLinter;
 import io.tesseraql.yaml.lint.LintFinding;
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.RouteFile;
@@ -371,7 +370,9 @@ public final class CopilotService {
     }
 
     private String lint() throws com.fasterxml.jackson.core.JsonProcessingException {
-        List<LintFinding> findings = new AppLinter().lint(manifest.appHome());
+        // The studio's health lint: the application's function and codec sets, not the
+        // process default's (docs/codec-discovery.md decision 3).
+        List<LintFinding> findings = studio.health();
         return findings.isEmpty()
                 ? "No findings."
                 : MAPPER.writeValueAsString(findings);

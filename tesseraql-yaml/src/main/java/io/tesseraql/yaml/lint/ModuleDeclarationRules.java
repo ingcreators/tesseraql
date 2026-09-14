@@ -6,23 +6,29 @@ import io.tesseraql.yaml.manifest.AppManifest;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
 /**
- * What an application uses against what it declares (docs/module-channel.md decision 3).
+ * What an application uses against what this run can serve (docs/module-channel.md decision
+ * 3, docs/codec-discovery.md decision 3): every export and import {@code format:} — on a
+ * route, a job step, a poll job — is judged against the run's codec set.
  *
  * <p>Opt-in codecs reach a deployment one way: the application declares them in
  * {@code tesseraql.modules}, packaging carries the locked closure, and the host refuses to start
  * without it. An application built through a wrapper pom can also put a codec on its own build
  * classpath, where exports work locally and the declaration that a {@code .tqlapp} would carry
  * never gets written — so the package deploys, starts, and fails at the first export with
- * {@code TQL-LD-2801}. That is a long way from the mistake, so this says it at lint time.
+ * {@code TQL-LD-2801}. That is a long way from the mistake, so this says it at lint time. An
+ * application's own codec, or a name that is a typo, is the same condition with no coordinate
+ * to name: no codec in this run's set serves it, and a boot from this set would refuse.
  *
  * <p>A warning, not an error: the build classpath is a legitimate route for an application that
- * builds its own runtime image and never packages. The rule stays silent when the codec is
- * discoverable here — a wrapper-pom build lints with its own dependencies present — so it speaks
- * exactly when the format is used, undeclared, and unavailable.
+ * builds its own runtime image and never packages. The rule stays silent when the codec is in
+ * the set — a wrapper-pom build lints with its own dependencies present — so it speaks exactly
+ * when the format is used, undeclared, and unavailable. On the developer CLI the set is the
+ * one {@code tesseraql dev} boots with, so a silent lint there is a booting application.
  */
 final class ModuleDeclarationRules implements LintRule {
 
@@ -34,6 +40,9 @@ final class ModuleDeclarationRules implements LintRule {
             "pdf", "io.tesseraql:tesseraql-pdf",
             "excel", "io.tesseraql:tesseraql-excel");
 
+    /** The format the runtime closure always carries, judged nowhere (docs/file-transfers.md). */
+    private static final Set<String> BUILT_IN_FORMATS = Set.of("csv");
+
     @Override
     public void lint(LintContext context, AppManifest manifest, List<LintFinding> findings) {
         Map<String, String> usedFormats = usedFormats(manifest, context.appHome());
@@ -41,24 +50,33 @@ final class ModuleDeclarationRules implements LintRule {
             return;
         }
         Set<String> declared = declaredModules(manifest);
-        // The thread context loader, spelled out: on the CLI it is the loader CliModules
-        // composed over the application's resolved modules (docs/codec-discovery.md decision 1).
-        io.tesseraql.core.files.FileCodecs available = io.tesseraql.core.files.FileCodecs
-                .discover(Thread.currentThread().getContextClassLoader());
+        io.tesseraql.core.files.FileCodecs available = context.codecs();
         usedFormats.forEach((format, source) -> {
+            if (BUILT_IN_FORMATS.contains(format) || available.supports(format)) {
+                return;
+            }
             String coordinate = MODULE_FORMATS.get(format);
-            if (declared.contains(coordinate) || available.supports(format)) {
+            if (coordinate != null && declared.contains(coordinate)) {
                 return;
             }
             findings.add(new LintFinding(CODEC_NOT_DECLARED, WARNING, source,
-                    "format: " + format + " needs the " + coordinate + " module, which this"
-                            + " application neither declares under tesseraql.modules nor carries"
-                            + " on the classpath — a package built from it would deploy and fail"
-                            + " at the first export"));
+                    "format: " + format + " names no codec this classpath carries and the"
+                            + " application declares none — " + (coordinate != null
+                                    ? "the " + coordinate + " module provides it: declare it"
+                                            + " under tesseraql.modules, or a package built"
+                                            + " from this application deploys and fails at"
+                                            + " the first export"
+                                    : "an application's own codec is declared under"
+                                            + " tesseraql.modules, or passed with --modules"
+                                            + " while it is being developed; a runtime"
+                                            + " without it refuses to start")));
         });
     }
 
-    /** Each opt-in format the app exports, mapped to the first document that uses it. */
+    /**
+     * Each format the app exports or imports, lower-cased (a mixed-case name is the export
+     * declaration lint's own finding), mapped to the first document that uses it.
+     */
     private static Map<String, String> usedFormats(AppManifest manifest,
             java.nio.file.Path appHome) {
         Map<String, String> used = new LinkedHashMap<>();
@@ -67,16 +85,23 @@ final class ModuleDeclarationRules implements LintRule {
             if (export != null) {
                 record(used, export.format(), relative(appHome, route.source()));
             }
+            io.tesseraql.yaml.model.ImportSpec fileImport = route.definition().fileImport();
+            if (fileImport != null) {
+                record(used, fileImport.format(), relative(appHome, route.source()));
+            }
         });
         manifest.jobs().forEach(job -> {
-            if (job.definition().pipeline() == null) {
-                return;
+            if (job.definition().pipeline() != null) {
+                job.definition().pipeline().forEach(step -> {
+                    if (step.export() != null) {
+                        record(used, step.export().format(), relative(appHome, job.source()));
+                    }
+                });
             }
-            job.definition().pipeline().forEach(step -> {
-                if (step.export() != null) {
-                    record(used, step.export().format(), relative(appHome, job.source()));
-                }
-            });
+            if (job.definition().fileImport() != null) {
+                record(used, job.definition().fileImport().format(),
+                        relative(appHome, job.source()));
+            }
         });
         return used;
     }
@@ -85,9 +110,10 @@ final class ModuleDeclarationRules implements LintRule {
         return appHome.relativize(source).toString().replace('\\', '/');
     }
 
+    /** An absent or blank format is the csv default or the export lint's own refusal. */
     private static void record(Map<String, String> used, String format, String source) {
-        if (format != null && MODULE_FORMATS.containsKey(format)) {
-            used.putIfAbsent(format, source);
+        if (format != null && !format.isBlank()) {
+            used.putIfAbsent(format.toLowerCase(Locale.ROOT), source);
         }
     }
 

@@ -117,7 +117,9 @@ sources:
 ```
 
 - `format:` is required on a job step and may be omitted on a route, where `csv` is the default;
-  a blank `format:` is refused everywhere, at lint and at boot. A `filename:` that carries
+  a blank `format:` is refused everywhere, at lint and at boot, and so is a format no codec in
+  the application's set serves — lint warns (`TQL-YAML-1408`), boot refuses (`TQL-LD-2801`)
+  naming the route or the step, on every recipe alike. A `filename:` that carries
   `{key}` without `splitBy:` is refused too (the placeholder would be delivered literally), and a
   filename whose extension is not the format's draws a lint warning (`TQL-YAML-1045`) — the file
   is served and recorded as its format whatever it is called.

@@ -127,8 +127,24 @@ public final class AppLinter {
         return lint(appHome, ExpressionFunctions.processDefault());
     }
 
-    /** As {@link #lint(Path)}, resolving custom expression calls against {@code functions}. */
+    /**
+     * As {@link #lint(Path)}, resolving custom expression calls against {@code functions}; the
+     * codec set is the thread context loader's, spelled out — on the CLI the loader
+     * {@code CliModules} composed over the application's modules (docs/codec-discovery.md
+     * decision 1).
+     */
     public List<LintFinding> lint(Path appHome, ExpressionFunctions functions) {
+        return lint(appHome, functions, io.tesseraql.core.files.FileCodecs
+                .discover(Thread.currentThread().getContextClassLoader()));
+    }
+
+    /**
+     * As {@link #lint(Path, ExpressionFunctions)}, judging every export and import format
+     * against {@code codecs} — a runtime's workshop passes the application's own set, so its
+     * health lint sees exactly the codecs the application serves with.
+     */
+    public List<LintFinding> lint(Path appHome, ExpressionFunctions functions,
+            io.tesseraql.core.files.FileCodecs codecs) {
         // The manifest loader absolutizes every source path; a relative app home (the
         // documented `tesseraql lint --app .` form) must match, or relativizing the
         // sources for finding locations throws.
@@ -140,7 +156,7 @@ public final class AppLinter {
                         .flatMap(spec -> spec.sourceTables().stream())
                         .collect(java.util.stream.Collectors
                                 .toCollection(java.util.LinkedHashSet::new)),
-                functions);
+                functions, codecs);
         for (LintRule rule : rules()) {
             rule.lint(context, manifest, findings);
         }

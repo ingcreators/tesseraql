@@ -7,7 +7,7 @@
 > **S1** — the codec set is the application's, discovered once from its module loader and
 > handed to every consumer (the sync `query-export` route, the import view, the reloader, the
 > transfer service): **shipped as S1**. **S2** — boot refuses a format no codec serves on every arm, naming
-> the site; lint judges every declared format against the run's codec set: *open*. **S3** — the
+> the site; lint judges every declared format against the run's codec set: **shipped as S2**. **S3** — the
 > developer CLI's module view is the runtime's, and a module that cannot be resolved is a shaped
 > refusal: *open*. **S4** — the README's second quick start runs as written from the `-Pdist`
 > archive, and CI proves it: *open*.
@@ -318,6 +318,35 @@ symbols for the head column; `ViewBinding.class` with a `getClassLoader` symbol 
 | v-view (`ViewBinding` discovers on its own loader, the parameter ignored) | 4 green, the accept leg red. **The first build of this variant failed on PMD's unused-parameter gate and the IT ran green against the previous jar** — the constant-pool check is what said so, not the test |
 | v-transfer (the transfer service discovers a second time on the same loader) | green by construction, not built: the same loader yields the same set |
 | the ledger, on a tree with `AppModules`' second discovery missing from its row | red, naming the site and the loader expression |
+
+### S2 — boot refuses on every arm, lint judges every format
+
+**One defect the slice found that the measurement had not:** a `file-import` route without
+`format:` — which [`file-transfers.md`](file-transfers.md) says reads csv — handed the
+processor the literal null, and the first upload answered 500 `TQL-LD-2801` for the format
+`'null'` (`ImportFormatDefaultIntegrationTest`, red on the S1 tip with exactly that body, green
+after: the compile defaults it as the export's is defaulted).
+
+Guards: `ExportDeclarationCompileArmsTest.aFormatNoCodecServesIsRefusedAtCompileOnEveryArm` (a
+`query-export`, a `file-export` and a `file-import` naming `fixedwidth` refuse at compile naming
+the app, the route and the key, without the excel hint; the same declarations compile against a
+set that names the format); `ExportDeclarationBootTest.aFormatNoCodecServesRefusesTheBootNamingTheStepOrTheRoute`
+(a job step at registration, a file-export route at compile — the runtime boot);
+`JobCommandIntegrationTest.aStepWhoseFormatNoCodecServesIsRefusedBeforeAnyExecutionRowExists`
+(`tesseraql job run` exits 2 naming the step, no execution row);
+`AppLinterModuleDeclarationTest.aFormatOutsideTheRunsSetWarnsAndInsideItIsSilent` (an export and
+an import naming `fixedwidth` draw one 1408 naming the mechanism; a set that carries it is
+silent); `StudioServiceHealthCodecsTest` (the health lint with the application's set is silent on
+a module format, and warns without it); `CodecDiscoveryLedgerTest` re-rowed (the lint's default
+moved to `AppLinter`, the MCP tools discover per application, Studio's default is its own loader;
+`StudioSupport` and `ModuleDeclarationRules` no longer discover).
+
+Red on the S1 tip (the test sources copied in alone; the lint and Studio tests do not compile
+there — the three-argument `lint` and the four-argument `StudioService` are this slice's):
+the arms test red (`file-export` and `file-import` compiled); the boot test red ("Expecting code
+to raise a throwable"); the CLI test red (exit 1 after wiring, an execution row recorded); the
+import-default test red (500 `TQL-LD-2801`). The head evidence for the lint is row 7 of the
+measurement: `0 finding(s)` on `fixedwidth`.
 
 ## Sources
 

@@ -91,6 +91,42 @@ class ExportDeclarationBootTest {
                 .hasMessageContaining("a job has no request");
     }
 
+    /**
+     * The codec arm (docs/codec-discovery.md decision 2): a step whose format no codec in the
+     * application's set serves refuses the boot naming the step — it used to boot and fail the
+     * step's first run — and a file-export route with such a format refuses the boot naming the
+     * route, where it used to boot and answer 500 at its first POST.
+     */
+    @Test
+    void aFormatNoCodecServesRefusesTheBootNamingTheStepOrTheRoute(@TempDir Path dir)
+            throws Exception {
+        Path step = appHome(dir, "export-boot-f", "      format: fixedwidth\n");
+
+        assertThatThrownBy(() -> TesseraqlRuntime.start(step, 0))
+                .isInstanceOf(io.tesseraql.core.error.TqlException.class)
+                .hasMessageContaining("TQL-LD-2801")
+                .hasMessageContaining("app 'export-boot-f'")
+                .hasMessageContaining("job 'report.daily' step 'report'")
+                .hasMessageContaining("export.format")
+                .hasMessageContaining("'fixedwidth'")
+                .hasMessageNotContaining("excel format needs");
+
+        Path route = routeAppHome(dir, "export-boot-g");
+        Path dump = route.resolve("web/api/items/dump/get.yml");
+        Files.writeString(dump, Files.readString(dump)
+                .replace("recipe: query-export", "recipe: file-export")
+                .replace("format: csv", "format: fixedwidth")
+                .replace("mode: query-export", "mode: query"));
+        Files.move(dump, dump.resolveSibling("post.yml"));
+
+        assertThatThrownBy(() -> TesseraqlRuntime.start(route, 0))
+                .isInstanceOf(io.tesseraql.core.error.TqlException.class)
+                .hasMessageContaining("TQL-LD-2801")
+                .hasMessageContaining("route 'items.dump'")
+                .hasMessageContaining("export.format")
+                .hasMessageContaining("'fixedwidth'");
+    }
+
     @Test
     void theValidTwinBootsAndRunsTheJobToCompletion(@TempDir Path dir) throws Exception {
         Path appHome = appHome(dir, "export-boot-c",
