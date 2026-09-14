@@ -1467,7 +1467,9 @@ Every unfiled defect the measurement found, routed elsewhere with its destinatio
   (the TCCL defect: the shipped `users/print` cannot boot on the CLI classpath even with
   `tesseraql.modules` declared), adding `require(format)` to `buildFileExport` (it would turn the
   working module-channel file-export into boot refusals), an unknown-format lint by discovery; no
-  runtime IT exercises a query-export through the module loader.
+  runtime IT exercises a query-export through the module loader. *The seam and the runtime IT
+  shipped as [`codec-discovery.md`](codec-discovery.md) S1; the boot refusal on every arm and the
+  lint are its S2.*
 - **Lookups record / export hygiene:** `TQL-FIELD-4622` guarding nothing on any export surface,
   the dead `CatalogBinder(fixedLocale)` step on export routes, `docs/lookups.md` decision 12's
   Export row, the #742 CHANGELOG framing; the two `CatalogBinder` sites' collapsed

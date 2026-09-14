@@ -87,6 +87,10 @@ public final class RouteCompiler {
     private boolean mountRest = true;
     private String appName;
     private ExpressionFunctions functions = ExpressionFunctions.processDefault();
+    // The compiler's own loader, never the thread's: a hosted runtime always sets its
+    // application's set, and a unit test compiles with whatever its classpath carries.
+    private io.tesseraql.core.files.FileCodecs codecs = io.tesseraql.core.files.FileCodecs
+            .discover(RouteCompiler.class.getClassLoader());
 
     /**
      * Sets the app name routes are attributed to (e.g. outbox events). One runtime serves one
@@ -105,6 +109,17 @@ public final class RouteCompiler {
      */
     public RouteCompiler functions(ExpressionFunctions functions) {
         this.functions = functions;
+        return this;
+    }
+
+    /**
+     * Sets the codec set this compile resolves export and import formats against — the
+     * application's, discovered once from its module loader (docs/codec-discovery.md decision
+     * 1), so a {@code query-export} and an import page see exactly the codecs the transfer
+     * service serves. Unset, the compiler's own class loader's codecs apply.
+     */
+    public RouteCompiler codecs(io.tesseraql.core.files.FileCodecs codecs) {
+        this.codecs = codecs;
         return this;
     }
 
@@ -1418,8 +1433,7 @@ public final class RouteCompiler {
         // the same predicate the linter reports from (docs/export-declarations.md decision 1).
         requireValidExport(definition, spec, routeDir);
         String format = spec != null && spec.format() != null ? spec.format() : "csv";
-        io.tesseraql.core.files.FileCodec codec = io.tesseraql.core.files.FileCodecs.discover()
-                .require(format);
+        io.tesseraql.core.files.FileCodec codec = codecs.require(format);
         Path template = spec == null || spec.template() == null
                 ? null
                 : routeDir.resolve(spec.template()).normalize();
@@ -1550,7 +1564,8 @@ public final class RouteCompiler {
         io.tesseraql.compiler.binding.ViewBinding viewBinding = html.view() == null
                 ? null
                 : io.tesseraql.compiler.binding.ViewBinding.of(appHome, html.view(),
-                        routeFile.definition(), this::postRouteByPath, this::viewPathById);
+                        routeFile.definition(), this::postRouteByPath, this::viewPathById,
+                        codecs);
         return new HtmlResponseRenderer(withDefaultHeaders(html), appHome,
                 routeFile.source().getParent(), i18n.defaultTag(), viewBinding, java.util.Map.of(),
                 functions).basePath(basePath());
@@ -1760,7 +1775,7 @@ public final class RouteCompiler {
                     && html.view() != null
                             ? io.tesseraql.compiler.binding.ViewBinding.of(appHome,
                                     html.view(), routeFile.definition(), this::postRouteByPath,
-                                    this::viewPathById)
+                                    this::viewPathById, codecs)
                             : null;
             // A workflow-declaring detail view gains its facts step after the row loads and
             // before the renderer (docs/workflow-surface.md decision 2).
@@ -1775,7 +1790,7 @@ public final class RouteCompiler {
                 for (String id : html.views()) {
                     boundViews.put(id, io.tesseraql.compiler.binding.ViewBinding.of(appHome,
                             id, routeFile.definition(), this::postRouteByPath,
-                            this::viewPathById));
+                            this::viewPathById, codecs));
                 }
             }
             applySessionRotation(route, routeFile.definition())

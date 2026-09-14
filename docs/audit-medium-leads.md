@@ -379,7 +379,8 @@ fresh `origin/main`. Nothing here is scheduled in `remediation.json` — this is
    `RouteCompiler:1388` discovers codecs on the thread-context loader and `TesseraqlRuntime:1045` on
    `modules.loader()`, so a module codec boots for `file-export` and is refused for `query-export`
    under `tesseraql dev` (TQL-LD-2801). Slice 4's guards therefore never put `format: excel` or an
-   SPI codec on a `query-export` route.
+   SPI codec on a `query-export` route. *The campaign is [`codec-discovery.md`](codec-discovery.md);
+   its S1 closed the seam on 2026-09-14.*
 
 ### Rules carried into every slice
 

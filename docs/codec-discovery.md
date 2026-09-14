@@ -6,7 +6,7 @@
 >
 > **S1** — the codec set is the application's, discovered once from its module loader and
 > handed to every consumer (the sync `query-export` route, the import view, the reloader, the
-> transfer service): *open*. **S2** — boot refuses a format no codec serves on every arm, naming
+> transfer service): **shipped as S1**. **S2** — boot refuses a format no codec serves on every arm, naming
 > the site; lint judges every declared format against the run's codec set: *open*. **S3** — the
 > developer CLI's module view is the runtime's, and a module that cannot be resolved is a shaped
 > refusal: *open*. **S4** — the README's second quick start runs as written from the `-Pdist`
@@ -293,6 +293,31 @@ row 11 answers). S3 is independent of S1 and S2 and could land between them with
   component's code does not spell it.
 - Slice branches start from fresh `origin/main`; `gh pr view --json mergeStateStatus` before
   and after; "Maven verify on Java 25" on the head SHA before the merge.
+
+## Verification record
+
+### S1 — the seam
+
+`ModuleCodecIntegrationTest` (tesseraql-runtime): five legs — the sync GET's bytes and
+`Content-Type`, the async transfer's bytes, the job step's completion with the codec's write
+counter advanced, the import page's `accept=".marker,text/x-marker"`, and a reload leg that
+rewrites the route's `filename:` and asserts the reloaded route still writes the marker.
+`ViewBindingImportTargetTest` (tesseraql-compiler): an explicit set holding a workbook codec
+renders `.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`; the
+compiler's own classpath renders no list. `CodecDiscoveryLedgerTest` (tesseraql-docs-reference):
+every `FileCodecs.discover(` in a main source is a ledger row naming its loader, and every row
+still discovers.
+
+Red proofs, each on a jar proven by its constant pool (`RouteCompiler.class` with zero `codecs`
+symbols for the head column; `ViewBinding.class` with a `getClassLoader` symbol for v-view):
+
+| Column | Result |
+| --- | --- |
+| head (`a35518f35`, the IT copied in alone) | the boot fails: `TQL-LD-2801: No file codec for format 'marker' - available: [csv, excel, pdf]` — one `initializationError`, all five legs unreachable |
+| v-reloader (the reloader constructs the compiler without the set) | 4 green, the reload leg red |
+| v-view (`ViewBinding` discovers on its own loader, the parameter ignored) | 4 green, the accept leg red. **The first build of this variant failed on PMD's unused-parameter gate and the IT ran green against the previous jar** — the constant-pool check is what said so, not the test |
+| v-transfer (the transfer service discovers a second time on the same loader) | green by construction, not built: the same loader yields the same set |
+| the ledger, on a tree with `AppModules`' second discovery missing from its row | red, naming the site and the loader expression |
 
 ## Sources
 

@@ -9,9 +9,16 @@ import java.util.Map;
 import java.util.ServiceLoader;
 
 /**
- * The file codecs available to this runtime, keyed by format (design ch. 28, 47): every
- * {@link FileCodec} on the classpath registers through {@link ServiceLoader}, so adding the
- * optional Excel module to the classpath is the whole install. An unknown format fails loudly.
+ * The file codecs of one application, keyed by format (design ch. 28, 47): every
+ * {@link FileCodec} a class loader can see registers through {@link ServiceLoader}, so
+ * declaring the optional Excel module is the whole install. An unknown format fails loudly.
+ *
+ * <p>Every discovery names its loader (docs/codec-discovery.md decision 1). A runtime
+ * discovers once on its application's module loader and hands the one instance to the route
+ * compiler, the reloader and the transfer service; a CLI verb that composed the thread context
+ * loader passes that loader, spelled out. The overload that read the context loader on its own
+ * is gone: it is how the synchronous export route came to see a different codec set from the
+ * asynchronous one under {@code tesseraql dev}.
  */
 public final class FileCodecs {
 
@@ -25,20 +32,13 @@ public final class FileCodecs {
         this.codecs = OrderedCopies.map(codecs);
     }
 
-    public static FileCodecs discover() {
-        Map<String, FileCodec> codecs = new LinkedHashMap<>();
-        ServiceLoader.load(FileCodec.class)
-                .forEach(codec -> put(codecs, codec));
-        return new FileCodecs(codecs);
-    }
-
     /**
      * Registers a codec under its format, the last one put winning as it always has — and says
      * so when a different class takes a format another codec held (docs/export-hygiene.md P7):
      * a module codec answering {@code csv} silently decided every export and import that read
      * this set. A refusal here would fail every app carrying the module; the lint that names the
-     * shape belongs to the codec-discovery work (F82 slice 2). The line describes THIS codec set:
-     * the synchronous route discovers on its own loader and may never see the pair.
+     * shape is the lint's (docs/codec-discovery.md decision 3). The line describes THIS codec
+     * set, which since decision 1 is the one set every arm of an application reads.
      */
     private static void put(Map<String, FileCodec> codecs, FileCodec codec) {
         FileCodec previous = codecs.put(codec.format(), codec);
@@ -50,8 +50,8 @@ public final class FileCodecs {
     }
 
     /**
-     * Discovers codecs visible to {@code loader} — a hosted runtime passes its own module
-     * loader so each application's codecs are its own declarations (docs/module-scope.md).
+     * Discovers the codecs visible to {@code loader} — a runtime passes its application's module
+     * loader, so each application's codecs are its own declarations (docs/module-scope.md).
      */
     public static FileCodecs discover(ClassLoader loader) {
         Map<String, FileCodec> codecs = new LinkedHashMap<>();

@@ -442,9 +442,12 @@ final class JobCommand implements Callable<Integer> {
                 repository,
                 io.tesseraql.core.util.Durations.parse(manifest.config()
                         .getString("tesseraql.batch.heartbeat.interval").orElse("30s")));
+        // The codecs installAppExtensions composed onto the context loader - the resolved
+        // declared modules and --modules - named as such (docs/codec-discovery.md decision 1).
         io.tesseraql.operations.files.JdbcFileTransferService transfers = new io.tesseraql.operations.files.JdbcFileTransferService(
                 repository, heartbeats, tempStore, main,
-                io.tesseraql.core.files.FileCodecs.discover(),
+                io.tesseraql.core.files.FileCodecs.discover(
+                        Thread.currentThread().getContextClassLoader()),
                 io.tesseraql.core.expr.ExpressionFunctions.processDefault());
         transfers.sqlTimeoutSeconds(
                 io.tesseraql.yaml.config.SqlDefaults.timeoutSeconds(manifest.config()));

@@ -1,6 +1,7 @@
 package io.tesseraql.runtime;
 
 import io.tesseraql.core.expr.ExpressionFunctions;
+import io.tesseraql.core.files.FileCodecs;
 import java.io.File;
 import java.io.IOException;
 import java.net.MalformedURLException;
@@ -14,10 +15,15 @@ import java.util.List;
 /**
  * One application's modules, loaded and owned by its runtime (docs/module-scope.md): a
  * classloader over the jars its resolution left in {@code work/modules} — plus an optional
- * development override directory — and the {@link ExpressionFunctions} discovered from it. The
- * runtime that builds this closes it, after its pools; module visibility equals runtime scope,
- * so two applications in one stack see exactly their own declarations
- * (docs/stack-architecture.md decision 28).
+ * development override directory — and the {@link ExpressionFunctions} and {@link FileCodecs}
+ * discovered from it, each once. The runtime that builds this closes it, after its pools;
+ * module visibility equals runtime scope, so two applications in one stack see exactly their
+ * own declarations (docs/stack-architecture.md decision 28).
+ *
+ * <p>The codec set is discovered here and nowhere else in a runtime
+ * (docs/codec-discovery.md decision 1): the route compiler, the reloader and the transfer
+ * service all receive this one instance, so the synchronous export, the import page and the
+ * asynchronous transfer cannot disagree about which formats the application serves.
  *
  * <p>The runtime never resolves: {@code dev} resolves before starting runtimes and a production
  * {@code host} boots offline from what install-time resolution left on disk — the host refuses
@@ -28,10 +34,12 @@ final class AppModules implements AutoCloseable {
 
     private final URLClassLoader loader;
     private final ExpressionFunctions functions;
+    private final FileCodecs codecs;
 
-    private AppModules(URLClassLoader loader, ExpressionFunctions functions) {
+    private AppModules(URLClassLoader loader, ExpressionFunctions functions, FileCodecs codecs) {
         this.loader = loader;
         this.functions = functions;
+        this.codecs = codecs;
     }
 
     /**
@@ -70,15 +78,17 @@ final class AppModules implements AutoCloseable {
             }
         }
         if (urls.isEmpty()) {
-            return new AppModules(null, ExpressionFunctions.builtInsOnly());
+            return new AppModules(null, ExpressionFunctions.builtInsOnly(),
+                    FileCodecs.discover(AppModules.class.getClassLoader()));
         }
         URLClassLoader loader = new URLClassLoader("tesseraql-modules",
                 urls.toArray(new URL[0]), AppModules.class.getClassLoader());
         try {
-            return new AppModules(loader, ExpressionFunctions.load(loader));
+            return new AppModules(loader, ExpressionFunctions.load(loader),
+                    FileCodecs.discover(loader));
         } catch (RuntimeException | Error ex) {
-            // Function discovery over a broken jar (a ServiceConfigurationError names its
-            // descriptor) must not strand the loader it just opened over that jar.
+            // Function or codec discovery over a broken jar (a ServiceConfigurationError names
+            // its descriptor) must not strand the loader it just opened over that jar.
             try {
                 loader.close();
             } catch (IOException ignored) {
@@ -101,6 +111,11 @@ final class AppModules implements AutoCloseable {
     /** The functions this application's expressions parse and evaluate with. */
     ExpressionFunctions functions() {
         return functions;
+    }
+
+    /** The file codecs this application exports and imports with, on every arm. */
+    FileCodecs codecs() {
+        return codecs;
     }
 
     /**

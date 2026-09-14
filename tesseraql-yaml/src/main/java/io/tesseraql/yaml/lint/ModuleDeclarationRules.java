@@ -41,8 +41,10 @@ final class ModuleDeclarationRules implements LintRule {
             return;
         }
         Set<String> declared = declaredModules(manifest);
+        // The thread context loader, spelled out: on the CLI it is the loader CliModules
+        // composed over the application's resolved modules (docs/codec-discovery.md decision 1).
         io.tesseraql.core.files.FileCodecs available = io.tesseraql.core.files.FileCodecs
-                .discover();
+                .discover(Thread.currentThread().getContextClassLoader());
         usedFormats.forEach((format, source) -> {
             String coordinate = MODULE_FORMATS.get(format);
             if (declared.contains(coordinate) || available.supports(format)) {
