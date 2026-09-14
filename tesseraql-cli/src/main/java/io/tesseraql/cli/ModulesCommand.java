@@ -20,7 +20,7 @@ import picocli.CommandLine.Parameters;
  * pdf/excel/s3 codecs) — declarative and reproducible via {@code modules.lock} (design:
  * app-developer-distribution work item 4). {@code add} edits {@code config/tesseraql.yml} and
  * refreshes the lock (like {@code cargo add}); {@code resolve} (re)writes the lock; {@code fetch} fills a
- * portable bag for a disconnected machine; {@code list} prints the declared set. {@code serve} resolves the same set on start, verifying the lock.
+ * portable bag for a disconnected machine; {@code list} prints the declared set. {@code dev} and {@code host} resolve the same set on start, verifying the lock.
  */
 @Command(name = "modules", description = "Manage the opt-in tesseraql.modules set.", subcommands = {
         ModulesCommand.AddCommand.class,

@@ -25,9 +25,9 @@ import org.junit.jupiter.api.Test;
  * {@code hc-empty__body}, {@code hc-field--grow} and invalid variant values for months
  * without a single test noticing. Every {@code hc-*} class token and every literal
  * {@code data-variant} value used by a template must exist in the WebJar's stylesheet, and
- * every {@code data-hc-confirm} must be wired so confirming actually fires (the kit only
- * re-emits {@code hc:confirmed}; a submit button rides the bootstrap's plain-form stand-in,
- * anything else needs {@code hx-trigger="hc:confirmed"} — see hc-briefs.md brief 4).
+ * every {@code data-hc-confirm} must be wired so confirming actually fires (a plain-form
+ * submit button is submitted by the kit's own {@code installConfirm} since hc 0.1.13; anything
+ * carrying an htmx verb needs {@code hx-trigger="hc:confirmed"} — see hc-briefs.md brief 4).
  *
  * <p>Scope: every {@code *.html} under the sibling modules' {@code src/main/resources}.
  * Markup emitted from Java string templates (the scaffolder) is covered by its own
@@ -143,8 +143,8 @@ class HcMarkupContractTest {
                         && HX_VERBS.stream().anyMatch(verb -> tag.contains(verb + "="));
                 if (!plainSubmit && !htmxWired) {
                     violations.add(rel(template) + ": data-hc-confirm on an element that can"
-                            + " never fire — needs type=\"submit\" (plain-form stand-in) or an"
-                            + " hx verb with hx-trigger=\"hc:confirmed\": "
+                            + " never fire — needs type=\"submit\" (the kit submits a plain"
+                            + " form itself) or an hx verb with hx-trigger=\"hc:confirmed\": "
                             + tag.replaceAll("\\s+", " "));
                 }
             }

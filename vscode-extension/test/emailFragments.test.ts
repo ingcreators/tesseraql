@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import {
   EMAIL_FRAGMENTS,
   emailCompletionAt,
-} from '../core/emailFragments';
+} from '../src/core/emailFragments';
 
 test('fragment completion fires after the library reference marker', () => {
   const line = '<div th:replace="~{tql/email/hc-email :: hcT';

@@ -1891,7 +1891,7 @@ final class StudioProviders {
                     return java.util.Map.of("captured", true);
                 })
                 // Migrate now (roadmap Phase 42): applies the app's pending migrations to
-                // the dev datasource on demand, closing the schema -> scaffold -> serve
+                // the dev datasource on demand, closing the schema -> scaffold -> dev
                 // loop without a process bounce. Same Flyway path as startup (main set +
                 // tenant pools + named per-datasource sets); edit-gated, confirm-gated
                 // like apply, and recorded to the audit trail.
@@ -1989,12 +1989,33 @@ final class StudioProviders {
                     boolean live = "true".equals(String.valueOf(params.get("live")));
                     io.tesseraql.studio.StudioService.RowSource rows = live
                             && studioTests.isEnabled() ? studioTests::liveRows : null;
+                    // The preview renders in the shell's chrome: the operator's theme,
+                    // ramp, density, accent and token stylesheet (the same UI beans
+                    // ShellChrome reads), not a pinned dark theme over the kit's defaults.
+                    io.tesseraql.pipeline.Beans beans = context.beans();
+                    io.tesseraql.studio.StudioViews.PreviewChrome chrome = io.tesseraql.studio.StudioViews.PreviewChrome
+                            .of(beans.lookup(
+                                    io.tesseraql.pipeline.TesseraqlProperties.UI_THEME_BEAN,
+                                    String.class),
+                                    beans.lookup(
+                                            io.tesseraql.pipeline.TesseraqlProperties.UI_NEUTRAL_BEAN,
+                                            String.class),
+                                    beans.lookup(
+                                            io.tesseraql.pipeline.TesseraqlProperties.UI_DENSITY_BEAN,
+                                            String.class),
+                                    beans.lookup(
+                                            io.tesseraql.pipeline.TesseraqlProperties.UI_COLOR_BEAN,
+                                            String.class),
+                                    beans.lookup(
+                                            io.tesseraql.pipeline.TesseraqlProperties.UI_STYLESHEET_BEAN,
+                                            String.class));
                     return io.tesseraql.studio.StudioViews.render(studio.render(path,
                             content == null ? null : String.valueOf(content),
                             sample == null ? null : String.valueOf(sample), rows,
                             studioMask, studioPdf),
                             io.tesseraql.pipeline.BasePath
-                                    .of(context.beans()));
+                                    .of(context.beans()),
+                            chrome);
                 })
                 .register("studio.runTests",
                         params -> studioTests

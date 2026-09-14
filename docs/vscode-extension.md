@@ -60,8 +60,8 @@ the editor with no extension release, and the two can never disagree.
 
 ## Commands
 
-*Serve*, *Test*, *Migrate*, *Admission*, and *Package* run the corresponding CLI verb
-in the integrated terminal (visible, cancellable, credentials prompted by the CLI
+*TesseraQL: Dev*, *Test*, *Migrate*, *Admission*, and *Package* run the corresponding CLI
+verb in the integrated terminal (visible, cancellable, credentials prompted by the CLI
 itself); *Lint* runs headless into the Problems panel.
 
 ## The explorer
@@ -140,7 +140,7 @@ The same run feeds VS Code's test coverage API: `coverableLines` minus `coveredL
 renders covered and uncovered SQL lines directly in the editor — the SQL coverage
 story from the documentation portal, visible where the SQL is written.
 
-## Serve status
+## Dev server status
 
 A status-bar item polls the readiness probe (`/_tesseraql/health/ready`, see
 [deployment](deployment.md)) on `tesseraql.serverUrl` while an app home is open:

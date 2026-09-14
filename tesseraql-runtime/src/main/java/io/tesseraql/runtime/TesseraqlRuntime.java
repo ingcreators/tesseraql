@@ -181,7 +181,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
 
     /**
      * Starts the runtime against {@code appHome} on the configured port, pointing the {@code main}
-     * datasource at {@code override} when non-null (the {@code serve --embedded-db} path).
+     * datasource at {@code override} when non-null (the {@code dev --embedded-db} path).
      */
     public static TesseraqlRuntime start(Path appHome,
             DataSources.MainDatasourceOverride override) {
@@ -1890,7 +1890,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                 .map(Long::parseLong).orElse(30L)),
                         appName, inviteEnabled, credentialThrottle).install(context);
             }
-            // The serve --watch file watcher and Studio's apply drive one reloader; bound
+            // The dev --watch file watcher and Studio's apply drive one reloader; bound
             // unstarted (independent of any extension) so watchRoutes() can start it on
             // demand without threading it through the runtime constructor.
             RouteReloader reloader = new RouteReloader(context, appHome, manifest, appName,
@@ -2420,7 +2420,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
     }
 
     /**
-     * Starts the {@code serve --watch} file watcher: saves under the app's {@code web/} tree
+     * Starts the {@code dev --watch} file watcher: saves under the app's {@code web/} tree
      * hot-reload through the same content-diff reloader Studio's apply uses, reporting one
      * concise line per reload to {@code out}. A failed reload never kills the watcher or the
      * server — the broken route serves its compile error as a 500 stub until the file is

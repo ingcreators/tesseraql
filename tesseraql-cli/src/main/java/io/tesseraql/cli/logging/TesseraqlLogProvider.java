@@ -13,7 +13,7 @@ import org.slf4j.spi.SLF4JServiceProvider;
  * the standalone runtime shipped NO provider at all — every log line fell into SLF4J's NOP
  * sink. It lives in tesseraql-cli, not the runtime, so a host that already binds SLF4J keeps
  * its own backend. Configure via {@code -Dtesseraql.logging.format=text|json} and
- * {@code -Dtesseraql.logging.level=trace|debug|info|warn|error} (the serve command exposes
+ * {@code -Dtesseraql.logging.level=trace|debug|info|warn|error} (the dev and host commands expose
  * them as {@code --log-format}/{@code --log-level}); MDC rides {@link BasicMDCAdapter}, so
  * the runtime's trace-id correlation shows up in every line.
  */
@@ -45,7 +45,7 @@ public final class TesseraqlLogProvider implements SLF4JServiceProvider {
 
     @Override
     public void initialize() {
-        // Settings resolve lazily per line, so a serve-command flag set just before the
+        // Settings resolve lazily per line, so a dev/host-command flag set just before the
         // runtime starts is honored even though the provider loads with the first logger.
     }
 }

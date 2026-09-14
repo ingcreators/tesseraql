@@ -90,6 +90,59 @@ class HypermediaComponentsManifestTest {
         assertThat(bundle).contains(REQUIRED_BUNDLE_EXPORTS);
     }
 
+    /**
+     * Every {@code --hc-*} token the framework stylesheet reads is one the kit defines or
+     * reads itself (docs/audit-medium-leads.md slice 10, F96). {@code tesseraql.css} read three
+     * names no kit release ever defined — {@code --hc-border}, {@code --hc-color-accent},
+     * {@code --hc-radius-md} — so their fallbacks always won: a dark literal border in the light
+     * theme, a fixed blue focus ring that ignored the accent axis, a 6px radius whatever the theme
+     * set, while docs/hypermedia-ui.md promised "the framework hard-codes no color". A name the kit
+     * reads with a fallback and never defines is the kit's own extension point (23 of them in
+     * 0.4.0), so "defined or read" is the rule; a token the kit neither defines nor reads is a
+     * phantom. Definitions inside CSS comments do not count — two of {@code hc.css}'s are
+     * comment-only.
+     */
+    @Test
+    void everyKitTokenTheFrameworkStylesheetReadsIsOneTheKitDefinesOrReads() throws Exception {
+        String stylesheet = new String(HypermediaComponentsManifestTest.class.getClassLoader()
+                .getResourceAsStream("tesseraql/assets/tesseraql.css").readAllBytes(),
+                StandardCharsets.UTF_8);
+        String kit = stripComments(new String(webjarResource("dist/hc.min.css").readAllBytes(),
+                StandardCharsets.UTF_8))
+                + stripComments(new String(webjarResource("dist/hc.tokens.css").readAllBytes(),
+                        StandardCharsets.UTF_8));
+        java.util.regex.Pattern read = java.util.regex.Pattern.compile("var\\((--hc-[a-z0-9-]+)");
+        java.util.Set<String> defined = new java.util.TreeSet<>();
+        java.util.regex.Matcher definitions = java.util.regex.Pattern
+                .compile("(--hc-[a-z0-9-]+)\\s*:").matcher(kit);
+        while (definitions.find()) {
+            defined.add(definitions.group(1));
+        }
+        java.util.Set<String> readByKit = new java.util.TreeSet<>();
+        java.util.regex.Matcher kitReads = read.matcher(kit);
+        while (kitReads.find()) {
+            readByKit.add(kitReads.group(1));
+        }
+        java.util.Set<String> used = new java.util.TreeSet<>();
+        java.util.regex.Matcher uses = read.matcher(stripComments(stylesheet));
+        while (uses.find()) {
+            used.add(uses.group(1));
+        }
+        assertThat(used).as("tesseraql.css reads kit tokens").isNotEmpty();
+        assertThat(defined).as("the kit defines tokens").isNotEmpty();
+
+        List<String> phantoms = used.stream()
+                .filter(name -> !defined.contains(name) && !readByKit.contains(name))
+                .toList();
+        assertThat(phantoms)
+                .as("tokens tesseraql.css reads that the kit neither defines nor reads")
+                .isEmpty();
+    }
+
+    private static String stripComments(String css) {
+        return css.replaceAll("(?s)/\\*.*?\\*/", "");
+    }
+
     /** Reads a file from the resolved WebJar, mirroring {@code AssetRoutes}'s lookup. */
     private static InputStream webjarResource(String path) {
         String version = new org.webjars.WebJarVersionLocator().version(WEBJAR);

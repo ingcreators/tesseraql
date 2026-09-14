@@ -67,7 +67,7 @@ public final class ManifestLoader {
 
     /**
      * The active environment profile (roadmap Phase 46): the {@code tesseraql.env} system
-     * property (the serve command's {@code --env} sets it) wins over the {@code TESSERAQL_ENV}
+     * property (the {@code --env} of {@code dev} and {@code host} sets it) wins over the {@code TESSERAQL_ENV}
      * environment variable; blank means no profile layer. The name is constrained to a simple
      * token so the profile can never escape {@code config/env/}.
      */
@@ -865,7 +865,7 @@ public final class ManifestLoader {
         // .tesseraql dir a packaged app carries build-generated artifacts in (e.g. docs/spec.json),
         // which are derived from the source and would otherwise make the index self-referential.
         // Also prune any persisted embedded-PostgreSQL data directory the user pointed inside the
-        // app home (serve --embedded-db=<dir>): its files are non-deterministic runtime state, not
+        // app home (dev --embedded-db=<dir>): its files are non-deterministic runtime state, not
         // source, and on Windows the running postgres holds OS locks on them, so reading them to
         // hash would fail the load. We prune whole subtrees so the locked files are never read.
         Path work = io.tesseraql.yaml.config.WorkHome.resolve(home, config);

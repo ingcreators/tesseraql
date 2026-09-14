@@ -95,7 +95,7 @@ final class ScaffoldCommand implements Runnable {
         /**
          * Connects with the shared {@link ConnectionOptions} resolution: an explicit
          * {@code --jdbc-url}, then the app's main datasource, then a running
-         * {@code serve --embedded-db} (its {@code work/embedded-db.jdbc} marker) when the
+         * {@code dev --embedded-db} (its {@code work/embedded-db.jdbc} marker) when the
          * config does not resolve or answer — so scaffolding works against the embedded
          * database another terminal is serving, like {@code identity-schema} does.
          */

@@ -13,7 +13,7 @@ public final class DataSources {
     }
 
     /**
-     * An out-of-config connection for the {@code main} pool. The {@code serve --embedded-db} path
+     * An out-of-config connection for the {@code main} pool. The {@code dev --embedded-db} path
      * starts an embedded PostgreSQL and supplies its coordinates here, so the runtime points
      * {@code main} at the embedded instance instead of {@code tesseraql.datasources.main.jdbcUrl}
      * (and the app's config need not declare {@code main} at all).

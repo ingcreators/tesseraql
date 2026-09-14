@@ -434,7 +434,7 @@ final class DuckDbDatasources {
      */
     static String conninfo(AppConfig config, String target,
             DataSources.MainDatasourceOverride override) {
-        // `serve --embedded-db` replaces main's coordinates outside config; an attach on main
+        // `dev --embedded-db` replaces main's coordinates outside config; an attach on main
         // must follow the EFFECTIVE pool, not the declared one.
         if ("main".equals(target) && override != null) {
             return conninfoOf(override.jdbcUrl(), override.username(), override.password());

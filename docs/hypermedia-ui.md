@@ -15,10 +15,13 @@ swap.
 `data-hc-confirm` gates an action behind the kit's confirm dialog. Two forms:
 
 **Plain form submit** (what IAM Admin's disable button uses) — the button lives in a normal
-`<form method="post">`; the dialog intercepts the click and submits on confirm. Without
-JavaScript the form still submits, so the action degrades gracefully. The submit-on-confirm
-leg is currently the framework bootstrap's stand-in (`tesseraql.js`; the kit's behavior only
-re-emits `hc:confirmed` — hc-briefs.md brief 4 asks the kit to own this):
+`<form method="post">`; the dialog intercepts the click and, on confirm, the kit's own
+`installConfirm` submits the form (`form.requestSubmit(source)`, hc 0.1.13 — hc-briefs.md
+brief 4, shipped). Without JavaScript the form still submits, so the action degrades
+gracefully. Do not add an `hc:confirmed` listener of your own to submit the form: the kit
+already does, and a second submit is a double post. The exemption that keeps the two forms
+apart is the kit's — a button or form carrying an htmx verb is never submitted this way, it
+stays on the `hc:confirmed` contract below:
 
 ```html
 <form method="post" th:action="|/_tesseraql/admin/users/${u.user_id}/disable|">

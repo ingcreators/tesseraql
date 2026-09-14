@@ -45,11 +45,18 @@ async function init() {
   const links = [...document.querySelectorAll('link[rel="stylesheet"]')]
     .map((l) => `<link rel="stylesheet" href="${l.getAttribute('href')}">`)
     .join('');
-  const theme = document.documentElement.getAttribute('data-theme') ?? 'light';
+  // The parent's theme trio rides into the canvas: the ramp and density sheets it links
+  // above are attribute-scoped, so without data-neutral/data-density the canvas rendered
+  // the kit's warm-gray comfortable defaults inside a slate, compact Studio.
+  const chrome = ['data-theme', 'data-neutral', 'data-density', 'data-color']
+    .map((name) => [name, document.documentElement.getAttribute(name)])
+    .filter(([, value]) => value)
+    .map(([name, value]) => ` ${name}="${value}"`)
+    .join('');
   const loaded = new Promise((resolve) => frame.addEventListener('load', resolve, { once: true }));
   // data-hc-static (upstream brief 11): behavior components render their CSS-only
   // resting state, so the scriptless canvas previews tabs/collapsibles faithfully.
-  frame.srcdoc = `<!doctype html><html data-theme="${theme}" data-hc-static><head>${links}`
+  frame.srcdoc = `<!doctype html><html${chrome} data-hc-static><head>${links}`
     + '<style>body{margin:0;padding:1rem;min-height:100%}</style></head><body></body></html>';
   await loaded;
 

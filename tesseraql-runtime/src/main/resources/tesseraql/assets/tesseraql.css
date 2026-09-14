@@ -25,7 +25,7 @@ a:hover{text-decoration-thickness:2px}
 
 /* Scrollbars follow the theme instead of the legacy UA chrome (slice 1). */
 *{scrollbar-width:thin;scrollbar-color:var(--hc-color-border,#8a8f98) transparent}
-.tql-preview-frame{width:100%;height:24rem;border:1px solid var(--hc-border,#3a3a3a);border-radius:6px;background:#fff}
+.tql-preview-frame{width:100%;height:24rem;border:1px solid var(--hc-color-border);border-radius:6px;background:#fff}
 /* The explorer tree's contextual "+ New route" row action (docs/studio-ux-refresh.md slice 4):
    revealed on row hover or keyboard focus so every folder row stays one quiet line. Opacity, not
    visibility — a visibility-hidden control would drop out of the tab order, and :focus-within on
@@ -43,7 +43,7 @@ a:hover{text-decoration-thickness:2px}
 @media (width < 70rem){.tql-editor-layout{grid-template-columns:minmax(0,1fr)}}
 /* The editor's sticky action bar: Save / Apply / Discard stay reachable however long the editor
    grows. Surface + border from tokens so both themes hold. */
-.tql-editor-bar{position:sticky;inset-block-end:0;z-index:2;display:flex;align-items:center;gap:var(--hc-space-2,.5rem);flex-wrap:wrap;padding:var(--hc-space-2,.5rem) var(--hc-space-3,.75rem);background:var(--hc-color-surface);border-block-start:1px solid var(--hc-color-border);border-radius:var(--hc-radius-md,6px) var(--hc-radius-md,6px) 0 0}
+.tql-editor-bar{position:sticky;inset-block-end:0;z-index:2;display:flex;align-items:center;gap:var(--hc-space-2,.5rem);flex-wrap:wrap;padding:var(--hc-space-2,.5rem) var(--hc-space-3,.75rem);background:var(--hc-color-surface);border-block-start:1px solid var(--hc-color-border);border-radius:var(--hc-control-radius) var(--hc-control-radius) 0 0}
 
 /* The mail composer's block canvas (docs/html-email.md D4): each block is one fragment
    invocation held in data attributes; the editor-kit overlay draws selection/drop chrome in a
@@ -56,9 +56,9 @@ a:hover{text-decoration-thickness:2px}
    host so selection/drop chrome draws over the frame, never inside the artifact. */
 .tql-builder-host{position:relative}
 .tql-builder-overlay{position:absolute;inset:0;pointer-events:none;z-index:1}
-.tql-builder-frame{width:100%;height:32rem;border:1px solid var(--hc-color-border);border-radius:var(--hc-radius-md,6px);background:#fff}
-.tql-mail-block{display:flex;align-items:center;gap:var(--hc-space-2,.5rem);padding:var(--hc-space-2,.5rem) var(--hc-space-3,.75rem);border:1px solid var(--hc-color-border);border-radius:var(--hc-radius-md,6px);background:var(--hc-color-surface);cursor:grab;touch-action:none}
-.tql-mail-block:focus-visible{outline:2px solid var(--hc-color-accent,#4c8dff);outline-offset:1px}
+.tql-builder-frame{width:100%;height:32rem;border:1px solid var(--hc-color-border);border-radius:var(--hc-control-radius);background:#fff}
+.tql-mail-block{display:flex;align-items:center;gap:var(--hc-space-2,.5rem);padding:var(--hc-space-2,.5rem) var(--hc-space-3,.75rem);border:1px solid var(--hc-color-border);border-radius:var(--hc-control-radius);background:var(--hc-color-surface);cursor:grab;touch-action:none}
+.tql-mail-block:focus-visible{outline:2px solid var(--hc-color-focus-ring);outline-offset:1px}
 .tql-mail-block__chip{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--hc-color-text-muted,#8a8f98);font-size:.9em}
 
 /* Governance stat tiles (docs/studio-ux-refresh.md slice 6): the dashboard's headline counts as
@@ -66,7 +66,7 @@ a:hover{text-decoration-thickness:2px}
    flags a problem (data-tone), neutral otherwise. hc ships no stat/KPI primitive, so these are
    app rules over the kit's tokens. */
 .tql-stats{display:flex;flex-wrap:wrap;gap:var(--hc-space-3,.75rem)}
-.tql-stat{display:flex;flex-direction:column;gap:2px;min-inline-size:6.5rem;padding:var(--hc-space-2,.5rem) var(--hc-space-3,.75rem);border:1px solid var(--hc-color-border);border-radius:var(--hc-radius-md,6px);background:var(--hc-color-surface)}
+.tql-stat{display:flex;flex-direction:column;gap:2px;min-inline-size:6.5rem;padding:var(--hc-space-2,.5rem) var(--hc-space-3,.75rem);border:1px solid var(--hc-color-border);border-radius:var(--hc-control-radius);background:var(--hc-color-surface)}
 .tql-stat__value{font-size:1.4rem;font-weight:600;font-variant-numeric:tabular-nums;line-height:1.1}
 .tql-stat__label{font-size:var(--hc-font-size-sm,.85rem);color:var(--hc-color-text-muted)}
 .tql-stat[data-tone="error"] .tql-stat__value{color:var(--hc-color-error)}
@@ -76,7 +76,7 @@ a:hover{text-decoration-thickness:2px}
 .tql-stripe-warning > td:first-child{box-shadow:inset 3px 0 0 var(--hc-color-warning)}
 /* Policy-form fieldsets (slice 6): quiet grouping — a bordered box with its legend as the
    group label; the browser's default fieldset chrome is too loud for a dense console. */
-.tql-fieldset{margin:0;padding:var(--hc-space-2,.5rem) var(--hc-space-3,.75rem);border:1px solid var(--hc-color-border);border-radius:var(--hc-radius-md,6px)}
+.tql-fieldset{margin:0;padding:var(--hc-space-2,.5rem) var(--hc-space-3,.75rem);border:1px solid var(--hc-color-border);border-radius:var(--hc-control-radius)}
 .tql-fieldset > legend{padding-inline:var(--hc-space-1,.25rem)}
 
 /* Studio sidebar section headers and grouping (shell studio-nav). hc ships no nav-group primitive,
@@ -112,12 +112,6 @@ a:hover{text-decoration-thickness:2px}
 @media print{
   .tql-list-page__grid > .hc-datagrid{--hc-datagrid-max-height:none}
 }
-
-/* Returning to a list refocuses the acted-on row (docs/list-surface.md decision 11): the
-   #row-<token> fragment lands here. scroll-margin keeps the row clear of the sticky header;
-   the tint marks it without stealing the selection color. */
-.hc-datagrid__row:target{scroll-margin-block:3rem}
-.hc-datagrid__row:target > td{background:color-mix(in srgb, var(--hc-color-accent,#4a6da7) 12%, transparent)}
 
 /* The unsaved badge of the kit's unsaved-changes recipe (docs/hypermedia-ui.md "Unsaved
    changes"): installDirtyGuard toggles data-dirty on the form; visibility keeps the action

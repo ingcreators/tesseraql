@@ -8,16 +8,16 @@ import java.sql.DriverManager;
 import java.util.Optional;
 
 /**
- * The first-login hand-off marker a running {@code serve --embedded-db} leaves at
+ * The first-login hand-off marker a running {@code dev --embedded-db} leaves at
  * {@code <appHome>/work/embedded-db.jdbc}: one line, the embedded PostgreSQL's JDBC URL. The
  * embedded instance binds a random port by default, so without the marker a second terminal
- * (e.g. {@code identity-schema --app .}) would have to hand-copy the URL {@code serve} printed.
+ * (e.g. {@code identity-schema --app .}) would have to hand-copy the URL {@code dev} printed.
  * {@code work/} is the app's runtime scratch directory (app-layout.md), never committed. The file
  * is overwritten on each start and best-effort deleted on graceful shutdown — a stale marker after
  * a crash is harmless because {@link #pick} only honours a URL that still answers a connection.
  *
  * <p>Public surface ({@link #pick}, {@link #reachable}) because the {@code mcp} dev-tools apply
- * the same fallback from their own package; writing and deleting stay with {@code serve} here.
+ * the same fallback from their own package; writing and deleting stay with {@code dev} here.
  */
 public final class EmbeddedDbMarker {
 
@@ -42,7 +42,7 @@ public final class EmbeddedDbMarker {
 
     /**
      * Writes (or overwrites) the marker for {@code appHome}. Best-effort: the marker is a
-     * convenience hand-off, so a write failure warns on stderr rather than failing {@code serve}.
+     * convenience hand-off, so a write failure warns on stderr rather than failing {@code dev}.
      */
     static void write(Path appHome, String jdbcUrl) {
         Path marker = marker(appHome);
@@ -82,7 +82,7 @@ public final class EmbeddedDbMarker {
      * precedence is: an explicit {@code --jdbc-url} (the caller never gets here), then the app's
      * configured main datasource when it resolves <em>and</em> answers a connection, then the
      * marker — and only when its own URL still answers, so a stale file left by a crashed
-     * {@code serve} is ignored. Without a marker nothing is probed and the caller's existing
+     * {@code dev} is ignored. Without a marker nothing is probed and the caller's existing
      * resolution runs unchanged. {@code configUrl} is {@code null} when the config declares no
      * main URL or its placeholders do not resolve.
      */

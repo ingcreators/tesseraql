@@ -26,7 +26,7 @@ import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 
 /**
- * Starts an embedded PostgreSQL for {@code serve --embedded-db}, so a tqlapp runs with no external
+ * Starts an embedded PostgreSQL for {@code dev --embedded-db}, so a tqlapp runs with no external
  * database. The platform's PostgreSQL binary is not bundled in the CLI; it is resolved on demand
  * (pinned to {@code zonky.postgres.binaries.version}) through the same embedded ShrinkWrap resolver
  * the opt-in {@code tesseraql.modules} use, then handed to zonky as the sole {@code .txz} payload of

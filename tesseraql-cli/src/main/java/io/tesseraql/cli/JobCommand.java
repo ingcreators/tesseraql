@@ -415,7 +415,7 @@ final class JobCommand implements Callable<Integer> {
                 manifest.config().getString(prefix + ".password").orElse(null));
     }
 
-    /** The in-process wiring `serve` boots, reduced to what a single run needs. */
+    /** The in-process wiring `dev` boots, reduced to what a single run needs. */
     private Wiring wire(AppManifest manifest) throws Exception {
         DriverManagerDataSource main = datasource.resolve(manifest.config(), app);
         JobRepository repository = new JobRepository(main);
@@ -431,7 +431,7 @@ final class JobCommand implements Callable<Integer> {
                 manifest.config(), app,
                 io.tesseraql.runtime.TempStores.scratch(manifest.config(), app),
                 Thread.currentThread().getContextClassLoader(), main);
-        // export: steps write through the same transfer machinery `serve` wires
+        // export: steps write through the same transfer machinery `dev` wires
         // (docs/analytics-experience.md track 3), so a CLI-run job records the same
         // execution + transfer rows and the console download works either way.
         // One clock for this process too, so a CLI-run job and a CLI-run export step pulse like a
