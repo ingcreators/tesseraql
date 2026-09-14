@@ -256,6 +256,10 @@ Ranked. The first two are larger than most of the leads that found them.
     boot check is the TCCL defect). The BLANK spelling — `format: ""` lint-silent on a query-export,
     boot refusing it naming nothing — and the format-LESS job step (every runner failing with
     `'null'`) are fixed by `export-hygiene.md` P7.
+25. **A HEAD against any GET route answers 405, on every leg** — Vert.x Web matches methods
+    strictly, the compiler mounts GET only, and nothing maps HEAD onto it, while the gateway
+    treats HEAD as replayable. `MultiAppGatewayDifferentialTest.headAnswersIdenticallyThroughTheGateway`
+    is green on it because both legs agree on the 405. Found by `edge-hygiene.md` E2; filed.
 24. **A zero-row CSV export writes no header row** — csv AND the Excel grid, declared `columns:`
     discarded too; the pdf grid prints a declared header — `export-hygiene.md` P5.
 

@@ -8,7 +8,7 @@
 > internal-doc lists). **E1** — a declared `headers:` `Location`/`HX-Redirect` acquires the
 > application's prefix, so the documented 201 recipe answers under `tesseraql dev` and `host`:
 > shipped as E1. **E2** — a GET or HEAD never engages the form parser, so a form content type on one
-> is not an unhandled exception and a raw 500 through the gateway: planned. **E3** — a declared
+> is not an unhandled exception and a raw 500 through the gateway: shipped as E2. **E3** — a declared
 > header value is judged where it is declared: a `security.responseHeaders` value carrying a
 > control character is refused at lint and boot (the three writers that bypass the edge's
 > backstop become safe by construction), and an `HX-Trigger` map is JSON-escaped to ASCII so a
@@ -233,13 +233,57 @@ Bracket (`work/edge-slice/e1/`): HEAD `836907712` — red, `/things/2/edit` (`he
 
 ## E2 — a GET never engages the form parser
 
-Planned. `RouteEdge.mount`/`remount`: the body handler is added to the route only for POST,
-PUT, PATCH and DELETE. Guards in a runtime integration test: a GET with
-`Content-Type: application/x-www-form-urlencoded` and `Content-Length: 0` answers 200 with the
-route's body (HEAD: raw 500, `Unhandled exception in router`); a multipart content type the
-same; a POST form still binds its fields (the control). Through the gateway when a harness
-reaches one cheaply, else the direct HTTP/1.1 shape with framing, which the library's own
-source shows is the same branch.
+### What was wrong
+
+`RouteEdge.mount` and `remount` put the shared body handler on every mounted route whatever
+its method. vertx-web's `BodyHandlerImpl.handle` engages whenever the request has framing —
+and treats every HTTP/2 request as framed — and its `BHandler` constructor calls
+`request.setExpectMultipart(true)` the moment the content type is `multipart/form-data` or
+`application/x-www-form-urlencoded`. Vert.x core refuses that on a GET with
+`IllegalStateException("Request method must be one of POST, PUT, PATCH or DELETE to decode a
+multipart request")`, thrown inside the handler: `Unhandled exception in router`, a raw 500 with
+no content type and no error envelope.
+
+Two measurements widened the filing. The gateway forwards to a member over h2c, so through it
+the content-type header alone reproduced — as filed. And **the JDK `HttpClient` frames every
+GET with `Content-Length: 0`, `noBody()` included** (RUN: a raw-socket listener,
+`work/edge-slice/e2/dump.out`), so the direct leg reproduced too: any Java caller that sets a
+default form content type met the 500 without a gateway in the way.
+
+### The change
+
+`RouteEdge.mountRoute` (the one mounting path `mount` and `remount` now share): the body
+handler is added for POST, PUT, PATCH and DELETE and for no other method (decision 6). A GET
+carries its parameters in the URL; `formAttributes()` without the handler is an empty map and
+`ctx.body().buffer()` is null, both of which `RouteEdge.body` already handled.
+
+### The guards, red before the fix
+
+`MultiAppGatewayDifferentialTest.aGetWithAFormContentTypeAnswersAlikeOnEveryLeg`: for
+`application/x-www-form-urlencoded` and `multipart/form-data`, a GET of `/shop/api/items` with
+that content type answers 200 direct, identically through the HTTP/1.1 gateway (`assertSame`),
+and 200 with the same body digest over the h2c gateway.
+
+Bracket (`work/edge-slice/e2/`): HEAD `836907712` — red on the first row, direct 500
+(`head-red.log`); `V-none` (the handler on no method) — caught by three EXISTING tests,
+`HttpEdgeIntegrationTest.aFormPostIsServedOnTheRouterAndReadsItsFields` and the two body-limit
+differentials, which is the proof that the POST half stays mounted (`v-none.log`); the fix —
+13/13 (`fix-green-3.log`). `V-head` (the handler kept on HEAD) is unobservable — see below.
+
+### What this breaks
+
+- `body.*` declared on a GET route can no longer bind. No route in the repository does (141
+  `get.yml`, zero); the filed lint for that declaration now has a reason to exist.
+
+### Filed, not fixed (from E2's measurement)
+
+- **A HEAD against any GET route answers 405 on every leg.** Vert.x Web matches methods
+  strictly (`RouteState.matches`, `containsMethod`), the compiler mounts GET only, and nothing
+  maps HEAD onto it — while `StackRelay` treats HEAD as replayable. The differential
+  `headAnswersIdenticallyThroughTheGateway` is green because both legs answer 405: **a
+  differential is green on a shared defect**, a guard hazard worth its own line. Found when a
+  HEAD row for this guard came back 405 on the fix too; the row was dropped rather than
+  asserting 405. An HTTP-edge lead, not this slice's.
 
 ## E3 — a declared header value is judged where it is declared
 

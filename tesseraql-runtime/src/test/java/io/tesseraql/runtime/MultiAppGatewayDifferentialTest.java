@@ -271,6 +271,33 @@ class MultiAppGatewayDifferentialTest {
         assertSame(head("/" + APP + "/api/items"));
     }
 
+    /**
+     * A GET carrying a form content type — a client's default header, no body — answers alike
+     * on every leg (docs/edge-hygiene.md E2). The body handler used to sit on every method, and
+     * it engages on every HTTP/2 request and on any HTTP/1.1 request with framing; a form
+     * content type then made it ask the transport to parse a form a GET cannot carry — an
+     * unhandled exception and a raw 500 with no envelope. The JDK client frames every GET with
+     * {@code Content-Length: 0} (measured on the wire, {@code noBody()} included), so the direct
+     * leg reproduces it as well as the h2c gateway does: any Java caller with a default content
+     * type met it.
+     */
+    @Test
+    void aGetWithAFormContentTypeAnswersAlikeOnEveryLeg() throws Exception {
+        for (String contentType : List.of("application/x-www-form-urlencoded",
+                "multipart/form-data; boundary=none")) {
+            Call call = get("/" + APP + "/api/items").header("Content-Type", contentType);
+            Captured straight = capture(direct, call);
+            assertThat(straight.status).as("direct, " + contentType).isEqualTo(200);
+            assertSame(call);
+            Captured overHttp2 = captureOver(h2Front, call, HttpClient.Version.HTTP_2);
+            assertThat(overHttp2.status).as("over h2c, " + contentType).isEqualTo(200);
+            assertThat(overHttp2.digest).isEqualTo(straight.digest);
+            // No HEAD row: the router answers 405 to a HEAD against a GET route on every leg
+            // (Vert.x Web matches methods strictly), so the handler is unreachable on HEAD
+            // today and a row here could only measure that other defect — filed, not this one.
+        }
+    }
+
     /** A conditional GET still answers 304, and the 304 still carries no body. */
     @Test
     void aConditionalGetStillAnswers304() throws Exception {
