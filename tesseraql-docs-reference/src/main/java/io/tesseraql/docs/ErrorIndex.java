@@ -618,7 +618,7 @@ final class ErrorIndex {
             "yaml-surface-drift.md", "module-boundary-guards.md",
             "audit-medium-leads.md", "download-name-and-bytes.md",
             "export-declarations.md", "export-hygiene.md", "edge-hygiene.md",
-            "temporal-semantics.md");
+            "temporal-semantics.md", "router-unicode-names.md");
 
     /** Whether {@code name} is an internal planning document; shared with the config index. */
     static boolean isInternalDoc(String name) {

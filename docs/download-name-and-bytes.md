@@ -871,7 +871,8 @@ of the surfaced list → "fixed in PR 4b (#1303)". **PR 4c**: `:46` → "SHIPPED
 
 Every unfiled defect the measurement surfaced, with its destination (the measurement record's §6):
 
-- **Router slice** ("Unicode names at the router", after 4b): a non-ASCII `tesseraql.app.name` is
+- **Router slice** ("Unicode names at the router", after 4b; now
+  [`router-unicode-names.md`](router-unicode-names.md), complete): a non-ASCII `tesseraql.app.name` is
   hosted but unaddressable at the gateway and `root.redirect` loops (#12); route shadowing by sort
   order (#13); `StackRelay:509`'s raw header write; `BasePaths.relative` on a wire-spelled
   `_return` under a non-ASCII base path (the doubled prefix, HEAD and 4b alike — the fix is the

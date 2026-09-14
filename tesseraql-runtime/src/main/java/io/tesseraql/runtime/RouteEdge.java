@@ -211,11 +211,41 @@ final class RouteEdge {
     private Route mountRoute(io.tesseraql.pipeline.HttpMounts.Mount mount, String routeId,
             String mountKey) {
         HttpMethod method = HttpMethod.valueOf(mount.method());
-        Route route = router.route(method, path(mount.path())).order(AFTER_THE_GATE);
+        Route route = router.route(method, path(mount.path()))
+                .order(AFTER_THE_GATE + specificity(mount.path()));
         if (carriesABody(method)) {
             route.handler(HttpEdgeBeans.bodyHandler(runtimeContext));
         }
         return route.handler(ctx -> serve(ctx, routeId, mountKey));
+    }
+
+    /**
+     * Where a route stands among its neighbours: a literal segment before a {@code {parameter}}
+     * at the first position where two routes differ (docs/router-unicode-names.md R2), whatever
+     * the characters. Every route used to mount at the same order and ties fell to the manifest's
+     * file order, where {@code {} sorts after every ASCII letter — so {@code /orders/new} beat
+     * {@code /orders/{id}} — and before every CJK character, so {@code /受注/{受注番号}} beat
+     * {@code /受注/エクスポート} and answered it with {@code 受注番号=エクスポート}. A route added
+     * by the file watcher lands in the same order, not behind everything mounted before it.
+     *
+     * <p>The number is a bit per segment, the first segment most significant, set where the
+     * segment is a parameter: comparing two routes' numbers is comparing their segments in
+     * order with literal (0) before parameter (1). Thirty segments fit below the hand-written
+     * surfaces' order; a deeper path's tail is not ranked.
+     */
+    static int specificity(String declared) {
+        int rank = 0;
+        int position = 0;
+        for (String segment : declared.split("/", -1)) {
+            if (segment.isEmpty()) {
+                continue;
+            }
+            if (position < 30 && segment.startsWith("{") && segment.endsWith("}")) {
+                rank |= 1 << (30 - position);
+            }
+            position++;
+        }
+        return rank;
     }
 
     /** The methods a request body rides on; the ones the transport will parse a form for. */

@@ -51,6 +51,9 @@ class MultiAppGatewayIntegrationTest {
         installRoot = Files.createTempDirectory("tesseraql-gateway-it");
         installApp("shop-a", "a", List.of());
         installApp("shop-b", "b", List.of("tenant-b"));
+        // A member named in Japanese: legal on tesseraql.app.name (docs/unicode-identifiers.md),
+        // addressed on the wire as /%E5%8F%97%E6%B3%A8 (docs/router-unicode-names.md).
+        installApp("受注", "c", List.of());
         // The two applications isolate their business data by schema, so their main coordinates
         // differ — the stack supplies the framework connection, exactly the arrangement
         // TQL-APP-4211 would otherwise refuse (docs/stack-architecture.md decision 22).
@@ -79,7 +82,7 @@ class MultiAppGatewayIntegrationTest {
 
     @Test
     void routesByAppPrefixOnOnePort() throws Exception {
-        assertThat(gateway.appNames()).containsExactlyInAnyOrder("shop-a", "shop-b");
+        assertThat(gateway.appNames()).containsExactlyInAnyOrder("shop-a", "shop-b", "受注");
 
         assertThat(itemName("shop-a")).isEqualTo("from-a");
         assertThat(itemName("shop-b")).isEqualTo("from-b");
@@ -312,6 +315,55 @@ class MultiAppGatewayIntegrationTest {
     }
 
     /**
+     * A member with a non-ASCII name is addressed at the gateway (docs/router-unicode-names.md
+     * R0): the wire path is percent-encoded and the member's prefix was compared to it raw, so
+     * every request to {@code /受注/…} answered 404 TQL-APP-4040 — the application was hosted
+     * and unreachable. Both spellings of the hex digits address it: a browser sends upper case,
+     * a hand-written client may not.
+     */
+    @Test
+    void aMemberWithANonAsciiNameIsAddressedAtTheGateway() throws Exception {
+        assertThat(itemName("%E5%8F%97%E6%B3%A8")).isEqualTo("from-c");
+        assertThat(get("/%e5%8f%97%e6%b3%a8/api/items").statusCode()).isEqualTo(200);
+        // The member's own root, the stream mount's fence and the 404 for a stranger stay.
+        assertThat(get("/%E5%8F%97%E6%B3%A8/nothing-here").statusCode()).isEqualTo(404);
+        assertThat(get("/%E5%8F%97%E6%B3%A8x/api/items").statusCode()).isEqualTo(404);
+    }
+
+    /**
+     * {@code root.redirect} to a non-ASCII member lands (R0): the {@code Location} was written
+     * raw, the transport folded it, and the browser landed on a 404 — the root pointed at an
+     * application it could not name on the wire.
+     */
+    @Test
+    void theRootRedirectsToANonAsciiMemberOnTheWire() throws Exception {
+        Path stackFile = installRoot.resolve(
+                io.tesseraql.operations.app.StackSettings.FILE_NAME);
+        String original = Files.readString(stackFile);
+        Files.writeString(stackFile, original + "root:\n  redirect: 受注\n");
+        try (MultiAppGateway pointed = MultiAppGateway.start(installRoot, 0)) {
+            java.net.http.HttpResponse<String> redirected = java.net.http.HttpClient
+                    .newHttpClient().send(
+                            java.net.http.HttpRequest.newBuilder(java.net.URI.create(
+                                    "http://localhost:" + pointed.port() + "/?q=1")).build(),
+                            java.net.http.HttpResponse.BodyHandlers.ofString());
+            assertThat(redirected.statusCode()).isEqualTo(307);
+            String location = redirected.headers().firstValue("Location").orElseThrow();
+            assertThat(location).isEqualTo("/%E5%8F%97%E6%B3%A8?q=1");
+            java.net.http.HttpResponse<String> landed = java.net.http.HttpClient
+                    .newHttpClient().send(
+                            java.net.http.HttpRequest.newBuilder(java.net.URI.create(
+                                    "http://localhost:" + pointed.port() + location
+                                            .replace("?q=1", "/api/items")))
+                                    .build(),
+                            java.net.http.HttpResponse.BodyHandlers.ofString());
+            assertThat(landed.statusCode()).isEqualTo(200);
+        } finally {
+            Files.writeString(stackFile, original);
+        }
+    }
+
+    /**
      * The root does exactly one thing — 307 — and configuration chooses only the target
      * (docs/stack-architecture.md Decision 24): the portal when the stack file names nothing,
      * {@code /<name>} when it names an application. The second case restarts a gateway over the
@@ -421,7 +473,7 @@ class MultiAppGatewayIntegrationTest {
         try (Connection connection = DriverManager.getConnection(
                 POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
                 Statement statement = connection.createStatement()) {
-            for (String schema : new String[]{"a", "b"}) {
+            for (String schema : new String[]{"a", "b", "c"}) {
                 statement.execute("create schema " + schema);
                 statement.execute("create table " + schema
                         + ".items (id serial primary key, name varchar(200) not null)");

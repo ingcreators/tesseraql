@@ -358,9 +358,9 @@ final class StackRelay {
         if (member == null) {
             return false;
         }
-        String base = member.basePath() == null ? "" : member.basePath();
-        return mountedAt(rawPath, base + "/_tesseraql/events")
-                || mountedAt(rawPath, base + "/_tesseraql/ui/copilot/stream");
+        String base = member.basePath() == null ? "" : wirePrefix(member);
+        return mountedAt(upperHex(rawPath), base + "/_tesseraql/events")
+                || mountedAt(upperHex(rawPath), base + "/_tesseraql/ui/copilot/stream");
     }
 
     /** Exact, or exact with one trailing slash: the member routes both to the same handler. */
@@ -417,13 +417,14 @@ final class StackRelay {
     private String appAddressedBy(String rawPath) {
         String best = null;
         String bestPrefix = null;
+        String path = upperHex(rawPath);
         for (String name : memberNames) {
             InstalledApp entry = entryOf.apply(name);
             if (entry == null) {
                 continue;
             }
-            String prefix = entry.basePath();
-            if (!addresses(prefix, rawPath)) {
+            String prefix = wirePrefix(entry);
+            if (!addresses(prefix, path)) {
                 continue;
             }
             if (bestPrefix == null || prefix.length() > bestPrefix.length()) {
@@ -445,6 +446,41 @@ final class StackRelay {
     private static boolean insideTheOriginFence(String rawPath) {
         return addresses("/_tesseraql", rawPath) || addresses("/assets", rawPath)
                 || addresses("/.well-known", rawPath);
+    }
+
+    /**
+     * A member's prefix as the wire spells it (docs/router-unicode-names.md R0): a request line
+     * carries {@code /%E5%8F%97%E6%B3%A8}, the catalogue holds {@code /受注}, and comparing the
+     * two raw found no member — an application named in Japanese was hosted and unreachable,
+     * TQL-APP-4040 on every request. ASCII is its own wire form, so every ASCII name compares
+     * exactly as before.
+     */
+    private static String wirePrefix(InstalledApp member) {
+        return io.tesseraql.core.http.PercentEncoding.uriLiteral(member.basePath());
+    }
+
+    /**
+     * The path with every percent-escape's hex digits upper-cased, which is how the framework
+     * spells them: a browser sends them upper-case, a hand-written client may not, and RFC 3986
+     * makes the two the same octet. Used for comparison only — the URI forwarded to a member
+     * stays exactly as the client sent it.
+     */
+    static String upperHex(String path) {
+        int percent = path.indexOf('%');
+        if (percent < 0) {
+            return path;
+        }
+        StringBuilder folded = new StringBuilder(path.length());
+        for (int i = 0; i < path.length(); i++) {
+            char c = path.charAt(i);
+            folded.append(c);
+            if (c == '%' && i + 2 < path.length()) {
+                folded.append(Character.toUpperCase(path.charAt(i + 1)))
+                        .append(Character.toUpperCase(path.charAt(i + 2)));
+                i += 2;
+            }
+        }
+        return folded.toString();
     }
 
     /** Whether {@code prefix} addresses {@code path}: equal, or followed by a segment boundary. */
@@ -505,9 +541,12 @@ final class StackRelay {
             if (rootTarget != null && "/".equals(rawPath)) {
                 String uri = request.uri();
                 int query = uri.indexOf('?');
+                // Wire text (docs/router-unicode-names.md R0): a target named in Japanese was
+                // written raw and the transport folded it to a row of '?'.
+                String target = io.tesseraql.core.http.PercentEncoding.uriLiteral(rootTarget);
                 request.response().setStatusCode(307)
                         .putHeader("Location",
-                                query < 0 ? rootTarget : rootTarget + uri.substring(query))
+                                query < 0 ? target : target + uri.substring(query))
                         .end();
                 return;
             }
@@ -617,7 +656,7 @@ final class StackRelay {
                         ? () -> null
                         : () -> {
                             InstalledApp entry = entryOf.apply(appName);
-                            return entry == null ? null : entry.basePath();
+                            return entry == null ? null : wirePrefix(entry);
                         }))
                 .addInterceptor(new RetryOnceAcrossTheSwap(port))
                 .addInterceptor(new BodylessRequestsHaveZeroLength());
@@ -658,7 +697,7 @@ final class StackRelay {
             if (prefix != null) {
                 String uri = proxied.getURI();
                 int query = uri.indexOf('?');
-                String path = query < 0 ? uri : uri.substring(0, query);
+                String path = upperHex(query < 0 ? uri : uri.substring(0, query));
                 String marker = prefix + "/_as/";
                 if (path.startsWith(marker)) {
                     String remainder = path.substring(marker.length());

@@ -84,9 +84,22 @@ public final class BasePaths {
         if (base.isEmpty() || url == null) {
             return url;
         }
-        if (url.equals(base)) {
+        // A URL read back off the request is wire text, so the base it carries is the base's
+        // wire spelling (docs/router-unicode-names.md R1): under /受注 a _return of
+        // /%E5%8F%97%E6%B3%A8/things kept its prefix here, and the redirect helper joined a
+        // second one. ASCII is its own wire form, so the two spellings coincide there.
+        String stripped = strip(PercentEncoding.uriLiteral(base), url);
+        return stripped != null
+                ? stripped
+                : java.util.Objects.requireNonNullElse(
+                        strip(base, url), url);
+    }
+
+    /** {@code url} without {@code prefix}, or null when the prefix does not address it. */
+    private static String strip(String prefix, String url) {
+        if (url.equals(prefix)) {
             return "/";
         }
-        return url.startsWith(base + "/") ? url.substring(base.length()) : url;
+        return url.startsWith(prefix + "/") ? url.substring(prefix.length()) : null;
     }
 }

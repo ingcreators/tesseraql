@@ -157,11 +157,12 @@ Consequence for ASCII apps: scaffolded field names change from `orderDate` to
 and docs move in the same slice. This is the breaking half of the campaign and lands
 as one slice so there is exactly one regen.
 
-What deliberately **stays ASCII** (infrastructure names, not user data): app names
-(`[a-z][a-z0-9-]{0,63}` — they become URL prefixes, directory names, and the history
-table suffix), topic names, env profile names, preference keys, DuckDB
-extension/secret names, Prometheus label names (spec-fixed), SCIM attributes
-(RFC-fixed), error-code slugs.
+What deliberately **stays ASCII** (infrastructure names, not user data): topic names,
+env profile names, preference keys, DuckDB extension/secret names, Prometheus label names
+(spec-fixed), SCIM attributes (RFC-fixed), error-code slugs. An application name is not on
+this list: it is one safe path segment (no `/`, no leading `_` or `.`, no dot) and may be
+non-ASCII — `受注` is the address `/受注`, spelled `/%E5%8F%97%E6%B3%A8` on the wire, and the
+gateway compares it that way ([router-unicode-names.md](router-unicode-names.md)).
 
 ## Tracks
 
