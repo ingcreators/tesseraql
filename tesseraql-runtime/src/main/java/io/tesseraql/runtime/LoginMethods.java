@@ -30,9 +30,11 @@ final class LoginMethods {
         // Password recovery (roadmap Phase 50): the login page shows "Forgot password?"
         // only when the operator enabled the flow.
         model.put("recovery", flag(config, "tesseraql.identity.recovery.enabled"));
-        // First-login guidance: the seed step is documented rather than auto-run (no default admin).
-        model.put("seedHint",
-                "tesseraql identity-schema --admin-login <id> --admin-password-file <file>");
+        // First-login guidance: the seed step is documented rather than auto-run (no default
+        // admin). The command names the application: without --app (or --jdbc-url) the CLI
+        // has no database and refuses, so a hint that omitted it taught a command that never ran.
+        model.put("seedHint", "tesseraql identity-schema --app <dir> --admin-login <id>"
+                + " --admin-password-file <file>");
         return model;
     }
 

@@ -36,7 +36,8 @@ final class ConnectionOptions {
     /**
      * Resolves the datasource: the explicit {@code --jdbc-url} (with its credentials), or the app's
      * main datasource from {@code config} when no URL is given. {@code config} may be {@code null}
-     * (commands without an app home), in which case {@code --jdbc-url} is required.
+     * (commands without an app home), in which case {@code --jdbc-url} is required — a
+     * {@link UsageRefusal}, one line and exit 2, since without a database nothing can run.
      */
     DriverManagerDataSource resolve(AppConfig config) {
         String url = jdbcUrl;
@@ -44,11 +45,13 @@ final class ConnectionOptions {
         String pass = password;
         if (url == null) {
             if (config == null) {
-                throw new IllegalArgumentException("--jdbc-url is required");
+                throw new UsageRefusal("No database to connect to: pass --jdbc-url <url>, or"
+                        + " --app <dir> so the application's " + key("jdbcUrl")
+                        + " supplies it.");
             }
             url = config.getString(key("jdbcUrl")).orElseThrow(
-                    () -> new IllegalArgumentException("No --jdbc-url given and the app config"
-                            + " declares no " + key("jdbcUrl")));
+                    () -> new UsageRefusal("No --jdbc-url given and the application's config"
+                            + " declares no " + key("jdbcUrl") + "."));
             if (user == null) {
                 user = config.getString(key("username")).orElse(null);
             }

@@ -65,13 +65,18 @@ final class IdentitySchemaCommand implements Callable<Integer> {
         configOptions.apply();
         AppConfig config = app != null ? new ManifestLoader().load(app).config() : null;
         DriverManagerDataSource dataSource = datasource.resolve(config, app);
+        // Every refusal before any work: the password used to be read after the schema had
+        // been applied, so a missing password source left a half-done bootstrap behind a
+        // stack trace.
+        boolean seed = adminLogin != null && !adminLogin.isBlank();
+        String password = seed ? adminPassword() : null;
         IdentityBootstrap bootstrap = new IdentityBootstrap(dataSource);
         bootstrap.applySchema(dialect);
         System.out.println("Applied the managed IAM schema (" + dialect + ")");
-        if (adminLogin != null && !adminLogin.isBlank()) {
+        if (seed) {
             List<String> roles = csv(adminRoles);
             List<String> permissions = csv(adminPermissions);
-            bootstrap.seedAdmin(adminLogin, adminPassword(), roles, permissions);
+            bootstrap.seedAdmin(adminLogin, password, roles, permissions);
             System.out.println("Seeded administrator '" + adminLogin + "' with roles " + roles
                     + (permissions.isEmpty() ? "" : " and permissions " + permissions));
         }
@@ -85,14 +90,25 @@ final class IdentitySchemaCommand implements Callable<Integer> {
                         .map(String::trim).filter(value -> !value.isEmpty()).toList();
     }
 
-    private String adminPassword() throws Exception {
+    /** The administrator's password, or a {@link UsageRefusal} naming what to pass. */
+    private String adminPassword() {
         if (adminPasswordFile != null) {
-            return SecretFiles.readTrimmed(adminPasswordFile);
+            try {
+                return SecretFiles.readTrimmed(adminPasswordFile);
+            } catch (java.nio.file.NoSuchFileException ex) {
+                throw new UsageRefusal("Cannot read --admin-password-file " + adminPasswordFile
+                        + ": no such file.");
+            } catch (java.io.IOException ex) {
+                throw new UsageRefusal("Cannot read --admin-password-file " + adminPasswordFile
+                        + ": " + (ex.getMessage() == null
+                                ? ex.getClass().getSimpleName()
+                                : ex.getMessage()));
+            }
         }
         String env = System.getenv("TESSERAQL_ADMIN_PASSWORD");
         if (env == null || env.isBlank()) {
-            throw new IllegalArgumentException("--admin-login is set but no password was provided:"
-                    + " set --admin-password-file or TESSERAQL_ADMIN_PASSWORD");
+            throw new UsageRefusal("--admin-login is set but no password was provided:"
+                    + " set --admin-password-file <file> or TESSERAQL_ADMIN_PASSWORD.");
         }
         return env;
     }

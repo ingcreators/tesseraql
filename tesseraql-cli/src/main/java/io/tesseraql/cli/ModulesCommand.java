@@ -194,7 +194,7 @@ final class ModulesCommand implements Runnable {
                         .map(lock -> lock.verify(resolved))
                         .filter(problems -> !problems.isEmpty())
                         .ifPresent(problems -> {
-                            throw new IllegalStateException(name
+                            throw new UsageRefusal(name
                                     + ": modules.lock verification failed:\n  "
                                     + String.join("\n  ", problems));
                         });

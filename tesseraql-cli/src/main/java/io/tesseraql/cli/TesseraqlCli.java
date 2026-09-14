@@ -17,33 +17,34 @@ import picocli.CommandLine.Option;
 /**
  * TesseraQL command-line interface (design ch. 17). The short command alias is {@code tql}.
  */
-@Command(name = "tesseraql", mixinStandardHelpOptions = true, versionProvider = TesseraqlCli.VersionProvider.class, description = "SQL-first hypermedia and integration framework.", subcommands = {
-        TesseraqlCli.DevCommand.class,
-        HostCommand.class,
-        DeployCommand.class,
-        RoutesCommand.class,
-        NewCommand.class,
-        ScaffoldCommand.class,
-        LintCommand.class,
-        TokenCommand.class,
-        TestCommand.class,
-        CoverageCommand.class,
-        GenerateCommand.class,
-        SchemaCommand.class,
-        SymbolsCommand.class,
-        ReleaseDiffCommand.class,
-        GovernanceCommand.class,
-        AdmissionCommand.class,
-        MigrateCommand.class,
-        JobCommand.class,
-        IdentitySchemaCommand.class,
-        PackageCommand.class,
-        VerifyCommand.class,
-        ModulesCommand.class,
-        EmbeddedDbCommand.class,
-        DuckDbCommand.class,
-        McpCommand.class
-})
+@Command(name = "tesseraql", mixinStandardHelpOptions = true, versionProvider = TesseraqlCli.VersionProvider.class, description = "SQL-first hypermedia and integration framework.", exitCodeListHeading = "%nExit codes:%n", exitCodeList = {
+        ExitCodes.OK, ExitCodes.FAILED, ExitCodes.REFUSED, ExitCodes.SKIPPED}, subcommands = {
+                TesseraqlCli.DevCommand.class,
+                HostCommand.class,
+                DeployCommand.class,
+                RoutesCommand.class,
+                NewCommand.class,
+                ScaffoldCommand.class,
+                LintCommand.class,
+                TokenCommand.class,
+                TestCommand.class,
+                CoverageCommand.class,
+                GenerateCommand.class,
+                SchemaCommand.class,
+                SymbolsCommand.class,
+                ReleaseDiffCommand.class,
+                GovernanceCommand.class,
+                AdmissionCommand.class,
+                MigrateCommand.class,
+                JobCommand.class,
+                IdentitySchemaCommand.class,
+                PackageCommand.class,
+                VerifyCommand.class,
+                ModulesCommand.class,
+                EmbeddedDbCommand.class,
+                DuckDbCommand.class,
+                McpCommand.class
+        })
 public final class TesseraqlCli implements Runnable {
 
     @Override
@@ -75,7 +76,7 @@ public final class TesseraqlCli implements Runnable {
      */
     static CommandLine commandLine() {
         return new CommandLine(new TesseraqlCli())
-                .setExecutionExceptionHandler(new UnreachableDatabaseHandler());
+                .setExecutionExceptionHandler(new CliExceptionHandler());
     }
 
     /**

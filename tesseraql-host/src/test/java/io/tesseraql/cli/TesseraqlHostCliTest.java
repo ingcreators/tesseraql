@@ -29,6 +29,33 @@ class TesseraqlHostCliTest {
                 "verify", "admission", "duckdb");
     }
 
+    /**
+     * One exit-code contract for both binaries (docs/cli-surface.md decision 10): the host
+     * declares the one list ({@code ExitCodes}; the developer CLI's model cannot be built on
+     * this reduced classpath, so the constants are the comparison), and a refusal here is one
+     * line and exit 2 through the same shaper.
+     */
+    @Test
+    void theExitCodesAreTheDeveloperClisAndARefusalIsOneLine() {
+        CommandLine host = TesseraqlHostCli.commandLine();
+        java.util.Map<String, String> declared = new java.util.LinkedHashMap<>();
+        for (String entry : java.util.List.of(ExitCodes.OK, ExitCodes.FAILED,
+                ExitCodes.REFUSED, ExitCodes.SKIPPED)) {
+            declared.put(entry.substring(0, entry.indexOf(':')),
+                    entry.substring(entry.indexOf(':') + 1));
+        }
+        assertThat(host.getCommandSpec().usageMessage().exitCodeList())
+                .containsExactlyEntriesOf(declared)
+                .containsKeys("0", "1", "2", "3");
+
+        java.io.StringWriter err = new java.io.StringWriter();
+        host.setErr(new java.io.PrintWriter(err, true));
+        int exit = host.execute("identity-schema", "--admin-login", "admin");
+        assertThat(exit).isEqualTo(2);
+        assertThat(err.toString().strip().lines()).hasSize(1);
+        assertThat(err.toString()).contains("--jdbc-url").doesNotContain("Exception");
+    }
+
     @Test
     void helpRendersForEveryVerb() {
         CommandLine host = TesseraqlHostCli.commandLine();

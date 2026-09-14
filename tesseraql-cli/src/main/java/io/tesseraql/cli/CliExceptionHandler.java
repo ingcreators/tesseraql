@@ -8,17 +8,25 @@ import picocli.CommandLine;
 import picocli.CommandLine.ParseResult;
 
 /**
- * Shapes a could-not-reach-the-database failure into a two-line operator message instead of a
- * stack trace — the same recoverable-operator-error stance {@code dev} takes for an
- * incompatible {@code --embedded-db} data directory. Every other exception is rethrown, which
- * reproduces picocli's default handling (stack trace on stderr, execution exit code), so
- * genuine bugs keep their full diagnostics.
+ * The CLI's one exception shaper (docs/cli-surface.md decision 10). Two shapes, two exit codes:
+ * a {@link UsageRefusal} — a request that cannot run at all, thrown before any work — is its
+ * message as one line on stderr and exit {@code 2}; a could-not-reach-the-database failure is
+ * a two-line operator message and exit {@code 1} — the same recoverable-operator-error stance
+ * {@code dev} takes for an incompatible {@code --embedded-db} data directory, and 1 because the
+ * command did run and met a failure. Every other exception is rethrown, which reproduces
+ * picocli's default handling (stack trace on stderr, execution exit code), so genuine bugs keep
+ * their full diagnostics.
  */
-final class UnreachableDatabaseHandler implements CommandLine.IExecutionExceptionHandler {
+final class CliExceptionHandler implements CommandLine.IExecutionExceptionHandler {
 
     @Override
     public int handleExecutionException(Exception ex, CommandLine commandLine,
             ParseResult parseResult) throws Exception {
+        if (ex instanceof UsageRefusal refusal) {
+            commandLine.getErr().println(refusal.getMessage());
+            commandLine.getErr().flush();
+            return CommandLine.ExitCode.USAGE;
+        }
         SQLException failure = connectionFailure(ex);
         if (failure == null) {
             throw ex;
