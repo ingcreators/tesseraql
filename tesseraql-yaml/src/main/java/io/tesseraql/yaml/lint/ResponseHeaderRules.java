@@ -24,6 +24,8 @@ final class ResponseHeaderRules implements LintRule {
 
     private static final String RESPONSE_HEADER_RESERVED = "TQL-SEC-4139";
 
+    private static final String RESPONSE_HEADER_CONTROL = "TQL-SEC-4151";
+
     @Override
     public void lint(LintContext context, AppManifest manifest,
             List<LintFinding> findings) {
@@ -58,13 +60,29 @@ final class ResponseHeaderRules implements LintRule {
 
     private void lintReserved(RouteFile route, java.util.Map<String, Object> declaredHeaders,
             String source, List<LintFinding> findings) {
-        for (String name : declaredHeaders.keySet()) {
+        for (var entry : declaredHeaders.entrySet()) {
+            String name = entry.getKey();
             if (io.tesseraql.core.http.ReservedHeaders.neverDeclared(name)) {
                 findings.add(new LintFinding(RESPONSE_HEADER_RESERVED, ERROR, source,
                         "Route '" + route.definition().id() + "' declares the response header '"
                                 + name + "', which the transport owns — framing and connection"
                                 + " control are computed from the body the server writes, and"
                                 + " the tql. namespace never leaves the runtime"));
+            }
+            // A literal control character in the declared text is refused at the edge on every
+            // request (docs/edge-hygiene.md E3); here it is named at build time. A value a
+            // placeholder brings in is judged only there. A map or list value serializes to
+            // JSON, which escapes its controls, so only the string form is read.
+            if (entry.getValue() instanceof String value) {
+                int control = io.tesseraql.yaml.config.ResponseHeaderDefaults.controlAt(value);
+                if (control >= 0) {
+                    findings.add(new LintFinding(RESPONSE_HEADER_CONTROL, ERROR, source,
+                            "Route '" + route.definition().id() + "' declares the response"
+                                    + " header '" + name + "' with the control character "
+                                    + io.tesseraql.yaml.config.ResponseHeaderDefaults
+                                            .unicodeName(value.charAt(control))
+                                    + " — the edge refuses it on every request"));
+                }
             }
         }
     }

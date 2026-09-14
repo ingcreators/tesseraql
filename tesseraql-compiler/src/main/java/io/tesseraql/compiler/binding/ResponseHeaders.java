@@ -32,7 +32,12 @@ final class ResponseHeaders {
 
     private static final TqlErrorCode RENDER_ERROR = new TqlErrorCode(TqlDomain.ROUTE, 3001);
 
-    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
+    /**
+     * ASCII on the wire: a header value is one byte per character to the transport, and the
+     * edge folds anything above U+00FF to {@code ?} — which is what a Japanese toast used to
+     * arrive as. The escape is JSON's own, so htmx reads the text back unchanged.
+     */
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrainedAscii();
 
     private final Map<String, Object> declared;
     private final Map<String, Expr> guards;

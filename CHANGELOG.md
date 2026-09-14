@@ -8,6 +8,12 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **A control character in a declared response header is refused where it is declared.** A
+  `security.responseHeaders` default carrying a C0 control (other than a tab) or DEL is refused
+  at lint and at boot with `TQL-SEC-4135`, naming the header and the character — the asset, SSE
+  and MCP surfaces write those values straight to the transport, where a control character hangs
+  the connection. A route's own `headers:` literal carrying one is a lint error, `TQL-SEC-4151`:
+  the edge would refuse it on every request.
 - **A mistyped export declaration is refused where it was written.** A `timezone:` the JDK does
   not know, a `locale:` it cannot format (`ja_JP`, `japanese`), a `csv`/`pdf` `columns[].format:`
   its parser refuses, an import `columns[].type:` the parser does not know, a `startCell:` or
@@ -131,6 +137,10 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **An `HX-Trigger` toast with a Japanese message arrives intact.** A map or list value in a
+  declared `headers:` block is serialized to JSON, and the serializer wrote the text raw; the
+  transport carries one byte per character, so everything above U+00FF reached the browser as
+  `?`. The JSON is now written ASCII-only (`\uXXXX` escapes), which htmx reads back unchanged.
 - **A GET carrying a form content type answers, instead of an unhandled exception.** The body
   handler sat on every route whatever its method, and it engages on every HTTP/2 request and on
   any HTTP/1.1 request with framing — where a `multipart/form-data` or

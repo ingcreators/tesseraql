@@ -121,6 +121,24 @@ final class RedirectLocationApp {
                       Location: "/api/items/{params.id}"
                       X-Msg: "{params.id}"
                 """);
+        route(home, "go/toast", """
+                version: tesseraql/v1
+                id: go.toast
+                kind: route
+                recipe: query-json
+                input:
+                  id:
+                    in: query
+                    type: string
+                response:
+                  json:
+                    status: 200
+                    headers:
+                      HX-Trigger:
+                        "hc:toast":
+                          message: "保存しました {params.id}"
+                          variant: success
+                """);
         route(home, "go/hxhdr", """
                 version: tesseraql/v1
                 id: go.hxhdr

@@ -1,6 +1,6 @@
 # Edge hygiene: a transfer under its own route, a declared header as wire text
 
-> **Status: in progress.** Four pull requests, in this order, each branched from fresh
+> **Status: complete.** Four pull requests, in this order, each branched from fresh
 > `origin/main` after the previous one merged. **E0** — a file-export or file-import route's
 > `{transferId}` subtree answers for the transfers that route created and for no other, the
 > foreign id indistinguishable from an unknown one, the cancel refused before it reaches the
@@ -12,7 +12,7 @@
 > header value is judged where it is declared: a `security.responseHeaders` value carrying a
 > control character is refused at lint and boot (the three writers that bypass the edge's
 > backstop become safe by construction), and an `HX-Trigger` map is JSON-escaped to ASCII so a
-> Japanese toast survives the wire: planned. Each pull request flips its own line here when it
+> Japanese toast survives the wire: shipped as E3. Each pull request flips its own line here when it
 > merges.
 >
 > **The filings under-stated the first item.** [`download-name-and-bytes.md`](download-name-and-bytes.md)
@@ -287,13 +287,63 @@ differentials, which is the proof that the POST half stays mounted (`v-none.log`
 
 ## E3 — a declared header value is judged where it is declared
 
-Planned. `ResponseHeaderDefaults.from`: a value carrying a C0 control (other than HTAB) or DEL
-is refused with a new `TQL-SEC-` code naming the header; the linter's security rules gain the
-twin. `ResponseHeaders`: the header mapper is a dedicated instance with
-`JsonWriteFeature.ESCAPE_NON_ASCII`. Guards: a lint case and a boot case per refusal; an
-`HX-Trigger` map with a Japanese toast arrives as `\uXXXX` escapes and parses back to the text;
-the asset, SSE and MCP writers unchanged. Variants: HEAD; V-lint-only; V-boot-only;
-V-scalar-only (the escape applied to scalars, not maps).
+### What was wrong
+
+Three writers put `security.responseHeaders` values on the wire without the compiled routes'
+edge: `AssetRoutes.headers`, `SseRoutes`' opening frame and the MCP `HttpTransport`. The values
+are the author's configuration, resolved by `ResponseHeaderDefaults.from` with no character
+check, so a control character there reached the transport — where 4b measured what that does:
+a hung connection on a buffered response. The routes' own `headers:` literals were judged only
+at the edge, per request, as a 500 the author first meets in production.
+
+And the documented toast (`docs/hypermedia-ui.md`, `HX-Trigger: {"hc:toast": {message: …}}`)
+was serialized with a default `ObjectMapper`, which writes text raw; the transport carries one
+byte per character and the edge folds everything above U+00FF to `?`. RUN:
+`{"hc:toast":{"message":"?????? ??-001","variant":"success"}}` for `保存しました 受注-001`
+(`work/edge-slice/e3/head-red-it.log`).
+
+### The change
+
+- `ResponseHeaderDefaults.from` refuses a value carrying a C0 control other than HTAB, or DEL,
+  with `TQL-SEC-4135` naming the header and the character (decision 7). Boot calls it
+  (`RouteCompiler`), and `ResponseHeaderRules.lintResponseHeaderDefaults` already surfaced its
+  exception as a finding — one predicate, both twins, by construction. The three writers are
+  safe because nothing they write can carry one.
+- `ResponseHeaderRules.lintReserved` reads a route's literal `headers:` values through the same
+  `controlAt` and names one at build time, `TQL-SEC-4151`; a placeholder's value is judged at
+  the edge as before, and a map or list value serializes to JSON, which escapes its own.
+- `JsonMappers.constrainedAscii()` — the constrained mapper with `ESCAPE_NON_ASCII` — is the
+  header mapper in `ResponseHeaders`. Every character above U+007F leaves as a JSON escape and
+  htmx reads it back unchanged.
+
+### The guards, red before the fix
+
+- `ResponseHeaderDefaultsTest.aControlCharacterInADefaultIsRefusedNamingTheHeader` — U+0000
+  and U+007F refused naming the header; HTAB kept.
+- `AppLinterResponseHeadersTest.refusesADeclaredHeaderValueWithAControlCharacter` — a route's
+  `X-Note: "line one\nline two"` is `TQL-SEC-4151` naming U+000A; an `X-Tab: "a\tb"` beside it
+  lints clean.
+- `AppLinterResponseHeadersTest.refusesADefaultHeaderValueWithAControlCharacter` — the config
+  twin: the same NUL in `security.responseHeaders` is `TQL-SEC-4135` at lint.
+- `RedirectLocationIntegrationTest.aDeclaredHxTriggerToastWithAJapaneseMessageArrivesIntact` —
+  the wire value is printable ASCII with no `?`, and parses back to `保存しました 受注-001`.
+
+Bracket (`work/edge-slice/e3/`): HEAD `3eb753c84` — 3/3 unit guards and the toast guard red
+(`head-red-unit.log`, `head-red-it.log`; each guard reads a different file, so HEAD is each
+one's own variant); `V-tab` (`controlAt` refusing HTAB) — exactly the two HTAB rows red
+(`v-tab.log`); the fix — 7/7, 10/10, 35/35 (`fix-green.log`).
+
+### What this breaks
+
+- An application whose `security.responseHeaders` carried a control character no longer boots;
+  none in the repository did, and the value could not have been served.
+- A scalar declared header value above U+00FF still folds to `?` at the edge — 4b's decision
+  ("not the backstop's business") stands; the JSON map is the documented shape for text.
+
+### Filed, not fixed (from E3's measurement)
+
+- Item 7's literal-value lints (`response.file.contentType` charset, authored OWS in
+  `location:`) — a different rule per key, not one predicate; filed as before.
 
 ---
 
