@@ -913,7 +913,7 @@ public final class MultiAppHost implements AutoCloseable, StackReconciler.HostOp
             try {
                 stackFrameworkPool.close();
             } catch (Exception ex) {
-                LOG.warn("Failed to close the stack's framework pool: {}", ex.getMessage());
+                LOG.warn("Failed to close the stack's framework pool: {}", ex.getMessage(), ex);
             }
         }
         // Last, and only here: every runtime served on this instance and none of them closed it,
@@ -926,7 +926,7 @@ public final class MultiAppHost implements AutoCloseable, StackReconciler.HostOp
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
             } catch (Exception ex) {
-                LOG.warn("Failed to close the host's Vert.x instance: {}", ex.getMessage());
+                LOG.warn("Failed to close the host's Vert.x instance: {}", ex.getMessage(), ex);
             }
         }
     }
@@ -942,7 +942,7 @@ public final class MultiAppHost implements AutoCloseable, StackReconciler.HostOp
         try {
             runtime.close();
         } catch (RuntimeException ex) {
-            LOG.warn("Failed to stop hosted app: {}", ex.getMessage());
+            LOG.warn("Failed to stop hosted app: {}", ex.getMessage(), ex);
         }
     }
 

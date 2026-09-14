@@ -1246,7 +1246,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
                         } catch (Exception ex) {
                             // The bridge is a freshness hint: without it this node still signals
                             // locally, so a wiring failure must not stop the boot.
-                            LOG.warn("Cross-node topic bridge not started: {}", ex.getMessage());
+                            LOG.warn("Cross-node topic bridge not started: {}", ex.getMessage(),
+                                    ex);
                         }
                     }
                 }

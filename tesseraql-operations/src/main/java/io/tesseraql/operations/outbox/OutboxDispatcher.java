@@ -70,8 +70,10 @@ public final class OutboxDispatcher {
             } catch (Exception ex) {
                 // event.attempts() counts completed attempts; this failure is one more.
                 if (event.attempts() + 1 >= maxAttempts) {
+                    // The terminal attempt carries the throwable: a retried failure comes back,
+                    // a dead-lettered one is the operator's last sight of why.
                     LOG.warn("Outbox delivery failed for {} ({} attempts); dead-lettering: {}",
-                            event.id(), event.attempts() + 1, ex.getMessage());
+                            event.id(), event.attempts() + 1, ex.getMessage(), ex);
                     store.markDead(event.id(), ex.getMessage());
                 } else {
                     LOG.warn("Outbox delivery failed for {}: {}", event.id(), ex.getMessage());

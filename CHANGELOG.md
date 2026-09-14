@@ -222,6 +222,16 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A failure leaves its throwable in the log.** A job run that died, a file import that died
+  outside its row bracket, a gateway forward that failed (the 502), a cross-node topic bridge
+  that did not start, a hosted app or pool or Vert.x instance that failed to close, an import
+  spool that could not be reclaimed or read, a watcher that could not watch a new directory,
+  and an outbox delivery dead-lettered on its last attempt each logged `ex.getMessage()` alone
+  — the execution row keeps the message too, so a `NullPointerException` in a step class
+  recorded `null` and no stack existed anywhere unless OTLP export was configured. Each WARN
+  now carries the throwable, so the frames — which class failed, and where — follow the line;
+  the gateway's line also names the path it was forwarding. A retried outbox delivery still
+  logs its message alone: it comes back, and the terminal attempt carries the stack.
 - **An application named in Japanese is addressed at the gateway.** A member's prefix was
   compared to the request line raw — `/受注` against `/%E5%8F%97%E6%B3%A8` — so a stack member
   with a non-ASCII `tesseraql.app.name` answered 404 `TQL-APP-4040` on every request, and
