@@ -338,4 +338,7 @@ export const EXCLUDED = [
   // Unicode names at the router: a member named in Japanese is addressed at the gateway,
   // redirected to, returned to, and shadowed by nothing - fixed 2026-09-14.
   'router-unicode-names.md',
+  // One codec set per application: the synchronous export, the import view and the reloader
+  // read the module loader's codecs like the transfer service does - designed 2026-09-14.
+  'codec-discovery.md',
 ];
