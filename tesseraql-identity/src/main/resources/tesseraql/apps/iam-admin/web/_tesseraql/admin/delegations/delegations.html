@@ -1,30 +1,30 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org"
-      th:replace="~{tql/shell :: page('IAM Admin · Delegations', ~{:: #page-header}, ~{:: #page-content})}">
+      th:replace="~{tql/shell :: page(#{tql.iam.page.delegations}, ~{:: #page-header}, ~{:: #page-content})}">
 <th:block id="page-header">
   <span class="hc-spacer"></span>
-  <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/admin/users}">Users</a>
-  <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/admin/applications}">Applications</a>
+  <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/admin/users}" th:text="#{tql.iam.users}">Users</a>
+  <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/admin/applications}" th:text="#{tql.iam.applications}">Applications</a>
 </th:block>
 <div id="page-content" class="hc-stack">
 <section class="hc-card">
-  <div class="hc-card__header">Active and upcoming delegations</div>
+  <div class="hc-card__header" th:text="#{tql.iam.activeAndUpcomingDelegations}">Active and upcoming delegations</div>
   <div class="hc-card__body hc-stack">
-    <p class="hc-field__message">Approval tasks assigned inside a window go to the delegate,
+    <p class="hc-field__message" th:text="#{tql.iam.approvalTasksAssignedInside}">Approval tasks assigned inside a window go to the delegate,
       who acts as themselves; each task records who it was meant for.</p>
     <div class="hc-empty" th:if="${#lists.isEmpty(delegations)}">
-      <p class="hc-empty__title">Nobody is out of office.</p>
+      <p class="hc-empty__title" th:text="#{tql.iam.nobodyIsOutOf}">Nobody is out of office.</p>
     </div>
     <div class="hc-table-scroll" th:unless="${#lists.isEmpty(delegations)}">
       <table class="hc-table">
-        <thead><tr><th>Subject</th><th>Delegate</th><th>From</th><th>Until</th><th></th></tr></thead>
+        <thead><tr><th th:text="#{tql.iam.subject}">Subject</th><th th:text="#{tql.iam.delegate}">Delegate</th><th th:text="#{tql.iam.from}">From</th><th th:text="#{tql.iam.until}">Until</th><th></th></tr></thead>
         <tbody>
           <tr th:each="d : ${delegations}">
             <td th:text="${d.subject}"></td>
             <td th:text="${d.delegate}"></td>
             <td th:text="${d.startsAt}"></td>
             <td th:text="${d.endsAt}"></td>
-            <td><span class="hc-badge" th:if="${d.active}">active</span></td>
+            <td><span class="hc-badge" th:if="${d.active}" th:text="#{tql.iam.active}">active</span></td>
           </tr>
         </tbody>
       </table>

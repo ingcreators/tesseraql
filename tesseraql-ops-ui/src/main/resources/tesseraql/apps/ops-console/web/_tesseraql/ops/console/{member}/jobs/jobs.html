@@ -1,10 +1,10 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org"
-      th:replace="~{tql/shell :: ops-member-page(|Batch Jobs — ${jobs.shell.label}|, ${jobs.shell}, ~{:: #page-header}, ~{:: #page-content})}">
+      th:replace="~{tql/shell :: ops-member-page(#{tql.ops.page.batchJobs(${jobs.shell.label})}, ${jobs.shell}, ~{:: #page-header}, ~{:: #page-content})}">
 <th:block id="page-header">
   <span class="hc-spacer"></span>
   <div class="hc-cluster">
-    <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{|${jobs.shell.base}${jobs.shell.slotQuery}|}">&larr; overview</a>
+    <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{|${jobs.shell.base}${jobs.shell.slotQuery}|}" th:text="#{tql.ops.larrOverview}">&larr; overview</a>
   </div>
 </th:block>
 <div id="page-content" class="hc-stack">
@@ -13,21 +13,21 @@
      never discard a parameter the operator is typing. -->
 <section class="hc-card" id="jobs-status" th:hx-get="@{|${jobs.shell.base}/jobs${jobs.shell.slotQuery}|}"
          hx-trigger="every 15s" hx-select="#jobs-status" hx-target="this" hx-swap="outerHTML">
-  <div class="hc-card__header">Batch jobs</div>
+  <div class="hc-card__header" th:text="#{tql.ops.batchJobs}">Batch jobs</div>
   <div class="hc-card__body hc-stack">
-    <div class="hc-empty" th:unless="${jobs.hasRows}"><p class="hc-empty__title">No jobs declared.</p></div>
+    <div class="hc-empty" th:unless="${jobs.hasRows}"><p class="hc-empty__title" th:text="#{tql.ops.noJobsDeclared}">No jobs declared.</p></div>
     <div class="hc-datagrid" th:if="${jobs.hasRows}">
       <div class="hc-datagrid__scroll">
         <table class="hc-datagrid__table">
           <thead class="hc-datagrid__head"><tr>
-            <th class="hc-datagrid__headcell">Job</th>
-            <th class="hc-datagrid__headcell">App</th>
-            <th class="hc-datagrid__headcell">Trigger</th>
-            <th class="hc-datagrid__headcell">Calendar next</th>
-            <th class="hc-datagrid__headcell">Policy</th>
-            <th class="hc-datagrid__headcell">Source</th>
-            <th class="hc-datagrid__headcell">Last run</th>
-            <th class="hc-datagrid__headcell">Started</th>
+            <th class="hc-datagrid__headcell" th:text="#{tql.ops.job}">Job</th>
+            <th class="hc-datagrid__headcell" th:text="#{tql.ops.app}">App</th>
+            <th class="hc-datagrid__headcell" th:text="#{tql.ops.trigger}">Trigger</th>
+            <th class="hc-datagrid__headcell" th:text="#{tql.ops.calendarNext}">Calendar next</th>
+            <th class="hc-datagrid__headcell" th:text="#{tql.ops.policy}">Policy</th>
+            <th class="hc-datagrid__headcell" th:text="#{tql.ops.source}">Source</th>
+            <th class="hc-datagrid__headcell" th:text="#{tql.ops.lastRun}">Last run</th>
+            <th class="hc-datagrid__headcell" th:text="#{tql.ops.started}">Started</th>
           </tr></thead>
           <tbody class="hc-datagrid__body">
             <tr class="hc-datagrid__row" th:each="j : ${jobs.rows}">
@@ -66,9 +66,9 @@
   </div>
 </section>
 <section class="hc-card" th:if="${jobs.hasRows}">
-  <div class="hc-card__header">Run a job</div>
+  <div class="hc-card__header" th:text="#{tql.ops.runAJob}">Run a job</div>
   <div class="hc-card__body hc-stack">
-    <p class="hc-field__message">Run starts the job now and records you as the trigger; declared
+    <p class="hc-field__message" th:text="#{tql.ops.runStartsTheJob}">Run starts the job now and records you as the trigger; declared
       parameters are validated before the job starts, and the execution page opens when it has
       been accepted.</p>
     <details class="hc-collapsible" th:each="j : ${jobs.rows}">
@@ -89,7 +89,7 @@
           <input class="hc-input" data-size="sm"
                  th:attr="name=|param.${p.name}|,type=${p.numeric} ? 'number' : 'text',required=${p.required} ? 'required' : null,step=${p.numeric} ? 'any' : null">
         </label>
-        <button class="hc-button" data-variant="primary" data-size="sm" type="submit">Run</button>
+        <button class="hc-button" data-variant="primary" data-size="sm" type="submit" th:text="#{tql.ops.run}">Run</button>
       </form>
     </details>
   </div>

@@ -1,31 +1,31 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org"
-      th:replace="~{tql/shell :: page('IAM Admin · Sessions', ~{:: #page-header}, ~{:: #page-content})}">
+      th:replace="~{tql/shell :: page(#{tql.iam.page.sessions}, ~{:: #page-header}, ~{:: #page-content})}">
 <th:block id="page-header">
   <span class="hc-spacer"></span>
-  <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/admin/users}">Users</a>
-  <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/admin/applications}">Applications</a>
-  <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/admin/delegations}">Delegations</a>
+  <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/admin/users}" th:text="#{tql.iam.users}">Users</a>
+  <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/admin/applications}" th:text="#{tql.iam.applications}">Applications</a>
+  <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/admin/delegations}" th:text="#{tql.iam.delegations}">Delegations</a>
 </th:block>
 <div id="page-content" class="hc-stack">
 <p class="hc-alert" data-variant="success" role="status"
-   th:if="${signedout != null}">Device signed out.</p>
+   th:if="${signedout != null}" th:text="#{tql.iam.deviceSignedOut}">Device signed out.</p>
 <section class="hc-card">
-  <div class="hc-card__header">Active sessions</div>
+  <div class="hc-card__header" th:text="#{tql.iam.activeSessions}">Active sessions</div>
   <div class="hc-card__body hc-stack">
     <!-- Live store state: the page lists exactly what the store holds right now
          (docs/session-visibility.md). -->
     <form method="get" th:action="@{/_tesseraql/admin/sessions}" class="hc-cluster">
       <label class="hc-field">
-        <span class="hc-field__label">Subject starts with</span>
+        <span class="hc-field__label" th:text="#{tql.iam.subjectStartsWith}">Subject starts with</span>
         <input class="hc-input" data-size="sm" name="q" th:value="${sessions.q}">
       </label>
-      <button class="hc-button" data-size="sm" type="submit">Filter</button>
+      <button class="hc-button" data-size="sm" type="submit" th:text="#{tql.iam.filter}">Filter</button>
     </form>
-    <div class="hc-empty" th:unless="${sessions.hasRows}"><p class="hc-empty__title">No active sessions.</p></div>
+    <div class="hc-empty" th:unless="${sessions.hasRows}"><p class="hc-empty__title" th:text="#{tql.iam.noActiveSessions}">No active sessions.</p></div>
     <div class="hc-table-scroll" th:if="${sessions.hasRows}">
       <table class="hc-table">
-        <thead><tr><th>Subject</th><th>Signed in</th><th>Last active</th><th>Device</th><th>Address</th><th></th></tr></thead>
+        <thead><tr><th th:text="#{tql.iam.subject}">Subject</th><th th:text="#{tql.iam.signedIn}">Signed in</th><th th:text="#{tql.iam.lastActive}">Last active</th><th th:text="#{tql.iam.device}">Device</th><th th:text="#{tql.iam.address}">Address</th><th></th></tr></thead>
         <tbody>
           <tr th:each="s : ${sessions.rows}">
             <td><a th:href="@{|/_tesseraql/admin/users/${s.subject}|}" th:text="${s.subject}"></a></td>
@@ -41,14 +41,14 @@
                 <button type="submit" class="hc-button" data-variant="ghost" data-size="sm"
                         th:attr="data-hc-confirm=|Sign this device of ${s.subject} out?|"
                         data-hc-confirm-title="Confirm sign-out"
-                        data-hc-confirm-label="Sign out device" data-hc-confirm-variant="error">Sign out</button>
+                        data-hc-confirm-label="Sign out device" data-hc-confirm-variant="error" th:text="#{tql.iam.signOut}">Sign out</button>
               </form>
             </td>
           </tr>
         </tbody>
       </table>
     </div>
-    <p class="hc-field__message">The newest 200 live sessions, straight from the session
+    <p class="hc-field__message" th:text="#{tql.iam.theNewest200Live}">The newest 200 live sessions, straight from the session
       store; a session ends here the moment the store drops it.</p>
   </div>
 </section>

@@ -1,34 +1,34 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org"
-      th:replace="~{tql/shell :: page('IAM Admin · Group', ~{:: #page-header}, ~{:: #page-content})}">
+      th:replace="~{tql/shell :: page(#{tql.iam.page.group}, ~{:: #page-header}, ~{:: #page-content})}">
 <th:block id="page-header">
   <span class="hc-spacer"></span>
-  <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/admin/groups}">Groups</a>
-  <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/admin/users}">Users</a>
+  <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/admin/groups}" th:text="#{tql.iam.groups}">Groups</a>
+  <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/admin/users}" th:text="#{tql.iam.users}">Users</a>
 </th:block>
 <div id="page-content" class="hc-stack">
-<p class="hc-alert" data-variant="success" role="status" th:if="${added != null}">Member added.</p>
-<p class="hc-alert" data-variant="success" role="status" th:if="${removed != null}">Member removed.</p>
-<p class="hc-alert" data-variant="success" role="status" th:if="${granted != null}">Role added to the group.</p>
-<p class="hc-alert" data-variant="success" role="status" th:if="${revoked != null}">Role removed from the group.</p>
+<p class="hc-alert" data-variant="success" role="status" th:if="${added != null}" th:text="#{tql.iam.memberAdded}">Member added.</p>
+<p class="hc-alert" data-variant="success" role="status" th:if="${removed != null}" th:text="#{tql.iam.memberRemoved}">Member removed.</p>
+<p class="hc-alert" data-variant="success" role="status" th:if="${granted != null}" th:text="#{tql.iam.roleAddedToThe2}">Role added to the group.</p>
+<p class="hc-alert" data-variant="success" role="status" th:if="${revoked != null}" th:text="#{tql.iam.roleRemovedFromThe}">Role removed from the group.</p>
 <div th:if="${available == 0}" class="hc-alert" data-variant="warning" role="status">
-  <p class="hc-alert__title">Groups are unavailable for this realm.</p>
+  <p class="hc-alert__title" th:text="#{tql.iam.groupsAreUnavailableFor}">Groups are unavailable for this realm.</p>
   <p th:text="${reason}">reason</p>
 </div>
 <section class="hc-card" th:if="${available == 1}">
   <div class="hc-card__header"><h1 th:text="${groupCode}">group</h1></div>
 </section>
 <section class="hc-card" th:if="${available == 1}">
-  <div class="hc-card__header">Members</div>
+  <div class="hc-card__header" th:text="#{tql.iam.members}">Members</div>
   <div class="hc-card__body hc-stack">
     <!-- Unlike the sign-in reads this list is unfiltered: an administrator needs to see a
          membership that has not started yet, or has ended, in order to edit it. -->
     <div class="hc-empty" th:if="${#lists.isEmpty(members)}">
-      <p class="hc-empty__title">Nobody is in this group.</p>
+      <p class="hc-empty__title" th:text="#{tql.iam.nobodyIsInThis}">Nobody is in this group.</p>
     </div>
     <div class="hc-table-scroll" th:if="${!#lists.isEmpty(members)}">
       <table class="hc-table">
-        <thead><tr><th>User</th><th>From</th><th>Until</th><th>Source</th><th></th></tr></thead>
+        <thead><tr><th th:text="#{tql.iam.user}">User</th><th th:text="#{tql.iam.from}">From</th><th th:text="#{tql.iam.until}">Until</th><th th:text="#{tql.iam.source}">Source</th><th></th></tr></thead>
         <tbody>
           <tr th:each="m : ${members}">
             <td><a th:href="@{'/_tesseraql/admin/users/' + ${m.user_id}}"
@@ -41,7 +41,7 @@
                     th:action="@{/_tesseraql/admin/groups/{code}/members/remove(code=${groupCode})}">
                 <input type="hidden" name="_csrf" th:value="${_csrf}">
                 <input type="hidden" name="userId" th:value="${m.user_id}">
-                <button class="hc-button" data-variant="ghost" data-size="sm" type="submit">Remove</button>
+                <button class="hc-button" data-variant="ghost" data-size="sm" type="submit" th:text="#{tql.iam.remove}">Remove</button>
               </form>
             </td>
           </tr>
@@ -51,25 +51,25 @@
     <form th:if="${writable == 1}" method="post"
           th:action="@{/_tesseraql/admin/groups/{code}/members/add(code=${groupCode})}" class="hc-cluster">
       <input type="hidden" name="_csrf" th:value="${_csrf}">
-      <label class="hc-field"><span class="hc-field__label">User id</span>
+      <label class="hc-field"><span class="hc-field__label" th:text="#{tql.iam.userId}">User id</span>
         <input class="hc-input" name="userId" required></label>
-      <label class="hc-field"><span class="hc-field__label">From</span>
+      <label class="hc-field"><span class="hc-field__label" th:text="#{tql.iam.from}">From</span>
         <input class="hc-input" name="startsAt" type="datetime-local"></label>
-      <label class="hc-field"><span class="hc-field__label">Until</span>
+      <label class="hc-field"><span class="hc-field__label" th:text="#{tql.iam.until}">Until</span>
         <input class="hc-input" name="endsAt" type="datetime-local"></label>
-      <button class="hc-button" data-variant="primary" type="submit">Add</button>
+      <button class="hc-button" data-variant="primary" type="submit" th:text="#{tql.iam.add}">Add</button>
     </form>
   </div>
 </section>
 <section class="hc-card" th:if="${available == 1}">
-  <div class="hc-card__header">Roles this group delivers</div>
+  <div class="hc-card__header" th:text="#{tql.iam.rolesThisGroupDelivers}">Roles this group delivers</div>
   <div class="hc-card__body hc-stack">
     <div class="hc-empty" th:if="${#lists.isEmpty(groupRoles)}">
-      <p class="hc-empty__title">This group delivers no roles.</p>
+      <p class="hc-empty__title" th:text="#{tql.iam.thisGroupDeliversNo}">This group delivers no roles.</p>
     </div>
     <div class="hc-table-scroll" th:if="${!#lists.isEmpty(groupRoles)}">
       <table class="hc-table">
-        <thead><tr><th>Role</th><th>Application</th><th></th></tr></thead>
+        <thead><tr><th th:text="#{tql.iam.role}">Role</th><th th:text="#{tql.iam.application}">Application</th><th></th></tr></thead>
         <tbody>
           <tr th:each="r : ${groupRoles}">
             <td><code th:text="${r.role_code}"></code></td>
@@ -79,7 +79,7 @@
                     th:action="@{/_tesseraql/admin/groups/{code}/roles/revoke(code=${groupCode})}">
                 <input type="hidden" name="_csrf" th:value="${_csrf}">
                 <input type="hidden" name="roleCode" th:value="${r.role_code}">
-                <button class="hc-button" data-variant="ghost" data-size="sm" type="submit">Remove</button>
+                <button class="hc-button" data-variant="ghost" data-size="sm" type="submit" th:text="#{tql.iam.remove}">Remove</button>
               </form>
             </td>
           </tr>
@@ -89,11 +89,11 @@
     <form th:if="${writable == 1}" method="post"
           th:action="@{/_tesseraql/admin/groups/{code}/roles/grant(code=${groupCode})}" class="hc-cluster">
       <input type="hidden" name="_csrf" th:value="${_csrf}">
-      <label class="hc-field"><span class="hc-field__label">Role</span>
+      <label class="hc-field"><span class="hc-field__label" th:text="#{tql.iam.role}">Role</span>
         <select class="hc-input" name="roleCode" required>
           <option th:each="r : ${allRoles}" th:value="${r.role_code}" th:text="${r.role_code}"></option>
         </select></label>
-      <button class="hc-button" data-variant="primary" type="submit">Add</button>
+      <button class="hc-button" data-variant="primary" type="submit" th:text="#{tql.iam.add}">Add</button>
     </form>
   </div>
 </section>

@@ -1,11 +1,11 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org"
-      th:replace="~{tql/shell :: page('IAM Admin · Grant history', ~{:: #page-header}, ~{:: #page-content})}">
+      th:replace="~{tql/shell :: page(#{tql.iam.page.grantHistory}, ~{:: #page-header}, ~{:: #page-content})}">
 <th:block id="page-header">
   <span class="hc-spacer"></span>
-  <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/admin/users}">Users</a>
-  <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/admin/roles}">Roles</a>
-  <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/admin/rules}">Rules</a>
+  <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/admin/users}" th:text="#{tql.iam.users}">Users</a>
+  <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/admin/roles}" th:text="#{tql.iam.roles}">Roles</a>
+  <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/admin/rules}" th:text="#{tql.iam.rules}">Rules</a>
 </th:block>
 <div id="page-content" class="hc-stack">
 <div th:if="${available == 0}" class="hc-alert" data-variant="warning" role="status">
@@ -13,32 +13,32 @@
   <p th:text="${reason}">reason</p>
 </div>
 <section class="hc-card" th:if="${available == 1}">
-  <div class="hc-card__header">Filter</div>
+  <div class="hc-card__header" th:text="#{tql.iam.filter}">Filter</div>
   <div class="hc-card__body">
     <form method="get" th:action="@{/_tesseraql/admin/history}" class="hc-cluster">
-      <label class="hc-field"><span class="hc-field__label">User id</span>
+      <label class="hc-field"><span class="hc-field__label" th:text="#{tql.iam.userId}">User id</span>
         <input class="hc-input" data-size="sm" name="user" th:value="${user}"></label>
-      <label class="hc-field"><span class="hc-field__label">Application</span>
+      <label class="hc-field"><span class="hc-field__label" th:text="#{tql.iam.application}">Application</span>
         <input class="hc-input" data-size="sm" name="app" th:value="${app}"></label>
-      <button class="hc-button" data-size="sm" type="submit">Show</button>
+      <button class="hc-button" data-size="sm" type="submit" th:text="#{tql.iam.show}">Show</button>
       <a class="hc-button" data-variant="ghost" data-size="sm"
-         th:href="@{/_tesseraql/admin/history}">Clear</a>
+         th:href="@{/_tesseraql/admin/history}" th:text="#{tql.iam.clear}">Clear</a>
     </form>
   </div>
 </section>
 <section class="hc-card" th:if="${available == 1}">
-  <div class="hc-card__header">Grant history</div>
+  <div class="hc-card__header" th:text="#{tql.iam.grantHistory}">Grant history</div>
   <div class="hc-card__body">
     <div class="hc-empty" th:if="${#lists.isEmpty(rows)}">
-      <p class="hc-empty__title">No recorded grant changes.</p>
-      <p class="hc-empty__description">Changes made from now on are recorded here, whether an
+      <p class="hc-empty__title" th:text="#{tql.iam.noRecordedGrantChanges}">No recorded grant changes.</p>
+      <p class="hc-empty__description" th:text="#{tql.iam.changesMadeFromNow}">Changes made from now on are recorded here, whether an
         administrator made them or an assignment rule produced them.</p>
     </div>
     <div class="hc-table-scroll" th:if="${!#lists.isEmpty(rows)}">
       <table class="hc-table">
         <thead><tr>
-          <th>When</th><th>Actor</th><th>Subject</th><th>Change</th><th>Code</th>
-          <th>Application</th><th>Source</th><th>Cause</th><th>Window</th>
+          <th th:text="#{tql.iam.when}">When</th><th th:text="#{tql.iam.actor}">Actor</th><th th:text="#{tql.iam.subject}">Subject</th><th th:text="#{tql.iam.change}">Change</th><th th:text="#{tql.iam.code}">Code</th>
+          <th th:text="#{tql.iam.application}">Application</th><th th:text="#{tql.iam.source}">Source</th><th th:text="#{tql.iam.cause}">Cause</th><th th:text="#{tql.iam.window}">Window</th>
         </tr></thead>
         <tbody>
           <tr th:each="h : ${rows}">

@@ -1,33 +1,33 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org"
-      th:replace="~{tql/shell :: page('IAM Admin · Applications', ~{:: #page-header}, ~{:: #page-content})}">
+      th:replace="~{tql/shell :: page(#{tql.iam.page.applications}, ~{:: #page-header}, ~{:: #page-content})}">
 <th:block id="page-header">
   <span class="hc-spacer"></span>
-  <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/admin/users}">Users</a>
-  <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/admin/sessions}">Sessions</a>
-  <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/admin/delegations}">Delegations</a>
+  <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/admin/users}" th:text="#{tql.iam.users}">Users</a>
+  <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/admin/sessions}" th:text="#{tql.iam.sessions}">Sessions</a>
+  <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/admin/delegations}" th:text="#{tql.iam.delegations}">Delegations</a>
 </th:block>
 <div id="page-content" class="hc-stack">
 <!-- A sql realm without the optional grant-view contracts degrades here, never fails
      (docs/application-roles.md slice 1). -->
 <div th:if="${available == 0}" class="hc-alert" data-variant="warning" role="status">
-  <p class="hc-alert__title">Grant views are unavailable for this realm.</p>
+  <p class="hc-alert__title" th:text="#{tql.iam.grantViewsAreUnavailable}">Grant views are unavailable for this realm.</p>
   <p th:text="${reason}">reason</p>
 </div>
 <section class="hc-card">
-  <div class="hc-card__header">Applications</div>
+  <div class="hc-card__header" th:text="#{tql.iam.applications}">Applications</div>
   <div class="hc-card__body hc-stack">
     <p th:if="${available == 1}">
-      <span class="hc-badge" th:text="|${wildcardHolders} wildcard user(s)|">0 wildcard user(s)</span>
-      hold <code>tql.app.use.*</code> and may use every application; per-application counts
-      below list the exact grants.
+      <span class="hc-badge" th:text="#{tql.iam.wildcardUsers(${wildcardHolders})}">0 wildcard user(s)</span>
+      <span th:utext="#{tql.iam.wildcardHoldersExplain}">hold <code>tql.app.use.*</code> and may use every application; per-application counts
+      below list the exact grants.</span>
     </p>
     <div class="hc-empty" th:if="${#lists.isEmpty(rows)}">
-      <p class="hc-empty__title">This stack has no applications.</p>
+      <p class="hc-empty__title" th:text="#{tql.iam.thisStackHasNo}">This stack has no applications.</p>
     </div>
     <div class="hc-table-scroll" th:if="${!#lists.isEmpty(rows)}">
       <table class="hc-table">
-        <thead><tr><th>Application</th><th th:if="${available == 1}">May use (exact grants)</th></tr></thead>
+        <thead><tr><th th:text="#{tql.iam.application}">Application</th><th th:if="${available == 1}" th:text="#{tql.iam.mayUseExactGrants}">May use (exact grants)</th></tr></thead>
         <tbody>
           <tr th:each="r : ${rows}">
             <td><a th:href="@{/_tesseraql/admin/applications/{name}(name=${r.name})}"
