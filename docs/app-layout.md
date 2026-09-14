@@ -59,7 +59,9 @@ work/                   runtime scratch (drafts, spools, system apps); never com
 
 `web/` mirrors URLs exactly: the directory path is the URL path, the file name is the HTTP
 method (`get.yml`, `post.yml`, ...), and `{name}` directories declare path parameters. No
-directory is special-cased, so the URL is always predictable from the file path.
+directory is special-cased, so the URL is always predictable from the file path. A `get.yml`
+answers HEAD too — the same status and headers, `Content-Length` included, and no content —
+so there is no `head.yml` to write.
 
 Distinctions are URL conventions, not folder rules:
 

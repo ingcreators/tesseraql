@@ -108,8 +108,11 @@ final class AssetRoutes implements RuntimeContext.Service {
     private record Jarred(byte[] bytes, String etag) {
     }
 
-    /** What the handler read off the request before leaving the event loop. */
-    private record Asked(String path, String ifNoneMatch, String locale) {
+    /**
+     * What the handler read off the request before leaving the event loop; {@code head} is
+     * whether it wants the headers alone (docs/edge-hygiene.md E4).
+     */
+    private record Asked(String path, String ifNoneMatch, String locale, boolean head) {
     }
 
     private final RuntimeContext runtimeContext;
@@ -165,7 +168,8 @@ final class AssetRoutes implements RuntimeContext.Service {
         }
         String mount = io.tesseraql.pipeline.BasePath
                 .of(runtimeContext.beans()) + "/assets";
-        router.route(HttpMethod.GET, mount + "/*").order(AFTER_THE_GATE)
+        // HEAD too (docs/edge-hygiene.md E4): the transport withholds the body of a HEAD.
+        router.route(HttpMethod.GET, mount + "/*").method(HttpMethod.HEAD).order(AFTER_THE_GATE)
                 .handler(ctx -> assets.serve(ctx, mount));
     }
 
@@ -187,15 +191,15 @@ final class AssetRoutes implements RuntimeContext.Service {
             ctx.response().setStatusCode(404).end();
             return;
         }
+        Asked asked = new Asked(path, ctx.request().getHeader("If-None-Match"),
+                ctx.request().getParam("locale"), HeadRequests.isHead(ctx.request()));
         Jarred held = jarred.get(path);
         if (held != null) {
             // Already in memory: a lookup and a write, which is what the event loop is for.
-            sendBytes(ctx.response(), path, held.bytes(), held.etag(),
-                    ctx.request().getHeader("If-None-Match"));
+            sendBytes(ctx.response(), asked, held.bytes(), held.etag());
             return;
         }
-        fromStorage(ctx, new Asked(path, ctx.request().getHeader("If-None-Match"),
-                ctx.request().getParam("locale")));
+        fromStorage(ctx, asked);
     }
 
     /**
@@ -267,6 +271,19 @@ final class AssetRoutes implements RuntimeContext.Service {
             });
             return;
         }
+        if (asked.head()) {
+            // The file's headers and its length, none of its bytes (docs/edge-hygiene.md E4).
+            onContext(connection, () -> {
+                if (gone.get() || response.ended()) {
+                    return;
+                }
+                headers(response, etag);
+                response.putHeader("Content-Type", CONTENT_TYPES.get(extension(asked.path())));
+                response.setStatusCode(200);
+                HeadRequests.endWithoutBody(response, size);
+            });
+            return;
+        }
         onContext(connection, () -> {
             headers(response, etag);
             response.putHeader("Content-Type", CONTENT_TYPES.get(extension(asked.path())));
@@ -306,19 +323,24 @@ final class AssetRoutes implements RuntimeContext.Service {
             if (gone.get() || response.ended()) {
                 return;
             }
-            sendBytes(response, asked.path(), bytes, etag, asked.ifNoneMatch());
+            sendBytes(response, asked, bytes, etag);
         });
     }
 
-    private void sendBytes(HttpServerResponse response, String path, byte[] bytes, String etag,
-            String ifNoneMatch) {
+    private void sendBytes(HttpServerResponse response, Asked asked, byte[] bytes, String etag) {
         headers(response, etag);
-        if (etag.equals(ifNoneMatch)) {
+        if (etag.equals(asked.ifNoneMatch())) {
             response.setStatusCode(304).end();
             return;
         }
-        response.putHeader("Content-Type", CONTENT_TYPES.get(extension(path)));
-        response.setStatusCode(200).end(Buffer.buffer(bytes));
+        response.putHeader("Content-Type", CONTENT_TYPES.get(extension(asked.path())));
+        response.setStatusCode(200);
+        if (asked.head()) {
+            // The bytes' headers and their length, none of the bytes (docs/edge-hygiene.md E4).
+            HeadRequests.endWithoutBody(response, bytes.length);
+            return;
+        }
+        response.end(Buffer.buffer(bytes));
     }
 
     private void notFound(Context connection, AtomicBoolean gone, HttpServerResponse response) {

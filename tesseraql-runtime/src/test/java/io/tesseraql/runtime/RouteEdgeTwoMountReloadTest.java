@@ -63,6 +63,9 @@ class RouteEdgeTwoMountReloadTest {
         return router.getRoutes().stream()
                 .filter(route -> route.getPath() != null)
                 .flatMap(route -> route.methods().stream()
+                        // HEAD rides on every GET mount (docs/edge-hygiene.md E4) and is not
+                        // a mount of its own; the bookkeeping under test is per mount.
+                        .filter(method -> method != HttpMethod.HEAD)
                         .map(method -> method + " " + route.getPath()))
                 .collect(Collectors.toCollection(java.util.TreeSet::new));
     }

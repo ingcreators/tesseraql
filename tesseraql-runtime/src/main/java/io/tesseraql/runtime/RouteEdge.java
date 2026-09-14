@@ -213,6 +213,15 @@ final class RouteEdge {
         HttpMethod method = HttpMethod.valueOf(mount.method());
         Route route = router.route(method, path(mount.path()))
                 .order(AFTER_THE_GATE + specificity(mount.path()));
+        if (method == HttpMethod.GET) {
+            // A HEAD is a GET without the body (RFC 9110 §9.3.2; docs/edge-hygiene.md E4): the
+            // same route answers both, the pipeline runs as it does for the GET, and the
+            // transport withholds the content - Vert.x's response drops the body of a HEAD in
+            // end, write and sendFile and keeps the headers, Content-Length included. The
+            // router used to match the file's method alone, so every GET route, asset and
+            // health probe answered a HEAD with 405 - on every leg, the gateway's included.
+            route.method(HttpMethod.HEAD);
+        }
         if (carriesABody(method)) {
             route.handler(HttpEdgeBeans.bodyHandler(runtimeContext));
         }
@@ -538,7 +547,10 @@ final class RouteEdge {
                 return;
             }
             headers(ctx.response(), status, wire);
-            if (buffer == null) {
+            if (HeadRequests.isHead(ctx.request())) {
+                // The GET's headers and its length, none of its content (E4).
+                HeadRequests.endWithoutBody(ctx.response(), buffer == null ? 0 : buffer.length());
+            } else if (buffer == null) {
                 ctx.response().end();
             } else {
                 ctx.response().end(buffer);
@@ -549,6 +561,22 @@ final class RouteEdge {
     private void stream(RoutingContext ctx, Context connection, Exchange exchange,
             InputStream body, int status, List<Map.Entry<String, String>> wire) {
         HttpServerResponse response = ctx.response();
+        if (HeadRequests.isHead(ctx.request())) {
+            // A streamed body has no length to claim; the HEAD gets the headers alone (E4),
+            // and the body is closed unread.
+            try {
+                body.close();
+            } catch (IOException ignored) {
+                // Nothing was read; a close failure changes nothing on the wire.
+            }
+            connection.runOnContext(reply -> {
+                if (!response.ended()) {
+                    headers(response, status, wire);
+                    HeadRequests.endWithoutBody(response, -1);
+                }
+            });
+            return;
+        }
         AtomicBoolean gone = new AtomicBoolean();
         connection.runOnContext(open -> {
             response.closeHandler(closed -> gone.set(true));

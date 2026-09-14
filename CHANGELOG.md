@@ -209,6 +209,14 @@ All notable changes to TesseraQL are documented here. The format follows
   `/受注/エクスポート` with `受注番号=エクスポート`. A route's order is now its specificity — a
   literal before a parameter at the first segment where two routes differ, whatever the
   characters — and a route the file watcher adds lands in its place.
+- **A HEAD is answered as a GET without the body.** Every GET route, asset and health probe
+  answered a HEAD with 405 — the router matched the route file's method alone — on the direct
+  leg and through the gateway alike, so a monitor, a link checker or a cache validating with
+  HEAD was told the method is not allowed. A HEAD now reaches the GET's handler and answers
+  the GET's status and headers with a `Content-Length` saying how long the content would have
+  been and no content; the edge withholds it itself, because Vert.x sends a HEAD's body over
+  h2c and claims no length over HTTP/1.1. The HEAD of a browser-protected page answers the 302
+  its GET answers. The event stream stays GET-only.
 - **A job's `domain:` references are resolved.** A job's `input:` fields, each export step's
   columns and a poll job's import columns now take their domain's keys in the manifest loader,
   exactly as a route's do. Before, `count: { domain: batch_count }` on a job was parsed and
