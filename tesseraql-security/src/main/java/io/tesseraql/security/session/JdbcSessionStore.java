@@ -8,6 +8,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
@@ -37,9 +38,19 @@ public final class JdbcSessionStore implements SessionStore {
     private final Duration idleTimeout;
     private final Integer maxPerSubject;
     private final String cookieName;
+    private final Clock clock;
     private final ObjectMapper mapper = io.tesseraql.security.SecurityJson.constrained();
-    /** Node-local last-touch instants, keyed by session id; entries die with the session. */
+    /**
+     * Node-local last-touch instants, keyed by session id. An entry throttles one session's
+     * {@code last_seen_at} writes for {@link #TOUCH_INTERVAL} and means nothing after it, so
+     * {@link #touch} sweeps the expired ones once per interval: the map holds the sessions seen
+     * in the last minute, not every session id the node has ever seen. It used to shrink only on
+     * logout and rotation — sessions overwhelmingly end by expiry, so on the multi-node store it
+     * grew by ~200 bytes per login for the life of the process.
+     */
     private final ConcurrentMap<String, Instant> touched = new ConcurrentHashMap<>();
+    /** When the last sweep of {@link #touched} ran, epoch millis; guards the sweep's cadence. */
+    private final java.util.concurrent.atomic.AtomicLong sweptAt = new java.util.concurrent.atomic.AtomicLong();
 
     public JdbcSessionStore(DataSource dataSource, Duration timeToLive) {
         this(dataSource, timeToLive, null, DEFAULT_COOKIE_NAME);
@@ -65,6 +76,15 @@ public final class JdbcSessionStore implements SessionStore {
      */
     public JdbcSessionStore(DataSource dataSource, Duration timeToLive, Duration idleTimeout,
             Integer maxPerSubject, String cookieName) {
+        this(dataSource, timeToLive, idleTimeout, maxPerSubject, cookieName, Clock.systemUTC());
+    }
+
+    /**
+     * The clock every instant this store stamps or compares is read from — the system clock in
+     * production; a test drives the touch throttle and its sweep through it instead of waiting.
+     */
+    public JdbcSessionStore(DataSource dataSource, Duration timeToLive, Duration idleTimeout,
+            Integer maxPerSubject, String cookieName, Clock clock) {
         this.dataSource = dataSource;
         this.timeToLive = timeToLive;
         this.idleTimeout = idleTimeout;
@@ -72,6 +92,15 @@ public final class JdbcSessionStore implements SessionStore {
         this.cookieName = cookieName == null || cookieName.isBlank()
                 ? DEFAULT_COOKIE_NAME
                 : cookieName;
+        this.clock = clock;
+    }
+
+    /**
+     * The sessions this node is currently throttling touches for — the size of the map above,
+     * bounded by the touch interval; a diagnostic, and what the guard against its growth reads.
+     */
+    public int throttledTouches() {
+        return touched.size();
     }
 
     /**
@@ -110,7 +139,7 @@ public final class JdbcSessionStore implements SessionStore {
                 invalidate(live.get(i).sessionId());
             }
         }
-        return insert(principal, client == null ? ClientInfo.NONE : client, Instant.now(), null);
+        return insert(principal, client == null ? ClientInfo.NONE : client, clock.instant(), null);
     }
 
     /**
@@ -139,7 +168,7 @@ public final class JdbcSessionStore implements SessionStore {
     private String insert(Principal principal, ClientInfo client, Instant createdAt,
             Instant expiresAt) {
         String id = UUID.randomUUID().toString();
-        Instant now = Instant.now();
+        Instant now = clock.instant();
         try (Connection connection = dataSource.getConnection()) {
             prune(connection, now);
             try (PreparedStatement insert = connection.prepareStatement(
@@ -185,7 +214,7 @@ public final class JdbcSessionStore implements SessionStore {
         if (sessionId == null) {
             return null;
         }
-        Instant now = Instant.now();
+        Instant now = clock.instant();
         String sql = "select principal_json, csrf_token from tql_session "
                 + "where session_id = ? and expires_at >= ?"
                 // Pre-upgrade rows have no last-seen clock; the idle window cannot
@@ -215,12 +244,13 @@ public final class JdbcSessionStore implements SessionStore {
         if (sessionId == null) {
             return;
         }
-        Instant now = Instant.now();
+        Instant now = clock.instant();
         Instant last = touched.get(sessionId);
         if (last != null && last.plus(TOUCH_INTERVAL).isAfter(now)) {
             return;
         }
         touched.put(sessionId, now);
+        sweepExpiredTouches(now);
         try (Connection connection = dataSource.getConnection();
                 PreparedStatement ps = connection.prepareStatement(
                         "update tql_session set last_seen_at = ? where session_id = ?")) {
@@ -230,6 +260,20 @@ public final class JdbcSessionStore implements SessionStore {
         } catch (SQLException ex) {
             throw new IllegalStateException("Failed to touch session", ex);
         }
+    }
+
+    /**
+     * Drops every throttle entry older than the interval, at most once per interval: an entry
+     * past it would let the next touch write anyway, so it holds nothing but memory. One
+     * sweeper at a time — a losing racer leaves the sweep to the winner.
+     */
+    private void sweepExpiredTouches(Instant now) {
+        long last = sweptAt.get();
+        if (now.toEpochMilli() - last < TOUCH_INTERVAL.toMillis()
+                || !sweptAt.compareAndSet(last, now.toEpochMilli())) {
+            return;
+        }
+        touched.entrySet().removeIf(entry -> !entry.getValue().plus(TOUCH_INTERVAL).isAfter(now));
     }
 
     @Override
@@ -271,7 +315,7 @@ public final class JdbcSessionStore implements SessionStore {
                 + "where subject = ? and expires_at >= ? order by created_at desc",
                 ps -> {
                     ps.setString(1, subject);
-                    ps.setTimestamp(2, Timestamp.from(Instant.now()));
+                    ps.setTimestamp(2, Timestamp.from(clock.instant()));
                 }, 0);
     }
 
@@ -280,7 +324,7 @@ public final class JdbcSessionStore implements SessionStore {
         return query("select session_id, subject, session_handle, created_at, expires_at, "
                 + "last_seen_at, user_agent, remote_addr from tql_session "
                 + "where expires_at >= ? order by created_at desc",
-                ps -> ps.setTimestamp(1, Timestamp.from(Instant.now())), limit);
+                ps -> ps.setTimestamp(1, Timestamp.from(clock.instant())), limit);
     }
 
     private interface Binder {
@@ -325,7 +369,7 @@ public final class JdbcSessionStore implements SessionStore {
         // client facts carry (docs/session-visibility.md); id, handle and CSRF are
         // freshly minted.
         String fresh = UUID.randomUUID().toString();
-        Instant now = Instant.now();
+        Instant now = clock.instant();
         try (Connection connection = dataSource.getConnection()) {
             boolean autoCommit = connection.getAutoCommit();
             connection.setAutoCommit(false);

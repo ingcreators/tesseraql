@@ -55,10 +55,14 @@ public final class MessageCatalog {
     /**
      * Like {@link #load(Path)} but re-reads only when the {@code messages/} directory's {@code .yml}
      * files change (name/mtime/size signature), so a Studio message edit is served on the next render
-     * without a restart, while an unchanged directory costs a single {@code list}. Process-wide cache
-     * keyed by directory.
+     * without a restart, while an unchanged directory costs a single {@code list} plus a stat per
+     * file — per call. A caller that resolves many keys reads the catalog once and keeps it:
+     * a template render does ({@code Templates.render} publishes one catalog to its context),
+     * where every {@code #{key}} used to list the directory again. Process-wide cache keyed by
+     * directory.
      */
     public static MessageCatalog live(Path messagesDir) {
+        LISTINGS.increment();
         String signature = signatureOf(messagesDir);
         LiveEntry entry = LIVE.get(messagesDir);
         if (entry != null && entry.signature().equals(signature)) {
@@ -73,6 +77,13 @@ public final class MessageCatalog {
     }
 
     private static final java.util.concurrent.ConcurrentHashMap<Path, LiveEntry> LIVE = new java.util.concurrent.ConcurrentHashMap<>();
+
+    private static final java.util.concurrent.atomic.LongAdder LISTINGS = new java.util.concurrent.atomic.LongAdder();
+
+    /** How many times {@link #live} has listed a directory since the JVM started; a diagnostic. */
+    static long directoryListings() {
+        return LISTINGS.sum();
+    }
 
     /** A change-detection signature over the directory's {@code .yml} files (name:mtime:size). */
     private static String signatureOf(Path messagesDir) {

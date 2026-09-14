@@ -147,6 +147,52 @@ class JdbcSessionStoreIntegrationTest {
     }
 
     /**
+     * The touch throttle holds the sessions seen in the last interval, not every session id the
+     * node has ever seen (docs/audit-medium-leads.md slice 6, F120): it shrank only on logout and
+     * rotation, and browser sessions end by expiry, so on this store — the multi-node default —
+     * the map grew by one entry per login for the life of the process. Driven through the
+     * store's clock: a hundred sessions touched, the interval passed, one more touch sweeps the
+     * hundred; a touch inside the interval sweeps nothing.
+     */
+    @Test
+    void theTouchThrottleForgetsSessionsOlderThanItsInterval() {
+        java.time.Instant[] now = {java.time.Instant.parse("2026-09-14T09:00:00Z")};
+        java.time.Clock clock = new java.time.Clock() {
+            @Override
+            public java.time.ZoneId getZone() {
+                return java.time.ZoneOffset.UTC;
+            }
+
+            @Override
+            public java.time.Clock withZone(java.time.ZoneId zone) {
+                return this;
+            }
+
+            @Override
+            public java.time.Instant instant() {
+                return now[0];
+            }
+        };
+        JdbcSessionStore store = new JdbcSessionStore(dataSource, Duration.ofHours(1), null,
+                null, SessionStore.DEFAULT_COOKIE_NAME, clock);
+        for (int i = 0; i < 100; i++) {
+            store.touch(store.create(principal("jdbc-touch-" + i), SessionStore.ClientInfo.NONE));
+        }
+        assertThat(store.throttledTouches()).isEqualTo(100);
+
+        // Thirty seconds on: every entry is still inside the interval, so a touch sweeps nothing.
+        now[0] = now[0].plusSeconds(30);
+        store.touch(store.create(principal("jdbc-touch-late"), SessionStore.ClientInfo.NONE));
+        assertThat(store.throttledTouches()).isEqualTo(101);
+
+        // Past the interval for the first hundred: the next touch sweeps them and keeps the one
+        // still inside it and itself.
+        now[0] = now[0].plusSeconds(31);
+        store.touch(store.create(principal("jdbc-touch-after"), SessionStore.ClientInfo.NONE));
+        assertThat(store.throttledTouches()).isEqualTo(2);
+    }
+
+    /**
      * A DataSource whose connections refuse to go back to autocommit. It sabotages the cleanup
      * only: the read, the insert, the delete and the commit all run against the real database.
      * Keyed on having seen {@code setAutoCommit(false)} first, so a driver that sets autocommit on
