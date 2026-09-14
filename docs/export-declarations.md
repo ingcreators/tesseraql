@@ -53,6 +53,10 @@ synthesizers; nothing below is inferred from the plan.
 
 ### Today's temporal contract — stated precisely, and NOT changed by this slice
 
+> *Superseded on 2026-09-14 by [`temporal-semantics.md`](temporal-semantics.md): a column's
+> kind comes from the database, a wall clock is never converted, an instant is presented in the
+> export's zone. The contract below is what shipped through slice 5 and what T1 replaces.*
+
 - On **`csv` and `pdf`**, a column renders through the export's `locale:`/`timezone:` only when it
   declares `type:` (`date` / `datetime` / `number`) or `format:`; a column with neither is written
   as the driver object's `toString()` (`2026-01-15 22:30:00.0` for a `java.sql.Timestamp`).
@@ -1420,7 +1424,8 @@ Recorded, no migration steps (pre-1.0).
 Every unfiled defect the measurement found, routed elsewhere with its destination (MEASUREMENT
 §3, §6, and the four syntheses).
 
-- **Temporal semantics (its own design, merged with result-column-types):** N2's fix (the
+- **Temporal semantics (its own design, merged with result-column-types — now
+  [`temporal-semantics.md`](temporal-semantics.md), 2026-09-14):** N2's fix (the
   zoneless-`timestamp` semantics by `ResultSetMetaData` type, the DST-gap shift, the three codecs'
   disagreement, the `.0` vs `T…Z` per-driver split); `microsoft.sql.DateTimeOffset`,
   `oracle.sql.TIMESTAMP*`; PostgreSQL `timetz` host-zoned by pgjdbc (`13:30:00` on a UTC host for

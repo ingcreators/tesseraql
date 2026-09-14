@@ -157,7 +157,9 @@ Ranked. The first two are larger than most of the leads that found them.
    07:30` on both) describe a `timestamptz` column; on a zoneless `timestamp` — the type the shipped
    schemas use — the untyped cell is host-stable and the **typed** cell moves with the host. Only
    the procurement export selects a temporal, and its harm is the driver's `.0` text, not an ignored
-   declaration. The fix is the temporal-semantics design's, not this campaign's.
+   declaration. The fix is the temporal-semantics design's, not this campaign's — designed
+   2026-09-14 as `temporal-semantics.md` (decisions 5 and 6: an untyped instant takes the
+   export's zone; a wall clock is never converted).
    **Any Excel grid or placement export with one NULL cell answered 500, and any csv/excel/pdf
    export of a `time` column answered 500 on five of six drivers** (high / medium-high, loud; both
    since v0.1.0; both inside `ColumnValues.toZoned` — no `case null`, and
@@ -256,6 +258,14 @@ Ranked. The first two are larger than most of the leads that found them.
     boot check is the TCCL defect). The BLANK spelling — `format: ""` lint-silent on a query-export,
     boot refusing it naming nothing — and the format-LESS job step (every runner failing with
     `'null'`) are fixed by `export-hygiene.md` P7.
+26. **Every DuckDB JSON route that selects a `date`, `time` or `timestamptz` column answers
+    500 `TQL-ROUTE-3001`** (HIGH, loud, since the analytics stack shipped in v0.11.0) — the
+    driver hands the framework a `java.time` value, `ResultRows.value` passes it through, and
+    the JSON mapper has no `jsr310` module; MySQL `DATETIME` and H2 `timestamptz` are the same
+    mechanism. No DuckDB integration test selects a temporal through a JSON route. Beside it, a
+    PostgreSQL zoneless `timestamp` is served as a UTC instant with a `Z` it never had, `timetz`
+    is silently host-zoned, and `jsonb`/`interval` are served as `PGobject`/`PGInterval` bean
+    dumps. Found by the temporal-semantics measurement; T0 of `temporal-semantics.md`.
 25. **A HEAD against any GET route answers 405, on every leg** — Vert.x Web matches methods
     strictly, the compiler mounts GET only, and nothing maps HEAD onto it, while the gateway
     treats HEAD as replayable. `MultiAppGatewayDifferentialTest.headAnswersIdenticallyThroughTheGateway`

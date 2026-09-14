@@ -332,4 +332,7 @@ export const EXCLUDED = [
   // Edge hygiene: a transfer answers under the route that created it, a declared header is
   // wire text - the transfer subtree that opened onto every transfer - measured 2026-09-13.
   'edge-hygiene.md',
+  // Temporal semantics: a column's kind comes from the database and every path renders it the
+  // same way - the java.time read seam, the wall clock that is not an instant - designed 2026-09-14.
+  'temporal-semantics.md',
 ];
