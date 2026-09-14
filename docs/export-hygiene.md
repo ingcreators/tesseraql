@@ -638,6 +638,8 @@ true at zero rows.
 - Placement mode at zero rows returns the template unchanged (the template owns its headings).
 - The result-column-types design wants a `ResultSetMetaData` seam on `ResultSetRows` for TYPES;
   `NamedRows` is the names half — build the types half as a sibling accessor, not a second read.
+  *Designed 2026-09-14 as `JdbcValues.read` on the reader ([`temporal-semantics.md`](temporal-semantics.md)
+  decision 13), not on `NamedRows`.*
 
 ---
 
