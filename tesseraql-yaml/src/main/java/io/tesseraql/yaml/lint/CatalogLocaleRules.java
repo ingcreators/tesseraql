@@ -105,7 +105,10 @@ final class CatalogLocaleRules implements LintRule {
     void lintCatalogLanguages(Path appHome, AppConfig config, List<LintFinding> findings) {
         io.tesseraql.yaml.catalog.Catalogs catalogs = io.tesseraql.yaml.catalog.Catalogs
                 .load(appHome);
-        if (catalogs.isEmpty()) {
+        // A declared locale the runtime cannot serve is I18nRules' finding; the settings
+        // would refuse to build here.
+        if (catalogs.isEmpty()
+                || !io.tesseraql.yaml.i18n.I18nSettings.declarationProblems(config).isEmpty()) {
             return;
         }
         io.tesseraql.yaml.i18n.I18nSettings i18n = io.tesseraql.yaml.i18n.I18nSettings

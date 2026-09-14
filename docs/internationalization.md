@@ -36,12 +36,22 @@ from the error entry they describe (constraint params, violation row columns).
 tesseraql:
   i18n:
     defaultLocale: en            # the app's authoring locale (default en)
-    locales: [en, ja]            # served locales; defaults to the catalogs found
+    locales: [en, ja]            # served locales; defaults to every catalog found
     preference:                  # user-preference sources, highest priority first
       - query.lang               # ?lang=ja — a language toggle without sign-in
       - preference.ui.locale     # the account surface's stored choice
       - principal.claim.locale   # the signed-in user's locale claim
 ```
+
+With no `locales:` the served set is every catalog the app can answer in: its own
+`messages/` files and the framework's built-in English and Japanese. So an app that never
+wrote a catalog still serves `ja` — a browser asking for Japanese gets the framework's
+chrome, error texts and input messages in it, the language picker offers both, and the app's
+own texts fall back to the default locale. Declare `locales:` to pin the set. A declared
+`defaultLocale:` or `locales:` entry is a BCP-47 tag the JDK can format (`ja-JP`, never
+`ja_JP`; `Locale.forLanguageTag` folds the underscore spelling to `und`), judged by the same
+rule as an export's `locale:`; a value that fails it is a lint error and a boot refusal,
+`TQL-YAML-1065`, naming the key.
 
 Every route resolves its locale once, right after authentication: the preference sources in
 order, then `Accept-Language` negotiation (RFC 4647 lookup, so `ja-JP` matches a supported
@@ -148,10 +158,11 @@ with `key`, `locale`, and `text` columns:
 A `message` coverage kind declares every shipped catalog by its language tag and counts it
 covered when a messages case reads it, gated via `coverage.thresholds.message`.
 
-Lint checks the catalogs statically when `messages/` exists:
+Lint checks the declared locales, then the catalogs statically when `messages/` exists:
 
 | Code | Severity | Finding |
 | --- | --- | --- |
+| `TQL-YAML-1065` | error | a `defaultLocale` or `locales` entry is not a language tag the JDK can format (`ja_JP`); the boot refuses it too |
 | `TQL-YAML-1007` | error | a catalog file is malformed or its name is not a BCP-47 tag |
 | `TQL-YAML-1103` | warning | a declared `tesseraql.i18n.locales` entry has no catalog |
 | `TQL-YAML-1008` | warning | a catalog misses keys present in the default locale |

@@ -84,6 +84,19 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **Every application serves the framework's Japanese with zero configuration.** With no
+  `tesseraql.i18n.locales` declared, the served locale set is every catalog the app can answer
+  in — its own `messages/` files and the framework's built-in `en` and `ja` — where it used to
+  be the app's files alone, so an app with no `messages/` directory served English only:
+  `Accept-Language: ja` negotiated to `en`, the account surface's language picker offered one
+  option, and the framework's Japanese chrome, error texts and input messages were unreachable
+  without a `locales:` line no bundled app or example ever wrote. The framework texts render in
+  the negotiated locale; an app's own texts fall back to its default locale as before. Declare
+  `locales:` to pin the set. A declared `defaultLocale:` or `locales:` entry is now judged by
+  the same rule as an export's `locale:` — `ja_JP` (which `Locale.forLanguageTag` folds to
+  `und`, so every catalog lookup threw and every error response of the app answered 500) or
+  a tag the JDK cannot format is a lint error and a boot refusal, `TQL-YAML-1065`, naming the
+  key. `docs/internationalization.md` says both.
 - **A temporal column reaches a JSON response in the kind the database declares for it, and
   every kind has one text** (`docs/temporal-semantics.md`, T0). A zoneless `timestamp` or
   `datetime` is a wall clock and prints without a zone designator —
