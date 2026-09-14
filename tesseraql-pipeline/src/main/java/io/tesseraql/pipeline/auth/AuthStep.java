@@ -351,14 +351,16 @@ public class AuthStep implements Step {
     /**
      * Whether this is a top-level browser HTML {@code GET} navigation — the only shape the
      * activation redirects answer; an htmx swap or an API caller gets a deterministic in-place
-     * answer instead (the {@code ErrorResponseRenderer} login-bounce test, restated here).
+     * answer instead (the {@code ErrorResponseRenderer} login-bounce test, restated here). A
+     * HEAD is a GET without the body (docs/edge-hygiene.md E4), so it is answered the same.
      */
     private static boolean wantsHtmlNavigation(Exchange exchange) {
         if ("true".equals(exchange.request().header("HX-Request"))) {
             return false;
         }
         Object method = exchange.request().method();
-        if (method != null && !"GET".equalsIgnoreCase(String.valueOf(method))) {
+        if (method != null && !"GET".equalsIgnoreCase(String.valueOf(method))
+                && !"HEAD".equalsIgnoreCase(String.valueOf(method))) {
             return false;
         }
         String accept = exchange.request().header("Accept");

@@ -75,12 +75,15 @@ final class HealthRoutes {
                 .of(runtimeContext.beans()) + "/_tesseraql/health";
         // Liveness is a constant: it says the process is running, and it must never consult a
         // dependency, which is the whole distinction between it and readiness.
-        router.route(HttpMethod.GET, mount + "/live").order(AFTER_THE_GATE)
+        // HEAD too (docs/edge-hygiene.md E4): a probe that heads a health endpoint is told the
+        // status, and the transport withholds the body.
+        router.route(HttpMethod.GET, mount + "/live").method(HttpMethod.HEAD).order(AFTER_THE_GATE)
                 .handler(ctx -> respond(ctx, 200, UP));
-        router.route(HttpMethod.GET, mount + "/ready").order(AFTER_THE_GATE)
-                .handler(health::readiness);
+        router.route(HttpMethod.GET, mount + "/ready").method(HttpMethod.HEAD)
+                .order(AFTER_THE_GATE).handler(health::readiness);
         // The bare path serves the same roll-up, as it always has.
-        router.route(HttpMethod.GET, mount).order(AFTER_THE_GATE).handler(health::readiness);
+        router.route(HttpMethod.GET, mount).method(HttpMethod.HEAD).order(AFTER_THE_GATE)
+                .handler(health::readiness);
     }
 
     private void readiness(RoutingContext ctx) {
@@ -155,7 +158,12 @@ final class HealthRoutes {
             return;
         }
         ctx.response().setStatusCode(code)
-                .putHeader("Content-Type", "application/json; charset=utf-8")
-                .end(body);
+                .putHeader("Content-Type", "application/json; charset=utf-8");
+        if (HeadRequests.isHead(ctx.request())) {
+            HeadRequests.endWithoutBody(ctx.response(),
+                    body.getBytes(java.nio.charset.StandardCharsets.UTF_8).length);
+            return;
+        }
+        ctx.response().end(body);
     }
 }

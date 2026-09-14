@@ -1,6 +1,6 @@
 # Edge hygiene: a transfer under its own route, a declared header as wire text
 
-> **Status: complete.** Four pull requests, in this order, each branched from fresh
+> **Status: complete, plus E4 (2026-09-14).** Four pull requests, in this order, each branched from fresh
 > `origin/main` after the previous one merged. **E0** — a file-export or file-import route's
 > `{transferId}` subtree answers for the transfers that route created and for no other, the
 > foreign id indistinguishable from an unknown one, the cancel refused before it reaches the
@@ -344,6 +344,81 @@ one's own variant); `V-tab` (`controlAt` refusing HTAB) — exactly the two HTAB
 
 - Item 7's literal-value lints (`response.file.contentType` charset, authored OWS in
   `location:`) — a different rule per key, not one predicate; filed as before.
+
+## E4 — a HEAD is a GET without the body
+
+Audit lead 25, the item E2 filed. Designed and shipped 2026-09-14 after the temporal slices.
+
+### What was wrong
+
+RFC 9110 §9.3.2: HEAD is identical to GET except that the server must not send content, and
+every general-purpose server supports it. Vert.x Web matches methods strictly
+(`RouteState.matches`), `RouteEdge.mountRoute` mounted the route file's method and nothing
+else, and nothing mapped HEAD onto GET — so a HEAD against any GET route, an asset, or a
+health probe answered 405 `Allow: GET`, on the direct leg and through the gateway alike (the
+gateway forwards HEAD as replayable, and the member refused it). A monitor probing a page with
+HEAD, a proxy validating a cache entry, a link checker: every one was told the method is not
+allowed.
+
+Measured on `1b05c855d`, first by reading the bytecode of the response Vert.x writes (5.1.7,
+`Http1ServerResponse`: `writeHead`, `end`, `write`, `sendFile` and `prepareHeaders` each branch
+on a `head` flag) and then by running the guard with HEAD merely mounted — **the reading was
+half right, and the run corrected it**: over HTTP/1.1 Vert.x drops the body of a HEAD but
+claims no `Content-Length` for it (`prepareHeaders` keeps one the handler set and sets none of
+its own on a HEAD, so the transport-only answer said nothing about the content's size); and
+over HTTP/2 — which every h2c client upgrades to, the JDK's `HttpClient` by default — the body
+of a HEAD went out in full, 19 bytes of `{"data":[{"ok":1}]}` on a HEAD. Withholding is
+therefore the edge's job, not the transport's. The pipeline runs as it does for the GET (the
+SQL runs; HEAD is GET's cost minus the bytes on the wire, the caller's choice).
+
+### The decisions
+
+1. **Every GET mount answers HEAD, and the edge withholds the content**: `RouteEdge.mountRoute`
+   adds `HEAD` to a GET route — one route, two methods, so a hot reload's `unmount` removes
+   both — and the hand-written GET surfaces (`AssetRoutes`, `HealthRoutes`) do the same; the
+   ops routes and the Studio member reach it through the one mount. Every writer at the edge
+   ends a HEAD through `HeadRequests.endWithoutBody`: the headers as set for the GET, a
+   `Content-Length` saying how long the content would have been (none claimed for a streamed
+   body, whose length nobody knows), and no content — the same on HTTP/1.1 and h2c. The SSE
+   stream stays GET-only: a stream has no representation to head, and a HEAD on it would hold
+   the connection open with nothing to send.
+2. **A HEAD is a GET to the two browser-navigation predicates** (`AuthStep.wantsHtmlNavigation`,
+   `ErrorResponseRenderer.wantsHtmlLoginRedirect`): the HEAD of a protected page answers the
+   302 its GET answers, `Location` included — not a 401 JSON its GET never gives.
+3. **Nothing changes at the gateway** (HEAD was already replayable) and nothing in the compiler
+   (the CSRF gate is decided by the route file's method at compile time, and a GET file never
+   gets one; `head.yml` stays unservable, TQL-YAML-1011 — HEAD is derived, never authored).
+
+### The guards, red before the fix
+
+`HeadRequestIntegrationTest` (runtime, over the JDK client's h2c upgrade and over HTTP/1.1):
+HEAD of a public JSON route answers 200 with the GET's `Content-Type`, a `Content-Length` equal
+to the GET's body length and no body — on both transports; HEAD of a page route the same in
+`text/html`; HEAD of a browser-protected page without a session answers the 302 its GET
+answers, same `Location`; HEAD of an asset and of `/_tesseraql/health/live` answer 200 with the
+length and no body; HEAD of a POST-only path answers as its GET does (no route), and of the SSE
+stream is not answered. `MultiAppGatewayDifferentialTest.headAnswersIdenticallyThroughTheGateway`
+now asserts the 200, the empty body and the GET's length before comparing the legs, so the
+differential can no longer be green on a shared 405 — the guard hazard E2 recorded.
+
+Bracket (`work/edge-slice/e4/`): HEAD `1b05c855d` — 5/5 red (405 everywhere; 404 for the
+POST-only path, which the row was widened to accept). `V-no-withhold` (HEAD mounted, the
+transport left to decide) — exactly the three body-and-length rows, the h2c body leak and the
+missing HTTP/1.1 length among them. `V-no-navigation` (the two predicates GET-only) — exactly
+the protected-page row (401 where the GET gives 302). Fix — 6/6 and the differential 13/13.
+
+### What this breaks
+
+- A caller that relied on 405 to detect "not a GET route" — nothing can have.
+- A HEAD now runs the route's pipeline: a monitor that HEADs an expensive page once a second
+  costs what a GET does. It always did on every other server.
+
+### Filed, not fixed
+
+- A HEAD of a download (`…/file`) goes through `RouteEdge.stream`, which ends a HEAD with the
+  headers and no length claimed; the transfer flow itself is not run here.
+- Vert.x 5.1.7 sends the body of a HEAD over HTTP/2 — worth an upstream issue; the edge no
+  longer depends on the answer.
 
 ---
 

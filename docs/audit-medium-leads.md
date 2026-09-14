@@ -278,7 +278,9 @@ Ranked. The first two are larger than most of the leads that found them.
 25. **A HEAD against any GET route answers 405, on every leg** — Vert.x Web matches methods
     strictly, the compiler mounts GET only, and nothing maps HEAD onto it, while the gateway
     treats HEAD as replayable. `MultiAppGatewayDifferentialTest.headAnswersIdenticallyThroughTheGateway`
-    is green on it because both legs agree on the 405. Found by `edge-hygiene.md` E2; filed.
+    is green on it because both legs agree on the 405. Found by `edge-hygiene.md` E2; **fixed
+    2026-09-14 as E4** — every GET mount answers HEAD and the edge withholds the content (Vert.x
+    itself sends a HEAD's body over h2c and claims no length over HTTP/1.1).
 24. **A zero-row CSV export writes no header row** — csv AND the Excel grid, declared `columns:`
     discarded too; the pdf grid prints a declared header — `export-hygiene.md` P5.
 

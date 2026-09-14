@@ -240,7 +240,10 @@ public final class ErrorResponseRenderer implements Step {
             return false;
         }
         Object method = exchange.request().method();
-        if (method != null && !"GET".equalsIgnoreCase(String.valueOf(method))) {
+        // A HEAD is a GET without the body (docs/edge-hygiene.md E4): the HEAD of a protected
+        // page answers the 302 its GET answers, not a 401 its GET never gives.
+        if (method != null && !"GET".equalsIgnoreCase(String.valueOf(method))
+                && !"HEAD".equalsIgnoreCase(String.valueOf(method))) {
             return false;
         }
         String accept = exchange.request().header("Accept");

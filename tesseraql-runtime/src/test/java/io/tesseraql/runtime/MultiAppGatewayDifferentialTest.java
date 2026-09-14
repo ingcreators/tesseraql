@@ -266,9 +266,21 @@ class MultiAppGatewayDifferentialTest {
         }
     }
 
+    /**
+     * A HEAD answers alike on every leg — and answers: the GET's status and length, no body
+     * (docs/edge-hygiene.md E4). The two legs used to agree on a 405, which kept this row green
+     * on a shared defect; the absolute assertions are what stop that.
+     */
     @Test
     void headAnswersIdenticallyThroughTheGateway() throws Exception {
-        assertSame(head("/" + APP + "/api/items"));
+        Call call = head("/" + APP + "/api/items");
+        Captured straight = capture(direct, call);
+        assertThat(straight.status).as("a HEAD is answered").isEqualTo(200);
+        assertThat(straight.length).as("with no body").isZero();
+        assertThat(straight.headers.get("content-length")).as("and the GET's length")
+                .isEqualTo(List
+                        .of(String.valueOf(capture(direct, get("/" + APP + "/api/items")).length)));
+        assertSame(call);
     }
 
     /**
@@ -292,9 +304,8 @@ class MultiAppGatewayDifferentialTest {
             Captured overHttp2 = captureOver(h2Front, call, HttpClient.Version.HTTP_2);
             assertThat(overHttp2.status).as("over h2c, " + contentType).isEqualTo(200);
             assertThat(overHttp2.digest).isEqualTo(straight.digest);
-            // No HEAD row: the router answers 405 to a HEAD against a GET route on every leg
-            // (Vert.x Web matches methods strictly), so the handler is unreachable on HEAD
-            // today and a row here could only measure that other defect — filed, not this one.
+            // A HEAD reaches the handler since E4 (headAnswersIdenticallyThroughTheGateway
+            // covers it); this row measures the form content type on a GET alone.
         }
     }
 
