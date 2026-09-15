@@ -77,8 +77,9 @@ public final class MarkerFileCodec implements FileCodec {
     };
 
     @Override
-    // The writer is flushed, never closed: the stream is the caller's (the codec contract).
-    @SuppressWarnings("resource")
+    // The writer is flushed, never closed: the stream is the caller's (the codec contract). No
+    // resource suppression: a JDK writer over a stream this method does not own is not a leak
+    // to the IDE's analysis, so the annotation suppressed nothing (Java(1102)).
     public void write(OutputStream out, FileWriteSpec spec, ExportModel model)
             throws java.io.IOException {
         WRITES.incrementAndGet();
