@@ -24,6 +24,28 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A transition's `assign:` resolver is told which document it resolves for.** The resolver's
+  binds were its declared `params:` plus the ambient seed and nothing else; the engine seeded the
+  document key for the guard and wired it for the command, but never for the one contract that is
+  "given a document". A `/* key */` in an assign file bound null, the `SELECT` answered no row, no
+  task opened, and the task-authority gate — sold as framework-enforced — silently never engaged:
+  any principal under the route policy could approve. Three of the procurement gallery's four
+  resolvers (`approver.sql`, `rfq-owner.sql`, `order-owner.sql`) have that shape, so the demo's
+  approval inbox, RFQ follow-up and order review tasks never existed and the declarative suites
+  could not see it. The resolver now binds `/* key */` exactly as the guard and command do (a
+  declared `params:` key still wins), each `params:` key is checked to be a bind name
+  (`TQL-SQL-2120`), and `ProcurementRequisitionTaskIntegrationTest` proves the gallery over HTTP.
+  `docs/audit-low-leads.md`, slice 2a (G32).
+- **Workflow reminders keep their `recipient:` and reach the inbox.** Both reminder enqueues —
+  the transition's `assigned` and the sweeper's `escalated` — built the envelope through the
+  recipient-less overload the other notify paths left behind when the addressed envelope arrived (Phase 49), and `WorkflowRules` never
+  linted a reminder. A declared `recipient:` was parsed and ignored, an inbox reminder
+  dead-lettered on every attempt ("carries no recipient"), the assignee's per-channel opt-out was
+  never consulted, and an undeclared channel or a malformed `when:` linted clean. Reminders now
+  carry the resolved recipient and the tenant (the acting principal's on the route, the task's on
+  the sweeper — `WorkflowTaskStore.Overdue` gained it), honour the opt-out at enqueue, and lint as
+  notifications: `TQL-YAML-1034` for an inbox reminder without a recipient, `TQL-YAML-1102` and
+  `TQL-SQL-2101` as for a route's `notify:`. `docs/audit-low-leads.md`, slice 2a (G34).
 - **`tesseraql job run` on a database no runtime has booted no longer poisons the framework
   schema.** The job verbs (`run`, `rerun`, `cancel`) bootstrapped their stores directly, which
   created every operations table with its latest columns and no Flyway history; the next

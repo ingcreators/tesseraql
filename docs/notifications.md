@@ -158,7 +158,10 @@ Two rules keep this honest:
   any channel.
 
 The preference is looked up in the acting principal's tenant on command routes; job
-contexts carry no principal and check the untenanted scope.
+contexts carry no principal and check the untenanted scope. A workflow's
+[reminders](approval-workflow.md#deadlines-escalation-and-delegation) follow the same rule: the
+`assigned` reminder checks the acting principal's tenant, the sweeper's `escalated` reminder the
+tenant the task was opened under.
 
 ## Mail channels
 

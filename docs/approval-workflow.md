@@ -350,6 +350,23 @@ where  a.unit_id in (
 (`approvers` here is the application's own table mapping principals to the units they
 approve for; the managed `tql_org_closure` supplies the hierarchy.)
 
+The resolver is told its document. It binds `/* key */` — the resolved document key — exactly as
+the transition's guard and command do, plus the ambient `principal.*`, `decision.*` and `audit.*`
+binds every statement in the transition's transaction sees. A transition's `assign.params` adds to
+that set and wins on a clash, so the `requesterUnit` above comes from
+`params: { requesterUnit: document.unit_id }` while a resolver that reads the document row itself
+needs no `params:` at all:
+
+```sql
+-- workflow/assignees/owner.sql — the assignee is a column of the row the transition acts on
+select owner_login as assignee from purchase_requests where id = /* key */ 'PR-0'
+```
+
+Until 0.18.0 the resolver saw only its declared `params:`. A `/* key */` bound null, the `SELECT`
+answered no row, no task opened, and the task-authority gate below never engaged — silently,
+because no lint reaches an assign file's binds (`docs/audit-low-leads.md`, G32). Each `params:`
+key is now also checked to be a bind name (`TQL-SQL-2120`), as a route's are.
+
 The `tql_org_closure` join is the managed org-unit foundation ([data scoping](data-scoping.md))
 consumed unchanged (`OrgUnitStore.descendants(...)` is the Java seam when resolution is done in code
 rather than SQL). In `app` mode the same contract is written against the application's own
@@ -621,16 +638,24 @@ rule that redirects new tasks for a whole absence window — extends exactly thi
 **Reminder notifications** ride the [notification channels](notifications.md): a workflow declares a
 `reminders:` block whose `assigned` reminder fires when a transition opens a task and whose `escalated`
 reminder fires when the sweeper reassigns one. Each is a `NotifySpec` (channel, optional `when`
-guard, `payload`) enqueued as a `NOTIFICATION` outbox event **in the same transaction** as the task
-change — so a rolled-back transition never notifies and a committed one notifies at-least-once, with
-the same retries and dead-letters as a route's `notify:`. The resolved `assignee` is in the payload
-scope:
+guard, optional `recipient`, `payload`) enqueued as a `NOTIFICATION` outbox event **in the same
+transaction** as the task change — so a rolled-back transition never notifies and a committed one
+notifies at-least-once, with the same retries and dead-letters as a route's `notify:`. The resolved
+`assignee` is in the payload scope and is the natural `recipient:`; an [inbox](inbox.md) channel
+requires one (`TQL-YAML-1034`), and a reminder that names its recipient honours that subject's
+[per-user opt-out](notifications.md#per-user-opt-out) at enqueue, like any other notification:
 
 ```yaml
 reminders:
-  assigned:  { channel: task-mail, payload: { to: assignee, doc: document.id } }
+  assigned:  { channel: task-inbox, recipient: assignee, payload: { to: assignee, doc: document.id } }
   escalated: { channel: task-mail, payload: { to: assignee, doc: docId } }
 ```
+
+The envelope carries the acting principal's tenant on the route side and the task's own tenant on
+the sweeper's, which has no request principal. Reminders lint as the notifications they are: an
+undeclared channel warns and a malformed `when:` is an error, as for a route's `notify:`. Until
+0.18.0 both reminder paths dropped the declared `recipient:` and passed lint unchecked, so an inbox
+reminder dead-lettered on every delivery attempt (`docs/audit-low-leads.md`, G34).
 
 ## Audit trail
 

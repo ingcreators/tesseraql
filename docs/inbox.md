@@ -27,9 +27,9 @@ tesseraql:
         userOptOut: true                 # optional, shows the per-user opt-out toggle
 ```
 
-A `notify:` on an inbox channel **must** name its `recipient:` (the
-[per-user opt-out](notifications.md#per-user-opt-out) expression resolving to a
-subject) — an inbox message
+A `notify:` — or a workflow `reminders:` entry — on an inbox channel **must** name its
+`recipient:` (the [per-user opt-out](notifications.md#per-user-opt-out) expression resolving
+to a subject) — an inbox message
 without an addressee is meaningless, so a missing one is a **lint error**, not a runtime
 surprise. The resolved recipient rides the outbox envelope (an optional field; envelopes
 without it decode with it absent), and `NotificationSink` has an `inbox` case beside
@@ -113,7 +113,8 @@ bundled `sse` extension — the same `SseRoutes` transport that carries the
 
 ## Error and lint surface
 
-- Lint `TQL-YAML-1034`: a `notify:` on an inbox-type channel declares no `recipient:`.
+- Lint `TQL-YAML-1034`: a `notify:` or a workflow reminder on an inbox-type channel declares no
+  `recipient:`.
 - `TQL-ACCOUNT-4806`: marking a message that is not the caller's (or unknown) as read.
 - Delivery failures throw, so the dispatcher's retry/dead-letter policy applies — except
   the duplicate-key case, which reads as already-delivered success.

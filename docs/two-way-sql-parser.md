@@ -377,9 +377,10 @@ A lint and not a JSON Schema constraint, for a reason the re-measurement correct
 schemas are two copies, but because **the build has no JSON Schema validator at all**. The schemas
 are editor-only. A constraint written there would be advice, not a gate.
 
-`MatchArm.params`, `SqlRef.params` and `AssignSpec.params` — the scope and workflow document
-families — carry real bind names and are **out of scope**, named here rather than left silent, and
-filed below.
+`MatchArm.params` and `SqlRef.params` — the scope family — carry real bind names and are **out of
+scope**, named here rather than left silent, and filed below. `AssignSpec.params` (a transition's
+`assign:` and a deadline's `onBreach.reassign:`) was filed with them and is checked since 0.18.0
+(`docs/audit-low-leads.md`, slice 2a).
 
 ### 17 — A transaction rolls back on any `Throwable`, through one primitive
 
@@ -547,7 +548,8 @@ Permanent exceptions and known gaps, not approvals.
    11.
 6. **NFD and NFC spellings of one name are two identifiers**, in this framework and in every engine
    measured. Decision 12.
-7. **`MatchArm`, `SqlRef` and `AssignSpec` `params:` maps are not checked** by `TQL-SQL-2120`.
+7. **`MatchArm` and `SqlRef` `params:` maps are not checked** by `TQL-SQL-2120`. `AssignSpec`
+   was filed here too and is checked since 0.18.0 (`docs/audit-low-leads.md`, slice 2a).
 8. **`WireNames.WIRE_SAFE` is stricter than the router requires.** Its javadoc says Vert.x rejects
    `{order_id}`; Vert.x 5.1.6 accepts `:order_id` and even `:2fast`. Harmless — a stand-in is
    minted where none was needed — but the stated reason is wrong.
