@@ -985,7 +985,10 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             .tracer(effectiveTracer)
                             // The escalation reminder honours the same opt-out a route's
                             // notify: does (docs/notifications.md, "Per-user opt-out").
-                            .preferences(preferences);
+                            .preferences(preferences)
+                            // A sweep-fired statement renders its scope directives as the
+                            // system (docs/data-scoping.md): every declared scope is (1=1).
+                            .scopeResolver(systemScopeResolver(context));
                     context.bind(TesseraqlProperties.WORKFLOW_SWEEPER_BEAN,
                             workflowSweeper);
                 }
@@ -2176,6 +2179,20 @@ public final class TesseraqlRuntime implements AutoCloseable {
         return false;
     }
 
+    /**
+     * The scope resolver the sweeper renders through: the app's compiled scopes answering as the
+     * system, or the reject-any-scope default when the app declares none (an undeclared scope
+     * directive is a build error already, TQL-SCOPE-3011).
+     */
+    private static io.tesseraql.core.sql.ScopeResolver systemScopeResolver(
+            io.tesseraql.pipeline.RuntimeContext context) {
+        io.tesseraql.core.sql.ScopeResolver declared = context.lookup(
+                TesseraqlProperties.SCOPE_RESOLVER_BEAN, io.tesseraql.core.sql.ScopeResolver.class);
+        return declared instanceof io.tesseraql.identity.scope.CompiledScopeResolver compiled
+                ? compiled.asSystem()
+                : io.tesseraql.core.sql.ScopeResolver.UNSUPPORTED;
+    }
+
     /** The sweeper's escalation rules: each state deadline's onBreach.reassign resolver, parsed. */
     private static List<WorkflowSweeper.Rule> buildSweeperRules(
             io.tesseraql.yaml.manifest.AppManifest manifest, String dialect,
@@ -2194,6 +2211,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
             String mode = def.mode() == null || def.mode().isBlank() ? null : def.mode();
             boolean managed = mode == null ? defaultManaged : "managed".equalsIgnoreCase(mode);
             java.nio.file.Path dir = workflow.source().getParent();
+            WorkflowSweeper.Document document = new WorkflowSweeper.Document(
+                    def.document().table(), def.document().key(), dialect);
             for (io.tesseraql.yaml.model.DeadlineSpec deadline : def.deadlines()) {
                 io.tesseraql.yaml.model.DeadlineSpec.OnBreachSpec onBreach = deadline.onBreach();
                 if (onBreach == null) {
@@ -2206,19 +2225,21 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     if (escalate != null) {
                         rules.add(
                                 new WorkflowSweeper.Rule(docType, deadline.state(), null, escalate,
-                                        escalateNotify));
+                                        escalateNotify, document));
                     }
                 } else if (onBreach.reassign() != null && onBreach.reassign().file() != null
                         && !onBreach.reassign().file().isBlank()) {
-                    // The assign: shape (docs/vocabulary-cleanup.md slice 1); the sweeper binds
-                    // the SQL from its own sweep context, so declared params: stay unused here.
+                    // The assign: shape (docs/vocabulary-cleanup.md slice 1), declared params:
+                    // included — the sweeper resolves them against the loaded document.
                     java.nio.file.Path file = io.tesseraql.core.dialect.DialectSqlResolver.resolve(
                             dir.resolve(onBreach.reassign().file()).normalize(), dialect);
                     try {
                         rules.add(new WorkflowSweeper.Rule(docType, deadline.state(),
-                                io.tesseraql.core.sql.Sql2WayParser
-                                        .parse(java.nio.file.Files.readString(file)),
-                                null, escalateNotify));
+                                new WorkflowSweeper.Reassign(
+                                        io.tesseraql.core.sql.Sql2WayParser.parse(
+                                                java.nio.file.Files.readString(file), functions),
+                                        onBreach.reassign().params()),
+                                null, escalateNotify, document));
                     } catch (java.io.IOException ex) {
                         throw new java.io.UncheckedIOException(ex);
                     }

@@ -8,6 +8,7 @@ import io.tesseraql.core.expr.ExpressionParser;
 import io.tesseraql.yaml.config.AppConfig;
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.WorkflowFile;
+import io.tesseraql.yaml.model.AssignSpec;
 import io.tesseraql.yaml.model.DeadlineSpec;
 import io.tesseraql.yaml.model.StateSpec;
 import io.tesseraql.yaml.model.TransitionSpec;
@@ -60,6 +61,17 @@ final class WorkflowRules implements LintRule {
     private static final String STAMP_OUTSIDE_JOIN = "TQL-WORKFLOW-3119";
     /** TQL-WORKFLOW-3120: comment: only takes 'required' — anything else is a typo. */
     private static final String INVALID_COMMENT = "TQL-WORKFLOW-3120";
+
+    // A reassign params: entry reading a context root the sweeper does not carry.
+    private static final String REASSIGN_PARAM_OUTSIDE_SWEEP_CONTEXT = "TQL-WORKFLOW-3121";
+
+    /**
+     * The roots a sweep-fired resolver's {@code params:} may read: the loaded document row, the
+     * document key (and its {@code docId} alias), the breached state, and the system's audit —
+     * there is no request, so no {@code path.*}, {@code body.*} or {@code principal.*}.
+     */
+    private static final Set<String> SWEEP_CONTEXT_ROOTS = Set.of("document", "key", "docId",
+            "state", "audit");
 
     private static final String INVALID_GUARD_DECLARATION = "TQL-WORKFLOW-3108";
 
@@ -406,6 +418,7 @@ final class WorkflowRules implements LintRule {
                     DocumentRules.lintBindNames(onBreach.reassign().params(),
                             "deadlines[" + deadline.state() + "].onBreach.reassign.params",
                             source, findings);
+                    lintReassignParams(onBreach.reassign(), where, source, findings);
                 }
             }
         }
@@ -622,6 +635,27 @@ final class WorkflowRules implements LintRule {
             }
         }
         return reachable;
+    }
+
+    /**
+     * A reassign resolver's {@code params:} resolve against the sweep context, not a request:
+     * an entry reading {@code path.key} — the natural copy of a transition's {@code assign:}
+     * wiring — bound null on every sweep, silently, and the resolver answered no row
+     * (docs/audit-low-leads.md G36). The sweeper seeds {@code key} itself, so the usual reason
+     * to write that entry is gone; what remains must read what the sweep carries.
+     */
+    private static void lintReassignParams(AssignSpec reassign, String where, String source,
+            List<LintFinding> findings) {
+        reassign.params().forEach((bindName, path) -> {
+            String root = path == null ? "" : path.split("\\.", 2)[0];
+            if (!SWEEP_CONTEXT_ROOTS.contains(root)) {
+                findings.add(new LintFinding(REASSIGN_PARAM_OUTSIDE_SWEEP_CONTEXT, ERROR, source,
+                        where + " reassign params: '" + bindName + "' reads '" + path
+                                + "' — the sweeper runs with no request, so a reassign"
+                                + " resolver's params: read document.*, key, docId, state or"
+                                + " audit.* only (key is seeded already)"));
+            }
+        });
     }
 
     /**
