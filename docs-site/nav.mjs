@@ -344,4 +344,7 @@ export const EXCLUDED = [
   // A view's source: is a route's declaration: the symbols contract carries every route's named
   // sources and the view it binds, and the editor navigates and completes them - designed 2026-09-15.
   'editor-named-sources.md',
+  // The audit's 17 low leads and the 68 "Filed, not fixed" bullets of seven records, atomized and
+  // measured against current main, plus the completeness critic's first run — 2026-09-15.
+  'audit-low-leads.md',
 ];
