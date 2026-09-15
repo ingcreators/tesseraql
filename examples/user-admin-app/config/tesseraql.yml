@@ -1,4 +1,11 @@
 tesseraql:
+  # The printable user list (web/api/users/print) renders through the opt-in pdf codec, which
+  # reaches an application as a module: `tesseraql dev` resolves this into work/modules and a
+  # package carries it (docs/printable-documents.md, docs/module-channel.md). No modules.lock
+  # is committed for it — a first-party module at the framework's own SNAPSHOT version changes
+  # checksum on every build, and a lock pins one.
+  modules:
+    - io.tesseraql:tesseraql-pdf
   app:
     name: user-admin
     work: ${TESSERAQL_WORK_HOME:${TESSERAQL_APP_HOME}/work}

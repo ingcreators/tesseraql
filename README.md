@@ -61,28 +61,29 @@ with everything preinstalled.
 ```
 
 Run the bundled example. It needs only an empty PostgreSQL at
-`jdbc:postgresql://localhost:5432/user_admin` (see `examples/user-admin-app/config/application.yml`);
-the app owns its schema, so `dev` applies its `db/migration` on start. Build the CLI distribution
-and run the example (the `-Pdist` archive ships `bin/` and `lib/tesseraql.jar`; the opt-in pdf and
-excel codecs are not in it):
+`jdbc:postgresql://localhost:5432/user_admin` (see `examples/user-admin-app/config/application.yml`),
+or `--embedded-db` for one the CLI starts; the app owns its schema, so `dev` applies its
+`db/migration` on start. Install the reactor, then build the CLI distribution and run the example.
+The `-Pdist` archive ships `bin/` and `lib/tesseraql.jar` and no opt-in codec: the example's
+printable route declares the pdf module under `tesseraql.modules`, and `dev` resolves it from
+your local repository — which is why the first line installs rather than packages.
 
 ```bash
-./mvnw -B -ntp -DskipTests -pl tesseraql-cli -am -Pdist package
+./mvnw -B -ntp -DskipTests -Pdist install
 ( cd tesseraql-cli/target && unzip -q tesseraql-cli-*-dist.zip )
 tesseraql-cli/target/tesseraql-*/bin/tesseraql dev \
   --stack examples --app-name user-admin
 ```
 
-`GET /api/users` is a `bearer`-authenticated route, so mint a dev JWT (HS256, the
-`tesseraql.security.jwt` dev secret, a `USER_READ` role) and call it:
+The stack serves the application at `/user-admin/`. Its API routes take a bearer token; mint a
+development one for the application (signed with its configured HS256 secret, carrying the
+`USER_READ` role and the application-use grant) and call the search and the printable list:
 
 ```bash
-JWT_SECRET="dev-only-secret-change-me-in-production"
-b64url(){ openssl base64 -e -A | tr '+/' '-_' | tr -d '='; }
-h=$(printf '%s' '{"alg":"HS256","typ":"JWT"}' | b64url)
-p=$(printf '%s' '{"sub":"dev","roles":["USER_READ"]}' | b64url)
-s=$(printf '%s' "$h.$p" | openssl dgst -binary -sha256 -hmac "$JWT_SECRET" | b64url)
-curl -s -H "Authorization: Bearer $h.$p.$s" "http://localhost:8080/api/users?q=sato"
+TQL=tesseraql-cli/target/tesseraql-*/bin/tesseraql
+TOKEN=$($TQL token --app examples/user-admin-app --role USER_READ)
+curl -s -H "Authorization: Bearer $TOKEN" "http://localhost:8080/user-admin/api/users?q=sato"
+curl -s -H "Authorization: Bearer $TOKEN" -o users.pdf "http://localhost:8080/user-admin/api/users/print"
 ```
 
 Or build a container image with the app baked in:

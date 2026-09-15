@@ -29,8 +29,10 @@ if not "%TESSERAQL_CLASSPATH%"=="" set "CP=!CP!;%TESSERAQL_CLASSPATH%"
 
 rem The archive is tied to the classpath it was built from, and a changed classpath does not cause
 rem a rebuild — the JVM quietly stops using it — so the classpath's fingerprint names the file and
-rem an upgrade, or an added extension jar, lands on a new one. -Xlog:cds=error keeps the writing
-rem run from listing the classes it skipped, while still reporting an archive the JVM refuses.
+rem an upgrade, or an added extension jar, lands on a new one. The writing run lists every class
+rem it skipped, on stdout by default: the default output is switched off and rebuilt on stderr,
+rem warnings and up with cds at errors only (docs/codec-discovery.md decision 8). A refused
+rem archive is silent under every setting; the fingerprint is what keeps one from going stale.
 if not "%LOCALAPPDATA%"=="" if not "%FINGERPRINT%"=="" (
   if not exist "%LOCALAPPDATA%\tesseraql\" mkdir "%LOCALAPPDATA%\tesseraql" 2>nul
   if exist "%LOCALAPPDATA%\tesseraql\" (
@@ -41,7 +43,7 @@ if not "%LOCALAPPDATA%"=="" if not "%FINGERPRINT%"=="" (
     rem argv splitter then takes the quoted run as one token. Unquoted, the tail arrived as a
     rem second argument, and because it precedes -cp the JVM took it as the main class and the
     rem real classpath became a program argument - the CLI died before running any of its code.
-    set "OPTS=!OPTS! -XX:+AutoCreateSharedArchive "-XX:SharedArchiveFile=%LOCALAPPDATA%\tesseraql\cds-!FINGERPRINT!.jsa" -Xlog:cds=error:stderr"
+    set "OPTS=!OPTS! -XX:+AutoCreateSharedArchive "-XX:SharedArchiveFile=%LOCALAPPDATA%\tesseraql\cds-!FINGERPRINT!.jsa" -Xlog:disable -Xlog:all=warning,cds=error:stderr"
   )
 )
 

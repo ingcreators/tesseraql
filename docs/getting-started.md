@@ -107,14 +107,16 @@ bounces that route, a workflow edit rebuilds its transition endpoints, a shared-
 edit rebuilds every route. The same instant loop as Studio's **Apply** (jobs, consumers,
 and `config/` changes still need a restart).
 
-Smoke-testing a bearer-authenticated API? `tesseraql token --app . --role ADMIN` mints a
-development JWT signed with the app's configured HS256 secret — roles land under the
-configured `rolesClaim`, `--claim partner=P-100` adds custom claims (a JSON-looking value
-embeds structurally), `--ttl 30m` bounds it. Development only by construction: an app that
-verifies asymmetrically (publicKey/JWKS) has nothing this command could sign with.
+Smoke-testing a bearer-authenticated API? `tesseraql token --app . --role APP_READ` mints a
+development JWT signed with the app's configured HS256 secret — `APP_READ` is the role the
+scaffolded `app.read` policy names; roles land under the configured `rolesClaim`, the
+application-use grant (`tql.app.use.<name>`) rides along so the token can enter the application
+it is minted for, `--claim partner=P-100` adds custom claims (a JSON-looking value embeds
+structurally), `--ttl 30m` bounds it. Development only by construction: an app that verifies
+asymmetrically (publicKey/JWKS) has nothing this command could sign with.
 
 ```bash
-curl -H "Authorization: Bearer $(tesseraql token --app . --role ADMIN)" \
+curl -H "Authorization: Bearer $(tesseraql token --app . --role APP_READ)" \
   http://localhost:8080/myapp/api/things
 ```
 

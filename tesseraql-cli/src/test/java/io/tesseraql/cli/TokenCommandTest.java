@@ -79,6 +79,38 @@ class TokenCommandTest {
         assertThat(payload.get("exp").asLong())
                 .isBetween(System.currentTimeMillis() / 1000 + 1500,
                         System.currentTimeMillis() / 1000 + 1900);
+        // Minted for token-test, the token can enter token-test (docs/codec-discovery.md
+        // decision 7): the application-use grant rides under the permissions claim.
+        assertThat(payload.get("permissions")).isNotNull();
+        assertThat(payload.get("permissions").get(0).asText()).isEqualTo("tql.app.use.token-test");
+    }
+
+    /** An explicit permission list is the caller's; the grant is not smuggled into it. */
+    @Test
+    void anExplicitPermissionListIsMintedAsGiven(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), """
+                tesseraql:
+                  app:
+                    name: token-test
+                  security:
+                    jwt:
+                      secret: unit-test-secret
+                      audience: https://app.example.com
+                """);
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        PrintStream stdout = System.out;
+        System.setOut(new PrintStream(out, true, StandardCharsets.UTF_8));
+        try {
+            assertThat(new CommandLine(new TokenCommand()).execute("--app", dir.toString(),
+                    "--sub", "aoki", "--permission", "token-test.read")).isZero();
+        } finally {
+            System.setOut(stdout);
+        }
+        String[] parts = out.toString(StandardCharsets.UTF_8).trim().split("\\.");
+        JsonNode payload = MAPPER.readTree(Base64.getUrlDecoder().decode(parts[1]));
+        assertThat(payload.get("permissions")).hasSize(1);
+        assertThat(payload.get("permissions").get(0).asText()).isEqualTo("token-test.read");
     }
 
     @Test
