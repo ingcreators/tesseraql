@@ -493,8 +493,8 @@ tenanted stack to confirm). A second critic round would start there.
 
 ## The campaign — slices in severity order
 
-Chosen order: severity first, then reachability; the cheap sweeps batched at the end. Every slice
-branches from a fresh `origin/main`; every guard is proven red on HEAD and against a broken
+Chosen order: severity first, then reachability; the cheap sweeps batched at the end — *decided
+2026-09-15: the order below stands as written.* Every slice branches from a fresh `origin/main`; every guard is proven red on HEAD and against a broken
 variant before it ships (four guards in the HIGH pass were green on their own defect; here the
 adjudicators resolved 131 lens disagreements, and in 36 of them a lens's evidence was wrong at
 first reading). Sizes are the adjudicators'. Nothing here is
@@ -527,6 +527,9 @@ card and two pages stop saying an elevation "expires by itself" (G26). |
 | 22 | HEAD and the first download | EH-07, unfiled 26 (F57), EH-03, EH-08, unfiled 71-72 | S+S | A HEAD does not spend the claim; the claim and `after:` in one transaction (F57's other half); the E4 IT adds the HEAD-of-download row; an IT for the application half of `TransferScope`; the `mountRoute` comment and the record sentences; the Vert.x HEAD-over-h2 report filed upstream. |
 | 23 | Sweeps: docs, frontend, dx | F83, F84, F85, F116, F122, DN-03d, F94, F95, F100, F101, F102, F103, DN-01c, unfiled 24, 25, 30, 31, 46, 49, 65, 66, 69, 70 | S each, one or two PRs | The stale distribution sentences; the package-manager upgrade bullets; the sidebar pointer; the memoization claim struck; the goal → verb parity sentence (reuse `ReadmeLedgerTest`'s `@Mojo` scan); the schema description split per arm and `route-v1:531/577` corrected (regenerate; keep the `.vscode` copy); `wrangler@4` in `DEPLOYMENT.md`; both setup comments; the dialog's `aria-labelledby`; F101 decided; briefs 13-15 with the `data-tql-*` guard; F103's comment and the fill chain's guard; the `rows` template key and its two stale comments; the bare base + query and the wire-spelled `_return` in `BasePaths.relative` (DN-01c, unfiled 69); member bind address in `host`/`dev`. |
 
+The in-slice calls the measurement made stand as written (decided 2026-09-15): G3 keeps
+`SUPPORTED`; F108 gets the log line only; F103 gets no class swap.
+
 **Not scheduled, on the measurement's own verdict:** DN-02e (the IDN trigger has not fired;
 `PercentEncodingTest` pins `[` by decision 7), DN-06c (touch when one of the two files is open),
 EN-04 and EN-05 (worth no — the scan stays), XH-08 (none; a spool-format change), EH-08 beyond
@@ -538,32 +541,51 @@ the upstream report, and the eighteen note-only atoms of `POOL.md`.
    `test --fail-on-regression` ran and found a regression. Recommendation: 3, widening
    `ExitCodes.SKIPPED`'s sentence to "the command ran and a policy gate said no" (decision 10b);
    1 is the acceptable alternative; 2 is the one answer the published vocabulary rules out.
+   *Decided 2026-09-15: as recommended — 3, and `SKIPPED`'s sentence widened (decision 10b).*
 2. **Who writes `catalog.json` (slice 7).** Structural decision 2 makes the catalogue the CLI's
    intent file; the boot reads it as the served version. Recommendation: the CLI writes
    candidates, the host writes the catalogue and the status on an applied replace; N hosts on a
    shared root each write the same bytes (benign, stated). Without this the slice cannot be built.
+   *Decided 2026-09-15: as recommended — the host writes the catalogue and the status; the CLI
+   writes candidates; the addendum to structural decision 2 lands first, in the same PR.*
 3. **A declared header source (slice 9a).** Which names may be header-sourced, and whether a
    declared header input is overridden by query/body (today `?Cookie=x` outranks the header on
    the delegated hop). Recommendation: `header.<name>` in service `params:` only, never overridden,
    the fallback deleted, recorded as a breaking change.
+   *Decided 2026-09-15: as recommended — `header.<name>` is legal in service `params:` only, never
+   overridden by query or body; the order is declare → adopt on the 109 routes → delete the read.*
 4. **The unattributed root in the ops traces (slice 16).** `OpsScope.compose` admits `app == null`
    for the wildcard grant (restoring `c047b6c60`) or the Javadoc changes; the same line scopes
    five tables. Recommendation: admit it for traces only, as a separate predicate.
+   *Decided 2026-09-15: as recommended — traces only, its own predicate; the table scope keeps
+   #692's fence; the guard goes through `OpsScope.view(...)`, never a hand-built predicate.*
 5. **The split-export fold (slice 15).** Case-insensitive collisions refused (flips the pinned
    2857 test) or suffixed; combining marks kept; emoji. Recommendation: refuse, once, with 2857's
    sentence naming both keys.
+   *Decided 2026-09-15: as recommended — refuse with 2857, the sentence saying the two keys are one
+   file on a case-insensitive filesystem; combining marks kept under NFC; reserved DOS stems
+   prefixed; the pinned `SplitExportTest` row flips.*
 6. **The transfer subtree under tenancy (slice 3b / G31).** EH-01's product decision, now with a
    security finding behind it. Recommendation: scope by tenant where the app is tenanted.
+   *Decided 2026-09-15: as recommended — a `tenant_id` column (V15, three dialects), the `/file`
+   leg under `applyCommonGovernance`, `TransferScope` with a tenant term; subject scoping stays a
+   separate product decision.*
 7. **`type: time` (slice 18)** — add it to the vocabulary or file it on its own bullet.
    Recommendation: file it; the export side has no time-only column in any shipped example.
+   *Decided 2026-09-15: as recommended — filed on its own bullet in `temporal-semantics.md`.*
 8. **TS-04's shape (slice 18)** — apply `result:` declarations after `readRows` in the Studio
    browse (M) or one documented clause (S). Recommendation: the clause now, the M when the preview
    is next touched.
+   *Decided 2026-09-15: as recommended — the documented clause now; the M rides the next change
+   to the preview seam (slice 19).*
 9. **F101** — `hc-container` on the six standalone pages, or one sentence recording the inline
    frame. Recommendation: the sentence.
+   *Decided 2026-09-15: as recommended — one sentence in `console-ux-refresh.md`, as a rider.*
 10. **The cron lint's dependency (slice 8)** — Quartz is `tesseraql-runtime`-only; a cron lint in
     `tesseraql-yaml` needs the parser or a recorded exception. Recommendation: shape the boot
     refusal now; sequence the lint with F60.
+    *Decided 2026-09-15: as recommended — the boot refusals shaped and the zone lint in slice 8;
+    the cron lint waits for the dependency decision, sequenced with F60.*
 
 ### Rules carried into every slice
 
