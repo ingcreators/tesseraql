@@ -1,8 +1,9 @@
 # The module channel
 
-Status: designed 2026-08-20. What a TesseraQL runtime carries on its own classpath, what reaches
-it through the module channel instead, and how everything in the second group travels — into a
-`.tqlapp`, onto a Windows host image, and onto a machine with no outbound network.
+Status: designed 2026-08-20; decision 9 added 2026-09-15. What a TesseraQL runtime carries on its
+own classpath, what reaches it through the module channel instead, and how everything in the second
+group travels — into a `.tqlapp`, onto a Windows host image, and onto a machine with no outbound
+network.
 
 [runtime-footprint.md](runtime-footprint.md) decided what a deployment carries: the host, not the
 workshop. This document asks the question that follows from it. Of the things a deployment does
@@ -380,6 +381,141 @@ The enforcer rule bans the three clients *and* the stacks they bring (`httpclien
 by their own coordinates, so a fourth default client in a later SDK release cannot reintroduce
 them under a name the rule has not heard of — which is exactly how `apache5-client` arrived.
 
+### 9. A module's closure excludes what the runtime carries, and the runtime says what that is
+
+Decided 2026-09-15, for the item [codec-discovery.md](codec-discovery.md) S5 filed: after the
+framework's own group leaves a module's closure, the pdf example still resolves 16 jars, and
+several of them are on the classpath that loads the module — inert under parent-first loading, a
+copy in every cache, package and bag, and a lock line claiming a version that never runs. The
+resolver cannot name those by rule the way it names `io.tesseraql:*`; it needs the runtime's
+closure at resolve time. **Which closure, and how the resolver names it, is the question this
+decision settles before any code**, because three routes resolve or bundle a module closure and
+the classpath their own process runs on is different on each:
+
+| Route | What the resolver's own process has on its classpath | What the module meets at run time |
+| --- | --- | --- |
+| The dist shaded jar (`bin/tesseraql modules resolve`, `dev`, `package`) | one jar: the developer CLI's 214-artifact closure melted together — picocli, ShrinkWrap and its Maven resolver, the embedded PostgreSQL supervisor, `jcl-over-slf4j` | under `dev`, that jar; after `package`, the deployment's |
+| The reactor (the CLI's tests, an IDE run, `exec:java`) | `target/classes` directories and `.m2` jars, the same 214 | the same |
+| The Maven plugin (`package-app` in a wrapper pom) | the plugin's own realm — core, yaml, apptasks, identity, report, Maven — and no runtime at all | the deployment's |
+
+And "the deployment" is itself three shapes: the `tesseraql-host` fat jar (the Windows app image),
+the container's `lib/` (the host's runtime-scope dependencies), and a wrapper-pom build that embeds
+`tesseraql-runtime` as a library and never sees the host.
+
+**Measured 2026-09-15 on `c3875e871`** (`dependency:list -DincludeScope=runtime`, sorted):
+`tesseraql-runtime` carries 149 artifacts; `tesseraql-host` 156 (the 149 plus picocli,
+`slf4j-jdk-platform-logging`, and `tesseraql-cli`, `-apptasks`, `-runtime` themselves); the
+developer CLI 214. Of the pdf module's 16 jars after S5, six are in all three closures —
+`thymeleaf`, `ognl`, `attoparser`, `unbescape`, `javassist`, `slf4j-api`, 2.4 MB. The seventh S5
+counted, `commons-logging`, is in **none** of them: the package `lib/tesseraql.jar` holds under
+that name is `org.slf4j:jcl-over-slf4j`, which arrived with the resolver stack the host excludes.
+A resolver that read "the base classpath" as its own would have dropped `commons-logging` from
+every pdf cache, and PDFBox would have failed under `host` with a class `dev` had always found —
+the asymmetry decision 4 exists to forbid, shipped by the fix for a smaller one. The excel module
+overlaps the runtime on four third-party artifacts (`commons-codec`, `commons-io`, `stax2-api`,
+`slf4j-api`), the S3 module on sixteen.
+
+> **The set a module's closure excludes is `tesseraql-runtime`'s own runtime-scope dependency
+> closure, and the runtime names it itself: its build writes the closure into the runtime jar as
+> `META-INF/tesseraql/runtime-closure.txt` — the `maven-dependency-plugin` `list` output, runtime
+> scope, sorted — and every route reads that one file. No route derives the set from the classpath
+> it happens to be running on.**
+
+Why the runtime's closure and not the host's: the host's 156 is what the three deployment shapes
+carry, but the wrapper-pom build embeds the runtime without the host, and in every shape the module
+loader's parent is the runtime's own loader (`AppModules`, [module-scope.md](module-scope.md)
+structural decision 2). The runtime's closure is the floor every parent has. What the host adds is
+picocli, a logging binding and first-party jars — nothing a module would bring and be right to
+carry; if one ever brings picocli, carrying it is correct.
+
+Why a file the build writes and not something else, each considered:
+
+- **The resolver's own classpath** — `java.class.path`, or the `META-INF/maven/*/pom.properties`
+  the shade plugin keeps: a different answer on each route, and wrong on two of them (the
+  `commons-logging` case above).
+- **Resolving `io.tesseraql:tesseraql-runtime` transitively at resolve time and subtracting**: the
+  same answer everywhere, but 149 artifacts fetched to compute an exclusion list, a bag that has to
+  carry the runtime's whole POM graph, and S5's principle — the exclusion is written into the POM
+  so an offline resolve never asks for what it will not use — reversed.
+- **A hand-kept list beside `FRAMEWORK_GROUP`**: 149 entries drifting from the runtime's POM with
+  every bump, and the guard that keeps them equal would compare against `dependency:list` — the
+  generated file with an extra step.
+- **A committed ledger a guard regenerates** (the reference pages' shape): reviewable, but the
+  file is derived from the POM with no human judgment in it, and every dependency bump that adds or
+  removes a transitive artifact would fail the guard until someone regenerated. Built, not
+  committed.
+
+How each route reads the file:
+
+- **The dist shaded jar**: the resource is shaded into `lib/tesseraql.jar` with the runtime's
+  classes; the shade filter drops signatures and module descriptors and nothing else.
+- **The reactor**: `tesseraql-runtime/target/classes`, written at `generate-resources`, so a
+  `-pl tesseraql-cli -am` build and the IDE's Maven run both have it. A `.m2` runtime jar installed
+  before this slice has no ledger, and the resolver **refuses** rather than resolving with an empty
+  set — the same `-am install` a stale jar always needed, now named by the refusal.
+- **The Maven plugin**: `package-app` computes no closure — it fetches what the lock pins
+  (decision 3) — so it has no set to derive; what it must not do is bundle a lock a resolver
+  without the ledger wrote. It resolves `io.tesseraql:tesseraql-runtime` at its own version through
+  the Maven session, the same repositories the lock's coordinates come from, and reads the ledger
+  out of that jar. Its own version, as `ModulesInstaller.BOM_COORDINATE` already decides for the
+  BOM: the tool's version names the framework's.
+
+What each route does with it:
+
+1. **`ModuleResolver`** writes every ledger `group:artifact` as an exclusion of every declared
+   dependency in the synthetic POM, beside the `io.tesseraql:*` wildcard S5 added; the ledger's
+   own first-party lines are covered by the wildcard and not repeated. In the POM and not as a
+   filter on the result, for S5's reason.
+2. **A declared coordinate the ledger names is refused** — `TQL-APP-4222`, naming the coordinate
+   and the version the runtime carries. A module is what the runtime does not carry; declaring
+   `org.slf4j:slf4j-api` or `io.tesseraql:tesseraql-core` asks for a copy that never loads.
+   `modules add` checks before it edits the YAML, so the declaration is never written.
+3. **`package` refuses a lock that names a carried artifact** — `TQL-APP-4219`, naming the
+   artifacts and `tesseraql modules resolve`, on both routes from one function in
+   `PackagedModules`. The CLI route's exact comparison already refused such a lock; the check
+   gives the Maven route the same refusal and both routes the same sentence. `dev` keeps starting
+   on such a lock: `ModulesLock.verify` stays one-directional (S5), because the cache it fills is
+   the smaller one and the lock's extra lines describe jars that would not have loaded.
+
+Versions do not enter the exclusion. It is by `group:artifact`: a module whose closure wants a
+different version of a runtime-carried artifact gets the runtime's version under parent-first
+loading in any case — the difference the ledger makes is that the lock stops claiming otherwise,
+and a class the newer version alone has fails to load instead of loading from a jar the rest of
+the library does not match. A module compiles against the BOM's versions, which are the runtime's;
+this decision writes down the rule that was always in force.
+
+Consequences to record rather than discover:
+
+- `modules fetch` resolves through the same POM, so a bag stops carrying the six; a bag fetched
+  before this slice still serves, holding more than it is asked for.
+- The pdf example's cache and lock go from 16 lines to 10. No committed lock names a carried
+  artifact (`inventory-app`'s pins a driver with no overlap; `user-admin-app` commits none).
+- A test fixture that declared a carried artifact as its "tiny, stable module" is now refused:
+  `ModulesFetchIntegrationTest` declared `org.slf4j:slf4j-api` and moves to
+  `info.picocli:picocli`, which the developer CLI carries and the runtime does not — the leaf
+  `ModulesCommandTest` already pins. The full verify found it; 4222 is doing what it says.
+- The ledger is a build output with the reproducibility every build output here has: the same POM
+  produces the same file, byte for byte, and a dependency bump changes it without anyone
+  regenerating anything.
+- The ledger's versions are the runtime's own resolution, and a deployment's can differ: Maven
+  mediates a version per graph, so the developer CLI carries `commons-codec` 1.21.0 where the
+  runtime's ledger says 1.19.0, and the host carries `org.jetbrains:annotations` 13.0 to the
+  runtime's 17.0.0. The exclusion is by `group:artifact` for this reason too, and the ledger guard
+  checks artifacts against the classpath, not versions.
+
+**Measured after the slice, through the reactor CLI against the local repository** (the copies
+under `scratchpad/m/`): the pdf example resolves **10** artifacts, 5.2 MB — `commons-logging`
+among them, the six gone; `modules add org.slf4j:slf4j-api` answers `TQL-APP-4222` naming
+`org.slf4j:slf4j-api:2.0.18`, exit 2, the YAML untouched; a lock with the two carried lines
+appended is refused by `tesseraql package` with `TQL-APP-4219` naming both, and packages 10 jars
+once `modules resolve` rewrites it. The excel module resolves 22 where it resolved 26 — one of
+the 22 is `jcl-over-slf4j`, which the developer CLI carries and the runtime does not, kept for
+the same reason `commons-logging` is; the S3 module 32. One thing observed and not changed:
+`tesseraql package`'s lock refusals (`4218`, `4219`) print as a stack trace with exit 1, as
+they did before this slice — the CLI's exception shaper knows `UsageRefusal` and the
+database-unreachable shape, and `PackagedModules` throws the runtime's `TqlException` so the
+Maven goal can share it; shaping that on the CLI is its own small slice.
+
 ## Guards
 
 | Module | Guard | What it refuses |
@@ -390,6 +526,11 @@ them under a name the rule has not heard of — which is exactly how `apache5-cl
 | `tesseraql-runtime` | `AppModulesTest` (extended) | a bundled module set silently composed with, or shadowed by, a stale `work/modules` |
 | `tesseraql-cli` | dist smoke assertion | a `modules/` directory in the dist archive |
 | `tesseraql-cli` | launcher test (slice 4b) | a classpath change that leaves the CDS archive key untouched |
+| `tesseraql-runtime` | the `runtime-closure` execution (decision 9) | a runtime jar without `META-INF/tesseraql/runtime-closure.txt`; the file is `dependency:list` at runtime scope, sorted, and no hand ever edits it |
+| `tesseraql-apptasks` | `RuntimeClosureTest` | a ledger line the parser cannot read (a plugin whose output format changed) is refused, never skipped; the header, blank lines and the ` -- module` suffix are not lines. `PackagedModulesTest`: a lock naming a carried artifact is `TQL-APP-4219` naming it |
+| `tesseraql-cli` | `RuntimeClosureLedgerTest` | a ledger that is not the runtime's closure: every line's jar must be on the test process's classpath at the version the line names, and the ledger must name neither picocli (the host's) nor `commons-logging` (a module's) |
+| `tesseraql-cli` | `ModuleResolverTest` (extended) | a module dependency the ledger names left in the closure; a declared coordinate the ledger names not refused with `TQL-APP-4222` before any repository is asked |
+| `ci.yml` dist job | the README step | a jar the shaded jar's own ledger names left in `user-admin-app/work/modules` after `dev` resolved from the archive — the one route no in-JVM test runs |
 
 ## Slices
 
@@ -402,10 +543,12 @@ Each slice is a PR and leaves the build green.
 | 3 | A `.tqlapp` carries its modules | Decision 3: resolve-from-lock in `AppPackager` and `PackageAppMojo`, `TQL-APP-4218` / `4219`, the `AppModules` precedence branch, the format lint, the `runtime-footprint.md` and `hosting.md` corrections | Installing a packaged PDF application onto a host with no repository starts and exports; no jar is ever committed to an application's repository |
 | 4a | The bag | Decision 5: `modules fetch` resolving into the bag, `--repo`, `--platform` with the binary version, `bag.json`; decision 7; the `proxy.md` section | A stack prepared on a connected machine resolves, packages and runs `dev` on a disconnected one |
 | 4b | One base classpath route | Decision 6: the stack declaration, `TQL-APP-4220`, `lib/ext/` and `TESSERAQL_CLASSPATH` in both launchers with the CDS key fix, the Windows app-image route verified on the `windows-latest` job, the `hosting.md` section | A SQL Server framework database works under `dev`, in the container, and on Windows Server, by the same placement step |
+| 5 | What the runtime carries leaves the module closure | Decision 9: the runtime's build writes its closure ledger; `ModuleResolver` excludes it and refuses a declared coordinate it names (`TQL-APP-4222`); `package` on both routes refuses a lock that names one (`TQL-APP-4219`); the `codec-discovery.md` S5 note corrected | The pdf example resolves 10 jars, not 16, from the reactor and from the dist archive alike; a lock written before the slice is refused by `tesseraql package` and by `package-app` with the same sentence |
 
 Slices 1 and 2 are independent of each other and of the rest. 4a and 4b are split so a Windows
 verification problem cannot hold up the bag; 4b depends on 4a only for the fetch side of its
-documentation.
+documentation. Slice 5 landed after all four, on the resolver S5 of
+[codec-discovery.md](codec-discovery.md) left.
 
 ## What moves in the docs
 

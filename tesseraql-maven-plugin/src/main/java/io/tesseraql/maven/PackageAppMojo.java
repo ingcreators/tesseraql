@@ -2,6 +2,7 @@ package io.tesseraql.maven;
 
 import io.tesseraql.apptasks.AppPackager;
 import io.tesseraql.apptasks.PackagedModules;
+import io.tesseraql.apptasks.RuntimeClosure;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -32,6 +33,12 @@ import org.eclipse.aether.resolution.ArtifactResolutionException;
  * because the lock already settled all three. An application that declares modules without a lock
  * is refused (TQL-APP-4218), which is also the only route this goal has: the Maven plugin has no
  * command that writes a lock.
+ *
+ * <p>What the goal must not do is bundle a lock a resolver without the runtime's closure ledger
+ * wrote (docs/module-channel.md decision 9): the plugin carries no runtime, so it resolves the
+ * runtime artifact at its own version — the tool's version names the framework's, as the CLI's
+ * BOM coordinate already decides — reads the ledger out of that jar, and refuses a lock naming an
+ * artifact the runtime carries (TQL-APP-4219) with the sentence {@code tesseraql package} gives it.
  */
 @Mojo(name = "package-app", defaultPhase = LifecyclePhase.PACKAGE, threadSafe = true)
 public class PackageAppMojo extends AbstractMojo {
@@ -95,6 +102,9 @@ public class PackageAppMojo extends AbstractMojo {
         if (lock == null) {
             return null;
         }
+        PackagedModules.requireNothingTheRuntimeCarries(home, lock, RuntimeClosure.fromJar(
+                resolve("io.tesseraql:tesseraql-runtime:"
+                        + io.tesseraql.core.TesseraqlVersion.current())));
         Path target = modulesDir.toPath();
         Files.createDirectories(target);
         for (Path stale : PackagedModules.jars(target)) {
@@ -109,7 +119,10 @@ public class PackageAppMojo extends AbstractMojo {
         return target;
     }
 
-    /** One locked coordinate, from the local repository or the project's remotes. */
+    /**
+     * One coordinate, from the local repository or the project's remotes: a locked module, or the
+     * runtime artifact whose ledger says what a lock may not name.
+     */
     private Path resolve(String coordinate) throws MojoExecutionException {
         try {
             ArtifactRequest request = new ArtifactRequest();
@@ -118,8 +131,9 @@ public class PackageAppMojo extends AbstractMojo {
             return repositorySystem.resolveArtifact(repositorySession, request)
                     .getArtifact().getFile().toPath();
         } catch (ArtifactResolutionException ex) {
-            throw new MojoExecutionException("Cannot resolve locked module " + coordinate
-                    + " — the lock names it, so the build cannot package without it", ex);
+            throw new MojoExecutionException("Cannot resolve " + coordinate
+                    + " — the lock names it or its ledger checks the lock, so the build cannot"
+                    + " package without it", ex);
         }
     }
 }

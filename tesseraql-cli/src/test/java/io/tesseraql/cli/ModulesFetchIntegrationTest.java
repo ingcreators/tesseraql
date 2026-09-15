@@ -24,14 +24,17 @@ class ModulesFetchIntegrationTest {
 
     /**
      * A tiny, stable closure — the test is about the bag, not about what is in it. The version is
-     * the reactor's own {@code slf4j.version}, so the artifact already sits in the local
+     * the reactor's own {@code picocli.version}, so the artifact already sits in the local
      * repository of any machine that built the project (a pinned foreign version re-downloaded
      * from Central on every run, and two consecutive Windows CI runs failed on Central
-     * throttling).
+     * throttling). picocli rather than {@code slf4j-api}, which this test declared before
+     * docs/module-channel.md decision 9: the runtime carries {@code slf4j-api}, so declaring it
+     * is refused as a module now, whereas picocli is the developer CLI's alone — a leaf with no
+     * parent POM and no dependency, the same fixture {@code ModulesCommandTest} pins.
      */
-    private static final String SLF4J_VERSION = reactorSlf4jVersion();
+    private static final String PICOCLI_VERSION = reactorPicocliVersion();
 
-    private static final String MODULE = "org.slf4j:slf4j-api:" + SLF4J_VERSION;
+    private static final String MODULE = "info.picocli:picocli:" + PICOCLI_VERSION;
 
     private String previousLocalRepo;
 
@@ -67,8 +70,8 @@ class ModulesFetchIntegrationTest {
                 .execute("modules", "fetch", "--app", app.toString(), "--into", bag.toString()))
                 .isZero();
 
-        assertThat(bag.resolve("org/slf4j/slf4j-api/" + SLF4J_VERSION
-                + "/slf4j-api-" + SLF4J_VERSION + ".jar")).exists();
+        assertThat(bag.resolve("info/picocli/picocli/" + PICOCLI_VERSION
+                + "/picocli-" + PICOCLI_VERSION + ".jar")).exists();
         assertThat(bag.resolve("bag.json")).exists();
         assertThat(Files.readString(bag.resolve("bag.json")))
                 .contains(MODULE)
@@ -79,18 +82,18 @@ class ModulesFetchIntegrationTest {
         Files.copy(app.resolve("modules.lock"), deployed.resolve("modules.lock"));
         assertThat(new CommandLine(new TesseraqlCli()).execute("modules", "resolve",
                 "--app", deployed.toString(), "--repo", bag.toString(), "--offline")).isZero();
-        assertThat(deployed.resolve("work/modules/slf4j-api-" + SLF4J_VERSION + ".jar")).exists();
+        assertThat(deployed.resolve("work/modules/picocli-" + PICOCLI_VERSION + ".jar")).exists();
     }
 
-    /** The reactor's {@code slf4j.version}, read from the parent POM the test already leans on. */
-    private static String reactorSlf4jVersion() {
+    /** The reactor's {@code picocli.version}, read from the parent POM the test already leans on. */
+    private static String reactorPicocliVersion() {
         Path parentPom = Path.of("..", "pom.xml").toAbsolutePath().normalize();
         try {
             java.util.regex.Matcher matcher = java.util.regex.Pattern
-                    .compile("<slf4j\\.version>([^<]+)</slf4j\\.version>")
+                    .compile("<picocli\\.version>([^<]+)</picocli\\.version>")
                     .matcher(Files.readString(parentPom));
             if (!matcher.find()) {
-                throw new IllegalStateException("No slf4j.version property in " + parentPom);
+                throw new IllegalStateException("No picocli.version property in " + parentPom);
             }
             return matcher.group(1);
         } catch (java.io.IOException ex) {
@@ -101,26 +104,26 @@ class ModulesFetchIntegrationTest {
     /**
      * Seeds the bag with the declared module from the machine's local repository, when it is
      * there — which it is on any machine that built the project, the reactor depending on the
-     * same version. Every {@code org.slf4j} artifact at that version is copied, so the parent
-     * POM chain the resolution reads (slf4j-api → slf4j-parent → slf4j-bom) comes along without
-     * this test pinning slf4j's internal structure. When the local repository has none of it,
-     * the fetch downloads from Central exactly as before; the seed only removes the network
-     * from the common case, it never fails the test.
+     * same version. Every {@code info.picocli} artifact at that version is copied, so a parent
+     * POM chain, should picocli ever grow one, comes along without this test pinning its
+     * internal structure. When the local repository has none of it, the fetch downloads from
+     * Central exactly as before; the seed only removes the network from the common case, it
+     * never fails the test.
      */
     private static void seedModuleFromLocalRepository(Path bag) throws Exception {
-        Path localSlf4j = Path.of(System.getProperty("user.home"), ".m2", "repository")
-                .resolve("org/slf4j");
-        if (!Files.isDirectory(localSlf4j)) {
+        Path localPicocli = Path.of(System.getProperty("user.home"), ".m2", "repository")
+                .resolve("info/picocli");
+        if (!Files.isDirectory(localPicocli)) {
             return;
         }
-        try (Stream<Path> artifacts = Files.list(localSlf4j)) {
+        try (Stream<Path> artifacts = Files.list(localPicocli)) {
             for (Path artifact : artifacts.sorted(Comparator.naturalOrder()).toList()) {
-                Path installed = artifact.resolve(SLF4J_VERSION);
+                Path installed = artifact.resolve(PICOCLI_VERSION);
                 if (!Files.isDirectory(installed)) {
                     continue;
                 }
-                Path target = bag.resolve("org/slf4j").resolve(artifact.getFileName())
-                        .resolve(SLF4J_VERSION);
+                Path target = bag.resolve("info/picocli").resolve(artifact.getFileName())
+                        .resolve(PICOCLI_VERSION);
                 Files.createDirectories(target);
                 try (Stream<Path> files = Files.list(installed)) {
                     for (Path file : files.sorted(Comparator.naturalOrder()).toList()) {

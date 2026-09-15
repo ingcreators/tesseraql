@@ -1,5 +1,6 @@
 package io.tesseraql.cli.modules;
 
+import io.tesseraql.apptasks.RuntimeClosure;
 import io.tesseraql.core.util.Hashing;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -14,8 +15,9 @@ import org.jboss.shrinkwrap.resolver.api.maven.coordinate.MavenCoordinate;
 
 /**
  * Resolves the declared {@code tesseraql.modules} set — and its full compile+runtime closure, less
- * the framework's own artifacts ({@link #FRAMEWORK_GROUP}) — from Maven repositories, with versions
- * supplied by the TesseraQL BOM (design: app-developer-distribution work item 4). It embeds the
+ * the framework's own artifacts ({@link #FRAMEWORK_GROUP}) and what the runtime carries
+ * ({@link RuntimeClosure}) — from Maven repositories, with versions supplied by the TesseraQL BOM
+ * (design: app-developer-distribution work item 4). It embeds the
  * ShrinkWrap Maven resolver, so no Maven install is needed and the resolution honors
  * {@code ~/.m2/settings.xml} (proxies, mirrors, credentials) automatically.
  *
@@ -29,6 +31,7 @@ public final class ModuleResolver {
     private final String bomCoordinate;
     private final boolean offline;
     private final boolean alwaysImportBom;
+    private final RuntimeClosure runtime;
 
     public ModuleResolver(String bomCoordinate) {
         this(bomCoordinate, false);
@@ -48,6 +51,7 @@ public final class ModuleResolver {
         this.bomCoordinate = bomCoordinate;
         this.offline = offline;
         this.alwaysImportBom = alwaysImportBom;
+        this.runtime = RuntimeClosure.fromClasspath();
     }
 
     /**
@@ -58,11 +62,21 @@ public final class ModuleResolver {
      */
     static final String UNRESOLVABLE = "TQL-APP-4221";
 
+    /**
+     * TQL-APP-4222: a declared module is an artifact the runtime already carries — a copy that
+     * would never load, since the module loader is a child of the runtime's, parent-first. A
+     * module is what the runtime does not carry; the refusal names the coordinate and the
+     * version the runtime has, and asks for the declaration to go (docs/module-channel.md
+     * decision 9).
+     */
+    static final String CARRIED = "TQL-APP-4222";
+
     /** Resolves the closure of {@code declared}, sorted by coordinate for a stable lock/classpath. */
     public List<ResolvedModule> resolve(List<ModuleCoordinate> declared) {
         if (declared.isEmpty()) {
             return List.of();
         }
+        requireNoneCarried(declared);
         Path pom = writePom(declared);
         try {
             MavenResolvedArtifact[] artifacts;
@@ -105,6 +119,24 @@ public final class ModuleResolver {
         }
     }
 
+    /**
+     * Refuses ({@link #CARRIED}) any declared coordinate the runtime's closure ledger names, before
+     * any repository is asked. {@code modules add} asks this before it edits the YAML, so a
+     * declaration the resolver would refuse is never written.
+     */
+    public void requireNoneCarried(List<ModuleCoordinate> declared) {
+        for (ModuleCoordinate coordinate : declared) {
+            String groupArtifact = coordinate.groupId() + ":" + coordinate.artifactId();
+            runtime.version(groupArtifact).ifPresent(version -> {
+                throw new io.tesseraql.cli.UsageRefusal(CARRIED + ": tesseraql.modules declares "
+                        + coordinate + ", which the runtime already carries (" + groupArtifact
+                        + ":" + version + ") and a module's closure leaves out — a module is what"
+                        + " the runtime does not carry, and a copy in work/modules would never"
+                        + " load. Remove the declaration.");
+            });
+        }
+    }
+
     /** The resolver's message up to its first line break: the sentence, not the model dump. */
     private static String firstLine(String message) {
         if (message == null || message.isBlank()) {
@@ -133,9 +165,24 @@ public final class ModuleResolver {
     /**
      * Writes a synthetic POM declaring the module coordinates. The BOM is imported only when some
      * coordinate omits its version (so the BOM supplies it); fully-pinned sets resolve without it.
-     * Every dependency excludes {@link #FRAMEWORK_GROUP} transitively.
+     * Every dependency excludes {@link #FRAMEWORK_GROUP} transitively, and every artifact the
+     * runtime's closure ledger names (docs/module-channel.md decision 9) — in the POM rather than
+     * filtered from the result, so an offline resolution never asks a bag for a jar the closure
+     * will not keep. The ledger's own first-party lines are the wildcard's and are not repeated.
      */
     private Path writePom(List<ModuleCoordinate> declared) {
+        StringBuilder exclusions = new StringBuilder();
+        exclusions.append("<exclusions><exclusion><groupId>").append(FRAMEWORK_GROUP)
+                .append("</groupId><artifactId>*</artifactId></exclusion>");
+        for (String carried : runtime.artifacts()) {
+            String[] groupArtifact = carried.split(":");
+            if (!FRAMEWORK_GROUP.equals(groupArtifact[0])) {
+                exclusions.append("<exclusion><groupId>").append(groupArtifact[0])
+                        .append("</groupId><artifactId>").append(groupArtifact[1])
+                        .append("</artifactId></exclusion>");
+            }
+        }
+        exclusions.append("</exclusions>");
         StringBuilder dependencies = new StringBuilder();
         boolean needsBom = alwaysImportBom;
         for (ModuleCoordinate coordinate : declared) {
@@ -146,8 +193,7 @@ public final class ModuleResolver {
             if (coordinate.hasVersion()) {
                 dependencies.append("<version>").append(coordinate.version()).append("</version>");
             }
-            dependencies.append("<exclusions><exclusion><groupId>").append(FRAMEWORK_GROUP)
-                    .append("</groupId><artifactId>*</artifactId></exclusion></exclusions>");
+            dependencies.append(exclusions);
             dependencies.append("</dependency>\n");
         }
         String management = "";

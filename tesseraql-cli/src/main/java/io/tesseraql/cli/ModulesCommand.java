@@ -51,7 +51,11 @@ final class ModulesCommand implements Runnable {
         @Override
         public Integer call() throws Exception {
             configOptions.apply();
-            ModuleCoordinate.parse(coordinate);
+            // Refused before the edit: a coordinate the runtime carries is never a module, and a
+            // declaration the resolver would refuse is not left in the YAML for a hand to remove.
+            new io.tesseraql.cli.modules.ModuleResolver(ModulesInstaller.BOM_COORDINATE,
+                    configOptions.offline).requireNoneCarried(
+                            List.of(ModuleCoordinate.parse(coordinate)));
             Path tesseraqlYml = app.resolve("config/tesseraql.yml");
             String updated = ModulesYaml.addModule(Files.readString(tesseraqlYml), coordinate);
             Files.writeString(tesseraqlYml, updated);

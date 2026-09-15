@@ -238,6 +238,24 @@ All notable changes to TesseraQL are documented here. The format follows
   every declared module transitively; the pdf example resolves 16 artifacts where it resolved
   17. A lock written earlier still starts `dev` and `host`; `package` asks for a fresh
   `tesseraql modules resolve` as it does for any drift. `docs/codec-discovery.md` S5.
+- **A module's resolved closure no longer carries what the runtime carries.** After the
+  framework's own jars left, the pdf example's closure still held six third-party jars the
+  runtime's classpath already has — `thymeleaf`, `ognl`, `attoparser`, `unbescape`,
+  `javassist`, `slf4j-api`, 2.4 MB — copies that never loaded, in every cache, package and
+  bag, and a lock naming versions that did not run. The runtime's build now writes its own
+  runtime-scope closure into the runtime jar (`META-INF/tesseraql/runtime-closure.txt`), and
+  the resolver excludes every artifact it names — the runtime's closure and not the process
+  the resolver runs in, because that differs between the developer CLI, the host and a
+  wrapper-pom build, and only the runtime's is the floor every module loader's parent has;
+  `commons-logging`, which the developer CLI's `jcl-over-slf4j` had made look carried, stays in
+  the closure because the host does not have it. The pdf example resolves 10 artifacts where it
+  resolved 16. A declared coordinate the runtime carries (`org.slf4j:slf4j-api`,
+  `io.tesseraql:tesseraql-core`) is refused with `TQL-APP-4222` naming the version the runtime
+  has, before `modules add` edits the YAML and before any repository is asked. A lock written
+  earlier still starts `dev` and `host`; `tesseraql package` and the Maven `package-app` goal
+  both refuse it with the same `TQL-APP-4219` sentence naming the carried artifacts and
+  `tesseraql modules resolve` — the goal reads the ledger out of the runtime artifact it
+  resolves, since it carries no runtime of its own. `docs/module-channel.md` decision 9.
 - **The README's second quick start runs as written from the distribution archive.** The
   example it names declares the pdf module its printable route uses, so `tesseraql dev`
   resolves it — the build line installs the reactor so that resolution finds the module and

@@ -455,7 +455,12 @@ closure.
 base classpath too (`lib/tesseraql.jar` holds their packages), inert under the same
 parent-first rule. Excluding them needs the runtime's closure at resolve time, which the
 resolver cannot name by rule the way it names the framework's group; the module channel is
-where that list would live.
+where that list would live. **Fixed as [module-channel.md](module-channel.md) decision 9**
+(slice 5, 2026-09-15), which measured the count as six, not seven: `commons-logging` is not in
+the runtime's closure at all — the package `lib/tesseraql.jar` holds is the developer CLI's
+`jcl-over-slf4j`, which the host excludes with the resolver stack — so a resolver that had
+excluded what the *CLI* carries would have broken PDFBox under `host`. The runtime's own build
+now writes its closure into its jar, and that file is the list.
 
 Guards: `DevNarrowingIntegrationTest` (tesseraql-cli; the running case forks `dev --watch`
 and reads the console once "Watching every application's web/" — printed after the hints —

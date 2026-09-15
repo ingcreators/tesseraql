@@ -110,6 +110,35 @@ public final class PackagedModules {
     }
 
     /**
+     * Refuses ({@code TQL-APP-4219}) when {@code lock} pins an artifact the runtime carries
+     * (docs/module-channel.md decision 9): such a lock was written by a resolver that did not
+     * know the runtime's closure, and the jars it names would ride in the archive to be shadowed
+     * by the runtime's own copies at load. Both packaging routes ask this before they fetch or
+     * resolve anything, so a stale lock gets the same sentence from {@code tesseraql package}
+     * and from the Maven goal: re-run {@code tesseraql modules resolve}, which writes a lock
+     * without them.
+     */
+    public static void requireNothingTheRuntimeCarries(Path appHome, Path lock,
+            RuntimeClosure runtime) {
+        List<String> carried = new ArrayList<>();
+        for (String coordinate : lockedCoordinates(lock)) {
+            int version = coordinate.lastIndexOf(':');
+            String groupArtifact = version < 0 ? coordinate : coordinate.substring(0, version);
+            if (runtime.carries(groupArtifact)) {
+                carried.add(coordinate);
+            }
+        }
+        if (!carried.isEmpty()) {
+            throw new TqlException(MODULES_DIVERGED_AT_PACK, "Application '"
+                    + appHome.getFileName() + "' has a modules.lock naming " + carried.size()
+                    + " artifact(s) the runtime already carries, which a module's closure leaves"
+                    + " out: " + String.join(", ", carried) + " — re-run 'tesseraql modules"
+                    + " resolve --app " + appHome + "' so the lock names only what the runtime"
+                    + " does not carry");
+        }
+    }
+
+    /**
      * The {@code group:artifact:version} coordinates {@code lock} pins, in file order — what a
      * build that has no TesseraQL resolver of its own (the Maven plugin, resolving through Maven)
      * needs in order to fetch exactly the reviewed closure and nothing else.
