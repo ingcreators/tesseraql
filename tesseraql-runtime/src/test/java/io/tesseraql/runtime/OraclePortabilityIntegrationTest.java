@@ -111,6 +111,11 @@ class OraclePortabilityIntegrationTest {
     }
 
     @Test
+    void theWorkflowSweepIsolatesAFailingTaskOnThisDialect() throws Exception {
+        DialectRuntimeChecks.workflowSweepRoundTrip(dataSource(), "oracle");
+    }
+
+    @Test
     void fileTransfersRoundTripOnThisDialect() throws Exception {
         DialectRuntimeChecks.fileTransferRoundTrip(runtime, "oracle-demo");
     }

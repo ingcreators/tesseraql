@@ -114,6 +114,11 @@ class SqlServerPortabilityIntegrationTest {
     }
 
     @Test
+    void theWorkflowSweepIsolatesAFailingTaskOnThisDialect() throws Exception {
+        DialectRuntimeChecks.workflowSweepRoundTrip(dataSource(), "sqlserver");
+    }
+
+    @Test
     void fileTransfersRoundTripOnThisDialect() throws Exception {
         DialectRuntimeChecks.fileTransferRoundTrip(runtime, "sqlserver-demo");
     }
