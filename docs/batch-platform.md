@@ -160,6 +160,11 @@ code. Today the only manual trigger is an ops HTTP endpoint.
   execution completes successfully in the same app — enough for "extract, then
   send"; anything wider belongs to the external scheduler by design.
 
+On a vendor whose Flyway module ships with the runtime, the job verbs migrate the
+framework's operations schema before they touch it, exactly as a boot does. A database
+whose first TesseraQL contact is `job run` therefore boots a runtime afterwards; the
+stores' own bootstrap is not a substitute for that migration.
+
 ## Track E — overlap, and the SLA that pages someone
 
 - **Overlap policy**: today a firing runs even while the previous execution is still
