@@ -1,13 +1,17 @@
 # A view's `source:` is a route's declaration: go-to-definition and completion for named sources in the editor
 
-> **Status: designed 2026-09-15; every decision decided as recommended the same day.** One implementation
-> slice and one release, each on the user's call.
+> **Status: designed 2026-09-15; every decision decided as recommended the same day; S1 shipped
+> the same day.** One implementation slice and one release, each on the user's call.
 >
 > **S1** — the `symbols` contract carries every route's named sources (with their lines), the
 > view it binds and the views it composes; the extension navigates from a `source:` value to the
 > `sources.<name>:` line of the route that binds the document, and completes the names the
-> binding route declares: *open*. **R1** — `ext-v0.3.17`, the first extension release since
-> #1354 and #1355, read back by its notes and by the bytes of its vsix: *open*.
+> binding route declares: **shipped, #1357** (extension 0.3.17; the CLI guard was red on HEAD by
+> absence, the two detector variants `v-nowalk` and `v-anyenrich` each red on exactly the
+> exclusion test, and the new CLI's document for `examples/procurement-app` fed into the
+> compiled extension core resolved `dashboard.view.yml:13` to `web/dashboard/get.yml:14`).
+> **R1** — `ext-v0.3.17`, the first extension release since #1354 and #1355, read back by its
+> notes and by the bytes of its vsix: *open — the user pushes the tag after S1 merges*.
 
 This is the last line of `docs/vscode-extension.md` "Not currently supported" — "go-to-definition
 for named queries" — written when the route surface still spelled them `queries:`. Since the

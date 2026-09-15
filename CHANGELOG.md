@@ -6,6 +6,22 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ## Unreleased
 
+### Added
+
+- **The editor navigates a view's `source:` to the route that declares it.** The last
+  "not currently supported" line of the VS Code extension — go-to-definition for named
+  queries, spelled `sources:` since the unified source model — is closed
+  (`docs/editor-named-sources.md`). `tesseraql symbols` now carries, per route, the named
+  sources it declares in authored order (name, `sources.<name>:` line, arm, the sql arm's
+  file) and the view documents it binds through `response.html.view` and `views:`; the
+  extension (0.3.17) resolves a view's `source:` — the document's, a panel's, a child's, block
+  form or flow map — through every route that binds the view, one location per route, and an
+  `enrich:` entry's bare-name `source:` against its own route, and completes the names the
+  binding routes declare with their arm, file and route. A `source` under `params:`, a
+  lookup's URL, a decision table's block and `steps.<id>` are not references. A 0.17.0 CLI
+  omits the three properties and the extension stays silent, as with every earlier contract
+  addition.
+
 ### Fixed
 
 - **An extension release's token check survives a Marketplace request timeout.** `ext-v0.3.16`'s

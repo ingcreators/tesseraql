@@ -5,16 +5,24 @@ import { homeOf } from '../core/appHome';
 import {
   AppSymbols,
   BrokenDocument,
+  RouteSymbol,
   completionKindAt,
   parseAppSymbols,
+  routesBinding,
+  sourceCompletionAt,
+  sourceDetail,
+  sourceReferenceAt,
   symbolReferenceAt,
 } from '../core/symbols';
+import { viewIdInfoOf } from '../core/views';
 
 /**
  * The language layer (docs/vscode-extension.md, Phase 56 slice 5): completion and
  * go-to-definition for `policy:`, `message:`, `domain:`, and `use:` values over the
  * `tesseraql symbols` contract — the editor knows exactly what the framework
- * declares, nothing more.
+ * declares, nothing more. A named source (docs/editor-named-sources.md) is the one
+ * kind declared in a route and referenced from a document that does not name it: a
+ * view's `source:` resolves through the routes that bind the view.
  */
 function poolFor(symbols: AppSymbols,
     kind: 'policy' | 'message' | 'maybe-message' | 'domain' | 'shared' | 'decision'
@@ -37,6 +45,30 @@ function poolFor(symbols: AppSymbols,
     default: return symbols.messages;
   }
 }
+/** The lines before the cursor's — the block contexts read upward. */
+function linesAbove(document: vscode.TextDocument, line: number): string[] {
+  const lines: string[] = [];
+  for (let index = 0; index < line; index++) {
+    lines.push(document.lineAt(index).text);
+  }
+  return lines;
+}
+
+/**
+ * The routes whose `sources:` a `source:` in this document refers to: for a view
+ * document, the routes binding it (through `view:` or `views:`); for a route document,
+ * the route itself.
+ */
+function sourceScope(home: string, symbols: AppSymbols, document: vscode.TextDocument):
+    RouteSymbol[] {
+  const file = document.uri.fsPath;
+  if (file.endsWith('.view.yml')) {
+    return routesBinding(symbols, viewIdInfoOf(path.basename(file), document.getText()).id);
+  }
+  const relative = path.relative(home, file).split(path.sep).join('/');
+  return symbols.routes.filter((route) => route.source === relative);
+}
+
 export class SymbolIndex {
   private readonly byHome = new Map<string, AppSymbols>();
   private readonly pending = new Map<string, NodeJS.Timeout>();
@@ -147,14 +179,15 @@ export class SymbolDefinitionProvider implements vscode.DefinitionProvider {
   constructor(private readonly index: SymbolIndex) {}
 
   provideDefinition(document: vscode.TextDocument, position: vscode.Position):
-      vscode.Location | undefined {
+      vscode.Location | vscode.Location[] | undefined {
     const found = this.index.symbolsFor(document.uri.fsPath);
     if (found === undefined) {
       return undefined;
     }
-    const reference = symbolReferenceAt(document.lineAt(position.line).text, position.character);
+    const lineText = document.lineAt(position.line).text;
+    const reference = symbolReferenceAt(lineText, position.character);
     if (reference === undefined) {
-      return undefined;
+      return this.sourceDefinition(found.home, found.symbols, document, position, lineText);
     }
     const pool = poolFor(found.symbols, reference.kind);
     const target = pool.find((symbol) => symbol.name === reference.value);
@@ -165,6 +198,31 @@ export class SymbolDefinitionProvider implements vscode.DefinitionProvider {
     return new vscode.Location(
         vscode.Uri.file(path.join(found.home, ...target.source.split('/'))),
         new vscode.Position((target.line ?? 1) - 1, 0));
+  }
+
+  /**
+   * A `source:` value → the `sources.<name>:` line of every route that binds the
+   * document (docs/editor-named-sources.md decision 3): one location per binding route,
+   * so a view two routes share shows both. A name no binding route declares resolves
+   * nothing — TQL-VIEW-3308 is the judgement, not the editor.
+   */
+  private sourceDefinition(home: string, symbols: AppSymbols, document: vscode.TextDocument,
+      position: vscode.Position, lineText: string): vscode.Location[] | undefined {
+    const reference = sourceReferenceAt(document.uri.fsPath, lineText, position.character,
+        linesAbove(document, position.line));
+    if (reference === undefined) {
+      return undefined;
+    }
+    const locations: vscode.Location[] = [];
+    for (const route of sourceScope(home, symbols, document)) {
+      const source = route.sources.find((candidate) => candidate.name === reference.value);
+      if (source !== undefined) {
+        locations.push(new vscode.Location(
+            vscode.Uri.file(path.join(home, ...route.source.split('/'))),
+            new vscode.Position((source.line ?? 1) - 1, 0)));
+      }
+    }
+    return locations.length === 0 ? undefined : locations;
   }
 }
 
@@ -177,9 +235,10 @@ export class SymbolCompletionProvider implements vscode.CompletionItemProvider {
     if (found === undefined) {
       return undefined;
     }
-    const kind = completionKindAt(document.lineAt(position.line).text, position.character);
+    const lineText = document.lineAt(position.line).text;
+    const kind = completionKindAt(lineText, position.character);
     if (kind === undefined) {
-      return undefined;
+      return this.sourceCompletions(found.home, found.symbols, document, position, lineText);
     }
     const pool = poolFor(found.symbols, kind);
     return pool.map((symbol) => {
@@ -194,5 +253,30 @@ export class SymbolCompletionProvider implements vscode.CompletionItemProvider {
           : symbol.source;
       return item;
     });
+  }
+
+  /**
+   * After `source:` at a reference position: the names the binding routes declare, one
+   * item per name (decision 5), each saying its arm, its file and its route. `main` is
+   * offered only where a route declares it.
+   */
+  private sourceCompletions(home: string, symbols: AppSymbols, document: vscode.TextDocument,
+      position: vscode.Position, lineText: string): vscode.CompletionItem[] | undefined {
+    if (!sourceCompletionAt(document.uri.fsPath, lineText, position.character,
+        linesAbove(document, position.line))) {
+      return undefined;
+    }
+    const items = new Map<string, vscode.CompletionItem>();
+    for (const route of sourceScope(home, symbols, document)) {
+      for (const source of route.sources) {
+        if (items.has(source.name)) {
+          continue;
+        }
+        const item = new vscode.CompletionItem(source.name, vscode.CompletionItemKind.Value);
+        item.detail = sourceDetail(source, route);
+        items.set(source.name, item);
+      }
+    }
+    return [...items.values()];
   }
 }

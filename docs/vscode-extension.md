@@ -107,6 +107,7 @@ contract (see below), per app home and refreshed on save, and adds:
 | `calendar:` | the business-day calendars under `calendars/` |
 | `codes:` | the code catalogs under `catalogs/` |
 | `after:` | the declared batch jobs, each completion carrying its one-line trigger story |
+| `source:` | in a `*.view.yml`, the named sources declared by the routes that bind the view (through `response.html.view` or a template route's `views:`); under an `enrich:` entry of a route, the route's own — each item saying its arm, its file and its route |
 
 A mistyped `calendar:` fails open at fire time, so the editor is where it gets caught.
 
@@ -121,11 +122,18 @@ A mistyped `calendar:` fails open at fire time, so the editor is where it gets c
 - `codes:` → the catalog's `catalogs/*.yml` declaration. A mistyped name resolves nothing,
   and every value of that field is then refused at runtime.
 - `after:` → the chained job's document.
+- `source:` → the `sources.<name>:` line of the route that declares it. A view's
+  `source:` (the document's own, a panel's, a child's — block form or inside a flow map)
+  resolves through every route that binds the view, one location per route, so a view two
+  routes share shows both. A route's `enrich:` `source:` resolves against the route itself
+  when it is a bare name; `steps.<id>` names a step and stays a literal, as does a `source`
+  under `params:`. The SQL file is one more click, through the `file:` link on the next line.
 
 Unknown references stay lint findings — the providers navigate, they do not judge.
 A pre-shared-definitions CLI simply omits the `domains`/`rules`/`decisions` arrays
-(a pre-0.10 CLI the `workflows`/`calendars`/`jobs` arrays), and the extension
-degrades those features to empty rather than rejecting the document.
+(a pre-0.10 CLI the `workflows`/`calendars`/`jobs` arrays, a pre-0.18 CLI a route's
+`sources`/`view`/`views`), and the extension degrades those features to empty rather
+than rejecting the document.
 
 ## Test Explorer and SQL coverage
 
@@ -259,16 +267,17 @@ the opt-in regression gate) are identical in both formats.
 Prints what the framework declares:
 
 ```json
-{"policies": [{"name": "...", "source": "...", "line": 1}], "messages": [{"key": "...", "source": "...", "line": 1}], "domains": [{"name": "...", "source": "...", "line": 1}], "rules": [{"name": "...", "source": "...", "line": 1}], "decisions": [{"name": "...", "source": "...", "line": 1}], "calendars": [{"name": "...", "source": "...", "line": 1}], "catalogs": [{"name": "...", "source": "...", "line": 1}], "routes": [{"id": "...", "source": "...", "path": "...", "recipe": "..."}], "workflows": [{"id": "...", "source": "...", "line": 1, "transitions": ["..."], "dispatches": ["..."]}], "jobs": [{"id": "...", "source": "...", "line": 1, "trigger": "..."}], "broken": [{"source": "...", "error": "..."}]}
+{"policies": [{"name": "...", "source": "...", "line": 1}], "messages": [{"key": "...", "source": "...", "line": 1}], "domains": [{"name": "...", "source": "...", "line": 1}], "rules": [{"name": "...", "source": "...", "line": 1}], "decisions": [{"name": "...", "source": "...", "line": 1}], "calendars": [{"name": "...", "source": "...", "line": 1}], "catalogs": [{"name": "...", "source": "...", "line": 1}], "routes": [{"id": "...", "source": "...", "method": "...", "path": "...", "recipe": "...", "sources": [{"name": "...", "line": 1, "arm": "sql", "file": "..."}], "view": "...", "views": ["..."]}], "workflows": [{"id": "...", "source": "...", "line": 1, "transitions": ["..."], "dispatches": ["..."]}], "jobs": [{"id": "...", "source": "...", "line": 1, "trigger": "..."}], "broken": [{"source": "...", "error": "..."}]}
 ```
 
 Everything in it is sorted and deterministic. Policies come from the app config, and message
 keys from the default-locale catalog, as flattened dotted keys with their source lines.
 Domains, rules, calendars, and catalogs come from the shared-definition documents under
 `domains/`, `rules/`, `calendars/`, and `catalogs/`, each name paired with the file
-declaring it. Routes, workflows
-(each with its transition and dispatch ids), and jobs (each with its one-line trigger story)
-come from the manifest.
+declaring it. Routes (each with the named sources it declares in authored order — name,
+`sources.<name>:` line, arm, and the sql arm's file — and the view documents it binds through
+`response.html.view` and `views:`), workflows (each with its transition and dispatch ids), and
+jobs (each with its one-line trigger story) come from the manifest.
 
 A document that does not parse is **skipped, not fatal**: it is listed in `broken`
 (with the parser's message) and on stderr, and everything else still prints. Editor
@@ -313,8 +322,10 @@ repository.
 - **Open VSX publication.** The `ext-v*` workflow publishes to the Visual Studio
   Marketplace only; mirroring to Open VSX (for VS Code forks) needs its own token
   and is not wired up.
-- **Embedded-SQL analysis** against the introspected catalog, and go-to-definition
-  for named queries.
+- **Embedded-SQL analysis** against the introspected catalog, and the template side of
+  a named source — `${ordersByState.rows}` in HTML, jxls and PDF templates. The YAML side
+  (a view's or an enrichment's `source:`) navigates and completes; a bindable path such as
+  `model: { users: main.rows }` does not.
 
 ## Design notes
 
