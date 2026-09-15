@@ -10,6 +10,25 @@ class WorkHomeTest {
 
     private static final Path HOME = Path.of("/apps/demo");
 
+    /**
+     * The module set is the bundled directory when it holds a jar, else {@code work/modules}
+     * (docs/codec-discovery.md decision 4): one answer for the runtime and every CLI verb.
+     */
+    @Test
+    void theModuleSetIsTheBundledDirectoryWhenItHoldsAJarElseWorkModules(
+            @org.junit.jupiter.api.io.TempDir Path dir) throws Exception {
+        AppConfig config = new AppConfig(Map.of(), name -> null);
+        assertThat(WorkHome.moduleSet(dir, config)).isEqualTo(dir.resolve("work/modules"));
+
+        Path bundled = java.nio.file.Files.createDirectories(dir.resolve(WorkHome.BUNDLED_MODULES));
+        java.nio.file.Files.writeString(bundled.resolve("notes.txt"), "");
+        assertThat(WorkHome.moduleSet(dir, config)).as("a jar-less bundled directory is not a set")
+                .isEqualTo(dir.resolve("work/modules"));
+
+        java.nio.file.Files.writeString(bundled.resolve("codec.jar"), "");
+        assertThat(WorkHome.moduleSet(dir, config)).isEqualTo(bundled);
+    }
+
     @Test
     void defaultsToTheConventionalWorkDirectory() {
         assertThat(WorkHome.resolve(HOME, new AppConfig(Map.of(), name -> null)))

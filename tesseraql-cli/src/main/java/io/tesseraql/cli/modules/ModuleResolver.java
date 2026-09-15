@@ -49,6 +49,14 @@ public final class ModuleResolver {
         this.alwaysImportBom = alwaysImportBom;
     }
 
+    /**
+     * TQL-APP-4221: a declared module could not be resolved — the artifact, its version through
+     * the BOM, or the BOM itself is not in any repository this resolver reaches. A refusal in
+     * one line naming what and where to look, exit 2, in place of the resolver's own stack
+     * trace (docs/codec-discovery.md decision 5).
+     */
+    static final String UNRESOLVABLE = "TQL-APP-4221";
+
     /** Resolves the closure of {@code declared}, sorted by coordinate for a stable lock/classpath. */
     public List<ResolvedModule> resolve(List<ModuleCoordinate> declared) {
         if (declared.isEmpty()) {
@@ -56,13 +64,26 @@ public final class ModuleResolver {
         }
         Path pom = writePom(declared);
         try {
-            MavenResolvedArtifact[] artifacts = Maven.configureResolver()
-                    .workOffline(offline)
-                    .loadPomFromFile(pom.toFile())
-                    .importCompileAndRuntimeDependencies()
-                    .resolve()
-                    .withTransitivity()
-                    .asResolvedArtifact();
+            MavenResolvedArtifact[] artifacts;
+            try {
+                artifacts = Maven.configureResolver()
+                        .workOffline(offline)
+                        .loadPomFromFile(pom.toFile())
+                        .importCompileAndRuntimeDependencies()
+                        .resolve()
+                        .withTransitivity()
+                        .asResolvedArtifact();
+            } catch (org.jboss.shrinkwrap.resolver.api.ResolutionException
+                    | org.jboss.shrinkwrap.resolver.api.InvalidConfigurationFileException ex) {
+                throw new io.tesseraql.cli.UsageRefusal(UNRESOLVABLE + ": cannot resolve the"
+                        + " declared modules " + declared.stream().map(ModuleCoordinate::toString)
+                                .toList()
+                        + (offline ? " offline" : "") + " - " + firstLine(ex.getMessage())
+                        + "\n  Versions come from " + bomCoordinate + ": from the monorepo,"
+                        + " `./mvnw -DskipTests install` puts it and the modules in the local"
+                        + " repository; offline, pass --repo <bag> from `tesseraql modules"
+                        + " fetch`; otherwise check the repositories in ~/.m2/settings.xml.");
+            }
             List<ResolvedModule> resolved = new ArrayList<>();
             for (MavenResolvedArtifact artifact : artifacts) {
                 MavenCoordinate coordinate = artifact.getCoordinate();
@@ -81,6 +102,15 @@ public final class ModuleResolver {
                 // A leftover temp POM is harmless.
             }
         }
+    }
+
+    /** The resolver's message up to its first line break: the sentence, not the model dump. */
+    private static String firstLine(String message) {
+        if (message == null || message.isBlank()) {
+            return "the resolver gave no reason";
+        }
+        int end = message.indexOf('\n');
+        return (end < 0 ? message : message.substring(0, end)).strip();
     }
 
     /**

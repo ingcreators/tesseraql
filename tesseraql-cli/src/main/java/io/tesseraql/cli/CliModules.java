@@ -96,24 +96,33 @@ public final class CliModules {
     }
 
     /**
-     * One application's module cache directory: resolved (lock-verified) through the embedded
-     * resolver on the developer CLI, or read as-is from disk on the deployment distribution,
-     * which carries no resolver. A broken app (unreadable manifest) yields nothing and does not
-     * fail here: the linter reports the manifest problem itself.
+     * One application's module directory: the declared set resolved (lock-verified) through the
+     * embedded resolver on the developer CLI, and otherwise — nothing declared, or the deployment
+     * distribution, which carries no resolver — the directory the runtime reads
+     * ({@code WorkHome.moduleSet}: the bundled set, else {@code work/modules}). One rule for every
+     * runner (docs/codec-discovery.md decision 4): the developer CLI used to ignore an undeclared
+     * {@code work/modules} that {@code tesseraql dev}, {@code host} and the deployment CLI all
+     * load, so {@code lint} warned about a format the runtime was serving. A broken app
+     * (unreadable manifest) yields nothing and does not fail here: the linter reports the
+     * manifest problem itself; a module that cannot be resolved is the installer's refusal.
      */
     private static Optional<File> moduleCache(Path app) {
+        AppConfig config;
         try {
-            AppConfig config = new ManifestLoader().load(app).config();
-            if (RESOLVER_PRESENT) {
-                return new ModulesInstaller().install(app, config, false)
-                        .map(result -> result.cacheDir().toFile());
-            }
-            Path cache = WorkHome.resolve(app, config).resolve("modules");
-            return Files.isDirectory(cache) ? Optional.of(cache.toFile()) : Optional.empty();
+            config = new ManifestLoader().load(app).config();
         } catch (RuntimeException ex) {
             // lint of a broken app must still run; modules just stay uninstalled
             return Optional.empty();
         }
+        if (RESOLVER_PRESENT) {
+            Optional<File> resolved = new ModulesInstaller().install(app, config, false)
+                    .map(result -> result.cacheDir().toFile());
+            if (resolved.isPresent()) {
+                return resolved;
+            }
+        }
+        Path set = WorkHome.moduleSet(app, config);
+        return Files.isDirectory(set) ? Optional.of(set.toFile()) : Optional.empty();
     }
 
     /**
