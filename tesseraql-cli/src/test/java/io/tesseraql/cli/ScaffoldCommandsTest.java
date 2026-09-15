@@ -108,9 +108,11 @@ class ScaffoldCommandsTest {
         assertThat(Files.readString(board.resolve("get.yml")))
                 .contains("template: board.html").doesNotContain("view: board");
 
-        // Ejected means ejected: a rerun finds no view: left to eject.
+        // Ejected means ejected: a rerun finds no view: left to eject — a coded refusal
+        // before anything is written, so the shaper's 2 (docs/cli-surface.md decision 10a),
+        // not the 1 this command hand-wrote before decision 10 existed.
         assertThat(execute("scaffold", "eject-view", "--app", app.toString(),
-                "--route", "web/board/get.yml")).isEqualTo(1);
+                "--route", "web/board/get.yml")).isEqualTo(2);
     }
 
     @Test

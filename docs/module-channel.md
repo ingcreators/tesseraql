@@ -510,11 +510,20 @@ among them, the six gone; `modules add org.slf4j:slf4j-api` answers `TQL-APP-422
 appended is refused by `tesseraql package` with `TQL-APP-4219` naming both, and packages 10 jars
 once `modules resolve` rewrites it. The excel module resolves 22 where it resolved 26 — one of
 the 22 is `jcl-over-slf4j`, which the developer CLI carries and the runtime does not, kept for
-the same reason `commons-logging` is; the S3 module 32. One thing observed and not changed:
-`tesseraql package`'s lock refusals (`4218`, `4219`) print as a stack trace with exit 1, as
-they did before this slice — the CLI's exception shaper knows `UsageRefusal` and the
+the same reason `commons-logging` is; the S3 module 32. One thing observed and not changed
+here: `tesseraql package`'s lock refusals (`4218`, `4219`) printed as a stack trace with exit 1,
+as they did before this slice — the CLI's exception shaper knew `UsageRefusal` and the
 database-unreachable shape, and `PackagedModules` throws the runtime's `TqlException` so the
-Maven goal can share it; shaping that on the CLI is its own small slice.
+Maven goal can share it. **Closed 2026-09-15 by [cli-surface.md](cli-surface.md) decision 10a**,
+which measured the shape across every verb first: it was never `package`'s — twenty-two verbs
+printed a route that does not parse the same way — so the shaper learned the coded exception as
+its third shape (the sentence, exit 2) rather than `package` wrapping two codes. The same
+measurement found the CLI route's *drifted*-lock refusal had lost its 4219 in decision 10's
+slice (#1338 turned the installer's mismatch into a `UsageRefusal`, and `PackageCommand`'s
+re-raise caught the exception the installer no longer threw): that refusal is the installer's
+own sentence at exit 2, the one `dev` gives the same lock, and 4219 on the CLI route is
+`PackagedModules`' two sentences — a carried artifact, and a cache that disagrees with the lock
+after a verified resolve.
 
 ## Guards
 

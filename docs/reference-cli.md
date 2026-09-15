@@ -34,7 +34,7 @@ Every command, on both binaries, answers with one of these; `tesseraql --help` p
 | --- | --- |
 | `0` | The command did what was asked. |
 | `1` | The command ran and failed — a database it could not reach (one operator message, no stack trace), a job that ended FAILED, or an unexpected error with its stack trace. |
-| `2` | Nothing ran: the request could not be run at all — a missing or unparseable flag, a directory that is not an application, a declaration the command cannot act on, a modules.lock that does not match — one line on stderr saying what to change. |
+| `2` | Nothing ran: the request could not be run at all — a missing or unparseable flag, a directory that is not an application, a declaration the command cannot act on, a modules.lock that does not match — one line on stderr saying what to change, or the framework's own coded sentence (TQL-…) naming the declaration. |
 | `3` | `job run` only: the job did not run by policy — its business-day calendar filtered the date out, or the overlap policy skipped the firing. |
 
 ## `dev`

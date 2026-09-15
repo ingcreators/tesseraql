@@ -60,11 +60,14 @@ final class PackageCommand implements Callable<Integer> {
      * The module closure this package carries, or null when the application declares none
      * (docs/module-channel.md decision 3). Packaging is the last moment a resolver is present, so
      * it resolves here rather than asking for a prior command: the lock pins the closure, and
-     * {@link io.tesseraql.cli.modules.ModulesInstaller} verifies what it resolved against it. An
-     * application that declares modules without a lock is refused (TQL-APP-4218) instead, because
-     * only a lock can say which closure was reviewed; a lock naming an artifact the runtime
-     * carries is refused before anything resolves (TQL-APP-4219), with the sentence the Maven
-     * goal gives the same lock (docs/module-channel.md decision 9).
+     * {@link io.tesseraql.cli.modules.ModulesInstaller} verifies what it resolved against it —
+     * its own refusal, the sentence {@code dev} gives the same lock. An application that declares
+     * modules without a lock is refused (TQL-APP-4218) instead, because only a lock can say which
+     * closure was reviewed; a lock naming an artifact the runtime carries is refused before
+     * anything resolves (TQL-APP-4219), with the sentence the Maven goal gives the same lock
+     * (docs/module-channel.md decision 9). Every refusal here is coded or a {@code UsageRefusal},
+     * and the CLI's exception shaper prints each as its sentence with exit 2
+     * (docs/cli-surface.md decision 10a).
      */
     private static Path resolveDeclaredModules(Path home) {
         io.tesseraql.yaml.config.AppConfig config = new io.tesseraql.yaml.manifest.ManifestLoader()
@@ -75,18 +78,9 @@ final class PackageCommand implements Callable<Integer> {
         }
         PackagedModules.requireNothingTheRuntimeCarries(home, lock,
                 io.tesseraql.apptasks.RuntimeClosure.fromClasspath());
-        Path cache;
-        try {
-            cache = new io.tesseraql.cli.modules.ModulesInstaller().install(home, config, false)
-                    .map(io.tesseraql.cli.modules.ModulesInstaller.Result::cacheDir)
-                    .orElse(null);
-        } catch (IllegalStateException lockMismatch) {
-            // The installer's own lock verification, raised as the packaging refusal it is.
-            throw new io.tesseraql.core.error.TqlException(
-                    PackagedModules.MODULES_DIVERGED_AT_PACK, "Application '"
-                            + home.getFileName() + "' cannot be packaged: "
-                            + lockMismatch.getMessage());
-        }
+        Path cache = new io.tesseraql.cli.modules.ModulesInstaller().install(home, config, false)
+                .map(io.tesseraql.cli.modules.ModulesInstaller.Result::cacheDir)
+                .orElse(null);
         if (cache != null) {
             PackagedModules.verifyAgainstLock(home, cache, home.resolve("modules.lock"));
         }

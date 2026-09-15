@@ -246,15 +246,12 @@ final class ScaffoldCommand implements Runnable {
             // D2): ViewEjects locates the route, renders the pattern, writes the
             // checksum-stamped template and flips view: to template:.
             var manifest = new ManifestLoader().load(app);
-            io.tesseraql.yaml.view.ViewEjects.Result result;
-            try {
-                result = io.tesseraql.yaml.view.ViewEjects.eject(app, manifest, route, force);
-            } catch (io.tesseraql.core.error.TqlException ex) {
-                // Failure diagnostics go to stderr so `tesseraql scaffold eject-view … > out`
-                // does not swallow the reason behind a non-zero exit.
-                System.err.println(ex.getMessage());
-                return 1;
-            }
+            // A route the ejector cannot act on — no view:, a shared view, a template it
+            // cannot place — is a coded refusal raised before its first write, and the CLI's
+            // exception shaper answers it with the sentence and exit 2 (docs/cli-surface.md
+            // decision 10a); the hand-written catch that returned 1 here predated decision 10.
+            io.tesseraql.yaml.view.ViewEjects.Result result = io.tesseraql.yaml.view.ViewEjects
+                    .eject(app, manifest, route, force);
             if (result.blocked()) {
                 System.err.println("  skipped   " + result.templatePath());
                 System.err.println("The target template exists with hand edits."
