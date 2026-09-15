@@ -37,6 +37,10 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  * drives a document through transitions; a transition resolves assignees and opens a deadline-bearing
  * task; a document with open tasks may only be transitioned by someone who holds one; the cluster-safe
  * sweeper escalates an overdue task exactly once; and the assignee may delegate to another principal.
+ *
+ * <p>Since docs/audit-low-leads.md slice 2a: the assign resolver is told its document (a
+ * {@code /* key *}{@code /} lookup opens the task, so the task-authority gate engages), and both
+ * reminders reach the assignee's inbox — recipient and opt-out honoured at enqueue.
  */
 @Testcontainers
 class WorkflowTransitionIntegrationTest {
@@ -280,8 +284,12 @@ class WorkflowTransitionIntegrationTest {
         assertThat(queryString("select due_at from tql_workflow_task "
                 + "where doc_id = ? and status = 'OPEN'", "ER-1")).isNull();
         assertThat(escalateHistoryCount("ER-1")).isEqualTo(1);
-        // The escalation enqueued a reminder notification on the outbox (Phase 20 channels).
+        // The escalation enqueued a reminder notification on the outbox (Phase 20 channels),
+        // addressed to the new assignee, and the inbox channel delivers it to them.
         assertThat(notificationCount("ER-1")).isEqualTo(1);
+        runtime.dispatchOutboxOnce();
+        assertThat(inboxTitle("dept-head-1", "escalating_request.escalated", "ER-1"))
+                .isEqualTo("Task on ER-1");
 
         // Exactly once: the cleared deadline means a second sweep escalates and notifies nothing.
         assertThat(sweeper.sweep()).isZero();
@@ -311,15 +319,61 @@ class WorkflowTransitionIntegrationTest {
     }
 
     @Test
-    void assignmentEnqueuesAReminderNotification() throws Exception {
+    void assignmentDeliversTheReminderToTheAssigneesInbox() throws Exception {
         assertThat(post("/purchase-requests/PR-8/submit", "requester-1").statusCode())
                 .isEqualTo(200);
-        // Opening the approver's task enqueued a NOTIFICATION outbox event addressed to them.
+        // Opening the approver's task enqueued a NOTIFICATION outbox event addressed to them:
+        // the declared recipient: rides the envelope, not only the payload.
         assertThat(notificationCount("PR-8")).isEqualTo(1);
         assertThat(queryString("select payload_json from tql_outbox_event "
                 + "where event_type = 'NOTIFICATION' and payload_json like ?",
                 "%\"doc\":\"PR-8\"%"))
-                .contains("approver-1");
+                .contains("\"recipient\":\"approver-1\"")
+                .contains("\"to\":\"approver-1\"");
+        // And the inbox channel delivers it to that subject (it dead-lettered before: an
+        // unaddressed inbox envelope has no one to deliver to).
+        runtime.dispatchOutboxOnce();
+        assertThat(inboxTitle("approver-1", "purchase_request.assigned", "PR-8"))
+                .isEqualTo("Task on PR-8");
+    }
+
+    @Test
+    void anAssigneeWhoOptedOutOfTheChannelGetsNoReminder() throws Exception {
+        io.tesseraql.core.account.PreferenceStore preferences = runtime.context().lookup(
+                TesseraqlProperties.PREFERENCE_STORE_BEAN,
+                io.tesseraql.core.account.PreferenceStore.class);
+        try {
+            preferences.put(null, "approver-1", "notify.task-inbox.optOut", "true");
+            assertThat(post("/purchase-requests/PR-15/submit", "requester-1").statusCode())
+                    .isEqualTo(200);
+            // The task opens regardless; the reminder is decided at enqueue, so no outbox row.
+            assertThat(openTaskAssignee("PR-15")).isEqualTo("approver-1");
+            assertThat(notificationCount("PR-15")).isZero();
+        } finally {
+            preferences.remove(null, "approver-1", "notify.task-inbox.optOut");
+        }
+    }
+
+    /**
+     * The assign resolver is told which document it resolves for: a {@code /* key *}{@code /}
+     * lookup finds the row's owner, the task opens for them, and the task-authority gate
+     * engages. Without the seed the resolver bound null, no task opened, and any principal
+     * under the route's policy could approve (docs/audit-low-leads.md G32).
+     */
+    @Test
+    void aKeyedAssignResolverIsToldItsDocument() throws Exception {
+        assertThat(post("/keyed-requests/KR-1/submit", "requester-1").statusCode())
+                .isEqualTo(200);
+        assertThat(openTaskAssignee("KR-1")).isEqualTo("owner-k1");
+
+        assertThat(post("/keyed-requests/KR-1/approve", "intruder").statusCode())
+                .isEqualTo(403);
+        assertThat(instanceState("keyed_request", "KR-1")).isEqualTo("submitted");
+
+        assertThat(post("/keyed-requests/KR-1/approve", "owner-k1").statusCode())
+                .isEqualTo(200);
+        assertThat(instanceState("keyed_request", "KR-1")).isEqualTo("approved");
+        assertThat(taskCount("KR-1", "DONE")).isEqualTo(1);
     }
 
     private static HttpResponse<String> post(String path, String sub) throws Exception {
@@ -379,6 +433,14 @@ class WorkflowTransitionIntegrationTest {
                 docId, status));
     }
 
+    /** The title of the message the inbox channel delivered to {@code subject} for a document. */
+    private static String inboxTitle(String subject, String source, String docId)
+            throws Exception {
+        return queryString("select title from tql_user_notification "
+                + "where subject = ? and source = ? and title like ?", subject, source,
+                "%" + docId + "%");
+    }
+
     private static String openTaskAssignee(String docId) throws Exception {
         return queryString("select assignee from tql_workflow_task "
                 + "where doc_id = ? and status = 'OPEN'", docId);
@@ -421,7 +483,7 @@ class WorkflowTransitionIntegrationTest {
                     + "('PR-4','Chair',700), ('PR-5','Lamp',300), ('PR-6','Phone',900), "
                     + "('PR-7','Mouse',150), ('PR-8','Cable',80), ('PR-9','Clip',0), "
                     + "('PR-10','Server',1200), ('PR-11','Rack',500), ('PR-12','Tape',0), "
-                    + "('PR-13','Stand',500), ('PR-14','Riser',500)");
+                    + "('PR-13','Stand',500), ('PR-14','Riser',500), ('PR-15','Hub',60)");
             // App-mode: state lives in the status column, initialized to the initial state.
             statement.execute("create table expenses (id varchar(64) primary key, "
                     + "amount numeric(12,2) not null, status varchar(32) not null, "
@@ -436,6 +498,11 @@ class WorkflowTransitionIntegrationTest {
             statement.execute("create table auto_requests (id varchar(64) primary key, "
                     + "last_action varchar(32), acted_by varchar(64), lane varchar(32))");
             statement.execute("insert into auto_requests (id) values ('AU-1')");
+            // A workflow whose assign resolver looks the assignee up by the document key.
+            statement.execute("create table keyed_requests (id varchar(64) primary key, "
+                    + "owner_login varchar(64) not null, last_action varchar(32))");
+            statement.execute("insert into keyed_requests (id, owner_login) values "
+                    + "('KR-1','owner-k1')");
         }
     }
 
@@ -465,6 +532,13 @@ class WorkflowTransitionIntegrationTest {
                       secret: %s
                       audience: https://app.example.com
                       rolesClaim: roles
+                  notifications:
+                    channels:
+                      task-inbox:
+                        type: inbox
+                        title: "Task on [(${payload.doc})]"
+                        body: "Assigned to [(${payload.to})]."
+                        userOptOut: "true"
                 """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
                 POSTGRES.getPassword(), JWT_SECRET));
 
@@ -496,7 +570,8 @@ class WorkflowTransitionIntegrationTest {
                   - { id: reject, from: submitted, to: rejected, command: { file: reject.sql } }
                 reminders:
                   assigned:
-                    channel: task-reminders
+                    channel: task-inbox
+                    recipient: assignee
                     payload:
                       to: assignee
                       doc: document.id
@@ -635,7 +710,8 @@ class WorkflowTransitionIntegrationTest {
                     onBreach: { reassign: { file: dept_head.sql } }
                 reminders:
                   escalated:
-                    channel: task-reminders
+                    channel: task-inbox
+                    recipient: assignee
                     payload:
                       to: assignee
                       doc: docId
@@ -676,6 +752,32 @@ class WorkflowTransitionIntegrationTest {
                 + "last_action = 'approve', acted_by = /* audit.user */ 'x' where id = /* key */ 'x'\n");
         Files.writeString(workflowDir.resolve("a_approver.sql"),
                 "select 'approver-1' as assignee\n");
+
+        // The natural document-keyed resolver (the shape every procurement gallery resolver
+        // has): the assignee is a column of the row the transition acts on.
+        Files.writeString(workflowDir.resolve("keyed_request.yml"),
+                """
+                        version: tesseraql/v1
+                        id: keyed_request
+                        kind: workflow
+                        document: { type: keyed_request, table: keyed_requests, key: id }
+                        basePath: /keyed-requests
+                        security: { auth: bearer }
+                        initial: draft
+                        states:
+                          - { id: draft, type: initial }
+                          - { id: submitted }
+                          - { id: approved, type: terminal }
+                        transitions:
+                          - { id: submit, from: draft, to: submitted, command: { file: k_submit.sql }, assign: { file: owner.sql } }
+                          - { id: approve, from: submitted, to: approved, command: { file: k_approve.sql } }
+                        """);
+        Files.writeString(workflowDir.resolve("k_submit.sql"),
+                "update keyed_requests set last_action = 'submit' where id = /* key */ 'x'\n");
+        Files.writeString(workflowDir.resolve("k_approve.sql"),
+                "update keyed_requests set last_action = 'approve' where id = /* key */ 'x'\n");
+        Files.writeString(workflowDir.resolve("owner.sql"),
+                "select owner_login as assignee from keyed_requests where id = /* key */ 'x'\n");
         return home;
     }
 

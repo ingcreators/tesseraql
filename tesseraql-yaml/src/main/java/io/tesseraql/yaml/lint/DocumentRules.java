@@ -298,13 +298,22 @@ final class DocumentRules {
     static void lintBindNames(RouteDefinition definition, String source,
             List<LintFinding> findings) {
         for (LintSupport.DocumentBindParams slot : LintSupport.documentBindParams(definition)) {
-            for (String key : slot.params().keySet()) {
-                if (!SqlIdentifiers.isIdentifier(key)) {
-                    findings.add(new LintFinding(NON_IDENTIFIER_BIND_NAME, ERROR, source,
-                            "params: key '" + key
-                                    + "' is not a bind name — a bind name is an identifier, because the 2-way SQL bind it names is an expression the directive parses, so this one binds null on every request; declared under "
-                                    + slot.slot()));
-                }
+            lintBindNames(slot.params(), slot.slot(), source, findings);
+        }
+    }
+
+    /**
+     * The same check over one {@code params:} map wherever it hangs — a workflow's assignee
+     * resolver declares the same shape (docs/two-way-sql-parser.md item 7 named it unchecked).
+     */
+    static void lintBindNames(java.util.Map<String, String> params, String slot, String source,
+            List<LintFinding> findings) {
+        for (String key : params.keySet()) {
+            if (!SqlIdentifiers.isIdentifier(key)) {
+                findings.add(new LintFinding(NON_IDENTIFIER_BIND_NAME, ERROR, source,
+                        "params: key '" + key
+                                + "' is not a bind name — a bind name is an identifier, because the 2-way SQL bind it names is an expression the directive parses, so this one binds null on every request; declared under "
+                                + slot));
             }
         }
     }

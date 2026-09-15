@@ -817,6 +817,13 @@ public final class TransactionalCommandProcessor implements Step {
         Map<String, Object> params = new LinkedHashMap<>();
         workflow.assignParams().forEach((bindName, sourceExpr) -> params.put(bindName,
                 evaluation.resolve(Arrays.asList(sourceExpr.split("\\.")))));
+        // The resolver is told which document it resolves for, exactly as the guard and the
+        // command are (TransitionExecutor seeds the guard's key; RouteCompiler.commandParams
+        // wires the command's). It was the one document-keyed contract in the engine that saw
+        // neither: a /* key *&#47; in an assign file bound null, the SELECT answered no row, no
+        // task opened, and the task-authority gate silently never engaged
+        // (docs/audit-low-leads.md G32). A declared params: key still wins.
+        params.putIfAbsent("key", wf.docId());
         // Assign SQL binds what every other statement in this transaction binds. Without the
         // ambient seed a /* principal.loginId *&#47; here resolved to null rather than failing,
         // because a missing segment evaluates to null - a silent wrong answer.
@@ -862,6 +869,15 @@ public final class TransactionalCommandProcessor implements Step {
      * Enqueues the task-assignment reminder on the transaction's outbox (roadmap Phase 28 slice 3,
      * Phase 20 channels), so a rolled-back transition never notifies and a committed one notifies
      * at-least-once. The resolved {@code assignee}/{@code candidateGroup} are in the payload scope.
+     *
+     * <p>Addressed the way a route's {@code notify:} is: the declared {@code recipient:} resolved
+     * against that scope and the acting principal's tenant ride the envelope, and that subject's
+     * per-channel opt-out is honoured at enqueue (docs/notifications.md, "Per-user opt-out").
+     *
+     * <p>The reminder was the one enqueue path left on the recipient-less {@code build}
+     * overload after Phases 48/49 retrofitted the other two: its {@code recipient:} was parsed
+     * and then never evaluated, so an inbox reminder dead-lettered on every delivery attempt and
+     * an opted-out assignee was reminded anyway (docs/audit-low-leads.md G34).
      */
     private void enqueueAssignReminder(Exchange exchange, Connection connection,
             Map<String, Object> context, String assignee, String candidateGroup) {
@@ -876,9 +892,21 @@ public final class TransactionalCommandProcessor implements Step {
         }
         OutboxStore store = exchange.beans().lookup(
                 TesseraqlProperties.OUTBOX_STORE_BEAN, OutboxStore.class);
-        if (store != null) {
-            store.insert(connection, workflow.assignNotify().build(reminderContext, appName));
+        if (store == null) {
+            return;
         }
+        String tenantId = context.get("principal") instanceof Principal p
+                ? p.tenantId()
+                : null;
+        if (io.tesseraql.yaml.notify.NotifyOptOut.optedOut(workflow.assignNotify(),
+                reminderContext, exchange.beans().lookup(
+                        TesseraqlProperties.PREFERENCE_STORE_BEAN,
+                        io.tesseraql.core.account.PreferenceStore.class),
+                tenantId)) {
+            return;
+        }
+        store.insert(connection, workflow.assignNotify().build(reminderContext, appName,
+                workflow.assignNotify().resolveRecipient(reminderContext), tenantId));
     }
 
     private Map<String, Object> allocateSequence(Exchange exchange, Connection connection,

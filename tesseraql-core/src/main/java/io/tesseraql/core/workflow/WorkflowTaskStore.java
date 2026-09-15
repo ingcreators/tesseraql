@@ -100,8 +100,12 @@ public interface WorkflowTaskStore {
      * @param docId    the business document key
      * @param state    the state the task is open in
      * @param assignee the current assignee, or {@code null}
+     * @param tenantId the tenant the task was opened under, or {@code null} when untenanted —
+     *                 the escalation reminder's envelope and the fallback assignee's absence
+     *                 rule are both looked up under it
      */
-    record Overdue(String taskId, String docType, String docId, String state, String assignee) {
+    record Overdue(String taskId, String docType, String docId, String state, String assignee,
+            String tenantId) {
     }
 
     /**

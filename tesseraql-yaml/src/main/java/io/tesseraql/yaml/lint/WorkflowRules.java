@@ -278,6 +278,12 @@ final class WorkflowRules implements LintRule {
                 findings.add(new LintFinding(MISSING_TRANSITION_REFERENCE, ERROR, source,
                         where + " references missing assignee file '" + t.assign().file() + "'"));
             }
+            if (t.assign() != null) {
+                // The resolver's declared binds are bind names like any other params: map
+                // (TQL-SQL-2120); the route-side check never reached a workflow file.
+                DocumentRules.lintBindNames(t.assign().params(),
+                        "transitions[" + t.id() + "].assign.params", source, findings);
+            }
         }
 
         if (def.initial() != null && states.contains(def.initial())) {
@@ -396,9 +402,15 @@ final class WorkflowRules implements LintRule {
                             + " references missing reassign file '"
                             + onBreach.reassign().file() + "'"));
                 }
+                if (onBreach.reassign() != null) {
+                    DocumentRules.lintBindNames(onBreach.reassign().params(),
+                            "deadlines[" + deadline.state() + "].onBreach.reassign.params",
+                            source, findings);
+                }
             }
         }
 
+        lintReminders(def, config, source, findings);
         lintWorkflowMode(def, config, source, findings);
     }
 
@@ -610,6 +622,29 @@ final class WorkflowRules implements LintRule {
             }
         }
         return reachable;
+    }
+
+    /**
+     * A workflow's reminders are notifications and lint as such: the channel must be declared,
+     * a {@code when:} must parse, and an inbox channel needs a {@code recipient:} (TQL-YAML-1034).
+     *
+     * <p>Only route {@code notify:} entries and job notify steps went through this check; a
+     * reminder on an inbox channel with no recipient linted clean and dead-lettered on every
+     * delivery (docs/audit-low-leads.md G34). The ids match the outbox envelope's source.
+     */
+    private void lintReminders(WorkflowDefinition def, AppConfig config, String source,
+            List<LintFinding> findings) {
+        if (def.reminders() == null) {
+            return;
+        }
+        if (def.reminders().assigned() != null) {
+            MessagingRules.lintNotifySpec(config, def.id() + ".assigned",
+                    def.reminders().assigned(), source, findings, context.functions());
+        }
+        if (def.reminders().escalated() != null) {
+            MessagingRules.lintNotifySpec(config, def.id() + ".escalated",
+                    def.reminders().escalated(), source, findings, context.functions());
+        }
     }
 
     /** Checks the document fields the declared mode requires are present (roadmap Phase 28). */

@@ -109,14 +109,14 @@ public final class JdbcWorkflowTaskStore implements WorkflowTaskStore {
     public List<Overdue> overdue(Connection cx, Instant asOf, int limit) {
         List<Overdue> overdue = new ArrayList<>();
         try (PreparedStatement ps = cx.prepareStatement("select task_id, doc_type, doc_id, state, "
-                + "assignee from tql_workflow_task "
+                + "assignee, tenant_id from tql_workflow_task "
                 + "where status = 'OPEN' and due_at is not null and due_at < ? order by due_at")) {
             ps.setTimestamp(1, Timestamp.from(asOf));
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next() && overdue.size() < limit) {
                     overdue.add(new Overdue(rs.getString("task_id"), rs.getString("doc_type"),
                             rs.getString("doc_id"), rs.getString("state"),
-                            rs.getString("assignee")));
+                            rs.getString("assignee"), rs.getString("tenant_id")));
                 }
             }
         } catch (SQLException ex) {
