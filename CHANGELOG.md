@@ -4,7 +4,27 @@ All notable changes to TesseraQL are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/).
 
-## Unreleased
+## 0.17.0 - 2026-09-15
+
+This release is about the value between the database and the wire. Every reader of user data
+now reads a column in the kind the database declares for it, and every surface — a JSON route,
+an export cell, Studio's data browser, a suite's expectation, a decision table's outputs —
+prints that kind one way: a zoneless `timestamp` is a wall clock that never moves, an instant is
+presented in a declared zone, a `time` keeps its seconds, and a `result:` block turns the text a
+legacy column holds into the kind it means. Around that, the export pipeline was worked through
+end to end: a mistyped `timezone:` or `locale:` is refused where it was written instead of
+answering 500 after the query ran, an empty export carries its header, a failed one leaves no
+spool behind and records why with a code, a `splitBy:` bundle unpacks with its names intact and
+delivers as the ZIP it is, and a download keeps its name in every client measured. An
+application's codec set is discovered once, with its modules, so a module's resolved closure no
+longer carries the framework's own jars or what the runtime already has; a coded refusal on the
+CLI is one sentence and exit 2 on every verb; the framework's Japanese is served with zero
+configuration and the bundled system apps render in the user's language; the edge answers a
+HEAD, refuses a control character in a header, and encodes every URL it writes exactly once.
+Two security repairs close a file transfer's subtree to the route that created it and a
+tab-carrying sign-in return that landed off-site. **Includes pre-1.0 breaking changes** — the
+wire text of temporal columns, the `TransferStatus` and `FileWriteSpec` shapes, and
+declarations that used to boot and are now refused — each recorded in its entry.
 
 ### Added
 
@@ -221,11 +241,11 @@ All notable changes to TesseraQL are documented here. The format follows
 - **A failed asynchronous or job export records why, with a code, within its column — and logs
   its stack.** A codec, column-format or spool failure on a `file-export` or an `export:` job step
   now records `TQL-LD-2802: Writing the <format> document failed after the query ran: … [<file>]`,
-  the code the synchronous route has recorded since v0.16.x; the two arms used to record the raw
-  exception text with no code, or nothing at all for a message-less exception. A database error
-  at the start of the extraction or in the `after:` statement records `TQL-LD-2810` (`Export
-  query failed` / `Export follow-up statement failed`) instead of the driver's text alone. A
-  reason over 2,000 characters is cut to its column instead of failing the record — the
+  the code the synchronous route records (its own entry under Fixed); the two arms used to record
+  the raw exception text with no code, or nothing at all for a message-less exception. A database
+  error at the start of the extraction or in the `after:` statement records `TQL-LD-2810`
+  (`Export query failed` / `Export follow-up statement failed`) instead of the driver's text
+  alone. A reason over 2,000 characters is cut to its column instead of failing the record — the
   asynchronous export used to surface `TQL-BATCH-5001 value too long` in place of its own failure,
   and a job step's transfer execution stayed RUNNING for the reaper to finish as abandoned
   (`TQL-BATCH-4212`) while its owner was alive. Every transfer failure is logged with its stack;
@@ -368,7 +388,8 @@ All notable changes to TesseraQL are documented here. The format follows
   entry points (PR template, CONTRIBUTING, `run-ci-local.sh`, `development-environment.md`)
   name every check CI gates on, and no longer a wrapper bootstrap script that was deleted.
   `docs/hypermedia-ui.md` no longer describes the confirm submit as a bootstrap stand-in the
-  kit has owned since hc 0.1.13 — following it added a second submit.
+  kit has owned since hc 0.1.13 — following it added a second submit. The extension ships as
+  0.3.16.
 - **The JDBC session store's touch throttle no longer grows for the life of the process.** The
   node-local map of last-touch instants — one entry per session, to write `last_seen_at` at
   most once a minute — shrank only on logout and rotation, and browser sessions end by expiry,
