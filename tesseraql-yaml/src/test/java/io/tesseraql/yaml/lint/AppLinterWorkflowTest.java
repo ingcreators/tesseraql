@@ -47,6 +47,26 @@ class AppLinterWorkflowTest {
                 .toList();
     }
 
+    private static List<String> allCodes(List<LintFinding> findings) {
+        return findings.stream().map(LintFinding::code).toList();
+    }
+
+    /** An inbox channel for the reminder cases: an inbox message must name its recipient. */
+    private static void writeInboxChannel(Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), """
+                tesseraql:
+                  app:
+                    name: t
+                  notifications:
+                    channels:
+                      task-inbox:
+                        type: inbox
+                        title: "Task"
+                        body: "[(${payload.to})]"
+                """);
+    }
+
     /**
      * A well-formed approval join: two approvers stamp in place, the advance declares the set,
      * and the rework that returns a document to review clears it.
@@ -140,6 +160,61 @@ class AppLinterWorkflowTest {
     void wellFormedWorkflowProducesNoWorkflowFindings(@TempDir Path dir) throws Exception {
         writeWorkflow(dir, WELL_FORMED);
         assertThat(codes(new AppLinter().lint(dir))).isEmpty();
+    }
+
+    /**
+     * A reminder is a notification and lints as one (docs/audit-low-leads.md G34): an inbox
+     * channel with no {@code recipient:} is TQL-YAML-1034, an undeclared channel warns, a
+     * malformed {@code when:} is an error — the same three checks a route's {@code notify:} gets.
+     */
+    @Test
+    void anInboxReminderWithoutARecipientIsAnError(@TempDir Path dir) throws Exception {
+        writeInboxChannel(dir);
+        writeWorkflow(dir, WELL_FORMED
+                + """
+                        reminders:
+                          assigned: { channel: task-inbox, payload: { to: assignee } }
+                          escalated: { channel: no-such-channel, when: "assignee ==== (", payload: { to: assignee } }
+                        """);
+        List<LintFinding> findings = new AppLinter().lint(dir);
+        assertThat(allCodes(findings)).contains("TQL-YAML-1034", "TQL-YAML-1102", "TQL-SQL-2101");
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-YAML-1034")
+                && f.message().contains("'purchase_request.assigned'"));
+    }
+
+    @Test
+    void anAddressedInboxReminderLintsClean(@TempDir Path dir) throws Exception {
+        writeInboxChannel(dir);
+        writeWorkflow(dir, WELL_FORMED + """
+                reminders:
+                  assigned: { channel: task-inbox, recipient: assignee, payload: { to: assignee } }
+                  escalated: { channel: task-inbox, recipient: assignee, payload: { to: assignee } }
+                """);
+        assertThat(allCodes(new AppLinter().lint(dir)))
+                .doesNotContain("TQL-YAML-1034", "TQL-YAML-1102", "TQL-SQL-2101");
+    }
+
+    /**
+     * An assign (or reassign) {@code params:} key is a bind name like any other, so a
+     * non-identifier is TQL-SQL-2120 here too — it bound null on every request while the
+     * route-side check never reached a workflow file (docs/two-way-sql-parser.md item 7).
+     */
+    @Test
+    void aNonIdentifierAssignParamsKeyIsAnError(@TempDir Path dir) throws Exception {
+        writeWorkflow(dir, WELL_FORMED.replace("command: { file: submit.sql } }",
+                "command: { file: submit.sql }, assign: { file: approver.sql, params: { order-id: path.key } } }")
+                + """
+                        deadlines:
+                          - { state: submitted, within: 1h, onBreach: { reassign: { file: approver.sql, params: { dept-head: document.dept } } } }
+                        """);
+        Files.writeString(dir.resolve("workflow/approver.sql"),
+                "select 'approver-1' as assignee\n");
+        List<LintFinding> findings = new AppLinter().lint(dir);
+        assertThat(findings.stream().filter(f -> f.code().equals("TQL-SQL-2120"))
+                .map(LintFinding::message))
+                .anyMatch(m -> m.contains("'order-id'")
+                        && m.contains("transitions[submit].assign.params"))
+                .anyMatch(m -> m.contains("'dept-head'") && m.contains("onBreach.reassign.params"));
     }
 
     @Test

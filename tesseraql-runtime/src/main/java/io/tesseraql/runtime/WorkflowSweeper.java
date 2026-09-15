@@ -69,6 +69,8 @@ final class WorkflowSweeper {
     /** Absence resolution for reassign fallbacks (roadmap Phase 52); nullable. */
     private final io.tesseraql.core.workflow.DelegationStore delegations;
     private io.tesseraql.core.sql.SqlStatement statements;
+    /** The per-user opt-out the escalation reminder consults (roadmap Phase 48); nullable. */
+    private io.tesseraql.core.account.PreferenceStore preferences;
 
     WorkflowSweeper(List<Rule> rules, WorkflowTaskStore taskStore, WorkflowStore workflowStore,
             OutboxStore outboxStore, String appName, DataSource dataSource,
@@ -99,6 +101,15 @@ final class WorkflowSweeper {
     /** The tracer each sweep statement spans through (docs/contract-sql-execution.md slice 7). */
     WorkflowSweeper tracer(io.tesseraql.core.telemetry.Tracer tracer) {
         this.statements = statements.tracer(tracer);
+        return this;
+    }
+
+    /**
+     * The preference store the escalation reminder's opt-out is read from; absent, no one has
+     * opted out (the account surface is what stores the preference in the first place).
+     */
+    WorkflowSweeper preferences(io.tesseraql.core.account.PreferenceStore preferences) {
+        this.preferences = preferences;
         return this;
     }
 
@@ -208,6 +219,13 @@ final class WorkflowSweeper {
     /**
      * Enqueues the escalation reminder on the sweep transaction's outbox (roadmap Phase 28 slice 3,
      * Phase 20 channels): the new assignee, the document, and the state are in its payload scope.
+     *
+     * <p>Addressed the way a route's {@code notify:} is: the declared {@code recipient:} resolved
+     * against that scope and the task's own tenant ride the envelope, and the recipient's
+     * per-channel opt-out is honoured at enqueue. The sweeper has no request principal, so the
+     * tenant is the one the task was opened under — which is why {@link WorkflowTaskStore.Overdue}
+     * carries it. Before this the reminder used the recipient-less {@code build}, so an inbox
+     * reminder dead-lettered every time (docs/audit-low-leads.md G34).
      */
     private void enqueueEscalateReminder(Connection connection, Rule rule,
             WorkflowTaskStore.Overdue task, String newAssignee) {
@@ -219,9 +237,13 @@ final class WorkflowSweeper {
         reminderContext.put("docType", task.docType());
         reminderContext.put("docId", task.docId());
         reminderContext.put("state", task.state());
-        if (rule.escalateNotify().fires(reminderContext)) {
-            outboxStore.insert(connection, rule.escalateNotify().build(reminderContext, appName));
+        if (!rule.escalateNotify().fires(reminderContext)
+                || io.tesseraql.yaml.notify.NotifyOptOut.optedOut(rule.escalateNotify(),
+                        reminderContext, preferences, task.tenantId())) {
+            return;
         }
+        outboxStore.insert(connection, rule.escalateNotify().build(reminderContext, appName,
+                rule.escalateNotify().resolveRecipient(reminderContext), task.tenantId()));
     }
 
     private Rule ruleFor(String docType, String state) {

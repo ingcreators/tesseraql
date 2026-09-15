@@ -982,7 +982,10 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             // transaction (docs/contract-sql-execution.md slice 2).
                             .sqlTimeoutSeconds(io.tesseraql.yaml.config.SqlDefaults
                                     .timeoutSeconds(manifest.config()))
-                            .tracer(effectiveTracer);
+                            .tracer(effectiveTracer)
+                            // The escalation reminder honours the same opt-out a route's
+                            // notify: does (docs/notifications.md, "Per-user opt-out").
+                            .preferences(preferences);
                     context.bind(TesseraqlProperties.WORKFLOW_SWEEPER_BEAN,
                             workflowSweeper);
                 }
