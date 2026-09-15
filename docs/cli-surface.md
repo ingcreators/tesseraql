@@ -671,6 +671,72 @@ coordinate that does not parse, a `modules.lock` mismatch, and `modules add` on 
 `tesseraql:` mapping. The login page's hint gained `--app <dir>`, the flag the CLI's own
 first-admin hint always carried.
 
+### 10a. A coded exception that reaches the shaper is its message and exit 2
+
+*Decided and shipped 2026-09-15, closing what [module-channel.md](module-channel.md) decision 9
+observed and did not change: `tesseraql package`'s lock refusals printed as a stack trace with
+exit 1.* Decision 10 named two shapes and the record said so; the third was measured before it
+was shaped, across every verb, against one fixture each — an application whose one route document
+does not parse (a `[` where a mapping goes), and an application declaring `tesseraql.modules` with
+no lock, a drifted lock, and a lock naming an artifact the runtime carries:
+
+| Invocation | Measured |
+| --- | --- |
+| `routes`, `lint`, `schema`, `generate`, `verify`, `governance`, `admission`, `release-diff`, `test`, `coverage`, `job list` / `run`, `migrate`, `identity-schema`, `token`, `package`, `modules list` / `resolve` / `add`, `scaffold crud` / `eject-view`, `duckdb info` — **22 verbs** — on the route that does not parse | `TQL-YAML-1001` as a 55-line stack trace, exit 1 |
+| `dev`, `host`, `mcp` on the same file | the same exception's message, exit 2 — each has a hand-written `catch` around its gateway start |
+| `symbols` on the same file | tolerant load: the file is reported as skipped, exit 0, by design (an editor's symbol feed must survive one broken document) |
+| `package`, modules declared, no lock | `TQL-APP-4218` as a 15-line trace, exit 1 |
+| `package`, the lock names an artifact the runtime carries | `TQL-APP-4219` as a 14-line trace, exit 1 |
+| `package`, the lock's checksum disagrees with the resolve | the installer's own `UsageRefusal`, three lines, exit 2, **no code**: `PackageCommand` re-raised the installer's mismatch as 4219 by catching `IllegalStateException`, which decision 10's slice turned into a `UsageRefusal` — the catch has been dead since #1338, and the reference published a 4219 sentence ("cannot be packaged") nothing could produce |
+| `scaffold eject-view` on a route with no `view:` | hand-caught, exit **1** — written before decision 10; `ViewEjects` raises every one of its exceptions before its first write, so by the rule this is a 2 |
+
+So the third shape was never `package`'s. It is the CLI's: on the most ordinary declaration
+mistake, twenty-two verbs answer with a trace and the code a genuine failure exits with, and
+three verbs answer the identical exception with its sentence and 2. Wrapping `package`'s two
+codes in a `UsageRefusal` would have shaped two codes on one verb and left the twenty-two; the
+shaper is the unit.
+
+**The rule.** A `TqlException` is the framework's own diagnosis: a code, a sentence written for a
+reader, and the declaration's file and line when it has one. It is never a bug's — the runtime's
+error envelope publishes a code and a status phrase and never a trace, and all sixteen
+hand-written catches on this CLI print exactly `getMessage()`. `CliExceptionHandler` therefore
+prints a coded exception's message on stderr — as many lines as the sentence has; a parser's
+carries its location line — and returns **2**. The stack trace stays for everything uncoded, as
+before.
+
+**Why 2 and not 1.** Decision 10's 2 is "a declaration the command cannot act on", and that is
+what throws a coded exception past a command on this CLI: the manifest that does not load, the
+lock that is missing or stale, the coordinate that does not parse. Measured by reading, no verb
+lets one escape *after* its work has begun: a job step's rides `JobExecutor` into a `FAILED`
+execution the command maps to 1, a migration's failure is Flyway's own exception (uncoded, and it
+keeps its trace and its 1), the test runner reports failures as results, `ViewEjects` and the
+scaffolders throw before their first write — the one coded exception a scaffold can raise between
+writes is its own path-confinement guardrail, which no declaration reaches. A command whose work
+can end in a coded failure after side effects is the command's own responsibility to map to 1,
+exactly as `job run` does today; the shaper is the floor, not the classifier.
+
+**The order of the shapes.** `UsageRefusal`, then the unreachable database, then the coded
+exception, then the rethrow. The database shape walks the cause chain, so a coded exception that
+*wraps* a refused connection is still the operator message at 1 — the command tried the
+connection, and the 0.12.0 changelog published that code; putting the coded shape first would have
+turned it into a 2 with a sentence that may not name the socket. `CliExceptionHandlerTest` pins
+the order with exactly that exception.
+
+**What this slice changed beside the shaper.** `PackageCommand`'s dead catch is gone: a lock that
+disagrees with the resolve is the installer's refusal, exit 2, the sentence `dev` gives the same
+lock, and 4219 on the CLI route is `PackagedModules`' own sentences (a carried artifact, an
+unreadable lock, a cache that disagrees with the lock after a verified resolve). `scaffold
+eject-view` lost its hand-written 1: nothing was written, so the shaper's 2 is the answer. The
+fifteen other hand-written `catch (TqlException)` blocks stay — each prints what the shaper now
+prints and returns what it returns, and deleting them is a diff with no behaviour in it.
+
+**Observed and not built.** A coded sentence stands alone: the shaper prints no cause chain,
+because every hand-written catch prints none and a sentence that hides its cause is a defect in
+the sentence, not in the shaper. There is no `--verbose` to get the trace back for a coded
+exception; the code names the reference entry, and a coded exception raised by a genuine bug is
+the bug's sentence to fix. Both have the same trigger: a coded refusal whose sentence a reader
+could not act on.
+
 ## The complete mapping
 
 Every command, and what these decisions do to it. `+set` means the command joins a Decision 5 set

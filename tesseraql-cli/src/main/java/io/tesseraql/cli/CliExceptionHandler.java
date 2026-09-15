@@ -1,5 +1,6 @@
 package io.tesseraql.cli;
 
+import io.tesseraql.core.error.TqlException;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
 import java.net.UnknownHostException;
@@ -8,14 +9,23 @@ import picocli.CommandLine;
 import picocli.CommandLine.ParseResult;
 
 /**
- * The CLI's one exception shaper (docs/cli-surface.md decision 10). Two shapes, two exit codes:
- * a {@link UsageRefusal} — a request that cannot run at all, thrown before any work — is its
- * message as one line on stderr and exit {@code 2}; a could-not-reach-the-database failure is
- * a two-line operator message and exit {@code 1} — the same recoverable-operator-error stance
+ * The CLI's one exception shaper (docs/cli-surface.md decision 10, 10a). Three shapes, two exit
+ * codes: a {@link UsageRefusal} — a request that cannot run at all, thrown before any work — is
+ * its message as one line on stderr and exit {@code 2}; a could-not-reach-the-database failure
+ * is a two-line operator message and exit {@code 1} — the same recoverable-operator-error stance
  * {@code dev} takes for an incompatible {@code --embedded-db} data directory, and 1 because the
- * command did run and met a failure. Every other exception is rethrown, which reproduces
+ * command did run and met a failure; a {@link TqlException} is the framework's own diagnosis —
+ * a code, a sentence written for a reader, the declaration's file and line when it has one —
+ * and is its message and exit {@code 2}, because what throws one past a command on this CLI is
+ * a declaration the command could not act on (a manifest that does not load, a lock that is
+ * missing), and a command whose work can end in a coded failure after side effects maps that to
+ * 1 itself, as {@code job run} does. Every other exception is rethrown, which reproduces
  * picocli's default handling (stack trace on stderr, execution exit code), so genuine bugs keep
  * their full diagnostics.
+ *
+ * <p>The database shape is asked before the coded one, and it walks the cause chain: a coded
+ * exception that wraps a refused connection is still the operator message at 1 — the command
+ * tried the connection.
  */
 final class CliExceptionHandler implements CommandLine.IExecutionExceptionHandler {
 
@@ -29,6 +39,11 @@ final class CliExceptionHandler implements CommandLine.IExecutionExceptionHandle
         }
         SQLException failure = connectionFailure(ex);
         if (failure == null) {
+            if (ex instanceof TqlException coded) {
+                commandLine.getErr().println(coded.getMessage());
+                commandLine.getErr().flush();
+                return CommandLine.ExitCode.USAGE;
+            }
             throw ex;
         }
         String message = failure.getMessage() == null

@@ -84,6 +84,27 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **A coded refusal on the CLI is its sentence and exit 2, on every verb.** A `TqlException`
+  that escaped a command went into picocli's default handling: on a route document that does
+  not parse, twenty-two verbs — `routes`, `lint`, `schema`, `generate`, `verify`, `governance`,
+  `admission`, `release-diff`, `test`, `coverage`, `job`, `migrate`, `identity-schema`, `token`,
+  `package`, `modules`, `scaffold`, `duckdb` — printed `TQL-YAML-1001` as a 55-line stack trace
+  with exit 1, the code a genuine failure exits with, while `dev`, `host` and `mcp` printed the
+  same exception's sentence with exit 2; `tesseraql package`'s lock refusals (`TQL-APP-4218`,
+  `TQL-APP-4219`) were traces too. The CLI's exception shaper now knows a coded exception as
+  its third shape, on both binaries: the framework's own sentence — its code, the declaration's
+  file and line when it has one — on stderr and exit 2, because what throws one past a command
+  is a declaration the command could not act on, and no verb lets one escape after its work has
+  begun (a job step's failure rides the executor into `FAILED` and exit 1 as before). A coded
+  exception that wraps a refused connection is still the operator's database message at exit 1.
+  `scaffold eject-view` on a route with no `view:` answers 2, not the 1 it hand-wrote before the
+  rule existed; the stack trace stays for everything uncoded. `docs/cli-surface.md` decision
+  10a records the measurement and the rule, and closes what `docs/module-channel.md` decision
+  9 observed. Found by the measurement and recorded, not changed: `tesseraql package` on a lock
+  whose checksums disagree with the resolve answers the installer's own refusal at exit 2 — the
+  sentence `dev` gives the same lock — and has since the exit-code slice below landed, which
+  left the command's re-raise of that mismatch as `TQL-APP-4219` catching an exception the
+  installer no longer throws; the dead re-raise is deleted.
 - **A CLI request that cannot run at all is one line on stderr and exit 2, before any work.**
   The shared connection options and the commands' own pre-flight checks used to throw into
   picocli's default handling — a twenty-line stack trace and exit 1, the code a genuine failure
