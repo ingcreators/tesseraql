@@ -16,10 +16,21 @@ import org.slf4j.LoggerFactory;
  *
  * <p>Vendors whose DDL diverges from the portable PostgreSQL/MySQL scripts keep complete scripts
  * of their own in a {@code <component>-<vendor>} location (Oracle, SQL Server); when one exists
- * it replaces the common location entirely. The scripts stay idempotent, so databases created by
- * the stores' direct bootstrap baseline cleanly.
+ * it replaces the common location entirely.
+ *
+ * <p>The scripts are NOT idempotent under Flyway's rules: V1 and V2 are re-runnable, but every
+ * later column and index add is a bare statement whose idempotency exists only in
+ * {@code SqlScripts.applyScript}'s tolerated duplicate errors, which Flyway does not use. So a
+ * database whose first TesseraQL contact was a store's direct {@code ensureSchema} — the CLI's
+ * job verbs before a runtime ever booted, or an embedder — does not baseline cleanly: Flyway
+ * baselines at 0 and fails on the first bare {@code add column} (eleven of the fourteen common
+ * operations scripts, on PostgreSQL), and every later boot repeats it. The order is therefore
+ * fixed: Flyway migrates before any store bootstraps, on every path that reaches a
+ * Flyway-bundled vendor — the runtime's own boot and {@link #migrateOperations} from the CLI
+ * (docs/audit-low-leads.md, slice 1). The scripts cannot be made re-runnable instead: their
+ * checksums pin every existing deployment (docs/framework-datasource.md section 4).
  */
-final class FrameworkMigrations {
+public final class FrameworkMigrations {
 
     private static final Logger LOG = LoggerFactory.getLogger(FrameworkMigrations.class);
     /** Each component's V1 file, used to probe whether a vendor-specific location exists. */
@@ -69,8 +80,16 @@ final class FrameworkMigrations {
         migrateComponent("security", frameworkDataSource);
     }
 
-    /** Migrates the per-application {@code operations} component — the hosted runtime keeps this. */
-    static void migrateOperations(DataSource dataSource) {
+    /**
+     * Migrates the per-application {@code operations} component — the hosted runtime keeps this,
+     * and it is the CLI's first act on a database before its job verbs bootstrap their stores
+     * ({@code tesseraql job run} on a database no runtime has booted; see the class note). A CLI
+     * newer than the running server migrates ahead of it, which is the same situation a rolling
+     * deploy of two runtime versions already creates: the scripts are additive and Flyway's
+     * default {@code ignoreMigrationPatterns} tolerates a future version on the older side.
+     * Vendors without a bundled Flyway module skip, as the runtime's boot does.
+     */
+    public static void migrateOperations(DataSource dataSource) {
         migrateComponent("operations", dataSource);
     }
 

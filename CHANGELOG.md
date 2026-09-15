@@ -24,6 +24,19 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **`tesseraql job run` on a database no runtime has booted no longer poisons the framework
+  schema.** The job verbs (`run`, `rerun`, `cancel`) bootstrapped their stores directly, which
+  created every operations table with its latest columns and no Flyway history; the next
+  runtime boot then baselined `tql_schema_history__operations` at 0 and died on
+  `V3__job_execution_actor.sql`'s bare `add column` (42701) — and on every boot after, with
+  no verb that repairs it. Eleven of the fourteen operations scripts fail that way on
+  PostgreSQL; MySQL fails at V3, Oracle at V1, SQL Server at V9. The verbs now run the
+  versioned operations migration first, exactly as a boot does, so the bootstraps are the
+  no-ops they are on a served node; `FrameworkMigrations` says the order out loud instead of
+  claiming an idempotency the scripts lost in 0.8.0. A database already poisoned needs a hand
+  repair no verb performs: drop the operations tables **and** `tql_schema_history__operations`
+  (keeping the history makes V3 fail on a missing relation); the rows the CLI runs wrote are
+  lost. `docs/audit-low-leads.md`, slice 1.
 - **An extension release's token check survives a Marketplace request timeout.** `ext-v0.3.16`'s
   `vsce verify-pat` timed out twice on Azure DevOps (`Request timeout: /_apis/securityroles`,
   three minutes each) and passed in two seconds on the third re-run of the job — each re-run a

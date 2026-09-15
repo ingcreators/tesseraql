@@ -104,6 +104,66 @@ class JobCommandIntegrationTest {
     }
 
     /**
+     * A database whose first TesseraQL contact is {@code job run} boots a runtime afterwards
+     * (docs/audit-low-leads.md, slice 1). The verb used to bootstrap its stores directly, which
+     * created every operations table with its latest columns and no Flyway history; the next
+     * boot then baselined the history at 0 and died on V3's bare {@code add column} — and on
+     * every boot after, with no verb that repairs it. The verb now migrates first, so the boot
+     * finds the history it would have written itself and the bootstraps are the no-ops they
+     * are on a served node. The boot is the assertion: a history-row count taken after the
+     * command is also green on a fix that migrates after bootstrapping, which still fails.
+     */
+    @Test
+    void aDatabaseFirstTouchedByJobRunBootsARuntimeAfterwards(@TempDir Path dir)
+            throws Exception {
+        execSql("create database job_first");
+        String jdbcUrl = POSTGRES.getJdbcUrl()
+                .replace("/" + POSTGRES.getDatabaseName(), "/job_first");
+        assertThat(execute("new", "demo", "--stack", dir.toString())).isZero();
+        Path app = dir.resolve("demo");
+        writeJobs(app);
+
+        Captured touch = executeCapturing("job", "run", "demo.touch",
+                "--app", app.toString(), "--jdbc-url", jdbcUrl,
+                "--username", POSTGRES.getUsername(), "--password", POSTGRES.getPassword());
+        assertThat(touch.exitCode()).isZero();
+        assertThat(touch.stdout()).contains("demo.touch COMPLETED");
+
+        io.tesseraql.runtime.TesseraqlRuntime runtime = null;
+        try {
+            runtime = io.tesseraql.runtime.TesseraqlRuntime.start(app, 0,
+                    new io.tesseraql.runtime.DataSources.MainDatasourceOverride(
+                            jdbcUrl, POSTGRES.getUsername(), POSTGRES.getPassword()));
+            assertThat(runtime.port()).isPositive();
+        } finally {
+            if (runtime != null) {
+                runtime.close();
+            }
+        }
+        // The history the verb wrote is the one the boot found: every operations script from
+        // V1, with no baseline row — a baseline is what the old order left behind (an empty
+        // history baselined at 0 over tables that already carried V3's column).
+        assertThat(operationsHistory(jdbcUrl)).startsWith("framework operations",
+                "document sequences", "job execution actor")
+                .doesNotContain("<< Flyway Baseline >>");
+    }
+
+    /** The descriptions recorded in the operations component's Flyway history, in order. */
+    private static java.util.List<String> operationsHistory(String jdbcUrl) throws Exception {
+        java.util.List<String> descriptions = new java.util.ArrayList<>();
+        try (Connection connection = DriverManager.getConnection(
+                jdbcUrl, POSTGRES.getUsername(), POSTGRES.getPassword());
+                Statement statement = connection.createStatement();
+                ResultSet rs = statement.executeQuery("select description from"
+                        + " tql_schema_history__operations order by installed_rank")) {
+            while (rs.next()) {
+                descriptions.add(rs.getString(1));
+            }
+        }
+        return descriptions;
+    }
+
+    /**
      * The job arm of the export-declaration refusal on this runner (docs/export-declarations.md
      * decision 1): {@code job run} fills its own job map and never reaches the serving runtime's
      * registration, so it judges every job itself — a mistyped step literal is one line and

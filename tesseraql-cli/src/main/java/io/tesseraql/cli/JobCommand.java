@@ -431,6 +431,13 @@ final class JobCommand implements Callable<Integer> {
     /** The in-process wiring `dev` boots, reduced to what a single run needs. */
     private Wiring wire(AppManifest manifest) throws Exception {
         DriverManagerDataSource main = datasource.resolve(manifest.config(), app);
+        // The versioned operations migration runs first, exactly as a runtime boot does. The
+        // stores' ensureSchema below is idempotent only through tolerated duplicate errors that
+        // Flyway does not use, so a database whose first contact is this bootstrap could never
+        // be migrated afterwards: the next runtime boot baselined at 0 and died on V3's bare
+        // add column, on every boot (docs/audit-low-leads.md, slice 1). After Flyway the
+        // bootstraps are the no-ops they are on a served node.
+        io.tesseraql.runtime.FrameworkMigrations.migrateOperations(main);
         JobRepository repository = new JobRepository(main);
         repository.ensureSchema();
         io.tesseraql.operations.outbox.JdbcOutboxStore outbox = new io.tesseraql.operations.outbox.JdbcOutboxStore(
