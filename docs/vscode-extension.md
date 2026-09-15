@@ -289,7 +289,11 @@ namespace. Pushing an `ext-v<version>` tag runs the *Extension release* workflow
 `vsce package`, `vsce verify-pat`, then `vsce publish` of that exact vsix to the Visual
 Studio Marketplace (publisher `ingcreators`), and a GitHub release with the same vsix
 attached. The archived artifact is therefore byte-identical to what the Marketplace serves.
-The workflow
+The release's notes are the pull requests that touched `vscode-extension/` since the previous
+`ext-v*` tag (`.github/scripts/extension-release-notes.sh`), not GitHub's generated notes:
+the extension shares the repository's release list with the framework, so the generated notes
+ranged from whichever release GitHub took for the previous one — ext-v0.3.16's reproduced
+v0.17.0's — and even the right `ext-v*` range is mostly framework pull requests. The workflow
 authenticates with the `VSCE_PAT` repository secret (an Azure DevOps PAT with the
 Marketplace *Manage* scope — it expires, so re-issuing it is a recurring operator
 task); running the workflow manually is a dry run that proves the token is still

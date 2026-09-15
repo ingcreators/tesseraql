@@ -4,6 +4,21 @@ All notable changes to TesseraQL are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Fixed
+
+- **An extension release's notes are the extension's pull requests.** `ext-v0.3.16`'s GitHub
+  release carried `v0.17.0`'s seventy-two lines under the extension's title: the extension
+  shares the repository's release list with the framework, and `gh release create
+  --generate-notes` ranged from whichever release GitHub took for the previous one —
+  `v0.16.0` this time, `ext-v0.3.13` the time before, `v0.14.0` the time before that. The
+  right `ext-v*` range would not have been enough either, since ext-v0.3.15..ext-v0.3.16 holds
+  206 pull requests and five touched `vscode-extension/`. The release job now writes its own
+  notes from the pull requests that touched that directory since the previous `ext-v*` tag,
+  over a full-history checkout, and a test drives the script over a repository it builds with
+  framework and extension pull requests interleaved across two tags.
+
 ## 0.17.0 - 2026-09-15
 
 This release is about the value between the database and the wire. Every reader of user data
