@@ -272,10 +272,14 @@ Ordered so that each lands independently and the guard arrives before the long t
    `TQL-SCOPE-3014` (new, error) rejects a directive in batch-job SQL, resolving open question 1
    in favour of failing at build time rather than wiring a resolver with no principal to resolve
    against. The scope directive lint also reaches MCP tools now.
-   **Still open:** `JdbcFileTransferService` (file import/export SQL) and `WorkflowSweeper`. Both
-   run outside a request; whether they should carry a scope at all is the same question
-   `TQL-SCOPE-3014` answers for jobs, and they deserve the same treatment or a resolver of their
-   own — decide before extending 3014 to them.
+   **Still open:** `JdbcFileTransferService` (file import/export SQL). It runs outside a request;
+   whether it should carry a scope at all is the same question `TQL-SCOPE-3014` answers for jobs,
+   and it deserves the same treatment or a resolver of its own — decide before extending 3014 to
+   it. **`WorkflowSweeper` — decided 2026-09-15** (`docs/audit-low-leads.md` slice 2b): a resolver
+   of its own. The escalated command is the transition's *own* file, the one the route renders
+   under the requester's resolver, so a 3014-shaped "no directive here" would strip the route path's
+   row authority; the sweeper renders as the system instead — every declared scope `(1=1)`, an
+   undeclared one still `TQL-SQL-2107` (`docs/data-scoping.md`).
 5. ~~**`query-export` through `executionUri`.**~~ **Shipped**, though not literally: the export
    URI's `mode` and `filename` are not a binding's, so the shared part was extracted as
    `executionParams` (dialect, maxRows, onOverflow, timeout) and both callers use it, with

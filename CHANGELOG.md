@@ -24,6 +24,28 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **The deadline sweeper resolves for the task it is told about.** Four defects in one engine
+  path, each silent (`docs/audit-low-leads.md`, slice 2b). An `onBreach.escalate` on a transition
+  whose command carries `/*%scope … */` — the transition idiom, and the docs' own example — could
+  never fire: the sweeper rendered the command resolver-less, `TQL-SQL-2106` every sweep for the
+  life of the deployment, no lint. The sweeper now renders **as the system** (every declared scope
+  `(1=1)`, an undeclared one still 2107; `route-governance-parity.md` decision 4 closes its sweeper
+  line). One failing task rolled the whole overdue batch back and, met first on every sweep after,
+  starved every other deadline; each task now runs behind its own savepoint, a failure is named at
+  WARNING (task id, document, state, cause) and skipped. The `reassign` resolver bound `docId` and
+  `state` only — undocumented — and dropped its declared `params:` at boot, so the documented
+  `/* key */` shape answered no row, silently, for ever; it now binds `key`, `audit.*` and its
+  `params:` against the loaded document, a no-row answer clears the deadline, records history and
+  warns, and a `params:` entry reading outside the sweep context is `TQL-WORKFLOW-3121`. And a
+  sweep-fired command that matched no row advanced the state anyway; it is `TQL-WORKFLOW-3204`
+  here too, the advance rolled back with it.
+- **Delegation rules are honoured under tenancy at assignment and on escalation.** The transition
+  funnel derived the tenant as `String.valueOf(TenantContext)` — the record's `toString`,
+  `TenantContext[id=acme, attributes={}]` — so no rule was ever found, and that string is what
+  `tql_workflow_instance` and `tql_workflow_task` persisted as their `tenant_id`; the sweeper's
+  fallback looked the rule up under the empty tenant. Both now use the tenant id (the task's own on
+  the sweeper). Rows written under tenancy by an earlier build carry the `toString` in `tenant_id`.
+  `docs/audit-low-leads.md`, slice 2b (G37).
 - **A transition's `assign:` resolver is told which document it resolves for.** The resolver's
   binds were its declared `params:` plus the ambient seed and nothing else; the engine seeded the
   document key for the guard and wired it for the command, but never for the one contract that is

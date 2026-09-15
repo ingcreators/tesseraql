@@ -231,6 +231,14 @@ Lint catches a misdeclared or unreferenceable scope before it ships:
 The runtime fails closed: a directive rendered without a scope resolver configured is `TQL-SQL-2106`,
 and a directive naming an undeclared scope is `TQL-SQL-2107` — a scope can never silently no-op.
 
+One path renders **as the system**, deliberately: the workflow deadline sweeper. An `onBreach.escalate`
+runs the transition's own command file — the one the route renders under the requester's resolver —
+and the sweeper has no requester, so every declared scope expands to `(1=1)` there
+(`CompiledScopeResolver.asSystem`); an undeclared one is still `TQL-SQL-2107`. The deadline the author
+declared is the authority ([approval workflow](approval-workflow.md#deadlines-escalation-and-delegation)).
+Batch jobs and file transfers keep the fail-closed default (`TQL-SCOPE-3014` refuses the directive at
+build time for a job) — their SQL is their own, and a job parameter filters it.
+
 `TQL-SEC-4100` warns when a write bypasses a governed scope: a table the app scopes on reads is
 `UPDATE`/`DELETE`d without a `/*%scope … */` predicate. It is a defense-in-depth nudge, not a hard
 rule — the set of scope-governed tables is inferred from where scope directives are actually used,
