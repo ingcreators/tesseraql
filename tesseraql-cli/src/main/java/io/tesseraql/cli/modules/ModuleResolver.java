@@ -13,10 +13,11 @@ import org.jboss.shrinkwrap.resolver.api.maven.MavenResolvedArtifact;
 import org.jboss.shrinkwrap.resolver.api.maven.coordinate.MavenCoordinate;
 
 /**
- * Resolves the declared {@code tesseraql.modules} set — and its full compile+runtime closure — from
- * Maven repositories, with versions supplied by the TesseraQL BOM (design: app-developer-distribution
- * work item 4). It embeds the ShrinkWrap Maven resolver, so no Maven install is needed and the
- * resolution honors {@code ~/.m2/settings.xml} (proxies, mirrors, credentials) automatically.
+ * Resolves the declared {@code tesseraql.modules} set — and its full compile+runtime closure, less
+ * the framework's own artifacts ({@link #FRAMEWORK_GROUP}) — from Maven repositories, with versions
+ * supplied by the TesseraQL BOM (design: app-developer-distribution work item 4). It embeds the
+ * ShrinkWrap Maven resolver, so no Maven install is needed and the resolution honors
+ * {@code ~/.m2/settings.xml} (proxies, mirrors, credentials) automatically.
  *
  * <p>The declared coordinates are written into a synthetic POM that imports the BOM, so an
  * unversioned {@code group:artifact} picks up the BOM-managed version; the resolver then collects
@@ -114,8 +115,25 @@ public final class ModuleResolver {
     }
 
     /**
+     * The framework's own group, excluded from every declared module's closure. A module compiles
+     * against {@code tesseraql-core} (a codec, a function) or {@code tesseraql-yaml} (a blob-store
+     * provider), and the runtime that loads the module already carries both: its loader is a child
+     * of the runtime's, parent-first, so a framework jar in {@code work/modules} is never the one
+     * that loads. Copying it there was a second copy of core in every resolved cache, every
+     * package and every bag, and — the day a module is built against a different core — a cache
+     * and a lock claiming a framework version that does not run (docs/codec-discovery.md S5).
+     *
+     * <p>The rule this states: a module's {@code io.tesseraql} dependencies are the framework's,
+     * and an application declares each module it uses by its own coordinate. The exclusion is
+     * written into the synthetic POM rather than filtered from the result, so an offline
+     * resolution never asks a bag for a framework jar the bag was never told to carry.
+     */
+    static final String FRAMEWORK_GROUP = "io.tesseraql";
+
+    /**
      * Writes a synthetic POM declaring the module coordinates. The BOM is imported only when some
      * coordinate omits its version (so the BOM supplies it); fully-pinned sets resolve without it.
+     * Every dependency excludes {@link #FRAMEWORK_GROUP} transitively.
      */
     private Path writePom(List<ModuleCoordinate> declared) {
         StringBuilder dependencies = new StringBuilder();
@@ -128,6 +146,8 @@ public final class ModuleResolver {
             if (coordinate.hasVersion()) {
                 dependencies.append("<version>").append(coordinate.version()).append("</version>");
             }
+            dependencies.append("<exclusions><exclusion><groupId>").append(FRAMEWORK_GROUP)
+                    .append("</groupId><artifactId>*</artifactId></exclusion></exclusions>");
             dependencies.append("</dependency>\n");
         }
         String management = "";

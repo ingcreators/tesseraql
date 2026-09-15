@@ -222,6 +222,22 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **`tesseraql dev --app-name` touches the member it runs and no other.** The command resolved
+  every stack member's declared modules, wrote the embedded-database marker under every member
+  and printed the first-administrator hint for every member, then started the one named — on
+  the examples, `--app-name user-admin` resolved inventory-app's 73 MB DuckDB driver, left a
+  `work/` directory under all seven members and printed seven hints for one running
+  application. The three steps walk the narrowed membership now, through the same function
+  the gateway narrows with, so an unknown name is refused before the database starts rather
+  than after it. `docs/codec-discovery.md` S5.
+- **A module's resolved closure no longer carries the framework's own jars.** `tesseraql modules
+  resolve`, `add`, `fetch`, `dev` and `package` kept a declared module's whole closure,
+  `tesseraql-core` included — a copy that never loaded, since the runtime's own loader is the
+  module loader's parent, in every `work/modules`, every `.tqlapp` and every bag, and a lock line
+  claiming a framework version that does not run. The resolver excludes `io.tesseraql:*` from
+  every declared module transitively; the pdf example resolves 16 artifacts where it resolved
+  17. A lock written earlier still starts `dev` and `host`; `package` asks for a fresh
+  `tesseraql modules resolve` as it does for any drift. `docs/codec-discovery.md` S5.
 - **The README's second quick start runs as written from the distribution archive.** The
   example it names declares the pdf module its printable route uses, so `tesseraql dev`
   resolves it — the build line installs the reactor so that resolution finds the module and
