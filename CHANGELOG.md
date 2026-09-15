@@ -8,6 +8,15 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **An extension release's token check survives a Marketplace request timeout.** `ext-v0.3.16`'s
+  `vsce verify-pat` timed out twice on Azure DevOps (`Request timeout: /_apis/securityroles`,
+  three minutes each) and passed in two seconds on the third re-run of the job — each re-run a
+  person pressing the button on a tag. The check now runs through
+  `.github/scripts/verify-marketplace-token.sh`, which retries that one failure — three attempts,
+  fifteen seconds apart — and nothing else: a refused token still fails at once with vsce's own
+  message, and a retried attempt's `::error::` is not repeated into a run that went on to pass. A
+  test drives the script with a scripted `vsce` and a recording `sleep` on `PATH` and was red on
+  four variants (no retry, a retry on every failure, no pause, four attempts).
 - **An extension release's notes are the extension's pull requests.** `ext-v0.3.16`'s GitHub
   release carried `v0.17.0`'s seventy-two lines under the extension's title: the extension
   shares the repository's release list with the framework, and `gh release create

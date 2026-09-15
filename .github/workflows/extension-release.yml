@@ -75,11 +75,14 @@ jobs:
         working-directory: vscode-extension
         run: pnpm run package
 
+      # The script retries a request timeout -- ext-v0.3.16's verify-pat timed out twice on
+      # Azure DevOps and passed on the third re-run of the job -- and nothing else. Under
+      # `pnpm exec` so that vsce is on its PATH, as the publish step's is.
       - name: Verify the Marketplace token
         working-directory: vscode-extension
         env:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
-        run: pnpm exec vsce verify-pat ingcreators
+        run: pnpm exec bash ../.github/scripts/verify-marketplace-token.sh ingcreators
 
       # Publishes the vsix packaged above — the artifact attached to the release is
       # byte-identical to what the Marketplace serves.

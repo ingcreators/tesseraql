@@ -297,8 +297,12 @@ v0.17.0's — and even the right `ext-v*` range is mostly framework pull request
 authenticates with the `VSCE_PAT` repository secret (an Azure DevOps PAT with the
 Marketplace *Manage* scope — it expires, so re-issuing it is a recurring operator
 task); running the workflow manually is a dry run that proves the token is still
-valid without publishing anything. `.vsix` files are gitignored — the release
-asset is the distribution channel, not the repository.
+valid without publishing anything. The token check
+(`.github/scripts/verify-marketplace-token.sh`) retries a Marketplace request timeout —
+three attempts, fifteen seconds apart; ext-v0.3.16's timed out twice and passed on the third
+re-run of the job — and nothing else: a refused token fails at once, as vsce reported it.
+`.vsix` files are gitignored — the release asset is the distribution channel, not the
+repository.
 
 ## Not currently supported
 
