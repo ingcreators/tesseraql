@@ -231,15 +231,15 @@ public final class MultiAppGateway implements AutoCloseable {
         // like every other link to a narrowed-away neighbour (docs/root-portal.md).
         io.tesseraql.operations.app.StackSettings stackSettings = io.tesseraql.operations.app.StackSettings
                 .load(installRoot);
-        List<InstalledApp> members = catalogued;
+        List<InstalledApp> membership = catalogued;
         String rootTarget = stackSettings.rootRedirect()
                 .map(name -> {
-                    if (members.stream().noneMatch(app -> name.equals(app.name()))) {
+                    if (membership.stream().noneMatch(app -> name.equals(app.name()))) {
                         throw new io.tesseraql.core.error.TqlException(UNKNOWN_ROOT_REDIRECT,
                                 io.tesseraql.operations.app.StackSettings.FILE_NAME
                                         + " names root.redirect: '" + name + "', and the stack"
                                         + " holds no application by that name. It holds: "
-                                        + members.stream().map(InstalledApp::name)
+                                        + membership.stream().map(InstalledApp::name)
                                                 .collect(java.util.stream.Collectors
                                                         .joining(", "))
                                         + ". Correct the name, or remove root.redirect to let /"
@@ -248,19 +248,7 @@ public final class MultiAppGateway implements AutoCloseable {
                     return "/" + name;
                 })
                 .orElse(PORTAL_TARGET);
-        if (appName != null) {
-            List<InstalledApp> named = catalogued.stream()
-                    .filter(app -> appName.equals(app.name()))
-                    .toList();
-            if (named.isEmpty()) {
-                throw new io.tesseraql.core.error.TqlException(MultiAppHost.UNKNOWN_APP,
-                        "The stack holds no application named '" + appName + "'. It holds: "
-                                + catalogued.stream().map(InstalledApp::name)
-                                        .collect(java.util.stream.Collectors.joining(", "))
-                                + ".");
-            }
-            catalogued = named;
-        }
+        catalogued = members(catalogued, appName);
         // The session cookie is the gateway's call, not the applications' (docs/base-path.md
         // decision 4): a stack is one sign-in across one origin, so the cookie is issued at the
         // root of it rather than scoped to each app's prefix. The address is the catalogue's, and
@@ -278,6 +266,32 @@ public final class MultiAppGateway implements AutoCloseable {
             host.close();
             throw ex;
         }
+    }
+
+    /**
+     * The members a run starts: every application {@code catalogued} holds, or the one
+     * {@code appName} names — a name the stack does not hold is refused with the members that
+     * would have worked. {@code dev} narrows with this before it resolves modules, writes the
+     * embedded-database marker or prints the first-administrator hint per member, so what it
+     * touches on disk and says on the console is what it runs (docs/codec-discovery.md S5);
+     * {@link #start(java.nio.file.Path, int, Settings, String, DevMode)} narrows with it again,
+     * because {@code host} has no such step of its own and the refusal belongs to the gateway.
+     */
+    public static List<InstalledApp> members(List<InstalledApp> catalogued, String appName) {
+        if (appName == null) {
+            return catalogued;
+        }
+        List<InstalledApp> named = catalogued.stream()
+                .filter(app -> appName.equals(app.name()))
+                .toList();
+        if (named.isEmpty()) {
+            throw new io.tesseraql.core.error.TqlException(MultiAppHost.UNKNOWN_APP,
+                    "The stack holds no application named '" + appName + "'. It holds: "
+                            + catalogued.stream().map(InstalledApp::name)
+                                    .collect(java.util.stream.Collectors.joining(", "))
+                            + ".");
+        }
+        return named;
     }
 
     /**

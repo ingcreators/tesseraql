@@ -181,11 +181,28 @@ public final class TesseraqlCli implements Runnable {
                 System.setProperty("tesseraql.logging.level", logLevel);
             }
 
-            // Every stack member's declared tesseraql.modules set, resolved into its own
+            // The members this run starts - the whole stack, or the one --app-name names - and
+            // nothing else is resolved, marked or advised below: a neighbour the run leaves
+            // idle keeps its disk and its console line (docs/codec-discovery.md S5). The
+            // gateway narrows with the same function, so an unknown name is its refusal, here
+            // before anything has started.
+            List<Path> homes;
+            try {
+                homes = io.tesseraql.runtime.MultiAppGateway
+                        .members(io.tesseraql.operations.app.AppDirectory.applications(resolved),
+                                appName)
+                        .stream()
+                        .map(app -> stackDir.resolve(app.path()).normalize())
+                        .toList();
+            } catch (io.tesseraql.core.error.TqlException refused) {
+                System.err.println(refused.getMessage());
+                return 2;
+            }
+
+            // Every started member's declared tesseraql.modules set, resolved into its own
             // work/modules (lock-verified) before any runtime starts. Nothing is composed onto
             // the process: each runtime builds its own loader over what this resolve left on
             // disk, so module visibility equals runtime scope (docs/module-scope.md).
-            List<Path> homes = resolved.applications();
             for (Path home : homes) {
                 AppConfig config = new ManifestLoader().load(home).config();
                 new ModulesInstaller().install(home, config, false).ifPresent(

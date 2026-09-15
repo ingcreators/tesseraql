@@ -49,8 +49,6 @@ class EmbeddedDbShutdownIntegrationTest {
     /** The port a running postmaster announces on the fourth line of its own pid file. */
     private static final int PID_FILE_PORT_LINE = 4;
 
-    private static final Pattern GATEWAY_PORT = Pattern.compile("app\\(s\\) on port (\\d+)");
-
     /**
      * The defect. A request is held in the database when the signal arrives; it must be allowed to
      * finish, and the log must not show PostgreSQL cutting it off.
@@ -63,7 +61,8 @@ class EmbeddedDbShutdownIntegrationTest {
     void aRequestHeldInTheDatabaseOutlivesTheSignalThatStopsTheStack(@TempDir Path dir)
             throws Exception {
         Path stack = stackWithASlowRoute(dir, 8);
-        Forked cli = fork(dir, "dev", "--stack", stack.toString(), "--port", "0", "--embedded-db");
+        ForkedCli cli = ForkedCli.fork(dir, "dev", "--stack", stack.toString(), "--port", "0",
+                "--embedded-db");
         try {
             int port = cli.awaitGatewayPort();
             HttpClient client = HttpClient.newHttpClient();
@@ -76,7 +75,7 @@ class EmbeddedDbShutdownIntegrationTest {
             // Long enough that the request is genuinely inside pg_sleep, short enough that it has
             // seconds left to run — the window the unfixed code kills it in is ~105 ms.
             Thread.sleep(2500);
-            cli.process.destroy();
+            cli.process().destroy();
 
             HttpResponse<String> answered = slow.get(60, TimeUnit.SECONDS);
             cli.awaitExit();
@@ -118,13 +117,13 @@ class EmbeddedDbShutdownIntegrationTest {
         Path stack = stackWithASlowRoute(dir, 1);
         for (int attempt = 1; attempt <= 3; attempt++) {
             Path data = Files.createDirectories(dir.resolve("pgdata" + attempt));
-            Forked cli = fork(dir, "dev", "--stack", stack.toString(), "--port", "0",
+            ForkedCli cli = ForkedCli.fork(dir, "dev", "--stack", stack.toString(), "--port", "0",
                     "--embedded-db", data.toString());
             try {
                 if (!cli.awaitWindow("postmaster started as", "Embedded PostgreSQL")) {
                     continue;
                 }
-                cli.process.destroy();
+                cli.process().destroy();
                 cli.awaitExit();
                 assertThat(servingPort(data))
                         .as("no PostgreSQL is left serving %s after an interrupt during its"
@@ -151,7 +150,7 @@ class EmbeddedDbShutdownIntegrationTest {
         Path stack = stackWithASlowRoute(dir, 1);
         Path data = Files.createDirectories(dir.resolve("pgdata"));
         try (ServerSocket taken = new ServerSocket(0)) {
-            Forked cli = fork(dir, "dev", "--stack", stack.toString(),
+            ForkedCli cli = ForkedCli.fork(dir, "dev", "--stack", stack.toString(),
                     "--port", String.valueOf(taken.getLocalPort()),
                     "--embedded-db", data.toString());
             try {
@@ -181,7 +180,7 @@ class EmbeddedDbShutdownIntegrationTest {
      */
     @Test
     void aStartWhoseCallerNeverClosesDoesNotOutliveTheProcess(@TempDir Path dir) throws Exception {
-        Forked jvm = fork(dir, ForgetfulStart.class.getName());
+        ForkedCli jvm = ForkedCli.fork(dir, ForgetfulStart.class.getName());
         try {
             assertThat(jvm.awaitExit()).as("the forgetful process exited").isZero();
             Matcher port = Pattern.compile("FORGOTTEN-PORT=(\\d+)").matcher(jvm.log());
@@ -203,94 +202,6 @@ class EmbeddedDbShutdownIntegrationTest {
                     + url.substring(url.lastIndexOf(':') + 1, url.lastIndexOf('/')));
             System.out.flush();
         }
-    }
-
-    // ---- harness ---------------------------------------------------------------------------
-
-    /** A forked JVM whose merged output is on disk, so a test can poll it while it runs. */
-    private record Forked(Process process, Path output) {
-
-        String log() throws IOException {
-            return Files.exists(output) ? Files.readString(output) : "";
-        }
-
-        int awaitGatewayPort() throws Exception {
-            long deadline = System.currentTimeMillis() + 120_000;
-            while (System.currentTimeMillis() < deadline) {
-                Matcher matcher = GATEWAY_PORT.matcher(log());
-                if (matcher.find()) {
-                    return Integer.parseInt(matcher.group(1));
-                }
-                if (!process.isAlive()) {
-                    throw new IllegalStateException("the fork died before it announced:\n" + log());
-                }
-                Thread.sleep(100);
-            }
-            throw new IllegalStateException("no gateway port announced:\n" + log());
-        }
-
-        /** True once {@code opened} has been logged and {@code closed} has not — a live window. */
-        boolean awaitWindow(String opened, String closed) throws Exception {
-            long deadline = System.currentTimeMillis() + 120_000;
-            while (System.currentTimeMillis() < deadline && process.isAlive()) {
-                String log = log();
-                if (log.contains(opened)) {
-                    return !log.contains(closed);
-                }
-                Thread.sleep(20);
-            }
-            return false;
-        }
-
-        int awaitExit() throws Exception {
-            if (!process.waitFor(120, TimeUnit.SECONDS)) {
-                throw new IllegalStateException("the fork did not exit:\n" + log());
-            }
-            return process.exitValue();
-        }
-
-        /**
-         * Ends the fork, giving it the chance to run its own shutdown first.
-         *
-         * <p>Not {@code destroyForcibly()} alone. This class forks a command whose whole job is to
-         * own a PostgreSQL, so killing it outright orphans one — for the rest of the module, which
-         * boots thirteen more. A case that leaks the very thing the code under test stops is a case
-         * that makes its neighbours flaky.
-         */
-        void kill() {
-            if (!process.isAlive()) {
-                return;
-            }
-            process.destroy();
-            try {
-                if (!process.waitFor(60, TimeUnit.SECONDS)) {
-                    process.destroyForcibly();
-                }
-            } catch (InterruptedException interrupted) {
-                Thread.currentThread().interrupt();
-                process.destroyForcibly();
-            }
-        }
-    }
-
-    private static Forked fork(Path dir, String... command) throws IOException {
-        Path output = Files.createTempFile(dir, "fork", ".log");
-        java.util.List<String> line = new java.util.ArrayList<>(List.of(
-                Path.of(System.getProperty("java.home"), "bin", "java").toString(),
-                "-cp", System.getProperty("java.class.path")));
-        if (command.length > 0 && command[0].contains(".")) {
-            line.add(command[0]);
-            line.addAll(List.of(command).subList(1, command.length));
-        } else {
-            line.add(TesseraqlCli.class.getName());
-            line.addAll(List.of(command));
-        }
-        Process process = new ProcessBuilder(line)
-                .directory(dir.toFile())
-                .redirectErrorStream(true)
-                .redirectOutput(output.toFile())
-                .start();
-        return new Forked(process, output);
     }
 
     /** A stack of one scaffolded application plus a route that holds a connection for a while. */

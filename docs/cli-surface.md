@@ -156,7 +156,11 @@ directory is still named, so `tesseraql-stack.yml` is read and the application s
 (`stack-architecture.md` Decision 25) — the
 address it has when the whole stack runs. Narrowing changes *how many* runtimes start and nothing
 else, which is what [stack-architecture.md](stack-architecture.md) Decision 19 asks for when it
-requires narrowing the development-tool MCP to stay "a scoping flag, not a second mode."
+requires narrowing the development-tool MCP to stay "a scoping flag, not a second mode." The
+steps `dev` takes per member around the gateway — resolving declared modules, writing the
+embedded-database marker, printing the first-administrator hint — walk the narrowed membership
+too, through the gateway's own `MultiAppGateway.members`
+([codec-discovery.md](codec-discovery.md) S5); before that they walked the stack.
 
 **Amended twice on 2026-08-16, and each amendment corrected the previous one.** The original made
 narrowing `--app` instead of `--stack`, which changed the application's address while narrowing, so

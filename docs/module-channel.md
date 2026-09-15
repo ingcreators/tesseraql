@@ -204,6 +204,13 @@ declaration and the lock, `work/` is ignored, and the jars exist only in a build
 and inside the artifact. An offline build resolves from the bag (decision 5) with
 `--offline --repo`.
 
+The closure is the module's own, never the framework's: the resolver excludes `io.tesseraql:*`
+transitively from every declared module, because the runtime that loads the module already
+carries what the module compiled against, parent-first, and a framework jar in the cache, the
+package or the bag was a copy that never loaded and a lock line claiming a version that did not
+run ([codec-discovery.md](codec-discovery.md) S5). An application declares each module it uses
+by its own coordinate.
+
 `AppModules.load` gains one branch, with the precedence stated so a stale directory cannot
 shadow: **when `.tesseraql/modules/` exists it is the application's module set, and `work/modules`
 is not consulted**; a source tree without it reads `work/modules` as before. The two are never

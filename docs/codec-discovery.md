@@ -10,7 +10,9 @@
 > the site; lint judges every declared format against the run's codec set: **shipped as S2**. **S3** — the
 > developer CLI's module view is the runtime's, and a module that cannot be resolved is a shaped
 > refusal: **shipped as S3**. **S4** — the README's second quick start runs as written from the `-Pdist`
-> archive, and CI proves it: **shipped as S4**.
+> archive, and CI proves it: **shipped as S4**. **S5** — the two items decision 9 filed:
+> `dev --app-name` resolves, marks and advises the member it runs and no other, and a module's
+> resolved closure no longer carries the framework's own jars: **shipped as S5**.
 
 This is F82 slice 2 of [`audit-medium-leads.md`](audit-medium-leads.md) (decision 3 there:
 "its own campaign, design-doc first"). The lead was filed three times before this record —
@@ -50,7 +52,7 @@ nothing below contradicts them, and rows 9 and 13 re-run their findings on the r
 | 13 | An undeclared drop-in `work/modules` (the pdf closure, no `tesseraql.modules`, no lock), file-export shape | Lint: `TQL-YAML-1408 … neither declares under tesseraql.modules nor carries on the classpath`. `dev`: boots and serves the PDF from that directory (202 → `COMPLETED` → `%PDF-1.6`). The developer CLI and the runtime disagree about which codecs the application has. |
 | 14 | `bin/tesseraql --version`, first run, fresh `XDG_CACHE_HOME` | **145 `[warning][cds] Skipping …: Old class has been linked` lines on stdout**, one line on stderr. The launcher's `-Xlog:cds=error:stderr` adds an output; the JVM's default stdout output (`all=warning`) keeps printing. Second run: quiet. |
 
-Two side observations, filed below and not fixed here: `dev --app-name user-admin` prints
+Two side observations, filed below and fixed in S5: `dev --app-name user-admin` prints
 "Resolved 1 tesseraql.modules artifact(s) for inventory-app" and the first-administrator hint
 for `scaffold-demo-app` — it resolves and advises for members it does not run; and
 `modules resolve` copies `tesseraql-core-0.17.0-SNAPSHOT.jar` into `work/modules` (parent-first
@@ -254,11 +256,11 @@ first command a README reader types should print the version, not 145 warnings o
 
 - `dev --app-name X` resolves every stack member's modules and prints the first-administrator
   hint for members it does not run (rows 1 and 6). Its own small slice; it touches the
-  stack-discovery contract, not codecs.
+  stack-discovery contract, not codecs. **Fixed in S5.**
 - `modules resolve` writes `tesseraql-core-<version>.jar` into `work/modules`: the resolver
   keeps the module's whole closure, framework jars included. Inert under parent-first loading;
   wasteful, and a trap the day a module is built against a different core. Belongs to the
-  module channel (`ModuleResolver`'s exclusion set).
+  module channel (`ModuleResolver`'s exclusion set). **Fixed in S5.**
 - Studio's `StudioService.health()` and the Copilot's `lint` never saw module functions
   (decision 3 fixes it as a by-product; recorded so the fix is not mistaken for scope creep).
 - `FileCodecs.put`'s last-wins warning prints once per codec set; after S1 the compiler no
@@ -278,8 +280,11 @@ first command a README reader types should print the version, not 145 warnings o
 | **S3** | decisions 4 and 5: `CliModules.moduleCache` reads an undeclared `work/modules`; `ModulesInstaller` shapes the resolver's failure as `TQL-APP-4221` | cli, docs-reference | `CliModulesTest`: a services-file-only jar in `work/modules`, nothing declared, resolver present → `lint` silent on 1408 and `job run` serves the codec (red on HEAD: 1408; 2801). `ModulesInstallerTest`: an empty `--repo` offline → `UsageRefusal` `TQL-APP-4221` naming the coordinate and the BOM, no frame (red on HEAD: the shrinkwrap type). |
 | **S4** | decisions 6, 7, 8: the example declares its module; README + getting-started; the mint's app-use atom; the launcher; the CI smoke on the README's example | examples, docs, cli, `bin/tesseraql(.cmd)`, `.github/workflows/ci.yml`, docs-reference (reference-cli) | `TokenCommandTest`: `--app` stamps `tql.app.use.<name>`; `--permission x` replaces it (red on HEAD). Launcher: a shell test under `tesseraql-cli/src/test` runs `bin/tesseraql --version` with a fresh `XDG_CACHE_HOME` and asserts stdout is the version line alone (red on HEAD: 146 lines). `ReadmeLedgerTest` gains: the README's build line installs; its curl names the member address; the example's config declares every opt-in format it uses (red on HEAD on all three). The CI step is the end-to-end guard and is red on HEAD by rows 1 and 11. |
 
+| **S5** | decision 9's first two items: `MultiAppGateway.members` is the one narrowing, and `dev` walks it before resolving, marking or advising; `ModuleResolver` excludes `io.tesseraql:*` from every declared module's closure | runtime, cli | `DevNarrowingIntegrationTest` (a forked `dev --app-name alpha` on a two-member stack whose idle member declares a module: nothing is resolved, the hint names `alpha` alone, `alpha/work/embedded-db.jdbc` exists and `beta/work` does not; an unknown name is refused before the database starts). `ModuleResolverTest` (offline against a written repository in which the framework artifact is resolvable: the closure is the module and its engine, not the framework). Red on `e7107ca09`'s sources: "Resolved 1 tesseraql.modules artifact(s) for beta" in both dev cases, the database started before the refusal, `io.tesseraql:tesseraql-core:9.9.9` in the closure |
+
 Order: S1 → S2 → S3 → S4. S2 needs S1's set at compile; S4's CI step needs S1-S3 (row 1 boots,
 row 11 answers). S3 is independent of S1 and S2 and could land between them without conflict.
+S5 is independent of all four and landed after them.
 
 ### Rules carried into every slice
 
@@ -404,10 +409,74 @@ and is ready in 14 s; `token --app examples/user-admin-app --role USER_READ` car
 (the two new cases, the gallery one naming `user-admin-app uses format: pdf and does not declare
 io.tesseraql:tesseraql-pdf`), `QuietLauncherTest` (the proxy's `[warning][cds]` line on stdout).
 
+### S5 — the two filed items
+
+**Measured 2026-09-15 on main `e7107ca09`, on the `-Pdist` archive.** `dev --stack examples
+--app-name user-admin --embedded-db`: "Resolved 1 tesseraql.modules artifact(s) for
+inventory-app" — the 73 MB DuckDB driver copied into `inventory-app/work/modules` for a member
+the run never starts — then "1 app(s)", then **seven** first-administrator hints, one per
+example; a `work/` directory left under all seven members, because the embedded-database marker
+was written under each and the shutdown hook deletes the file, not the directory.
+`modules resolve --app` on a copy of `user-admin-app`: 17 artifacts into `work/modules` and the
+lock, `tesseraql-core-0.17.0-SNAPSHOT.jar` (428,897 bytes) among them.
+
+**The narrowing.** `dev` computed its member list as `AppDirectory.Resolved.applications()` —
+the stack — and walked it three times: the module resolve, the marker, the hint. The gateway
+narrowed by name on its own, after the first two walks. `MultiAppGateway.members(catalogued,
+appName)` is now the one narrowing: `dev` walks its result, and the gateway calls it again for
+`host`, which has no per-member step of its own. An unknown name is the same refusal as before,
+now before the embedded database starts, where it used to come after the database, the
+resolves and the markers. `mcp --app-name` narrowed correctly already and keeps its own copy.
+Same archive, same command after S5: one "Resolved 16 tesseraql.modules artifact(s) for
+user-admin-app", one hint, `work/` under `user-admin-app` and the stack's own `work/portal`
+and nowhere else.
+
+**The closure.** Every dependency in the resolver's synthetic POM now excludes
+`io.tesseraql:*` transitively (`ModuleResolver.FRAMEWORK_GROUP`); the exclusion is in the POM
+rather than a filter on the result, so an offline resolution never asks a bag for a framework
+jar the bag was never told to carry. The rule it states: a module's `io.tesseraql` dependencies
+are the framework's — the runtime that loads the module carries them, parent-first, so a copy in
+`work/modules` never loads — and an application declares each module it uses by its own
+coordinate; a module that depended on another opt-in module would need both declared, and
+today none does (`tesseraql-pdf` and `tesseraql-excel` depend on `tesseraql-core`,
+`tesseraql-s3` on `tesseraql-core` and `tesseraql-yaml`, all three on nothing else of ours).
+ShrinkWrap 3.3.7 honours the `*` artifact wildcard; `ModuleResolverTest` is the proof. Same
+copy after S5: 16 artifacts, the lock without core, the pdf route unchanged.
+
+A lock written before S5 lists the framework jars. `ModulesLock.verify` checks that what
+resolved is in the lock, not the reverse, so `dev` and `host` keep starting on an old lock;
+`package` compares the cache to the lock both ways (`TQL-APP-4219`) and names
+`tesseraql modules resolve`, which rewrites it. No lock in the repository names a framework jar:
+`user-admin-app` commits none, and `inventory-app`'s pins a driver with no `io.tesseraql`
+closure.
+
+**Measured and filed, not fixed:** 7 of the remaining 16 jars — `thymeleaf`, `ognl`,
+`attoparser`, `unbescape`, `javassist`, `slf4j-api`, `commons-logging`, 2.5 MB — are on the
+base classpath too (`lib/tesseraql.jar` holds their packages), inert under the same
+parent-first rule. Excluding them needs the runtime's closure at resolve time, which the
+resolver cannot name by rule the way it names the framework's group; the module channel is
+where that list would live.
+
+Guards: `DevNarrowingIntegrationTest` (tesseraql-cli; the running case forks `dev --watch`
+and reads the console once "Watching every application's web/" — printed after the hints —
+appears; Linux and macOS, since stopping a forked `dev` needs a signal that runs its hooks;
+the refusal case exits on its own and runs everywhere), `ModuleResolverTest` (tesseraql-cli).
+The fork harness the shutdown test kept to itself is `ForkedCli` now, shared by both.
+
+Red on `e7107ca09`'s three main sources (the test sources in place, the runtime jar HEAD's):
+`ModuleResolverTest` — "some elements were not expected:
+[io.tesseraql:tesseraql-core:9.9.9]"; `narrowingResolvesMarksAndAdvisesTheMemberItRunsAndNoOther`
+— "Resolved 1 tesseraql.modules artifact(s) for beta." in the console;
+`anUnknownNameIsRefusedBeforeAnythingStarts` — the same line, then "Embedded PostgreSQL"
+before the refusal. Green with the fix, the runtime jar proven by its constant pool
+(`MultiAppGateway.class` with a `members` symbol).
+
 ## Sources
 
 The runs above: `scratchpad/m/` on this machine — `readme-dev.log` (row 1), `m3-*.log`,
 `m4-*` (the 5,689-byte PDF is `m4-file.bin`), `m5-dev.log`, `m6-dev.log` + `m6.pdf`,
 `m7-dev.log`/`m7b-dev.log`, `m8-host.log`, `m11-dev.log`, `m12-dev.log`, `cds-out.txt`/`cds-err.txt`
 (row 14), `gs/dev.log` + `probe-gs.sh` (row 12), `probe-m4.sh`/`cmp-tokens.sh`/`jwt.sh` (row 11);
-the copies `stack1`-`stack6` and `gs/myapp`. Not committed.
+the copies `stack1`-`stack6` and `gs/myapp`. S5: `probe-dev.sh` → `dev-head.log`/`dev-fixed.log`,
+`probe-resolve.sh` → `resolve-head.log`, `shaded-list.txt`; the copies `m/examples` and
+`m/user-admin-app`. Not committed.
