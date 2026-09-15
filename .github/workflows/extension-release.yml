@@ -3,7 +3,8 @@ name: Extension release
 # Publishes the VS Code extension to the Visual Studio Marketplace on ext-v* tags
 # (docs/vscode-extension.md): test, check the manifest version matches the tag,
 # package once, verify the publisher token, publish that exact vsix, and attach it
-# to a GitHub release. The extension versions independently of the framework, so
+# to a GitHub release whose notes are the extension's own pull requests. The
+# extension versions independently of the framework, so
 # its tags live in their own ext-v* namespace and never ride a framework release.
 #
 # workflow_dispatch runs everything except the publish and the release — a dry run
@@ -33,6 +34,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The release notes are the pull requests that touched vscode-extension/ since the
+          # previous ext-v* tag (.github/scripts/extension-release-notes.sh), which needs the
+          # tags and the history a shallow checkout does not carry.
+          fetch-depth: 0
 
       - name: Set up pnpm
         uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
@@ -84,13 +90,19 @@ jobs:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
         run: pnpm exec vsce publish --packagePath tesseraql-vscode-*.vsix
 
+      # Not --generate-notes: the extension shares the repository's release list with the
+      # framework, so GitHub's automatic notes range from whichever release it takes for the
+      # previous one -- ext-v0.3.16's reproduced v0.17.0's seventy-two lines -- and even the
+      # right ext-v* range is mostly framework pull requests. The script keeps the ones that
+      # touched vscode-extension/.
       - name: Publish GitHub release
         if: github.event_name == 'push'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          bash .github/scripts/extension-release-notes.sh "$GITHUB_REF_NAME" > release-notes.md
           gh release create "$GITHUB_REF_NAME" \
             --title "TesseraQL for VS Code ${GITHUB_REF_NAME#ext-v}" \
-            --generate-notes \
+            --notes-file release-notes.md \
             --verify-tag \
             vscode-extension/tesseraql-vscode-*.vsix

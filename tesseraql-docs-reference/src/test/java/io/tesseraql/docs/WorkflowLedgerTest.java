@@ -379,9 +379,9 @@ class WorkflowLedgerTest {
         }
 
         // Non-vacuity: the walk has to be finding script calls at all, or an empty result says
-        // nothing. Three jobs call into .github/scripts/ today.
+        // nothing. Four jobs call into .github/scripts/ today.
         assertThat(scriptCallingJobs()).as("the walk finds jobs that call a repository script")
-                .isGreaterThanOrEqualTo(3);
+                .isGreaterThanOrEqualTo(4);
         assertThat(blind)
                 .as("jobs that run a script from .github/scripts/ without checking the repository"
                         + " out; the script is not on the runner, so the step fails with exit 127"
