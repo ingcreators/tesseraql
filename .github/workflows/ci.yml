@@ -196,6 +196,20 @@ jobs:
           fi
           kill "$DEV_PID"
           wait "$DEV_PID" || true
+          # The route no in-JVM test runs (docs/module-channel.md decision 9): the resolver in the
+          # shaded jar read the runtime's closure ledger out of that jar, so the cache it filled
+          # holds nothing the ledger names. The ledger is read from the archive itself, not from
+          # the reactor: a shade filter that dropped it would refuse dev above, and one that kept
+          # a stale copy would show here as a carried jar in the cache.
+          unzip -p "$(dirname "$TQL")/../lib/tesseraql.jar" META-INF/tesseraql/runtime-closure.txt \
+            | grep -oE '^   [^:]+:[^:]+:jar:[^:]+:' | awk -F: '{print $2 "-" $4 ".jar"}' | sort > ledger-jars.txt
+          [ -s ledger-jars.txt ] || { echo 'The shaded jar carries no runtime closure ledger'; exit 1; }
+          ls examples/user-admin-app/work/modules > cache-jars.txt
+          if [ "$(wc -l < cache-jars.txt)" -eq 0 ]; then echo 'dev resolved nothing into work/modules'; exit 1; fi
+          if CARRIED=$(comm -12 ledger-jars.txt <(sort cache-jars.txt)) && [ -n "$CARRIED" ]; then
+            echo 'work/modules holds jars the runtime already carries:'; echo "$CARRIED"; exit 1
+          fi
+          echo "work/modules: $(wc -l < cache-jars.txt) jar(s), none of the $(wc -l < ledger-jars.txt) the runtime carries"
 
   # The default shipping pattern in docs/deployment.md is a baked image, and nothing built
   # deploy/Dockerfile: it had been unbuildable since the copy-dependencies step started

@@ -342,6 +342,36 @@
 
   <build>
     <plugins>
+      <!--
+        The runtime's closure ledger (docs/module-channel.md decision 9): what this jar's own
+        runtime-scope dependency set is, written into the jar so the module resolver can exclude
+        it from every declared module's closure. A module loads in a child of the runtime's
+        loader, parent-first, so a copy of any of these in work/modules never loads; the ledger
+        is what lets the resolver leave them out. It is the runtime's closure and not the CLI's
+        or the host's because the runtime's loader is the parent in every deployment shape,
+        including a wrapper-pom build that embeds this jar without either. Generated, never
+        committed: the file is the POM's dependency graph with no judgment in it, and a bump
+        changes it without anyone regenerating anything. The CLI's RuntimeClosureLedgerTest
+        checks the written file against the classpath it runs on.
+      -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-dependency-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>runtime-closure</id>
+            <phase>generate-resources</phase>
+            <goals>
+              <goal>list</goal>
+            </goals>
+            <configuration>
+              <includeScope>runtime</includeScope>
+              <sort>true</sort>
+              <outputFile>${project.build.outputDirectory}/META-INF/tesseraql/runtime-closure.txt</outputFile>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
       <plugin>
         <!--
           The workshop boundary (docs/studio-shell.md structural decision 3, the guard

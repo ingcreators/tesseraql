@@ -62,14 +62,19 @@ final class PackageCommand implements Callable<Integer> {
      * it resolves here rather than asking for a prior command: the lock pins the closure, and
      * {@link io.tesseraql.cli.modules.ModulesInstaller} verifies what it resolved against it. An
      * application that declares modules without a lock is refused (TQL-APP-4218) instead, because
-     * only a lock can say which closure was reviewed.
+     * only a lock can say which closure was reviewed; a lock naming an artifact the runtime
+     * carries is refused before anything resolves (TQL-APP-4219), with the sentence the Maven
+     * goal gives the same lock (docs/module-channel.md decision 9).
      */
     private static Path resolveDeclaredModules(Path home) {
         io.tesseraql.yaml.config.AppConfig config = new io.tesseraql.yaml.manifest.ManifestLoader()
                 .load(home).config();
-        if (PackagedModules.requireLock(home, config).isEmpty()) {
+        Path lock = PackagedModules.requireLock(home, config).orElse(null);
+        if (lock == null) {
             return null;
         }
+        PackagedModules.requireNothingTheRuntimeCarries(home, lock,
+                io.tesseraql.apptasks.RuntimeClosure.fromClasspath());
         Path cache;
         try {
             cache = new io.tesseraql.cli.modules.ModulesInstaller().install(home, config, false)

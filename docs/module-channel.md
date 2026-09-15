@@ -490,9 +490,31 @@ Consequences to record rather than discover:
   before this slice still serves, holding more than it is asked for.
 - The pdf example's cache and lock go from 16 lines to 10. No committed lock names a carried
   artifact (`inventory-app`'s pins a driver with no overlap; `user-admin-app` commits none).
+- A test fixture that declared a carried artifact as its "tiny, stable module" is now refused:
+  `ModulesFetchIntegrationTest` declared `org.slf4j:slf4j-api` and moves to
+  `info.picocli:picocli`, which the developer CLI carries and the runtime does not — the leaf
+  `ModulesCommandTest` already pins. The full verify found it; 4222 is doing what it says.
 - The ledger is a build output with the reproducibility every build output here has: the same POM
   produces the same file, byte for byte, and a dependency bump changes it without anyone
   regenerating anything.
+- The ledger's versions are the runtime's own resolution, and a deployment's can differ: Maven
+  mediates a version per graph, so the developer CLI carries `commons-codec` 1.21.0 where the
+  runtime's ledger says 1.19.0, and the host carries `org.jetbrains:annotations` 13.0 to the
+  runtime's 17.0.0. The exclusion is by `group:artifact` for this reason too, and the ledger guard
+  checks artifacts against the classpath, not versions.
+
+**Measured after the slice, through the reactor CLI against the local repository** (the copies
+under `scratchpad/m/`): the pdf example resolves **10** artifacts, 5.2 MB — `commons-logging`
+among them, the six gone; `modules add org.slf4j:slf4j-api` answers `TQL-APP-4222` naming
+`org.slf4j:slf4j-api:2.0.18`, exit 2, the YAML untouched; a lock with the two carried lines
+appended is refused by `tesseraql package` with `TQL-APP-4219` naming both, and packages 10 jars
+once `modules resolve` rewrites it. The excel module resolves 22 where it resolved 26 — one of
+the 22 is `jcl-over-slf4j`, which the developer CLI carries and the runtime does not, kept for
+the same reason `commons-logging` is; the S3 module 32. One thing observed and not changed:
+`tesseraql package`'s lock refusals (`4218`, `4219`) print as a stack trace with exit 1, as
+they did before this slice — the CLI's exception shaper knows `UsageRefusal` and the
+database-unreachable shape, and `PackagedModules` throws the runtime's `TqlException` so the
+Maven goal can share it; shaping that on the CLI is its own small slice.
 
 ## Guards
 
