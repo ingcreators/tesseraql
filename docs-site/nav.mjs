@@ -341,4 +341,7 @@ export const EXCLUDED = [
   // One codec set per application: the synchronous export, the import view and the reloader
   // read the module loader's codecs like the transfer service does - designed 2026-09-14.
   'codec-discovery.md',
+  // A view's source: is a route's declaration: the symbols contract carries every route's named
+  // sources and the view it binds, and the editor navigates and completes them - designed 2026-09-15.
+  'editor-named-sources.md',
 ];
