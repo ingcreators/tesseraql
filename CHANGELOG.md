@@ -222,6 +222,24 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **The README's second quick start runs as written from the distribution archive.** The
+  example it names declares the pdf module its printable route uses, so `tesseraql dev`
+  resolves it — the build line installs the reactor so that resolution finds the module and
+  the BOM in the local repository — and CI now boots the example from the shipped archive,
+  mints its token and downloads the PDF. The curl block calls the member address the stack
+  serves the application at (`/user-admin/…`) with a token the CLI mints: the hand-minted JWT
+  carried no `exp`, no `aud` and no application-use grant, and was refused three ways.
+  `getting-started.md` names `APP_READ`, the role the scaffolded policy reads, where it named
+  `ADMIN`. `docs/codec-discovery.md` S4.
+- **`tesseraql token --app` mints a token that can enter the application it is minted for.**
+  The local mint carried the application's audience and no permissions, so it failed the
+  `tql.app.use.<name>` fence of every application, a freshly scaffolded one included; the grant
+  rides under the permissions claim now unless `--permission` spells the list out.
+- **The launchers' first run prints only the command's output.** The run that writes the CDS
+  archive reported every class it skipped at warning level on the JVM's default output —
+  stdout — because `-Xlog:cds=error:stderr` added an output rather than replacing it: 145
+  lines ahead of `tesseraql --version` on a fresh cache, on the stream a `--format json` is
+  piped from. Both launchers switch the default output off and rebuild it on stderr.
 - **The developer CLI reads the module directory the runtime reads.** `lint`, `test`,
   `coverage`, `job run` and the other single-application verbs ignored an undeclared
   `work/modules` that `tesseraql dev`, `host` and the deployment CLI all load, so `lint` warned

@@ -1,8 +1,8 @@
 # One codec set per application
 
-> **Status: designed 2026-09-14; every decision decided as recommended the same day.** Slices
-> S1-S4 below, each its own pull request branched from fresh `origin/main` after the previous
-> one merged. Each pull request flips its own line here when it merges.
+> **Status: complete — designed 2026-09-14, every decision decided as recommended the same day,
+> the four slices shipped 2026-09-14/15.** Each was its own pull request branched from fresh
+> `origin/main` after the previous one merged; each flipped its own line here when it merged.
 >
 > **S1** — the codec set is the application's, discovered once from its module loader and
 > handed to every consumer (the sync `query-export` route, the import view, the reloader, the
@@ -10,7 +10,7 @@
 > the site; lint judges every declared format against the run's codec set: **shipped as S2**. **S3** — the
 > developer CLI's module view is the runtime's, and a module that cannot be resolved is a shaped
 > refusal: **shipped as S3**. **S4** — the README's second quick start runs as written from the `-Pdist`
-> archive, and CI proves it: *open*.
+> archive, and CI proves it: **shipped as S4**.
 
 This is F82 slice 2 of [`audit-medium-leads.md`](audit-medium-leads.md) (decision 3 there:
 "its own campaign, design-doc first"). The lead was filed three times before this record —
@@ -206,7 +206,7 @@ free `TQL-APP` code after the module-channel's 4216-4220.
 - The README's build line becomes `./mvnw -B -ntp -DskipTests -Pdist install`: the reactor
   installs `tesseraql-bom` and `tesseraql-pdf` into the local repository, which is where
   `dev` resolves the declaration from (row 10 is what the current `-pl tesseraql-cli -am … package`
-  line would produce after this change). One command; S4 records its duration.
+  line would produce after this change). One command; 38 s on the Dev Container (S4).
 - The README's curl block becomes the member address and the CLI mint — see decision 7 — and the
   JWT paragraph goes; `getting-started.md:110-118` names `APP_READ`, the role the scaffolded
   policy actually reads.
@@ -365,6 +365,44 @@ that application is silent on 1408 for the format the jar serves);
 resolver's type). Red on the S1 tip: the loader lacked the jar's codec; the resolver's
 `NoResolvedResultException` escaped raw. The lint case is red only once S2's rule judges every
 format, which is why S3 follows S2.
+
+### S4 — the front door runs as written
+
+**The cost of decision 6, found while paying it:** every host-shaped integration test copies
+`examples/user-admin-app` into a stack and boots it through `MultiAppHost`, and a host refuses
+an application whose declared modules are not on disk (`TQL-APP-4216`) — the right answer for
+an operator's install root, and exactly the state a copied source tree is in once the example
+declares its module. Fourteen tests; every copy already ran through one helper
+(`UserAdminAppJobs.parkDailyMaintenanceSchedule`, 76 call sites in two modules), so the helper
+became `UserAdminAppCopy.prepare` and drops the declaration beside parking the cron, loud on
+drift as before. Nothing in a runtime test resolves modules; the codec is on the test classpath.
+
+Guards: `TokenCommandTest` (the local mint carries `tql.app.use.<name>`; an explicit
+`--permission` list is minted as given); `QuietLauncherTest` (both launchers, a stub main
+whose archive dump has one class to report — a dynamic proxy — so the run that writes the
+archive prints the marker alone on stdout; **a stub that loads nothing unusual prints nothing
+under either flag set and would have been green on the defect**); `ReadmeLedgerTest` (the
+build line installs, the calls name the member address and the CLI mint, no hand-minted JWT;
+every gallery app declares the opt-in formats it uses — red on HEAD for `user-admin-app`); the
+CI step "Run the README's example from the dist archive" (the example boots from the archive
+with its module resolved from the local repository, the minted token enters it, the printable
+route answers `%PDF`).
+
+Measured for decision 8: a refused archive (a classpath the archive was not built from) prints
+nothing under the shipped flags, the new flags, or no flags at all — the launcher comment that
+promised the refusal would be reported was wrong; the fingerprint in the file name is the only
+thing that tracks it, and the comment says so now. The JVM's other warnings move from stdout to
+stderr with the default output rebuilt there, which is where a CLI's warnings belong.
+
+**The README's second quick start, run as written from this slice's archive** (the row-1
+command with `--embedded-db --offline` and a port; `scratchpad/m/readme-e2e.sh`):
+`./mvnw -B -ntp -DskipTests -Pdist install` 38 s on the Dev Container; the archive's first run
+prints the version line alone; `dev` resolves the example's 17 jars from the local repository
+and is ready in 14 s; `token --app examples/user-admin-app --role USER_READ` carries
+`tql.app.use.user-admin`; the search answers `sato` at 200; the printable route answers 200,
+5,689 bytes, `%PDF-1.6`; SIGTERM reaches the drain. Red proofs on the S1 tip: `ReadmeLedgerTest`
+(the two new cases, the gallery one naming `user-admin-app uses format: pdf and does not declare
+io.tesseraql:tesseraql-pdf`), `QuietLauncherTest` (the proxy's `[warning][cds]` line on stdout).
 
 ## Sources
 

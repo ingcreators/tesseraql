@@ -40,9 +40,13 @@ fi
 # and stale ones are dropped when a new name first appears. If the cache directory cannot be
 # written (read-only home, HOME unset), the archive is skipped entirely.
 #
-# -Xlog:cds=error keeps the run that writes it from reporting which classes it skipped — normal
-# detail of building an archive, alarming in a terminal — while still reporting the one thing an
-# operator would want to know: that an archive exists and the JVM refused it.
+# The run that writes the archive reports every class it skipped - normal detail of building
+# one, alarming in a terminal, and it went to STDOUT: `-Xlog:cds=error:stderr` alone ADDS a
+# stderr output and leaves the JVM's default stdout output at warning level, so a first run
+# printed 145 such lines ahead of the version (docs/codec-discovery.md decision 8). The default
+# output is switched off and rebuilt on stderr, warnings and up, with cds at errors only. A
+# refused archive is silent under every setting - the fingerprint in the file name is what
+# keeps an archive from going stale, not a message.
 CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/tesseraql"
 # Split CP on its separator only. Splitting on whitespace as well made `ls` miss every entry once
 # any of them held a space, so the fingerprint became the checksum of nothing - the same constant
@@ -71,7 +75,7 @@ if [ -n "$FINGERPRINT" ] && mkdir -p "$CACHE" 2>/dev/null; then
   ARCHIVE="$CACHE/cds-$FINGERPRINT.jsa"
   [ -f "$ARCHIVE" ] || rm -f "$CACHE"/cds-*.jsa 2>/dev/null || true
   set -- -XX:+AutoCreateSharedArchive "-XX:SharedArchiveFile=$ARCHIVE" \
-      -Xlog:cds=error:stderr "$@"
+      -Xlog:disable -Xlog:all=warning,cds=error:stderr "$@"
 fi
 set -- -XX:+UseCompactObjectHeaders --sun-misc-unsafe-memory-access=allow "$@"
 

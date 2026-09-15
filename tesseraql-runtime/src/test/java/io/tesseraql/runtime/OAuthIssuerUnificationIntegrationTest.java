@@ -637,7 +637,7 @@ class OAuthIssuerUnificationIntegrationTest {
         try (Stream<Path> files = Files.walk(source)) {
             files.forEach(path -> copy(source, home, path));
         }
-        UserAdminAppJobs.parkDailyMaintenanceSchedule(home);
+        UserAdminAppCopy.prepare(home);
         Path exampleConfig = home.resolve("config/tesseraql.yml");
         String config = Files.readString(exampleConfig);
         // The member's egress allow list must play no part in validating stack tokens: the

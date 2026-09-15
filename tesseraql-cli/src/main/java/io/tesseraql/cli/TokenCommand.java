@@ -30,7 +30,11 @@ import picocli.CommandLine.Option;
  * to mean hand-assembling a JWT. The claim layout mirrors what the runtime verifies: roles under
  * the configured {@code rolesClaim}, permissions under {@code permissionsClaim}, custom claims
  * verbatim (a value that parses as JSON — e.g. {@code '["a","b"]'} — is embedded structurally,
- * anything else as a string). Development only, and structurally so: an app whose verification is
+ * anything else as a string). A token minted for an application can use it: the application-use
+ * grant ({@code tql.app.use.<name>}, docs/application-roles.md) rides under the permissions claim
+ * unless the caller spells the permissions out, because a token whose {@code aud} is one
+ * application and whose grants cannot pass that application's fence is a token for nothing
+ * (docs/codec-discovery.md decision 7). Development only, and structurally so: an app whose verification is
  * asymmetric (publicKey/jwksUri, no shared secret) has nothing this command could sign with, and
  * production deployments are expected to be exactly that or to inject the secret from the
  * environment — the command signs with whatever the resolved config exposes and says so on stderr.
@@ -83,7 +87,7 @@ public final class TokenCommand implements Callable<Integer> {
     List<String> roles = new ArrayList<>();
 
     @Option(names = {
-            "--permission"}, paramLabel = "<permission>", description = "Permission (repeatable); lands under the configured permissionsClaim.")
+            "--permission"}, paramLabel = "<permission>", description = "Permission (repeatable); lands under the configured permissionsClaim. With --app, none given mints the application-use grant (tql.app.use.<name>) so the token can enter the application it is minted for.")
     List<String> permissions = new ArrayList<>();
 
     @Option(names = {"--claim"}, paramLabel = "<name=value>", description = "Custom claim "
@@ -342,6 +346,13 @@ public final class TokenCommand implements Callable<Integer> {
         }
         if (!permissions.isEmpty()) {
             payload.put(permissionsClaim, permissions);
+        } else {
+            // The fence every application checks first: a bearer holding roles alone is 403 at
+            // the door, the refusal naming the missing atom. An explicit --permission list is
+            // the caller's and is left alone, so a test of the fence itself can still mint a
+            // token without the grant.
+            String application = io.tesseraql.yaml.app.ApplicationName.of(config);
+            payload.put(permissionsClaim, List.of("tql.app.use." + application));
         }
         claims.forEach((name, value) -> payload.put(name, parseValue(value)));
         // The local mint fabricates claims by design; --as stamps the capacity claim the same

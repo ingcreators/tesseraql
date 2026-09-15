@@ -115,7 +115,7 @@ class TenantBatchIntegrationTest {
         try (Stream<Path> files = Files.walk(source)) {
             files.forEach(path -> copy(source, target, path));
         }
-        UserAdminAppJobs.parkDailyMaintenanceSchedule(target);
+        UserAdminAppCopy.prepare(target);
         String baseUrl = POSTGRES.getJdbcUrl();
         Files.writeString(target.resolve("config/application.yml"), """
                 server:

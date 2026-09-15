@@ -77,7 +77,7 @@ class FrameworkSurfaceGuardTest {
         try (Stream<Path> files = Files.walk(source)) {
             files.forEach(path -> copy(source, appHome, path));
         }
-        UserAdminAppJobs.parkDailyMaintenanceSchedule(appHome);
+        UserAdminAppCopy.prepare(appHome);
         Files.createDirectories(appHome.resolve("assets"));
         Files.writeString(appHome.resolve("assets/app.css"), "body{}\n");
         Files.createDirectories(appHome.resolve("mcp"));

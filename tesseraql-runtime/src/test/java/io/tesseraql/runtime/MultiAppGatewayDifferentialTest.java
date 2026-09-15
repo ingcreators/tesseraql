@@ -550,7 +550,7 @@ class MultiAppGatewayDifferentialTest {
         try (Stream<Path> files = Files.walk(source)) {
             files.forEach(path -> copy(source, appHome, path));
         }
-        UserAdminAppJobs.parkDailyMaintenanceSchedule(appHome);
+        UserAdminAppCopy.prepare(appHome);
         Files.writeString(appHome.resolve("config/application.yml"), """
                 server:
                   port: 0

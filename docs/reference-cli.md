@@ -227,7 +227,7 @@ Obtain a bearer token: mint one from an app's HS256 secret (--app), or sign in t
 | `--tenant <id>` | — | With --url: the tenant to sign in to, for a multi-tenant realm. |
 | `--otp <code>` | — | With --url: the TOTP code, or a recovery code, when the account has an authenticator enrolled. |
 | `--role <role>` | — | Role (repeatable); lands under the configured rolesClaim. |
-| `--permission <permission>` | — | Permission (repeatable); lands under the configured permissionsClaim. |
+| `--permission <permission>` | — | Permission (repeatable); lands under the configured permissionsClaim. With --app, none given mints the application-use grant (tql.app.use.<name>) so the token can enter the application it is minted for. |
 | `--claim <name=value>` | — | Custom claim (repeatable). A value that parses as JSON ('["a","b"]', '7', 'true') is embedded structurally; anything else is a string. |
 | `--ttl <duration>` | — | Lifetime, e.g. 30m, 12h, 7d (default 24h). |
 | `--app-name <name>` | — | Mint for one stack member: the token's audience is that member's address and its claims are the member's active view — one held role auto-activates, several stay inactive unless --as selects one (docs/token-issuance.md decision 9). Only with --url, against a stack surface. |

@@ -108,8 +108,12 @@ jobs:
           # Stated, not inherited (as above): a default that flipped on can flip off again.
           verify-signature: true
 
+      # Installed, not packaged: the README's example declares the pdf module, which `dev`
+      # resolves from the local repository, so the BOM and the module have to be there
+      # (docs/codec-discovery.md decision 6). The CLI's -am closure already builds the module;
+      # the BOM is named because nothing depends on it.
       - name: Build the CLI distribution
-        run: ./mvnw -B -ntp -pl tesseraql-cli -am -Pdist -DskipTests package
+        run: ./mvnw -B -ntp -pl tesseraql-cli,tesseraql-bom -am -Pdist -DskipTests install
 
       - name: Smoke-test the fat jar
         run: java -jar tesseraql-cli/target/tesseraql-cli-*-all.jar routes --app examples/scaffold-demo-app
@@ -166,6 +170,32 @@ jobs:
             echo 'SIGTERM did not reach the ordered drain (no "Stack stopping" line):'
             echo '--- dev.log ---'; cat dev.log; exit 1
           fi
+
+      # The README's second quick start, as written: the example declares the pdf module, dev
+      # resolves it from the repository the build step installed into, the token the CLI mints
+      # can enter the application, and the printable route answers a PDF through the module's
+      # codec on the synchronous recipe — the seam no in-JVM test can reach from the shipped
+      # archive (docs/codec-discovery.md decision 6).
+      - name: Run the README's example from the dist archive
+        run: |
+          TQL=$(echo "$RUNNER_TEMP"/tesseraql-*/bin/tesseraql)
+          "$TQL" dev --stack examples --app-name user-admin --embedded-db > readme.log 2>&1 &
+          DEV_PID=$!
+          READY=0
+          for i in $(seq 1 90); do
+            if curl -sf http://localhost:8080/user-admin/_tesseraql/health/ready > /dev/null; then READY=1; break; fi
+            kill -0 "$DEV_PID" 2>/dev/null || break
+            sleep 2
+          done
+          if [ "$READY" != "1" ]; then echo '--- readme.log ---'; cat readme.log; exit 1; fi
+          TOKEN=$("$TQL" token --app examples/user-admin-app --role USER_READ)
+          curl -sf -H "Authorization: Bearer $TOKEN" "http://localhost:8080/user-admin/api/users?q=sato" | grep -q '"sato"'
+          curl -sf -H "Authorization: Bearer $TOKEN" -o users.pdf "http://localhost:8080/user-admin/api/users/print"
+          if [ "$(head -c 4 users.pdf)" != "%PDF" ]; then
+            echo 'The printable route did not answer a PDF:'; head -c 200 users.pdf; echo; exit 1
+          fi
+          kill "$DEV_PID"
+          wait "$DEV_PID" || true
 
   # The default shipping pattern in docs/deployment.md is a baked image, and nothing built
   # deploy/Dockerfile: it had been unbuildable since the copy-dependencies step started

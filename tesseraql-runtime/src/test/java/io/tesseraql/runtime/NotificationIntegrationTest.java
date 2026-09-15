@@ -274,7 +274,7 @@ class NotificationIntegrationTest {
         try (Stream<Path> files = Files.walk(source)) {
             files.forEach(path -> copy(source, target, path));
         }
-        UserAdminAppJobs.parkDailyMaintenanceSchedule(target);
+        UserAdminAppCopy.prepare(target);
         // Point the channels at this test's SMTP server and webhook receiver (the placeholders
         // resolve top-level config keys after environment variables).
         Files.writeString(target.resolve("config/application.yml"), """

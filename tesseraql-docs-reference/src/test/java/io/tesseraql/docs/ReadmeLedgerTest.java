@@ -6,6 +6,9 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 import java.util.TreeSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -73,6 +76,67 @@ class ReadmeLedgerTest {
         // answers 404.
         assertThat(readme).doesNotContain("/<name>/_tesseraql/studio")
                 .contains("Studio at /_tesseraql/studio");
+    }
+
+    /**
+     * The second quick start runs as written (docs/codec-discovery.md decision 6): the build
+     * line installs the reactor — the example's declared pdf module resolves from the local
+     * repository, and `-am … package` installs nothing — and the calls name the member address
+     * the stack serves the application at, with a token the CLI mints.
+     */
+    @Test
+    void theSecondQuickStartInstallsTheReactorAndCallsTheMemberAddress() throws IOException {
+        String readme = Files.readString(REPO.resolve("README.md"), StandardCharsets.UTF_8);
+
+        assertThat(readme).contains("./mvnw -B -ntp -DskipTests -Pdist install")
+                .doesNotContain("-pl tesseraql-cli -am -Pdist package");
+        assertThat(readme).contains("http://localhost:8080/user-admin/api/users?q=sato")
+                .doesNotContain("http://localhost:8080/api/users")
+                .contains("token --app examples/user-admin-app --role USER_READ")
+                // The hand-minted JWT: no exp, no aud, no application-use grant — refused three
+                // ways by the application it was written for.
+                .doesNotContain("openssl dgst");
+    }
+
+    /**
+     * Every gallery application declares the opt-in codec modules its routes and jobs use, so
+     * `tesseraql dev` resolves them and a package carries them — the shipped flagship example
+     * was the shape TQL-YAML-1408 warns about, and the README told the reader to run it.
+     */
+    @Test
+    void everyGalleryAppDeclaresTheOptInFormatsItUses() throws IOException {
+        Map<String, String> coordinates = Map.of("pdf", "io.tesseraql:tesseraql-pdf",
+                "excel", "io.tesseraql:tesseraql-excel");
+        Pattern format = Pattern.compile("^\\s*format:\\s*(pdf|excel)\\s*$", Pattern.MULTILINE);
+        List<String> undeclared = new ArrayList<>();
+        try (Stream<Path> apps = Files.list(REPO.resolve("examples"))) {
+            for (Path app : apps.filter(Files::isDirectory).sorted().toList()) {
+                Path config = app.resolve("config/tesseraql.yml");
+                if (!Files.isRegularFile(config)) {
+                    continue;
+                }
+                String declared = Files.readString(config, StandardCharsets.UTF_8);
+                TreeSet<String> used = new TreeSet<>();
+                try (Stream<Path> files = Files.walk(app)) {
+                    for (Path file : files.filter(f -> f.toString().endsWith(".yml")
+                            && !f.toString().contains("/work/")).toList()) {
+                        Matcher use = format
+                                .matcher(Files.readString(file, StandardCharsets.UTF_8));
+                        while (use.find()) {
+                            used.add(use.group(1));
+                        }
+                    }
+                }
+                for (String name : used) {
+                    if (!declared.contains(coordinates.get(name))) {
+                        undeclared.add(app.getFileName() + " uses format: " + name
+                                + " and does not declare " + coordinates.get(name));
+                    }
+                }
+            }
+        }
+        assertThat(undeclared).as("gallery apps using an opt-in format without declaring it")
+                .isEmpty();
     }
 
     private static String paragraph(String markdown, String opening) {

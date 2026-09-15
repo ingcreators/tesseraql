@@ -392,7 +392,7 @@ class OpsConsoleIntegrationTest {
         String body = getWith("/_tesseraql/ops/console/user-admin/jobs", scopedCookie).body();
 
         assertThat(body).contains("Batch jobs").contains("user.dailyMaintenance")
-                .contains("cron " + UserAdminAppJobs.PARKED_CRON)
+                .contains("cron " + UserAdminAppCopy.PARKED_CRON)
                 .contains("action=\"/_tesseraql/ops/console/user-admin/jobs/run\"");
         // Deny-by-default: a caller without tql.ops.view atoms has no reach at all.
         assertThat(getWith("/_tesseraql/ops/console/user-admin/jobs", adminCookie)
@@ -546,7 +546,7 @@ class OpsConsoleIntegrationTest {
         try (Stream<Path> files = Files.walk(source)) {
             files.forEach(path -> copy(source, target, path));
         }
-        UserAdminAppJobs.parkDailyMaintenanceSchedule(target);
+        UserAdminAppCopy.prepare(target);
         Files.writeString(target.resolve("config/application.yml"), """
                 server:
                   port: 0
