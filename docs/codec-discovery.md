@@ -9,7 +9,7 @@
 > transfer service): **shipped as S1**. **S2** — boot refuses a format no codec serves on every arm, naming
 > the site; lint judges every declared format against the run's codec set: **shipped as S2**. **S3** — the
 > developer CLI's module view is the runtime's, and a module that cannot be resolved is a shaped
-> refusal: *open*. **S4** — the README's second quick start runs as written from the `-Pdist`
+> refusal: **shipped as S3**. **S4** — the README's second quick start runs as written from the `-Pdist`
 > archive, and CI proves it: *open*.
 
 This is F82 slice 2 of [`audit-medium-leads.md`](audit-medium-leads.md) (decision 3 there:
@@ -347,6 +347,24 @@ the arms test red (`file-export` and `file-import` compiled); the boot test red 
 to raise a throwable"); the CLI test red (exit 1 after wiring, an execution row recorded); the
 import-default test red (500 `TQL-LD-2801`). The head evidence for the lint is row 7 of the
 measurement: `0 finding(s)` on `fixedwidth`.
+
+### S3 — one module view, one refusal
+
+`WorkHome.moduleSet(appHome, config)` is the directory choice both the runtime
+(`AppModules.load`) and the CLI (`CliModules.moduleCache`) read: the bundled set when it holds a
+jar, else `work/modules`. The CLI resolves when the application declares modules and reads that
+directory when it does not — on both distributions. `ModuleResolver.resolve` turns the
+resolver's `ResolutionException` and `InvalidConfigurationFileException` into `TQL-APP-4221`, a
+`UsageRefusal` (exit 2, one line) naming the coordinates, the resolver's first sentence, the BOM
+the versions come from and the three ways to supply them.
+
+Guards: `WorkHomeTest.theModuleSetIsTheBundledDirectoryWhenItHoldsAJarElseWorkModules`;
+`CliModuleSetTest` (an undeclared `work/modules` jar joins the context loader, and `lint` on
+that application is silent on 1408 for the format the jar serves);
+`ModuleResolverRefusalTest` (an unresolvable coordinate, offline, is the refusal — not the
+resolver's type). Red on the S1 tip: the loader lacked the jar's codec; the resolver's
+`NoResolvedResultException` escaped raw. The lint case is red only once S2's rule judges every
+format, which is why S3 follows S2.
 
 ## Sources
 

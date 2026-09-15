@@ -36,6 +36,23 @@ public final class WorkHome {
         return appHome.resolve(BUNDLED_MODULES);
     }
 
+    /**
+     * The directory holding an application's module set (docs/module-channel.md decision 3,
+     * docs/codec-discovery.md decision 4): the bundled {@code .tesseraql/modules} when it holds
+     * a jar — an installed package's set, resolved and verified when the archive was built —
+     * else {@code work/modules} under the work home, where a resolve leaves a source tree's.
+     * The two are never composed. One function, read by the runtime that loads the set and by
+     * every CLI verb that lints, tests or runs a job against it, so the developer CLI and
+     * {@code tesseraql dev} cannot disagree about which codecs an application has.
+     */
+    public static Path moduleSet(Path appHome, AppConfig config) {
+        Path bundled = bundledModules(appHome);
+        String[] jars = bundled.toFile().list((dir, name) -> name.endsWith(".jar"));
+        return jars != null && jars.length > 0
+                ? bundled
+                : resolve(appHome, config).resolve("modules");
+    }
+
     /** The app's work directory: the declared {@code tesseraql.app.work}, else {@code work/}. */
     public static Path resolve(Path appHome, AppConfig config) {
         try {

@@ -222,6 +222,17 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **The developer CLI reads the module directory the runtime reads.** `lint`, `test`,
+  `coverage`, `job run` and the other single-application verbs ignored an undeclared
+  `work/modules` that `tesseraql dev`, `host` and the deployment CLI all load, so `lint` warned
+  about a format the runtime was serving. One function (`WorkHome.moduleSet`) names the
+  directory — the bundled set when it holds a jar, else `work/modules` — and the CLI resolves
+  when the application declares modules and reads that directory when it does not.
+- **A module that cannot be resolved is a shaped refusal.** `tesseraql dev`, `host`, `lint`,
+  `job run` and `modules resolve` printed the resolver's stack trace and exited 1 when a
+  declared module, its version or the BOM was not in any repository they reach; they refuse
+  with `TQL-APP-4221` in one line naming the coordinates and where versions come from, exit 2.
+  `docs/codec-discovery.md` S3.
 - **A format no codec serves is refused at boot on every arm, naming the site, and lint warns
   on every arm.** A `file-export` route with such a format booted and answered 500
   `TQL-LD-2801` at its first POST, a job step booted and failed its first run, and the message
