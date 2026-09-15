@@ -109,8 +109,10 @@ class CodedRefusalTest {
         Run run = run("routes", "--app", dir.toString());
 
         assertThat(run.exit()).isEqualTo(2);
+        // The source location is the platform's rendering of the path (backslashes on
+        // Windows), so the file name is what the sentence is asked to carry.
         assertThat(run.stderr()).startsWith("TQL-YAML-1001: Failed to parse route YAML")
-                .contains("web/ping/get.yml")
+                .contains("get.yml]")
                 .doesNotContain("\tat ").doesNotContain("io.tesseraql.core.error.TqlException");
     }
 
