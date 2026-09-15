@@ -1,6 +1,6 @@
 # A view's `source:` is a route's declaration: go-to-definition and completion for named sources in the editor
 
-> **Status: designed 2026-09-15; decisions 1-10 recommended, none decided.** One implementation
+> **Status: designed 2026-09-15; every decision decided as recommended the same day.** One implementation
 > slice and one release, each on the user's call.
 >
 > **S1** — the `symbols` contract carries every route's named sources (with their lines), the
@@ -66,7 +66,7 @@ referenced from a document that does not name the route. The manifest holds the 
 
 ## The decisions
 
-Each is recommended; the user decides.
+Each was recommended, and the user decided every one as recommended (2026-09-15).
 
 1. **The truth is the `symbols` contract, extended.** Every route entry gains `sources`
    (`[{name, line, arm, file}]` in authored order; `file` is the `sql` arm's file, `null` for
