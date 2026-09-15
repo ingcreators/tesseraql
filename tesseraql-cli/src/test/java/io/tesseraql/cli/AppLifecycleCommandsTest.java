@@ -245,6 +245,110 @@ class AppLifecycleCommandsTest {
         assertThat(document.get("broken")).isEmpty();
     }
 
+    /**
+     * A view's {@code source:} names an entry of the binding route's {@code sources:}
+     * (docs/editor-named-sources.md), so each route entry carries its declared sources in
+     * authored order — with the line, the arm and the sql arm's file — and the view documents it
+     * binds, through {@code response.html.view} and a template route's {@code views:}.
+     */
+    @Test
+    void symbolsCarriesEachRoutesNamedSourcesAndTheViewsItBinds(@TempDir Path dir)
+            throws Exception {
+        Path app = scaffold(dir);
+        Files.createDirectories(app.resolve("web/dashboard"));
+        Files.writeString(app.resolve("web/dashboard/totals.sql"), "select 1 as items\n");
+        Files.writeString(app.resolve("web/dashboard/by-status.sql"),
+                "select 'open' as label, 1 as value\n");
+        Files.writeString(app.resolve("web/dashboard/get.yml"), """
+                version: tesseraql/v1
+                id: demo.dashboard
+                kind: route
+                recipe: query-html
+                security:
+                  policy: app.read
+                sources:
+                  main:
+                    sql:
+                      file: totals.sql
+                      mode: query
+                  byStatus:
+                    sql:
+                      file: by-status.sql
+                  directory:
+                    service:
+                      name: demo.directory
+                response:
+                  html:
+                    status: 200
+                    view: demo.dashboard.view
+                """);
+        Files.writeString(app.resolve("web/dashboard/dashboard.view.yml"), """
+                version: tesseraql/v1
+                id: demo.dashboard.view
+                kind: view
+                recipe: dashboard
+                title: Dashboard
+                panels:
+                  - { type: stat, source: main, column: items, title: Items }
+                  - type: chart
+                    chart: bar
+                    source: byStatus
+                    title: By status
+                    x: label
+                    y: value
+                """);
+        Files.createDirectories(app.resolve("web/report"));
+        Files.createDirectories(app.resolve("templates"));
+        Files.writeString(app.resolve("templates/report.html"), "<div>report</div>\n");
+        Files.writeString(app.resolve("web/report/get.yml"), """
+                version: tesseraql/v1
+                id: demo.report
+                kind: route
+                recipe: query-html
+                security:
+                  policy: app.read
+                response:
+                  html:
+                    status: 200
+                    template: report.html
+                    views: [demo.dashboard.view]
+                """);
+        Captured captured = executeCapturing("symbols", "--app", app.toString());
+        assertThat(captured.exitCode()).isZero();
+        JsonNode document = new ObjectMapper().readTree(captured.stdout());
+        assertThat(brokenSources(document)).isEmpty();
+
+        JsonNode dashboard = routeNamed(document, "demo.dashboard");
+        assertThat(dashboard.get("view").asText()).isEqualTo("demo.dashboard.view");
+        assertThat(dashboard.get("views")).isEmpty();
+        JsonNode sources = dashboard.get("sources");
+        assertThat(sources).as("the declared sources, in authored order")
+                .extracting(source -> source.get("name").asText())
+                .containsExactly("main", "byStatus", "directory");
+        assertThat(sources).extracting(source -> source.get("line").asInt())
+                .containsExactly(8, 12, 15);
+        assertThat(sources).extracting(source -> source.get("arm").asText())
+                .containsExactly("sql", "sql", "service");
+        assertThat(sources.get(0).get("file").asText()).isEqualTo("totals.sql");
+        assertThat(sources.get(1).get("file").asText()).isEqualTo("by-status.sql");
+        assertThat(sources.get(2).get("file").isNull()).as("a service arm has no file").isTrue();
+
+        JsonNode report = routeNamed(document, "demo.report");
+        assertThat(report.get("sources")).as("a route without a sources: block").isEmpty();
+        assertThat(report.get("view").isNull()).isTrue();
+        assertThat(report.get("views")).extracting(JsonNode::asText)
+                .containsExactly("demo.dashboard.view");
+    }
+
+    private static JsonNode routeNamed(JsonNode document, String id) {
+        for (JsonNode route : document.get("routes")) {
+            if (route.get("id").asText().equals(id)) {
+                return route;
+            }
+        }
+        throw new AssertionError("no route " + id + " in " + document.get("routes"));
+    }
+
     private static List<String> brokenSources(JsonNode document) {
         List<String> sources = new ArrayList<>();
         document.get("broken").forEach(entry -> {

@@ -4,6 +4,10 @@ import {
   completionKindAt,
   parseAppSymbols,
   routeDescription,
+  routesBinding,
+  sourceCompletionAt,
+  sourceDetail,
+  sourceReferenceAt,
   symbolReferenceAt,
   SymbolsContractError,
 } from '../src/core/symbols';
@@ -23,8 +27,11 @@ test('parses the symbols document', () => {
   assert.deepEqual(symbols.rules, [{ name: 'editableStatus', source: 'rules/inventory.yml', line: 7 }]);
   assert.deepEqual(symbols.decisions,
       [{ name: 'approvalRoute', source: 'decisions/approval.yml', line: 4 }]);
+  // A pre-0.18 CLI carries no sources or view bindings: they degrade to empty, not to a
+  // contract error, so every other intelligence keeps working.
   assert.deepEqual(symbols.routes,
-      [{ id: 'app.home', source: 'web/get.yml', method: 'GET', path: '/', recipe: 'query-html' }]);
+      [{ id: 'app.home', source: 'web/get.yml', method: 'GET', path: '/', recipe: 'query-html',
+        sources: [], view: null, views: [] }]);
 });
 
 test('skipped documents are read from the broken array', () => {
@@ -129,18 +136,22 @@ test('a route without a source is a contract error, missing identity parts are n
   const symbols = parseAppSymbols(JSON.stringify(
       { policies: [], messages: [], routes: [{ source: 'batch/nightly.yml', id: null }] }));
   assert.deepEqual(symbols.routes,
-      [{ id: null, source: 'batch/nightly.yml', method: null, path: null, recipe: null }]);
+      [{ id: null, source: 'batch/nightly.yml', method: null, path: null, recipe: null,
+        sources: [], view: null, views: [] }]);
 });
 
 test('a route describes itself from whichever identity parts it has', () => {
   assert.equal(routeDescription(
-      { id: 'users.list', source: 'web/api/users/get.yml', method: 'GET', path: '/api/users', recipe: 'query-json' }),
+      { id: 'users.list', source: 'web/api/users/get.yml', method: 'GET', path: '/api/users', recipe: 'query-json',
+        sources: [], view: null, views: [] }),
       'GET /api/users · query-json');
   assert.equal(routeDescription(
-      { id: 'nightly', source: 'batch/nightly.yml', method: null, path: null, recipe: 'sql-batch' }),
+      { id: 'nightly', source: 'batch/nightly.yml', method: null, path: null, recipe: 'sql-batch',
+        sources: [], view: null, views: [] }),
       'sql-batch');
   assert.equal(routeDescription(
-      { id: null, source: 'web/get.yml', method: null, path: null, recipe: null }),
+      { id: null, source: 'web/get.yml', method: null, path: null, recipe: null,
+        sources: [], view: null, views: [] }),
       undefined);
 });
 
@@ -192,4 +203,123 @@ test('completion kind is detected mid-typing', () => {
   assert.equal(completionKindAt('    decision: appr', 18), 'decision');
   assert.equal(completionKindAt('  title: x', 10), undefined);
   assert.equal(completionKindAt('  policy: app.read extra', 24), undefined);
+});
+
+// --- Named sources (docs/editor-named-sources.md) ---
+
+const DASHBOARD_ROUTE = {
+  id: 'procurement.dashboard', source: 'web/dashboard/get.yml', method: 'GET',
+  path: '/dashboard', recipe: 'query-html',
+  sources: [
+    { name: 'main', line: 10, arm: 'sql', file: 'totals.sql' },
+    { name: 'ordersByState', line: 14, arm: 'sql', file: 'orders-by-state.sql' },
+    { name: 'directory', line: 17, arm: 'service', file: null },
+  ],
+  view: 'procurement.dashboard.view', views: [],
+};
+
+test('parses each route\'s named sources and the views it binds', () => {
+  const symbols = parseAppSymbols(JSON.stringify({
+    policies: [], messages: [],
+    routes: [
+      DASHBOARD_ROUTE,
+      { id: 'report', source: 'web/report/get.yml', method: 'GET', path: '/report',
+        recipe: 'query-html', sources: [], view: null, views: ['procurement.dashboard.view'] },
+      // A flow-form sources: block yields no line; a malformed entry is dropped, not fatal.
+      { id: 'flow', source: 'web/flow/get.yml', method: 'GET', path: '/flow', recipe: 'query-json',
+        sources: [{ name: 'main', line: null, arm: 'sql', file: 'x.sql' }, { line: 3 }],
+        view: null, views: [] },
+    ],
+  }));
+  assert.deepEqual(symbols.routes[0], DASHBOARD_ROUTE);
+  assert.deepEqual(symbols.routes[1].views, ['procurement.dashboard.view']);
+  assert.deepEqual(symbols.routes[2].sources,
+      [{ name: 'main', line: null, arm: 'sql', file: 'x.sql' }]);
+});
+
+test('a view is bound by the routes that name it through view: or views:', () => {
+  const symbols = parseAppSymbols(JSON.stringify({
+    policies: [], messages: [],
+    routes: [
+      DASHBOARD_ROUTE,
+      { id: 'report', source: 'web/report/get.yml', sources: [], view: null,
+        views: ['procurement.dashboard.view'] },
+      { id: 'other', source: 'web/other/get.yml', sources: [], view: 'other.view', views: [] },
+    ],
+  }));
+  assert.deepEqual(routesBinding(symbols, 'procurement.dashboard.view').map((route) => route.id),
+      ['procurement.dashboard', 'report']);
+  assert.deepEqual(routesBinding(symbols, 'unbound.view'), []);
+});
+
+test('a source completion says its arm, its file and its route', () => {
+  assert.equal(sourceDetail(DASHBOARD_ROUTE.sources[1], DASHBOARD_ROUTE),
+      'sql · orders-by-state.sql · web/dashboard/get.yml');
+  assert.equal(sourceDetail(DASHBOARD_ROUTE.sources[2], DASHBOARD_ROUTE),
+      'service · web/dashboard/get.yml');
+});
+
+test('every source: in a view document is a reference — block form and flow map', () => {
+  const view = 'dashboard.view.yml';
+  const block = '    source: ordersByState';
+  assert.deepEqual(sourceReferenceAt(view, block, 14, []),
+      { value: 'ordersByState', start: 12, end: 25 });
+  assert.equal(sourceReferenceAt(view, block, 5, []), undefined);
+  const flow = '  - { type: stat, source: main, column: requisitions, title: Requisitions }';
+  assert.deepEqual(sourceReferenceAt(view, flow, flow.indexOf('main') + 2, []),
+      { value: 'main', start: flow.indexOf('main'), end: flow.indexOf('main') + 4 });
+  assert.deepEqual(sourceReferenceAt(view, 'source: "受注一覧"', 10, []),
+      { value: '受注一覧', start: 9, end: 13 });
+  // A child's source: under children:, and the document's own top-level source:.
+  assert.equal(sourceReferenceAt(view, '  - source: lines', 14,
+      ['children:'])?.value, 'lines');
+  assert.equal(sourceReferenceAt(view, 'source: main', 8, [])?.value, 'main');
+  // resource: is not source:.
+  assert.equal(sourceReferenceAt(view, '  resource: main', 14, []), undefined);
+});
+
+test('in a route document only an enrich: entry\'s bare-name source: is a reference', () => {
+  const route = 'get.yml';
+  const enriched = [
+    'sources:',
+    '  main:',
+    '    sql:',
+    '      file: orders.sql',
+    '    enrich:',
+    '      customer:',
+    '        on: { customer_id: id }',
+  ];
+  const source = '        source: customers';
+  assert.deepEqual(sourceReferenceAt(route, source, 18, enriched),
+      { value: 'customers', start: 16, end: 25 });
+  // A comment and a blank line between do not break the walk.
+  assert.equal(sourceReferenceAt(route, source, 18, [...enriched, '', '        # joined'])?.value,
+      'customers');
+  // steps.<id> names a step, not a source.
+  assert.equal(sourceReferenceAt(route, '        source: steps.lookup', 20, enriched), undefined);
+  // The Studio validation builder's params: bind named source (shipped twice).
+  const params = ['      params:'];
+  assert.equal(sourceReferenceAt(route, '        source: params.source', 20, params), undefined);
+  assert.equal(sourceReferenceAt(route, '        source: main', 20, params), undefined);
+  // An enrichment's own sql: arm's params: — the chain is params, not the entry.
+  assert.equal(sourceReferenceAt(route, '            source: main', 22,
+      [...enriched, '        sql:', '          params:']), undefined);
+  // on: under the entry maps columns.
+  assert.equal(sourceReferenceAt(route, '          source: main', 20,
+      [...enriched.slice(0, 6), '        on:']), undefined);
+  // A lookup's source: is a URL (domains/*.yml, inputs) — and not a bare name anyway.
+  assert.equal(sourceReferenceAt(route, '      source: /api/suppliers/search', 16,
+      ['    lookup:']), undefined);
+  // A top-level source: of a route document is nothing the route surface declares.
+  assert.equal(sourceReferenceAt(route, 'source: main', 8, []), undefined);
+});
+
+test('source: completes in a view document and under an enrich: entry', () => {
+  assert.equal(sourceCompletionAt('dashboard.view.yml', '    source: ord', 15, []), true);
+  assert.equal(sourceCompletionAt('dashboard.view.yml', '  - { type: chart, source: ', 27, []),
+      true);
+  assert.equal(sourceCompletionAt('dashboard.view.yml', '    title: ord', 14, []), false);
+  const enriched = ['    enrich:', '      customer:'];
+  assert.equal(sourceCompletionAt('get.yml', '        source: cu', 18, enriched), true);
+  assert.equal(sourceCompletionAt('get.yml', '        source: cu', 18, ['      params:']), false);
 });

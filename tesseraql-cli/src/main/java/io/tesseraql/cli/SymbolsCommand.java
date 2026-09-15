@@ -29,11 +29,11 @@ import picocli.CommandLine.Option;
 
 /**
  * {@code tesseraql symbols --app <dir>}: prints what the framework declares — security policies,
- * default-locale message keys, shared field domains, validation rules, decision tables, routes,
- * and workflows (with their transition and dispatch ids), each with its source and line — as one
- * JSON object on stdout. The editor language layer
- * (docs/vscode-extension.md, Phase 56) consumes it for completion and go-to-definition; like
- * every editor contract, the document is sorted and deterministic.
+ * default-locale message keys, shared field domains, validation rules, decision tables, routes
+ * (each with the named sources it declares and the views it binds), and workflows (with their
+ * transition and dispatch ids), each with its source and line — as one JSON object on stdout.
+ * The editor language layer (docs/vscode-extension.md, Phase 56) consumes it for completion and
+ * go-to-definition; like every editor contract, the document is sorted and deterministic.
  *
  * <p>A document that does not parse is <em>skipped and reported</em>, not fatal: the load is the
  * tolerant one the hot reloader uses, and each shared-definition file is parsed inside its own
@@ -221,17 +221,69 @@ final class SymbolsCommand implements Callable<Integer> {
         }
     }
 
-    private static void routes(ArrayNode into, AppManifest manifest, Path home) {
+    /**
+     * The mounted routes, each with the named sources it declares (docs/unified-sources.md) in
+     * authored order and the view documents it binds — so a view's {@code source:} can be
+     * navigated to the {@code sources.<name>:} line of the route that binds the view
+     * (docs/editor-named-sources.md). A source's line comes from the same indentation walk that
+     * positions message keys; a flow-form {@code sources: { … }} yields none.
+     */
+    private static void routes(ArrayNode into, AppManifest manifest, Path home)
+            throws IOException {
         List<RouteFile> routes = new ArrayList<>(manifest.routes());
         routes.sort(Comparator.comparing(route -> String.valueOf(route.definition().id())));
         for (RouteFile route : routes) {
+            io.tesseraql.yaml.model.RouteDefinition definition = route.definition();
             ObjectNode entry = into.addObject();
-            entry.put("id", route.definition().id());
+            entry.put("id", definition.id());
             entry.put("source", home.relativize(route.source()).toString().replace('\\', '/'));
             entry.put("method", route.httpMethod());
             entry.put("path", route.urlPath());
-            entry.put("recipe", route.definition().recipe());
+            entry.put("recipe", definition.recipe());
+            ArrayNode sources = entry.putArray("sources");
+            Map<String, Integer> lines = definition.sources().isEmpty()
+                    ? Map.of()
+                    : dottedKeyLines(readLines(route.source()));
+            for (Map.Entry<String, io.tesseraql.yaml.model.Binding> source : definition.sources()
+                    .entrySet()) {
+                ObjectNode declared = sources.addObject();
+                declared.put("name", source.getKey());
+                Integer line = lines.get("sources." + source.getKey());
+                declared.put("line", line == null || line == 0 ? null : line);
+                declared.put("arm", arm(source.getValue()));
+                declared.put("file", source.getValue().isSql() ? source.getValue().file() : null);
+            }
+            io.tesseraql.yaml.model.ResponseSpec.HtmlResponse html = definition.response() == null
+                    ? null
+                    : definition.response().html();
+            entry.put("view", html == null ? null : html.view());
+            ArrayNode views = entry.putArray("views");
+            if (html != null) {
+                for (String bound : html.views()) {
+                    views.add(bound);
+                }
+            }
         }
+    }
+
+    /** The one mechanism a source declares, by the arm it carries. */
+    private static String arm(io.tesseraql.yaml.model.Binding binding) {
+        if (binding.isSql()) {
+            return "sql";
+        }
+        if (binding.isContract()) {
+            return "contract";
+        }
+        if (binding.isService()) {
+            return "service";
+        }
+        if (binding.declaresHttp()) {
+            return "http";
+        }
+        if (binding.isSequence()) {
+            return "sequence";
+        }
+        return binding.isSpool() ? "spool" : null;
     }
 
     /**

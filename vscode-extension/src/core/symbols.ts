@@ -19,13 +19,33 @@ export interface WorkflowSymbol {
   dispatches: string[];
 }
 
-/** A mounted route as the manifest resolves it: the file plus its served identity. */
+/**
+ * A named source a route declares (docs/unified-sources.md): its name, the line of its
+ * `sources.<name>:` key (null for a flow-form block), the arm it carries, and the
+ * `sql` arm's file.
+ */
+export interface SourceSymbol {
+  name: string;
+  line: number | null;
+  arm: string | null;
+  file: string | null;
+}
+
+/**
+ * A mounted route as the manifest resolves it: the file plus its served identity, the
+ * named sources it declares in authored order, and the view documents it binds — the
+ * one `response.html.view` names and the ones a template route's `views:` composes
+ * (docs/editor-named-sources.md). All three are empty on a pre-0.18 CLI.
+ */
 export interface RouteSymbol {
   id: string | null;
   source: string;
   method: string | null;
   path: string | null;
   recipe: string | null;
+  sources: SourceSymbol[];
+  view: string | null;
+  views: string[];
 }
 
 /** A declared batch job: its file plus the one-line trigger story. */
@@ -168,8 +188,146 @@ function optionalRoutes(value: unknown): RouteSymbol[] {
       method: stringOrNull(route.method),
       path: stringOrNull(route.path),
       recipe: stringOrNull(route.recipe),
+      // Absent on a pre-0.18 CLI: the sources and view bindings degrade to empty, so
+      // source navigation stays silent rather than failing the whole index.
+      sources: optionalSources(route.sources),
+      view: stringOrNull(route.view),
+      views: stringList(route.views),
     };
   });
+}
+
+function optionalSources(value: unknown): SourceSymbol[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+      .map((entry) => entry as Record<string, unknown>)
+      .filter((entry) => typeof entry?.name === 'string')
+      .map((entry) => {
+        const line = entry.line;
+        return {
+          name: entry.name as string,
+          line: typeof line === 'number' && Number.isInteger(line) && line >= 1 ? line : null,
+          arm: stringOrNull(entry.arm),
+          file: stringOrNull(entry.file),
+        };
+      });
+}
+
+/**
+ * The routes that bind a view document — through `response.html.view` or a template
+ * route's `views:` — which is where the view's `source:` values are declared. The lint
+ * (TQL-VIEW-3308) judges a view against the same routes.
+ */
+export function routesBinding(symbols: AppSymbols, viewId: string): RouteSymbol[] {
+  return symbols.routes.filter(
+      (route) => route.view === viewId || route.views.includes(viewId));
+}
+
+/** The completion detail of a declared source: `sql · orders-by-state.sql · web/…/get.yml`. */
+export function sourceDetail(source: SourceSymbol, route: RouteSymbol): string {
+  return [source.arm, source.file, route.source]
+      .filter((part): part is string => part !== null && part !== '')
+      .join(' · ');
+}
+
+/** A named-source reference under the cursor, with its exact span. */
+export interface SourceReference {
+  value: string;
+  /** 0-based columns of the value span. */
+  start: number;
+  end: number;
+}
+
+const VIEW_SUFFIX = '.view.yml';
+
+/** Identifier runs are Unicode (docs/unicode-identifiers.md): a source may be named in Japanese. */
+const SOURCE_NAME = '[\\p{L}\\p{N}_-]+';
+
+const SOURCE_VALUE = new RegExp(
+    `(?<![\\p{L}\\p{N}_.-])source:\\s*(["']?)(${SOURCE_NAME})\\1(?=[\\s,}]|$)`, 'gu');
+
+/**
+ * The named-source reference the cursor sits on (docs/editor-named-sources.md decision 2).
+ * In a view document every scalar `source:` is one — the document's, a child's, a panel's,
+ * in block form or inside a flow map. In a route document only a `source:` directly under an
+ * `enrich:` entry is, and only when its value is a bare name: `steps.<id>` names a step, a
+ * `params:` `source` is a bind name, a lookup's `source:` is a URL, a decision table's is a
+ * block. Line-based like every context here; no YAML semantics enter the extension.
+ */
+export function sourceReferenceAt(fileName: string, lineText: string, character: number,
+    linesAbove: readonly string[]): SourceReference | undefined {
+  if (!isViewDocument(fileName) && !isEnrichmentSource(lineText, linesAbove)) {
+    return undefined;
+  }
+  for (const match of lineText.matchAll(SOURCE_VALUE)) {
+    const start = match.index + match[0].length - match[2].length - match[1].length;
+    const end = start + match[2].length;
+    if (character >= start && character <= end) {
+      return { value: match[2], start, end };
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Whether the cursor sits after a `source:` at one of the positions
+ * {@link sourceReferenceAt} resolves — block form or inside a flow map — so completion
+ * can offer the binding routes' declared names.
+ */
+export function sourceCompletionAt(fileName: string, lineText: string, character: number,
+    linesAbove: readonly string[]): boolean {
+  const head = lineText.slice(0, character);
+  if (!/(?:^\s*(?:-\s+)?|[{,]\s*)source:\s*["']?[\p{L}\p{N}_-]*$/u.test(head)) {
+    return false;
+  }
+  return isViewDocument(fileName) || isEnrichmentSource(lineText, linesAbove);
+}
+
+function isViewDocument(fileName: string): boolean {
+  return fileName.endsWith(VIEW_SUFFIX);
+}
+
+/**
+ * Whether a block-form `source:` line is directly under an `enrich:` entry: its nearest
+ * less-indented key is the enrichment's name, and that key's own parent is `enrich:`. The
+ * walk reads upward past blank, comment and deeper lines, the way the `views:` sequence
+ * context does; a `source:` under `params:`, `on:`, or anything else is not a reference.
+ */
+function isEnrichmentSource(lineText: string, linesAbove: readonly string[]): boolean {
+  if (!/^\s*source:/.test(lineText)) {
+    return false;
+  }
+  const ancestors = ancestorKeys(lineText, linesAbove, 2);
+  return ancestors.length === 2 && ancestors[1] === 'enrich';
+}
+
+/**
+ * The keys enclosing a line, nearest first, up to `depth` of them: each is the closest line
+ * above with a smaller indent that declares a key. A `- ` item's indent is the dash's.
+ */
+function ancestorKeys(lineText: string, linesAbove: readonly string[], depth: number):
+    string[] {
+  const keys: string[] = [];
+  let indent = /^\s*/.exec(lineText)![0].length;
+  for (let index = linesAbove.length - 1; index >= 0 && keys.length < depth; index--) {
+    const above = linesAbove[index];
+    if (/^\s*(#|$)/.test(above)) {
+      continue;
+    }
+    const aboveIndent = /^\s*/.exec(above)![0].length;
+    if (aboveIndent >= indent) {
+      continue;
+    }
+    const key = /^\s*(?:-\s+)?(["']?)([^\s:#"'{}\[\]][^:#]*?)\1:(?:\s|$)/u.exec(above);
+    if (key === null) {
+      return keys;
+    }
+    keys.push(key[2]);
+    indent = aboveIndent;
+  }
+  return keys;
 }
 
 function stringOrNull(value: unknown): string | null {
