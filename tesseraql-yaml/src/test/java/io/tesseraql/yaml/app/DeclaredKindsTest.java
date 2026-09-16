@@ -162,7 +162,7 @@ class DeclaredKindsTest {
                             "chunk.reader.result: is not applied");
                 });
         List<String> warned = new java.util.ArrayList<>();
-        assertThatThrownBy(() -> ExportDeclarations.requireJob("t", job, warned::add))
+        assertThatThrownBy(() -> ExportDeclarations.requireJob("t", dir, job, warned::add))
                 .isInstanceOf(TqlException.class)
                 .hasMessageContaining("TQL-YAML-1064")
                 .hasMessageContaining("chunk.reader.result: is not applied");

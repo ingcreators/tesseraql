@@ -660,11 +660,10 @@ final class DocumentRules {
                 lintRuleExpression(id, rule.rule(), source, findings, context.functions());
                 return;
             }
+            // A rule file that is missing or outside the application home is the document's
+            // file finding (RouteFileRules); here the statement is judged only where it is.
             Path sqlFile = file.getParent().resolve(rule.file());
             if (!Files.isRegularFile(sqlFile)) {
-                findings.add(new LintFinding(LintCodes.MISSING_SQL_FILE, ERROR, source,
-                        "Validation rule '" + id + "' references a missing SQL file: "
-                                + rule.file()));
                 return;
             }
             String sql = context.content(sqlFile);

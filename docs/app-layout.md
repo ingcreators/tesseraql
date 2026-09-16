@@ -8,7 +8,9 @@ config/                 application.yml / tesseraql.yml (+ overlay.yml)
 web/                    routes; the directory tree mirrors the URL space one-to-one
   api/users/            GET /api/users
     get.yml             route definition
-    search.sql          colocated 2-way SQL (referenced as sql.file: search.sql)
+    search.sql          colocated 2-way SQL (referenced as sql.file: search.sql; a
+                        reference is relative to the document and may point anywhere
+                        inside the app home — ../shared/x.sql — never outside it)
   users/                GET /users (an HTML page)
     get.yml
     index.html          colocated template (referenced as template: index.html)

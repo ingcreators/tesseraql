@@ -162,8 +162,11 @@ changed — no restart — and the reload result names the rebuilt route. Go bac
 equally fine: run with `tesseraql dev --watch` and every save under `web/`,
 `workflow/`, or a shared-definition tree (`decisions/`, `rules/`, `scope/`, `domains/`)
 hot-reloads the same way, no Apply needed; without `--watch`, disk edits are picked up on
-the next restart or Studio apply. Jobs, consumers, and `config/` changes still need a
-restart.)
+the next restart or Studio apply. A save reloads the routes that read the file, wherever
+under `web/` the file sits — a statement two routes share from a parent directory bounces
+its readers and no other. A file a route reads from outside the watched trees, such as an
+app-root `shared/`, raises no event of its own; the next save anywhere picks it up. Jobs,
+consumers, and `config/` changes still need a restart.)
 
 ## Add a validation rule
 

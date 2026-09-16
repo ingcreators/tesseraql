@@ -244,6 +244,41 @@ class JxlsFileCodecLimitsTest {
         }
     }
 
+    /**
+     * A workbook outside the application home is refused before a byte is written, whatever
+     * mode the spec declares (docs/audit-low-leads.md slice 14, XH-14): lint and boot fence
+     * the declaration, and this is the codec's own twin of the pdf codec's rule, for a spec
+     * no compiler fenced. The same workbook inside the home writes.
+     */
+    @Test
+    void aTemplateOutsideTheApplicationHomeIsRefusedBeforeAByteIsWritten() throws Exception {
+        Path home = Files.createDirectories(dir.resolve("app"));
+        Path outside = placementTemplate();
+        Path inside = Files.copy(outside, home.resolve("placement.xlsx"));
+        for (CellRef start : new CellRef[]{null, CellRef.parse("A2")}) {
+            FileWriteSpec escaped = new FileWriteSpec(
+                    List.of(new ColumnMapping("name", null, ColumnMapping.parseColumn("A")),
+                            new ColumnMapping("body", null, ColumnMapping.parseColumn("B"))),
+                    null, outside, start, home, null, null);
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            assertThatThrownBy(() -> codec.write(out, escaped,
+                    ExportModel.repeatable(List.of(row("a", "b")), Map.of())))
+                    .as(start == null ? "report" : "placement")
+                    .isInstanceOf(TqlException.class)
+                    .hasMessageContaining("TQL-LD-2837")
+                    .hasMessageContaining("outside the application home")
+                    .hasMessageContaining(outside.getFileName().toString());
+            assertThat(out.size()).as("nothing written before the refusal").isZero();
+        }
+        FileWriteSpec confined = new FileWriteSpec(
+                List.of(new ColumnMapping("name", null, ColumnMapping.parseColumn("A")),
+                        new ColumnMapping("body", null, ColumnMapping.parseColumn("B"))),
+                null, inside, CellRef.parse("A2"), home, null, null);
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        codec.write(out, confined, ExportModel.repeatable(List.of(row("a", "b")), Map.of()));
+        assertThat(out.size()).isPositive();
+    }
+
     // ------------------------------------------------------------------------------ fixtures
 
     /** A placement template: a title in row 1, the data area from A2. */

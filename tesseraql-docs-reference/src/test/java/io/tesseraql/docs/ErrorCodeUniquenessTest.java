@@ -113,7 +113,8 @@ class ErrorCodeUniquenessTest {
             Map.entry("SQL-2101", "an expression that does not parse"),
             // The lint's own code, refused at the compiler's resolve sites since
             // docs/audit-low-leads.md slice 8: the source read lazily, so a missing statement
-            // booted green and failed every request.
+            // booted green and failed every request. The constant lives with the resolver
+            // both altitudes read a statement through (RouteFiles, slice 14).
             Map.entry("SQL-2103", "a binding's 2-way SQL file is not there"),
             Map.entry("SQL-2111", "a file placeholder that cannot resolve where it is written"),
             Map.entry("VIEW-3302", "a view reference that does not resolve"),

@@ -266,8 +266,8 @@ final class JobCommand implements Callable<Integer> {
                             manifest.config()),
                     System.err::println);
             for (JobFile job : jobs.values()) {
-                io.tesseraql.yaml.app.ExportDeclarations.requireJob(appName, job,
-                        System.err::println);
+                io.tesseraql.yaml.app.ExportDeclarations.requireJob(appName,
+                        manifest.appHome(), job, System.err::println);
                 // The codec each export step and poll import names, from the set this
                 // command composed — before any row (docs/codec-discovery.md decision 2).
                 io.tesseraql.yaml.app.ExportDeclarations.requireCodecs(appName, job, codecs);

@@ -176,6 +176,69 @@ class ReloadContentDiffIntegrationTest {
         }
     }
 
+    /**
+     * An apply to a statement two routes' directories share bounces the route that reads it
+     * and no other (docs/audit-low-leads.md slice 14, XH-13 and unfiled 7): the print is the
+     * route's own files now, keyed by route. It used to be the digest of a route's directory,
+     * so a save to {@code web/orders/order.sql} — read only by {@code orders.detail} through
+     * {@code file: ../order.sql} — bounced {@code orders.list}, whose directory it sat in, and
+     * left the reader on the statement it had read at boot.
+     */
+    @Test
+    void anApplyToASharedStatementBouncesTheRouteThatReadsItAndNoOther() throws Exception {
+        Path orders = appHome.resolve("web/orders");
+        Files.createDirectories(orders.resolve("detail"));
+        try {
+            Files.writeString(orders.resolve("list.sql"), "select 'list' as value\n");
+            Files.writeString(orders.resolve("order.sql"), "select 'v1' as value\n");
+            Files.writeString(orders.resolve("get.yml"), routeYaml("orders.list", "list.sql"));
+            Files.writeString(orders.resolve("detail/get.yml"),
+                    routeYaml("orders.detail", "../order.sql"));
+            assertThat(post("/_tesseraql/studio/reload", "").statusCode()).isEqualTo(200);
+            assertThat(get("/orders/detail").body()).contains("v1");
+
+            assertThat(post("/_tesseraql/studio/drafts?path=" + enc("web/orders/order.sql"),
+                    "select 'v2' as value\n").statusCode()).isEqualTo(200);
+            HttpResponse<String> apply = post(
+                    "/_tesseraql/studio/apply?path=" + enc("web/orders/order.sql"), "");
+            assertThat(apply.statusCode()).isEqualTo(200);
+            List<String> reloaded = new java.util.ArrayList<>();
+            MAPPER.readTree(apply.body()).get("reloaded")
+                    .forEach(id -> reloaded.add(id.asText()));
+            assertThat(reloaded).as("the reader, and only the reader")
+                    .containsExactly("orders.detail");
+            assertThat(get("/orders/detail").body()).as("serving the applied statement")
+                    .contains("v2");
+            assertThat(get("/orders").body()).contains("list");
+        } finally {
+            try (Stream<Path> files = Files.walk(orders)) {
+                files.sorted(Comparator.reverseOrder()).forEach(path -> path.toFile().delete());
+            }
+            post("/_tesseraql/studio/reload", "");
+        }
+    }
+
+    /** A trivial bearer query-json route over the statement at {@code file}. */
+    private static String routeYaml(String id, String file) {
+        return """
+                version: tesseraql/v1
+                id: %s
+                kind: route
+                recipe: query-json
+                security:
+                  auth: bearer
+                sources:
+                  main:
+                    sql:
+                      file: %s
+                      mode: query
+                response:
+                  json:
+                    body:
+                      data: main.rows
+                """.formatted(id, file);
+    }
+
     private static HttpResponse<String> get(String path) throws Exception {
         return TestHttp.send(HttpRequest.newBuilder(
                 URI.create("http://localhost:" + runtime.port() + path))

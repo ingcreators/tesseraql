@@ -184,7 +184,7 @@ public final class JxlsFileCodec implements FileCodec {
         }
         // A declared template is used or refused, never silently replaced by the grid: the
         // declaration chose a mode, and streams() answered for that mode.
-        requireWorkbook(spec.template());
+        requireWorkbook(spec.template(), spec.resources());
         if (spec.startCell() != null) {
             // Placement walks the rows once, but its mode is declared as buffering because the
             // template workbook is held whole — so the re-readable source is the one it is given.
@@ -195,14 +195,20 @@ public final class JxlsFileCodec implements FileCodec {
     }
 
     /**
-     * The template must be a workbook: present, a regular file, non-empty, and starting with the
-     * OOXML ({@code PK}) or the OLE2 signature. Anything else is refused by name before a byte of
-     * the document is written — lint and boot judge existence when the app loads, so what reaches
-     * here is a template that vanished, was replaced by a directory, or was never a workbook.
+     * The template must be a workbook inside the application home: present, a regular file,
+     * non-empty, and starting with the OOXML ({@code PK}) or the OLE2 signature. Anything else
+     * is refused by name before a byte of the document is written — lint and boot judge
+     * existence and confinement when the app loads ({@code RouteFiles}, docs/audit-low-leads.md
+     * slice 14), so what reaches here is a template that vanished, was replaced by a directory,
+     * was never a workbook, or arrived through a spec no compiler fenced; the confinement is
+     * the pdf codec's own rule, kept here as its defence-in-depth twin.
      */
-    private static void requireWorkbook(Path template) {
+    private static void requireWorkbook(Path template, Path resources) {
         String reason;
-        if (Files.isDirectory(template)) {
+        if (resources != null && !io.tesseraql.core.files.ConfinedPath.under(resources)
+                .contains(template)) {
+            reason = "is outside the application home '" + resources + "'";
+        } else if (Files.isDirectory(template)) {
             reason = "is a directory";
         } else if (!Files.isRegularFile(template)) {
             reason = "does not exist";

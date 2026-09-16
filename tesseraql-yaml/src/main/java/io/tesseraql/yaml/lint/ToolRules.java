@@ -6,7 +6,6 @@ import static io.tesseraql.yaml.lint.LintFinding.Severity.WARNING;
 import io.tesseraql.yaml.config.AppConfig;
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.model.RouteDefinition;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Set;
@@ -74,27 +73,8 @@ final class ToolRules implements LintRule {
         RequestSourceRules.report(context, config, tool.source(), definition,
                 io.tesseraql.yaml.app.RecipeShape.Surface.TOOL, source, findings);
         DocumentRules.lintStepGuards(context, tool.source(), definition, source, findings);
-        if (definition.main() != null && !definition.main().isContract()
-                && definition.main().file() != null
-                && !Files.isRegularFile(
-                        tool.source().getParent().resolve(definition.main().file()))) {
-            findings.add(new LintFinding(LintCodes.MISSING_SQL_FILE, ERROR, source,
-                    "Referenced SQL file is missing: " + definition.main().file()));
-        }
-        definition.steps().forEach((name, step) -> {
-            if (step.file() != null
-                    && !Files.isRegularFile(tool.source().getParent().resolve(step.file()))) {
-                findings.add(new LintFinding(LintCodes.MISSING_SQL_FILE, ERROR, source,
-                        "Step '" + name + "' references a missing SQL file: " + step.file()));
-            }
-        });
-        definition.sources().forEach((name, query) -> {
-            if (query.file() != null
-                    && !Files.isRegularFile(tool.source().getParent().resolve(query.file()))) {
-                findings.add(new LintFinding(LintCodes.MISSING_SQL_FILE, ERROR, source,
-                        "Query '" + name + "' references a missing SQL file: " + query.file()));
-            }
-        });
+        RouteFileRules.report(context, config, tool.source(), definition,
+                io.tesseraql.yaml.app.RecipeShape.Surface.TOOL, source, findings);
 
         boolean write = "command-json".equals(definition.recipe())
                 || (definition.main() != null

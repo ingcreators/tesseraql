@@ -11,7 +11,6 @@ import io.tesseraql.yaml.model.ImportSpec;
 import io.tesseraql.yaml.model.PipelineStep;
 import io.tesseraql.yaml.model.RouteDefinition;
 import java.nio.file.Files;
-import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.text.DateFormatSymbols;
 import java.text.DecimalFormat;
@@ -222,9 +221,10 @@ public final class ExportDeclarations {
     /**
      * Every violation of a route's or step's {@code export:} block ({@code null} being "no
      * block"); {@code directory} is where {@code template:} resolves, the route's or the job
-     * file's.
+     * file's, and {@code appHome} the fence it must resolve inside ({@link RouteFiles}).
      */
-    public static List<Violation> violations(Site site, ExportSpec spec, Path directory) {
+    public static List<Violation> violations(Site site, ExportSpec spec, Path appHome,
+            Path directory) {
         List<Violation> out = new ArrayList<>();
         if (spec == null) {
             return out;
@@ -278,7 +278,7 @@ public final class ExportDeclarations {
                             + " after.sql: { file: ... }"));
         }
         if (template && !csv) {
-            templateFile(site, spec.template(), pdf, directory, out);
+            templateFile(site, spec.template(), pdf, appHome, directory, out);
         }
         if (!shipped) {
             return out;
@@ -448,7 +448,8 @@ public final class ExportDeclarations {
      * (docs/temporal-semantics.md decision 27) — a job binds its parameters through the same
      * binder a route does.
      */
-    public static void requireJob(String app, JobFile job, Consumer<String> warn) {
+    public static void requireJob(String app, Path appHome, JobFile job,
+            Consumer<String> warn) {
         DeclaredKinds.require(DeclaredKinds.inputViolations(job.definition()), warn);
         DeclaredKinds.require(DeclaredKinds.chunkViolations(job.definition()), warn);
         String jobId = job.definition().id();
@@ -457,8 +458,8 @@ public final class ExportDeclarations {
         Path directory = job.source() == null ? null : job.source().getParent();
         for (PipelineStep step : job.definition().pipeline()) {
             if (step.export() != null) {
-                require(violations(Site.step(app, jobId, step.id()), step.export(), directory),
-                        warn);
+                require(violations(Site.step(app, jobId, step.id()), step.export(), appHome,
+                        directory), warn);
             }
         }
         if (job.definition().fileImport() != null) {
@@ -893,10 +894,12 @@ public final class ExportDeclarations {
     /**
      * The template a workbook, a print or a module format reads (decision 10, the boot twin of
      * the linter's own code): a pdf template renders through the template engine and must be
-     * {@code .html}; any template must be there beside the document.
+     * {@code .html}; any template must resolve inside the application home
+     * ({@link RouteFiles#resolve}, docs/audit-low-leads.md slice 14 — every codec opened the
+     * path as resolved, and only the pdf codec fenced it, at request time) and be there.
      */
-    private static void templateFile(Site site, String template, boolean pdf, Path directory,
-            List<Violation> out) {
+    private static void templateFile(Site site, String template, boolean pdf, Path appHome,
+            Path directory, List<Violation> out) {
         if (pdf && !template.endsWith(".html")) {
             out.add(new Violation(UNUSABLE_TEMPLATE, Kind.INVALID, "export.template",
                     site.prefix("export.template") + "'" + bounded(template) + "' must be an"
@@ -907,16 +910,19 @@ public final class ExportDeclarations {
         if (directory == null) {
             return;
         }
+        Path file;
         try {
-            if (!Files.isRegularFile(directory.resolve(template))) {
-                out.add(new Violation(UNUSABLE_TEMPLATE, Kind.INVALID, "export.template",
-                        site.prefix("export.template") + "references a missing template: "
-                                + bounded(template)));
-            }
-        } catch (InvalidPathException ex) {
+            file = RouteFiles.resolve(appHome, directory, template,
+                    site.prefix("export.template"));
+        } catch (TqlException outside) {
+            out.add(new Violation(outside.code(), Kind.INVALID, "export.template",
+                    outside.getMessage()));
+            return;
+        }
+        if (!Files.isRegularFile(file)) {
             out.add(new Violation(UNUSABLE_TEMPLATE, Kind.INVALID, "export.template",
-                    site.prefix("export.template") + "'" + bounded(template)
-                            + "' is not a file path"));
+                    site.prefix("export.template") + "references a missing template: "
+                            + bounded(template)));
         }
     }
 }

@@ -20,8 +20,10 @@ running application:
 2. **Preview.** A draft compiles without being applied, so a mistake is reported before it
    reaches the route. The compare panel shows the diff against the current source.
 3. **Apply.** Applying writes the source and hot-reloads what changed: a route edit bounces
-   that route, a workflow edit rebuilds its transition endpoints, and a shared-definition
-   edit rebuilds every route that bakes it in.
+   that route, an edit to a file several routes read (a statement in a parent directory, a
+   template under a subdirectory) bounces exactly the routes that read it, a workflow edit
+   rebuilds its transition endpoints, and a shared-definition edit rebuilds every route that
+   bakes it in.
 
 If the source changed underneath a draft, applying is refused until you review the
 conflict. With `tesseraql.studio.confirmApply` set, every apply requires that review, not

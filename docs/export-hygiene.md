@@ -561,8 +561,11 @@ walked as a stream).
 - The `RouteReloader` fingerprint hole: a template in a subdirectory (`tpl/report.xlsx`) or under
   `../shared/` is outside `digestDirectory` (immediate children), so `--watch` and Studio Apply see
   neither its deletion nor its restoration; a stub stays until a manual reload — a reloader filing.
+  *Fixed in docs/audit-low-leads.md slice 14 (XH-13): the print is the route's own files, keyed by
+  route, and a stubbed route always rebuilds.*
 - The Excel codec accepts `..` in `template:` (the pdf codec confines to the app home) — the same
-  filing.
+  filing. *Fixed in slice 14 (XH-14), wider than filed: every reference is fenced by the home at
+  lint, admission, boot and `job run` (`TQL-YAML-1075`), and the codec keeps a twin (2837).*
 - Microsoft Excel's own behaviour on a >32,767-character grid cell — unmeasured (no Excel here);
   the refusal does not depend on it.
 

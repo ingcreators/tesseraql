@@ -65,14 +65,6 @@ public final class RouteCompiler {
     private static final TqlErrorCode INVALID_SOURCE = new TqlErrorCode(TqlDomain.ROUTE, 3120);
     /** TQL-VIEW-3327: a detail view's workflow: names no declared kind: workflow document. */
     private static final TqlErrorCode UNKNOWN_WORKFLOW = new TqlErrorCode(TqlDomain.VIEW, 3327);
-    /**
-     * TQL-SQL-2103: a binding's 2-way SQL file is not there — the lint's own code, refused at
-     * boot from the resolve site (docs/audit-low-leads.md slice 8). The source read the file
-     * lazily, so a route whose statement was missing booted green and answered every request
-     * with a raw {@code NoSuchFileException} as an internal error, and a reload reported it as
-     * "changed" rather than failed.
-     */
-    private static final TqlErrorCode MISSING_SQL_FILE = new TqlErrorCode(TqlDomain.SQL, 2103);
     private static final String DEFAULT_DATASOURCE = "main";
     private static final long DEFAULT_IDEMPOTENCY_TTL = java.time.Duration.ofHours(24).toMillis();
 
@@ -440,7 +432,9 @@ public final class RouteCompiler {
         String datasource = bindingDatasource(main, source.definition().effectiveDatasource());
         String dialect = datasourceDialect(datasource);
         Path file = io.tesseraql.core.dialect.DialectSqlResolver.resolve(
-                source.source().getParent().resolve(main.file()).normalize(), dialect);
+                sqlFile(source.source().getParent(), main.file(), dialect,
+                        "route '" + source.definition().id() + "'", "sources.main.file"),
+                dialect);
         return new io.tesseraql.compiler.binding.LookupReferences.Compiled(fieldName,
                 field.lookup(), parseSql(file), file.toString(), main.params(), datasource,
                 dialect);
@@ -513,6 +507,8 @@ public final class RouteCompiler {
     private void buildRoute(RuntimeContext context, Path appHome, RouteFile routeFile) {
         RouteDefinition definition = routeFile.definition();
         requireRecipeShape(definition, io.tesseraql.yaml.app.RecipeShape.Surface.ROUTE);
+        requireRouteFiles(definition, routeFile.source().getParent(),
+                io.tesseraql.yaml.app.RecipeShape.Surface.ROUTE);
         requireRequestSources(definition, io.tesseraql.yaml.app.RecipeShape.Surface.ROUTE);
         requireResponseLiterals(definition);
         requireRotationHonoured(definition);
@@ -768,6 +764,31 @@ public final class RouteCompiler {
     }
 
     /**
+     * The files the document names, judged before any builder runs by the resolver the
+     * linter reports from (docs/audit-low-leads.md slice 14): every reference resolves inside
+     * the application home, and the page template is there. A statement's presence is judged
+     * where it is read, by the resolve site that knows which dialect variant counts — a
+     * fixture shipping only {@code list.postgres.sql} is a legal layout there, and would not
+     * be here.
+     */
+    private void requireRouteFiles(RouteDefinition definition, Path directory,
+            io.tesseraql.yaml.app.RecipeShape.Surface surface) {
+        String subject = surface.noun() + " '"
+                + io.tesseraql.yaml.app.ExportDeclarations.bounded(definition.id()) + "'";
+        for (io.tesseraql.yaml.app.RouteFiles.Reference reference : io.tesseraql.yaml.app.RouteFiles
+                .references(definition)) {
+            String head = io.tesseraql.yaml.app.RouteFiles.head(appName, subject,
+                    reference.key());
+            switch (reference.kind()) {
+                case SQL, EXPORT_TEMPLATE -> io.tesseraql.yaml.app.RouteFiles.resolve(
+                        compiledAppHome, directory, reference.declared(), head);
+                case PAGE -> io.tesseraql.yaml.app.RouteFiles.page(compiledAppHome, directory,
+                        reference.declared(), head);
+            }
+        }
+    }
+
+    /**
      * Where the document reads the request from, refused before any binder is built
      * (docs/audit-low-leads.md slice 9): a {@code header.<name>} source is a service
      * binding's argument and nothing else's — on a statement's {@code params:} it would bind
@@ -953,16 +974,23 @@ public final class RouteCompiler {
         String datasource = definition.effectiveDatasource();
         requirePlainSqlOffMain(definition);
         String dialect = datasourceDialect(datasource);
+        String subject = "route '" + routeId + "'";
+        // Every statement the processor reads — a step's, a validation rule's, the lock
+        // directive's — resolves through the one resolver lint judges by (docs/audit-low-leads.md
+        // slice 14): fenced by the application home, and there.
         java.util.function.Function<String, Path> stepFile = file -> io.tesseraql.core.dialect.DialectSqlResolver
-                .resolve(sourceDir.resolve(file).normalize(), dialect);
-        // The statements the processor is about to read, judged here so a missing one is the
-        // lint's own code naming the route and the step rather than the processor's raw
-        // NoSuchFileException — the transactional twin of the check at the read path's resolve.
+                .resolve(sqlFile(sourceDir, file, dialect, subject, "steps"), dialect);
+        // Judged here first, so a missing or escaping one is named by its step or rule rather
+        // than by the processor's slot — the transactional twin of the check at the read path's
+        // resolve.
         definition.steps().forEach((name, binding) -> {
-            if (binding.file() != null && !binding.file().isBlank()
-                    && !java.nio.file.Files.isRegularFile(stepFile.apply(binding.file()))) {
-                throw new TqlException(MISSING_SQL_FILE, "Route '" + routeId + "' step '" + name
-                        + "': referenced SQL file is missing: " + binding.file());
+            if (binding.isSql()) {
+                sqlFile(sourceDir, binding.file(), dialect, subject, "steps." + name + ".file");
+            }
+        });
+        definition.validate().forEach((name, rule) -> {
+            if (rule.file() != null && !rule.file().isBlank()) {
+                sqlFile(sourceDir, rule.file(), dialect, subject, "validate." + name + ".file");
             }
         });
         if (definition.lock() != null) {
@@ -1368,8 +1396,12 @@ public final class RouteCompiler {
         if (transition.assign() == null || transition.assign().file() == null) {
             return null;
         }
-        return parseSql(io.tesseraql.core.dialect.DialectSqlResolver.resolve(workflowFile.source()
-                .getParent().resolve(transition.assign().file()).normalize(),
+        return parseSql(io.tesseraql.core.dialect.DialectSqlResolver.resolve(
+                sqlFile(workflowFile.source().getParent(), transition.assign().file(),
+                        datasourceDialect(),
+                        "workflow '" + workflowFile.definition().id() + "' transition '"
+                                + transition.id() + "'",
+                        "assign.file"),
                 datasourceDialect()));
     }
 
@@ -1446,6 +1478,8 @@ public final class RouteCompiler {
     private void buildQueueConsume(RouteFile routeFile) {
         RouteDefinition definition = routeFile.definition();
         requireRecipeShape(definition, io.tesseraql.yaml.app.RecipeShape.Surface.CONSUMER);
+        requireRouteFiles(definition, routeFile.source().getParent(),
+                io.tesseraql.yaml.app.RecipeShape.Surface.CONSUMER);
         requireRequestSources(definition, io.tesseraql.yaml.app.RecipeShape.Surface.CONSUMER);
         requireResponseLiterals(definition);
         requireLockHonoured(definition, "a queue consumer");
@@ -1512,7 +1546,7 @@ public final class RouteCompiler {
                 "export.format");
         Path template = spec == null || spec.template() == null
                 ? null
-                : routeDir.resolve(spec.template()).normalize();
+                : templateFile(routeDir, spec.template(), definition);
         io.tesseraql.core.files.FileWriteSpec writeSpec = spec == null
                 ? new io.tesseraql.core.files.FileWriteSpec(java.util.List.of(), null, null, null,
                         appHome, null, null)
@@ -1522,7 +1556,6 @@ public final class RouteCompiler {
         if (mountRest) {
             mount(context, routeFile.httpMethod(), routeFile.urlPath(), served);
         }
-        Path sqlPath = routeDir.resolve(definition.main().file()).normalize();
         // The export URI is hand-built because its mode and filename are not a binding's, but it
         // carries the same execution parameters every other endpoint does. Omitting them meant a
         // dialect variant was never picked up, the statement ran with no timeout, and on
@@ -1531,6 +1564,9 @@ public final class RouteCompiler {
         // export exists to avoid.
         String exportDatasource = bindingDatasource(definition.main(),
                 definition.effectiveDatasource());
+        Path sqlPath = sqlFile(routeDir, definition.main().file(),
+                datasourceDialect(exportDatasource), "route '" + routeId + "'",
+                "sources.main.file");
         io.tesseraql.pipeline.sql.SqlStep exportSql = new io.tesseraql.pipeline.sql.SqlStep(
                 new io.tesseraql.pipeline.sql.FileSqlSource(sqlPath.toString(), exportDatasource,
                         datasourceDialect(exportDatasource)),
@@ -1564,8 +1600,9 @@ public final class RouteCompiler {
         RouteDefinition definition = routeFile.definition();
         io.tesseraql.yaml.model.ImportSpec spec = definition.fileImport();
         String routeId = definition.id();
-        Path rowSql = routeFile.source().getParent()
-                .resolve(definition.rowStep().file()).normalize();
+        Path rowSql = sqlFile(routeFile.source().getParent(), definition.rowStep().file(),
+                datasourceDialect(definition.effectiveDatasource()), "route '" + routeId + "'",
+                "steps." + definition.steps().keySet().iterator().next() + ".file");
         // import.locale is where a typo costs data (de_DE parses 1234,50 as 123450.00): the
         // same predicate as the export block (docs/export-declarations.md decision 1).
         io.tesseraql.yaml.app.ExportDeclarations.require(
@@ -1703,14 +1740,18 @@ public final class RouteCompiler {
         requireCodec(definition, format, "export.format");
         // The rows an export writes are the document's main source, on every export surface
         // (docs/unified-sources.md, decision 7).
-        Path querySql = routeDir.resolve(definition.main().file()).normalize();
+        String exportDialect = datasourceDialect(
+                bindingDatasource(definition.main(), definition.effectiveDatasource()));
+        Path querySql = sqlFile(routeDir, definition.main().file(), exportDialect,
+                "route '" + routeId + "'", "sources.main.file");
         String afterTiming = spec.after() == null ? null : spec.after().effectiveTiming();
         Path afterSql = spec.after() == null
                 ? null
-                : routeDir.resolve(spec.after().sql().file()).normalize();
+                : sqlFile(routeDir, spec.after().sql().file(), exportDialect,
+                        "route '" + routeId + "'", "export.after.sql.file");
         Path template = spec.template() == null
                 ? null
-                : routeDir.resolve(spec.template()).normalize();
+                : templateFile(routeDir, spec.template(), definition);
 
         String served = routeId;
         if (mountRest) {
@@ -1762,8 +1803,30 @@ public final class RouteCompiler {
         io.tesseraql.yaml.app.ExportDeclarations.require(
                 io.tesseraql.yaml.app.ExportDeclarations.violations(
                         io.tesseraql.yaml.app.ExportDeclarations.Site.route(appName, definition),
-                        spec, routeDir),
+                        spec, compiledAppHome, routeDir),
                 LOG::warn);
+    }
+
+    /**
+     * A 2-way SQL statement the document names, through the resolver lint judges by
+     * (docs/audit-low-leads.md slice 14): fenced by the application home and there — refused
+     * with the lint's own codes naming the document and the key.
+     */
+    private Path sqlFile(Path directory, String declared, String dialect, String subject,
+            String key) {
+        return io.tesseraql.yaml.app.RouteFiles.sql(compiledAppHome, directory, declared,
+                dialect, io.tesseraql.yaml.app.RouteFiles.head(appName, subject, key));
+    }
+
+    /**
+     * An export's template, fenced by the application home like every other reference; its
+     * existence and kind are the export block's own arm ({@link #requireValidExport}), judged
+     * before this is reached.
+     */
+    private Path templateFile(Path directory, String declared, RouteDefinition definition) {
+        return io.tesseraql.yaml.app.RouteFiles.resolve(compiledAppHome, directory, declared,
+                io.tesseraql.yaml.app.RouteFiles.head(appName,
+                        "route '" + definition.id() + "'", "export.template"));
     }
 
     /**
@@ -2059,7 +2122,7 @@ public final class RouteCompiler {
                         name, binding.http()))
                 : step.process(new io.tesseraql.compiler.binding.NamedQueryBinder(binding))
                         .process(execution(dir, binding, name, datasource,
-                                "Document '" + id + "'"));
+                                "document '" + id + "'"));
         return declaredKinds(acquired, dir.getFileName().toString(), name, binding);
     }
 
@@ -2118,7 +2181,10 @@ public final class RouteCompiler {
                     definition.effectiveDatasource());
             String dialect = datasourceDialect(datasource);
             Path file = io.tesseraql.core.dialect.DialectSqlResolver.resolve(
-                    routeDir.resolve(spec.sql().file()).normalize(), dialect);
+                    sqlFile(routeDir, spec.sql().file(), dialect,
+                            "route '" + definition.id() + "'",
+                            "sources." + into + ".enrich." + name + ".sql.file"),
+                    dialect);
             processors.add(new io.tesseraql.compiler.binding.EnrichProcessor(
                     into, name, spec, parseSql(file), file.toString(), datasource, dialect,
                     commandBounds()));
@@ -2146,6 +2212,8 @@ public final class RouteCompiler {
     private void buildMcpTool(ToolFile toolFile) {
         RouteDefinition definition = toolFile.definition();
         requireRecipeShape(definition, io.tesseraql.yaml.app.RecipeShape.Surface.TOOL);
+        requireRouteFiles(definition, toolFile.source().getParent(),
+                io.tesseraql.yaml.app.RecipeShape.Surface.TOOL);
         requireRequestSources(definition, io.tesseraql.yaml.app.RecipeShape.Surface.TOOL);
         requireResponseLiterals(definition);
         requireLockHonoured(definition, "an MCP tool");
@@ -2355,7 +2423,7 @@ public final class RouteCompiler {
             io.tesseraql.yaml.model.Binding binding, String resultKey) {
         return execution(routeFile.source().getParent(), binding, resultKey,
                 routeFile.definition().effectiveDatasource(),
-                "Route '" + routeFile.definition().id() + "'");
+                "route '" + routeFile.definition().id() + "'");
     }
 
     /** As {@link #executionUri(RouteFile, io.tesseraql.yaml.model.Binding, String)}, resolving
@@ -2382,7 +2450,6 @@ public final class RouteCompiler {
                     effectiveTimeoutSeconds(binding), effectiveOnOverflow(binding), null);
         }
         String datasource = bindingDatasource(binding, routeDatasource);
-        Path sqlPath = sourceDir.resolve(binding.file()).normalize();
         // The dialect is the load-bearing setting: the source resolves foo.<dialect>.sql
         // variants from it, and the step picks the dialect's streaming profile and folds column
         // labels with it.
@@ -2390,12 +2457,10 @@ public final class RouteCompiler {
         // The file the source will read, judged here rather than at the first request: the
         // source reads lazily, so a missing statement used to boot green, answer every request
         // with a raw NoSuchFileException as an internal error, and heal on the next request —
-        // which is why a reload of the route reported "changed" and never stubbed it.
-        if (!java.nio.file.Files.isRegularFile(
-                io.tesseraql.core.dialect.DialectSqlResolver.resolve(sqlPath, dialect))) {
-            throw new TqlException(MISSING_SQL_FILE, subject + " binding '" + resultKey
-                    + "': referenced SQL file is missing: " + binding.file());
-        }
+        // which is why a reload of the route reported "changed" and never stubbed it. Fenced
+        // by the application home on the same call (docs/audit-low-leads.md slice 14).
+        Path sqlPath = sqlFile(sourceDir, binding.file(), dialect, subject,
+                (resultKey.startsWith("steps.") ? resultKey : "sources." + resultKey) + ".file");
         return new io.tesseraql.pipeline.sql.SqlStep(
                 new io.tesseraql.pipeline.sql.FileSqlSource(sqlPath.toString(), datasource,
                         dialect),
@@ -2661,7 +2726,7 @@ public final class RouteCompiler {
      * and a template composes the rest around them, so they run on the extraction's own
      * connection and the executing path receives the files rather than a second set of steps.
      */
-    private static java.util.List<io.tesseraql.core.files.ExportQuery> exportQueries(
+    private java.util.List<io.tesseraql.core.files.ExportQuery> exportQueries(
             RouteDefinition definition, Path dir) {
         java.util.List<io.tesseraql.core.files.ExportQuery> queries = new java.util.ArrayList<>();
         definition.sources().forEach((name, binding) -> {
@@ -2669,8 +2734,10 @@ public final class RouteCompiler {
                 // The source's own params: travel as expressions; the executing path resolves
                 // them at request time (docs/audit-low-leads.md G28).
                 queries.add(new io.tesseraql.core.files.ExportQuery(name,
-                        dir.resolve(binding.file()).normalize(), binding.params(),
-                        java.util.Map.of()));
+                        sqlFile(dir, binding.file(), datasourceDialect(bindingDatasource(binding,
+                                definition.effectiveDatasource())),
+                                "route '" + definition.id() + "'", "sources." + name + ".file"),
+                        binding.params(), java.util.Map.of()));
             }
         });
         return java.util.List.copyOf(queries);

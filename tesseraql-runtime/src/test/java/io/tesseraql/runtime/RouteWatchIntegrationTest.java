@@ -75,7 +75,7 @@ class RouteWatchIntegrationTest {
                 "select 'v2' as version\n");
         assertThat(await("/api/ping", response -> response.body().contains("v2")).body())
                 .contains("v2");
-        awaitWatchLine(line -> line.contains("Watch: reloaded routes (1 changed)")
+        awaitWatchLine(line -> line.contains("Watch: reloaded routes (1 changed: ping)")
                 && line.contains("web/api/ping/ping.sql changed"));
 
         // A brand-new route directory joins the watch as it appears and mounts on save.
@@ -184,6 +184,70 @@ class RouteWatchIntegrationTest {
         Files.writeString(gone.resolve("get.yml"), routeYaml("gone", "gone"));
         assertThat(await("/api/gone", response -> response.statusCode() == 200
                 && response.body().contains("back")).body()).contains("back");
+    }
+
+    /**
+     * A statement a route reads from its parent directory ({@code file: ../order.sql}, the
+     * layout the framework's own tests author) reloads the route that reads it when it is
+     * saved (docs/audit-low-leads.md slice 14, XH-13). The print used to be the digest of a
+     * route's directory: the shared file sat in the parent's print, so its save bounced
+     * {@code orders.list}, which never reads it, reported "1 changed", and left
+     * {@code orders.detail} on the statement it had read at boot until its own yml was saved.
+     * The line names the route it bounced, so the log says which one.
+     */
+    @Test
+    void aSaveToASharedStatementReloadsTheRouteThatReadsIt() throws Exception {
+        Path orders = appHome.resolve("web/orders");
+        Files.createDirectories(orders.resolve("detail"));
+        Files.writeString(orders.resolve("list.sql"), "select 'list' as answer\n");
+        Files.writeString(orders.resolve("order.sql"), "select 'v1' as answer\n");
+        Files.writeString(orders.resolve("get.yml"), routeYaml("orders.list", "list"));
+        Files.writeString(orders.resolve("detail/get.yml"),
+                routeYaml("orders.detail", "../order"));
+        assertThat(await("/orders/detail", response -> response.statusCode() == 200
+                && response.body().contains("v1")).body()).contains("v1");
+        assertThat(await("/orders", response -> response.statusCode() == 200).body())
+                .contains("list");
+
+        Files.writeString(orders.resolve("order.sql"), "select 'v2' as answer\n");
+        assertThat(await("/orders/detail", response -> response.body().contains("v2")).body())
+                .as("the reader serves the saved statement")
+                .contains("v2");
+        awaitWatchLine(line -> line.contains("Watch: reloaded routes (1 changed: orders.detail)")
+                && line.contains("web/orders/order.sql changed"));
+    }
+
+    /**
+     * A stub clears when the file whose absence installed it comes back — under a
+     * subdirectory, where the directory print never looked (docs/audit-low-leads.md slice
+     * 14, XH-13's second half). The save of the yml while {@code q/rows.sql} was away stubbed
+     * the route (the compile refuses a missing statement); the restore used to be "no route
+     * changes" and the stub stayed, the opposite of what the watcher's line promises.
+     */
+    @Test
+    void aStubClearsWhenItsMissingStatementReturnsUnderASubdirectory() throws Exception {
+        Path sub = appHome.resolve("web/api/sub");
+        Files.createDirectories(sub.resolve("q"));
+        Files.writeString(sub.resolve("q/rows.sql"), "select 'here' as answer\n");
+        Files.writeString(sub.resolve("get.yml"), routeYaml("sub", "q/rows"));
+        assertThat(await("/api/sub", response -> response.statusCode() == 200).body())
+                .contains("here");
+
+        Files.delete(sub.resolve("q/rows.sql"));
+        Files.writeString(sub.resolve("get.yml"), routeYaml("sub", "q/rows") + "# saved\n");
+        HttpResponse<String> stub = await("/api/sub",
+                response -> response.statusCode() == 500
+                        && response.body().contains("TQL-ROUTE-3103"));
+        assertThat(stub.body()).contains("TQL-ROUTE-3103");
+        awaitWatchLine(line -> line.contains("failed to compile")
+                && line.contains("TQL-SQL-2103") && line.contains("q/rows.sql"));
+
+        // The statement comes back; nothing else is touched.
+        Files.writeString(sub.resolve("q/rows.sql"), "select 'back' as answer\n");
+        assertThat(await("/api/sub", response -> response.statusCode() == 200
+                && response.body().contains("back")).body())
+                .as("the stub clears on the restore alone")
+                .contains("back");
     }
 
     /**

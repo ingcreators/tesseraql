@@ -1341,7 +1341,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 // the one placement that refuses under dev and host alike with one line —
                 // by the predicate the linter reports from (docs/export-declarations.md
                 // decision 1); routes are the compiler's arm, and jobs never reach it.
-                requireValidJobDeclarations(appName, job, modules.codecs());
+                requireValidJobDeclarations(appName, manifest.appHome(), job, modules.codecs());
                 jobs.put(job.definition().id(), job);
             }
             // The owning app per job id (main app jobs default), so execution records are tagged with
@@ -1423,7 +1423,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 // tagged with the owning app; duplicate ids across apps fail the mount.
                 for (JobFile job : mounted.manifest().jobs()) {
                     String jobId = job.definition().id();
-                    requireValidJobDeclarations(mounted.name(), job, modules.codecs());
+                    requireValidJobDeclarations(mounted.name(), mounted.manifest().appHome(),
+                            job, modules.codecs());
                     if (jobs.putIfAbsent(jobId, job) != null) {
                         throw new io.tesseraql.core.error.TqlException(DUPLICATE_JOB,
                                 "Job id '" + jobId + "' of app '" + mounted.name()
@@ -2098,9 +2099,9 @@ public final class TesseraqlRuntime implements AutoCloseable {
      * set (docs/codec-discovery.md decision 2): a step no codec serves refuses the boot, not
      * its first run.
      */
-    private static void requireValidJobDeclarations(String appName, JobFile job,
-            io.tesseraql.core.files.FileCodecs codecs) {
-        io.tesseraql.yaml.app.ExportDeclarations.requireJob(appName, job, LOG::warn);
+    private static void requireValidJobDeclarations(String appName, java.nio.file.Path appHome,
+            JobFile job, io.tesseraql.core.files.FileCodecs codecs) {
+        io.tesseraql.yaml.app.ExportDeclarations.requireJob(appName, appHome, job, LOG::warn);
         io.tesseraql.yaml.app.ExportDeclarations.requireCodecs(appName, job, codecs);
     }
 

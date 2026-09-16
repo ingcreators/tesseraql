@@ -220,13 +220,13 @@ public final class RouteWatcher implements AutoCloseable {
     private static String summary(RouteReloader.Result result) {
         List<String> parts = new ArrayList<>();
         if (!result.reloaded().isEmpty()) {
-            parts.add(result.reloaded().size() + " changed");
+            parts.add(named(result.reloaded(), "changed"));
         }
         if (!result.added().isEmpty()) {
-            parts.add(result.added().size() + " added");
+            parts.add(named(result.added(), "added"));
         }
         if (!result.removed().isEmpty()) {
-            parts.add(result.removed().size() + " removed");
+            parts.add(named(result.removed(), "removed"));
         }
         if (!result.failed().isEmpty()) {
             parts.add(result.failed().size() + " failed");
@@ -234,6 +234,19 @@ public final class RouteWatcher implements AutoCloseable {
         return parts.isEmpty()
                 ? "no route changes"
                 : "reloaded routes (" + String.join(", ", parts) + ")";
+    }
+
+    /**
+     * The count and the route ids behind it — {@code 1 changed: orders.detail} — so the line
+     * says which route a save bounced (docs/audit-low-leads.md slice 14: the print used to
+     * charge a shared file to its directory's other routes, and the line named none). A
+     * shared-definition edit rebuilds every route; the first three stand for the rest.
+     */
+    private static String named(List<String> ids, String what) {
+        String names = ids.size() <= 3
+                ? String.join(", ", ids)
+                : String.join(", ", ids.subList(0, 3)) + ", …";
+        return ids.size() + " " + what + ": " + names;
     }
 
     private static String label(RouteReloader.RouteFailure failure) {

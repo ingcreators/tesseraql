@@ -67,6 +67,25 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **A document's files are fenced by the application home, on every altitude.** Every file a
+  route, tool or consumer names by relative path — its statements (`sources`, `steps`,
+  `validate`, an `enrich:`, an export's `after:`), the template a codec reads, the page a
+  response renders — resolves through one resolver, `RouteFiles`, and must land inside the
+  application home: `../shared/order.sql` inside it stays legal, `../../../outside.sql` is
+  refused with `TQL-YAML-1075` naming the document, the key and the value — at lint, at
+  `tesseraql admission`, at boot, on the hot reload and before `tesseraql job run` (an export
+  step's `template:`) alike. The linter, the admission gate, the compiler and the job runner
+  each resolved a declaration with nothing but `resolve().normalize()`, so a statement
+  outside the home executed, a workbook outside it was delivered by the Excel codec, and the
+  page template was the one reference the boot alone refused (`TQL-TPL-2001`) — lint was
+  silent on it, and on a page template that is nowhere; both are lint findings now, with
+  the same sentence the boot refuses with. A path the filesystem cannot express is
+  `TQL-YAML-1075` too (it was `TQL-YAML-1006` on an export template). The missing-statement
+  refusal, `TQL-SQL-2103`, is the resolver's on both altitudes, so its sentence is one:
+  `app 'shop': route 'orders' steps.write.file: referenced SQL file is missing: write.sql`
+  (the lint used to say `Step 'write' references a missing SQL file`, the boot `Route
+  'orders' step 'write': …`). `docs/audit-low-leads.md` slice 14 (XH-14, unfiled 52).
+
 - **A declaration is judged once, on both altitudes.** Seven declarations the linter and the
   boot judged differently — or that neither judged — are one predicate now, reported at lint
   and refused at boot with the same code and sentence (`docs/audit-low-leads.md` slice 13).
@@ -266,6 +285,32 @@ All notable changes to TesseraQL are documented here. The format follows
   sandbox, means the sandbox). Docs and two fixtures only (G5).
 
 ### Fixed
+
+- **A route's files are the hot reload's fingerprint, keyed by route.** The reload's content
+  diff printed a route's *directory* (its immediate files), shared by every route in it, so
+  a statement in a subdirectory or a parent — `file: ../order.sql`, the layout the framework's
+  own tests author — was in no print: its save bounced `orders.list`, whose directory it sat
+  in and which never reads it, reported "1 changed", and left `orders.detail` on the
+  statement it had read at boot until its own yml was saved. The print is now the route's
+  own document and every file it names, resolved as the compiler resolves them (a 2-way SQL
+  file with the dialect variants beside it, a page template beside the document or under
+  `templates/`, a codec's template), plus the main statement of every route a `lookup:` reads
+  through; a save bounces the routes that read the file and no other, and the `--watch` line
+  names them (`reloaded routes (1 changed: orders.detail)`). A route serving a compile-failure
+  stub is never "unchanged": the stub clears on the next reload whatever fixed it — a
+  `tpl/report.xlsx` or `q/rows.sql` restored under a subdirectory used to be "no route
+  changes" with the stub staying, against the watcher's own "until the file is fixed". A
+  referenced file outside the watched trees (`web/`, `workflow/`, the shared definitions,
+  `templates/`) still raises no event of its own; the next save anywhere picks it up.
+  `docs/audit-low-leads.md` slice 14 (XH-13, unfiled 7).
+- **The Excel codec refuses a workbook outside the application home before a byte is written**
+  (`TQL-LD-2837`, "is outside the application home"), the pdf codec's own rule as its
+  defence-in-depth twin for a spec no compiler fenced; the declaration is refused at lint
+  and boot first. `docs/audit-low-leads.md` slice 14 (XH-14).
+- **An export's missing `main` statement refuses the route at boot, not the first download.**
+  `query-export` and `file-export` resolved `main` themselves and never asked whether it was
+  there, so the slice-8 refusal (`TQL-SQL-2103`) covered every recipe but the two that stream
+  a file; both resolve through the one resolver now. `docs/audit-low-leads.md` slice 14.
 
 - **A `result:` on a job's chunk reader or writer refuses the job where it registers.** The
   0.17.0 note said "a lint error and a boot refusal"; only the lint existed. `tesseraql job

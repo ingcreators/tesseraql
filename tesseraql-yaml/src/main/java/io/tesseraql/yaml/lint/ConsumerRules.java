@@ -6,7 +6,6 @@ import io.tesseraql.yaml.config.AppConfig;
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.RouteFile;
 import io.tesseraql.yaml.model.RouteDefinition;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Set;
@@ -95,13 +94,8 @@ final class ConsumerRules implements LintRule {
                             + definition.id() + "' declares sources: — a consumer's pipeline is its"
                             + " steps:, and a declared source compiles to nothing here"));
         }
-        definition.steps().forEach((name, step) -> {
-            if (step.file() != null && !Files.isRegularFile(
-                    consumer.source().getParent().resolve(step.file()))) {
-                findings.add(new LintFinding(LintCodes.MISSING_SQL_FILE, ERROR, source,
-                        "Step '" + name + "' references a missing SQL file: " + step.file()));
-            }
-        });
+        RouteFileRules.report(context, config, consumer.source(), definition,
+                io.tesseraql.yaml.app.RecipeShape.Surface.CONSUMER, source, findings);
         // A consumer's validate: is compiled and run exactly like a command's, so its rules get
         // the same static checks — a typo'd validation SQL filename used to reach startup.
         DocumentRules.lintValidation(context, consumer.source(), definition, source, findings);
