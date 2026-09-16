@@ -35,6 +35,7 @@ class StackReconcilerTest {
         final Map<String, Integer> weights = new HashMap<>();
         final List<String> operations = new ArrayList<>();
         RuntimeException refusal;
+        int attempts;
 
         @Override
         public Set<String> appNames() {
@@ -62,10 +63,11 @@ class StackReconcilerTest {
         }
 
         @Override
-        public void replace(InstalledApp entry) {
+        public void replace(InstalledApp entry, Runnable swapped) {
             refuseIfArranged();
             operations.add("replace " + entry.version());
             stable.put(entry.name(), entry);
+            swapped.run();
         }
 
         @Override
@@ -83,10 +85,11 @@ class StackReconcilerTest {
         }
 
         @Override
-        public void promoteCanary(String appName) {
+        public void promoteCanary(String appName, Runnable swapped) {
             operations.add("promote");
             stable.put(appName, canary.remove(appName));
             weights.remove(appName);
+            swapped.run();
         }
 
         @Override
@@ -97,6 +100,7 @@ class StackReconcilerTest {
         }
 
         private void refuseIfArranged() {
+            attempts++;
             if (refusal != null) {
                 throw refusal;
             }
@@ -263,7 +267,11 @@ class StackReconcilerTest {
         assertThat(status).contains("\"applied\"").contains("2.0.0").contains("replace");
     }
 
-    /** Failure does not loop: the refusal is recorded and the host's state is untouched. */
+    /**
+     * The refusal is recorded with what was refused — the action and the version — and the
+     * host's state is untouched. A record without them could not say which intent it was
+     * about, and the reconciler could not recognise its own attempt.
+     */
     @Test
     void aRefusedActionIsRecordedWithItsOwnMessage() throws IOException {
         host.refusal = new IllegalStateException("modules unresolved: run tesseraql modules"
@@ -274,7 +282,104 @@ class StackReconcilerTest {
 
         assertThat(host.stable.get("shop").version()).isEqualTo("1.0.0");
         String status = Files.readString(installRoot.resolve(".upgrade/shop.status.json"));
-        assertThat(status).contains("\"refused\"").contains("modules unresolved");
+        assertThat(status).contains("\"refused\"").contains("modules unresolved")
+                .contains("\"action\":\"replace\"").contains("\"version\":\"2.0.0\"");
+    }
+
+    /**
+     * The CLI writes candidates, the host writes the catalogue (docs/runtime-replace.md
+     * structural decision 2's addendum): a replace candidate the host applies moves the
+     * catalogue at that moment, and a second pass over the applied state does nothing.
+     */
+    @Test
+    void anAppliedReplaceCandidateMovesTheCatalogue() throws IOException {
+        pendingState("2.0.0");
+
+        reconciler.reconcileOnce();
+
+        assertThat(host.operations).containsExactly("replace 2.0.0");
+        assertThat(new AppCatalog(installRoot).find("shop")).get()
+                .extracting(InstalledApp::version).isEqualTo("2.0.0");
+        String status = Files.readString(installRoot.resolve(".upgrade/shop.status.json"));
+        assertThat(status).contains("\"applied\"").contains("\"action\":\"replace\"");
+        host.operations.clear();
+
+        reconciler.reconcileOnce();
+        assertThat(host.operations).isEmpty();
+    }
+
+    /** A replace candidate the canary slot already runs is a promote: nothing starts. */
+    @Test
+    void aReplaceCandidateTheCanarySlotRunsPromotesAndMovesTheCatalogue() throws IOException {
+        host.canary.put("shop", entry("2.0.0"));
+        host.weights.put("shop", 25);
+        pendingState("2.0.0");
+
+        reconciler.reconcileOnce();
+
+        assertThat(host.operations).containsExactly("promote");
+        assertThat(host.stable.get("shop").version()).isEqualTo("2.0.0");
+        assertThat(new AppCatalog(installRoot).find("shop")).get()
+                .extracting(InstalledApp::version).isEqualTo("2.0.0");
+    }
+
+    /**
+     * A refused replace candidate leaves the catalogue naming the version that serves
+     * (docs/audit-low-leads.md, XD-08a): the catalogue used to move in the CLI before any host
+     * judged the candidate, so the next cold start failed the whole stack on it.
+     */
+    @Test
+    void aRefusedReplaceCandidateLeavesTheCatalogueOnTheServingVersion() throws IOException {
+        host.refusal = new IllegalStateException("TQL-LD-2801: the route does not compile");
+        pendingState("2.0.0");
+
+        reconciler.reconcileOnce();
+
+        assertThat(host.stable.get("shop").version()).isEqualTo("1.0.0");
+        assertThat(new AppCatalog(installRoot).find("shop")).get()
+                .extracting(InstalledApp::version).isEqualTo("1.0.0");
+        String status = Files.readString(installRoot.resolve(".upgrade/shop.status.json"));
+        assertThat(status).contains("\"refused\"").contains("\"version\":\"2.0.0\"");
+    }
+
+    /**
+     * Failure does not loop: a candidate whose refusal is on record is attempted once, not once
+     * per pass — the sweep a shared root needs re-attempted it every fifteen seconds, one
+     * runtime start per pass. The operator writing the intent again is what earns another
+     * attempt.
+     */
+    @Test
+    void aRefusedCandidateIsAttemptedOnceUntilTheOperatorWritesAgain() throws Exception {
+        host.refusal = new IllegalStateException("TQL-LD-2801: the route does not compile");
+        pendingState("2.0.0");
+
+        reconciler.reconcileOnce();
+        reconciler.reconcileOnce();
+        reconciler.reconcileOnce();
+        assertThat(host.attempts).as("one attempt across three passes").isEqualTo(1);
+
+        // A newer intent — the same candidate re-deployed — is attempted again, and applies
+        // once the refusal is gone.
+        Thread.sleep(1100);
+        pendingState("2.0.0");
+        host.refusal = null;
+        reconciler.reconcileOnce();
+        assertThat(host.attempts).isEqualTo(2);
+        assertThat(host.stable.get("shop").version()).isEqualTo("2.0.0");
+    }
+
+    /** The same memo holds a refused canary stage, the other candidate shape. */
+    @Test
+    void aRefusedCanaryStageIsAttemptedOnce() throws IOException {
+        host.refusal = new IllegalStateException("modules unresolved");
+        stagedState("2.0.0", 15);
+
+        reconciler.reconcileOnce();
+        reconciler.reconcileOnce();
+
+        assertThat(host.attempts).isEqualTo(1);
+        String status = Files.readString(installRoot.resolve(".upgrade/shop.status.json"));
+        assertThat(status).contains("\"action\":\"stage\"").contains("\"version\":\"2.0.0\"");
     }
 
     private void stagedState(String candidateVersion, int weight) throws IOException {
@@ -283,5 +388,14 @@ class StackReconcilerTest {
                 {"previous":null,"candidate":{"name":"shop","version":"%s",\
                 "path":"shop/%s","entitledTenants":[]},"canaryWeight":%d}"""
                 .formatted(candidateVersion, candidateVersion, weight));
+    }
+
+    /** A replace candidate as the CLI's deploy, promote and rollback write it. */
+    private void pendingState(String candidateVersion) throws IOException {
+        Files.createDirectories(installRoot.resolve(".upgrade"));
+        Files.writeString(installRoot.resolve(".upgrade/shop.json"), """
+                {"previous":null,"candidate":{"name":"shop","version":"%s",\
+                "path":"shop/%s","entitledTenants":[]},"canaryWeight":0,"mode":"replace"}"""
+                .formatted(candidateVersion, candidateVersion));
     }
 }

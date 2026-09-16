@@ -373,10 +373,12 @@ catalogue and the status.**
   of an applied candidate writes `previous` as a `replace` candidate, `rollback` of one not yet
   applied clears it. A state file without a `mode` reads as `canary`, which is what every
   pre-0.18 file meant.
-- **`catalog.json` moves only when a host applies a `replace` candidate** — at the moment it
-  writes `applied` for the replace or promote — so it names a version that served, always, and
-  boot on it can only start what has started before. `previous` and the preflight floor are
-  therefore served versions too, which is what `rollback` was always specified against.
+- **`catalog.json` moves only when a host applies a `replace` candidate** — at the swap, the
+  moment the candidate serves and before the retiring runtime drains (a drain takes seconds,
+  and a `rollback` written in that window must read the promote as applied) — so it names a
+  version that served, always, and boot on it can only start what has started before.
+  `previous` and the preflight floor are therefore served versions too, which is what
+  `rollback` was always specified against.
 - **A refusal is recorded once, with its action and version**, and the reconciler does not
   re-attempt a candidate whose refusal is on record — same action, same version, the intent file
   no newer than the status — until the operator writes something new. The sweep still runs

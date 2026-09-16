@@ -19,10 +19,16 @@ import java.util.Optional;
  * Upgrades an installed app with a preflight, snapshot, and rollback lifecycle (design ch. 31),
  * gated by the version compatibility matrix (ch. 30).
  *
- * <p>A direct upgrade activates the new version immediately (snapshotting the previous one for
- * rollback). A canary upgrade stages the new version on disk without activating it, so it can run
- * alongside the current version (via multi-app hosting) and then be {@link #promote promoted} or
- * {@link #rollback rolled back}.
+ * <p>The CLI's side of the install root's deploy protocol (docs/runtime-replace.md structural
+ * decision 2 and its addendum): every verb here writes a <em>candidate</em> into
+ * {@code .upgrade/<name>.json} and nothing else. A direct upgrade writes a {@code replace}
+ * candidate — the version to become the serving one; a canary upgrade stages a {@code canary}
+ * candidate beside the serving version at a traffic weight; {@link #promote} rewrites the staged
+ * canary as a replace candidate; {@link #rollback} writes the snapshotted previous version as
+ * one, or clears a candidate that never applied. <b>The catalogue is the host's to move</b>: it
+ * names the serving version and moves when a host applies a replace candidate, so it can never
+ * name a version no host has started — a refused deploy used to land there and fail the next
+ * cold start of the whole stack.
  */
 public final class AppUpgrader {
 
@@ -30,6 +36,11 @@ public final class AppUpgrader {
     private static final TqlErrorCode NO_TARGET = new TqlErrorCode(TqlDomain.UPGRADE, 4091);
     private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
     private static final int DEFAULT_CANARY_WEIGHT = 10;
+
+    /** A candidate staged beside the serving version at a traffic weight. */
+    public static final String CANARY = "canary";
+    /** A candidate to become the serving version; the host moves the catalogue when it does. */
+    public static final String REPLACE = "replace";
 
     private final AppInstaller installer = new AppInstaller();
 
@@ -66,7 +77,10 @@ public final class AppUpgrader {
                 current.map(InstalledApp::version).orElse(null), info.version(), messages);
     }
 
-    /** Activates the new version immediately, snapshotting the previous one for rollback. */
+    /**
+     * Writes the new version as a replace candidate, snapshotting the serving version for
+     * rollback; a host applies it and moves the catalogue.
+     */
     public UpgradeResult upgrade(Path tqlapp, Path installRoot, SemanticVersion frameworkVersion) {
         return upgrade(tqlapp, installRoot, frameworkVersion, false);
     }
@@ -82,8 +96,11 @@ public final class AppUpgrader {
     }
 
     /**
-     * Upgrades the app. When {@code canary} is true the new version is staged but not activated;
-     * call {@link #promote} to activate it or {@link #rollback} to discard it.
+     * Upgrades the app: the package is placed side by side and written as a candidate — staged
+     * beside the serving version when {@code canary} is true ({@link #promote} activates it,
+     * {@link #rollback} discards it), else to replace it. The preflight's floor and the
+     * snapshotted {@code previous} are the catalogue's entry, which is always a version that
+     * served.
      */
     public UpgradeResult upgrade(Path tqlapp, Path installRoot, SemanticVersion frameworkVersion,
             boolean canary) {
@@ -92,18 +109,13 @@ public final class AppUpgrader {
             throw new TqlException(INCOMPATIBLE,
                     "Upgrade preflight failed: " + String.join("; ", report.messages()));
         }
-        AppCatalog catalog = new AppCatalog(installRoot);
-        InstalledApp previous = catalog.find(report.appName()).orElse(null);
+        InstalledApp previous = new AppCatalog(installRoot).find(report.appName()).orElse(null);
         List<String> entitled = previous == null ? List.of() : previous.entitledTenants();
 
         InstalledApp placed = installer.place(tqlapp, installRoot, null, entitled);
-        if (canary) {
-            writeState(installRoot, report.appName(),
-                    new UpgradeState(previous, placed, DEFAULT_CANARY_WEIGHT));
-        } else {
-            catalog.replace(placed);
-            writeState(installRoot, report.appName(), new UpgradeState(previous, null, 0));
-        }
+        writeState(installRoot, report.appName(), canary
+                ? new UpgradeState(previous, placed, DEFAULT_CANARY_WEIGHT, CANARY)
+                : new UpgradeState(previous, placed, 0, REPLACE));
         return new UpgradeResult(report.appName(), report.fromVersion(), report.toVersion(),
                 canary);
     }
@@ -111,50 +123,71 @@ public final class AppUpgrader {
     /** Adjusts the percentage of traffic the staged canary candidate should receive (0-100). */
     public void setCanaryWeight(String appName, Path installRoot, int weightPercent) {
         UpgradeState state = readState(installRoot, appName);
-        if (state == null || state.candidate() == null) {
+        if (state == null || !state.isCanary()) {
             throw new TqlException(NO_TARGET, "No staged candidate for app: " + appName);
         }
         int weight = Math.max(0, Math.min(100, weightPercent));
         writeState(installRoot, appName,
-                new UpgradeState(state.previous(), state.candidate(), weight));
+                new UpgradeState(state.previous(), state.candidate(), weight, CANARY));
     }
 
     /** The staged canary candidate and its traffic weight, if a canary is in progress. */
     public Optional<CanaryStatus> canary(String appName, Path installRoot) {
         UpgradeState state = readState(installRoot, appName);
-        if (state == null || state.candidate() == null) {
+        if (state == null || !state.isCanary()) {
             return Optional.empty();
         }
         return Optional.of(new CanaryStatus(state.candidate(), state.canaryWeight()));
     }
 
-    /** Activates a previously staged canary version. */
+    /**
+     * The replace candidate — a direct deploy, a promote or a rollback the host has not applied
+     * yet, or one it has (the catalogue then names it; the reconciler reads the two together).
+     */
+    public Optional<InstalledApp> pending(String appName, Path installRoot) {
+        UpgradeState state = readState(installRoot, appName);
+        if (state == null || state.candidate() == null || state.isCanary()) {
+            return Optional.empty();
+        }
+        return Optional.of(state.candidate());
+    }
+
+    /**
+     * Rewrites a staged canary as a replace candidate; a host promotes the canary it already
+     * runs (nothing starts) and moves the catalogue.
+     */
     public InstalledApp promote(String appName, Path installRoot) {
         UpgradeState state = readState(installRoot, appName);
-        if (state == null || state.candidate() == null) {
+        if (state == null || !state.isCanary()) {
             throw new TqlException(NO_TARGET, "No staged candidate to promote for app: " + appName);
         }
-        new AppCatalog(installRoot).replace(state.candidate());
-        writeState(installRoot, appName, new UpgradeState(state.previous(), null, 0));
+        writeState(installRoot, appName,
+                new UpgradeState(state.previous(), state.candidate(), 0, REPLACE));
         return state.candidate();
     }
 
     /**
-     * Reverts the last upgrade: discards a pending canary, or restores the snapshotted previous
-     * version as active. The previous version's files must still be present.
+     * Reverts the last upgrade. A candidate the host has not applied — a staged canary, or a
+     * replace candidate the catalogue does not name — is discarded and the serving version
+     * stays. An applied one is reverted by writing the snapshotted previous version as the
+     * replace candidate; its files must still be present, and it is the version that served
+     * before, because the catalogue only ever named served versions.
      */
     public InstalledApp rollback(String appName, Path installRoot) {
         UpgradeState state = readState(installRoot, appName);
         if (state == null) {
             throw new TqlException(NO_TARGET, "Nothing to roll back for app: " + appName);
         }
-        if (state.candidate() != null) {
-            // Canary not promoted: the catalog still points to the previous version; just discard.
-            writeState(installRoot, appName, new UpgradeState(state.previous(), null, 0));
-            return state.previous();
+        InstalledApp serving = new AppCatalog(installRoot).find(appName).orElse(null);
+        if (state.candidate() != null && (serving == null
+                || !serving.version().equals(state.candidate().version()))) {
+            // Never applied: discard the candidate and keep what serves.
+            writeState(installRoot, appName, new UpgradeState(state.previous(), null, 0, null));
+            return serving != null ? serving : state.previous();
         }
         InstalledApp previous = state.previous();
-        if (previous == null) {
+        if (previous == null
+                || (serving != null && previous.version().equals(serving.version()))) {
             throw new TqlException(NO_TARGET,
                     "No previous version to roll back to for app: " + appName);
         }
@@ -162,8 +195,7 @@ public final class AppUpgrader {
             throw new TqlException(NO_TARGET,
                     "Previous version files are missing for app: " + appName);
         }
-        new AppCatalog(installRoot).replace(previous);
-        writeState(installRoot, appName, new UpgradeState(null, null, 0));
+        writeState(installRoot, appName, new UpgradeState(null, previous, 0, REPLACE));
         return previous;
     }
 
@@ -206,8 +238,18 @@ public final class AppUpgrader {
     public record CanaryStatus(InstalledApp candidate, int weightPercent) {
     }
 
-    /** Persisted snapshot for rollback/promotion (previous active, staged candidate, canary weight). */
+    /**
+     * Persisted intent (docs/runtime-replace.md structural decision 2's addendum): the previous
+     * served version for rollback, the candidate, its canary weight, and the candidate's
+     * {@code mode} — {@link #CANARY} or {@link #REPLACE}. A file with a candidate and no mode is
+     * a canary, which is what every file written before the mode existed meant.
+     */
     @JsonIgnoreProperties(ignoreUnknown = true)
-    record UpgradeState(InstalledApp previous, InstalledApp candidate, int canaryWeight) {
+    record UpgradeState(InstalledApp previous, InstalledApp candidate, int canaryWeight,
+            String mode) {
+
+        boolean isCanary() {
+            return candidate != null && !REPLACE.equals(mode);
+        }
     }
 }

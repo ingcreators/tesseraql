@@ -19,8 +19,8 @@
   <span th:unless="${fromVersion}" th:text="#{tql.ops.atVersion(${toVersion})}">version</span>
   <th:block th:if="${canary}" th:text="#{tql.ops.mdashStagedAsA}">&mdash; staged as a canary; watch its second switcher entry and
     promote or roll back with the CLI.</th:block>
-  <th:block th:unless="${canary}" th:text="#{tql.ops.mdashTheRunningHost}">&mdash; the running host's reconciler converges the stack to
-    it while the stack serves.</th:block>
+  <th:block th:unless="${canary}" th:text="#{tql.ops.mdashTheRunningHost}">&mdash; the intent is written; the running host applies it
+    while the stack serves, and its verdict lands in the table below.</th:block>
 </p>
 
 <section class="hc-card">
@@ -74,11 +74,17 @@
     <p class="hc-field__message" th:utext="#{tql.ops.yourCodeTqlApp}">Your <code>tql.app.deploy</code> grants applied to the
       stack's members. A package declaring any other name refuses at the endpoint.</p>
     <table class="hc-table" th:if="${deploy.hasApps}">
-      <thead><tr><th th:text="#{tql.ops.application}">Application</th><th th:text="#{tql.ops.installedVersion}">Installed version</th><th></th></tr></thead>
+      <thead><tr><th th:text="#{tql.ops.application}">Application</th><th th:text="#{tql.ops.installedVersion}">Installed version</th><th th:text="#{tql.ops.hostsLastVerdict}">Host's last verdict</th><th></th></tr></thead>
       <tbody>
         <tr th:each="app : ${deploy.apps}">
           <td th:text="${app.name}">app</td>
           <td th:text="${app.version}">1.0.0</td>
+          <!-- The host judges a candidate after the deploy endpoint has answered; the verdict
+               it records is what tells this page's reader that a deploy it reported as
+               written was refused — or applied. -->
+          <td><span class="hc-status" th:if="${app.outcome != null}"
+                    th:attr="data-variant=${app.outcome == 'applied' ? 'success' : 'error'}"
+                    th:text="${app.outcome + ' ' + app.verdict}">applied replace v1.0.1</span></td>
           <td><span class="hc-badge" data-variant="warning" th:if="${app.canary}" th:text="#{tql.ops.canaryStaged}">canary staged</span></td>
         </tr>
       </tbody>

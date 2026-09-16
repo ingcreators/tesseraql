@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.tesseraql.operations.app.AppCatalog;
 import io.tesseraql.operations.app.AppInstaller;
+import io.tesseraql.operations.app.AppUpgrader;
 import io.tesseraql.operations.app.InstalledApp;
 import java.io.ByteArrayOutputStream;
 import java.io.OutputStream;
@@ -45,15 +46,25 @@ class DeployCommandTest {
         assertThat(result.stderr()).contains("No such package");
     }
 
+    /**
+     * A direct deploy writes a candidate and leaves the catalogue to the host
+     * (docs/runtime-replace.md structural decision 2's addendum): the catalogue names the
+     * serving version until a host applies what was written.
+     */
     @Test
-    void aDirectDeployMovesTheCatalogue(@TempDir Path dir) throws Exception {
+    void aDirectDeployWritesACandidateAndLeavesTheCatalogueToTheHost(@TempDir Path dir)
+            throws Exception {
         Path root = installRoot(dir, "orders", "1.0.0");
         Result result = execute("deploy", pkg(dir, "orders", "2.0.0").toString(),
                 "--stack", root.toString());
         assertThat(result.exitCode()).isZero();
-        assertThat(result.stdout()).contains("Deployed 'orders' 2.0.0 (was 1.0.0)");
+        assertThat(result.stdout()).contains("Deployed 'orders' 2.0.0 (serving 1.0.0)");
         assertThat(new AppCatalog(root).find("orders")).get()
+                .extracting(InstalledApp::version).isEqualTo("1.0.0");
+        assertThat(new AppUpgrader().pending("orders", root)).get()
                 .extracting(InstalledApp::version).isEqualTo("2.0.0");
+        Result status = execute("deploy", "status", "orders", "--stack", root.toString());
+        assertThat(status.stdout()).contains("orders: serving 1.0.0").contains("pending: 2.0.0");
     }
 
     @Test
@@ -92,7 +103,7 @@ class DeployCommandTest {
                 .extracting(InstalledApp::version).isEqualTo("1.0.0");
 
         Result status = execute("deploy", "status", "--stack", root.toString());
-        assertThat(status.stdout()).contains("orders: active 1.0.0")
+        assertThat(status.stdout()).contains("orders: serving 1.0.0")
                 .contains("canary: 2.0.0 at 25%");
 
         Result weight = execute("deploy", "weight", "orders", "50", "--stack", root.toString());
@@ -100,16 +111,25 @@ class DeployCommandTest {
         assertThat(execute("deploy", "status", "orders", "--stack", root.toString()).stdout())
                 .contains("canary: 2.0.0 at 50%");
 
+        // A promote rewrites the staged canary as the replace candidate; the host that runs
+        // the canary promotes it and moves the catalogue. Here the host is played by hand.
         Result promoted = execute("deploy", "promote", "orders", "--stack", root.toString());
         assertThat(promoted.exitCode()).isZero();
         assertThat(new AppCatalog(root).find("orders")).get()
-                .extracting(InstalledApp::version).isEqualTo("2.0.0");
+                .extracting(InstalledApp::version).isEqualTo("1.0.0");
+        InstalledApp candidate = new AppUpgrader().pending("orders", root).orElseThrow();
+        assertThat(candidate.version()).isEqualTo("2.0.0");
+        new AppCatalog(root).replace(candidate);
 
+        // A rollback of an applied candidate writes the version that served as the candidate;
+        // the catalogue is still the host's move.
         Result rolledBack = execute("deploy", "rollback", "orders", "--stack", root.toString());
         assertThat(rolledBack.exitCode()).isZero();
-        assertThat(rolledBack.stdout()).contains("Rolled back 'orders' to 1.0.0");
-        assertThat(new AppCatalog(root).find("orders")).get()
+        assertThat(rolledBack.stdout()).contains("Rolling back 'orders' to 1.0.0");
+        assertThat(new AppUpgrader().pending("orders", root)).get()
                 .extracting(InstalledApp::version).isEqualTo("1.0.0");
+        assertThat(new AppCatalog(root).find("orders")).get()
+                .extracting(InstalledApp::version).isEqualTo("2.0.0");
     }
 
     @Test
@@ -120,9 +140,60 @@ class DeployCommandTest {
 
         Result discarded = execute("deploy", "rollback", "orders", "--stack", root.toString());
         assertThat(discarded.exitCode()).isZero();
-        assertThat(discarded.stdout()).contains("Discarded the staged candidate");
+        assertThat(discarded.stdout()).contains("Discarded the candidate");
         assertThat(new AppCatalog(root).find("orders")).get()
                 .extracting(InstalledApp::version).isEqualTo("1.0.0");
+    }
+
+    /**
+     * A rollback of a candidate no host applied — the refused deploy's shape — discards it and
+     * keeps what serves (docs/audit-low-leads.md, XD-08b): the rollback used to "restore" the
+     * refused version, report success, and null the previous version out for good.
+     */
+    @Test
+    void rollingBackAPendingDeployDiscardsItAndKeepsWhatServes(@TempDir Path dir)
+            throws Exception {
+        Path root = installRoot(dir, "orders", "1.0.0");
+        execute("deploy", pkg(dir, "orders", "1.0.1").toString(), "--stack", root.toString());
+
+        Result discarded = execute("deploy", "rollback", "orders", "--stack", root.toString());
+        assertThat(discarded.exitCode()).isZero();
+        assertThat(discarded.stdout()).contains("Discarded the candidate")
+                .contains("stays at 1.0.0");
+        assertThat(new AppUpgrader().pending("orders", root)).isEmpty();
+        assertThat(new AppCatalog(root).find("orders")).get()
+                .extracting(InstalledApp::version).isEqualTo("1.0.0");
+        // Nothing served but 1.0.0: there is no previous version to roll back to.
+        Result nothing = execute("deploy", "rollback", "orders", "--stack", root.toString());
+        assertThat(nothing.exitCode()).isEqualTo(2);
+        assertThat(nothing.stderr()).contains("No previous version");
+    }
+
+    /** {@code rollback --wait} tails the host's verdict like {@code deploy --wait}. */
+    @Test
+    void rollbackWaitSurfacesTheHostsVerdict(@TempDir Path dir) throws Exception {
+        Path root = installRoot(dir, "orders", "1.0.0");
+        execute("deploy", pkg(dir, "orders", "2.0.0").toString(), "--stack", root.toString());
+        new AppCatalog(root).replace(new AppUpgrader().pending("orders", root).orElseThrow());
+        Path status = root.resolve(".upgrade").resolve("orders.status.json");
+        Thread host = new Thread(() -> {
+            try {
+                Thread.sleep(600);
+                Files.writeString(status, "{\"name\":\"orders\",\"action\":\"replace\","
+                        + "\"version\":\"1.0.0\",\"outcome\":\"refused\","
+                        + "\"message\":\"TQL-APP-4216: unresolved modules\","
+                        + "\"at\":\"2026-08-18T00:00:00Z\"}");
+            } catch (Exception impossible) {
+                throw new IllegalStateException(impossible);
+            }
+        });
+        host.start();
+        Result result = execute("deploy", "rollback", "orders", "--stack", root.toString(),
+                "--wait", "--wait-timeout", "10");
+        host.join();
+        assertThat(result.exitCode()).isEqualTo(2);
+        assertThat(result.stderr()).contains("The host refused it (replace v1.0.0)")
+                .contains("unresolved modules");
     }
 
     @Test
@@ -151,8 +222,30 @@ class DeployCommandTest {
                         + "\"at\":\"2026-08-18T00:00:00Z\"}");
         Result result = execute("deploy", "status", "orders", "--stack", root.toString());
         assertThat(result.exitCode()).isZero();
-        assertThat(result.stdout()).contains("orders: active 1.0.0")
+        assertThat(result.stdout()).contains("orders: serving 1.0.0")
                 .contains("host: applied replace v1.0.0 at 2026-08-18T00:00:00Z");
+    }
+
+    /**
+     * A verdict about a version no longer on disk is not the current state
+     * (docs/audit-low-leads.md, unfiled 60): the status file is the host's last word, and
+     * after the operator has written a newer intent the last word is about something else.
+     */
+    @Test
+    void statusHidesAVerdictAboutAnIntentNoLongerOnDisk(@TempDir Path dir) throws Exception {
+        Path root = installRoot(dir, "orders", "1.0.0");
+        Files.writeString(root.resolve(".upgrade").resolve("orders.status.json"),
+                "{\"name\":\"orders\",\"action\":\"replace\",\"version\":\"1.0.1\","
+                        + "\"outcome\":\"refused\",\"message\":\"TQL-LD-2801\","
+                        + "\"at\":\"2026-08-18T00:00:00Z\"}");
+        Result stale = execute("deploy", "status", "orders", "--stack", root.toString());
+        assertThat(stale.stdout()).contains("orders: serving 1.0.0").doesNotContain("host:");
+
+        // The refused version written as the candidate again: now the verdict is about it.
+        execute("deploy", pkg(dir, "orders", "1.0.1").toString(), "--stack", root.toString());
+        Result current = execute("deploy", "status", "orders", "--stack", root.toString());
+        assertThat(current.stdout()).contains("pending: 1.0.1")
+                .contains("host: refused replace v1.0.1: TQL-LD-2801");
     }
 
     @Test
@@ -192,8 +285,8 @@ class DeployCommandTest {
         Thread host = new Thread(() -> {
             try {
                 Thread.sleep(600);
-                Files.writeString(status, "{\"name\":\"orders\",\"action\":null,"
-                        + "\"version\":null,\"outcome\":\"refused\","
+                Files.writeString(status, "{\"name\":\"orders\",\"action\":\"replace\","
+                        + "\"version\":\"2.0.0\",\"outcome\":\"refused\","
                         + "\"message\":\"TQL-APP-4216: unresolved modules\","
                         + "\"at\":\"2026-08-18T00:00:00Z\"}");
             } catch (Exception impossible) {
@@ -205,7 +298,7 @@ class DeployCommandTest {
                 "--stack", root.toString(), "--wait", "--wait-timeout", "10");
         host.join();
         assertThat(result.exitCode()).isEqualTo(2);
-        assertThat(result.stderr()).contains("The host refused it")
+        assertThat(result.stderr()).contains("The host refused it (replace v2.0.0)")
                 .contains("unresolved modules");
     }
 
@@ -217,9 +310,12 @@ class DeployCommandTest {
         assertThat(result.exitCode()).isEqualTo(1);
         assertThat(result.stderr()).contains("Timed out after 1s")
                 .contains("orders.status.json");
-        // The timeout is "the host has not answered", not "the deploy failed".
-        assertThat(new AppCatalog(root).find("orders")).get()
+        // The timeout is "the host has not answered", not "the deploy failed": the candidate
+        // is written, the catalogue is the host's.
+        assertThat(new AppUpgrader().pending("orders", root)).get()
                 .extracting(InstalledApp::version).isEqualTo("2.0.0");
+        assertThat(new AppCatalog(root).find("orders")).get()
+                .extracting(InstalledApp::version).isEqualTo("1.0.0");
     }
 
     private static Path installRoot(Path dir, String name, String version) throws Exception {

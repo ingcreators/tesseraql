@@ -121,14 +121,26 @@ public record HostContext(String basePath, String cookiePath, String externalOri
         default String version(String member) {
             return null;
         }
+
+        /**
+         * The host's last recorded verdict on {@code member} — the status file the reconciler
+         * writes ({@code outcome}, {@code action}, {@code version}, {@code message}, {@code at})
+         * as a map, or an empty map when none. The deploy page renders it, so an operator who by
+         * design has no install-root access still learns that the host refused what the page
+         * had reported as deployed (docs/audit-low-leads.md, unfiled 18).
+         */
+        default java.util.Map<String, Object> lastVerdict(String member) {
+            return java.util.Map.of();
+        }
     }
 
     /**
      * The host's deploy pen: what the surface runtime's authenticated deploy endpoint may do to
-     * the install root, and nothing else (docs/stack-shells.md, the deploy surface). One method,
-     * because deploying IS writing intent — the reconciler stays the one mechanism that moves a
-     * runtime, and every refusal the CLI's local mode meets refuses here identically, before
-     * anything is written.
+     * the install root, and nothing else (docs/stack-shells.md, the deploy surface). Deploying
+     * IS writing intent — the reconciler stays the one mechanism that moves a runtime, and every
+     * refusal the CLI's local mode meets refuses here identically, before anything is written —
+     * and reading the verdict back is the one other thing: the endpoint's caller cannot see the
+     * install root, and the host's refusal used to reach them at the next restart.
      */
     public interface DeployPen {
 
@@ -139,6 +151,9 @@ public record HostContext(String basePath, String cookiePath, String externalOri
          */
         io.tesseraql.operations.app.AppUpgrader.UpgradeResult deploy(java.nio.file.Path tqlapp,
                 boolean canary, Integer weightPercent, String sha256);
+
+        /** The host's last recorded verdict on {@code name}, as {@link MemberOrigins#lastVerdict}. */
+        java.util.Map<String, Object> status(String name);
     }
 
     /**

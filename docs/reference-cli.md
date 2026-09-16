@@ -111,12 +111,14 @@ Activate the staged canary; the previous version stays on disk for rollback.
 
 ### `deploy rollback`
 
-Discard a staged canary, or restore the previous version as active.
+Discard a candidate the host has not applied, or restore the previous version as active.
 
 | Argument | Required? | Description |
 | --- | --- | --- |
 | `<name>` | yes | The application to roll back. |
 | `--stack <dir>` | yes | The install root. |
+| `--wait` | — | Wait for the running host to report the outcome in the member's .upgrade status file before exiting. |
+| `--wait-timeout <seconds>` | — | How long --wait waits before giving up loudly (default 300). |
 
 ### `deploy status`
 
