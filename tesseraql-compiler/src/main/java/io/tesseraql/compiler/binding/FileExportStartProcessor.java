@@ -81,7 +81,8 @@ public final class FileExportStartProcessor implements Step {
                 filename, querySqlFile, Map.copyOf(params), afterTiming, afterSqlFile,
                 rowCap, queries, ExportSources.values(exchange, httpSources),
                 ExportEnrichment.enricher(exchange, enrichments),
-                ExportEnrichment.window(enrichments)));
+                ExportEnrichment.window(enrichments))
+                .on(TransferPools.of(exchange)));
         FileImportProcessor.respondAccepted(exchange, urlPath, transferId, true);
     }
 }

@@ -1025,7 +1025,16 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     // when the application declares topics, so a finished import reads it at
                     // the moment it has something to announce.
                     .topicBus(() -> context.lookup(TesseraqlProperties.TOPIC_BUS_BEAN,
-                            io.tesseraql.core.events.TopicBus.class));
+                            io.tesseraql.core.events.TopicBus.class))
+                    // The tenant pools, for the after: statement a first download fires on a
+                    // later request than the export's (docs/multi-tenancy.md): the resolver
+                    // is bound only in a per-tenant mode, and refuses an unknown tenant.
+                    .tenantPools(tenantId -> {
+                        io.tesseraql.pipeline.tenant.TenantDataSourceResolver resolver = context
+                                .lookup(TesseraqlProperties.TENANT_DATASOURCE_RESOLVER_BEAN,
+                                        io.tesseraql.pipeline.tenant.TenantDataSourceResolver.class);
+                        return resolver == null ? null : resolver.resolve(tenantId);
+                    });
             // How long a reviewed upload waits for its confirm (docs/csv-import.md decision 2).
             long reviewTtlMillis = io.tesseraql.core.util.Durations.toMillis(manifest.config()
                     .getString("tesseraql.transfers.reviewTtl").orElse("30m"));

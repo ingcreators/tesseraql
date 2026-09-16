@@ -88,6 +88,24 @@ shared pool. Tenant routing replaces **only** `main`: an explicit non-main `data
 route is deployment-shared infrastructure and is never tenant-routed
 ([multi-datasource routes](multi-datasource.md)).
 
+A **file transfer** is that request's SQL too ([file transfers](file-transfers.md)): a
+`file-export` extracts from the tenant's pool and a `file-import` writes its rows there, both
+refused for an unknown tenant before any transfer row exists. An export's `after:` statement
+runs on the same pool at either timing — the transfer records its tenant so a first download,
+a later request, resolves it again. The transfer's own record and its execution verdict stay on
+`main` with the other framework tables, so in these modes a run is two connections: the rows
+commit first, then the verdict. A failure between the two leaves rows that landed under a
+RUNNING record the reaper closes as abandoned and the log names — never a COMPLETED verdict over
+rows that did not land. Until 0.18.0 both recipes ran on the main pool in every mode, 202 and
+COMPLETED, for an unknown tenant too (`docs/audit-low-leads.md`, G24).
+
+The vocabulary is refused, not guessed: an enabled tenancy whose `mode` is not one of the three
+above, or whose `resolver.type` is not `header`, `claim` or `host`, does not boot
+(`TQL-TENANT-4032`) and does not lint (`TQL-TENANT-3002`); so does a per-tenant mode declaring
+no `tenancy.datasources`, since it would refuse every tenant. A misspelled mode used to read as
+"no isolation" — no pools, no resolver, every tenant on the shared pool, and the shared-schema
+lint switched off with it — in silence (G25).
+
 ## Tenant resolution
 
 Resolution runs once per request, after authentication, and publishes the tenant into the
@@ -124,8 +142,10 @@ there is no request.
 | Code | Meaning |
 | --- | --- |
 | `TQL-TENANT-3001` | warning — a shared-schema SQL route neither binds `tenant.*` nor mentions a tenant column in its SQL; the query would leak rows across tenants. Bind `tenant.id` or filter by a tenant column. |
+| `TQL-TENANT-3002` | error — `tenancy.mode` or `tenancy.resolver.type` is outside its vocabulary, or a per-tenant mode declares no `tenancy.datasources`; the runtime refuses the same at boot. |
 | `TQL-TENANT-4001` | 400 — no tenant could be resolved for the request (with `required: true`). |
-| `TQL-TENANT-4031` | 403 — the resolved tenant has no configured datasource in a per-tenant mode. |
+| `TQL-TENANT-4031` | 403 — the resolved tenant has no configured datasource in a per-tenant mode; a file transfer for that tenant is refused the same way, before any transfer row. |
+| `TQL-TENANT-4032` | boot refusal — an enabled tenancy names a `mode` or `resolver.type` outside its vocabulary, or a per-tenant mode with no pools. |
 | `TQL-TENANT-5005` | the tenant registry query failed. |
 
 Data scoping reuses this exact shape — a parameterized predicate at an author-chosen site,

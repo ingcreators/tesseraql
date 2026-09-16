@@ -94,7 +94,8 @@ public final class ImportCommitProcessor implements Step {
                     // would be false on the very leg that repeats the parse.
                     new FileTransferService.ImportRequest(routeId, appName, format, readSpec,
                             rowSqlFile, onError, null)
-                            .announcing(emit, ImportTopics.tenant(exchange)));
+                            .announcing(emit, ImportTopics.tenant(exchange))
+                            .on(TransferPools.of(exchange)));
         } catch (TqlException refusal) {
             // A refusal that declared human-safe text is one the confirming caller is meant to
             // act on — that is what `details.message` means (docs/csv-import.md decision 5) —

@@ -110,6 +110,59 @@ class TenantDataSourceRoutingIntegrationTest {
         assertThat(noteCount("globex", "never-written")).isZero();
     }
 
+    /**
+     * A route-triggered export runs on the request's tenant pool (docs/multi-tenancy.md): the
+     * file holds that tenant's rows, and the {@code after:} statement a first download fires —
+     * on a later request — runs on the same pool. Until docs/audit-low-leads.md slice 3a both
+     * ran on the main pool: every tenant, and an unknown one, was served the shared rows.
+     */
+    @Test
+    void anExportServesTheTenantsOwnRowsAndItsAfterStatementLandsThere() throws Exception {
+        String transferId = startTransfer("acme", "/api/items/export", "");
+        assertThat(awaitTerminal("acme", "/api/items/export/" + transferId)
+                .get("status").asText()).isEqualTo("COMPLETED");
+        HttpResponse<String> file = HttpClient.newHttpClient().send(
+                HttpRequest.newBuilder(URI.create("http://localhost:" + runtime.port()
+                        + "/api/items/export/" + transferId + "/file"))
+                        .header("X-Tenant-Id", "acme")
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertThat(file.statusCode()).isEqualTo(200);
+        assertThat(file.body()).contains("acme-only").doesNotContain("globex-only");
+
+        // The after-download statement wrote its mark in acme's schema, nowhere else.
+        assertThat(noteCount("acme", "exported-mark")).isEqualTo(1);
+        assertThat(noteCount("globex", "exported-mark")).isZero();
+        assertThat(noteCount("public", "exported-mark")).isZero();
+    }
+
+    @Test
+    void anImportLandsInTheTenantsOwnDatasource() throws Exception {
+        String transferId = startTransfer("globex", "/api/notes/import",
+                "name\nglobex-imported\n");
+        assertThat(awaitTerminal("globex", "/api/notes/import/" + transferId)
+                .get("status").asText()).isEqualTo("COMPLETED");
+
+        assertThat(noteCount("globex", "globex-imported")).isEqualTo(1);
+        assertThat(noteCount("acme", "globex-imported")).isZero();
+        assertThat(noteCount("public", "globex-imported")).isZero();
+    }
+
+    @Test
+    void anUnknownTenantsTransfersAreRefusedBeforeAnyRow() throws Exception {
+        HttpResponse<String> export = transferRequest("nope", "/api/items/export", "");
+        assertThat(export.statusCode()).isEqualTo(403);
+        assertThat(export.body()).contains("TQL-TENANT-4031");
+
+        HttpResponse<String> imported = transferRequest("nope", "/api/notes/import",
+                "name\nnope-imported\n");
+        assertThat(imported.statusCode()).isEqualTo(403);
+        assertThat(imported.body()).contains("TQL-TENANT-4031");
+        assertThat(noteCount("public", "nope-imported")).isZero();
+        assertThat(noteCount("acme", "nope-imported")).isZero();
+        assertThat(noteCount("globex", "nope-imported")).isZero();
+    }
+
     @Test
     void unknownTenantIsRejected() throws Exception {
         HttpResponse<String> response = HttpClient.newHttpClient().send(
@@ -120,6 +173,45 @@ class TenantDataSourceRoutingIntegrationTest {
                 HttpResponse.BodyHandlers.ofString());
         assertThat(response.statusCode()).isEqualTo(403);
         assertThat(response.body()).contains("TQL-TENANT-4031");
+    }
+
+    private static HttpResponse<String> transferRequest(String tenant, String path, String body)
+            throws Exception {
+        return HttpClient.newHttpClient().send(
+                HttpRequest.newBuilder(URI.create("http://localhost:" + runtime.port() + path))
+                        .header("X-Tenant-Id", tenant)
+                        .header("Content-Type", "text/csv")
+                        .POST(HttpRequest.BodyPublishers.ofString(body))
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+    }
+
+    private static String startTransfer(String tenant, String path, String body)
+            throws Exception {
+        HttpResponse<String> response = transferRequest(tenant, path, body);
+        assertThat(response.statusCode()).isEqualTo(202);
+        return MAPPER.readTree(response.body()).get("transferId").asText();
+    }
+
+    private static JsonNode awaitTerminal(String tenant, String statusPath) throws Exception {
+        java.time.Instant deadline = java.time.Instant.now().plusSeconds(20);
+        while (true) {
+            HttpResponse<String> response = HttpClient.newHttpClient().send(
+                    HttpRequest.newBuilder(URI.create(
+                            "http://localhost:" + runtime.port() + statusPath))
+                            .header("X-Tenant-Id", tenant)
+                            .build(),
+                    HttpResponse.BodyHandlers.ofString());
+            assertThat(response.statusCode()).isEqualTo(200);
+            JsonNode status = MAPPER.readTree(response.body());
+            String state = status.get("status").asText();
+            if (!"PENDING".equals(state) && !"RUNNING".equals(state)) {
+                return status;
+            }
+            assertThat(java.time.Instant.now()).as("transfer " + statusPath + " terminal in time")
+                    .isBefore(deadline);
+            Thread.sleep(100);
+        }
     }
 
     private static HttpResponse<String> post(String tenant, String name) throws Exception {
@@ -310,6 +402,60 @@ class TenantDataSourceRoutingIntegrationTest {
                       created: steps.main.affectedRows
                 """);
         Files.writeString(notesDir.resolve("insert.sql"),
+                "insert into notes (name) values (/* name */ 'sample')\n");
+
+        // The transfer legs: an export of items with an after-download mark into notes, and an
+        // import into notes — both must run on the tenant's pool, and both must be refused for
+        // a tenant the reads refuse.
+        Path exportDir = target.resolve("web/api/items/export");
+        Files.createDirectories(exportDir);
+        Files.writeString(exportDir.resolve("post.yml"), """
+                version: tesseraql/v1
+                id: items.export
+                kind: route
+                recipe: file-export
+
+                security:
+                  auth: public
+
+                export:
+                  format: csv
+                  filename: items.csv
+                  after:
+                    timing: download
+                    sql:
+                      file: mark.sql
+                sources:
+                  main:
+                    sql:
+                      file: export.sql
+                """);
+        Files.writeString(exportDir.resolve("export.sql"),
+                "select id, name from items order by id\n");
+        Files.writeString(exportDir.resolve("mark.sql"),
+                "insert into notes (name) values ('exported-mark')\n");
+
+        Path importDir = target.resolve("web/api/notes/import");
+        Files.createDirectories(importDir);
+        Files.writeString(importDir.resolve("post.yml"), """
+                version: tesseraql/v1
+                id: notes.import
+                kind: route
+                recipe: file-import
+
+                security:
+                  auth: public
+
+                import:
+                  format: csv
+                  columns:
+                    - name
+                steps:
+                  - id: row
+                    sql:
+                      file: insert-note.sql
+                """);
+        Files.writeString(importDir.resolve("insert-note.sql"),
                 "insert into notes (name) values (/* name */ 'sample')\n");
         return target;
     }

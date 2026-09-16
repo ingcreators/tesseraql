@@ -33,7 +33,7 @@ public interface FileTransferService {
      */
     record ImportRequest(String routeId, String appName, String format, FileReadSpec readSpec,
             Path rowSqlFile, String onError, RowContract contract, List<String> emit,
-            String tenantId) {
+            String tenantId, TransferPool pool) {
 
         /** The shape before an import could hold its rows to a contract. */
         public ImportRequest(String routeId, String appName, String format, FileReadSpec readSpec,
@@ -45,19 +45,47 @@ public interface FileTransferService {
         public ImportRequest(String routeId, String appName, String format, FileReadSpec readSpec,
                 Path rowSqlFile, String onError, RowContract contract) {
             this(routeId, appName, format, readSpec, rowSqlFile, onError, contract, List.of(),
-                    null);
+                    null, null);
         }
 
         public ImportRequest {
             contract = contract == null ? RowContract.none() : contract;
             emit = emit == null ? List.of() : List.copyOf(emit);
+            pool = pool == null ? TransferPool.MAIN : pool;
         }
 
         /** This request with the route's live-view topics and the caller's tenant attached. */
         public ImportRequest announcing(List<String> topics, String tenant) {
             return new ImportRequest(routeId, appName, format, readSpec, rowSqlFile, onError,
-                    contract, topics, tenant);
+                    contract, topics, tenant, pool);
         }
+
+        /** This request with the pool its row statement runs on (docs/multi-tenancy.md). */
+        public ImportRequest on(TransferPool pool) {
+            return new ImportRequest(routeId, appName, format, readSpec, rowSqlFile, onError,
+                    contract, emit, tenantId, pool);
+        }
+    }
+
+    /**
+     * The datasource a transfer's own SQL runs on — the row statement, the extraction, the
+     * {@code after:} statement — and the tenant it was resolved for (docs/multi-tenancy.md):
+     * in a per-tenant isolation mode the request's tenant pool replaces {@code main}, exactly as
+     * it does for every other executor, and the tenant id is recorded on the transfer so the
+     * {@code after:} statement a first download fires — a later request — runs on the same pool.
+     * {@link #MAIN} is the service's own datasource, the untenanted default.
+     *
+     * <p>Transfers ran on the main pool in every mode until 0.18.0: an export answered another
+     * tenant's rows and an import landed in the shared schema, 202 and COMPLETED
+     * (docs/audit-low-leads.md G24).
+     *
+     * @param dataSource the pool, or {@code null} for the service's main datasource
+     * @param tenantId   the resolved tenant the pool belongs to, or {@code null} when untenanted
+     */
+    record TransferPool(javax.sql.DataSource dataSource, String tenantId) {
+
+        /** The service's main datasource, untenanted. */
+        public static final TransferPool MAIN = new TransferPool(null, null);
     }
 
     /**
@@ -74,7 +102,17 @@ public interface FileTransferService {
             String filename, Path querySqlFile, Map<String, Object> params,
             String afterTiming, Path afterSqlFile, ExportRowCap rowCap,
             List<ExportQuery> queries, Map<String, Object> values,
-            RowEnricher enricher, int enrichWindow) {
+            RowEnricher enricher, int enrichWindow, TransferPool pool) {
+
+        /** The shape before an export carried its pool (docs/multi-tenancy.md). */
+        public ExportRequest(String routeId, String appName, String format,
+                FileWriteSpec writeSpec, String filename, Path querySqlFile,
+                Map<String, Object> params, String afterTiming, Path afterSqlFile,
+                ExportRowCap rowCap, List<ExportQuery> queries, Map<String, Object> values,
+                RowEnricher enricher, int enrichWindow) {
+            this(routeId, appName, format, writeSpec, filename, querySqlFile, params, afterTiming,
+                    afterSqlFile, rowCap, queries, values, enricher, enrichWindow, null);
+        }
 
         /** The shape before an export could enrich its rows (docs/lookups.md, slice 13b). */
         public ExportRequest(String routeId, String appName, String format,
@@ -89,6 +127,14 @@ public interface FileTransferService {
             rowCap = rowCap == null ? ExportRowCap.unbounded() : rowCap;
             queries = queries == null ? List.of() : List.copyOf(queries);
             values = values == null ? Map.of() : OrderedCopies.map(values);
+            pool = pool == null ? TransferPool.MAIN : pool;
+        }
+
+        /** This request with the pool its extraction and {@code after:} statement run on. */
+        public ExportRequest on(TransferPool pool) {
+            return new ExportRequest(routeId, appName, format, writeSpec, filename, querySqlFile,
+                    params, afterTiming, afterSqlFile, rowCap, queries, values, enricher,
+                    enrichWindow, pool);
         }
     }
 

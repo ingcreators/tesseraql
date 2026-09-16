@@ -334,6 +334,12 @@ subtree:
 - `GET {path}/{transferId}/file` — streams the finished file; an unknown transfer is 404, a
   transfer that is still running (or failed, or is an import) is 409
 
+Under [multi-tenancy](multi-tenancy.md) a transfer is the request's SQL: in a per-tenant
+isolation mode the extraction, the row statement and the `after:` statement run on the tenant's
+pool, an unknown tenant is refused (`TQL-TENANT-4031`) before any transfer row exists, and the
+transfer records its tenant so the after-download statement — a later request — runs on the same
+pool. The transfer record and the execution verdict stay on `main`.
+
 The `after:` follow-up statement runs once, at one of two timings:
 
 - `extract` (default) — in the same transaction as the extraction query. Reliable: the rows are

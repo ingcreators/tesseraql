@@ -111,7 +111,11 @@ public final class FileImportProcessor implements Step {
                     // outlives it: an import announces itself when its transaction commits on
                     // the background thread, not when this response goes out
                     // (docs/csv-import.md decision 6).
-                    .announcing(emit, ImportTopics.tenant(exchange));
+                    .announcing(emit, ImportTopics.tenant(exchange))
+                    // And the pool its row statement runs on: the tenant's in a per-tenant
+                    // mode, resolved here so an unknown tenant is refused before any row
+                    // (docs/multi-tenancy.md).
+                    .on(TransferPools.of(exchange));
             if (review) {
                 FileTransferService.ImportReview outcome = transfers.reviewImport(request,
                         subject(exchange), content);
