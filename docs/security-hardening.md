@@ -214,7 +214,7 @@ reviewer can check each claim against the source.
 | --- | --- | --- |
 | Errors don't leak internals | met | `ErrorResponseRenderer` returns generic bodies; SAML/OIDC failures are generic 401/400, contents never echoed |
 | A structured, greppable error taxonomy | met | 336 `TQL-<DOMAIN>-<NNNN>` codes across 33 domains, generated into the reference and drift-guarded |
-| Audit trail without sensitive data | met | `tql_route_audit` records who/what/when over *declared* inputs only, and excludes any field marked `mask:`/`classification:` wholesale |
+| Audit trail without sensitive data | met (compiled routes) | `tql_route_audit` records who/what/when over *declared* inputs only, and excludes any field marked `mask:`/`classification:` wholesale; the Java-mounted system routes (sign-in/out, elevation, token exchange, invite/reset acceptance, bulk disable) are outside it — the token mint is logged |
 | Log correlation | met | MDC bridges the OTel `traceId`/`spanId` into logs |
 
 #### V8 Data protection

@@ -22,8 +22,92 @@ All notable changes to TesseraQL are documented here. The format follows
   omits the three properties and the extension stays silent, as with every earlier contract
   addition.
 
+### Changed
+
+- **`TotpStore` confirms an enrollment and activates its recovery codes in one call.**
+  `beginEnrollment` takes the plain recovery codes with the secret, `confirmEnrollment` takes
+  their hashes and writes `confirmed_at`, the hashes and the cleared pending copy in one
+  transaction, `Enrollment` carries `pendingRecovery`, and `remove` deletes the codes with the
+  enrollment; `replaceRecoveryCodes`, `storePendingRecovery` and `pendingRecovery` are gone.
+  `JdbcTotpStore` runs both brackets through `Transactions` and leaves the transaction-owner
+  ledger. `CredentialTokenStore` gains `revoke(loginId)`. `docs/audit-low-leads.md`, slice 4
+  (G42, G39).
+- **IAM Admin's disable action refuses the caller's own account, singly or in bulk.** An
+  administrator could disable themselves — per user by URL, or by a select-all that carried
+  their own row — and the same request ended their session; for the last holder of
+  `tql.iam.admin.write` that left no administrator the console could bring back, only the
+  `identity-schema` re-seed. The per-user and bulk routes refuse a selection naming the
+  caller's subject whole (`TQL-IAM-4037`, 409) before anything is disabled, and the users
+  list and detail page render no checkbox and no Disable for that row. `docs/audit-low-leads.md`,
+  slice 4 (G43).
+- **An invited user offers Withdraw, not Enable.** Enable on an `INVITED` row made an
+  `ACTIVE` account with no credential; the console offered no way to take an invitation
+  back. The detail page's actions now follow state as `console-ux-refresh.md` amends it:
+  Disable for active, Enable for disabled, Withdraw for invited — the disable action, so the
+  mailed link dies with it — and a withdrawn login can be invited again through the new
+  `reinvite-user` contract, which puts a DISABLED account back to INVITED only while it holds
+  no credential. `docs/credential-lifecycle.md` "Withdrawing an invitation".
+
 ### Fixed
 
+- **Restarting a confirmed two-factor enrollment no longer turns the factor off without the
+  password.** `POST /_tesseraql/account/totp/begin` overwrote a confirmed secret with an
+  unconfirmed one and cleared `confirmed_at`, so a session holder — a stolen cookie, an
+  unattended browser — stripped the second factor with no password, read the new pending
+  secret from the page and could confirm their own authenticator in its place; the page never
+  offered the button, the server never enforced it. A confirmed enrollment now refuses `begin`
+  (`TQL-ACCOUNT-4807`, 409): the factor leaves only through `disable` with the password, as
+  `credential-lifecycle.md` always said. `docs/audit-low-leads.md`, slice 4 (G38).
+- **An invitation dies with Disable, and the accept link activates only an invited account.**
+  The public accept leg consumed the token, wrote the password and ran `enable-user` with no
+  look at the row's status, and nothing revoked a login's tokens, so an operator's Disable
+  was undone by the mailed link for up to seven days — the account came back `ACTIVE` with a
+  password of the link holder's choosing. Disabling (per user, bulk, and the new Withdraw)
+  revokes every live token of the login, and the accept leg refuses — the dead-link page —
+  unless the account is still `INVITED`. `docs/audit-low-leads.md`, slice 4 (G39).
+- **TOTP confirmation activates the recovery codes in the same transaction, and the schema
+  reaches SQL Server.** The confirm was four auto-committed store calls, so a failure after
+  `confirmed_at` enforced the factor with no recovery codes and the plain codes still pending;
+  on SQL Server that failure was certain — the common `totp/V2` script's `timestamp` is a
+  rowversion, which refused every recovery-code insert, so the first enrollment there answered
+  500 with the factor on and no code that could ever work. The confirm is one transaction now,
+  `totp-sqlserver/V2` and `totp-oracle/V2` exist (`datetime2`/`nvarchar`, `varchar2`), the
+  vendor-migration guard's exemption list is gone, and the four dialect suites enroll, confirm,
+  consume and disable on the vendor schema. A SQL Server database bootstrapped before the
+  vendor script keeps its rowversion table. `docs/audit-low-leads.md`, slice 4 (G42).
+- **mTLS `clockSkew` widens the certificate validity window instead of narrowing it.**
+  `MtlsAuthenticator` checked both `now + skew` and `now - skew` against the window, so the
+  documented leeway refused every client certificate for `skew` after issuance and before
+  expiry — the rotation edges a mesh's short-lived certificates hit — and the PKIX path was
+  validated at a strict now regardless. A certificate is refused only when it is not yet
+  valid or expired by more than the skew, and the chain is validated at the window's nearer
+  edge. `docs/audit-low-leads.md`, slice 4 (G40).
+- **The route audit's scope is stated.** `session-token-exchange.md` said token issuance was
+  recorded in the audit trail and `deployment.md` that every route invocation landed a row;
+  the `RouteAudit` step is compiled into YAML routes only, so the Java-mounted system routes —
+  sign-in, the three sign-outs, elevation, the token exchange, invite and reset acceptance,
+  the IAM bulk disable — land none, and the mint is an INFO log line. The four sentences
+  (those two, the ASVS V7 row, the threat model's repudiation row) now say so. `docs/audit-low-leads.md`,
+  slice 4 (G41).
+- **A password-login app boots a second time on MySQL and H2.** The common `totp/V2` script's
+  `create table` was bare, and MySQL's duplicate-table error (1050) is not one the bootstrap
+  tolerates, so every restart of an app with a managed identity realm on MySQL failed at
+  `JdbcTotpStore.ensureSchema` from 0.6.0 — the vendor suite booted once and never again. And
+  `SqlScripts` compared H2's duplicate-column and duplicate-index codes 42121/42111 as
+  SQLStates, where H2 reports them through `getErrorCode()` under 42S21/42S11, so every
+  `ensureSchema` column add failed a second boot on H2. The table is `if not exists`, the
+  H2 codes are read where H2 puts them, and the four dialect suites apply the TOTP schema
+  twice; `SqlScriptsTest` measures the tolerance on a live H2. Found by slice 4's dialect
+  check (`docs/audit-low-leads.md`).
+- **A bundled app file missing from `.app-index` is a build failure, not a 404.** A jar
+  cannot be walked, so a system app is extracted by its index; a route document added beside
+  the index and not to it was on the classpath and served nowhere, silently.
+  `BundledAppIndexLedgerTest` pins every bundled app's index to the files beside it.
+- **An elevation "expires by itself" at the next sign-in, not mid-session.** `account.md`,
+  `iam-admin.md`, the account card's hint (en and ja) and its fallback text said a taken role
+  expires by itself with nothing to give back, while `application-roles.md` decision 2 defers
+  mid-session expiry: in the session that took it the role stays until End now, sign-out or
+  the session's lifetime. The sentences say that now. `docs/audit-low-leads.md`, slice 4 (G26).
 - **Scope arms that share a bind name each keep their own values.** `CompiledScopeResolver`
   folded every matching arm's `params:` into one map, so two arms naming the same bind — the
   shipped procurement scope's shape — rendered both fragments against the last arm's value and

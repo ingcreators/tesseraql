@@ -31,10 +31,20 @@ their own password. Nobody types a password on someone else's behalf. The invita
 reset flows are described in [credential-lifecycle.md](credential-lifecycle.md).
 
 **Disable a user.** Disabling ends access immediately: it marks the account disabled *and
-invalidates every session that account holds*. A disabled account is not "disabled at next
-login" — the browser it left open stops working on the next request.
+invalidates every session that account holds* *and revokes every live invite or reset link
+issued for that login*. A disabled account is not "disabled at next login" — the browser it
+left open stops working on the next request, and a mailed link posted later answers the
+dead-link page. You cannot disable your own account, singly or inside a bulk selection: the
+page offers no Disable and no checkbox for your own row, and the server refuses the request
+whole (`TQL-IAM-4037`) — another administrator disables you. Without that, a select-all
+could sign the last administrator out for good.
 
-**Enable a user.** Restores access. The user signs in again as normal.
+**Withdraw an invitation.** An `INVITED` account offers Withdraw in place of Disable: the
+same action, so the mailed link dies with it, and the account reads `DISABLED`. Inviting
+the same login again — say, to a corrected address — puts it back to `INVITED` with a fresh
+link; that works only for an account that has never been signed into.
+
+**Enable a user.** Restores access to a disabled account. The user signs in again as normal.
 
 ## Sessions
 
@@ -156,11 +166,14 @@ difference between "may take" and "holds".
 
 Make somebody eligible from the **Eligible roles** card on their detail page, naming a
 limit in minutes and whether a reason is required. They then take the role from their own
-[account page](account.md), for a window up to that limit, and it **expires by itself** —
-no revocation to remember, because a validity window is what ends it.
+[account page](account.md), for a window up to that limit, and the grant **expires by itself
+at their next sign-in** — no revocation to remember, because a validity window is what ends
+it.
 
-Taking one is live immediately in the session that took it. Their other sessions see it at
-their next sign-in, and nothing else about a signed-in principal refreshes mid-session.
+Taking one is live immediately in the session that took it, and stays so until they end it,
+sign out, or the session's own lifetime runs out. Their other sessions see it at their next
+sign-in, and nothing else about a signed-in principal refreshes mid-session — the window's
+close included.
 
 Every elevation is recorded in the [grant history](#grant-history) with its reason and its
 window, and it passes the same separation-of-duties check as any other grant — a temporary

@@ -95,6 +95,24 @@ to ACTIVE. From zero to signed-in without an operator ever knowing a password.
 Re-inviting a still-INVITED account is a polite resend under the token cooldown; an
 already-usable login refuses, so an invite can never take over an account.
 
+### Withdrawing an invitation
+
+The operator's decision holds against the link they mailed. **Withdraw** on an INVITED
+account (IAM Admin's detail page) is the disable action: the status flips to DISABLED and
+`CredentialTokenStore.revoke(loginId)` deletes every live token of the login — invite and
+reset alike — so the accept link, posted later, answers the same dead-link page as a spent
+one. Disabling an ACTIVE account revokes the same way. The accept leg keeps its own gate
+too: it activates only an account that is still INVITED, whatever token it was handed, so
+a status changed by any other path (an operator's SQL, a sql realm's own tooling) is not
+undone by the link — and `enable-user` is never run for an account that was not invited.
+
+A withdrawn login can be invited again: the `reinvite-user` contract puts a DISABLED account
+back to INVITED with the operator's latest name and address, *only while the row holds no
+credential* (the contract's own predicate), so an account that was ever signed into keeps
+refusing (`TQL-SQL-4090`). Because the withdrawal revoked the token, the cooldown is clear
+and a fresh link goes out — which is how a mis-addressed invitation is corrected: withdraw,
+then invite the same login to the right address.
+
 ## TOTP second factor
 
 - `Totp` in `tesseraql-security`: RFC 6238 over `javax.crypto.Mac` (HmacSHA1, 6 digits,
@@ -103,8 +121,12 @@ already-usable login refuses, so an invite can never take over an account.
   secret, render it as a **QR code** (a server-side inline SVG over the `otpauth://`
   URI — zxing computes the matrix, no imaging stack, no client scripting) alongside
   the Base32 text for manual entry, and **confirm with a valid code** before anything
-  is stored in `tql_user_totp(subject, secret, confirmed_at, last_used_step)`.
-  Disabling requires the current password (`TQL-ACCOUNT-4804` on mismatch).
+  is enforced from `tql_user_totp(subject, secret, confirmed_at, last_used_step)`.
+  Disabling requires the current password (`TQL-ACCOUNT-4804` on mismatch), and that is
+  the only way out of a confirmed enrollment. `totp/begin` restarts a *pending* one; on a
+  confirmed one it is refused (`TQL-ACCOUNT-4807`). Restarting used to overwrite the
+  enforced secret with an unconfirmed one, so a session holder could turn the factor off
+  without the password the disable form asks for (`docs/audit-low-leads.md`, G38).
 - Login: the password form (and the JSON login) gains an optional **code** field. A
   confirmed enrollment makes it required — wrong or missing code fails exactly like a
   wrong password (one neutral message; no "password ok, code wrong" oracle). The
@@ -113,10 +135,19 @@ already-usable login refuses, so an invite can never take over an account.
 - **Recovery codes**: eight single-use codes are minted with the pending secret and
   shown on the enrollment page — the same owner-only exposure as the pending secret
   itself — with the instruction to save them now. Confirmation activates them: the
-  plain copies are dropped and only SHA-256 hashes live in `tql_totp_recovery`. At the
-  login prompt a recovery code goes in the same field as the 6-digit code and signs in
-  **once** (consuming the hash is the single-use guarantee); wrong or spent codes fail
+  plain copies are dropped and only SHA-256 hashes live in `tql_totp_recovery`, in the
+  **same transaction** that sets `confirmed_at` (`TotpStore.confirmEnrollment` takes the
+  hashes), so a failure between the two leaves the enrollment pending rather than
+  enforced without a recovery path. Disabling removes the hashes with the enrollment. At
+  the login prompt a recovery code goes in the same field as the 6-digit code and signs
+  in **once** (consuming the hash is the single-use guarantee); wrong or spent codes fail
   exactly like a wrong password. Re-enrolling mints a fresh set, replacing the old.
+  The `totp` schema has Oracle and SQL Server variants for both scripts: on SQL Server the
+  common `V2`'s `timestamp` is a rowversion, which refuses the value the store writes, so
+  every confirm there enabled the factor and then failed to store its codes until the
+  vendor script existed (G42). A SQL Server database bootstrapped before it keeps the
+  rowversion column — `create table` is tolerated, not rebuilt — and recovery codes stay
+  unusable there until the table is recreated.
 
 ## Security posture
 

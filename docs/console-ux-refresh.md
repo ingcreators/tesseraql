@@ -71,7 +71,11 @@ the user cannot lose work to is the contract.
 
 `ACTIVE` = success, `INVITED` = info (a normal in-between state, not a failure),
 `DISABLED` = error. Action buttons follow state: an active user offers Disable, a disabled
-or invited user offers Enable — never both.
+user offers Enable, an invited user offers Withdraw — never two. *Amended 2026-09-16
+(docs/audit-low-leads.md slice 4, G39): an invited user used to offer Enable, which made an
+`ACTIVE` account with no credential and left the operator no way to take a mis-addressed
+invitation back. Withdraw is the disable action, so the mailed link dies with it. The caller's
+own row offers nothing (G43).*
 
 ### Standalone pages share the shell's token plumbing
 

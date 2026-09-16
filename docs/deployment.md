@@ -310,11 +310,14 @@ and keep secrets in real environment variables or the secret provider as before.
 
 ## Business-route audit log and error pages
 
-Opt in with `tesseraql.audit.routes.enabled: true`: every route invocation lands one durable
-row in `tql_route_audit` — who (`actor`, `tenant_id`), what (`route_id`, method, path,
+Opt in with `tesseraql.audit.routes.enabled: true`: every compiled route invocation lands one
+durable row in `tql_route_audit` — who (`actor`, `tenant_id`), what (`route_id`, method, path,
 status, duration), when, correlated by `trace_id` — with the **declared** input params as
 JSON. Fields carrying a `mask:` or `classification:` are excluded wholesale, so sensitive
-values can never reach the trail; a failed audit insert never fails the request.
+values can never reach the trail; a failed audit insert never fails the request. The
+framework's Java-mounted system routes are outside the trail: sign-in, the three sign-outs,
+elevation, the session-token exchange, invite and reset acceptance, and the IAM Admin bulk
+disable land no row (the token mint is logged at INFO instead).
 `GET /_tesseraql/ops/audit` reads the newest rows, bearer-gated (any `tql.ops.view` grant) and
 narrowed to the caller's `tql.ops.view.<name>` grants like every other per-app ops read.
 

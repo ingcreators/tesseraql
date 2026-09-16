@@ -82,8 +82,14 @@ the CSRF token against the session, exactly as `system.logout`, `system.logout.o
 `system.logout.device` do. `CsrfValidator` already refuses when there is no session, so a request
 without one cannot reach the minting path.
 
-Issuance is recorded in the audit trail. A token that outlives the session that produced it is a
-credential nobody would otherwise know exists.
+Issuance is logged: `SessionTokens` writes an INFO line naming the subject and the expiry, because
+a token that outlives the session that produced it is a credential nobody would otherwise know
+exists. It is **not** a row in `tql_route_audit` — the route audit is a compiled-route step, and
+the exchange is mounted from Java like sign-in, sign-out, elevation, invite and reset acceptance
+and the IAM bulk disable, none of which carry it. Slice 2 was designed with an audit record and
+shipped with the log line; the divergence is recorded here rather than left implied
+([deployment.md](deployment.md#business-route-audit-log-and-error-pages) says which routes the
+trail covers).
 
 ## Decision 3 — revocation is the lifetime, and the asymmetry is documented
 
