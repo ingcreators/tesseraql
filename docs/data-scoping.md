@@ -98,6 +98,13 @@ caller sees a row if *any* of their roles' scopes would show it — the same add
 | both manager and read-own | `((o.region in (?)) or (o.created_by = ?))` | `[R1, uid]` |
 | neither | `(1=0)` | `[]` |
 
+Each arm's `params:` are private to its own fragment. Two matching arms that name the same bind —
+a staff arm and a manager arm both reading `/* units */` from different claims — each render
+against their own values, in arm order: `((o.unit in (?, ?)) or (o.unit in (?)))` with
+`[M1, M2, A1]`. Until 0.18.0 the resolver folded every matching arm's binds into one map, so the
+last arm's value won the name and the other arm's rows vanished — silently, and reversing the arm
+order flipped which role lost them (`docs/audit-low-leads.md`, G27).
+
 ## The `/*%scope ... */` directive and joins
 
 The author marks the injection site, so the engine never has to guess where the predicate goes. The

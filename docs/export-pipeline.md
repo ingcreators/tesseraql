@@ -144,6 +144,14 @@ denormalizing into the line query.
 **The named queries** run before the extraction, on the same connection and inside the same
 transaction as the export query, so a document reads exactly the state its rows came from.
 
+A named query binds exactly as a read route's does: its own `params:`, resolved against the
+request context at request time, over the request's ambient binds — on the inline path and on the
+file-export path alike, where the values travel with the request because the extraction runs off
+it. And its `/*%scope … */` directives render through the caller's resolver like `main`'s. Until
+0.18.0 the named query carried a name and a path only, so its `params:` bound null and a header
+query printed an empty header (`docs/audit-low-leads.md`, G28), and the inline path rendered it
+resolver-less, so a scoped named source answered 500 `TQL-SQL-2106` (G30).
+
 *Corrected 2026-09-09, twice over.* This paragraph named the key `export.queries:`, "rather than at
 route level, which is where this decision first put them". The unified-source model moved it back:
 an export query is now any non-`main` entry of the route-level `sources:` that carries a `file:`,
