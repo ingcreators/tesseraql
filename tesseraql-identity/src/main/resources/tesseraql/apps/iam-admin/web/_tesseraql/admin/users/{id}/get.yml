@@ -15,6 +15,9 @@ input:
   disabled:
     type: string
     required: false
+  withdrawn:
+    type: string
+    required: false
   signedout:
     type: string
     required: false
@@ -100,7 +103,10 @@ response:
       sessionCount: sessions.count
       enabled: params.enabled
       disabled: params.disabled
+      withdrawn: params.withdrawn
       signedout: params.signedout
+      # The caller's own row offers no Disable: the action is refused server-side too.
+      self: principal.subject
       assigned: params.assigned
       unassigned: params.unassigned
       granted: params.granted

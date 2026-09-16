@@ -98,7 +98,13 @@ final class RecoveryRoutes {
         }
     }
 
-    /** Consume the invite token, set the first password, flip the account ACTIVE. */
+    /**
+     * Consume the invite token, set the first password, flip the account ACTIVE — for an
+     * account that is still INVITED. A withdrawn (disabled) account answers the dead-link
+     * page like a spent token: the operator's decision holds against a link they mailed
+     * earlier, and an account that was never invited can never be activated by one
+     * (docs/credential-lifecycle.md, "Withdrawing an invitation").
+     */
     private void acceptInvite(Exchange exchange) throws Exception {
         Map<String, Object> body = LoginRoutes.parseBody(exchange);
         String token = str(body.get("token"));
@@ -120,17 +126,19 @@ final class RecoveryRoutes {
             return;
         }
         String loginId = consumed.get();
+        List<Map<String, Object>> users = identity.execute(realm,
+                IdentityContracts.FIND_USER_BY_LOGIN, Map.of("loginId", loginId));
+        if (users.isEmpty() || !"INVITED".equals(str(users.get(0).get("status")))) {
+            LoginRoutes.redirect(exchange, 303, "/_tesseraql/invite?invalid=1");
+            return;
+        }
         Pbkdf2PasswordEncoder encoder = new Pbkdf2PasswordEncoder();
         identity.executeUpdate(realm, IdentityContracts.UPDATE_PASSWORD, Map.of(
                 "loginId", loginId,
                 "passwordHash", encoder.encode(next),
                 "passwordParams", encoder.defaultParams()));
-        List<Map<String, Object>> users = identity.execute(realm,
-                IdentityContracts.FIND_USER_BY_LOGIN, Map.of("loginId", loginId));
-        if (!users.isEmpty()) {
-            identity.executeUpdate(realm, IdentityContracts.ENABLE_USER,
-                    Map.of("userId", str(users.get(0).get("user_id"))));
-        }
+        identity.executeUpdate(realm, IdentityContracts.ENABLE_USER,
+                Map.of("userId", str(users.get(0).get("user_id"))));
         LoginRoutes.redirect(exchange, 303, "/_tesseraql/login?invited=1");
     }
 

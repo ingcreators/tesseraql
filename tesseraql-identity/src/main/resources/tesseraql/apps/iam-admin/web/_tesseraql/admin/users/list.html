@@ -93,7 +93,7 @@
           <tbody class="hc-datagrid__body">
             <tr class="hc-datagrid__row" th:each="u : ${users}">
               <td class="hc-datagrid__cell"><input type="checkbox" class="hc-checkbox"
-                  name="ids" th:value="${u.user_id}"
+                  name="ids" th:value="${u.user_id}" th:unless="${u.user_id == self}"
                   th:attr="aria-label=|Select ${u.login_id}|"></td>
               <td class="hc-datagrid__cell"><a th:href="@{|/_tesseraql/admin/users/${u.user_id}|}" th:text="${u.login_id}"></a></td>
               <td class="hc-datagrid__cell" th:text="${u.display_name}"></td>

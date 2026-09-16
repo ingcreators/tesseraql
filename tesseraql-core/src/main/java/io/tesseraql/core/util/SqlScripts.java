@@ -66,15 +66,20 @@ public final class SqlScripts {
                     // everywhere but PostgreSQL) get their idempotency from tolerated
                     // already-exists errors instead: ORA-00955/-01430, MySQL 1060/1061
                     // (duplicate column/key), SQL Server 2714/2705/1913 (duplicate
-                    // object/column/index), and the duplicate-column/-index SQLStates of
-                    // PostgreSQL (42701/42P07) and H2 (42121/42111). Everything else still
-                    // fails the bootstrap.
+                    // object/column/index), the duplicate-column/-table SQLStates of
+                    // PostgreSQL (42701/42P07) and H2's duplicate-column/-index error CODES
+                    // 42121/42111 — H2 reports those as getErrorCode() under the generic
+                    // states 42S21/42S11, and reading them as states left every column add
+                    // failing a second boot on H2 (docs/audit-low-leads.md slice 4). A table
+                    // create spells IF NOT EXISTS where the vendor takes it; MySQL 1050 and H2
+                    // 42101 are deliberately not here. Everything else still fails the
+                    // bootstrap.
                     int code = ex.getErrorCode();
                     String state = ex.getSQLState();
                     boolean tolerated = code == 955 || code == 1430 || code == 1060
                             || code == 1061 || code == 2714 || code == 2705 || code == 1913
-                            || "42701".equals(state) || "42P07".equals(state)
-                            || "42121".equals(state) || "42111".equals(state);
+                            || code == 42121 || code == 42111
+                            || "42701".equals(state) || "42P07".equals(state);
                     if (!tolerated) {
                         throw ex;
                     }

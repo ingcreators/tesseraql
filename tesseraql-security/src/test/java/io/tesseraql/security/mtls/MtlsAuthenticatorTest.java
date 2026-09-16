@@ -20,6 +20,11 @@ import org.junit.jupiter.api.Test;
 /**
  * mTLS authentication for service callers: a forwarded X.509 client certificate is parsed, validity
  * and (optionally) PKIX checked, and its identity matched against declared clients deny-by-default.
+ *
+ * <p>The clock-skew cases use the committed fixtures with a skew wide enough to reach them
+ * deterministically: {@code expired-client.pem} expired on 2020-01-02 and {@code client.pem} was
+ * issued on 2026-06-14, so a twenty-year skew covers both edges from either side for decades,
+ * while a one-day skew reaches neither.
  */
 class MtlsAuthenticatorTest {
 
@@ -43,8 +48,16 @@ class MtlsAuthenticatorTest {
     }
 
     private static MtlsConfig config(String trustBundle, Map<String, MtlsClient> clients) {
-        return new MtlsConfig(HEADER, trustBundle, null, clients);
+        return config(trustBundle, null, clients);
     }
+
+    private static MtlsConfig config(String trustBundle, java.time.Duration clockSkew,
+            Map<String, MtlsClient> clients) {
+        return new MtlsConfig(HEADER, trustBundle, clockSkew, clients);
+    }
+
+    /** Wide enough to reach both fixtures' edges from today; see the class comment. */
+    private static final java.time.Duration WIDE_SKEW = java.time.Duration.ofDays(365L * 20);
 
     /** Uppercase, colon-separated SHA-256 of the DER cert (the openssl fingerprint form). */
     private static String fingerprint(String pem) throws Exception {
@@ -171,6 +184,52 @@ class MtlsAuthenticatorTest {
         String expired = pem("expired-client.pem");
         assertThatThrownBy(() -> authenticator.authenticate(expired))
                 .isInstanceOf(TqlException.class);
+    }
+
+    /**
+     * {@code clockSkew} is leeway: it widens the validity window at both ends. It used to narrow
+     * it — both {@code now + skew} and {@code now - skew} had to fall inside the window, so a
+     * certificate was refused for {@code skew} after issuance and before expiry, the reverse of
+     * what the option documents (docs/audit-low-leads.md slice 4, G40).
+     */
+    @Test
+    void clockSkewAdmitsACertificateExpiredWithinTheSkew() throws Exception {
+        MtlsAuthenticator authenticator = new MtlsAuthenticator(config(null, WIDE_SKEW,
+                Map.of("expired", billing("CN=expired-service,O=Acme", null, null))));
+        assertThat(authenticator.authenticate(pem("expired-client.pem")).subject())
+                .isEqualTo("svc:billing");
+    }
+
+    @Test
+    void clockSkewAdmitsACertificateIssuedWithinTheSkew() throws Exception {
+        // Inside its window today; a narrowing skew would have demanded issuance twenty
+        // years ago.
+        MtlsAuthenticator authenticator = new MtlsAuthenticator(config(null, WIDE_SKEW,
+                Map.of("billing-service", billing(BILLING_DN, null, null))));
+        assertThat(authenticator.authenticate(pem("client.pem")).subject())
+                .isEqualTo("svc:billing");
+    }
+
+    @Test
+    void clockSkewDoesNotAdmitACertificateExpiredBeyondIt() throws Exception {
+        MtlsAuthenticator authenticator = new MtlsAuthenticator(
+                config(null, java.time.Duration.ofDays(1),
+                        Map.of("expired", billing("CN=expired-service,O=Acme", null, null))));
+        String expired = pem("expired-client.pem");
+        assertThatThrownBy(() -> authenticator.authenticate(expired))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("not valid");
+    }
+
+    @Test
+    void pkixValidatesAtTheSameLeewayAsTheWindowCheck() throws Exception {
+        // The expired fixture is signed by the test CA: a path validated at a strict now would
+        // refuse what the window check just admitted, so the chain is validated at the
+        // window's nearer edge instead.
+        MtlsAuthenticator authenticator = new MtlsAuthenticator(config(pem("ca.pem"), WIDE_SKEW,
+                Map.of("expired", billing("CN=expired-service,O=Acme", null, null))));
+        assertThat(authenticator.authenticate(pem("expired-client.pem")).subject())
+                .isEqualTo("svc:billing");
     }
 
     @Test

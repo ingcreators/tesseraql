@@ -27,7 +27,9 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  * The TOTP second factor end to end (roadmap Phase 50 slice 3): enrollment confirms
  * before anything enforces, a confirmed enrollment makes the login code required (missing,
  * wrong, and REPLAYED codes all answer exactly like a wrong password), the replay guard is
- * the store's compare-and-set, and disabling re-verifies the password.
+ * the store's compare-and-set, disabling re-verifies the password — and a confirmed
+ * enrollment cannot be restarted around that password (docs/audit-low-leads.md slice 4,
+ * G38): {@code totp/begin} is refused while the factor is on.
  */
 @Testcontainers
 class TotpIntegrationTest {
@@ -92,8 +94,8 @@ class TotpIntegrationTest {
         // (docs/credential-lifecycle.md) — all to the owner only, none enforced yet.
         assertThat(pendingPage).contains(secret).contains("otpauth://totp/")
                 .contains("TOTP enrollment QR code").contains("Recovery codes");
-        String recoveryCode = store.pendingRecovery(null, "totp-user").orElseThrow()
-                .split(" ")[0];
+        String recoveryCode = store.enrollment(null, "totp-user").orElseThrow()
+                .pendingRecovery().split(" ")[0];
         assertThat(pendingPage).contains(recoveryCode);
         assertThat(loginCookie("totp-user", "FirstPass1", null)).isNotNull();
 
@@ -123,11 +125,26 @@ class TotpIntegrationTest {
         // pending copy: the page never shows them again.
         assertThat(get(cookie, "/_tesseraql/account").body())
                 .contains("Disable two-factor").doesNotContain("Recovery codes");
-        assertThat(store.pendingRecovery(null, "totp-user")).isEmpty();
+        assertThat(store.enrollment(null, "totp-user").orElseThrow().pendingRecovery())
+                .isNull();
+        assertThat(recoveryRows()).as("eight hashes, activated with the confirm").isEqualTo(8);
 
         // Missing and wrong codes fail exactly like a wrong password.
         assertThat(loginCookie("totp-user", "FirstPass1", null)).isNull();
         assertThat(loginCookie("totp-user", "FirstPass1", "000000")).isNull();
+
+        // A session holder cannot restart the enrollment around the password: begin on a
+        // confirmed enrollment is refused (409), the enforced secret is untouched, and the
+        // password alone still does not sign in. (The page never offers the button; the
+        // server is what enforces it.)
+        HttpResponse<String> restart = postForm(cookie, csrf, "/_tesseraql/account/totp/begin",
+                "");
+        assertThat(restart.statusCode()).as(restart::body).isEqualTo(409);
+        assertThat(restart.body()).contains("TQL-ACCOUNT-4807");
+        TotpStore.Enrollment enforced = store.enrollment(null, "totp-user").orElseThrow();
+        assertThat(enforced.confirmed()).isTrue();
+        assertThat(enforced.secret()).isEqualTo(secret);
+        assertThat(loginCookie("totp-user", "FirstPass1", null)).isNull();
 
         // The next step's code (inside the +1 window) signs in - once.
         long loginStep = confirmStep + 1;
@@ -155,6 +172,23 @@ class TotpIntegrationTest {
         assertThat(postForm(cookie, csrf, "/_tesseraql/account/totp/disable",
                 "current=FirstPass1").statusCode()).isEqualTo(303);
         assertThat(loginCookie("totp-user", "FirstPass1", null)).isNotNull();
+        // Disabling removes the recovery codes with the enrollment: nothing of the factor
+        // stays behind for the next enrollment to inherit.
+        assertThat(recoveryRows()).as("no hashes after disable").isZero();
+        // And begin is open again once the factor is off.
+        assertThat(postForm(cookie, csrf, "/_tesseraql/account/totp/begin", "")
+                .statusCode()).isEqualTo(303);
+    }
+
+    /** The subject's rows in {@code tql_totp_recovery}. */
+    private static int recoveryRows() throws Exception {
+        try (java.sql.Connection connection = mainDataSource.getConnection();
+                java.sql.Statement statement = connection.createStatement();
+                java.sql.ResultSet rs = statement.executeQuery(
+                        "select count(*) from tql_totp_recovery where subject = 'totp-user'")) {
+            rs.next();
+            return rs.getInt(1);
+        }
     }
 
     private static String csrfFor(String cookie) {

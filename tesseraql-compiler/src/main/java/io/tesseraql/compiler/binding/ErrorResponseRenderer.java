@@ -656,6 +656,9 @@ public final class ErrorResponseRenderer implements Step {
                 // their application read "Internal Server Error" — the same defect slice 2
                 // found in this very switch, in the very next number.
                 case 4036 -> 403;
+                // 4037: the caller's own account in a disable — a conflict between the actor
+                // and the target, not a malformed request (docs/iam-admin.md).
+                case 4037 -> 409;
                 default -> 500;
             };
             // 4040: unknown - or out-of-scope, which reads identically - event or execution,
@@ -676,6 +679,9 @@ public final class ErrorResponseRenderer implements Step {
                 case 4803 -> 409; // password change unavailable (SSO-managed credentials)
                 case 4805 -> 404; // account surface disabled
                 case 4806 -> 404; // marking an inbox message that is not the caller's
+                // 4807: restarting a confirmed TOTP enrollment — the factor is on and leaves
+                // only through disable with the password (docs/credential-lifecycle.md)
+                case 4807 -> 409;
                 default -> 500;
             };
             case SQL -> switch (code.number()) {

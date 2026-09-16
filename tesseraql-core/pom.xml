@@ -24,6 +24,14 @@
       <artifactId>assertj-core</artifactId>
       <scope>test</scope>
     </dependency>
+    <!-- SqlScripts' already-exists tolerance is measured on a live H2, the one dialect whose
+         duplicate-object signal the class had read from the wrong field (docs/audit-low-leads.md
+         slice 4). Test scope only: core stays dependency-free at runtime. -->
+    <dependency>
+      <groupId>com.h2database</groupId>
+      <artifactId>h2</artifactId>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 
   <build>

@@ -187,13 +187,15 @@
     </div>
   </section>
   <!-- Just-in-time elevation (docs/access-governance.md structural decision 3): an
-       eligibility grants nothing until it is taken, and what is taken expires by itself. -->
+       eligibility grants nothing until it is taken; what is taken expires at the next
+       sign-in and, in this session, ends only through End now (docs/account.md). -->
   <section class="hc-card" th:if="${eligibilityAvailable == 1 and !#lists.isEmpty(eligibility)}">
     <div class="hc-card__header" th:text="#{tql.account.eligibility}">Roles you can take when you need them</div>
     <div class="hc-card__body hc-stack">
     <p class="hc-field__message" th:text="#{tql.account.eligibilityHint}">You are eligible for these roles but do not hold them.
-      Taking one grants it for the window you ask for, up to its limit, and it expires by
-      itself — every elevation is recorded with the reason you gave.</p>
+      Taking one grants it for the window you ask for, up to its limit; it expires by itself
+      at your next sign-in, and End now gives it back in this session. Every elevation is
+      recorded with the reason you gave.</p>
     <div th:each="e : ${eligibility}" class="hc-cluster">
       <span><code th:text="${e.role_code}"></code>
         <span th:if="${e.application != null}" class="hc-badge" th:text="${e.application}"></span>

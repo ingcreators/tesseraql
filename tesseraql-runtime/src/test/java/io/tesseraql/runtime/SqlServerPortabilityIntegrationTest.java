@@ -134,6 +134,11 @@ class SqlServerPortabilityIntegrationTest {
         DialectRuntimeChecks.catalogVersionTableApplies(dataSource());
     }
 
+    @Test
+    void totpEnrollmentRoundTripsOnThisDialect() throws Exception {
+        DialectRuntimeChecks.totpEnrollmentRoundTrip(dataSource());
+    }
+
     private static javax.sql.DataSource dataSource() {
         com.microsoft.sqlserver.jdbc.SQLServerDataSource dataSource = new com.microsoft.sqlserver.jdbc.SQLServerDataSource();
         dataSource.setURL(SQLSERVER.getJdbcUrl());

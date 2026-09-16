@@ -39,6 +39,12 @@ public final class IdentityContracts {
     public static final String UPDATE_PASSWORD = "update-password";
     /** Where a password-reset link may be sent (roadmap Phase 50); no row = not by mail. */
     public static final String FIND_RECOVERY_DESTINATION = "find-recovery-destination-by-login";
+    /**
+     * A withdrawn invitation invited again (docs/credential-lifecycle.md): back to INVITED with
+     * the latest name and address, only while the row holds no credential — zero rows means
+     * the account was once usable and is refused.
+     */
+    public static final String REINVITE_USER = "reinvite-user";
     public static final String SEED_ADMIN_USER = "seed-admin-user";
     public static final String ENSURE_ROLE = "ensure-role";
     public static final String ASSIGN_USER_ROLE = "assign-user-role";

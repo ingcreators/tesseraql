@@ -42,8 +42,8 @@ class TransactionOwnerLedgerTest {
      * return from inside the transaction, or choose their own commit point, so they cannot be a
      * lambda without restructuring. Each writes the rule out: roll back on any {@code Throwable}
      * before the restore.</li>
-     * <li>{@code ChunkStepRunner}, {@code JdbcTotpStore} — take autocommit off and never restore
-     * it, so the commit-on-restore hazard cannot fire; they rely on the pool resetting a returned
+     * <li>{@code ChunkStepRunner} — takes autocommit off and never restores it, so the
+     * commit-on-restore hazard cannot fire; it relies on the pool resetting a returned
      * connection.</li>
      * <li>{@code SandboxDataSource} — deliberately holds a transaction open and rolls it back, so
      * a Studio preview never writes.</li>
@@ -61,8 +61,6 @@ class TransactionOwnerLedgerTest {
                     + "JdbcFileTransferService.java",
             "tesseraql-pipeline/src/main/java/io/tesseraql/pipeline/sql/SqlStep.java",
             "tesseraql-security/src/main/java/io/tesseraql/security/session/JdbcSessionStore.java",
-            "tesseraql-operations/src/main/java/io/tesseraql/operations/credential/"
-                    + "JdbcTotpStore.java",
             "tesseraql-studio-runtime/src/main/java/io/tesseraql/studio/runtime/"
                     + "SandboxDataSource.java",
             "tesseraql-test-core/src/main/java/io/tesseraql/test/SqlCases.java",

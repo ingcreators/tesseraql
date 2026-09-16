@@ -1,0 +1,22 @@
+version: tesseraql/v1
+id: tql.iamAdmin.users.withdraw
+kind: route
+recipe: command-json
+
+security:
+  policy: tql.iam.admin.write
+
+# Withdrawing an invitation (docs/credential-lifecycle.md) is the disable action on an
+# INVITED account: the status flips to DISABLED and the mailed accept link dies with it -
+# posted afterwards, it answers the dead-link page. The same login can be invited again.
+
+steps:
+  - id: main
+    service:
+      name: iam.disableUser
+      params:
+        userId: path.id
+        subject: principal.subject
+response:
+  redirect:
+    location: /_tesseraql/admin/users/{path.id}?withdrawn=1

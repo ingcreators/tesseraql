@@ -29,4 +29,11 @@ public interface CredentialTokenStore {
      * cannot both succeed.
      */
     Optional<String> consume(String rawToken, String purpose);
+
+    /**
+     * Revokes every live token of the login, whatever its purpose, and returns how many died.
+     * Disabling an account calls this so a mailed invite or reset link cannot outlive the
+     * operator's decision; the cooldown clears with the token, so a fresh one may be issued.
+     */
+    int revoke(String loginId);
 }

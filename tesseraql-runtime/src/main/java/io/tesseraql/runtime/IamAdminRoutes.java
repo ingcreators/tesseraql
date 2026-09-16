@@ -6,7 +6,6 @@ import io.tesseraql.compiler.pipeline.Pipelines;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
-import io.tesseraql.identity.IdentityContracts;
 import io.tesseraql.identity.IdentityService;
 import io.tesseraql.identity.RealmConfig;
 import io.tesseraql.pipeline.Exchange;
@@ -16,7 +15,6 @@ import io.tesseraql.pipeline.TesseraqlProperties;
 import io.tesseraql.pipeline.auth.AuthStep;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 /**
@@ -29,11 +27,19 @@ import java.util.Set;
  * id is validated by the identity contract itself. An id that matches no user updates
  * nothing and is <em>not</em> counted as disabled: the redirect carries what actually
  * changed alongside what was selected, so a stale selection cannot read as a completed
- * action (docs/silent-tolerance.md O10).
+ * action (docs/silent-tolerance.md O10). A selection carrying the caller's own id is refused
+ * whole, before anything is disabled (the list renders no checkbox for that row).
  */
 final class IamAdminRoutes {
 
     private static final String USERS = "/_tesseraql/admin/users";
+
+    private final io.tesseraql.core.credential.CredentialTokenStore tokens;
+
+    /** {@code tokens} is null where neither invitations nor recovery are configured. */
+    IamAdminRoutes(io.tesseraql.core.credential.CredentialTokenStore tokens) {
+        this.tokens = tokens;
+    }
 
     void install(RuntimeContext context) {
         Pipelines.Compilation pipelines = Pipelines.of(context)
@@ -71,9 +77,16 @@ final class IamAdminRoutes {
                     io.tesseraql.security.session.SessionStore sessions = exchange.beans().lookup(
                             TesseraqlProperties.SESSION_STORE_BEAN,
                             io.tesseraql.security.session.SessionStore.class);
-                    // The same contract the per-user route runs, once per selected id. Disabled
+                    String subject = exchange.getProperty(TesseraqlProperties.PRINCIPAL,
+                            io.tesseraql.security.Principal.class).subject();
+                    if (ids.contains(subject)) {
+                        throw new TqlException(IdentityDisables.SELF,
+                                "You cannot disable your own account");
+                    }
+                    // The same action the per-user route runs, once per selected id. Disabled
                     // means disabled (docs/session-administration.md): every session of each
-                    // subject ends now, not at cookie expiry.
+                    // subject ends now, not at cookie expiry, and the login's live credential
+                    // tokens die with it.
                     //
                     // The affected-row count is kept rather than discarded: an id that matches
                     // no user updates nothing, and reporting the *requested* count made a stale
@@ -81,11 +94,10 @@ final class IamAdminRoutes {
                     // three). The page is told both numbers and says so when they differ.
                     int disabled = 0;
                     for (String id : ids) {
-                        if (identity.executeUpdate(realm, IdentityContracts.DISABLE_USER,
-                                Map.of("userId", id)) > 0) {
+                        if (IdentityDisables.disable(identity, realm, sessions, tokens, id,
+                                subject) > 0) {
                             disabled++;
                         }
-                        sessions.invalidateOthersFor(id, "");
                     }
                     io.tesseraql.compiler.binding.RedirectRenderer.negotiate(exchange, 303,
                             USERS + "?bulk=" + disabled + "&selected=" + ids.size());

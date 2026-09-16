@@ -120,6 +120,19 @@ public final class JdbcCredentialTokenStore implements CredentialTokenStore {
         }
     }
 
+    @Override
+    public int revoke(String loginId) {
+        try (Connection connection = dataSource.getConnection();
+                PreparedStatement revoke = connection.prepareStatement(
+                        "delete from tql_credential_token where login_id = ? "
+                                + "and used_at is null")) {
+            revoke.setString(1, loginId);
+            return revoke.executeUpdate();
+        } catch (SQLException ex) {
+            throw new IllegalStateException("Failed to revoke credential tokens", ex);
+        }
+    }
+
     private static String hash(String rawToken) {
         try {
             return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
