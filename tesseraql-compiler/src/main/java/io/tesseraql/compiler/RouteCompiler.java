@@ -515,6 +515,7 @@ public final class RouteCompiler {
     private void buildRoute(RuntimeContext context, Path appHome, RouteFile routeFile) {
         RouteDefinition definition = routeFile.definition();
         requireRecipeShape(definition, io.tesseraql.yaml.app.RecipeShape.Surface.ROUTE);
+        requireRequestSources(definition, io.tesseraql.yaml.app.RecipeShape.Surface.ROUTE);
         requireRotationHonoured(definition);
         requireLockHonoured(definition, null);
         refuseWriteKeysOnSources(definition);
@@ -756,6 +757,20 @@ public final class RouteCompiler {
             io.tesseraql.yaml.app.RecipeShape.Surface surface) {
         io.tesseraql.yaml.app.ExportDeclarations.require(
                 io.tesseraql.yaml.app.RecipeShape.violations(appName, definition, surface),
+                LOG::warn);
+    }
+
+    /**
+     * Where the document reads the request from, refused before any binder is built
+     * (docs/audit-low-leads.md slice 9): a {@code header.<name>} source is a service
+     * binding's argument and nothing else's — on a statement's {@code params:} it would bind
+     * null on every request, which is the silence the binder's own header fallback used to
+     * fill. The predicate is the linter's, so the two altitudes cannot disagree.
+     */
+    private void requireRequestSources(RouteDefinition definition,
+            io.tesseraql.yaml.app.RecipeShape.Surface surface) {
+        io.tesseraql.yaml.app.ExportDeclarations.require(
+                io.tesseraql.yaml.app.RequestSources.violations(appName, definition, surface),
                 LOG::warn);
     }
 
@@ -1406,6 +1421,7 @@ public final class RouteCompiler {
     private void buildQueueConsume(RouteFile routeFile) {
         RouteDefinition definition = routeFile.definition();
         requireRecipeShape(definition, io.tesseraql.yaml.app.RecipeShape.Surface.CONSUMER);
+        requireRequestSources(definition, io.tesseraql.yaml.app.RecipeShape.Surface.CONSUMER);
         requireLockHonoured(definition, "a queue consumer");
         refuseWriteKeysOnSources(definition);
         requireDeclaredKinds(definition);
@@ -2107,6 +2123,7 @@ public final class RouteCompiler {
     private void buildMcpTool(ToolFile toolFile) {
         RouteDefinition definition = toolFile.definition();
         requireRecipeShape(definition, io.tesseraql.yaml.app.RecipeShape.Surface.TOOL);
+        requireRequestSources(definition, io.tesseraql.yaml.app.RecipeShape.Surface.TOOL);
         requireLockHonoured(definition, "an MCP tool");
         refuseWriteKeysOnSources(definition);
         requireDeclaredKinds(definition);

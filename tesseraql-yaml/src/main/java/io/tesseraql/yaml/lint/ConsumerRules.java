@@ -82,6 +82,8 @@ final class ConsumerRules implements LintRule {
         // (docs/audit-low-leads.md slice 8).
         RecipeShapeRules.report(context, config, consumer.source(), definition,
                 io.tesseraql.yaml.app.RecipeShape.Surface.CONSUMER, source, findings);
+        RequestSourceRules.report(context, config, consumer.source(), definition,
+                io.tesseraql.yaml.app.RecipeShape.Surface.CONSUMER, source, findings);
         // A consumer mounts no sources: nothing runs before its transaction, and nothing reads a
         // result after it — there is no response. Refusing the key beats compiling it to nothing.
         if (!definition.sources().isEmpty()) {

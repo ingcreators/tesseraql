@@ -8,13 +8,7 @@ recipe: command-json
 # data, owned by the data browser. The service validates day names and ISO dates before
 # anything lands (TQL-STUDIO-4238).
 input:
-  Cookie:
-    type: string
-    required: false
   _csrf:
-    type: string
-    required: false
-  X-CSRF-Token:
     type: string
     required: false
   name:
@@ -36,9 +30,9 @@ steps:
       params:
         member: path.member
         shellPermissions: principal.permissions
-        shellCookie: params.Cookie
+        shellCookie: header.Cookie
         shellCsrf: params._csrf
-        shellCsrfHeader: params.X-CSRF-Token
+        shellCsrfHeader: header.X-CSRF-Token
         name: params.name
         weekend_monday: params.weekend_monday
         weekend_tuesday: params.weekend_tuesday

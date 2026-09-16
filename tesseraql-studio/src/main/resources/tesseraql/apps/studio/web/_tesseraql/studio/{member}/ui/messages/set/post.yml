@@ -6,13 +6,7 @@ recipe: command-json
 # Upserts one translation into messages/<locale>.yml (creating the locale if new). Edit-gated in the
 # provider; served after the next reload/restart.
 input:
-  Cookie:
-    type: string
-    required: false
   _csrf:
-    type: string
-    required: false
-  X-CSRF-Token:
     type: string
     required: false
   locale:
@@ -32,9 +26,9 @@ steps:
       params:
         member: path.member
         shellPermissions: principal.permissions
-        shellCookie: params.Cookie
+        shellCookie: header.Cookie
         shellCsrf: params._csrf
-        shellCsrfHeader: params.X-CSRF-Token
+        shellCsrfHeader: header.X-CSRF-Token
         locale: params.locale
         key: params.key
         value: params.value

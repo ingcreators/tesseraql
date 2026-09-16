@@ -6,13 +6,7 @@ recipe: command-json
 # Appends an item to the app's config/menu.yml (declarative, role-filtered sidebar menu). Edit-gated
 # in the provider; the running app's menu reloads after. Redirects back to the editor.
 input:
-  Cookie:
-    type: string
-    required: false
   _csrf:
-    type: string
-    required: false
-  X-CSRF-Token:
     type: string
     required: false
   label:
@@ -38,9 +32,9 @@ steps:
       params:
         member: path.member
         shellPermissions: principal.permissions
-        shellCookie: params.Cookie
+        shellCookie: header.Cookie
         shellCsrf: params._csrf
-        shellCsrfHeader: params.X-CSRF-Token
+        shellCsrfHeader: header.X-CSRF-Token
         label: params.label
         href: params.href
         icon: params.icon

@@ -4,9 +4,6 @@ kind: route
 recipe: query-html
 
 input:
-  Cookie:
-    type: string
-    required: false
   ds: { type: string, required: false }
   table: { type: string, required: true }
   sort: { type: string, required: false }
@@ -35,7 +32,7 @@ sources:
       params:
         member: path.member
         shellPermissions: principal.permissions
-        shellCookie: params.Cookie
+        shellCookie: header.Cookie
         ds: params.ds
         table: params.table
         sort: params.sort

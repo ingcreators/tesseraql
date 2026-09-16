@@ -273,7 +273,9 @@ writes the catalogue and the status. `deploy --wait`, `promote --wait` and `roll
 tail that file so a pipeline gets a synchronous exit code, and `deploy status` renders both
 sides — the host's verdict only when it is about a version on disk now, so an old refusal never
 reads as the current state. The sweep other nodes rely on does not re-attempt a candidate whose
-refusal is on record. Membership stays start-time: a new name in the catalogue, or one removed,
+refusal is on record, and the housekeeping that follows one — a canary the intent no longer
+names is discarded on the next pass — leaves that refusal as the record. Membership stays
+start-time: a new name in the catalogue, or one removed,
 is the stack changing shape and waits for the next stack start (the host logs the owed restart).
 Previous versions stay on disk — they are rollback's working material, and `rollback` targets
 the version that served, never one the host refused.

@@ -4,9 +4,6 @@ kind: route
 recipe: query-html
 
 input:
-  Cookie:
-    type: string
-    required: false
   captured:
     type: string
     required: false
@@ -17,7 +14,7 @@ sources:
       name: studio.shell.docs.releaseDiff
       params:
         member: path.member
-        shellCookie: params.Cookie
+        shellCookie: header.Cookie
         shellPermissions: principal.permissions
 response:
   html:

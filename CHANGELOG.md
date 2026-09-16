@@ -22,8 +22,42 @@ All notable changes to TesseraQL are documented here. The format follows
   omits the three properties and the extension stays silent, as with every earlier contract
   addition.
 
+- **`header.<Name>` is a source on a `service:` binding's `params:`.** A provider that
+  needs a request header — the stack shells forward the caller's session and CSRF token to
+  the member they delegate to — declares it: `cookie: header.Cookie`, read from the wire
+  (first value, name matched without regard to case) and never overridden by a query
+  parameter or a body field spelled like the header. It is a provider's argument only: on a
+  statement's `params:`, a validation rule's, an enrichment's or an export's `after:` it is
+  refused at lint and at boot (`TQL-YAML-1069`), because a statement binds what the route
+  declares under `input:`. The ops-console and Studio shells declare it on their 158
+  delegating routes, which no longer declare `Cookie` and `X-CSRF-Token` as inputs.
+  `docs/audit-low-leads.md` slice 9 (decision 3).
+- **Lint refuses a body source that never binds.** `body.<name>` on a GET route is
+  `TQL-YAML-1070`: the edge reads no body on a GET, so the value was a silent null on every
+  request (a snapshot-paginated page, which answers the pager's POST too, is exempt).
+  `body.<name>` naming a field the route does not declare under `input:` while it rejects
+  unknown fields is `TQL-YAML-1071`: a request carrying the field was refused by the
+  mass-assignment guard before the bind, one without it bound null. Both point at the
+  declaration to write. `docs/audit-low-leads.md` slice 9.
+
 ### Changed
 
+- **A request header no longer feeds a declared input.** After the path, the body and the
+  query, the request binder read a request header of the input's name — a fallback
+  `docs/vertx-native.md` decision 2 recorded as removed. Every declared input on every route
+  kind had it: `Host` satisfied `required: true`, a `required: true` boolean named `accept`
+  was never missing, `cookie` bound the caller's whole cookie header, and the helpdesk
+  example's `priority: {enum: [low, normal, high]}` answered 400 to every Chrome and Firefox
+  navigation over h2, where the browser sends `Priority: u=0, i` (`tesseraql dev` on
+  HTTP/1.1 never showed it; the documented TLS edge did). The read is gone: an input is fed
+  by what the route declares — the path, the query, the form or JSON body — and the one
+  place a header is a source is a `service:` binding's `params:` (Added, above). A breaking
+  change, pre-1.0. `docs/audit-low-leads.md` slice 9 (XD-07j).
+- **The binder's precedence is the record's: path, then query, then body.** `Request.param`
+  and `docs/vertx-native.md` declared the order once; the binder read the body before the
+  query, so `POST /echo?name=a` with a form field `name=b` bound `b`. The binder now reads
+  the merged view — path, query, form — and after it a JSON or programmatic body, so one
+  mechanism decides. `docs/audit-low-leads.md` slice 9.
 - **The CLI writes candidates; the host writes the catalogue and the status.** The install
   root's deploy protocol (`runtime-replace.md` structural decision 2, amended) split its files
   by writer and made `catalog.json` the CLI's intent file — a direct `deploy` moved it before
@@ -80,6 +114,12 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A refused deploy stays refused through the housekeeping that follows it.** A replace the
+  host refused while a canary the intent no longer named was still up had its refusal record
+  written over by the next pass's "discard applied" — so the pass after that attempted the
+  refused candidate once more, and `deploy status` read applied against a refused intent. The
+  discard leaves a standing refusal as the record. `docs/audit-low-leads.md` slice 9
+  (unfiled 73).
 - **A route the compiler could not build names itself and its missing piece, at lint and at
   boot.** Six shapes linted clean and took the whole application down at boot with a
   `NullPointerException` naming neither the route nor the key: a `query-json`, `command-json`

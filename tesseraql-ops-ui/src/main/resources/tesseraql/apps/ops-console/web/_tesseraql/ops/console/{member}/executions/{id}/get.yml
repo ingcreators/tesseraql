@@ -10,9 +10,6 @@ input:
   slot:
     type: string
     required: false
-  Cookie:
-    type: string
-    required: false
 
 sources:
   main:
@@ -24,7 +21,7 @@ sources:
         id: path.id
         # Executions outside the caller's tql.ops.view.<name> grants render as not found.
         permissions: principal.permissions
-        cookie: params.Cookie
+        cookie: header.Cookie
 response:
   html:
     status: 200

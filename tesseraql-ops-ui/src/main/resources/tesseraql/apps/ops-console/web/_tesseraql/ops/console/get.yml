@@ -9,20 +9,17 @@ recipe: query-html
 # timeout. An unreachable member's card says so and the page renders; no ops policy id — the
 # shell checks atoms, and a caller with no grants sees an empty switcher, not an open door.
 
-input:
-  # The caller's own session, forwarded on every delegated call so the member authenticates
-  # the same principal and re-runs its own grant checks (the shell adds reach, not authority).
-  Cookie:
-    type: string
-    required: false
-
 sources:
   main:
     service:
       name: ops.shell.home
       params:
         permissions: principal.permissions
-        cookie: params.Cookie
+        # The caller's own session, forwarded on every delegated call so the member
+        # authenticates the same principal and re-runs its own grant checks (the shell adds
+        # reach, not authority). A declared header source: read from the wire, never from a
+        # query parameter or a form field of that name (docs/audit-low-leads.md slice 9).
+        cookie: header.Cookie
 response:
   html:
     status: 200

@@ -4,9 +4,6 @@ kind: route
 recipe: query-html
 
 input:
-  Cookie:
-    type: string
-    required: false
   path:
     type: string
     required: false
@@ -21,7 +18,7 @@ sources:
       params:
         member: path.member
         shellPermissions: principal.permissions
-        shellCookie: params.Cookie
+        shellCookie: header.Cookie
         path: params.path
         method: params.method
 response:

@@ -309,6 +309,15 @@ at the edge, so no later step sees a `p0`. *(Superseded in shipping — see slic
 entirely, because the linter/OpenAPI reader role this decision believed it kept had no caller;
 the belief was wrong when written, not invalidated later.)*
 
+*Addendum 2026-09-16 (`docs/audit-low-leads.md` slice 9).* The header fallback did not go with
+it: the slice that shipped this decision wrote the read (`RequestBinder.rawValue`, after the
+path, the body and the query), and 158 shell routes came to depend on it for the caller's
+`Cookie` and `X-CSRF-Token`. Nor did the binder read in this decision's order — the body came
+before the query. Both are true now: the binder reads `Request.param` (path, query, form) and
+after it a JSON or programmatic body, and no request header feeds a declared input. The header
+a provider needs is declared, `header.<Name>` on a `service:` binding's `params:`, read from the
+wire by the named-query binder and never overridden by a parameter of that name.
+
 A form has one representation: `formFields()`. The edge stops writing fields into the header map
 and a `Map` body both, and the binder's own `parseForm` goes — an exchange built without the edge
 fills `formFields()` the same way the edge does, instead of carrying a raw body for the binder to

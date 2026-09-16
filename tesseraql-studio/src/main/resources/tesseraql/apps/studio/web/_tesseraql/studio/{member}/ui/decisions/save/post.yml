@@ -8,13 +8,7 @@ recipe: command-json
 # per-row delete). The service validates the rebuilt document (parse + decision compile)
 # before it lands as a draft.
 input:
-  Cookie:
-    type: string
-    required: false
   _csrf:
-    type: string
-    required: false
-  X-CSRF-Token:
     type: string
     required: false
   name:
@@ -312,9 +306,9 @@ steps:
       params:
         member: path.member
         shellPermissions: principal.permissions
-        shellCookie: params.Cookie
+        shellCookie: header.Cookie
         shellCsrf: params._csrf
-        shellCsrfHeader: params.X-CSRF-Token
+        shellCsrfHeader: header.X-CSRF-Token
         name: params.name
         c0key: params.c0key
         c0kind: params.c0kind

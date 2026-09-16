@@ -6,9 +6,6 @@ recipe: query-html
 # Invokes one of the app's own routes via a loopback HTTP call and renders the raw response as a
 # fragment. Browser-authed + CSRF-protected because it can invoke a state-changing route.
 input:
-  X-CSRF-Token:
-    type: string
-    required: false
   method:
     type: string
     required: false
@@ -30,11 +27,9 @@ input:
   useSession:
     type: string
     required: false
-  # Bound from the caller's own request headers/fields so the loopback can be sent as the current
-  # Studio user when "send my session" is ticked (Cookie = the session; _csrf = its CSRF token).
-  Cookie:
-    type: string
-    required: false
+  # The caller's own CSRF token, posted with the form so the loopback can be sent as the current
+  # Studio user when "send my session" is ticked; the session itself is the Cookie header,
+  # read below as header.Cookie.
   _csrf:
     type: string
     required: false
@@ -46,7 +41,7 @@ sources:
       params:
         member: path.member
         shellPermissions: principal.permissions
-        shellCsrfHeader: params.X-CSRF-Token
+        shellCsrfHeader: header.X-CSRF-Token
         method: params.method
         path: params.path
         query: params.query
@@ -54,7 +49,7 @@ sources:
         contentType: params.contentType
         bearer: params.bearer
         useSession: params.useSession
-        cookie: params.Cookie
+        cookie: header.Cookie
         csrf: params._csrf
 response:
   html:

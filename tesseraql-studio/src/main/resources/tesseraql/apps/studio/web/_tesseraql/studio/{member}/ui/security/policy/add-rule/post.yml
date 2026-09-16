@@ -6,13 +6,7 @@ recipe: command-json
 # Grants a policy a role/permission rule (creating the policy if new) in config/overlay.yml, then
 # rebinds the live PolicyEngine. Edit-gated in the provider.
 input:
-  Cookie:
-    type: string
-    required: false
   _csrf:
-    type: string
-    required: false
-  X-CSRF-Token:
     type: string
     required: false
   policy:
@@ -32,9 +26,9 @@ steps:
       params:
         member: path.member
         shellPermissions: principal.permissions
-        shellCookie: params.Cookie
+        shellCookie: header.Cookie
         shellCsrf: params._csrf
-        shellCsrfHeader: params.X-CSRF-Token
+        shellCsrfHeader: header.X-CSRF-Token
         policy: params.policy
         kind: params.kind
         value: params.value

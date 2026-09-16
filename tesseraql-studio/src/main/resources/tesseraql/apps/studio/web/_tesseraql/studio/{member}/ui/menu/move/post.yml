@@ -6,13 +6,7 @@ recipe: command-json
 # Moves the menu item at the given index up (dir=up) or down (dir=down) in config/menu.yml.
 # Edit-gated in the provider.
 input:
-  Cookie:
-    type: string
-    required: false
   _csrf:
-    type: string
-    required: false
-  X-CSRF-Token:
     type: string
     required: false
   index:
@@ -29,9 +23,9 @@ steps:
       params:
         member: path.member
         shellPermissions: principal.permissions
-        shellCookie: params.Cookie
+        shellCookie: header.Cookie
         shellCsrf: params._csrf
-        shellCsrfHeader: params.X-CSRF-Token
+        shellCsrfHeader: header.X-CSRF-Token
         index: params.index
         dir: params.dir
         actor: principal.loginId

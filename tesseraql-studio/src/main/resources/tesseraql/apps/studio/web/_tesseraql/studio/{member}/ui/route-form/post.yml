@@ -4,13 +4,7 @@ kind: route
 recipe: command-json
 
 input:
-  Cookie:
-    type: string
-    required: false
   _csrf:
-    type: string
-    required: false
-  X-CSRF-Token:
     type: string
     required: false
   path:
@@ -136,8 +130,8 @@ steps:
       params:
         member: path.member
         shellPermissions: principal.permissions
-        shellCookie: params.Cookie
-        shellCsrfHeader: params.X-CSRF-Token
+        shellCookie: header.Cookie
+        shellCsrfHeader: header.X-CSRF-Token
         path: params.path
         recipe: params.recipe
         auth: params.auth

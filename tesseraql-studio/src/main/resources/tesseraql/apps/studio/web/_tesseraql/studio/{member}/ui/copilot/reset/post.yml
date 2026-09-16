@@ -4,13 +4,7 @@ kind: route
 recipe: command-json
 
 input:
-  Cookie:
-    type: string
-    required: false
   _csrf:
-    type: string
-    required: false
-  X-CSRF-Token:
     type: string
     required: false
 
@@ -20,9 +14,9 @@ steps:
       name: studio.shell.studio.copilot.reset
       params:
         member: path.member
-        shellCookie: params.Cookie
+        shellCookie: header.Cookie
         shellCsrf: params._csrf
-        shellCsrfHeader: params.X-CSRF-Token
+        shellCsrfHeader: header.X-CSRF-Token
         shellPermissions: principal.permissions
         actor: principal.loginId
 response:

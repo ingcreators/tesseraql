@@ -69,6 +69,11 @@ public final class RecipeShape {
         Surface(String noun) {
             this.noun = noun;
         }
+
+        /** The words a refusal opens with: {@code route}, {@code MCP tool}, {@code consumer}. */
+        public String noun() {
+            return noun;
+        }
     }
 
     private RecipeShape() {

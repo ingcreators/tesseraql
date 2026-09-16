@@ -97,6 +97,13 @@ final class RouteRules implements LintRule {
         // from (docs/audit-low-leads.md slice 8): each used to lint clean and NPE the boot.
         RecipeShapeRules.report(context, config, route.source(), definition,
                 io.tesseraql.yaml.app.RecipeShape.Surface.ROUTE, source, findings);
+        // Where the document reads the request from (docs/audit-low-leads.md slice 9): a
+        // header source outside a service binding's params:, from the predicate the compiler
+        // refuses from; and the body sources a route's method or its declared inputs make a
+        // silent null.
+        RequestSourceRules.report(context, config, route.source(), definition,
+                io.tesseraql.yaml.app.RecipeShape.Surface.ROUTE, source, findings);
+        RequestSourceRules.lintBodySources(context, route, source, findings);
         // A negative timeout on a step or named source was clamped to 0 = unlimited by the
         // compiler — the inverse of the author's intent — so the guard was missing here.
         definition.steps().forEach((name, step) -> {

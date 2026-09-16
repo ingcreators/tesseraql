@@ -7,13 +7,7 @@ recipe: command-json
 # service enforces the linter's rules before anything lands (TQL-STUDIO-4239): one trigger
 # kind, one cadence, one calendar qualifier, known enum values, parseable SLA fields.
 input:
-  Cookie:
-    type: string
-    required: false
   _csrf:
-    type: string
-    required: false
-  X-CSRF-Token:
     type: string
     required: false
   name:
@@ -37,9 +31,9 @@ steps:
       params:
         member: path.member
         shellPermissions: principal.permissions
-        shellCookie: params.Cookie
+        shellCookie: header.Cookie
         shellCsrf: params._csrf
-        shellCsrfHeader: params.X-CSRF-Token
+        shellCsrfHeader: header.X-CSRF-Token
         name: params.name
         cron: params.cron
         fixedDelay: params.fixedDelay

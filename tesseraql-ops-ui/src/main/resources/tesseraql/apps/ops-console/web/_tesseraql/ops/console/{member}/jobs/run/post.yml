@@ -18,9 +18,6 @@ input:
   slot:
     type: string
     required: false
-  Cookie:
-    type: string
-    required: false
   _csrf:
     type: string
     required: false
@@ -43,7 +40,7 @@ steps:
         # this; a delegated member derives the same answer from the forwarded session itself.
         actor: principal.loginId
         permissions: principal.permissions
-        cookie: params.Cookie
+        cookie: header.Cookie
         csrf: params._csrf
 response:
   redirect:

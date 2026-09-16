@@ -368,6 +368,31 @@ class StackReconcilerTest {
         assertThat(host.stable.get("shop").version()).isEqualTo("2.0.0");
     }
 
+    /**
+     * The memo survives the housekeeping that follows a refusal. A replace refused while a
+     * canary the intent no longer names is still up: the next pass discards the canary, and
+     * its "discard applied" record used to replace the refusal's — so the pass after that
+     * attempted the refused candidate again, and {@code deploy status} read applied against a
+     * refused intent (docs/audit-low-leads.md, unfiled 73; found by the reconciler IT's
+     * cold-start row, green only when its snapshot beat the discard).
+     */
+    @Test
+    void aCanaryDiscardAfterARefusalKeepsTheRefusalOnRecord() throws IOException {
+        host.refusal = new IllegalStateException("TQL-APP-4216: modules unresolved");
+        host.canary.put("shop", entry("1.5.0"));
+        pendingState("2.0.0");
+
+        reconciler.reconcileOnce();
+        reconciler.reconcileOnce();
+        reconciler.reconcileOnce();
+
+        assertThat(host.operations).containsExactly("discard");
+        assertThat(host.attempts).as("one attempt across three passes").isEqualTo(1);
+        String status = Files.readString(installRoot.resolve(".upgrade/shop.status.json"));
+        assertThat(status).contains("\"refused\"").contains("\"action\":\"replace\"")
+                .contains("\"version\":\"2.0.0\"");
+    }
+
     /** The same memo holds a refused canary stage, the other candidate shape. */
     @Test
     void aRefusedCanaryStageIsAttemptedOnce() throws IOException {

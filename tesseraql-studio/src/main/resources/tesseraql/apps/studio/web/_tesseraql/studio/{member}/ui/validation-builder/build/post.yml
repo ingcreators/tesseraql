@@ -5,13 +5,7 @@ recipe: query-html
 
 # Generates the validate: YAML for one rule from the form inputs (pure text; copy into the route).
 input:
-  Cookie:
-    type: string
-    required: false
   _csrf:
-    type: string
-    required: false
-  X-CSRF-Token:
     type: string
     required: false
   operation:
@@ -49,9 +43,9 @@ sources:
       params:
         member: path.member
         shellPermissions: principal.permissions
-        shellCookie: params.Cookie
+        shellCookie: header.Cookie
         shellCsrf: params._csrf
-        shellCsrfHeader: params.X-CSRF-Token
+        shellCsrfHeader: header.X-CSRF-Token
         operation: params.operation
         source: params.source
         field: params.field

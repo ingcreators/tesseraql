@@ -9,9 +9,6 @@ recipe: query-html
 # (a folder's app-relative path, passed by the "new route here" trigger) seeds the Path field so a
 # new route lands where you were browsing. The form POSTs to this same path (tql.studio.newRoute).
 input:
-  Cookie:
-    type: string
-    required: false
   prefix:
     type: string
     required: false
@@ -23,7 +20,7 @@ sources:
       params:
         member: path.member
         shellPermissions: principal.permissions
-        shellCookie: params.Cookie
+        shellCookie: header.Cookie
         prefix: params.prefix
 response:
   html:

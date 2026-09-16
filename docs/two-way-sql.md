@@ -83,6 +83,7 @@ Sources resolve against the request context:
 | `path.*` | path parameters (typed when declared under `input:`) |
 | `principal.*` | the authenticated caller (`subject`, `loginId`, `roles`, …) |
 | `tenant` | the resolved tenant |
+| `header.<name>` | a request header — on a `service:` binding's `params:` only; a statement never binds one (`TQL-YAML-1069`), and a request header never feeds a declared input ([extending.md](extending.md)) |
 | `steps.<name>.*` | in a command step: an *earlier* step's result — generated keys, affected rows, an allocated sequence value ([transactional-writes.md](transactional-writes.md)) |
 
 A bind expression may itself use a dotted path to navigate into a bound value — for example

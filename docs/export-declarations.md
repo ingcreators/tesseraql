@@ -1493,8 +1493,10 @@ Every unfiled defect the measurement found, routed elsewhere with its destinatio
   refusals (fixed: `ConditionZone`, `CronExpressions`); the lint crash on a header-less document
   (fixed: the linter loads tolerantly); TQL-YAML-1409 defined twice; the SEC-4048
   (`[]`, `""`, `[""]`) and PolicyCodes lint/boot drifts; the header-fed input
-  (`RequestBinder.rawValue:348` vs `vertx-native.md:307`); `EvaluationContext`'s reflective reach
-  (`principal.toString` echoes every claim into the ERROR log); `body.*` on a GET.
+  (`RequestBinder.rawValue:348` vs `vertx-native.md:307` — fixed: the read is gone, a
+  provider declares `header.<Name>`, `docs/audit-low-leads.md` slice 9); `EvaluationContext`'s
+  reflective reach (`principal.toString` echoes every claim into the ERROR log); `body.*` on a
+  GET (fixed: `TQL-YAML-1070`, and an undeclared `body.<name>` as `TQL-YAML-1071`).
 - **Runtime-replace campaign:** a refused hot deploy advances `catalog.json`; `deploy rollback`
   targets the refused version and leaves `previous` null — 5a widens the refusal surface it must
   survive.

@@ -7,13 +7,7 @@ recipe: command-json
 # edit card's hc-calendar posts here; the date is added to — or removed from — the
 # calendar's holiday list through the same validated draft flow as the form save.
 input:
-  Cookie:
-    type: string
-    required: false
   _csrf:
-    type: string
-    required: false
-  X-CSRF-Token:
     type: string
     required: false
   name:
@@ -30,9 +24,9 @@ steps:
       params:
         member: path.member
         shellPermissions: principal.permissions
-        shellCookie: params.Cookie
+        shellCookie: header.Cookie
         shellCsrf: params._csrf
-        shellCsrfHeader: params.X-CSRF-Token
+        shellCsrfHeader: header.X-CSRF-Token
         name: params.name
         date: params.date
         permissions: principal.permissions

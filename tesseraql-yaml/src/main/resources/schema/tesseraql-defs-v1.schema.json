@@ -1082,7 +1082,7 @@
               "additionalProperties": {
                 "type": "string"
               },
-              "description": "Each bind name to the bindable path supplying its value, such as `path.id`, `params.unit` or `principal.claim.tenant_id`."
+              "description": "Each argument name to the bindable path supplying its value, such as `path.id`, `params.unit` or `principal.claim.tenant_id` — or `header.<Name>`, a request header read from the wire (first value, name matched without regard to case), never overridden by a query parameter or a body field of that name. A header is a provider's argument only: on a statement's `params:` it is refused (TQL-YAML-1069)."
             }
           },
           "additionalProperties": true,

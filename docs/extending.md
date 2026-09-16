@@ -77,6 +77,13 @@ Three rules the runtime holds you to:
 - **Steps cannot bind a provider.** `service:` is legal on any `sources:` entry,
   and is refused at build time inside a command's `steps:` — a transactional step must be a
   SQL file or a sequence.
+- **A request header is a provider's argument, never an input.** A provider that needs one
+  declares it under `params:` as `header.<Name>` — `cookie: header.Cookie`, which is how the
+  stack shells forward the caller's session to the member they delegate to. The value is the
+  wire header's first value, matched without regard to case, and a query parameter or a body
+  field spelled like the header never replaces it. On a statement's `params:` the same
+  spelling is refused (`TQL-YAML-1069`), because a statement binds what the route declares
+  under `input:`.
 
 A route that binds a provider is assessed `extended` and scores +1
 ([governance.md](governance.md)).
