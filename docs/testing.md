@@ -62,7 +62,10 @@ scope posture, and how the `data-scope` [coverage kind](#coverage-kinds) is earn
   [Testing write routes](#testing-write-routes)). A statement carrying `/*%lock*/` is a target
   like any other once the case declares a [`lock:`](#locked-writes). Every `sql` case runs inside
   a transaction the runner always rolls back, so a test run never commits anything to the
-  database.
+  database. A file that would end that transaction itself — `commit;`, `rollback`,
+  `begin`/`start transaction` or `set transaction` at the start of a statement — is refused with
+  `TQL-SQL-2123` by lint, the runner and the sandbox alike: its write would otherwise persist
+  behind a green case.
 - **`contract`** — runs a named identity contract (for example
   `identity.find-roles-by-user-id`) against the configured realm; its rows are the case's rows.
 - **`validate`** — evaluates a route's `validate:` rules against the case's `params` (the
@@ -295,16 +298,22 @@ tesseraql coverage --app .
 
 `test` runs every suite and exits non-zero on any failure. It connects to the app's `main`
 datasource from `tesseraql.yml`, or to an explicit `--jdbc-url` (with `--username` /
-`--password`). Useful options:
+`--password`); a database it cannot reach is the one operator message at exit 1, like every
+other database command. Two case names that are the same across the app's suites are refused
+(`TQL-YAML-1410`): the reports join results to cases by name. Useful options:
 
 - `--case <name>` — run only the named case(s), exact match, repeatable. This is how the
-  editor's Test Explorer re-runs one failing case.
+  editor's Test Explorer re-runs one failing case. A name no case carries is a refusal
+  (`TQL-YAML-1411`, exit 2) rather than a green run of nothing.
 - `--format json` — machine-readable output: per-case results plus per-file SQL coverage with
   the covered and coverable line lists.
 - `--report` — additionally writes the documentation portal's report overlay
-  (`.tesseraql/docs/report.json` and `history.json`); `--run-id` labels the run in the trend,
-  and `--fail-on-regression` exits with code 2 when SQL coverage dropped against the previous
-  run beyond `--regression-tolerance`.
+  (`.tesseraql/docs/report.json` and `history.json`); `--run-id` labels the run in the trend.
+  `--fail-on-regression` exits with code 3 when SQL coverage dropped against the previous run
+  beyond `--regression-tolerance`: the suites ran and passed, a policy said no, which the
+  [exit codes](reference-cli.md) keep apart from a failure (1) and from a request that could
+  not run (2). A `history.json` the gate cannot read is refused (`TQL-REPORT-2006`, exit 2) and
+  left in place; without the gate it is one warning and a fresh history.
 - `--report-dir` — where the report files go (default `<app>/work/reports`).
 
 `coverage` runs the same suites and then enforces the coverage gate: it fails when SQL line or
@@ -344,7 +353,13 @@ per-line SQL coverage highlighting.
 
 SQL coverage is measured from the 2-way SQL structure itself: every line and conditional
 branch a case's rendered statement includes counts as covered, so an `/*%if*/` block no case
-ever triggers shows up as an uncovered branch.
+ever triggers shows up as an uncovered branch. The population is every SQL file the app's
+documents bind — routes, tools, consumers and resources (sources, steps, enrichments,
+validation files, an export's `after:`), jobs (steps, chunk reader and writer) and workflows
+(commands and guard files) — declared at 0% before the first case runs. A bound file no case
+touches therefore counts, in the per-file gate and in the aggregate the regression gate
+compares: deleting a test lowers coverage, and an app with no suite scores 0%, not 100%
+(`docs/audit-low-leads.md`, G16). A run that finds no suite file says so on stderr.
 
 Beyond SQL lines and branches, the run derives *item coverage* — covered-of-declared per kind:
 
@@ -355,9 +370,9 @@ Beyond SQL lines and branches, the run derives *item coverage* — covered-of-de
 - `validation` / `notification` / `http` — every `validate:` rule, `notify:` declaration,
   and outbound call, covered by the cases that evaluate it.
 - `message` — every message catalog, covered by the `messages` cases that read it.
-- `file-poll`, `queue-consume`, `data-scope`, `workflow`, `mcp`, `mcp-resource`, `mcp-ui`,
-  `mcp-prompt` — the corresponding declarations, covered by the cases exercising their SQL.
-  Only prompts that read data are declared: a prompt rendering from its arguments alone
+- `file-poll`, `queue-consume`, `data-scope`, `workflow`, `decision`, `mcp`, `mcp-resource`,
+  `mcp-ui`, `mcp-prompt` — the corresponding declarations, covered by the cases exercising
+  them. Only prompts that read data are declared: a prompt rendering from its arguments alone
   executes no SQL a case could exercise.
 - `iam-contract`, `saml`, `oidc`, `scim`, `preference` — inventories of the standard identity
   and account surfaces in use; their gaps are reported as notes, not warnings.
@@ -382,16 +397,20 @@ coverage:
 
 `-Dtesseraql.sqlLineThreshold` / `-Dtesseraql.sqlBranchThreshold` (or `--sql-line-threshold` /
 `--sql-branch-threshold` on the CLI) supply defaults when the config sets none. Any kind above
-can be named as a threshold, except `preference` and `queue-consume`, which are report-only.
+can be named as a threshold — `queue-consume` and `decision` included. A key naming a kind the
+run did not measure (a typo such as `sqlLines`) fails the gate with a sentence listing the
+kinds, instead of gating nothing (`docs/audit-low-leads.md`, G22). `preference` is an
+inventory, always 1.0.
 
 ## Recording cases from Studio
 
 You do not have to write every case by hand. In [Studio](studio.md)'s API console, a
 successful invocation of a query route offers **Save as test case**. The sent query and body
-are mapped back onto the route's SQL parameters, the row count observed in the console's
-sandboxed run is captured as `expect.rowCount`, and the resulting `sql` case is appended to
-`tests/studio-recorded-test.yml`. From then on it runs in CI exactly like a hand-written
-case.
+are mapped back onto the route's SQL parameters — each query-string value typed by the
+route's `input:` declaration, so a `type: integer` limit is written as the integer it is — the
+row count observed in the console's sandboxed run is captured as `expect.rowCount`, and the
+resulting `sql` case is appended to `tests/studio-recorded-test.yml`. From then on it runs in
+CI exactly like a hand-written case.
 
 Recording currently covers query routes with a bound SQL file and no path parameters.
 Anything else states why it is not recordable.

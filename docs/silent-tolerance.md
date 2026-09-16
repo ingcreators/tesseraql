@@ -365,7 +365,10 @@ drops every per-kind threshold, so an unreadable config reports "coverage gate: 
 remedy must separate **missing** (first run, legitimately fine) from **corrupt/unreadable**
 (warn or fail) — `ReportHistoryTest.recoversFromACorruptHistoryByStartingFresh` pins the
 current conflation and must be rewritten. The `DocService.schemaCorrupt()` predicate is the
-pattern.
+pattern. *Addendum, `docs/audit-low-leads.md` slice 12 (G18): #652 fixed the `report` goal's gate
+and not `tesseraql test --report --fail-on-regression`, whose Javadoc claimed parity — the CLI
+kept passing unconditionally over a corrupt `history.json` and overwriting it until slice 12
+gave it the same `isCorrupt` guard (a refusal under the gate, a warning without).*
 
 ### O10 — the smaller confirmed items
 

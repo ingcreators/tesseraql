@@ -122,7 +122,7 @@ built only with YAML, 2-way SQL, and templates, fully covered by declarative sui
 ### Phase 24 — AI-assisted development (MCP)
 
 TesseraQL's artifacts are declarative and machine-checkable (lint, declarative tests,
-coverage kinds, plan guard, reproducible generated output) — exactly the feedback loop a
+coverage kinds, reproducible generated output) — exactly the feedback loop a
 coding agent needs. Turn that into a product surface:
 
 - An MCP server exposing read tools (manifest, route/SQL sources, schema introspection,

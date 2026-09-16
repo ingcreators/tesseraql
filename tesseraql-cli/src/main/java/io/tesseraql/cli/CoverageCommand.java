@@ -64,6 +64,15 @@ final class CoverageCommand implements Callable<Integer> {
                         .resolve("reports");
         Files.createDirectories(reports);
 
+        // The first connection opens here so a refused database is the operator message at 1,
+        // not N failed cases (docs/audit-low-leads.md, unfiled 27).
+        try (java.sql.Connection probe = dataSource.getConnection()) {
+            probe.isValid(5);
+        }
+        if (AppTestRunner.suiteFiles(app).isEmpty()) {
+            System.err.println("No suite file under " + app.resolve("tests") + " — nothing ran;"
+                    + " the coverage recorded is the manifest's SQL files at 0%");
+        }
         AppTestRunner.RunResult result = new AppTestRunner().run(app, dataSource,
                 RealmConfig.managed(realm, "main"), reports);
         CoverageThresholds thresholds = CoverageThresholdResolver.resolve(manifest.config(),

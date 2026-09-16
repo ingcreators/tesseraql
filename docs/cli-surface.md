@@ -490,7 +490,7 @@ for a single workload. "Suite" in this industry means a **product bundle** (an o
 **test suite**. It does not name a deployment unit anywhere.
 
 **And the second sense is this project's own.** Measured 2026-08-16: of the occurrences of the word
-in main source, 186 are the test sense and 33 the deployment sense — `TestSuite`, `RouteSuite`,
+in main source, 186 are the test sense and 33 the deployment sense — `TestSuite`, `RouteSuite` (since deleted),
 `SuiteCoverage`, `TestSuiteLoader`, `suiteName`, `loadSuites`, and a `SuiteContext` that lives in
 `tesseraql-test-core`. The deployment sense is the newcomer, introduced by this campaign.
 
@@ -749,6 +749,28 @@ beside the others, and files a refusal of the whole load (the configuration, a s
 definition) as one finding at the file it names. The document is always printed, and the exit
 is the findings' own 1. Every other verb keeps the shaper's 2: a route that does not parse is a
 declaration `routes` or `generate` cannot act on, and only `lint` is asked to say so as a report.
+
+### 10b. `3` is "the command ran and a policy said no", and the regression gate answers it
+
+*Decided 2026-09-15 ([audit-low-leads.md](audit-low-leads.md) decision 1, shipped in slice 12,
+F115).* `test --report --fail-on-regression` answered 2 when the suites had all passed and the
+coverage had dropped — the number decision 10 published as "nothing ran", in the table
+`tesseraql --help` prints and [reference-cli.md](reference-cli.md) renders, while
+[testing.md](testing.md) published the same number as the regression gate. One script could not
+serve both sentences. `3` already meant what the gate does: `job run` returns it for a
+business-day or overlap skip, recording a `SKIPPED` execution — not a success, not a failure,
+the command ran and a policy said no. So the gate returns 3, `ExitCodes.SKIPPED`'s sentence is
+widened from "`job run` only" to that meaning, and `coverage`'s absolute gate keeps its 1 (the
+command ran and the bar it was asked to enforce failed). `1` was the acceptable alternative;
+`2` was the one answer the published vocabulary ruled out.
+
+Two neighbours of the same verb closed alongside: a `history.json` the gate cannot read is
+refused (`TQL-REPORT-2006`, exit 2 — the file kept as evidence; without the gate one warning
+and a fresh ring), which the `report` goal did since #652 and the CLI, whose Javadoc claimed
+parity, did not; and `test` against a database it cannot reach opens its first connection before
+the suites, so the refusal is the shaper's one operator message at 1 rather than N failed cases
+carrying the driver's sentence. `schema` reached the same shape by carrying the `SQLException`
+as its cause: the bare wrap had answered a coded line at 2 against decision 10's own rule.
 
 ## The complete mapping
 

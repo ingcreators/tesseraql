@@ -25,8 +25,8 @@ file transfers, observability, and supply-chain tooling.
   idempotency stores, asynchronous CSV/Excel file transfers with per-user locale formats, and
   an operations console (dashboard, traces, slow SQL, transfers).
 - **Testing and coverage** - declarative test suites with SQL line/branch coverage, route /
-  security / assertion / IAM-contract / SAML / SCIM coverage kinds, a query plan guard, and
-  JUnit / HTML / JSON / SARIF / Cobertura / SonarQube / Allure reports.
+  security / assertion / IAM-contract / SAML / SCIM coverage kinds, and JUnit / HTML / JSON /
+  SARIF / Cobertura / SonarQube / Allure reports.
 - **Four databases** - PostgreSQL, MySQL, Oracle, and SQL Server, with dialect-aware SQL
   resolution, streaming profiles, and per-dialect Flyway migrations.
 - **Supply chain** - signed release evidence (Ed25519), CycloneDX SBOMs, signature-verified
@@ -157,7 +157,7 @@ browsable here under [docs/](docs/).
 | `tesseraql-oauth` | The stack's authorization server: token issuance and the grant layer |
 | `tesseraql-operations` | Job repository, outbox dispatch, idempotency, file transfers, app installer |
 | `tesseraql-observability` | OpenTelemetry integration |
-| `tesseraql-test-core` / `tesseraql-coverage-core` / `tesseraql-report` | Declarative tests, coverage kinds, plan guard, report exporters |
+| `tesseraql-test-core` / `tesseraql-coverage-core` / `tesseraql-report` | Declarative tests, coverage kinds, report exporters |
 | `tesseraql-studio` / `tesseraql-studio-runtime` / `tesseraql-ops-ui` | Bundled Studio and operations console apps, and the workshop's runtime extension |
 | `tesseraql-excel` / `tesseraql-pdf` / `tesseraql-s3` | Opt-in codecs and stores: Excel (fastexcel, jxls), printable PDF, S3-compatible attachment storage |
 | `tesseraql-mcp` | Model Context Protocol server core: JSON-RPC dispatch, tool model, stdio and HTTP transports |

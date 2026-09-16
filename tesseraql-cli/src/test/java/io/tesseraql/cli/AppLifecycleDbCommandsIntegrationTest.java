@@ -101,6 +101,108 @@ class AppLifecycleDbCommandsIntegrationTest {
                 "--admin-password-file", passwordFile.toString()))).isZero();
     }
 
+    /**
+     * The runner says what it proved (docs/audit-low-leads.md slice 12): the regression gate
+     * answers 3 — the suites ran and passed, a policy said no (decision 10b) — where it used to
+     * answer 2, the number the CLI publishes as "nothing ran" (F115).
+     */
+    @Test
+    void theRegressionGateAnswersThreeAndTheUsageRefusalsKeepTheirTwo(@TempDir Path dir)
+            throws Exception {
+        Path app = scaffolded(dir);
+
+        // A baseline: the whole smoke suite, then one case of it — SQL coverage drops.
+        assertThat(execute(args(app, "test", "--report", "--run-id", "r1"))).isZero();
+        Captured regressed = executeCapturing(args(app, "test", "--report", "--run-id", "r2",
+                "--fail-on-regression", "--case", "the items search returns the seeded row"));
+        assertThat(regressed.exitCode()).as(regressed.stderr()).isEqualTo(3);
+        assertThat(regressed.stdout()).contains("1 passed, 0 failed");
+        assertThat(regressed.stderr()).contains("Coverage regression: SQL");
+        // The usage refusals keep their 2, so the gate cannot pass by moving the usage code.
+        assertThat(execute(args(app, "test", "--bogus"))).isEqualTo(2);
+        assertThat(executeCapturing("test", "--app", dir.resolve("nonexistent").toString(),
+                "--jdbc-url", POSTGRES.getJdbcUrl(), "--username", POSTGRES.getUsername(),
+                "--password", POSTGRES.getPassword()).exitCode()).isEqualTo(2);
+    }
+
+    /** G18: a corrupt history is refused under the gate and left as evidence. */
+    @Test
+    void aCorruptHistoryIsRefusedUnderTheGateAndWarnedAboutWithoutIt(@TempDir Path dir)
+            throws Exception {
+        Path app = scaffolded(dir);
+        assertThat(execute(args(app, "test", "--report", "--run-id", "r1"))).isZero();
+        Path history = app.resolve(".tesseraql/docs/history.json");
+        Files.writeString(history, "{\"not\":\"an array\"");
+
+        Captured corrupt = executeCapturing(args(app, "test", "--report", "--run-id", "r3",
+                "--fail-on-regression"));
+        assertThat(corrupt.exitCode()).as(corrupt.stderr()).isEqualTo(2);
+        assertThat(corrupt.stderr()).contains("TQL-REPORT-2006").contains("is unreadable");
+        assertThat(Files.readString(history)).isEqualTo("{\"not\":\"an array\"");
+        // Without the gate it is one warning and a fresh ring.
+        Captured fresh = executeCapturing(args(app, "test", "--report", "--run-id", "r4"));
+        assertThat(fresh.exitCode()).isZero();
+        assertThat(fresh.stderr()).contains("is unreadable").contains("starting a fresh history");
+        assertThat(Files.readString(history)).startsWith("[");
+    }
+
+    /** G19 and G16: a --case that names no case is a refusal; a run with no suite says so. */
+    @Test
+    void aCaseThatNamesNothingIsRefusedAndARunWithNoSuiteSaysSo(@TempDir Path dir)
+            throws Exception {
+        Path app = scaffolded(dir);
+
+        Captured nothing = executeCapturing(args(app, "test", "--case", "no such case"));
+        assertThat(nothing.exitCode()).as(nothing.stderr()).isEqualTo(2);
+        assertThat(nothing.stderr()).contains("TQL-YAML-1411").contains("no such case");
+
+        Path tests = app.resolve("tests");
+        Path aside = dir.resolve("tests-aside");
+        Files.move(tests, aside);
+        try {
+            Captured none = executeCapturing(args(app, "test"));
+            assertThat(none.exitCode()).isZero();
+            assertThat(none.stderr()).contains("No suite file under");
+            assertThat(none.stdout()).contains("0 passed, 0 failed");
+        } finally {
+            Files.move(aside, tests);
+        }
+    }
+
+    /**
+     * Unfiled 27 and 10: an unreachable database is the one operator message at 1, for test and
+     * schema alike — test used to print N failed cases, schema a coded line at 2.
+     */
+    @Test
+    void anUnreachableDatabaseIsTheOperatorMessageForTest(@TempDir Path dir) throws Exception {
+        Captured refused = executeCapturing(unreachable(scaffolded(dir), "test"));
+        assertThat(refused.exitCode()).as(refused.stderr()).isEqualTo(1);
+        assertThat(refused.stderr()).contains("Could not connect to the database")
+                .doesNotContain("FAIL ");
+    }
+
+    @Test
+    void anUnreachableDatabaseIsTheOperatorMessageForSchema(@TempDir Path dir) throws Exception {
+        Captured refused = executeCapturing(unreachable(scaffolded(dir), "schema"));
+        assertThat(refused.exitCode()).as(refused.stderr()).isEqualTo(1);
+        assertThat(refused.stderr()).contains("Could not connect to the database")
+                .doesNotContain("TQL-REPORT-2007");
+    }
+
+    /** A command against a port nothing listens on. */
+    private static String[] unreachable(Path app, String command) {
+        return new String[]{command, "--app", app.toString(), "--jdbc-url",
+                "jdbc:postgresql://127.0.0.1:1/never", "--username", "x", "--password", "x"};
+    }
+
+    /** A freshly scaffolded app with its migration applied. */
+    private Path scaffolded(Path dir) {
+        assertThat(execute("new", "demo", "--stack", dir.toString())).isZero();
+        Path app = dir.resolve("demo");
+        assertThat(execute(args(app, "migrate", "apply"))).isZero();
+        return app;
+    }
+
     /** A command (with any positional) plus {@code --app} and the container's datasource flags. */
     private String[] args(Path app, String... command) {
         return Stream.concat(Stream.of(command),
@@ -115,18 +217,27 @@ class AppLifecycleDbCommandsIntegrationTest {
         return new CommandLine(new TesseraqlCli()).execute(args);
     }
 
+    /** Runs a command capturing stdout and stderr — the process streams and picocli's writer. */
     private static Captured executeCapturing(String... args) {
-        PrintStream original = System.out;
-        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        PrintStream originalOut = System.out;
+        PrintStream originalErr = System.err;
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        ByteArrayOutputStream err = new ByteArrayOutputStream();
         try {
-            System.setOut(new PrintStream(buffer, true, StandardCharsets.UTF_8));
-            int exitCode = execute(args);
-            return new Captured(exitCode, buffer.toString(StandardCharsets.UTF_8));
+            System.setOut(new PrintStream(out, true, StandardCharsets.UTF_8));
+            System.setErr(new PrintStream(err, true, StandardCharsets.UTF_8));
+            CommandLine commandLine = TesseraqlCli.commandLine();
+            commandLine.setErr(new java.io.PrintWriter(
+                    new java.io.OutputStreamWriter(err, StandardCharsets.UTF_8), true));
+            int exitCode = commandLine.execute(args);
+            return new Captured(exitCode, out.toString(StandardCharsets.UTF_8),
+                    err.toString(StandardCharsets.UTF_8));
         } finally {
-            System.setOut(original);
+            System.setOut(originalOut);
+            System.setErr(originalErr);
         }
     }
 
-    private record Captured(int exitCode, String stdout) {
+    private record Captured(int exitCode, String stdout, String stderr) {
     }
 }

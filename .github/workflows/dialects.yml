@@ -44,11 +44,6 @@ jobs:
       - name: Install the reactor (tests deferred to the suites)
         run: ./mvnw -B -ntp -DskipTests install
 
-      - name: Plan guards (coverage-core)
-        run: >
-          ./mvnw -B -ntp -pl tesseraql-coverage-core test -Dtesseraql.dialect.its=true
-          -Dtest='OraclePlanGuardIntegrationTest,SqlServerPlanGuardIntegrationTest'
-
       - name: Runtime portability (tesseraql-runtime)
         run: >
           ./mvnw -B -ntp -pl tesseraql-runtime test -Dtesseraql.dialect.its=true

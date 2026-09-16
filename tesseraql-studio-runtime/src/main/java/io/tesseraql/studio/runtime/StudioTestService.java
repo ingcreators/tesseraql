@@ -128,8 +128,11 @@ final class StudioTestService {
         // A sandboxed identity service (over the same sandboxed datasources) runs contract cases,
         // so their identity SELECTs are capped/timed-out like every other case.
         IdentityService identity = new IdentityService(this::sandbox, dialect);
-        TestReport report = new TestRunner(sandbox("main"), appHome, identity, realm)
-                .run(new TestSuite(runnable));
+        // The application's registry: under dev and host nothing installs a process default,
+        // so the four-argument runner made every module function unknown here while the same
+        // case passed under tesseraql test (docs/audit-low-leads.md G20).
+        TestReport report = new TestRunner(sandbox("main"), appHome, identity, realm, null,
+                functions).run(new TestSuite(runnable));
         return result(relativePath, report);
     }
 

@@ -581,6 +581,11 @@ ships as its own slice once the phase opens:
   states why it is not recordable (`TQL-STUDIO-4233` → 400).
   `StudioService.recordability`/`recordedCaseParams`/`recordedSqlFile`/`appendRecordedTest`;
   `StudioTestService.sandboxRowCount`; `studio.tryRecord` provider; `/ui/try/record` route.
+  *Amended, `docs/audit-low-leads.md` slice 12 (G21): the recorder wrote every query-string
+  value as a YAML string, so a `type: integer` limit bound a varchar where PostgreSQL wanted a
+  bigint — the recorded case failed on its first replay and the sandbox capture, refused the
+  same way, recorded no expectation. `StudioService.typedQuery` types the values by the route's
+  `input:` declaration for both the case and the capture.*
 - [x] **J4 — data-browser row edit** — *done*: rows in the data browser link **Edit** when
   three things line up — the row editor's own opt-in (`tesseraql.studio.dataBrowser.edit.enabled`,
   default false, on top of the browser's), the caller's `editRoles`, and a primary key on the

@@ -36,8 +36,8 @@ import org.junit.jupiter.api.Test;
  * <li>The CLI trio ({@code TokenCommand}, {@code DeployCommand}, {@code UpdateNotifier}) — a
  * developer's own machine, no egress policy and no tracer; structural decision 3 gives them
  * timeouts, not the primitive.</li>
- * <li>The test-core pair ({@code RouteTestRunner}, {@code HttpCallCases}) — main-source files
- * that exist only to drive tests, the SQL ledger's precedent.</li>
+ * <li>{@code HttpCallCases} in test-core — a main-source file that exists only to drive tests,
+ * the SQL ledger's precedent.</li>
  * </ul>
  */
 class HttpClientLedgerTest {
@@ -52,8 +52,7 @@ class HttpClientLedgerTest {
             "tesseraql-runtime/src/main/java/io/tesseraql/runtime/LoopbackCall.java",
             "tesseraql-runtime/src/main/java/io/tesseraql/runtime/MultiAppGateway.java",
             "tesseraql-studio/src/main/java/io/tesseraql/studio/CopilotService.java",
-            "tesseraql-test-core/src/main/java/io/tesseraql/test/HttpCallCases.java",
-            "tesseraql-test-core/src/main/java/io/tesseraql/test/RouteTestRunner.java"));
+            "tesseraql-test-core/src/main/java/io/tesseraql/test/HttpCallCases.java"));
 
     @Test
     void everyClientConstructionSiteIsOnTheLedger() throws IOException {

@@ -93,13 +93,9 @@ coverage:
 PostgreSQL and MySQL integration tests run on every `./mvnw verify`. The runtime portability run
 covers the framework migrations, the stores whose SQL differs per vendor (the outbox, the job
 claim, run ownership, the event channel, document sequences), the identity pack and a served
-route. The Oracle and SQL Server plan-guard tests use large container images and are opt-in:
+route. The Oracle and SQL Server runs use large container images and are opt-in:
 
 ```bash
-# Query Plan Guard against real Oracle / SQL Server
-./mvnw -pl tesseraql-coverage-core test -Dtesseraql.dialect.its=true \
-  -Dtest='OraclePlanGuardIntegrationTest,SqlServerPlanGuardIntegrationTest'
-
 # Full runtime portability (framework migrations, stores, identity pack, a served route)
 ./mvnw -pl tesseraql-runtime test -Dtesseraql.dialect.its=true \
   -Dtest='OraclePortabilityIntegrationTest,SqlServerPortabilityIntegrationTest'

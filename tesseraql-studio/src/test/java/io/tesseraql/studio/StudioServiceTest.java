@@ -335,6 +335,15 @@ class StudioServiceTest {
                 id: things.search
                 kind: route
                 recipe: query-json
+                input:
+                  q:
+                    type: string
+                  limit:
+                    type: integer
+                  ratio:
+                    type: number
+                  archived:
+                    type: boolean
                 sources:
                   main:
                     sql:
@@ -343,6 +352,9 @@ class StudioServiceTest {
                       params:
                         q: query.q
                         owner: params.owner
+                        limit: query.limit
+                        ratio: query.ratio
+                        archived: query.archived
                 response:
                   json:
                     body:
@@ -375,9 +387,21 @@ class StudioServiceTest {
                 .isEqualTo("web/api/things/search.sql");
 
         Map<String, Object> params = studio.recordedCaseParams("GET", "/api/things",
-                Map.of("q", "sato", "unrelated", "x"), Map.of("owner", "ops"));
+                Map.of("q", "sato", "unrelated", "x", "limit", "10", "ratio", "0.5",
+                        "archived", "true"),
+                Map.of("owner", "ops"));
         assertThat(params).containsEntry("q", "sato").containsEntry("owner", "ops")
                 .doesNotContainKey("unrelated");
+        // Typed by the route's input: declaration, as the served route types them
+        // (docs/audit-low-leads.md G21) — a string here bound a varchar where the statement
+        // wanted a bigint, and the recorded case failed on its first replay.
+        assertThat(params).containsEntry("limit", 10L).containsEntry("ratio", 0.5)
+                .containsEntry("archived", true);
+        // A value the declared type cannot read stays the string it arrived as.
+        assertThat(studio.recordedCaseParams("GET", "/api/things", Map.of("limit", "ten"),
+                Map.of())).containsEntry("limit", "ten");
+        assertThat(studio.typedQuery("GET", "/api/things", Map.of("limit", "7", "q", "x")))
+                .containsEntry("limit", 7L).containsEntry("q", "x");
 
         String first = studio.appendRecordedTest("finds sato", "web/api/things/search.sql",
                 params, 2, "it");

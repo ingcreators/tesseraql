@@ -212,8 +212,9 @@ Held to the same bar as the rest of the gallery, scaled up:
   declarations), decision, workflow transitions.
 - `tesseraql admission --app .` clean; the suite runs in CI like the other gallery apps
   (regen discipline: scaffold-derived surfaces are regenerated, never hand-edited).
-- The query plan guard on the comparison and dashboard queries — the two most
-  join-heavy statements.
+- *Struck (`docs/audit-low-leads.md` slice 12, G23): the query plan guard this bullet named
+  had no caller — no verb, goal or config key ran it — and was deleted; the comparison and
+  dashboard queries are covered by the suite's SQL line and branch coverage.*
 
 ## The demo tour (the deliverable, not an afterthought)
 

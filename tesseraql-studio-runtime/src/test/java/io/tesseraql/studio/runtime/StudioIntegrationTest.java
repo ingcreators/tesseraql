@@ -2388,19 +2388,27 @@ class StudioIntegrationTest {
         assertThat(run.statusCode()).isEqualTo(200);
         assertThat(run.body()).contains("Save as test case");
 
+        // The paged shape every scaffolded search route has: limit and offset are declared
+        // type: integer, so the recorder writes them as YAML integers — written as strings
+        // they bound a varchar where the statement wanted a bigint, the case failed on its
+        // first replay and the sandbox capture, refused the same way, recorded no expectation
+        // (docs/audit-low-leads.md G21).
         HttpResponse<String> recorded = postForm("/_tesseraql/studio/user-admin/ui/try/record",
-                "method=GET&path=" + enc("/api/users") + "&query=" + enc("q=sato")
-                        + "&name=" + enc("search finds sato"));
+                "method=GET&path=" + enc("/api/users") + "&query="
+                        + enc("q=sato&limit=10&offset=0") + "&name=" + enc("search finds sato"));
         assertThat(recorded.statusCode()).isEqualTo(303);
         String suite = Files.readString(appHome.resolve("tests/studio-recorded-test.yml"));
         assertThat(suite).contains("search finds sato").contains("web/api/users/search.sql")
-                .contains("sato").contains("rowCount");
+                .contains("sato").contains("rowCount").contains("limit: 10")
+                .contains("offset: 0").doesNotContain("\"10\"");
 
-        // The recorded case runs through the route's test runner like a hand-written one.
+        // The recorded case runs through the route's test runner like a hand-written one — and
+        // passes, which is the contract ("passes by construction").
         HttpResponse<String> tests = postForm("/_tesseraql/studio/user-admin/ui/run-tests",
                 "path=" + enc("web/api/users/get.yml"));
         assertThat(tests.statusCode()).isEqualTo(200);
         assertThat(tests.body()).contains("search finds sato");
+        assertThat(recordedCaseVerdict(tests.body(), "search finds sato")).isEqualTo("pass");
 
         // Re-recording the same name gets a suffix instead of clobbering the first case.
         assertThat(postForm("/_tesseraql/studio/user-admin/ui/try/record",
@@ -2413,6 +2421,16 @@ class StudioIntegrationTest {
         // A command route is not recordable (v1) and says why.
         assertThat(postForm("/_tesseraql/studio/user-admin/ui/try/record",
                 "method=POST&path=" + enc("/api/users/provision")).statusCode()).isEqualTo(400);
+    }
+
+    /** The pass/fail badge the run-tests fragment renders beside the named case. */
+    private static String recordedCaseVerdict(String body, String caseName) {
+        int at = body.indexOf("<span>" + caseName + "</span>");
+        assertThat(at).as("case rendered").isPositive();
+        String before = body.substring(0, at);
+        return before.substring(before.lastIndexOf("data-variant=")).contains("success")
+                ? "pass"
+                : "fail";
     }
 
     @Test

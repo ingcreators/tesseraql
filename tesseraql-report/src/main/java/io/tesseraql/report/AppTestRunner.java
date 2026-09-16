@@ -1,12 +1,19 @@
 package io.tesseraql.report;
 
+import io.tesseraql.core.error.TqlDomain;
+import io.tesseraql.core.error.TqlErrorCode;
+import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.expr.ExpressionFunctions;
+import io.tesseraql.core.sql.Sql2WayParser;
+import io.tesseraql.core.sql.SqlNode;
 import io.tesseraql.coverage.ItemCoverage;
+import io.tesseraql.coverage.SqlCoverableLines;
 import io.tesseraql.coverage.SqlCoverage;
 import io.tesseraql.coverage.SqlCoverageReport;
 import io.tesseraql.identity.IdentityService;
 import io.tesseraql.identity.RealmConfig;
 import io.tesseraql.test.ManifestCoverage;
+import io.tesseraql.test.ManifestSqlFiles;
 import io.tesseraql.test.SuiteCoverage;
 import io.tesseraql.test.TestReport;
 import io.tesseraql.test.TestRunner;
@@ -29,12 +36,25 @@ import javax.sql.DataSource;
  * Discovers and runs declarative test suites under an app's {@code tests/} directory and writes the
  * JUnit XML, JSON, HTML, SARIF, Cobertura, SonarQube, and Allure reports (design ch. 13, 15, 18).
  * Independent of Maven for testability.
+ *
+ * <p>Before the first case runs, every SQL file the manifest binds is declared to the coverage
+ * collector at 0%, so the population the gate and the regression aggregate read is the
+ * application's, not the cases' (docs/audit-low-leads.md G16). And the case names the reports join
+ * on are checked once, across every suite: a name declared twice would show the first result for
+ * both, and a {@code --case} that matches nothing would have written an all-green overlay for a
+ * run of nothing (G19).
  */
 public final class AppTestRunner {
 
     /** Coverage kinds whose gaps are framework-inventory hints rather than test gaps. */
     private static final Set<String> NOTE_KINDS = Set.of("iam-contract", "saml", "oidc",
             "scim", "preference");
+
+    /** TQL-YAML-1410: two cases across the app's suites share a name. */
+    static final TqlErrorCode DUPLICATE_CASE_NAME = new TqlErrorCode(TqlDomain.YAML, 1410);
+
+    /** TQL-YAML-1411: a {@code --case} filter named no case. */
+    static final TqlErrorCode NO_SUCH_CASE = new TqlErrorCode(TqlDomain.YAML, 1411);
 
     /**
      * Result of a test run: the aggregated report, the collected SQL coverage, and the derived
@@ -84,14 +104,39 @@ public final class AppTestRunner {
             Set<String> caseNames, ExpressionFunctions functions) {
         IdentityService identity = new IdentityService(name -> dataSource);
         SqlCoverage coverage = new SqlCoverage();
+        AppManifest manifest = loadManifest(appHome, functions);
+        declareSqlFiles(appHome, manifest, coverage, functions);
         TestRunner runner = new TestRunner(dataSource, appHome, identity, realm, coverage,
                 functions);
         TestSuiteLoader loader = new TestSuiteLoader();
 
-        List<TestReport.TestResult> results = new ArrayList<>();
-        List<TestSuite> suites = new ArrayList<>();
+        Map<String, Path> namedCases = new java.util.HashMap<>();
+        List<TestSuite> loaded = new ArrayList<>();
         for (Path suiteFile : suiteFiles(appHome)) {
             TestSuite suite = loader.load(suiteFile);
+            for (TestSuite.TestCase testCase : suite.tests()) {
+                Path first = namedCases.putIfAbsent(testCase.name(), suiteFile);
+                if (first != null) {
+                    throw new TqlException(DUPLICATE_CASE_NAME, "Test case '" + testCase.name()
+                            + "' is declared twice: in " + relative(appHome, first) + " and "
+                            + relative(appHome, suiteFile) + " — the reports join results to"
+                            + " cases by name, so both would show the first result");
+                }
+            }
+            loaded.add(suite);
+        }
+        if (!caseNames.isEmpty()) {
+            Set<String> unknown = new java.util.TreeSet<>(caseNames);
+            unknown.removeAll(namedCases.keySet());
+            if (!unknown.isEmpty()) {
+                throw new TqlException(NO_SUCH_CASE, "No test case is named " + unknown
+                        + " under " + appHome.resolve("tests") + " — nothing ran");
+            }
+        }
+
+        List<TestReport.TestResult> results = new ArrayList<>();
+        List<TestSuite> suites = new ArrayList<>();
+        for (TestSuite suite : loaded) {
             if (!caseNames.isEmpty()) {
                 suite = new TestSuite(suite.tests().stream()
                         .filter(testCase -> caseNames.contains(testCase.name())).toList());
@@ -102,7 +147,7 @@ public final class AppTestRunner {
             suites.add(suite);
             results.addAll(runner.run(suite).results());
         }
-        List<ItemCoverage> kinds = coverageKinds(appHome, suites, functions);
+        List<ItemCoverage> kinds = coverageKinds(manifest, suites);
 
         TestReport report = new TestReport(results);
         writeReports(report, reportDir);
@@ -111,13 +156,40 @@ public final class AppTestRunner {
         return new RunResult(report, coverage, kinds);
     }
 
-    /** Derives the item-coverage kinds; the manifest-based ones need a loadable manifest. */
-    private static List<ItemCoverage> coverageKinds(Path appHome, List<TestSuite> suites,
+    /**
+     * Declares every SQL file the manifest binds to the collector at 0% — the population the
+     * gate and the regression aggregate read. A file that is missing or does not parse is lint's
+     * finding, not a coverage entry, and is skipped here.
+     */
+    private static void declareSqlFiles(Path appHome, AppManifest manifest, SqlCoverage coverage,
             ExpressionFunctions functions) {
+        Path home = appHome.toAbsolutePath().normalize();
+        for (Path file : ManifestSqlFiles.of(manifest)) {
+            if (!Files.isRegularFile(file)) {
+                continue;
+            }
+            List<SqlNode> nodes;
+            try {
+                nodes = Sql2WayParser.parse(Files.readString(file), functions);
+            } catch (IOException | RuntimeException unreadable) {
+                continue;
+            }
+            String sqlId = home.relativize(file).toString().replace('\\', '/');
+            coverage.declare(sqlId, SqlCoverableLines.compute(nodes),
+                    SqlCoverableLines.branchLines(nodes));
+        }
+    }
+
+    private static String relative(Path appHome, Path file) {
+        return appHome.toAbsolutePath().normalize()
+                .relativize(file.toAbsolutePath().normalize()).toString().replace('\\', '/');
+    }
+
+    /** Derives the item-coverage kinds; the manifest-based ones need a loadable manifest. */
+    private static List<ItemCoverage> coverageKinds(AppManifest manifest, List<TestSuite> suites) {
         List<ItemCoverage> kinds = new ArrayList<>();
         kinds.add(SuiteCoverage.assertions(suites));
         kinds.add(SuiteCoverage.contracts(suites));
-        AppManifest manifest = loadManifest(appHome, functions);
         if (manifest != null) {
             kinds.add(ManifestCoverage.routes(manifest, suites));
             kinds.add(ManifestCoverage.security(manifest, suites));
@@ -193,7 +265,8 @@ public final class AppTestRunner {
         }
     }
 
-    private static List<Path> suiteFiles(Path appHome) {
+    /** Every suite file under {@code tests/}, sorted; empty when the directory is absent. */
+    public static List<Path> suiteFiles(Path appHome) {
         Path testsDir = appHome.resolve("tests");
         if (!Files.isDirectory(testsDir)) {
             return List.of();

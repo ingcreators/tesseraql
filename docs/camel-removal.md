@@ -52,8 +52,10 @@ through a `ProducerTemplate`. A registry of pipelines by id is what all four act
 
 `tesseraql-core`, `tesseraql-yaml`, `tesseraql-security`, `tesseraql-operations`,
 `tesseraql-identity`, `tesseraql-test-core` and `tesseraql-maven-plugin` import none. **The test
-suite an application ships does not go through Camel** — `RouteTestRunner` drives a route over
-real HTTP — which is what made the edge change checkable and is what makes this one checkable.
+suite an application ships does not go through Camel** — it runs SQL on a JDBC connection, and
+the runtime's integration tests drive a route over real HTTP — which is what made the edge change
+checkable and is what makes this one checkable. *(The sentence named `RouteTestRunner`, a class
+nothing called, deleted by `docs/audit-low-leads.md` slice 12, G23.)*
 
 ### What the dependency costs, counted the way the image counts it
 

@@ -35,7 +35,7 @@ Every command, on both binaries, answers with one of these; `tesseraql --help` p
 | `0` | The command did what was asked. |
 | `1` | The command ran and failed — a database it could not reach (one operator message, no stack trace), a job that ended FAILED, or an unexpected error with its stack trace. |
 | `2` | Nothing ran: the request could not be run at all — a missing or unparseable flag, a directory that is not an application, a declaration the command cannot act on, a modules.lock that does not match — one line on stderr saying what to change, or the framework's own coded sentence (TQL-…) naming the declaration. |
-| `3` | `job run` only: the job did not run by policy — its business-day calendar filtered the date out, or the overlap policy skipped the firing. |
+| `3` | The command ran and a policy gate said no — `job run`'s business-day calendar filtered the date out or its overlap policy skipped the firing; `test --fail-on-regression` ran the suites green and found SQL coverage below the previous run's. |
 
 ## `dev`
 
@@ -253,7 +253,7 @@ Run the app's test suites; --report writes the docs overlay.
 | `--history-limit <historyLimit>` | — | Runs retained in history.json; 0 keeps all (default: 20). |
 | `--sql-line-threshold <sqlLineThreshold>` | — | Min SQL line coverage % recorded. |
 | `--sql-branch-threshold <sqlBranchThreshold>` | — | Min SQL branch coverage % recorded. |
-| `--fail-on-regression` | — | Exit non-zero if SQL coverage drops vs the previous run (needs --report). |
+| `--fail-on-regression` | — | Exit 3 if SQL coverage drops vs the previous run (needs --report). |
 | `--regression-tolerance <regressionTolerance>` | — | Allowed coverage drop (percentage points) before it is a regression. |
 | `--format <format>` | — | Output format: text, json (default: text). Default: `text`. |
 | `--case <cases>` | — | Run only the named case(s), exact match; repeatable (default: all). |

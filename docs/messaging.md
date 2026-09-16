@@ -220,7 +220,8 @@ Lint catches a misconfigured channel before it ships:
 
 A `queue-consume` route is covered by the `queue-consume` coverage kind when a declarative suite
 ([testing](testing.md)) exercises its SQL (the same SQL-file basis as route coverage); gate it with
-`coverage.thresholds.queue-consume`.
+`coverage.thresholds.queue-consume` — a key the threshold resolver's allow-list had dropped
+without a word until `docs/audit-low-leads.md` G22.
 
 ## Next
 

@@ -10,7 +10,8 @@ import java.util.Map;
  * @param sqlLine   minimum acceptable SQL line-coverage ratio per file
  * @param sqlBranch minimum acceptable SQL branch-coverage ratio per file
  * @param kinds     minimum acceptable covered-of-declared ratio per coverage kind; absent kinds
- *                  are not gated
+ *                  are not gated, and a named kind the run did not measure is a gate violation
+ *                  ({@link CoverageGate})
  */
 public record CoverageThresholds(double sqlLine, double sqlBranch, Map<String, Double> kinds) {
 

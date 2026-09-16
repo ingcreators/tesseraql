@@ -655,7 +655,10 @@ public final class StudioService {
      * Reverse-maps a console invocation onto the route's {@code sql.params} (Track J3): each SQL
      * parameter's source expression ({@code query.x} / {@code params.x}) resolves from the sent
      * query string and JSON body; unresolved parameters are simply omitted (the 2-way SQL's
-     * conditional blocks then skip them, exactly as the live request did).
+     * conditional blocks then skip them, exactly as the live request did). A query-string value
+     * is typed by the route's {@code input:} declaration, as the served route types it: written
+     * untyped, {@code limit: "10"} bound a varchar where the statement wanted a bigint, and the
+     * recorded case failed on its first replay (docs/audit-low-leads.md G21).
      */
     public Map<String, Object> recordedCaseParams(String method, String path,
             Map<String, String> query, Map<String, Object> body) {
@@ -668,19 +671,59 @@ public final class StudioService {
         if (mapping == null) {
             return out;
         }
+        Map<String, Object> typed = typedQuery(match.definition(), query);
         mapping.forEach((sqlParam, expr) -> {
             Object value = null;
             if (expr != null && expr.startsWith("query.")) {
-                value = query.get(expr.substring("query.".length()));
+                value = typed.get(expr.substring("query.".length()));
             } else if (expr != null && expr.startsWith("params.")) {
                 String name = expr.substring("params.".length());
-                value = body.containsKey(name) ? body.get(name) : query.get(name);
+                value = body.containsKey(name) ? body.get(name) : typed.get(name);
             }
             if (value != null && !String.valueOf(value).isBlank()) {
                 out.put(sqlParam, value);
             }
         });
         return out;
+    }
+
+    /**
+     * The sent query string with each value typed by the matched route's {@code input:}
+     * declaration — the map the sandbox binds when it captures the recorded case's expectation,
+     * so the capture reads the same values the case will replay. A name the route does not
+     * declare, or a value its type cannot read, stays the string it arrived as.
+     */
+    public Map<String, Object> typedQuery(String method, String path, Map<String, String> query) {
+        RouteFile match = routeFor(method, path);
+        return match == null ? new LinkedHashMap<>(query) : typedQuery(match.definition(), query);
+    }
+
+    private static Map<String, Object> typedQuery(RouteDefinition definition,
+            Map<String, String> query) {
+        Map<String, Object> typed = new LinkedHashMap<>();
+        query.forEach(
+                (name, raw) -> typed.put(name, typedValue(definition.input().get(name), raw)));
+        return typed;
+    }
+
+    /** {@code type: integer} → a long, {@code number} → a double, {@code boolean} → a boolean. */
+    static Object typedValue(io.tesseraql.yaml.model.InputField field, String raw) {
+        if (field == null || field.type() == null || raw == null) {
+            return raw;
+        }
+        try {
+            return switch (field.type()) {
+                case "integer" -> Long.parseLong(raw.trim());
+                case "number" -> field.format() == null ? Double.parseDouble(raw.trim()) : raw;
+                case "boolean" -> "true".equalsIgnoreCase(raw.trim())
+                        || "false".equalsIgnoreCase(raw.trim())
+                                ? Boolean.parseBoolean(raw.trim())
+                                : raw;
+                default -> raw;
+            };
+        } catch (NumberFormatException notANumber) {
+            return raw;
+        }
     }
 
     /**

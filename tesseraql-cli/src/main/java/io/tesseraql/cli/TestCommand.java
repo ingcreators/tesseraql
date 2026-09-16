@@ -34,8 +34,10 @@ import picocli.CommandLine.Option;
  * {@code report} goal: it additionally writes the documentation-portal overlay
  * ({@code .tesseraql/docs/report.json} + {@code history.json}). The overlay is JSON today; a future
  * {@code <fmt>} selector is reserved. With {@code --fail-on-regression} the command also exits
- * non-zero (2) when this run's SQL coverage dropped against the previous run beyond the tolerance —
- * the coverage-regression gate.
+ * {@code 3} when this run's SQL coverage dropped against the previous run beyond the tolerance —
+ * the coverage-regression gate: the suites ran and passed, a policy said no
+ * (docs/cli-surface.md decision 10b), which is neither a failure ({@code 1}) nor "nothing ran"
+ * ({@code 2}).
  */
 @Command(name = "test", description = "Run the app's test suites; --report writes the docs overlay.")
 final class TestCommand implements Callable<Integer> {
@@ -72,7 +74,7 @@ final class TestCommand implements Callable<Integer> {
     double sqlBranchThreshold;
 
     @Option(names = {
-            "--fail-on-regression"}, description = "Exit non-zero if SQL coverage drops vs the previous run (needs --report).")
+            "--fail-on-regression"}, description = "Exit 3 if SQL coverage drops vs the previous run (needs --report).")
     boolean failOnRegression;
 
     @Option(names = {
@@ -110,6 +112,17 @@ final class TestCommand implements Callable<Integer> {
                         .resolve("reports");
         Files.createDirectories(reports);
 
+        // A database the runner cannot reach used to surface as N failed cases at exit 1 — the
+        // driver's refusal wrapped into every case's message — where every other database verb
+        // prints the one operator message. The first connection is opened here, so the refusal
+        // reaches the handler that prints it (docs/audit-low-leads.md, unfiled 27).
+        try (java.sql.Connection probe = dataSource.getConnection()) {
+            probe.isValid(5);
+        }
+        if (AppTestRunner.suiteFiles(app).isEmpty()) {
+            System.err.println("No suite file under " + app.resolve("tests") + " — nothing ran;"
+                    + " the coverage recorded is the manifest's SQL files at 0%");
+        }
         AppTestRunner.RunResult result = new AppTestRunner().run(app, dataSource,
                 RealmConfig.managed(realm, "main"), reports, Set.copyOf(cases));
         TestReport report = result.report();
@@ -121,8 +134,9 @@ final class TestCommand implements Callable<Integer> {
         if (!report.allPassed()) {
             return 1;
         }
-        // A clean test run that regressed coverage (opt-in gate) exits 2, distinct from a test failure.
-        return regressed ? 2 : 0;
+        // A clean test run that regressed coverage (opt-in gate): the suites ran and passed, a
+        // policy said no — 3, the number `job run` already gives that meaning (decision 10b).
+        return regressed ? 3 : 0;
     }
 
     private static void printText(TestReport report) {
@@ -182,6 +196,17 @@ final class TestCommand implements Callable<Integer> {
         Files.writeString(docsDir.resolve("report.json"), generator.toJson(doc));
         // The previous run, captured before this run is appended, is the regression-gate baseline.
         Path historyFile = docsDir.resolve("history.json");
+        // A corrupt (not merely absent) history silently disabled the regression gate — the
+        // empty baseline it read passed unconditionally, then the append overwrote the evidence.
+        // The report goal got this guard in #652; the CLI, whose Javadoc claims parity, did not
+        // (docs/audit-low-leads.md G18).
+        if (ReportHistory.isCorrupt(historyFile)) {
+            if (failOnRegression) {
+                throw ReportHistory.corrupt(historyFile);
+            }
+            System.err.println(ReportHistory.corrupt(historyFile).sentence()
+                    + " (starting a fresh history)");
+        }
         List<ReportHistory.Entry> priorHistory = ReportHistory.read(historyFile);
         // A non-positive limit keeps the full history (longer-term trends, backlog F9).
         ReportHistory.append(historyFile, ReportHistory.Entry.from(doc), historyLimit);

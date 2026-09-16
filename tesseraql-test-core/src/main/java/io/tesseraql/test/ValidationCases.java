@@ -57,14 +57,20 @@ final class ValidationCases {
         }
     }
 
+    /**
+     * Compiles a rule against the registry the runner was handed — the process default is what
+     * the MCP {@code test} tool and Studio never install (docs/module-scope.md), so the
+     * no-registry overloads made a module function "unknown" there while {@code tesseraql test}
+     * passed the same case (docs/audit-low-leads.md G20).
+     */
     private ValidationRules.Rule compileRule(Path routeDir, String id, ValidationRule rule) {
         if (rule.isExpression()) {
             return ValidationRules.expression(id, rule.when(), rule.rule(), rule.field(),
-                    rule.code(), rule.message());
+                    rule.code(), rule.message(), context.functions());
         }
         Path file = routeDir.resolve(rule.file()).normalize();
         return ValidationRules.sql(id, rule.when(), SuiteContext.read(file), file.toString(),
-                rule.params(), rule.field(), rule.code(), rule.message());
+                rule.params(), rule.field(), rule.code(), rule.message(), context.functions());
     }
 
     private void recordRuleCoverage(ValidationRules.Rule rule, BoundSql bound) {

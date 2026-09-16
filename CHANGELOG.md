@@ -67,6 +67,52 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **`test --fail-on-regression` exits 3.** The coverage-regression gate answered 2 — the number
+  the CLI's own exit-code table publishes as "nothing ran" — for a run whose suites had all
+  passed, while `testing.md` published the same number as the gate: one script could not serve
+  both. `3` already meant "the command ran and a policy said no" (`job run`'s calendar and
+  overlap skips), so the gate returns it and `ExitCodes.SKIPPED`'s sentence is widened
+  (`docs/cli-surface.md` decision 10b). `docs/audit-low-leads.md` slice 12 (F115, decision 1).
+- **The SQL coverage population is what the manifest binds.** Every SQL file the app's documents
+  reference — routes, tools, consumers and resources (sources, steps, enrichments, validation
+  files, an export's `after:`), jobs (steps, chunk reader and writer), workflows (commands and
+  guard files) — is declared at 0% before the first case runs, so a bound file no case touches
+  counts in the per-file gate and in the aggregate the regression gate compares. The gate used to
+  count only the files a case rendered: deleting the one test that exercised the worst-covered
+  file made an 80/80 gate pass, and an app whose suites never ran (a renamed `tests/`, a wrong
+  `--app`) scored 100% and wrote that into the trend. A breaking change for an app that enabled
+  `sqlLine`/`sqlBranch` with untested routes — the threshold now means what it says. A run that
+  finds no suite file says so on stderr. (G16)
+- **A 2-way SQL file that controls its transaction is refused.** `commit`, `rollback`,
+  `begin`/`start transaction` or `set transaction` at the start of a statement is
+  `TQL-SQL-2123` at parse, so lint, the test runner, the compiler and the Studio sandbox all
+  refuse the file with one code. A `commit;` inside a case's file — a DBA script's trailing
+  terminator — ended the transaction the runner always rolls back, so the write persisted behind
+  a green case and every later run added one more row, while `testing.md` promised a test run
+  never commits anything. A PL/SQL or T-SQL block whose `BEGIN` continues with a statement is
+  not judged. (G17)
+- **Every `coverage.thresholds.<kind>` key is read, and a kind the run did not measure fails the
+  gate.** The resolver's hand-kept allow-list dropped `queue-consume` and `decision` — both
+  documented as gates — and any typo without a word, so `queue-consume: 100` over a 0% kind
+  reported "coverage gate: passed". The resolver reads every key as written; `CoverageGate`
+  names a key whose kind was not measured, with the kinds that were. An app that had set
+  `queue-consume: 100` and was passing will fail until it covers the consumer. (G22)
+- **A case name is unique across the app's suites, and a `--case` that names no case is a
+  refusal.** The reports join results to cases by name, so two cases sharing one showed the
+  first result for both (a failing twin rendered green on the portal's route page):
+  `TQL-YAML-1410` names both files. A `--case` filter matching nothing ran nothing, exited 0 and
+  with `--report` overwrote the overlay with an all-green run of nothing: `TQL-YAML-1411`, exit
+  2, before anything is written. (G19)
+- **`RouteTestRunner`, `RouteSuite` and the query plan guard are deleted.** Neither had a caller
+  in main code since the day it was committed — no verb, goal, config key or MCP tool ran them —
+  while three design records grounded their acceptance on "`RouteTestRunner` drives every route
+  over real HTTP" (the acceptance was the runtime's JUnit integration tests) and the README,
+  roadmap and procurement demo advertised a plan guard no user could invoke. The
+  `io.tesseraql.coverage.plan` package, its four vendor integration tests, the `TQL-PLAN` domain,
+  the Oracle/SQL Server/MySQL test dependencies of `tesseraql-coverage-core` and the "Plan
+  guards" step of the dialect suites go with them; the design records say what the acceptance
+  was. (G23)
+
 - **A string literal in the expression language knows three escapes, and refuses the
   rest.** `\'`, `\"` and `\\` are the escapes; any other backslash is a parse error
   (`TQL-SQL-2101`) naming the doubled spelling. The lexer kept the character and dropped the
@@ -189,6 +235,30 @@ All notable changes to TesseraQL are documented here. The format follows
   sandbox, means the sandbox). Docs and two fixtures only (G5).
 
 ### Fixed
+
+- **`test --report --fail-on-regression` refuses a corrupt `history.json`.** The CLI read the
+  unreadable baseline as "no baseline yet", passed the gate unconditionally and overwrote the
+  file with a one-entry ring — the O9 defect #652 fixed in the `report` goal and not in the CLI,
+  whose Javadoc claimed parity. Under the gate the run is refused (`TQL-REPORT-2006`, exit 2)
+  and the file left as evidence; without it, one warning and a fresh history. (G18)
+- **The `validate`, `notify` and `transition` case kinds compile against the registry the runner
+  was handed.** They read the process default, which the MCP `test` tool and Studio never
+  install, so a case calling a module function passed under `tesseraql test` and failed as
+  "unknown function" from the agent's tool and Studio's run-tests panel; `mvn tesseraql:report`
+  alone ran built-ins only. The three kinds read `SuiteContext.functions()`, Studio hands the
+  runtime's registry to its runner, and the `report` goal installs the plugin classpath's
+  functions as its siblings do. (G20)
+- **The Studio recorder types a query value by the route's `input:` declaration.** Every
+  query-string value was written as a YAML string, so a recorded search with `limit=10` bound a
+  varchar where PostgreSQL wanted a bigint — the case failed on its first replay and the sandbox
+  capture, refused the same way, recorded no expectation. A `type: integer` value is written as
+  the integer it is, a `number` and a `boolean` likewise, and the capture binds the same typed
+  values. (G21)
+- **`test` and `schema` against a database they cannot reach answer the operator message at
+  exit 1.** `test` printed N failed cases carrying the driver's sentence; `schema` wrapped the
+  `SQLException` without its cause and answered a coded line at exit 2, against
+  `docs/cli-surface.md` decision 10. `test` and `coverage` open their first connection before the
+  suites, `SchemaGenerator` carries the cause the handler walks. (unfiled 27, 10)
 
 - **Lint reports a 2-way SQL file that does not parse.** `LintContext.sqlNodes` swallowed the
   parse failure on the premise that another lint owned the SQL; none did, and nothing loads a

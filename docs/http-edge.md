@@ -42,10 +42,12 @@ moving it is not a breaking change.
 Recorded because each one was believed the other way at the start of this document, and each
 belief would have inflated the estimate.
 
-- **Route tests do not go through Camel.** `RouteTestRunner` drives a route over real HTTP;
-  `tesseraql-test-core` and `tesseraql-maven-plugin` import no Camel at all. The test suite an
-  application ships keeps working across any edge change, which is what makes such a change
-  checkable.
+- **Route tests do not go through Camel.** The runtime's integration tests drive a route over
+  real HTTP with their own clients; `tesseraql-test-core` and `tesseraql-maven-plugin` import no
+  Camel at all, and the test suite an application ships runs SQL on a JDBC connection, so it
+  keeps working across any edge change, which is what makes such a change checkable. *(This
+  bullet named `RouteTestRunner`, a class nothing called, deleted by `docs/audit-low-leads.md`
+  slice 12, G23.)*
 - **Mail is not `camel-mail`.** `MailNotifier` is plain `jakarta.mail`.
 - **`camel-cxf-rest` is not Camel routing.** `tesseraql-oauth` uses CXF's OAuth classes directly;
   the artifact arrives through Camel's BOM and nothing else.

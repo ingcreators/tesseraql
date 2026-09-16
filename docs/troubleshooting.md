@@ -100,6 +100,25 @@ class is written `'\\d'`. A literal `matches()` pattern that does not compile is
 The runtime refuses a request that renders such a file with the same code, so a route that
 answers `2101` on every request has a SQL file the lint would have refused.
 
+### `TQL-SQL-2123` — a SQL file carries a transaction-control statement
+
+A 2-way SQL file never owns its transaction: the command pipeline does on a request, the test
+runner does for a case (and always rolls it back), the Studio sandbox does for a console run. A
+`commit;` at the end of the file — a DBA script's trailing terminator, an Oracle habit — ended
+the transaction the runner thought it owned, so the case's write persisted behind a green
+result and every later run added one more row. The parser refuses the file, naming the line
+and the statement, on every surface: remove the statement. A PL/SQL or T-SQL block that starts
+with `BEGIN` and continues with a statement is not one; `BEGIN` alone, `BEGIN WORK` and
+`BEGIN TRANSACTION` are.
+
+### `TQL-YAML-1410` / `1411` — the suite's case names
+
+The reports join results to cases by name, so a name declared twice across the app's suites is
+refused (`1410`, both files named): before, both twins showed the first result and a failing
+duplicate rendered green on the portal's route page. A `--case` filter naming no case is
+refused too (`1411`, exit 2): a CI step pinned to a since-renamed case used to run nothing,
+exit 0, and with `--report` overwrite the overlay with an all-green run of nothing.
+
 ### `TQL-SQL-2122` — an expression met an operand it cannot evaluate
 
 A relational comparison (`<`, `>`, `<=`, `>=`) on a `null` or on two values of unrelated
