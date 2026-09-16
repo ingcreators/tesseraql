@@ -52,7 +52,10 @@ publishes every finding to the Problems panel at `source:line:column`
 (position-less findings anchor at the top of their file). Findings clear when the
 next run no longer reports them. If the CLI is missing or predates `--format json`,
 one actionable warning points at the `tesseraql.cliPath` setting — never a modal,
-never a crash.
+never a crash. A document that does not parse is a finding like any other: the
+linter reports it at the file, with the parser's own line and column, and keeps
+linting the rest of the application, so the panel never goes stale on the shape an
+editor produces most — an empty file whose header is not typed yet.
 
 The extension holds no validation logic of its own. `AppLinter` is the single lint
 engine; the extension renders what it reports. A rule added to the framework reaches
@@ -282,13 +285,15 @@ jobs (each with its one-line trigger story) come from the manifest.
 A document that does not parse is **skipped, not fatal**: it is listed in `broken`
 (with the parser's message) and on stderr, and everything else still prints. Editor
 intelligence exists to help while an app is mid-edit, so the one moment a document is
-broken must not be the moment every completion in the app goes quiet. A failure
-outside the route tree — a broken shared definition, job, or MCP document — still
-aborts the manifest load, and the command then degrades one step further: the
-config-derived arrays (`policies`, `messages`) and the shared-definition walks still
-answer, `routes`/`workflows`/`jobs` come back empty rather than absent, and `broken`
-carries an `(app manifest)` entry. The extension names the skipped files once per set
-rather than leaving the missing completions unexplained.
+broken must not be the moment every completion in the app goes quiet. This holds for
+every per-document tree — a route, a job, a consumer, a workflow, an MCP document —
+each named by its own file. A failure in what every document resolves through — the
+configuration, a broken shared definition — still aborts the manifest load, and the
+command then degrades one step further: the config-derived arrays (`policies`,
+`messages`) and the shared-definition walks still answer, `routes`/`workflows`/`jobs`
+come back empty rather than absent, and `broken` carries an `(app manifest)` entry.
+The extension names the skipped files once per set rather than leaving the missing
+completions unexplained.
 
 ## Publishing
 

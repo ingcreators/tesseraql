@@ -108,6 +108,10 @@ class ErrorCodeUniquenessTest {
                     + " declare"),
             Map.entry("SEC-4135", "an invalid responseHeaders defaults declaration"),
             Map.entry("SQL-2101", "an expression that does not parse"),
+            // The lint's own code, refused at the compiler's resolve sites since
+            // docs/audit-low-leads.md slice 8: the source read lazily, so a missing statement
+            // booted green and failed every request.
+            Map.entry("SQL-2103", "a binding's 2-way SQL file is not there"),
             Map.entry("SQL-2111", "a file placeholder that cannot resolve where it is written"),
             Map.entry("VIEW-3302", "a view reference that does not resolve"),
             Map.entry("VIEW-3303", "a form action that names no usable POST route"),

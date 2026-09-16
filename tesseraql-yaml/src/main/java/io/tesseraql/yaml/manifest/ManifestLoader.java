@@ -84,24 +84,35 @@ public final class ManifestLoader {
         return clean;
     }
 
-    /** One route document that failed to parse during a tolerant load (the hot reloader). */
-    public record BrokenRoute(Path source, String error) {
+    /**
+     * One document that failed to load during a tolerant load, and is left out of the
+     * manifest: its file, the code of the refusal when it was a coded one (the parser's own for
+     * a document that does not parse; {@code null} for an uncoded failure), and the
+     * sentence — the root cause's own, without the code and the location the file already
+     * names, so a lint finding and a reload report can each frame it their way.
+     */
+    public record BrokenDocument(Path source, String code, String error) {
     }
 
     /**
-     * Loads the app, tolerating unparseable route documents when {@code brokenSink} is non-null:
-     * each one is reported to the sink (source file and root message) and left out of the manifest
-     * instead of aborting the load. The hot reloader (roadmap Phase 42) uses this so one broken
-     * document on disk cannot take the whole apply-and-reload loop down; startup stays strict.
+     * Loads the app, tolerating unloadable documents when {@code brokenSink} is non-null: each
+     * route, job, consumer, workflow and mcp document that does not load is reported to the
+     * sink and left out of the manifest instead of aborting the load. The hot reloader (roadmap
+     * Phase 42) uses this so one broken document on disk cannot take the whole
+     * apply-and-reload loop down, the linter so every broken document is one finding beside the
+     * others (docs/audit-low-leads.md slice 8), and {@code symbols} so an editor's feed survives
+     * the app being mid-edit. Startup stays strict. The configuration and the shared
+     * definitions (domains, rules, decisions) are not documents of this kind — every document
+     * resolves through them, so a broken one still fails the load whole.
      */
-    public AppManifest load(Path appHome, List<BrokenRoute> brokenSink) {
+    public AppManifest load(Path appHome, List<BrokenDocument> brokenSink) {
         return load(appHome, brokenSink, ExpressionFunctions.processDefault());
     }
 
     /**
      * As {@link #load(Path, List)}, resolving custom calls against {@code functions}.
      */
-    public AppManifest load(Path appHome, List<BrokenRoute> brokenSink,
+    public AppManifest load(Path appHome, List<BrokenDocument> brokenSink,
             ExpressionFunctions functions) {
         Path home = appHome.toAbsolutePath().normalize();
         if (!Files.isDirectory(home)) {
@@ -120,12 +131,12 @@ public final class ManifestLoader {
                 .load(home, parser);
         List<RouteFile> routes = applySharedDefinitions(domains, ruleSets, decisions,
                 applySecurityDefaults(config, loadRoutes(home, brokenSink)), functions);
-        List<JobFile> jobs = loadJobs(home, domains);
+        List<JobFile> jobs = loadJobs(home, domains, brokenSink);
         List<ToolFile> tools = new ArrayList<>();
         List<ResourceFile> resources = new ArrayList<>();
         List<UiResourceFile> uiResources = new ArrayList<>();
         List<PromptFile> prompts = new ArrayList<>();
-        loadMcp(home, tools, resources, uiResources, prompts);
+        loadMcp(home, tools, resources, uiResources, prompts, brokenSink);
         // The floor under primitives that declare nothing (docs/audit-hardening.md open question
         // 4). MCP documents never reach applySecurityDefaults: the path rules match on a served
         // URL path, and a primitive reached by name over one shared endpoint has none. So they get
@@ -154,9 +165,9 @@ public final class ManifestLoader {
                         tool.definition(), functions),
                 tool.description(), tool.uiResource()));
         List<RouteFile> consumers = applySharedDefinitions(domains, ruleSets, decisions,
-                loadConsumers(home), functions);
+                loadConsumers(home, brokenSink), functions);
         List<ScopeFile> scopes = loadScopes(home);
-        List<WorkflowFile> workflows = new ArrayList<>(loadWorkflows(home));
+        List<WorkflowFile> workflows = new ArrayList<>(loadWorkflows(home, brokenSink));
         workflows.replaceAll(workflow -> new WorkflowFile(workflow.source(),
                 withWorkflowDecisions(decisions, workflow.source(), workflow.definition(),
                         functions)));
@@ -311,7 +322,7 @@ public final class ManifestLoader {
      * transactional-command route per transition — so it lives in its own tree, alongside the 2-way
      * SQL command, assignee, and history files its transitions reference.
      */
-    private List<WorkflowFile> loadWorkflows(Path home) {
+    private List<WorkflowFile> loadWorkflows(Path home, List<BrokenDocument> brokenSink) {
         Path workflowRoot = home.resolve("workflow");
         if (!Files.isDirectory(workflowRoot)) {
             return List.of();
@@ -321,14 +332,55 @@ public final class ManifestLoader {
             files.filter(Files::isRegularFile)
                     .filter(p -> p.getFileName().toString().endsWith(".yml"))
                     .sorted()
-                    .forEach(file -> {
+                    .forEach(file -> perDocument(brokenSink, file, () -> {
                         requireInside(home, file);
                         workflows.add(new WorkflowFile(file, parser.parseWorkflow(file)));
-                    });
+                    }));
         } catch (IOException ex) {
             throw new UncheckedIOException(ex);
         }
         return workflows;
+    }
+
+    /**
+     * One document's load under the tolerant contract: with a sink, a document that does not
+     * load is recorded there and left out; without one — startup — it fails the load whole, as
+     * it always has.
+     */
+    private static void perDocument(List<BrokenDocument> brokenSink, Path file,
+            Runnable load) {
+        if (brokenSink == null) {
+            load.run();
+            return;
+        }
+        try {
+            load.run();
+        } catch (RuntimeException ex) {
+            brokenSink.add(broken(file, ex));
+        }
+    }
+
+    /**
+     * The sink's entry for {@code ex}: the root cause's sentence, and the code when the root is
+     * a coded refusal — a parser failure is the parser's code carrying the library's message
+     * as its cause, so the sentence is the library's own ("Cannot deserialize …, line: 5").
+     */
+    private static BrokenDocument broken(Path file, RuntimeException ex) {
+        Throwable root = ex;
+        while (root.getCause() != null) {
+            root = root.getCause();
+        }
+        String code = null;
+        for (Throwable t = ex; t != null; t = t.getCause()) {
+            if (t instanceof TqlException coded) {
+                code = coded.code().toString();
+                break;
+            }
+        }
+        String error = root instanceof TqlException coded
+                ? coded.sentence()
+                : root.getMessage() == null ? root.toString() : root.getMessage();
+        return new BrokenDocument(file, code, error);
     }
 
     /**
@@ -363,7 +415,7 @@ public final class ManifestLoader {
      * HTTP — the runtime's messaging consumer drives it — so it lives outside {@code web/} and the
      * derived "method" is the synthetic {@code QUEUE} marker, the directory tree its logical path.
      */
-    private List<RouteFile> loadConsumers(Path home) {
+    private List<RouteFile> loadConsumers(Path home, List<BrokenDocument> brokenSink) {
         Path consumeRoot = home.resolve("consume");
         if (!Files.isDirectory(consumeRoot)) {
             return List.of();
@@ -373,13 +425,13 @@ public final class ManifestLoader {
             files.filter(Files::isRegularFile)
                     .filter(p -> p.getFileName().toString().endsWith(".yml"))
                     .sorted()
-                    .forEach(file -> {
+                    .forEach(file -> perDocument(brokenSink, file, () -> {
                         requireInside(home, file);
                         RouteDefinition definition = parser.parseRoute(file);
                         Path relative = consumeRoot.relativize(file);
                         consumers.add(new RouteFile("QUEUE", "/" + relative.toString()
                                 .replace(java.io.File.separatorChar, '/'), file, definition));
-                    });
+                    }));
         } catch (IOException ex) {
             throw new UncheckedIOException(ex);
         }
@@ -668,7 +720,7 @@ public final class ManifestLoader {
         return def.withValidate(merged);
     }
 
-    private List<RouteFile> loadRoutes(Path home, List<BrokenRoute> brokenSink) {
+    private List<RouteFile> loadRoutes(Path home, List<BrokenDocument> brokenSink) {
         Path webRoot = home.resolve("web");
         if (!Files.isDirectory(webRoot)) {
             return List.of();
@@ -679,32 +731,16 @@ public final class ManifestLoader {
                     .filter(p -> p.getFileName().toString().endsWith(".yml"))
                     .filter(p -> isMethodFile(p.getFileName().toString()))
                     .sorted()
-                    .forEach(file -> {
-                        if (brokenSink == null) {
-                            routes.add(toRouteFile(home, webRoot, file));
-                            return;
-                        }
-                        try {
-                            routes.add(toRouteFile(home, webRoot, file));
-                        } catch (RuntimeException ex) {
-                            brokenSink.add(new BrokenRoute(file, rootMessage(ex)));
-                        }
-                    });
+                    .forEach(file -> perDocument(brokenSink, file,
+                            () -> routes.add(toRouteFile(home, webRoot, file))));
         } catch (IOException ex) {
             throw new UncheckedIOException(ex);
         }
         return routes;
     }
 
-    private static String rootMessage(Throwable ex) {
-        Throwable root = ex;
-        while (root.getCause() != null) {
-            root = root.getCause();
-        }
-        return root.getMessage() == null ? root.toString() : root.getMessage();
-    }
-
-    private List<JobFile> loadJobs(Path home, io.tesseraql.yaml.domain.FieldDomains domains) {
+    private List<JobFile> loadJobs(Path home, io.tesseraql.yaml.domain.FieldDomains domains,
+            List<BrokenDocument> brokenSink) {
         Path batchRoot = home.resolve("batch");
         if (!Files.isDirectory(batchRoot)) {
             return List.of();
@@ -714,11 +750,11 @@ public final class ManifestLoader {
             files.filter(Files::isRegularFile)
                     .filter(p -> p.getFileName().toString().endsWith(".yml"))
                     .sorted()
-                    .forEach(file -> {
+                    .forEach(file -> perDocument(brokenSink, file, () -> {
                         requireInside(home, file);
                         jobs.add(new JobFile(file,
                                 withFieldDomains(domains, file, parser.parseJob(file))));
-                    });
+                    }));
         } catch (IOException ex) {
             throw new UncheckedIOException(ex);
         }
@@ -769,7 +805,8 @@ public final class ManifestLoader {
      * sources; the {@code description} is the model-facing hint read from the same document.
      */
     private void loadMcp(Path home, List<ToolFile> tools, List<ResourceFile> resources,
-            List<UiResourceFile> uiResources, List<PromptFile> prompts) {
+            List<UiResourceFile> uiResources, List<PromptFile> prompts,
+            List<BrokenDocument> brokenSink) {
         Path mcpRoot = home.resolve("mcp");
         if (!Files.isDirectory(mcpRoot)) {
             return;
@@ -778,7 +815,7 @@ public final class ManifestLoader {
             files.filter(Files::isRegularFile)
                     .filter(p -> p.getFileName().toString().endsWith(".yml"))
                     .sorted()
-                    .forEach(file -> {
+                    .forEach(file -> perDocument(brokenSink, file, () -> {
                         requireInside(home, file);
                         Map<String, Object> tree = parser.parseTree(file);
                         String description = string(tree.get("description"));
@@ -805,7 +842,7 @@ public final class ManifestLoader {
                             tools.add(new ToolFile(file, definition, description,
                                     string(tree.get("ui"))));
                         }
-                    });
+                    }));
         } catch (IOException ex) {
             throw new UncheckedIOException(ex);
         }

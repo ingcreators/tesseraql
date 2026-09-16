@@ -85,6 +85,21 @@ use.
 
 A source's `sql.file:` resolves **relative to the route document's own directory**, not the app
 root. A route at `web/orders/get.yml` naming `search.sql` looks for `web/orders/search.sql`.
+The linter reports it, and the runtime refuses to start on it with the same code naming the
+route and the binding; under `dev --watch` the route serves its compile error until the file
+is back.
+
+### `TQL-YAML-1066` / `1067` — the recipe reads a piece the document does not declare
+
+A `query-json`, `command-json` or `webhook` route answers through `response.json:` or
+`response.redirect:`; a `page` or `query-html` route renders `response.html:` or
+`response.file:`. A document with neither — no `response:` block at all, or one holding only
+`session:`, or the page arm on a JSON recipe — is `TQL-YAML-1066`, naming the route and what
+the block does declare. Every source and step runs through one arm — `sql: { file: … }`,
+`contract:`, `service:`, `http:` (with its `url:`), or `sequence:` on a command step — and one
+that names none is `TQL-YAML-1067`. A `file-import` route needs its `import:` block and one
+`steps:` entry with a file; an export recipe needs a `main` source with a file to read; each is
+`TQL-YAML-1041`. All are lint errors and boot refusals with the same sentence.
 
 ### `TQL-YAML-1004` and friends — a key is refused on this recipe
 

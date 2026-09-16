@@ -402,4 +402,56 @@ class ManifestLoaderTest {
                 .hasMessageContaining("TQL-VIEW-3315")
                 .hasMessageContaining("declared twice");
     }
+
+    /**
+     * The tolerant load covers every per-document tree, not only {@code web/}
+     * (docs/audit-low-leads.md slice 8): a job, consumer, workflow or mcp document that does
+     * not parse is one sink entry — its file, the code, the parser's own sentence — and left
+     * out, while the strict load (no sink) still fails on the first of them.
+     */
+    @Test
+    void theTolerantLoadReportsEveryDocumentTreeAndTheStrictLoadStillFails(
+            @org.junit.jupiter.api.io.TempDir Path dir) throws Exception {
+        java.nio.file.Files.createDirectories(dir.resolve("config"));
+        java.nio.file.Files.writeString(dir.resolve("config/tesseraql.yml"),
+                "tesseraql:\n  app:\n    name: t\n");
+        java.nio.file.Files.createDirectories(dir.resolve("web/ok"));
+        java.nio.file.Files.writeString(dir.resolve("web/ok/get.yml"), """
+                version: tesseraql/v1
+                id: ok
+                kind: route
+                recipe: page
+                response:
+                  html:
+                    template: ok.html
+                """);
+        java.nio.file.Files.createDirectories(dir.resolve("batch/report"));
+        java.nio.file.Files.writeString(dir.resolve("batch/report/job.yml"), "kind: job\n");
+        java.nio.file.Files.createDirectories(dir.resolve("consume/orders"));
+        java.nio.file.Files.writeString(dir.resolve("consume/orders/get.yml"), "id: [\n");
+        java.nio.file.Files.createDirectories(dir.resolve("workflow"));
+        java.nio.file.Files.writeString(dir.resolve("workflow/ticket.yml"), "");
+        java.nio.file.Files.createDirectories(dir.resolve("mcp"));
+        java.nio.file.Files.writeString(dir.resolve("mcp/lookup.yml"), "kind: tool\n");
+
+        java.util.List<ManifestLoader.BrokenDocument> broken = new java.util.ArrayList<>();
+        AppManifest manifest = new ManifestLoader().load(dir, broken);
+
+        assertThat(manifest.routes()).extracting(r -> r.definition().id()).containsExactly("ok");
+        assertThat(manifest.jobs()).isEmpty();
+        assertThat(manifest.consumers()).isEmpty();
+        assertThat(manifest.workflows()).isEmpty();
+        assertThat(manifest.tools()).isEmpty();
+        assertThat(broken).extracting(b -> dir.relativize(b.source()).toString().replace('\\', '/'))
+                .containsExactly("batch/report/job.yml", "mcp/lookup.yml",
+                        "consume/orders/get.yml", "workflow/ticket.yml");
+        assertThat(broken).allSatisfy(b -> {
+            assertThat(b.code()).isEqualTo("TQL-YAML-1001");
+            assertThat(b.error()).doesNotStartWith("TQL-").doesNotContain(dir.toString());
+        });
+        assertThat(broken.get(0).error()).contains("Missing required field 'version'");
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> new ManifestLoader().load(dir))
+                .isInstanceOf(io.tesseraql.core.error.TqlException.class)
+                .hasMessageContaining("TQL-YAML-1001");
+    }
 }

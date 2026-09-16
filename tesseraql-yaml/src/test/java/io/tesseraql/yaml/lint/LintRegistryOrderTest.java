@@ -56,6 +56,10 @@ class LintRegistryOrderTest {
                         "MtlsConfigRules",
                         "OidcSamlRules",
                         "SecurityDefaultRules",
+                        // The conditions zone beside the other security config keys, judged by
+                        // the zone predicate the export declarations share
+                        // (docs/audit-low-leads.md slice 8).
+                        "ConditionZoneRules",
                         "FieldDomainRules",
                         "ResponseHeaderRules",
                         "AmbientPrincipalRules",

@@ -136,6 +136,46 @@ class ReloadContentDiffIntegrationTest {
                 "thing.finish");
     }
 
+    /**
+     * A workflow document that does not parse keeps its transitions serving as they were
+     * (docs/audit-low-leads.md slice 8): the tolerant load now covers {@code workflow/}, and
+     * without the reloader's ledger the document's absence from the manifest read as its
+     * transitions being gone — un-mounted on a mid-edit typo. The strict load used to abort the
+     * whole reload instead, which preserved the routes by preserving nothing else.
+     */
+    @Test
+    void aWorkflowThatDoesNotParseKeepsItsTransitionsUntilItIsFixed() throws Exception {
+        // On disk rather than through a draft: the draft endpoint refuses a document that
+        // does not parse, and an editor's save is the ordinary way a broken one arrives.
+        Path document = appHome.resolve("workflow/thing.yml");
+        String good = Files.readString(document);
+        try {
+            Files.writeString(document, "version: tesseraql/v1\nid: [\n");
+            HttpResponse<String> broken = post("/_tesseraql/studio/reload", "");
+            assertThat(broken.statusCode()).isEqualTo(200);
+            com.fasterxml.jackson.databind.JsonNode result = MAPPER.readTree(broken.body());
+            assertThat(result.get("removed")).as("nothing is un-mounted").isEmpty();
+            assertThat(result.get("failed")).singleElement().satisfies(failure -> {
+                assertThat(failure.get("path").asText()).isEqualTo("workflow/thing.yml");
+                assertThat(failure.get("error").asText()).contains("TQL-YAML-1001");
+            });
+
+            // Fixing the document recompiles the held transitions in place: they are reloaded,
+            // not added — the ledger knew they were still serving.
+            Files.writeString(document, good);
+            HttpResponse<String> fixed = post("/_tesseraql/studio/reload", "");
+            assertThat(fixed.statusCode()).isEqualTo(200);
+            List<String> reloaded = new java.util.ArrayList<>();
+            MAPPER.readTree(fixed.body()).get("reloaded")
+                    .forEach(id -> reloaded.add(id.asText()));
+            assertThat(reloaded).contains("thing.submit", "thing.cancel", "thing.finish");
+            assertThat(MAPPER.readTree(fixed.body()).get("added")).isEmpty();
+            assertThat(MAPPER.readTree(fixed.body()).get("failed")).isEmpty();
+        } finally {
+            Files.writeString(document, good);
+        }
+    }
+
     private static HttpResponse<String> get(String path) throws Exception {
         return TestHttp.send(HttpRequest.newBuilder(
                 URI.create("http://localhost:" + runtime.port() + path))

@@ -805,7 +805,8 @@ warning.
 - The `TQL-LD-2801` hard-coded excel hint (already filed) — untouched here.
 - `tesseraql lint` crashes with a stack trace on an unquoted `as: {nope}` (a YAML flow mapping,
   `TQL-YAML-1001` out of `AppLinter.lint`) — the filed lint-crash family; every fixture here is
-  quoted.
+  quoted. Fixed in `docs/audit-low-leads.md`: the linter loads tolerantly and files the document
+  as one finding.
 - The three-runners-two-module-sets drift for an undeclared `work/modules` jar — F82 slice 2.
 
 ---

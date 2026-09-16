@@ -68,6 +68,17 @@ public final class RouteReloader {
      * stub instead of serving TQL-ROUTE-3103 until restart.
      */
     private final java.util.Set<String> stubbed = new LinkedHashSet<>();
+    /**
+     * The synthesized transition routes kept serving for a workflow document that does not
+     * parse: the tolerant load leaves the document out, so the manifest no longer says they
+     * exist — this ledger does, until the file is fixed (recompiled in place) or deleted
+     * (un-mounted).
+     */
+    private final Map<String, HeldTransition> held = new LinkedHashMap<>();
+
+    /** One held transition: its endpoint path and the workflow document it came from. */
+    private record HeldTransition(String path, Path source) {
+    }
     /** Per-route content fingerprints (source-directory digests) from the last good reload. */
     private Map<String, String> fingerprints;
     /** The app-wide inputs every compiled route bakes in (config/ + shared definitions). */
@@ -125,9 +136,12 @@ public final class RouteReloader {
      * content — the manual {@code POST /_tesseraql/studio/reload} recovery hammer.
      */
     public synchronized Result reload(boolean force) {
-        // Tolerant load: an unparseable route document is a per-route failure like a compile
-        // error, not a reason to abort — only app.yml/config problems still fail the load.
-        List<ManifestLoader.BrokenRoute> broken = new ArrayList<>();
+        // Tolerant load: a route, job, consumer, workflow or mcp document that does not parse
+        // is a per-document failure like a compile error, not a reason to abort — a route's is
+        // stubbed below, a workflow's keeps its transitions serving as they were, the others
+        // are reported. Only the configuration and the shared definitions (domains, rules,
+        // decisions), which every document resolves through, still fail the load whole.
+        List<ManifestLoader.BrokenDocument> broken = new ArrayList<>();
         // The address is the host's and lives only in memory (docs/base-path-emission.md
         // decision 9): the disk copy never carried it, so re-reading loses it and every route
         // this reload compiles would emit origin-rooted URLs while the edge still serves the
@@ -157,19 +171,22 @@ public final class RouteReloader {
         before.values().forEach(route -> beforeBySource.put(normalize(route.source()), route));
         List<RouteFailure> failed = new ArrayList<>();
         Set<String> brokenIds = new LinkedHashSet<>();
-        for (ManifestLoader.BrokenRoute b : broken) {
+        Set<Path> brokenSources = new LinkedHashSet<>();
+        for (ManifestLoader.BrokenDocument b : broken) {
+            String error = b.code() == null ? b.error() : b.code() + ": " + b.error();
+            brokenSources.add(normalize(b.source()));
             RouteFile old = beforeBySource.get(normalize(b.source()));
             if (old != null && old.definition().id() != null) {
                 brokenIds.add(old.definition().id());
                 failed.add(new RouteFailure(old.definition().id(), old.httpMethod(),
-                        old.urlPath(), b.error()));
+                        old.urlPath(), error));
             } else {
                 failed.add(new RouteFailure(null, null,
                         appHome.toAbsolutePath().normalize()
                                 .relativize(normalize(b.source())).toString().replace('\\', '/'),
-                        b.error()));
+                        error));
             }
-            LOG.warn("Route document {} failed to parse on reload: {}", b.source(), b.error());
+            LOG.warn("Document {} failed to load on reload: {}", b.source(), error);
         }
 
         List<String> added = new ArrayList<>();
@@ -269,13 +286,37 @@ public final class RouteReloader {
         // it on); the rest keep serving.
         String workflowNow = workflowFingerprintOf(appHome);
         if (rebuildAll || !workflowNow.equals(workflowFingerprint)) {
-            Map<String, String> beforeWorkflow = workflowRoutePaths(current);
-            Map<String, String> nowWorkflow = workflowRoutePaths(reloaded);
+            // The transitions serving before this reload: the last manifest's, plus those held
+            // for a workflow document that did not parse on an earlier reload.
+            Map<String, String> beforeWorkflow = workflowRoutePaths(current.workflows());
+            held.forEach((id, transition) -> beforeWorkflow.putIfAbsent(id, transition.path()));
+            Map<String, String> nowWorkflow = workflowRoutePaths(reloaded.workflows());
+            // A workflow document that does not parse is reported above and its transitions
+            // keep serving as they were: the tolerant load left it out of the manifest, so
+            // without this its routes would read as gone and be un-mounted on a mid-edit typo
+            // — where a broken route keeps its endpoint as a stub, a broken workflow keeps its
+            // last good transitions, which is what the strict load's abort used to preserve.
+            // The ledger remembers them across reloads the way `stubbed` remembers a stub, so
+            // deleting the broken file still un-mounts them, and fixing it recompiles them in
+            // place like any surviving transition.
+            Map<String, HeldTransition> holding = new LinkedHashMap<>();
+            for (io.tesseraql.yaml.manifest.WorkflowFile workflow : current.workflows()) {
+                Path source = normalize(workflow.source());
+                if (brokenSources.contains(source)) {
+                    workflowRoutePaths(List.of(workflow)).forEach((id, path) -> holding.put(id,
+                            new HeldTransition(path, source)));
+                }
+            }
+            held.forEach((id, transition) -> {
+                if (brokenSources.contains(transition.source())) {
+                    holding.put(id, transition);
+                }
+            });
             for (String id : beforeWorkflow.keySet()) {
                 // Only a transition that is gone is removed; one that survives is recompiled
                 // in place below, so a request racing the reload runs the old chain or the
                 // new one, never a 404 (the same rule as the route loop above).
-                if (!nowWorkflow.containsKey(id)) {
+                if (!nowWorkflow.containsKey(id) && !holding.containsKey(id)) {
                     try {
                         stopAndRemove(id);
                     } catch (Exception ex) {
@@ -285,6 +326,8 @@ public final class RouteReloader {
                     removed.add(id);
                 }
             }
+            held.clear();
+            held.putAll(holding);
             for (Map.Entry<String, String> transition : nowWorkflow.entrySet()) {
                 String id = transition.getKey();
                 try {
@@ -400,9 +443,10 @@ public final class RouteReloader {
      * {@link RouteCompiler} mounts them under), mapped to their endpoint paths for failure
      * reporting.
      */
-    private static Map<String, String> workflowRoutePaths(AppManifest manifest) {
+    private static Map<String, String> workflowRoutePaths(
+            List<io.tesseraql.yaml.manifest.WorkflowFile> workflows) {
         Map<String, String> paths = new LinkedHashMap<>();
-        for (io.tesseraql.yaml.manifest.WorkflowFile workflow : manifest.workflows()) {
+        for (io.tesseraql.yaml.manifest.WorkflowFile workflow : workflows) {
             io.tesseraql.yaml.model.WorkflowDefinition def = workflow.definition();
             String basePath = def.basePath() == null
                     ? "/" + def.id()

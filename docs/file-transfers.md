@@ -496,7 +496,7 @@ queries like any other query.
 | --- | --- |
 | `TQL-YAML-1063` | An `export:`, `import:` or `tesseraql.files.*` literal the runtime cannot honour where it reads it — a zone, a language tag, a `csv`/`pdf` column pattern, an import column type, a cell reference, a mixed-case format name, or a request source naming nothing the surface binds. The linter's error and the boot refusal carry the same code |
 | `TQL-YAML-1005` | A declared key the format never reads (`bom:`, `sheet:`, `startCell:`, `template:` on the wrong format, `locale:` on a workbook, a `type:` the export does not render): a lint error, a boot warning. As a warning: a declaration honoured less than it reads |
-| `TQL-YAML-1041` | An incomplete export: a `file-export` route with no `export:` block, an `after:` without its statement, `splitBy:` without `{key}` |
+| `TQL-YAML-1041` | An incomplete export or import: a `file-export` route with no `export:` block, an `after:` without its statement, `splitBy:` without `{key}`, an export recipe with no `main` source file to read, a `file-import` route with no `import:` block, no `steps:` entry, or a row step naming no `file:`. The linter's error and the boot refusal carry the same code |
 | `TQL-YAML-1006` | The export names a template that is not there, or the wrong kind of file for the format, at lint and at boot |
 | `TQL-ROUTE-3101` | A `query-export` route declares an `export.after:` block, which only `file-export` supports |
 | `TQL-LD-2801` | No codec for the declared format (the module is not installed) |

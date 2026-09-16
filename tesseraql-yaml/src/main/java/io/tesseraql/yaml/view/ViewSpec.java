@@ -290,6 +290,13 @@ public record ViewSpec(String id,
         }
         rejectUnknown(name, tree, DOCUMENT_KEYS, "a view document");
         String view = str(tree.get("recipe"));
+        // A document with its envelope and no recipe: yet is the mid-edit shape of every view;
+        // Set.contains(null) throws, so it used to be an uncoded NullPointerException out of
+        // the linter and out of the boot (before the runtime's own wrapper).
+        if (view == null) {
+            throw invalid(name, "a view document must declare recipe: (one of "
+                    + new java.util.TreeSet<>(recipes()) + ")");
+        }
         if (!recipes().contains(view)) {
             throw invalid(name, "recipe must be one of "
                     + new java.util.TreeSet<>(recipes()) + ", got: " + view);

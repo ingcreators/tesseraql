@@ -737,6 +737,19 @@ exception; the code names the reference entry, and a coded exception raised by a
 the bug's sentence to fix. Both have the same trigger: a coded refusal whose sentence a reader
 could not act on.
 
+**Addendum (2026-09-16, `docs/audit-low-leads.md` slice 8): `lint` reports a document that does
+not parse; it does not refuse to run.** The table above recorded `lint` among the twenty-two
+verbs the shaper closed, and what that left unsaid is that `lint`'s own contract is a findings
+document (`--format json` prints "the one JSON object on stdout"), which the exit-2 sentence
+emptied: on a document that did not parse, stdout was zero bytes and the editor read that as a
+CLI predating the JSON contract. `lint` is therefore the one verb where the coded exception is
+not the answer — the linter loads through the tolerant load `symbols` already used, now covering
+every per-document tree, files each document that does not parse as one `TQL-YAML-1001` finding
+beside the others, and files a refusal of the whole load (the configuration, a shared
+definition) as one finding at the file it names. The document is always printed, and the exit
+is the findings' own 1. Every other verb keeps the shaper's 2: a route that does not parse is a
+declaration `routes` or `generate` cannot act on, and only `lint` is asked to say so as a report.
+
 ## The complete mapping
 
 Every command, and what these decisions do to it. `+set` means the command joins a Decision 5 set

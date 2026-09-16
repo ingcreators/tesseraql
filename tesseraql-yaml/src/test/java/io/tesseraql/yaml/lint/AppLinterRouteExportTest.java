@@ -31,6 +31,10 @@ class AppLinterRouteExportTest {
                 path: /api/items/dump
                 security:
                   auth: public
+                sources:
+                  main:
+                    sql:
+                      file: dump.sql
                 export:
                 %s
                 """.formatted(exportBody));

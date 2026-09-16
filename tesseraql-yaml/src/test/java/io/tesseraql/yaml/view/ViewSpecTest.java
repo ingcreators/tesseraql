@@ -91,6 +91,26 @@ class ViewSpecTest {
         assertThat(spec.workflow()).isEqualTo("ticket");
     }
 
+    /**
+     * The mid-edit shape of every view — the envelope typed, the recipe not yet — used to be
+     * {@code Set.contains(null)}'s NullPointerException out of the parser, and therefore out of
+     * the linter and out of the boot before the runtime's own wrapper
+     * (docs/audit-low-leads.md slice 8). It is the same coded refusal a wrong recipe draws.
+     */
+    @Test
+    void aViewWithItsEnvelopeAndNoRecipeIsRefusedNotANullPointer(@TempDir Path dir)
+            throws Exception {
+        Path file = write(dir, "x.view.yml", """
+                version: tesseraql/v1
+                kind: view
+                """);
+        assertThatThrownBy(() -> ViewSpec.parse(file))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("TQL-VIEW-3301")
+                .hasMessageContaining("must declare recipe:")
+                .hasMessageContaining("dashboard, detail, form, import, list");
+    }
+
     @Test
     void rejectsWorkflowOnANonDetailView(@TempDir Path dir) throws Exception {
         Path file = write(dir, "x.view.yml", """

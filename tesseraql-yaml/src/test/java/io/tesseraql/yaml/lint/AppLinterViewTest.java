@@ -54,6 +54,22 @@ class AppLinterViewTest {
                 .toList();
     }
 
+    /**
+     * A view with its envelope and no {@code recipe:} — the mid-edit shape — used to escape the
+     * linter as a NullPointerException (docs/audit-low-leads.md slice 8); it is one finding at
+     * the document, the shape every other unparseable view already had.
+     */
+    @Test
+    void aViewWithoutARecipeIsOneFindingNotACrash(@TempDir Path dir) throws Exception {
+        writeApp(dir, "version: tesseraql/v1\nkind: view\n");
+        List<LintFinding> findings = new AppLinter().lint(dir);
+        assertThat(findings).anySatisfy(finding -> {
+            assertThat(finding.code()).isEqualTo("TQL-VIEW-3301");
+            assertThat(finding.source()).isEqualTo("web/items/items.view.yml");
+            assertThat(finding.message()).contains("must declare recipe:");
+        });
+    }
+
     @Test
     void aWellFormedListViewProducesNoFindings(@TempDir Path dir) throws Exception {
         writeApp(dir, "version: tesseraql/v1\nkind: view\nrecipe: list\n");

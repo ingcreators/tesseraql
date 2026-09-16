@@ -69,7 +69,11 @@ public final class ExportDeclarations {
      */
     public static final TqlErrorCode INAPPLICABLE = new TqlErrorCode(TqlDomain.YAML, 1005);
 
-    /** TQL-YAML-1041: a piece the export needs is missing — the block itself, or a follow-up's statement. */
+    /**
+     * TQL-YAML-1041: a piece the export or the import needs is missing — the block itself, a
+     * follow-up's statement, the {@code main} source an export writes, or the row write a
+     * {@code file-import} applies.
+     */
     public static final TqlErrorCode INCOMPLETE = new TqlErrorCode(TqlDomain.YAML, 1041);
 
     /** TQL-YAML-1006: the export names a template that is not there, or the wrong kind of file for the format. */
@@ -318,6 +322,36 @@ public final class ExportDeclarations {
     public static String missingBlock(Site site) {
         return site.prefix("export") + "a file-export route needs an export: block saying"
                 + " how the rows are written (format:, filename:, columns:)";
+    }
+
+    /**
+     * The refusal a file-import route with no {@code import:} block draws, on both sides — the
+     * import twin of {@link #missingBlock}, which used to be a {@code NullPointerException} on
+     * the block's format one line into the compiler.
+     */
+    public static String missingImportBlock(Site site) {
+        return site.prefix("import") + "a file-import route needs an import: block saying how"
+                + " the file is parsed (format:, columns:, locale:)";
+    }
+
+    /**
+     * The refusal a file-import route draws when its one step names no statement, on both
+     * sides — the poll job's own sentence, on the route. The row write used to be resolved as
+     * a path before anything looked at it, and {@code Path.resolve(null)} says nothing at all.
+     */
+    public static String missingRowStep(Site site) {
+        return site.prefix("steps") + "a file-import route needs one steps: entry with"
+                + " sql: { file: ... } saying what to write per row";
+    }
+
+    /**
+     * The refusal an export recipe draws when the document declares no {@code main} source
+     * with a file to read, on both sides: the rows an export writes are the document's
+     * {@code main} source, on every export surface (docs/unified-sources.md decision 7).
+     */
+    public static String missingMain(Site site) {
+        return site.prefix("sources.main") + "an export writes the rows of the document's main"
+                + " source, and the document declares no sources: main: sql: { file: ... }";
     }
 
     /**

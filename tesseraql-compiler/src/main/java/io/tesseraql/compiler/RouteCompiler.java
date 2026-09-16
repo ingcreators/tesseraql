@@ -67,6 +67,14 @@ public final class RouteCompiler {
     private static final TqlErrorCode INVALID_SOURCE = new TqlErrorCode(TqlDomain.ROUTE, 3120);
     /** TQL-VIEW-3327: a detail view's workflow: names no declared kind: workflow document. */
     private static final TqlErrorCode UNKNOWN_WORKFLOW = new TqlErrorCode(TqlDomain.VIEW, 3327);
+    /**
+     * TQL-SQL-2103: a binding's 2-way SQL file is not there — the lint's own code, refused at
+     * boot from the resolve site (docs/audit-low-leads.md slice 8). The source read the file
+     * lazily, so a route whose statement was missing booted green and answered every request
+     * with a raw {@code NoSuchFileException} as an internal error, and a reload reported it as
+     * "changed" rather than failed.
+     */
+    private static final TqlErrorCode MISSING_SQL_FILE = new TqlErrorCode(TqlDomain.SQL, 2103);
     private static final String DEFAULT_DATASOURCE = "main";
     private static final long DEFAULT_IDEMPOTENCY_TTL = java.time.Duration.ofHours(24).toMillis();
 
@@ -506,6 +514,7 @@ public final class RouteCompiler {
 
     private void buildRoute(RuntimeContext context, Path appHome, RouteFile routeFile) {
         RouteDefinition definition = routeFile.definition();
+        requireRecipeShape(definition, io.tesseraql.yaml.app.RecipeShape.Surface.ROUTE);
         requireRotationHonoured(definition);
         requireLockHonoured(definition, null);
         refuseWriteKeysOnSources(definition);
@@ -734,6 +743,22 @@ public final class RouteCompiler {
         io.tesseraql.yaml.app.DeclaredKinds.require(violations, LOG::warn);
     }
 
+    /**
+     * The pieces the recipe reads, refused before any builder dereferences them
+     * (docs/audit-low-leads.md slice 8): the response arm the terminal renderer takes, the arm
+     * each source and step runs through, a file-import's block and row write, an export's
+     * {@code main}. Each used to escape a builder as a {@code NullPointerException} — the JSON
+     * renderer on {@code response().json()}, {@code Path.resolve(null)} on a file-less step —
+     * that lint had passed clean and that named neither the route nor the key. The predicate
+     * is the linter's, so the two altitudes cannot disagree about a document.
+     */
+    private void requireRecipeShape(RouteDefinition definition,
+            io.tesseraql.yaml.app.RecipeShape.Surface surface) {
+        io.tesseraql.yaml.app.ExportDeclarations.require(
+                io.tesseraql.yaml.app.RecipeShape.violations(appName, definition, surface),
+                LOG::warn);
+    }
+
     /** The terminal renderer: a redirect when declared, otherwise the JSON response. */
     private io.tesseraql.pipeline.Step responseRenderer(RouteDefinition definition) {
         if (definition.response() != null && definition.response().redirect() != null) {
@@ -890,6 +915,16 @@ public final class RouteCompiler {
         String dialect = datasourceDialect(datasource);
         java.util.function.Function<String, Path> stepFile = file -> io.tesseraql.core.dialect.DialectSqlResolver
                 .resolve(sourceDir.resolve(file).normalize(), dialect);
+        // The statements the processor is about to read, judged here so a missing one is the
+        // lint's own code naming the route and the step rather than the processor's raw
+        // NoSuchFileException — the transactional twin of the check at the read path's resolve.
+        definition.steps().forEach((name, binding) -> {
+            if (binding.file() != null && !binding.file().isBlank()
+                    && !java.nio.file.Files.isRegularFile(stepFile.apply(binding.file()))) {
+                throw new TqlException(MISSING_SQL_FILE, "Route '" + routeId + "' step '" + name
+                        + "': referenced SQL file is missing: " + binding.file());
+            }
+        });
         if (definition.lock() != null) {
             requireLockDirective(definition, stepFile);
         }
@@ -1370,6 +1405,7 @@ public final class RouteCompiler {
      */
     private void buildQueueConsume(RouteFile routeFile) {
         RouteDefinition definition = routeFile.definition();
+        requireRecipeShape(definition, io.tesseraql.yaml.app.RecipeShape.Surface.CONSUMER);
         requireLockHonoured(definition, "a queue consumer");
         refuseWriteKeysOnSources(definition);
         requireDeclaredKinds(definition);
@@ -1973,14 +2009,18 @@ public final class RouteCompiler {
         return declaredKinds(acquired, routeFile.definition().id(), name, binding);
     }
 
-    /** The same, for the {@code direct:} pipelines that carry a directory instead of a route. */
-    private PipelineBuilder source(PipelineBuilder step, Path dir, String name,
+    /**
+     * The same, for the {@code direct:} pipelines that carry a directory instead of a route;
+     * {@code id} is the document's own, for the refusal a missing statement draws.
+     */
+    private PipelineBuilder source(PipelineBuilder step, Path dir, String id, String name,
             io.tesseraql.yaml.model.Binding binding, String datasource) {
         PipelineBuilder acquired = binding.isHttp()
                 ? step.process(new io.tesseraql.compiler.binding.HttpSourceProcessor(
                         name, binding.http()))
                 : step.process(new io.tesseraql.compiler.binding.NamedQueryBinder(binding))
-                        .process(execution(dir, binding, name, datasource));
+                        .process(execution(dir, binding, name, datasource,
+                                "Document '" + id + "'"));
         return declaredKinds(acquired, dir.getFileName().toString(), name, binding);
     }
 
@@ -2066,6 +2106,7 @@ public final class RouteCompiler {
      */
     private void buildMcpTool(ToolFile toolFile) {
         RouteDefinition definition = toolFile.definition();
+        requireRecipeShape(definition, io.tesseraql.yaml.app.RecipeShape.Surface.TOOL);
         requireLockHonoured(definition, "an MCP tool");
         refuseWriteKeysOnSources(definition);
         requireDeclaredKinds(definition);
@@ -2086,7 +2127,7 @@ public final class RouteCompiler {
             step = step.process(commandProcessor(routeId, definition, toolDir, null));
         } else {
             for (var entry : definition.sources().entrySet()) {
-                step = source(step, toolDir, entry.getKey(), entry.getValue(),
+                step = source(step, toolDir, definition.id(), entry.getKey(), entry.getValue(),
                         definition.effectiveDatasource());
             }
         }
@@ -2110,7 +2151,7 @@ public final class RouteCompiler {
                 if (entry.getValue().isHttp()) {
                     continue;
                 }
-                step = source(step, toolDir, entry.getKey(), entry.getValue(),
+                step = source(step, toolDir, definition.id(), entry.getKey(), entry.getValue(),
                         definition.effectiveDatasource());
             }
         }
@@ -2154,7 +2195,7 @@ public final class RouteCompiler {
                         functions))
                 .process(new io.tesseraql.compiler.binding.CatalogBinder());
         for (var entry : definition.sources().entrySet()) {
-            step = source(step, resourceDir, entry.getKey(), entry.getValue(),
+            step = source(step, resourceDir, definition.id(), entry.getKey(), entry.getValue(),
                     definition.effectiveDatasource());
         }
         step = enrichments(step, resourceDir, definition);
@@ -2188,7 +2229,7 @@ public final class RouteCompiler {
                         functions))
                 .process(new io.tesseraql.compiler.binding.CatalogBinder());
         for (var entry : definition.sources().entrySet()) {
-            step = source(step, uiDir, entry.getKey(), entry.getValue(),
+            step = source(step, uiDir, definition.id(), entry.getKey(), entry.getValue(),
                     definition.effectiveDatasource());
         }
         step = enrichments(step, uiDir, definition);
@@ -2240,7 +2281,7 @@ public final class RouteCompiler {
                         functions))
                 .process(new io.tesseraql.compiler.binding.CatalogBinder());
         for (var entry : definition.sources().entrySet()) {
-            step = source(step, promptDir, entry.getKey(), entry.getValue(),
+            step = source(step, promptDir, definition.id(), entry.getKey(), entry.getValue(),
                     definition.effectiveDatasource());
         }
         step = enrichments(step, promptDir, definition);
@@ -2272,15 +2313,18 @@ public final class RouteCompiler {
     private io.tesseraql.pipeline.Step execution(RouteFile routeFile,
             io.tesseraql.yaml.model.Binding binding, String resultKey) {
         return execution(routeFile.source().getParent(), binding, resultKey,
-                routeFile.definition().effectiveDatasource());
+                routeFile.definition().effectiveDatasource(),
+                "Route '" + routeFile.definition().id() + "'");
     }
 
     /** As {@link #executionUri(RouteFile, io.tesseraql.yaml.model.Binding, String)}, resolving
      * SQL files relative to {@code sourceDir} (shared by routes and MCP tools). The binding's own
      * {@code datasource:} wins over {@code routeDatasource}, the route-level connector (roadmap
-     * Phase 53); the baked dialect follows the connector the SQL actually runs on. */
+     * Phase 53); the baked dialect follows the connector the SQL actually runs on.
+     * {@code subject} names the document in the one refusal raised here. */
     private io.tesseraql.pipeline.Step execution(Path sourceDir,
-            io.tesseraql.yaml.model.Binding binding, String resultKey, String routeDatasource) {
+            io.tesseraql.yaml.model.Binding binding, String resultKey, String routeDatasource,
+            String subject) {
         if (binding.isService()) {
             return new io.tesseraql.pipeline.service.ServiceStep("call", binding.service(),
                     resultKey);
@@ -2301,9 +2345,19 @@ public final class RouteCompiler {
         // The dialect is the load-bearing setting: the source resolves foo.<dialect>.sql
         // variants from it, and the step picks the dialect's streaming profile and folds column
         // labels with it.
+        String dialect = datasourceDialect(datasource);
+        // The file the source will read, judged here rather than at the first request: the
+        // source reads lazily, so a missing statement used to boot green, answer every request
+        // with a raw NoSuchFileException as an internal error, and heal on the next request —
+        // which is why a reload of the route reported "changed" and never stubbed it.
+        if (!java.nio.file.Files.isRegularFile(
+                io.tesseraql.core.dialect.DialectSqlResolver.resolve(sqlPath, dialect))) {
+            throw new TqlException(MISSING_SQL_FILE, subject + " binding '" + resultKey
+                    + "': referenced SQL file is missing: " + binding.file());
+        }
         return new io.tesseraql.pipeline.sql.SqlStep(
                 new io.tesseraql.pipeline.sql.FileSqlSource(sqlPath.toString(), datasource,
-                        datasourceDialect(datasource)),
+                        dialect),
                 binding.effectiveMode(), resultKey, effectiveMaxRows(binding),
                 effectiveTimeoutSeconds(binding), effectiveOnOverflow(binding), null);
     }

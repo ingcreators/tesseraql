@@ -653,7 +653,10 @@ public final class TesseraqlRuntime implements AutoCloseable {
             // Context conditions, both layers (docs/access-governance.md structural decision 8).
             // Layer A is bound only when the deployment names its networks, so an unconfigured
             // one looks up nothing and admits everybody. The zone is bound only when it differs
-            // from the JVM's, which is the same "absent means the default" reading.
+            // from the JVM's, which is the same "absent means the default" reading; a value
+            // that is not a zone is refused naming the key, from the predicate the linter
+            // reports from (docs/audit-low-leads.md slice 8) — it used to be the JDK's own
+            // sentence out of ZoneId.of, naming neither the key nor the application.
             io.tesseraql.security.net.SignInAllowList signInNetworks = io.tesseraql.security.net.SignInAllowList
                     .parse(manifest.config().getString("tesseraql.security.network.allow")
                             .orElse(null));
@@ -661,10 +664,9 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 context.bind(TesseraqlProperties.SIGN_IN_ALLOW_LIST_BEAN,
                         signInNetworks);
             }
-            manifest.config().getString("tesseraql.security.conditions.zone")
-                    .map(String::trim).filter(zone -> !zone.isEmpty())
+            io.tesseraql.yaml.config.ConditionZone.of(manifest.config())
                     .ifPresent(zone -> context.bind(
-                            TesseraqlProperties.CONDITION_ZONE_BEAN, java.time.ZoneId.of(zone)));
+                            TesseraqlProperties.CONDITION_ZONE_BEAN, zone));
             // Organizational data scoping (roadmap Phase 29): the resolver expands /*%scope ... */
             // into principal-derived predicates. Bound only when the app declares scopes, so the SQL
             // producer falls back to its reject-any-scope default everywhere else.

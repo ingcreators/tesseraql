@@ -64,6 +64,14 @@ public class TqlException extends RuntimeException {
         return details;
     }
 
+    /**
+     * The sentence alone — what {@link #getMessage()} composes the code and the source location
+     * around — for a reader that carries those two structurally, such as a lint finding.
+     */
+    public String sentence() {
+        return super.getMessage();
+    }
+
     @Override
     public String getMessage() {
         StringBuilder sb = new StringBuilder(code.toString());

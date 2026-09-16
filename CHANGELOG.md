@@ -60,9 +60,57 @@ All notable changes to TesseraQL are documented here. The format follows
   mailed link dies with it — and a withdrawn login can be invited again through the new
   `reinvite-user` contract, which puts a DISABLED account back to INVITED only while it holds
   no credential. `docs/credential-lifecycle.md` "Withdrawing an invitation".
+- **`tesseraql lint` reports a document that does not parse; it does not refuse to run.** The
+  linter loaded strictly, so the first route, job, consumer, workflow or mcp document that did
+  not parse escaped the verb as the parser's sentence — no finding, an empty stdout under
+  `--format json`, every other finding hidden — on the shape an editor produces most, an empty
+  file whose header is not typed yet; the VS Code extension then read the empty document as a
+  CLI predating the JSON contract and kept a stale Problems panel. The manifest loader's
+  tolerant load now covers every per-document tree (`BrokenDocument` replaces `BrokenRoute`,
+  carrying the code), the linter loads through it and files each broken document as one
+  `TQL-YAML-1001` finding — the parser's own line and column lifted into it — beside every
+  other finding, and a refusal of the whole load (the configuration, a shared definition) is
+  one finding at the file it names. `tesseraql symbols` names a broken job or mcp document
+  instead of `(app manifest)`, and the hot reloader keeps a broken workflow document's
+  transitions serving until the file is fixed or deleted, as it keeps a broken route's stub.
+  `docs/cli-surface.md` decision 10a (addendum), `docs/audit-low-leads.md` slice 8.
+- **`tesseraql-yaml` carries Quartz's cron expression.** A job's `schedule.cron` is judged
+  where it is written by the grammar the scheduler fires it by (`docs/audit-low-leads.md`
+  decision 10); the scheduler, its thread pool and its job store stay out, as in the runtime.
 
 ### Fixed
 
+- **A route the compiler could not build names itself and its missing piece, at lint and at
+  boot.** Six shapes linted clean and took the whole application down at boot with a
+  `NullPointerException` naming neither the route nor the key: a `query-json`, `command-json`
+  or `webhook` route with no `response.json:`/`redirect:` (the JSON renderer on a `response:`
+  that was absent or held only `session:` — the shape `docs/multi-datasource.md` showed as
+  complete), a `page`/`query-html` route with no `html:`/`file:`, a source or step whose `sql:`
+  named no `file:` (`Path.resolve(null)`, message-less), an `http:` source with no `url:`, a
+  `file-import` route without its `import:` block, its row step or the step's file, and an
+  export recipe with no `main` source. `RecipeShape` judges them once — `TQL-YAML-1066` for
+  the response arm, `TQL-YAML-1067` for a binding's arm, `TQL-YAML-1041` for the import's and
+  the export's pieces — reported by the linter on routes, MCP tools and consumers and refused
+  by the compiler before any builder dereferences them. `docs/audit-low-leads.md` slice 8.
+- **A view document with its envelope and no `recipe:` is a coded refusal.** The mid-edit
+  shape of every view was `Set.contains(null)`'s NullPointerException out of the parser — out
+  of the linter, and out of the boot before the runtime's own wrapper. It is `TQL-VIEW-3301`
+  now, as a wrong recipe always was.
+- **A missing 2-way SQL file refuses the boot and fails the reload.** The file source read
+  lazily, so a route whose statement was not there linted red (`TQL-SQL-2103`), booted green,
+  answered every request with a raw `NoSuchFileException` as `TQL-ROUTE-5000`, healed on the
+  next request, and a save under `--watch` reported it as "1 changed", never failed and never
+  stubbed. The compiler refuses it at the resolve sites — a source's, and a transactional
+  command's before its processor reads — with the lint's code naming the route and the
+  binding, so a reload stubs the route naming the file.
+- **`tesseraql.security.conditions.zone` and a job's `schedule.cron` are refused with their
+  key on them, and linted.** A misspelt region was `ZoneId.of`'s own sentence wrapped as
+  "Failed to start", naming neither the key nor the application; a cron the scheduler could
+  not fire — the five-field crontab reflex — was an uncoded exception naming the schedule and
+  nothing else, and no lint read either key. The zone is judged by the predicate every
+  declared zone shares (`TQL-SEC-4147`, read as written like the files zone), the cron by
+  Quartz's own grammar (`TQL-YAML-1068`), both at lint and at boot; a `fixedDelay:` that is
+  not a duration is a lint finding too (`TQL-YAML-1054`, the poll trigger's).
 - **A refused deploy no longer fails the next cold start, and rollback targets a version that
   served.** A direct deploy the running host refused was isolated live (the replace is a no-op)
   but named in `catalog.json`, so the next stack start — a reboot, a reschedule, a framework
