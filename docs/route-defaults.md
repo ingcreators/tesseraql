@@ -98,6 +98,9 @@ Merge rules, per header name:
 
 - The default set is merged into every HTML and JSON response at compile time. File and
   stream responses carry no `headers:` map of their own, so there is nothing to merge under.
+- The static-asset and event-stream writers, which the compiler never sees, put the defaults
+  first and their own headers after, so the same rule holds there: an app-wide `Cache-Control`
+  reaches a page and leaves an asset's `public, max-age=300` and a stream's `no-store` alone.
 - A route-local `response.html.headers` or `response.json.headers` entry **overrides** the default
   for that header name.
 - A route declares a header with the literal value `unset` to **suppress** a default it must not

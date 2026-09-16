@@ -101,6 +101,16 @@ final class OpsShellRoutes {
                 // the edge already closed it
             }
         });
-        exchange.setBody(body);
+        // The member's length rides with the stream, so this hop declares it too
+        // (docs/audit-low-leads.md slice 9, XD-09b); a member that framed the body some other
+        // way leaves it unmeasured, as before.
+        long length = response.header("Content-Length").map(value -> {
+            try {
+                return Long.parseLong(value.trim());
+            } catch (NumberFormatException unreadable) {
+                return -1L;
+            }
+        }).orElse(-1L);
+        exchange.setBody(io.tesseraql.core.http.SizedBody.of(body, length));
     }
 }

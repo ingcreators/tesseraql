@@ -127,16 +127,19 @@ class MultiAppGatewayDifferentialTest {
     // ---------------------------------------------------------------- what a proxy breaks
 
     /**
-     * A streaming export declares no length, so it answers chunked — and the gateway told the JDK
-     * server {@code -1}, which in {@code com.sun.net.httpserver} means "no response body" rather
-     * than "length unknown". Every chunked answer lost its body silently: a 200, the right headers,
-     * and nothing after them.
+     * A streaming export declares its length (docs/audit-low-leads.md slice 9, XD-09b), so it
+     * rides the relay's sized branch and answers identically through the gateway. It used to
+     * answer chunked — and the gateway of the day told the JDK server {@code -1}, which in
+     * {@code com.sun.net.httpserver} meant "no response body", so every chunked answer lost its
+     * body silently. The chunked arm is still guarded, at the relay with a stub origin
+     * ({@code StackRelayTest.aChunkedBodyWithNoDeclaredLengthIsRelayedWhole}); the export is no
+     * longer the body that exercises it.
      */
     @Test
-    void aChunkedResponseWithNoDeclaredLengthKeepsItsBody() throws Exception {
+    void aSizedExportDeclaresItsLengthThroughTheGateway() throws Exception {
         Captured answer = capture(direct, get("/" + APP + "/api/export"));
-        assertThat(answer.headers).as("the case is only meaningful without a declared length")
-                .doesNotContainKey("content-length");
+        assertThat(answer.headers).as("a spooled export knows its length")
+                .containsKey("content-length");
         assertThat(answer.length).as("and the app really does answer with a body").isPositive();
 
         assertSame("/" + APP + "/api/export");

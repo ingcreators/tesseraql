@@ -171,6 +171,25 @@ class RouteAuditAndErrorPagesIntegrationTest {
     }
 
     /**
+     * The app-wide default does not replace an asset's own caching policy
+     * (docs/audit-low-leads.md slice 9, unfiled 50). {@code route-defaults.md} promises that a
+     * local header wins by name; the asset writer put the defaults last, so an app-wide
+     * {@code Cache-Control} — declared for the pages — made every stylesheet and script
+     * uncacheable. The compiled JSON route, which merges the defaults under its own headers,
+     * shows the default is live.
+     */
+    @Test
+    void anAppWideCacheControlDoesNotReplaceTheAssetsOwn() throws Exception {
+        HttpResponse<String> asset = get("/assets/app.css", null, "text/css");
+        assertThat(asset.statusCode()).isEqualTo(200);
+        assertThat(asset.headers().allValues("Cache-Control"))
+                .containsExactly("public, max-age=300");
+
+        HttpResponse<String> json = get("/api/plain", null, null);
+        assertThat(json.headers().firstValue("Cache-Control")).hasValue("no-store");
+    }
+
+    /**
      * A JSON response carries the app's header block too.
      *
      * <p>It did not. The merge reached HTML responses only, on the reading that the block is
@@ -250,6 +269,7 @@ class RouteAuditAndErrorPagesIntegrationTest {
                       Content-Security-Policy: "default-src 'self'; frame-ancestors 'none'"
                       X-Frame-Options: DENY
                       X-Content-Type-Options: nosniff
+                      Cache-Control: no-store
                     jwt:
                       secret: dev-only-secret-change-me-in-production
                       audience: https://app.example.com

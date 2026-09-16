@@ -46,7 +46,9 @@ public final class FileBlobStore implements BlobStore {
 
     @Override
     public InputStream openInput(BlobRef ref) throws IOException {
-        return Files.newInputStream(root.resolve(ref.key()));
+        // The file's size rides with the stream (docs/audit-low-leads.md slice 9, XD-09b).
+        Path file = root.resolve(ref.key());
+        return io.tesseraql.core.http.SizedBody.of(Files.newInputStream(file), Files.size(file));
     }
 
     @Override

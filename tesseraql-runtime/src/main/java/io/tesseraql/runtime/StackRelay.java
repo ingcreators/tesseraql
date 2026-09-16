@@ -537,16 +537,21 @@ final class StackRelay {
             // The root does exactly one thing — redirect — and configuration chooses only the
             // target (docs/stack-architecture.md decision 24). 307 deliberately: a permanent
             // redirect is cached by browsers past the configuration change that retires it. The
-            // query string rides along verbatim.
+            // query string rides along.
             if (rootTarget != null && "/".equals(rawPath)) {
                 String uri = request.uri();
                 int query = uri.indexOf('?');
                 // Wire text (docs/router-unicode-names.md R0): a target named in Japanese was
-                // written raw and the transport folded it to a row of '?'.
-                String target = io.tesseraql.core.http.PercentEncoding.uriLiteral(rootTarget);
+                // written raw and the transport folded it to a row of '?'. The query too
+                // (docs/audit-low-leads.md slice 9, unfiled 47): Netty accepts a DEL or a C0
+                // byte in a request-target and Vert.x refuses it in a header, so a query
+                // echoed raw landed in the catch-all as a 502 blamed on the member, with a
+                // stack trace per request. The encoder keeps an authored %XX triplet, so a
+                // well-formed query is byte-identical.
+                String target = io.tesseraql.core.http.PercentEncoding.uriLiteral(
+                        query < 0 ? rootTarget : rootTarget + uri.substring(query));
                 request.response().setStatusCode(307)
-                        .putHeader("Location",
-                                query < 0 ? target : target + uri.substring(query))
+                        .putHeader("Location", target)
                         .end();
                 return;
             }

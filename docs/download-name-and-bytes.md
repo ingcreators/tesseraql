@@ -885,11 +885,14 @@ Every unfiled defect the measurement surfaced, with its destination (the measure
 - **Edge slice** ("A header value is refused before it can hang the connection"; now
   [`edge-hygiene.md`](edge-hygiene.md), which re-measured every item below and found N2 — the
   transfer subtree — to outrank them all): the asset and
-  SSE bypass checks (`AssetRoutes:343`, `SseRoutes:145`) and the MCP `HttpTransport:68` (#17, #23);
+  SSE bypass checks (`AssetRoutes:343`, `SseRoutes:145`) and the MCP `HttpTransport:68` (#17, #23
+  — the value half closed by E3; the name half, which no writer checked, by
+  `docs/audit-low-leads.md` slice 9; the MCP transport never wrote a configured value);
   a literal-value lint at `ExportRules:189`'s seam for `export.filename`, `response.stream.filename`,
   `redirect.location` and `response.file.contentType` (#7 — `charset=Shift_JIS` over UTF-8 bytes;
   an authored `location:` with OWS); the `headers:` `Content-Disposition` injection and F125
-  mangling (#15 — the helper does not run there); the `HX-Trigger` toast escape (#16 — one flag on
+  mangling (#15 — the helper does not run there; a lint since `docs/audit-low-leads.md` slice 9,
+  `TQL-SEC-4153`); the `HX-Trigger` toast escape (#16 — one flag on
   a dedicated mapper, its own small pull request or here); an IDN host in an absolute `location:`
   (`java.net.IDN` is JDK and could live in core when a shipped path authors one); `[`/`]` in a path
   and the JDK follower; the declared `headers:` `Location` never acquiring the base prefix.

@@ -297,6 +297,20 @@ class RedirectLocationIntegrationTest {
         assertThat(event.at("/hc:toast/variant").asText()).isEqualTo("success");
     }
 
+    /**
+     * A declared header whose NAME is not a token is a 500 on the route's thread, not a hang
+     * (docs/audit-low-leads.md slice 9, DN-02a): no writer read a name's characters, so the
+     * name reached Vert.x inside {@code runOnContext}, whose refusal left the buffered
+     * response unanswered until the caller's own timeout — the ten seconds the client below
+     * allows, so the old behaviour fails this test as a timeout.
+     */
+    @Test
+    void aDeclaredHeaderWhoseNameIsNotATokenIsA500NotAHang() throws Exception {
+        HttpResponse<Void> response = get(root, "/go/badname?id=1");
+
+        assertThat(response.statusCode()).isEqualTo(500);
+    }
+
     @Test
     void aDeclaredHxRedirectIsEncodedOnTheWire() throws Exception {
         HttpResponse<Void> response = get(root, "/go/hxhdr?id=" + JU);

@@ -72,8 +72,13 @@ public final class S3BlobStore implements BlobStore {
     @Override
     public InputStream openInput(BlobRef ref) {
         Location loc = location(ref);
-        return client.getObject(GetObjectRequest.builder().bucket(loc.bucket()).key(loc.key())
-                .build());
+        software.amazon.awssdk.core.ResponseInputStream<software.amazon.awssdk.services.s3.model.GetObjectResponse> object = client
+                .getObject(GetObjectRequest.builder().bucket(loc.bucket())
+                        .key(loc.key()).build());
+        // The object's length rides with the stream (docs/audit-low-leads.md slice 9,
+        // XD-09b): the edge declares it, so a GET cut short mid-object reads as truncated.
+        Long length = object.response().contentLength();
+        return io.tesseraql.core.http.SizedBody.of(object, length == null ? -1 : length);
     }
 
     @Override

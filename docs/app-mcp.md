@@ -247,15 +247,18 @@ response:
   text:
     template: draft-welcome.txt.tpl
     model:
-      customer: main.first
+      customer: main
       tone: params.tone
 ```
 
 ```text
 # mcp/draft-welcome.txt.tpl  (Thymeleaf TEXT mode)
-Write a [(${tone})] welcome message for [(${customer.name})],
-who joined on [(${customer.signedUpOn})] and is on the [(${customer.plan})] plan.
+Write a [(${tone})] welcome message for [(${customer.rows[0].name})],
+who joined on [(${customer.rows[0].signedUpOn})] and is on the [(${customer.rows[0].plan})] plan.
 ```
+
+The source publishes its rows; the template reads the head row by index. (A route source
+publishes no `first` — a job step's read does.)
 
 A prompt with nothing to look up declares no `sources:` and renders from its arguments alone —
 that is the whole document minus the two blocks.

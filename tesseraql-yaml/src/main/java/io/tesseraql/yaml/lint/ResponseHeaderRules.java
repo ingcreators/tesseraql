@@ -26,6 +26,12 @@ final class ResponseHeaderRules implements LintRule {
 
     private static final String RESPONSE_HEADER_CONTROL = "TQL-SEC-4151";
 
+    /** A declared header whose name is not a token the wire can carry. */
+    private static final String RESPONSE_HEADER_NAME = "TQL-SEC-4152";
+
+    /** A declared {@code Content-Disposition} building a filename from a placeholder. */
+    private static final String RESPONSE_HEADER_DISPOSITION = "TQL-SEC-4153";
+
     @Override
     public void lint(LintContext context, AppManifest manifest,
             List<LintFinding> findings) {
@@ -62,12 +68,41 @@ final class ResponseHeaderRules implements LintRule {
             String source, List<LintFinding> findings) {
         for (var entry : declaredHeaders.entrySet()) {
             String name = entry.getKey();
+            // The name itself, before what it is (docs/audit-low-leads.md slice 9, DN-02a):
+            // no check anywhere read a header name's characters, so a key with a space in it
+            // linted clean and hung the route — Vert.x refuses the name inside the transport,
+            // past the edge's 500. The edge refuses it on the route's thread now; here it is
+            // named at build time.
+            String notAToken = io.tesseraql.core.http.ReservedHeaders.notAToken(name);
+            if (notAToken != null) {
+                findings.add(new LintFinding(RESPONSE_HEADER_NAME, ERROR, source,
+                        "Route '" + route.definition().id() + "' declares the response header '"
+                                + name + "', whose name " + notAToken
+                                + " — the edge refuses it on every request"));
+                continue;
+            }
             if (io.tesseraql.core.http.ReservedHeaders.neverDeclared(name)) {
                 findings.add(new LintFinding(RESPONSE_HEADER_RESERVED, ERROR, source,
                         "Route '" + route.definition().id() + "' declares the response header '"
                                 + name + "', which the transport owns — framing and connection"
                                 + " control are computed from the body the server writes, and"
                                 + " the tql. namespace never leaves the runtime"));
+            }
+            if ("content-disposition".equalsIgnoreCase(name)
+                    && entry.getValue() instanceof String value
+                    && placeholderFilename(value)) {
+                // A download's name has a helper (docs/download-name-and-bytes.md): the
+                // response.file: recipe's filename: quotes and encodes it (RFC 6266), and a
+                // placeholder written into a Content-Disposition by hand is neither — a
+                // quote in the value ends the name and starts a parameter, a non-ASCII name
+                // folds to '?' on the wire. A literal disposition is left alone: inline has
+                // no other spelling (docs/audit-low-leads.md slice 9, DN-02c).
+                findings.add(new LintFinding(RESPONSE_HEADER_DISPOSITION, WARNING, source,
+                        "Route '" + route.definition().id() + "' builds a Content-Disposition"
+                                + " filename from a placeholder — the value is neither quoted"
+                                + " nor encoded on the wire; name a download with"
+                                + " response.file: filename:, which the framework quotes and"
+                                + " encodes"));
             }
             // A literal control character in the declared text is refused at the edge on every
             // request (docs/edge-hygiene.md E3); here it is named at build time. A value a
@@ -100,20 +135,17 @@ final class ResponseHeaderRules implements LintRule {
         try {
             defaults = io.tesseraql.yaml.config.ResponseHeaderDefaults.from(config);
         } catch (io.tesseraql.core.error.TqlException ex) {
-            // The manifest loader does not parse this key; surface the malformed map here.
-            findings.add(new LintFinding(INVALID_RESPONSE_HEADER_DEFAULTS, ERROR, "config",
-                    ex.getMessage()));
+            // The manifest loader does not parse this key; surface the malformed map here,
+            // under the code the read refused it with — the shape, a value's control
+            // character or a name that is not a token (TQL-SEC-4135), a name the transport
+            // owns (TQL-SEC-4139) — so lint and boot say the same thing.
+            findings.add(new LintFinding(ex.code() == null
+                    ? INVALID_RESPONSE_HEADER_DEFAULTS
+                    : ex.code().toString(), ERROR, "config", ex.getMessage()));
             return;
         }
         if (defaults.isEmpty()) {
             return;
-        }
-        for (String name : defaults.headers().keySet()) {
-            if (io.tesseraql.core.http.ReservedHeaders.neverDeclared(name)) {
-                findings.add(new LintFinding(RESPONSE_HEADER_RESERVED, ERROR, "config",
-                        "The default response header '" + name + "' is one the transport owns"
-                                + " — it is never sent, on any route"));
-            }
         }
         for (RouteFile route : manifest.routes()) {
             var response = route.definition().response();
@@ -131,6 +163,13 @@ final class ResponseHeaderRules implements LintRule {
                 lintAgainstDefaults(route, response.json().headers(), defaults, source, findings);
             }
         }
+    }
+
+    /** Whether a declared disposition builds its {@code filename=} from a {@code {placeholder}}. */
+    private static boolean placeholderFilename(String value) {
+        int filename = value.toLowerCase(java.util.Locale.ROOT).indexOf("filename");
+        return filename >= 0 && value.indexOf('{', filename) >= 0
+                && value.indexOf('}', filename) >= 0;
     }
 
     /** One response's declared headers against the app-wide defaults they merge under. */

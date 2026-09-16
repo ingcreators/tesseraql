@@ -136,7 +136,10 @@ public final class JdbcTempStore implements TempStore {
                 cleanable.clean();
             }
         };
-        return wrapper;
+        // The staged copy's size rides with the stream: the edge declares it as the
+        // download's length (docs/audit-low-leads.md slice 9, XD-09b). The sized wrapper
+        // holds the cleaner's wrapper, so the copy is still freed on close or collection.
+        return io.tesseraql.core.http.SizedBody.of(wrapper, Files.size(staging));
     }
 
     /** Closes and deletes one read's staging copy; runs once, on close or on collection. */

@@ -97,6 +97,52 @@ class ResponseHeaderDefaultsTest {
                 "Referrer-Policy");
     }
 
+    /**
+     * A header NAME is judged too (docs/audit-low-leads.md slice 9, DN-02a): no writer read a
+     * name's characters, so a key with a space, a trailing space, a non-ASCII letter or nothing
+     * at all linted clean, booted, and hung every asset, stream and download — Vert.x refuses
+     * the name inside the transport. Refused here, naming the header, with the same code the
+     * value check carries.
+     */
+    @Test
+    void aNameThatIsNotATokenIsRefusedNamingTheHeader() {
+        assertThatThrownBy(() -> defaults(Map.of("X Space", "typo")))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("TQL-SEC-4135")
+                .hasMessageContaining("'X Space'")
+                .hasMessageContaining("U+0020");
+        assertThatThrownBy(() -> defaults(Map.of("X-Frame-Options ", "DENY")))
+                .hasMessageContaining("'X-Frame-Options '").hasMessageContaining("U+0020");
+        assertThatThrownBy(() -> defaults(Map.of("受注-ヘッダ", "x")))
+                .hasMessageContaining("U+53D7");
+        assertThatThrownBy(() -> defaults(Map.of("X-Frame-Options:", "DENY")))
+                .hasMessageContaining("U+003A");
+        assertThatThrownBy(() -> defaults(Map.of("", "x")))
+                .hasMessageContaining("is empty");
+        // Every tchar is a name: the lint's own reserved list is spelled in these.
+        assertThat(defaults(Map.of("X_Ok.1!#$%&'*+-^`|~", "v")).headers())
+                .containsKey("X_Ok.1!#$%&'*+-^`|~");
+    }
+
+    /**
+     * A transport-owned name is refused at the read, not by the lint alone: the compiled
+     * routes' edge dropped a default {@code Content-Length} with a warning, but the classpath
+     * asset writer sent it ahead of the transport's own, so every framework stylesheet and
+     * script was that many bytes long. Case-insensitive, as the transport reads names.
+     */
+    @Test
+    void aTransportOwnedNameIsRefusedNamingTheHeader() {
+        assertThatThrownBy(() -> defaults(Map.of("Content-Length", "3")))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("TQL-SEC-4139")
+                .hasMessageContaining("'Content-Length'")
+                .hasMessageContaining("transport owns");
+        assertThatThrownBy(() -> defaults(Map.of("connection", "close")))
+                .hasMessageContaining("TQL-SEC-4139").hasMessageContaining("'connection'");
+        assertThatThrownBy(() -> defaults(Map.of("tql.acting.role", "admin")))
+                .hasMessageContaining("TQL-SEC-4139");
+    }
+
     @Test
     void malformedDeclarationsFailFast() {
         assertThatThrownBy(() -> ResponseHeaderDefaults.from(new AppConfig(

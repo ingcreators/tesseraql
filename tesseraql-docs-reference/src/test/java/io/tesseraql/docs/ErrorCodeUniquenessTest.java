@@ -107,6 +107,9 @@ class ErrorCodeUniquenessTest {
             Map.entry("VIEW-3323", "a filters: entry names an input the route does not"
                     + " declare"),
             Map.entry("SEC-4135", "an invalid responseHeaders defaults declaration"),
+            // The lint reported a transport-owned default per route; the boot refuses the
+            // defaults from the same read since docs/audit-low-leads.md slice 9 (DN-02a).
+            Map.entry("SEC-4139", "a declared response header the transport owns"),
             Map.entry("SQL-2101", "an expression that does not parse"),
             // The lint's own code, refused at the compiler's resolve sites since
             // docs/audit-low-leads.md slice 8: the source read lazily, so a missing statement

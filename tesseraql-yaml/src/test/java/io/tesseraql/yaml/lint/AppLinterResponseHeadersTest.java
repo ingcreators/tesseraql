@@ -201,6 +201,106 @@ class AppLinterResponseHeadersTest {
                 .containsExactly("Content-Length", "Transfer-Encoding", "Connection", "Trailer");
     }
 
+    /**
+     * A declared header's NAME is judged (docs/audit-low-leads.md slice 9, DN-02a): a key with
+     * a space linted clean and hung the route on every request, because the name reached
+     * Vert.x inside the transport. Named here at build time; the edge refuses it as a 500.
+     */
+    @Test
+    void refusesADeclaredHeaderWhoseNameIsNotAToken(@TempDir Path dir) throws Exception {
+        List<LintFinding> findings = new AppLinter().lint(app(dir,
+                "    headers:\n      \"X-Typo Name\": v\n      \"X-Ok\": v"));
+
+        assertThat(findings).anySatisfy(finding -> {
+            assertThat(finding.code()).isEqualTo("TQL-SEC-4152");
+            assertThat(finding.isError()).isTrue();
+            assertThat(finding.message()).contains("'X-Typo Name'").contains("U+0020")
+                    .contains("edge refuses it");
+        });
+        assertThat(findings).noneSatisfy(finding -> assertThat(finding.message())
+                .contains("'X-Ok'"));
+    }
+
+    /** The config twin: a name the transport owns is the boot's refusal too, under its code. */
+    @Test
+    void refusesADefaultHeaderWhoseNameIsNotAToken(@TempDir Path dir) throws Exception {
+        Path home = app(dir, "");
+        Files.writeString(home.resolve("config/tesseraql.yml"), """
+                tesseraql:
+                  app:
+                    name: t
+                  security:
+                    responseHeaders:
+                      "X Space": typo
+                """);
+
+        assertThat(new AppLinter().lint(home)).anySatisfy(finding -> {
+            assertThat(finding.code()).isEqualTo("TQL-SEC-4135");
+            assertThat(finding.isError()).isTrue();
+            assertThat(finding.source()).isEqualTo("config");
+            assertThat(finding.message()).contains("'X Space'").contains("U+0020");
+        });
+    }
+
+    /**
+     * A {@code Content-Disposition} written by hand from a placeholder is neither quoted nor
+     * encoded (docs/audit-low-leads.md slice 9, DN-02c): a quote in the caller's value ends
+     * the name and starts a parameter, a non-ASCII name folds to {@code ?}. The download
+     * recipe's {@code filename:} does both, so the finding points there. A literal
+     * disposition is left alone — {@code inline} has no other spelling — and a JSON route is
+     * held to the same rule.
+     */
+    @Test
+    void aPlaceholderFilenameInADeclaredContentDispositionIsPointedAtTheFileRecipe(
+            @TempDir Path dir) throws Exception {
+        List<LintFinding> findings = new AppLinter().lint(app(dir,
+                "    headers:\n      Content-Disposition: 'attachment; filename=\"{params.name}\"'"));
+
+        assertThat(findings).anySatisfy(finding -> {
+            assertThat(finding.code()).isEqualTo("TQL-SEC-4153");
+            assertThat(finding.severity()).isEqualTo("warning");
+            assertThat(finding.message()).contains("placeholder")
+                    .contains("response.file: filename:");
+        });
+    }
+
+    @Test
+    void aLiteralInlineDispositionLintsClean(@TempDir Path dir) throws Exception {
+        List<LintFinding> findings = new AppLinter().lint(app(dir,
+                "    headers:\n      Content-Disposition: inline\n"
+                        + "      X-Name: \"{params.name}\""));
+
+        assertThat(findings).noneMatch(finding -> finding.code().equals("TQL-SEC-4153"));
+    }
+
+    @Test
+    void aJsonRouteIsHeldToTheDispositionRuleToo(@TempDir Path dir) throws Exception {
+        Path home = app(dir, "");
+        Files.createDirectories(home.resolve("web/api/dl"));
+        Files.writeString(home.resolve("web/api/dl/get.yml"), """
+                version: tesseraql/v1
+                id: api.dl
+                kind: route
+                recipe: query-json
+                security:
+                  auth: public
+                input:
+                  name:
+                    type: string
+                response:
+                  json:
+                    body:
+                      ok: true
+                    headers:
+                      content-disposition: "attachment; filename={params.name}"
+                """);
+
+        assertThat(new AppLinter().lint(home)).anySatisfy(finding -> {
+            assertThat(finding.code()).isEqualTo("TQL-SEC-4153");
+            assertThat(finding.source()).isEqualTo("web/api/dl/get.yml");
+        });
+    }
+
     /** The app-wide defaults are held to the same rule, named as config. */
     @Test
     void refusesAReservedDefaultHeader(@TempDir Path dir) throws Exception {

@@ -85,7 +85,8 @@ domains, rules, decisions, scopes, calendars.
 
 **source** — one named acquisition of rows, declared under `sources:`. Its arm names the
 mechanism — `sql:`, `http:`, `contract:` or `service:` — and every source publishes the same
-envelope under its own name: `<name>.rows`, `.rowCount`, `.first`. See
+envelope under its own name: `<name>.rows`, `.rowCount` (a job step's read and an export's
+model add `.first`; a route source does not). See
 [response-shaping.md](response-shaping.md).
 
 **`main`** — the reserved source name every default resolves to: a view's rows, an export's

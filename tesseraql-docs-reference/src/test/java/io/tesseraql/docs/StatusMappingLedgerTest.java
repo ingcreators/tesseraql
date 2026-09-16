@@ -80,6 +80,10 @@ class StatusMappingLedgerTest {
             // 4151: a lint-only finding (a route header literal carrying a control character,
             // docs/edge-hygiene.md E3) — never answered on the wire, like 4139.
             "TQL-SEC-4151",
+            // 4152/4153: lint-only findings (a route header key that is not a token; a
+            // Content-Disposition built from a placeholder — docs/audit-low-leads.md slice 9),
+            // never answered on the wire.
+            "TQL-SEC-4152", "TQL-SEC-4153",
             // Studio server-side failures: an unreadable doc or catalog, and the copilot's
             // unconfigured-or-failed model endpoint — not the caller's input.
             "TQL-STUDIO-4041", "TQL-STUDIO-4235", "TQL-STUDIO-4242",

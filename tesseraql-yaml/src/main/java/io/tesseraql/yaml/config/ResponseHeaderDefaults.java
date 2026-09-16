@@ -33,6 +33,15 @@ public final class ResponseHeaderDefaults {
 
     private static final TqlErrorCode INVALID = new TqlErrorCode(TqlDomain.SEC, 4135);
 
+    /**
+     * TQL-SEC-4139: a default header the transport owns — {@code Content-Length},
+     * {@code Connection}, the {@code tql.} namespace — which the compiled routes' edge drops
+     * and the asset writer would send, ahead of the length the transport computes. The lint
+     * reported it per route and for the defaults; the boot refuses the defaults from the same
+     * read now (docs/audit-low-leads.md slice 9, DN-02a).
+     */
+    public static final TqlErrorCode RESERVED = new TqlErrorCode(TqlDomain.SEC, 4139);
+
     /** The route-local value that suppresses a default header. */
     public static final String UNSET = "unset";
 
@@ -63,6 +72,19 @@ public final class ResponseHeaderDefaults {
             }
             String name = String.valueOf(entry.getKey());
             String value = config.resolve(String.valueOf(entry.getValue()));
+            // The name first (docs/audit-low-leads.md slice 9, DN-02a): no writer checked a
+            // header NAME anywhere, so `"X Space": typo` linted clean, booted, and hung every
+            // asset, stream and download — Vert.x refuses the name inside the transport. And a
+            // transport-owned name was refused by the lint alone; the asset writer sent it.
+            String notAToken = io.tesseraql.core.http.ReservedHeaders.notAToken(name);
+            if (notAToken != null) {
+                throw new TqlException(INVALID, "Default response header '" + name + "' "
+                        + notAToken);
+            }
+            if (io.tesseraql.core.http.ReservedHeaders.neverDeclared(name)) {
+                throw new TqlException(RESERVED, "The default response header '" + name
+                        + "' is one the transport owns - it is never sent, on any route");
+            }
             // Judged here, where it is declared, and nowhere else (docs/edge-hygiene.md E3):
             // the compiled routes' edge refuses a control character per request, but the
             // asset, SSE and MCP surfaces write these values straight to the transport, where
