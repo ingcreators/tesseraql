@@ -115,8 +115,7 @@ parameters `:857`, `:370`), `TransitionExecutor` (through `ResultRows.value`), `
 ×2 (batch step), `ChunkRows` (keyset/chunk), `KeyedReference` (enrich), `LookupReferences` ×2,
 `DecisionTables`, `ValidationRules`, `SqlStep:483` (the scalar), `ResultSetRows` (export),
 `StudioTestService`, `StudioDataService` ×3, `SuiteContext`. Framework-owned tables
-(`JobRepository`, `JdbcRouteAuditStore`, `OraclePlanInspector`) read their own columns and are
-out of scope.
+(`JobRepository`, `JdbcRouteAuditStore`) read their own columns and are out of scope.
 
 `ResultRows.value` (`core/dialect`) is the one normalizer the bindable paths share: it turns
 `java.sql.Timestamp/Date/Time` into ISO text and passes everything else through — the

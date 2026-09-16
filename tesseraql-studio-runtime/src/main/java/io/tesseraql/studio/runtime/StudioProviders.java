@@ -956,9 +956,14 @@ final class StudioProviders {
                             }
                         }
                         if (match != null) {
+                            // The typed query, so the capture binds what the case will replay
+                            // (docs/audit-low-leads.md G21): the raw strings made PostgreSQL
+                            // refuse a bigint bind, the capture swallowed it, and the case was
+                            // recorded without its expectation.
+                            Map<String, Object> typed = studio.typedQuery(method, path, query);
                             Map<String, Object> recordContext = new java.util.LinkedHashMap<>();
-                            recordContext.put("query", query);
-                            recordContext.put("params", body.isEmpty() ? query : body);
+                            recordContext.put("query", typed);
+                            recordContext.put("params", body.isEmpty() ? typed : body);
                             rowCount = studioTests.sandboxRowCount(match.definition(),
                                     match.source().getParent(), recordContext);
                         }

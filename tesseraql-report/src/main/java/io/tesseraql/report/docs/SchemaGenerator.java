@@ -45,8 +45,12 @@ public final class SchemaGenerator {
         try (Connection connection = dataSource.getConnection()) {
             return introspector.introspect(connection);
         } catch (SQLException ex) {
+            // The cause rides along: the CLI's handler walks it for a connection refusal and
+            // answers the operator message at 1, where the bare wrap answered a coded line at 2
+            // against docs/cli-surface.md decision 10 (docs/audit-low-leads.md, unfiled 10).
             throw new TqlException(GEN_ERROR,
-                    "Failed to open a connection for schema introspection: " + ex.getMessage());
+                    "Failed to open a connection for schema introspection: " + ex.getMessage(),
+                    ex);
         }
     }
 

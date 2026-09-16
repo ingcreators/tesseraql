@@ -294,9 +294,11 @@ final class WorkflowCases {
         }
 
         String vendor = context.vendor();
+        // The runner's registry, not the process default: a guard calling a module function
+        // failed as "unknown" under the MCP test tool and Studio (docs/audit-low-leads.md G20).
         io.tesseraql.yaml.workflow.TransitionExecutor.CompiledTransition compiled = io.tesseraql.yaml.workflow.TransitionExecutor
                 .compile(def, transition, managed,
-                        vendor, workflowDir(def));
+                        vendor, workflowDir(def), context.functions());
         // Guard-file SQL joins route coverage through the executor's observer.
         Path guardFile = transition.guard() == null || transition.guard().file() == null
                 ? null

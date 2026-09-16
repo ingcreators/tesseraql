@@ -262,8 +262,8 @@ The complete per-case results (the packaged `report.json` only carries cases joi
 to a route) plus per-file SQL line/branch coverage with 1-based line lists — the same
 numbers the documentation portal renders. The repeatable `--case <name>` filter
 (exact case names) runs only the matching cases, and the JSON document reports only
-them. `--format text` names the default output; exit semantics (1 on failure, 2 on
-the opt-in regression gate) are identical in both formats.
+them. `--format text` names the default output; exit semantics (1 on failure, 3 on
+the opt-in regression gate, 2 when nothing ran) are identical in both formats.
 
 ### `tesseraql symbols --app <dir>`
 

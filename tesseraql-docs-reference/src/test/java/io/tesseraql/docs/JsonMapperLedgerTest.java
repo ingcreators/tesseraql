@@ -29,11 +29,10 @@ import org.junit.jupiter.api.Test;
  * {@code JsonLimits} so the bounds cannot drift.</li>
  * <li>{@code FlagsSpec}, {@code MenuSpec} — write-only YAML emitters (no parse, nothing to
  * constrain) with their own writer features.</li>
- * <li>{@code PackagedModules}, {@code MysqlPlanInspector}, {@code PostgresPlanInspector} —
- * build- and test-time tools on trusted input (a jar this build produced, a database's own
- * EXPLAIN output).</li>
- * <li>The test-core pair ({@code RouteTestRunner}, {@code TestSuiteLoader}) — main-source
- * files that exist only to drive tests, the SQL ledger's precedent.</li>
+ * <li>{@code PackagedModules} — a build-time tool on trusted input (a jar this build
+ * produced).</li>
+ * <li>{@code TestSuiteLoader} in test-core — a main-source file that exists only to drive
+ * tests, the SQL ledger's precedent.</li>
  * </ul>
  */
 class JsonMapperLedgerTest {
@@ -42,11 +41,8 @@ class JsonMapperLedgerTest {
 
     private static final Set<String> LEDGER = new TreeSet<>(List.of(
             "tesseraql-apptasks/src/main/java/io/tesseraql/apptasks/PackagedModules.java",
-            "tesseraql-coverage-core/src/main/java/io/tesseraql/coverage/plan/MysqlPlanInspector.java",
-            "tesseraql-coverage-core/src/main/java/io/tesseraql/coverage/plan/PostgresPlanInspector.java",
             "tesseraql-mcp/src/main/java/io/tesseraql/mcp/McpJson.java",
             "tesseraql-security/src/main/java/io/tesseraql/security/SecurityJson.java",
-            "tesseraql-test-core/src/main/java/io/tesseraql/test/RouteTestRunner.java",
             "tesseraql-test-core/src/main/java/io/tesseraql/test/TestSuiteLoader.java",
             "tesseraql-yaml/src/main/java/io/tesseraql/yaml/JsonMappers.java",
             "tesseraql-yaml/src/main/java/io/tesseraql/yaml/YamlMappers.java",

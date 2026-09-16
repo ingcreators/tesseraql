@@ -289,6 +289,7 @@ statically:
 | --- | --- |
 | `TQL-SQL-2101` / `2102` | a SQL file does not parse — a directive's expression, or the template itself (an unterminated directive, a bind without its dummy) |
 | `TQL-SQL-2103` | a route, step, or validation rule references a missing SQL file |
+| `TQL-SQL-2123` | a file carries a transaction-control statement (`commit`, `rollback`, `begin`/`start transaction`, `set transaction`) — the pipeline, the test runner and the sandbox own the transaction, never the file |
 | `TQL-SQL-2104` | an UPDATE declares `expect.rowCount` but has no version-column predicate (optimistic locking half-wired) |
 | `TQL-SQL-2105` | an UPDATE has a version predicate but no `expect.rowCount` (a stale edit would silently affect zero rows) |
 | `TQL-SQL-2116` | a route declares `lock:` but the UPDATE's SET list never assigns the column, so the lock matches every save |

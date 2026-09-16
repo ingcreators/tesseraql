@@ -34,4 +34,20 @@ class CoverageThresholdResolverTest {
         assertThat(thresholds.sqlLine()).isCloseTo(0.40, within(1e-9));
         assertThat(thresholds.sqlBranch()).isCloseTo(0.80, within(1e-9));
     }
+
+    @Test
+    void everyKindKeyIsReadAsWritten() {
+        // docs/audit-low-leads.md G22: a hand-kept allow-list dropped queue-consume, decision and
+        // any typo without a word; whether a kind was measured is the gate's to judge.
+        AppConfig config = new AppConfig(Map.of("coverage", Map.of("thresholds", Map.of(
+                "sqlLine", 90, "queue-consume", 100, "decision", "75", "sqlLines", 80))),
+                name -> null);
+
+        CoverageThresholds thresholds = CoverageThresholdResolver.resolve(config, 50, 50);
+        assertThat(thresholds.sqlLine()).isCloseTo(0.90, within(1e-9));
+        assertThat(thresholds.kinds()).containsOnlyKeys("queue-consume", "decision", "sqlLines");
+        assertThat(thresholds.kindThreshold("queue-consume")).isCloseTo(1.0, within(1e-9));
+        assertThat(thresholds.kindThreshold("decision")).isCloseTo(0.75, within(1e-9));
+        assertThat(thresholds.kindThreshold("sqlLines")).isCloseTo(0.80, within(1e-9));
+    }
 }

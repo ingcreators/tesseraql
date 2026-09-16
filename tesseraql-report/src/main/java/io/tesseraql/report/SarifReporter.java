@@ -15,7 +15,7 @@ import java.util.Set;
 /**
  * Renders findings as SARIF 2.1.0 (design ch. 15), the static-analysis interchange format consumed by
  * CI code-scanning. Findings carry a rule id, level, message, and an optional source location, so
- * coverage gaps and plan-guard issues surface as annotations in the build.
+ * coverage gaps surface as annotations in the build.
  */
 public final class SarifReporter {
 

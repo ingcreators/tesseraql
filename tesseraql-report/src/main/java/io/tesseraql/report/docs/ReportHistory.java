@@ -100,6 +100,18 @@ public final class ReportHistory {
         }
     }
 
+    /**
+     * The refusal a regression gate raises over a corrupt history — one sentence for the
+     * {@code report} goal and {@code test --fail-on-regression} alike (docs/audit-low-leads.md
+     * G18): the baseline is unreadable, so the gate has nothing to compare against, and starting
+     * a fresh ring would erase the evidence.
+     */
+    public static TqlException corrupt(Path historyFile) {
+        return new TqlException(HISTORY_ERROR, "Coverage history " + historyFile
+                + " is unreadable; the regression gate has no baseline to compare against —"
+                + " delete the file to start a fresh history");
+    }
+
     private static void write(Path historyFile, List<Entry> entries) {
         try {
             if (historyFile.getParent() != null) {

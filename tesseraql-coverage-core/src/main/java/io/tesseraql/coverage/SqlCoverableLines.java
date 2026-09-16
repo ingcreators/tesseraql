@@ -23,6 +23,31 @@ public final class SqlCoverableLines {
         return lines;
     }
 
+    /**
+     * The source lines of every conditional branch the template declares — each {@code if},
+     * {@code elseif} and {@code else} arm, nested ones included — the denominator the renderer
+     * builds one outcome at a time ({@code recordBranch}), computed statically so a file no case
+     * rendered has a branch count to be 0% of (docs/audit-low-leads.md G16).
+     */
+    public static Set<Integer> branchLines(List<SqlNode> nodes) {
+        Set<Integer> lines = new TreeSet<>();
+        collectBranches(nodes, lines);
+        return lines;
+    }
+
+    private static void collectBranches(List<SqlNode> nodes, Set<Integer> out) {
+        for (SqlNode node : nodes) {
+            if (node instanceof SqlNode.If conditional) {
+                for (SqlNode.If.Branch branch : conditional.branches()) {
+                    out.add(branch.sourceLine());
+                    collectBranches(branch.body(), out);
+                }
+            } else if (node instanceof SqlNode.For loop) {
+                collectBranches(loop.body(), out);
+            }
+        }
+    }
+
     private static void collect(List<SqlNode> nodes, Set<Integer> out) {
         for (SqlNode node : nodes) {
             switch (node) {

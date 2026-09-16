@@ -40,7 +40,8 @@
 > implemented too: params are the decision's inputs, the matched row's outputs are the
 > case's row, a miss/multi-hit comes back as data (`code: TQL-DECISION-4721/4720`), a
 > table-backed decision runs its generated SELECT against the suite's datasource, and the
-> `decision` coverage kind counts every declared decision. The editor and Studio
+> `decision` coverage kind counts every declared decision (and gates through
+> `coverage.thresholds.decision` since `docs/audit-low-leads.md` G22). The editor and Studio
 > catch-ups are implemented too: `tesseraql symbols` emits decisions and the VS Code
 > extension gains a Decisions tree plus `use:`/`decision:` intelligence (ext 0.3.3);
 > Studio gains the decide-snippet builder, the YAML-rows grid editor (validate before

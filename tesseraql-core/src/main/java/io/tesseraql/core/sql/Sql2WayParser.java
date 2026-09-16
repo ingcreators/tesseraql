@@ -93,6 +93,12 @@ public final class Sql2WayParser {
     /** Parses a 2-way SQL template string, resolving expressions against {@code functions}. */
     public static List<SqlNode> parse(String source,
             io.tesseraql.core.expr.ExpressionFunctions functions) {
+        // A file that ends the transaction it runs in is refused here, once for every surface
+        // that parses one — lint, the test runner, the compiler, the Studio sandbox
+        // (docs/audit-low-leads.md G17).
+        TransactionControl.find(source).ifPresent(found -> {
+            throw TransactionControl.refuse(found);
+        });
         Sql2WayParser parser = new Sql2WayParser(source, functions);
         List<SqlNode> nodes = parser.parseBlock();
         if (parser.pendingTerminator != null) {

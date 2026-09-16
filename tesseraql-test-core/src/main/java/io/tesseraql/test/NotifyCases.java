@@ -36,7 +36,7 @@ final class NotifyCases {
             route.definition().notifications().forEach((id, spec) -> {
                 if (target.id() == null || target.id().equals(id)) {
                     compiled.add(io.tesseraql.yaml.notify.NotifyEvents
-                            .compile(target.route(), id, spec));
+                            .compile(target.route(), id, spec, context.functions()));
                 }
             });
         } else {
@@ -47,7 +47,8 @@ final class NotifyCases {
                     continue;
                 }
                 compiled.add(io.tesseraql.yaml.notify.NotifyEvents
-                        .compile(target.job(), step.id(), step.notification()));
+                        .compile(target.job(), step.id(), step.notification(),
+                                context.functions()));
             }
         }
         if (compiled.isEmpty()) {

@@ -464,10 +464,14 @@ registry as the published record of the transport (the multi-app suite reads it 
 ## What the acceptance is, for all of it
 
 The same thing that made the edge change and the Camel removal checkable, and it has not moved:
-**`RouteTestRunner` drives every route over real HTTP**, and the application test suite does not go
-through the pipeline's internals at all. A shape change that keeps every one of those green has not
-changed what a request means. The unit tests that read headers off a message are the ones expected
-to change, and they are the ones being made to say what they mean.
+**the runtime's integration tests drive every route over real HTTP** (`tesseraql-runtime`'s
+`*IntegrationTest` classes, each with its own JDK client against a booted runtime), and the
+application test suite does not go through the pipeline's internals at all — it runs SQL on a
+JDBC connection. A shape change that keeps every one of those green has not changed what a
+request means. The unit tests that read headers off a message are the ones expected to change,
+and they are the ones being made to say what they mean. *Corrected by `docs/audit-low-leads.md`
+slice 12 (G23): this paragraph named `RouteTestRunner`, a library class that never had a caller
+and was deleted there; the acceptance it described was the runtime's JUnit integration tests.*
 
 That is how it went: seven slices, #962 to #968, each landed on a green full-reactor verify, with
 the suite catching every semantic miss the mechanical migration made — and nothing else. One

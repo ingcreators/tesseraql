@@ -136,9 +136,14 @@ final class SuiteContext {
                         "Unknown route '" + routeId + "' in " + key));
     }
 
-    /** The coverage id of a SQL file: its app-home-relative path with forward slashes. */
+    /**
+     * The coverage id of a SQL file: its app-home-relative path with forward slashes, both sides
+     * normalized so the id a run declares before its cases and the id a case records are one
+     * entry (docs/audit-low-leads.md G16).
+     */
     String sqlId(Path sqlFile) {
-        return appHome.relativize(sqlFile).toString().replace('\\', '/');
+        return appHome.toAbsolutePath().normalize()
+                .relativize(sqlFile.toAbsolutePath().normalize()).toString().replace('\\', '/');
     }
 
     /** Executes a 2-way SQL file on the given (case-transaction) connection, recording coverage. */

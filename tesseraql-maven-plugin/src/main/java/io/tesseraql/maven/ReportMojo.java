@@ -86,6 +86,10 @@ public class ReportMojo extends AbstractMojo {
 
     @Override
     public void execute() throws MojoExecutionException, MojoFailureException {
+        // Custom expression functions resolve from the plugin's classpath, as the test and
+        // coverage goals install them; this goal alone ran built-ins only, so `tesseraql:report`
+        // on its own failed every module-function case (docs/audit-low-leads.md G20).
+        io.tesseraql.core.expr.ExpressionFunctions.install(getClass().getClassLoader());
         DriverManagerDataSource dataSource = new DriverManagerDataSource(jdbcUrl, username,
                 password);
         AppTestRunner.RunResult result = new AppTestRunner().run(appHome.toPath(), dataSource,

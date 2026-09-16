@@ -379,6 +379,17 @@ Per slice, naming the existing files they extend:
   `draft_preview` compiles against the right registry.
 - The existing acceptance flow stays green with zero-module apps (the common case).
 
+*Addendum, `docs/audit-low-leads.md` slice 12 (G20).* Slice 4 threaded the registry into
+`SuiteContext` for the manifest load and the `sql` kind only: the `validate`, `notify` and
+`transition` kinds still compiled through the process-default overloads of `ValidationRules`,
+`NotifyEvents` and `TransitionExecutor`, so a case calling a module function passed under
+`tesseraql test` (which installs the default) and failed as unknown from the MCP `test` tool and
+Studio's run-tests panel (which never install it), and `mvn tesseraql:report` alone ran
+built-ins only. Slice 12 threads `SuiteContext.functions()` into the three kinds, hands the
+runtime's registry to `StudioTestService`'s runner and gives `ReportMojo` the install line its
+siblings carry; `SuiteGuaranteesIntegrationTest` pins the MCP shape (a registry handed in, no
+default installed).
+
 ## What moves in the docs, and when
 
 With the code PRs, not before: `hosting.md` (the host's module expectations, the two refusals,

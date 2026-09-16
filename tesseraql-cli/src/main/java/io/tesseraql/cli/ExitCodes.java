@@ -6,7 +6,10 @@ package io.tesseraql.cli;
  * both root commands print the same list under {@code --help} and the generated CLI reference
  * renders it from the model. The rule: {@code 2} means nothing ran — the request could not be
  * run at all — and {@code 1} means the command ran and failed, so a script can tell a mistyped
- * invocation from a broken bootstrap by the number alone.
+ * invocation from a broken bootstrap by the number alone. {@code 3} is the one number for "the
+ * command ran and a policy said no" (decision 10b): a job's calendar or overlap policy, and the
+ * test runner's coverage-regression gate, which used to answer 2 — "nothing ran" — for a run
+ * whose suites had all passed (docs/audit-low-leads.md F115).
  */
 final class ExitCodes {
 
@@ -22,9 +25,10 @@ final class ExitCodes {
             + " line on stderr saying what to change, or the framework's own coded sentence"
             + " (TQL-…) naming the declaration.";
 
-    static final String SKIPPED = "3:`job run` only: the job did not run by policy — its"
-            + " business-day calendar filtered the date out, or the overlap policy skipped the"
-            + " firing.";
+    static final String SKIPPED = "3:The command ran and a policy gate said no — `job run`'s"
+            + " business-day calendar filtered the date out or its overlap policy skipped the"
+            + " firing; `test --fail-on-regression` ran the suites green and found SQL coverage"
+            + " below the previous run's.";
 
     private ExitCodes() {
     }
