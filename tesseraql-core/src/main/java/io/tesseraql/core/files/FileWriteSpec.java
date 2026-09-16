@@ -23,7 +23,11 @@ import java.util.List;
  *
  * <p>{@code resources} is the app home: the confinement boundary for everything a template
  * references beyond itself - stylesheets, images, and the {@code fonts/} directory the PDF codec
- * embeds (roadmap Phase 21). Codecs must never read files outside it.
+ * embeds (roadmap Phase 21). Codecs must never read files outside it. {@code template} arrives
+ * fenced by it when a compiler built the spec (the declaration is refused at lint and boot
+ * otherwise, docs/audit-low-leads.md slice 14); a codec that opens the template still refuses
+ * one outside {@code resources} itself, as the PDF and Excel codecs do, because a spec may be
+ * built by hand.
  *
  * <p>{@code bom} asks a codec that writes a text stream to open it with the encoding's
  * byte-order mark ({@code EF BB BF} for the CSV codec's UTF-8), so a spreadsheet that sniffs

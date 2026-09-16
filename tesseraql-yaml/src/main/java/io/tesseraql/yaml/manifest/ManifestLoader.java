@@ -32,8 +32,12 @@ import java.util.stream.Stream;
 /**
  * Loads an external app home into an {@link AppManifest} (design ch. 3, 4, 20).
  *
- * <p>Enforces the path-confinement guardrail: every file read must resolve inside the app home,
- * so {@code ../..} traversal is rejected (design ch. 20.1, 20.2).
+ * <p>Enforces the path-confinement guardrail on the documents it walks: every document read
+ * must resolve inside the app home, so {@code ../..} traversal is rejected (design ch. 20.1,
+ * 20.2). The files a document <em>names</em> — its statements, its templates — are fenced by
+ * the same rule at their own altitude, through {@link io.tesseraql.yaml.app.RouteFiles}
+ * (lint, admission, the compiler, the hot reload, {@code job run}); this class never reads
+ * them.
  */
 public final class ManifestLoader {
 

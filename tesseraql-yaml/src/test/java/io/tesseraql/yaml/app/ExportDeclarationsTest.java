@@ -44,7 +44,7 @@ class ExportDeclarationsTest {
     }
 
     private static List<Violation> refusals(Site site, ExportSpec spec) {
-        return ExportDeclarations.violations(site, spec, null).stream()
+        return ExportDeclarations.violations(site, spec, null, null).stream()
                 .filter(violation -> violation.kind() == Kind.INVALID).toList();
     }
 
@@ -112,7 +112,7 @@ class ExportDeclarationsTest {
                 .extracting(Violation::message).asString()
                 .contains("'Excel'", "format names are lower-case (excel)");
         // A module codec's name is not the predicate's to judge (F82 slice 2).
-        assertThat(ExportDeclarations.violations(ROUTE, export("parquet", null, null), null))
+        assertThat(ExportDeclarations.violations(ROUTE, export("parquet", null, null), null, null))
                 .isEmpty();
     }
 
@@ -159,7 +159,7 @@ class ExportDeclarationsTest {
                 ColumnSpec.of("created", null, null, "date", cellFormat),
                 ColumnSpec.of("amount", null, null, "number", cellFormat));
 
-        assertThat(ExportDeclarations.violations(ROUTE, excel, null)).isEmpty();
+        assertThat(ExportDeclarations.violations(ROUTE, excel, null, null)).isEmpty();
         // The csv twin of the same list goes through DateTimeFormatter/DecimalFormat, and
         // every Excel-native format above fails at least one of them.
         assertThat(refusals(ROUTE, columns("csv",
@@ -173,7 +173,7 @@ class ExportDeclarationsTest {
         // never reaches it) — served today, so a lint error and a boot warning; ColumnValues
         // .parse throws "Unknown column type" on every imported row — refused.
         List<Violation> export = ExportDeclarations.violations(ROUTE,
-                columns("csv", ColumnSpec.of("held", null, null, "timestamp", null)), null);
+                columns("csv", ColumnSpec.of("held", null, null, "timestamp", null)), null, null);
         List<Violation> imported = ExportDeclarations.violations(ROUTE, new ImportSpec("csv",
                 List.of(ColumnSpec.of("held", null, null, "timestamp", null)), null, null, null,
                 null, null, null));
@@ -380,7 +380,7 @@ class ExportDeclarationsTest {
         ExportSpec noFormat = new ExportSpec(null, null, "report.xlsx", null, "B2", List.of(),
                 null, "Asia/Tokio", null, null, null, null, null, null);
 
-        List<Violation> violations = ExportDeclarations.violations(step, noFormat, null);
+        List<Violation> violations = ExportDeclarations.violations(step, noFormat, null, null);
 
         assertThat(violations).extracting(Violation::key)
                 .containsExactly("export.format", "export.timezone");
@@ -441,7 +441,7 @@ class ExportDeclarationsTest {
         ExportSpec spec = new ExportSpec("excel", null, null, null, null, List.of(), "ja_JP",
                 null, null, null, null, null, null, true);
 
-        List<Violation> violations = ExportDeclarations.violations(ROUTE, spec, null);
+        List<Violation> violations = ExportDeclarations.violations(ROUTE, spec, null, null);
 
         // The locale's VALUE is not judged where nothing reads it: one inert finding, never a
         // refusal beside it.
@@ -458,12 +458,47 @@ class ExportDeclarationsTest {
         ExportSpec csv = new ExportSpec("csv", null, "missing.xlsx", "S1", "B2", List.of(),
                 null, null, null, null, null, null, null, null);
 
-        List<Violation> violations = ExportDeclarations.violations(ROUTE, csv, dir);
+        List<Violation> violations = ExportDeclarations.violations(ROUTE, csv, dir, dir);
 
         assertThat(violations).extracting(Violation::kind).containsOnly(Kind.INERT);
         assertThat(violations).extracting(Violation::key).containsExactly("export.sheet",
                 "export.template");
         assertThat(violations.get(1).message()).contains("'missing.xlsx'", "reads no template");
+    }
+
+    /**
+     * A template that resolves outside the application home is refused for every format that
+     * reads one, whether or not it is there (docs/audit-low-leads.md slice 14, XH-14): the
+     * predicate judged existence alone, so an {@code .xlsx} two levels above the home linted
+     * clean, passed admission, booted, and the Excel codec delivered its bytes.
+     */
+    @Test
+    void aTemplateOutsideTheApplicationHomeIsRefusedForEveryFormat(@TempDir Path root)
+            throws Exception {
+        Path home = Files.createDirectories(root.resolve("app"));
+        Path routeDir = Files.createDirectories(home.resolve("web/report"));
+        Files.writeString(root.resolve("outside.xlsx"), "x");
+        Files.writeString(root.resolve("outside.html"), "x");
+        for (String[] format : new String[][]{{"excel", "outside.xlsx"}, {"pdf", "outside.html"},
+                {"parquet", "outside.xlsx"}}) {
+            ExportSpec spec = new ExportSpec(format[0], null, "../../../" + format[1], null,
+                    null, List.of(), null, null, null, null, null, null, null, null);
+            assertThat(ExportDeclarations.violations(ROUTE, spec, home, routeDir))
+                    .as(format[0]).singleElement().satisfies(violation -> {
+                        assertThat(violation.code().toString()).isEqualTo("TQL-YAML-1075");
+                        assertThat(violation.kind()).isEqualTo(Kind.INVALID);
+                        assertThat(violation.key()).isEqualTo("export.template");
+                        assertThat(violation.message()).contains("export.template:",
+                                "'../../../" + format[1] + "'",
+                                "resolves outside the application home");
+                    });
+        }
+        // Inside the home, wherever it sits: the parent's shared directory is legal.
+        Files.createDirectories(home.resolve("shared"));
+        Files.writeString(home.resolve("shared/report.xlsx"), "x");
+        ExportSpec shared = new ExportSpec("excel", null, "../../shared/report.xlsx", null,
+                "B2", List.of(), null, null, null, null, null, null, null, null);
+        assertThat(ExportDeclarations.violations(ROUTE, shared, home, routeDir)).isEmpty();
     }
 
     @Test
@@ -480,26 +515,27 @@ class ExportDeclarationsTest {
                 List.of(), null, null, null, null, null, null, null, null);
 
         assertThat(refusals(ROUTE, present)).isEmpty();
-        assertThat(ExportDeclarations.violations(ROUTE, missing, dir)).singleElement()
+        assertThat(ExportDeclarations.violations(ROUTE, missing, dir, dir)).singleElement()
                 .satisfies(violation -> {
                     assertThat(violation.code().toString()).isEqualTo("TQL-YAML-1006");
                     assertThat(violation.kind()).isEqualTo(Kind.INVALID);
                     assertThat(violation.message()).contains("missing template: missing.xlsx");
                 });
-        assertThat(ExportDeclarations.violations(ROUTE, pdfWrongKind, dir)).singleElement()
+        assertThat(ExportDeclarations.violations(ROUTE, pdfWrongKind, dir, dir)).singleElement()
                 .satisfies(violation -> {
                     assertThat(violation.code().toString()).isEqualTo("TQL-YAML-1006");
                     assertThat(violation.message()).contains("'invoice.xlsx'", ".html");
                 });
-        // A NUL used to escape dir.resolve as an InvalidPathException on both sides.
-        assertThat(ExportDeclarations.violations(ROUTE, nul, dir)).singleElement()
+        // A NUL used to escape dir.resolve as an InvalidPathException on both sides; the
+        // resolver refuses it the way it refuses an escape (docs/audit-low-leads.md slice 14).
+        assertThat(ExportDeclarations.violations(ROUTE, nul, dir, dir)).singleElement()
                 .satisfies(violation -> {
-                    assertThat(violation.code().toString()).isEqualTo("TQL-YAML-1006");
+                    assertThat(violation.code().toString()).isEqualTo("TQL-YAML-1075");
                     assertThat(violation.message()).contains("'bad?name.xlsx'", "not a file path");
                 });
         assertThat(ExportDeclarations.violations(ROUTE, new ExportSpec("parquet", null,
                 "missing.tpl", null, null, List.of(), null, null, null, null, null, null, null,
-                null), dir)).singleElement().extracting(Violation::code)
+                null), dir, dir)).singleElement().extracting(Violation::code)
                 .isEqualTo(ExportDeclarations.UNUSABLE_TEMPLATE);
     }
 
@@ -519,19 +555,19 @@ class ExportDeclarationsTest {
 
         // A jxls report never calls ColumnValues.zone: the mistyped zone is not judged there,
         // the advisory is the finding (served today, so no refusal).
-        assertThat(ExportDeclarations.violations(ROUTE, report, dir)).singleElement()
+        assertThat(ExportDeclarations.violations(ROUTE, report, dir, dir)).singleElement()
                 .satisfies(violation -> {
                     assertThat(violation.kind()).isEqualTo(Kind.ADVISORY);
                     assertThat(violation.message()).contains("jxls report", "timezone:",
                             "columns[].type:/format:");
                 });
-        assertThat(ExportDeclarations.violations(ROUTE, untyped, null)).singleElement()
+        assertThat(ExportDeclarations.violations(ROUTE, untyped, null, null)).singleElement()
                 .satisfies(violation -> {
                     assertThat(violation.kind()).isEqualTo(Kind.ADVISORY);
                     assertThat(violation.message()).contains("none of the declared columns",
                             "cannot see derived columns");
                 });
-        assertThat(ExportDeclarations.violations(ROUTE, typed, null)).isEmpty();
+        assertThat(ExportDeclarations.violations(ROUTE, typed, null, null)).isEmpty();
     }
 
     /**
@@ -552,10 +588,10 @@ class ExportDeclarationsTest {
                 List.of(ColumnSpec.of("id"), ColumnSpec.of("name")), "de-DE", null, null, null,
                 null, null, null, null);
 
-        assertThat(ExportDeclarations.violations(ROUTE, localized, dir)).isEmpty();
-        assertThat(ExportDeclarations.violations(ROUTE, zoned, dir)).singleElement()
+        assertThat(ExportDeclarations.violations(ROUTE, localized, dir, dir)).isEmpty();
+        assertThat(ExportDeclarations.violations(ROUTE, zoned, dir, dir)).singleElement()
                 .extracting(Violation::kind).isEqualTo(Kind.ADVISORY);
-        assertThat(ExportDeclarations.violations(ROUTE, csv, null)).singleElement()
+        assertThat(ExportDeclarations.violations(ROUTE, csv, null, null)).singleElement()
                 .extracting(Violation::kind).isEqualTo(Kind.ADVISORY);
     }
 
@@ -571,7 +607,7 @@ class ExportDeclarationsTest {
         Site step = Site.step("t", "report.daily", "report");
         for (String format : new String[]{null, "", "  "}) {
             List<Violation> violations = ExportDeclarations.violations(step,
-                    export(format, null, null), dir);
+                    export(format, null, null), dir, dir);
             assertThat(violations).as("job step, format " + format).singleElement()
                     .satisfies(violation -> {
                         assertThat(violation.code()).isEqualTo(ExportDeclarations.INCOMPLETE);
@@ -582,9 +618,9 @@ class ExportDeclarationsTest {
                     });
         }
         for (Site route : List.of(ROUTE, FILE_EXPORT)) {
-            assertThat(ExportDeclarations.violations(route, export(null, null, null), dir))
+            assertThat(ExportDeclarations.violations(route, export(null, null, null), dir, dir))
                     .as("absent on a route defaults to csv").isEmpty();
-            assertThat(ExportDeclarations.violations(route, export("", null, null), dir))
+            assertThat(ExportDeclarations.violations(route, export("", null, null), dir, dir))
                     .as("blank on a route").singleElement()
                     .satisfies(violation -> {
                         assertThat(violation.code()).isEqualTo(ExportDeclarations.INCOMPLETE);
@@ -665,19 +701,19 @@ class ExportDeclarationsTest {
                 Surface.FILE_EXPORT, Set.of(), true, true);
         List<Violation> all = new java.util.ArrayList<>();
         all.addAll(ExportDeclarations.violations(route, export("csv", null, "query." + huge),
-                null));
+                null, null));
         all.addAll(ExportDeclarations.violations(route, columns("csv",
                 ColumnSpec.of(huge, null, null, "number", "#,##0.00.00" + huge),
                 ColumnSpec.of("d", null, null, "date", "yyyy'" + huge),
-                ColumnSpec.of("t", null, null, huge, null)), null));
+                ColumnSpec.of("t", null, null, huge, null)), null, null));
         all.addAll(ExportDeclarations.violations(route, new ExportSpec("excel", null, huge,
                 null, null, List.of(), null, null, null, null, null, null, null, null),
-                Path.of(".")));
+                Path.of("."), Path.of(".")));
         all.addAll(ExportDeclarations.violations(route, new ExportSpec("csv", null, null, null,
                 huge, List.of(ColumnSpec.of("c", null, huge, null, null)), huge, huge, null,
-                null, null, null, null, null), null));
+                null, null, null, null, null), null, null));
         all.addAll(ExportDeclarations.violations(Site.step("t", huge, huge),
-                export("csv", null, huge), null));
+                export("csv", null, huge), null, null));
         all.addAll(ExportDeclarations.configViolations(huge, "tesseraql.files.timezone", huge));
 
         assertThat(all).hasSizeGreaterThanOrEqualTo(10);

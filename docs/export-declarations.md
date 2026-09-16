@@ -393,6 +393,12 @@ stalls every further reload until fixed.
 today); on pdf must be `.html` (1006); on excel, pdf and a module format must exist beside the route
 or the job file (1006, lint AND boot — the boot twin of lint 1006, measurement decision 10); a name
 the file system refuses (a NUL) is 1006 "is not a file path", never an `InvalidPathException`.
+*Addendum (docs/audit-low-leads.md slice 14, XH-14): "beside the route" was the wording, "any
+relative path" the predicate — a template outside the application home linted clean, passed
+admission, booted, and the Excel codec delivered its bytes. The template resolves through
+`RouteFiles` like every other reference: inside the home (anywhere — `../../shared/` is legal)
+or refused with `TQL-YAML-1075`, on both altitudes and before `job run`; a NUL is 1075 now,
+the resolver's own "not a file path". Existence stays 1006.*
 `startCell:` without a template is 1041 on excel only. Report mode = excel && `template:` present
 and non-blank && no `startCell:`. *Rejected:* judging existence on csv (contract decisions F1: a
 refusal for a file nothing opens).

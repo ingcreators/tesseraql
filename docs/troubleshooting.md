@@ -85,9 +85,21 @@ use.
 
 A source's `sql.file:` resolves **relative to the route document's own directory**, not the app
 root. A route at `web/orders/get.yml` naming `search.sql` looks for `web/orders/search.sql`.
-The linter reports it, and the runtime refuses to start on it with the same code naming the
-route and the binding; under `dev --watch` the route serves its compile error until the file
-is back.
+The linter reports it, and the runtime refuses to start on it with the same code and the same
+sentence, naming the route and the key (`route 'orders' sources.main.file: referenced SQL file
+is missing: search.sql`). Under `dev --watch` the route serves its compile error until the
+file is back, and the reload that brings it back clears the stub on its own.
+
+### `TQL-YAML-1075` / `TQL-TPL-2001` — a file the document names is outside the app, or nowhere
+
+Every file a document names by relative path — a statement, an export's `template:`, a
+page's `response.html.template` — may sit anywhere inside the application home:
+`../order.sql` from `web/orders/detail/`, `../../shared/report.xlsx`, a subdirectory. One that
+resolves outside the home (`../../../outside.sql`, an absolute path elsewhere) is refused with
+`TQL-YAML-1075` naming the document, the key and the value — by the linter, the admission
+gate, the boot, the hot reload and `job run` alike; move the file under the home. A page
+template is looked for beside the document, then under the application's `templates/`; one
+found in neither is `TQL-TPL-2001`, at lint as at boot.
 
 ### `TQL-SQL-2101` / `2102` — an expression or a SQL file does not parse
 

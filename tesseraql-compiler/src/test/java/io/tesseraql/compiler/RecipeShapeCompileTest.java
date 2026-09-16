@@ -269,9 +269,9 @@ class RecipeShapeCompileTest {
     @Test
     void aMissingSqlFileIsRefusedAtCompileNotAtTheFirstRequest(@TempDir Path dir)
             throws Exception {
-        // The compiler's own sentence shape ("Route 'x'"), as every refusal raised at a
-        // resolve site is; the predicate's are the linter's ("route 'x'"). The read path
-        // resolves at the source, the transactional command before its processor reads.
+        // The linter's own sentence, from the one resolver both altitudes read a statement
+        // through (docs/audit-low-leads.md slice 14). The read path resolves at the source,
+        // the transactional command before its processor reads.
         assertThatThrownBy(() -> compile(dir, "query-json", """
                 response:
                   json:
@@ -284,7 +284,7 @@ class RecipeShapeCompileTest {
                 """))
                 .isInstanceOf(TqlException.class)
                 .hasMessageContaining("TQL-SQL-2103")
-                .hasMessageContaining("Route 'items.route' binding 'main'")
+                .hasMessageContaining("route 'items.route' sources.main.file:")
                 .hasMessageContaining("referenced SQL file is missing: nowhere.sql");
         assertThatThrownBy(() -> compile(dir.resolve("step"), "command-json", """
                 response:
@@ -299,7 +299,7 @@ class RecipeShapeCompileTest {
                 """))
                 .isInstanceOf(TqlException.class)
                 .hasMessageContaining("TQL-SQL-2103")
-                .hasMessageContaining("Route 'items.route' step 'touch'")
+                .hasMessageContaining("route 'items.route' steps.touch.file:")
                 .hasMessageContaining("nowhere.sql");
     }
 

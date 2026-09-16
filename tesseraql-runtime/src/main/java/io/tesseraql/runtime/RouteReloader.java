@@ -79,7 +79,7 @@ public final class RouteReloader {
     /** One held transition: its endpoint path and the workflow document it came from. */
     private record HeldTransition(String path, Path source) {
     }
-    /** Per-route content fingerprints (source-directory digests) from the last good reload. */
+    /** Per-route content fingerprints (the files each route reads) from the last good reload. */
     private Map<String, String> fingerprints;
     /** The app-wide inputs every compiled route bakes in (config/ + shared definitions). */
     private String appFingerprint;
@@ -199,17 +199,20 @@ public final class RouteReloader {
             }
         });
 
-        // Content diff (the instant-loop default): a kept route whose source directory —
-        // its yml, 2-way SQL, and templates live together — and the app-wide config are
-        // both unchanged keeps SERVING, untouched. Only genuinely changed routes bounce:
-        // the stop/re-add is the risky part of a reload, so the delta stays minimal.
+        // Content diff (the instant-loop default): a kept route whose files — its document
+        // and every file the document names, wherever they sit inside the application home
+        // — and the app-wide config are both unchanged keeps SERVING, untouched. Only
+        // genuinely changed routes bounce: the stop/re-add is the risky part of a reload, so
+        // the delta stays minimal. A route serving a stub is never "unchanged": whatever
+        // broke its compile may have been fixed by something no print carries, and the stub
+        // promises to clear when the file is fixed.
         Map<String, String> prints = fingerprintsOf(reloaded);
         String appNow = appFingerprintOf(appHome);
         boolean rebuildAll = force || !appNow.equals(appFingerprint);
         List<String> rebuild = new ArrayList<>();
         int unchanged = 0;
         for (String id : kept) {
-            if (!rebuildAll && prints.get(id) != null
+            if (!rebuildAll && !stubbed.contains(id) && prints.get(id) != null
                     && prints.get(id).equals(fingerprints.get(id))) {
                 unchanged++;
             } else {
@@ -366,8 +369,19 @@ public final class RouteReloader {
     }
 
     /**
-     * Per-route fingerprints: the digest of each route's source directory, and the URL it
+     * Per-route fingerprints: the digest of the files each route reads, and the URL it
      * declares.
+     *
+     * <p>The files are the route's own, keyed by route (docs/audit-low-leads.md slice 14): its
+     * document, every file the document names — resolved the way the compiler resolves them
+     * ({@link io.tesseraql.yaml.app.RouteFiles}), a 2-way SQL file with the dialect variants
+     * beside it, a page template beside the document or under {@code templates/} — and the
+     * main statement of every route a {@code lookup:} field reads through. The print used to
+     * be the digest of the route's <em>directory</em>, shared by every route in it: a
+     * statement in a subdirectory or a parent (the {@code ../order.sql} layout the framework's
+     * own tests author) was in no print, so its edit left the route on the old statement
+     * until a save of the yml, and a shared file's edit bounced the directory's other routes,
+     * which never read it, while the reader kept serving stale.
      *
      * <p>The URL has to be in it. It is derived from the directory structure while the digest
      * hashes only file <em>names</em> and bytes, so renaming a route directory with its contents
@@ -378,17 +392,98 @@ public final class RouteReloader {
      * <p>Deliberately the declared URL rather than the absolute directory path — the delta stays
      * minimal, and moving the whole application home does not rebuild every route.
      */
-    private static Map<String, String> fingerprintsOf(AppManifest manifest) {
-        Map<Path, String> byDirectory = new LinkedHashMap<>();
+    private Map<String, String> fingerprintsOf(AppManifest manifest) {
+        Map<Path, String> byFile = new LinkedHashMap<>();
         Map<String, String> prints = new LinkedHashMap<>();
         for (RouteFile route : manifest.routes()) {
             if (route.definition().id() != null) {
-                String contents = byDirectory.computeIfAbsent(
-                        normalize(route.source()).getParent(), RouteReloader::digestDirectory);
-                prints.put(route.definition().id(), contents + "@" + route.urlPath());
+                StringBuilder print = new StringBuilder();
+                for (Path file : filesOf(manifest, route)) {
+                    print.append(byFile.computeIfAbsent(file, RouteReloader::digestFile))
+                            .append('|');
+                }
+                prints.put(route.definition().id(), print + "@" + route.urlPath());
             }
         }
         return prints;
+    }
+
+    /** The files a route's compile reads, in declaration order; a lookup's source last. */
+    private List<Path> filesOf(AppManifest manifest, RouteFile route) {
+        List<Path> files = new ArrayList<>();
+        Path source = normalize(route.source());
+        files.add(source);
+        for (io.tesseraql.yaml.app.RouteFiles.Reference reference : io.tesseraql.yaml.app.RouteFiles
+                .references(route.definition())) {
+            files.addAll(referenced(source.getParent(), reference));
+        }
+        route.definition().input().forEach((name, field) -> {
+            if (field.lookup() == null || field.lookup().source() == null) {
+                return;
+            }
+            // The lookup's source route: its main statement is parsed into this route's
+            // field at compile (RouteCompiler.compileLookup), so its edit is this route's.
+            for (RouteFile candidate : manifest.routes()) {
+                io.tesseraql.yaml.model.Binding main = candidate.definition().main();
+                if ("GET".equalsIgnoreCase(candidate.httpMethod())
+                        && field.lookup().source().equals(candidate.urlPath())
+                        && main != null && main.isSql()) {
+                    files.addAll(referenced(normalize(candidate.source()).getParent(),
+                            new io.tesseraql.yaml.app.RouteFiles.Reference("sources.main.file",
+                                    main.file(), io.tesseraql.yaml.app.RouteFiles.Kind.SQL)));
+                }
+            }
+        });
+        return files;
+    }
+
+    /**
+     * The files one reference may be read from, resolved lexically (a reference outside the
+     * home is the compile's refusal, not the print's concern): a statement with the dialect
+     * variants beside it, a page template beside the document or else under
+     * {@code templates/}, a codec's template as declared.
+     */
+    private List<Path> referenced(Path directory,
+            io.tesseraql.yaml.app.RouteFiles.Reference reference) {
+        Path file;
+        try {
+            file = directory.resolve(reference.declared()).normalize();
+        } catch (java.nio.file.InvalidPathException unexpressible) {
+            return List.of();
+        }
+        return switch (reference.kind()) {
+            case SQL -> {
+                List<Path> statements = new ArrayList<>();
+                statements.add(file);
+                statements.addAll(dialectVariants(file));
+                yield statements;
+            }
+            case PAGE -> List.of(java.nio.file.Files.isRegularFile(file)
+                    ? file
+                    : normalize(appHome).resolve("templates").resolve(reference.declared())
+                            .normalize());
+            case EXPORT_TEMPLATE -> List.of(file);
+        };
+    }
+
+    /** {@code search.<dialect>.sql} beside {@code search.sql}, whichever dialects are there. */
+    private static List<Path> dialectVariants(Path statement) {
+        String name = statement.getFileName().toString();
+        int dot = name.lastIndexOf(".sql");
+        Path directory = statement.getParent();
+        if (dot < 0 || directory == null || !java.nio.file.Files.isDirectory(directory)) {
+            return List.of();
+        }
+        String stem = name.substring(0, dot) + ".";
+        try (java.util.stream.Stream<Path> siblings = java.nio.file.Files.list(directory)) {
+            return siblings.filter(sibling -> {
+                String candidate = sibling.getFileName().toString();
+                return candidate.startsWith(stem) && candidate.endsWith(".sql")
+                        && !candidate.equals(name);
+            }).sorted().toList();
+        } catch (java.io.IOException ex) {
+            return List.of();
+        }
     }
 
     /**
@@ -463,12 +558,15 @@ public final class RouteReloader {
         return paths;
     }
 
-    /** Digest of a directory's immediate regular files (name + bytes, sorted). */
-    private static String digestDirectory(Path directory) {
-        try (java.util.stream.Stream<Path> files = java.nio.file.Files.list(directory)) {
-            return digest(files);
+    /** Digest of one file (name + bytes); a file that is not there reads as absent. */
+    private static String digestFile(Path file) {
+        if (!java.nio.file.Files.isRegularFile(file)) {
+            return "absent";
+        }
+        try {
+            return digest(java.util.stream.Stream.of(file));
         } catch (java.io.IOException ex) {
-            // An unreadable directory reads as changed, so the route safely rebuilds.
+            // An unreadable file reads as changed, so the route safely rebuilds.
             return "unreadable:" + ex.getMessage();
         }
     }

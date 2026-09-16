@@ -8,7 +8,6 @@ import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.RouteFile;
 import io.tesseraql.yaml.model.InputPolicy;
 import io.tesseraql.yaml.model.RouteDefinition;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Set;
@@ -136,28 +135,11 @@ final class RouteRules implements LintRule {
                         context.lineOf(route.source(), "timeoutSeconds:"), null));
             }
         });
-        if (definition.main() != null && !definition.main().isContract()
-                && definition.main().file() != null) {
-            Path sqlFile = route.source().getParent().resolve(definition.main().file());
-            if (!Files.isRegularFile(sqlFile)) {
-                findings.add(new LintFinding(LintCodes.MISSING_SQL_FILE, ERROR, source,
-                        "Referenced SQL file is missing: " + definition.main().file()));
-            }
-        }
-        definition.steps().forEach((name, step) -> {
-            if (step.file() != null
-                    && !Files.isRegularFile(route.source().getParent().resolve(step.file()))) {
-                findings.add(new LintFinding(LintCodes.MISSING_SQL_FILE, ERROR, source,
-                        "Step '" + name + "' references a missing SQL file: " + step.file()));
-            }
-        });
-        definition.sources().forEach((name, query) -> {
-            if (query.file() != null
-                    && !Files.isRegularFile(route.source().getParent().resolve(query.file()))) {
-                findings.add(new LintFinding(LintCodes.MISSING_SQL_FILE, ERROR, source,
-                        "Query '" + name + "' references a missing SQL file: " + query.file()));
-            }
-        });
+        // The files the document names — every statement, the page template — resolved by
+        // the resolver the compiler refuses from (docs/audit-low-leads.md slice 14): outside
+        // the application home, or not there.
+        RouteFileRules.report(context, config, route.source(), definition,
+                io.tesseraql.yaml.app.RecipeShape.Surface.ROUTE, source, findings);
         DocumentRules.lintOptimisticLocking(context, route.source(), definition, true, source,
                 findings);
         // Whether the recipe honors validate: at all is a route-level question; the rules'

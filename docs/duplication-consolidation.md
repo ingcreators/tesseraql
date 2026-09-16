@@ -146,6 +146,13 @@ zip-slip guard) is the same primitive applied per entry. All 22 sites adopt; eac
 own outer refusal message where one exists today. The ledger names every main-source
 `Path#startsWith` caller, refusing new hand-rolled guards.
 
+*Addendum (docs/audit-low-leads.md slice 14): the census was "sites that had a hand-rolled
+guard", so two reads that never had one were invisible to it — the compiler's resolution of a
+document's `sql.file` and export `template:` (`resolve().normalize()`, no fence) and the Excel
+codec's opening of the template. Both hold the primitive now: `RouteFiles` (yaml/app) fences
+every reference a route, tool or consumer names, for lint and the compiler alike, and
+`JxlsFileCodec.requireWorkbook` confines under `FileWriteSpec.resources` as the pdf codec does.*
+
 ## Campaign 3: the error envelope, and the status table's missing guard
 
 `TqlException` needs nothing — 795 construction sites through one builder — and

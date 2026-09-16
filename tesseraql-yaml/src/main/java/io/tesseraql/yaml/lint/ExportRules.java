@@ -76,7 +76,7 @@ final class ExportRules {
         // (docs/export-declarations.md decision 1).
         report(context, job.source(), "export:", ExportDeclarations.violations(
                 ExportDeclarations.Site.step(appName(config), job.definition().id(), step.id()),
-                export, job.source().getParent()), source, findings);
+                export, context.appHome(), job.source().getParent()), source, findings);
         lintExportRowCap(export, "Step '" + step.id() + "': ", source, findings);
         lintExportFilename(export, "Step '" + step.id() + "': ", source, findings);
         lintExportSources(context, export, java.util.Map.of(),
@@ -117,7 +117,7 @@ final class ExportRules {
         }
         report(context, route.source(), "export:",
                 ExportDeclarations.violations(routeSite(config, definition), spec,
-                        route.source().getParent()),
+                        context.appHome(), route.source().getParent()),
                 source, findings);
     }
 

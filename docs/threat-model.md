@@ -145,7 +145,9 @@ The model holds only where these hold:
 - **The operator is trusted** — they hold the configuration, secrets, and deployment; a
   compromised operator is out of scope.
 - **The app author is trusted in a single-tenant deployment.** The semi-trusted case is a
-  shared package, which the admission gate and the fail-closed parsers must survive.
+  shared package, which the admission gate and the fail-closed parsers must survive — a file
+  a document names outside the package (a statement, a template) is refused by the gate as
+  by the boot (`TQL-YAML-1075`), so a package reads nothing beyond itself.
 - **The datastore and secret provider are trusted** to enforce their own access control;
   at-rest encryption and DB hardening are the deployment's.
 - **Deny-by-default is not weakened** — an app that leaves a policy undefined, an egress host

@@ -97,9 +97,10 @@ Page-oriented CSS drives the print layout:
 </html>
 ```
 
-Templates are app-authored and confined: the template must live inside the app home
-(`TQL-LD-2832`), every `url(...)` it references resolves only to files inside the app home,
-and the network is never fetched during an export. Data interpolates with `th:text`, escaped
+Templates are app-authored and confined: the template must live inside the app home — the
+declaration is refused at lint and boot otherwise (`TQL-YAML-1075`), and the codec refuses
+one that reaches it from outside (`TQL-LD-2832`) — every `url(...)` it references resolves
+only to files inside the app home, and the network is never fetched during an export. Data interpolates with `th:text`, escaped
 by default.
 
 ## Fonts (CJK included)
