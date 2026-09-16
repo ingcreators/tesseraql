@@ -182,6 +182,26 @@ class AppLinterWorkflowTest {
                 && f.message().contains("'purchase_request.assigned'"));
     }
 
+    /**
+     * A reassign resolver's {@code params:} resolve against the sweep context, which carries no
+     * request: {@code path.key} — the natural copy of the transition's own wiring — is refused
+     * (TQL-WORKFLOW-3121), while {@code document.*} is what the sweeper loads for it.
+     */
+    @Test
+    void aReassignParamReadingTheRequestIsAnError(@TempDir Path dir) throws Exception {
+        writeWorkflow(dir, WELL_FORMED
+                + """
+                        deadlines:
+                          - { state: submitted, within: 1h, onBreach: { reassign: { file: approver.sql, params: { key: path.key, dept: document.dept } } } }
+                        """);
+        Files.writeString(dir.resolve("workflow/approver.sql"),
+                "select 'approver-1' as assignee\n");
+        List<LintFinding> findings = new AppLinter().lint(dir);
+        assertThat(findings.stream().filter(f -> f.code().equals("TQL-WORKFLOW-3121"))
+                .map(LintFinding::message))
+                .singleElement().asString().contains("'key' reads 'path.key'");
+    }
+
     @Test
     void anAddressedInboxReminderLintsClean(@TempDir Path dir) throws Exception {
         writeInboxChannel(dir);

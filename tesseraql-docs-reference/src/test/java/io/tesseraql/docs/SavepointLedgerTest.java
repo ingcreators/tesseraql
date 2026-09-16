@@ -47,6 +47,10 @@ class SavepointLedgerTest {
             // covers the skip path on PostgreSQL only, so the rollback-to-savepoint behaviour on
             // Oracle and SQL Server rests on the two checks above exercising the same construct.
             "tesseraql-operations/src/main/java/io/tesseraql/operations/batch/ChunkStepRunner.java",
+            // The deadline sweeper's per-task fence (docs/audit-low-leads.md slice 2b):
+            // DialectRuntimeChecks.workflowSweepRoundTrip, on PostgreSQL per pull request
+            // (WorkflowSweepFenceIntegrationTest) and on the three gated vendors.
+            "tesseraql-runtime/src/main/java/io/tesseraql/runtime/WorkflowSweeper.java",
             // The declarative suite's transition fence, which runs against whichever dialect the
             // application under test is on — it is exercised by every workflow suite, on that
             // vendor, rather than by a check of its own.

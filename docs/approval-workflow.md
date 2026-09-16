@@ -611,12 +611,33 @@ nodes:
 
 - **`reassign`** — reassigns the overdue task to the fallback resolver named by the SQL contract (a
   2-way SQL `SELECT` returning the new assignee), clearing the task's `due_at` and recording an
-  `escalate` history row (actor `system`); or
+  `escalate` history row (actor `system`). The resolver is bound the way a transition's `assign:`
+  is — one assignee-resolution contract, one bind set: `/* key */` (the document key; `docId` is
+  its alias), `state`, `audit.*` as the system, and the declared `params:` resolved against the
+  sweep context, which carries the loaded `document` row. There is no request, so a `params:`
+  entry reading `path.*`, `body.*` or `principal.*` is a build error (`TQL-WORKFLOW-3121`). A
+  resolver that answers **no row** is handled once and loudly: the task keeps its assignee, its
+  `due_at` is cleared, a history row says so, and a WARNING names the task — it is not re-evaluated
+  in silence on every sweep; or
 - **`escalate`** — auto-fires the named transition **as the system**: it advances the document from
   the deadline's state, runs the transition's command (with `/* key */` and `/* audit.* */` binds, so
   `audit.user` is `system`), completes the open tasks (so it cannot re-fire), and records a history
   row under the transition id. The lint (`TQL-WORKFLOW-3107`) checks the named transition starts from
-  the deadline's state. `escalate` takes precedence when both are declared.
+  the deadline's state. `escalate` takes precedence when both are declared. The command's
+  `/*%scope … */` directives render **as the system**: every declared scope is `(1=1)`, because the
+  deadline the author declared is the write authority and there is no requester whose org unit could
+  confine it ([data scoping](data-scoping.md)); an undeclared scope is still `TQL-SQL-2107`. A
+  command that matched no row is refused exactly as the route refuses it (`TQL-WORKFLOW-3204`): the
+  state advance rolls back with it and the tasks stay open, so no history claims a change the table
+  does not show.
+
+**One task's failure never blocks the others.** The sweep runs in one transaction, and each task's
+breach handling behind its own savepoint: a resolver that fails on a row, a command that matched
+nothing, a driver timeout — the task is rolled back to its savepoint, a WARNING names it (task id,
+document, state, cause), and the sweep moves on. The task is met again next sweep, so a persistent
+failure repeats the WARNING once per interval. Until 0.18.0 the first failure rolled the whole batch
+back and, being the earliest overdue, met the sweeper first on every sweep after — one bad rule
+starved every deadline in the deployment (`docs/audit-low-leads.md`, G33, G35, G36).
 
 ```yaml
 deadlines:

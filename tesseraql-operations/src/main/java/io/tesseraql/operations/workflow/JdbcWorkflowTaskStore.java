@@ -106,6 +106,17 @@ public final class JdbcWorkflowTaskStore implements WorkflowTaskStore {
     }
 
     @Override
+    public void clearDeadline(Connection cx, String taskId) {
+        try (PreparedStatement ps = cx.prepareStatement("update tql_workflow_task "
+                + "set due_at = null where task_id = ? and status = 'OPEN'")) {
+            ps.setString(1, taskId);
+            ps.executeUpdate();
+        } catch (SQLException ex) {
+            throw error("Failed to clear the workflow task's deadline", ex);
+        }
+    }
+
+    @Override
     public List<Overdue> overdue(Connection cx, Instant asOf, int limit) {
         List<Overdue> overdue = new ArrayList<>();
         try (PreparedStatement ps = cx.prepareStatement("select task_id, doc_type, doc_id, state, "

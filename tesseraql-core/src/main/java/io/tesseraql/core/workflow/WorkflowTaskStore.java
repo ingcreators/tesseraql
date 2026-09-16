@@ -55,6 +55,13 @@ public interface WorkflowTaskStore {
     void escalate(Connection cx, String taskId, String newAssignee, String delegatedFrom);
 
     /**
+     * Clears an overdue task's deadline without reassigning it: the breach was handled and
+     * produced no new assignee (the reassign resolver answered no row), and clearing the deadline
+     * is what makes the sweeper act on it exactly once (docs/audit-low-leads.md G36).
+     */
+    void clearDeadline(Connection cx, String taskId);
+
+    /**
      * The open tasks whose deadline has passed as of {@code asOf} (up to {@code limit}), the
      * sweeper's work-list (roadmap Phase 28 slice 3).
      */

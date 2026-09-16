@@ -40,7 +40,11 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  *
  * <p>Since docs/audit-low-leads.md slice 2a: the assign resolver is told its document (a
  * {@code /* key *}{@code /} lookup opens the task, so the task-authority gate engages), and both
- * reminders reach the assignee's inbox — recipient and opt-out honoured at enqueue.
+ * reminders reach the assignee's inbox — recipient and opt-out honoured at enqueue. Since slice
+ * 2b: the sweeper resolves for the task it is told about — a scoped escalate command renders as
+ * the system, the reassign resolver binds {@code key} and its declared {@code params:}, a no-row
+ * answer is loud and once, one failing task never blocks the batch, and a sweep-fired command that
+ * matched no row is refused like the route's.
  */
 @Testcontainers
 class WorkflowTransitionIntegrationTest {
@@ -376,6 +380,115 @@ class WorkflowTransitionIntegrationTest {
         assertThat(taskCount("KR-1", "DONE")).isEqualTo(1);
     }
 
+    /**
+     * The escalated transition's command carries the scope directive the transition idiom puts
+     * there; the sweeper renders it as the system, so the escalation fires. Before this the
+     * resolver-less render threw TQL-SQL-2106 on every sweep and rolled the batch back with it
+     * (docs/audit-low-leads.md G33).
+     */
+    @Test
+    void aScopedEscalateCommandRendersAsTheSystem() throws Exception {
+        assertThat(post("/scoped-requests/SC-1/submit", "requester-1").statusCode())
+                .isEqualTo(200);
+        WorkflowSweeper sweeper = runtime.context().lookup(
+                TesseraqlProperties.WORKFLOW_SWEEPER_BEAN, WorkflowSweeper.class);
+        assertThat(sweeper.sweep()).isEqualTo(1);
+        assertThat(instanceState("scoped_request", "SC-1")).isEqualTo("approved");
+        assertThat(column("scoped_requests", "last_action", "SC-1")).isEqualTo("approve");
+        assertThat(column("scoped_requests", "acted_by", "SC-1")).isEqualTo("system");
+        assertThat(taskCount("SC-1", "OPEN")).isZero();
+    }
+
+    /**
+     * The reassign resolver is bound the way the route binds {@code assign:}: {@code key} and its
+     * declared {@code params:} against the loaded document (G36). A resolver that answers no row
+     * is loud and once: the task keeps its assignee, the deadline is cleared, the history says so.
+     */
+    @Test
+    void theReassignResolverIsToldItsDocumentAndANoRowAnswerIsHandledOnce() throws Exception {
+        assertThat(post("/fallback-requests/FB-1/submit", "requester-1").statusCode())
+                .isEqualTo(200);
+        assertThat(post("/fallback-requests/FB-2/submit", "requester-1").statusCode())
+                .isEqualTo(200);
+        assertThat(openTaskAssignee("FB-1")).isEqualTo("owner-f1");
+        assertThat(openTaskAssignee("FB-2")).isEqualTo("owner-f2");
+
+        WorkflowSweeper sweeper = runtime.context().lookup(
+                TesseraqlProperties.WORKFLOW_SWEEPER_BEAN, WorkflowSweeper.class);
+        // FB-1's row names a fallback; FB-2's does not.
+        assertThat(sweeper.sweep()).isEqualTo(1);
+        assertThat(openTaskAssignee("FB-1")).isEqualTo("fallback-f1");
+        assertThat(queryString("select due_at from tql_workflow_task "
+                + "where doc_id = ? and status = 'OPEN'", "FB-1")).isNull();
+        assertThat(escalateHistoryCount("FB-1")).isEqualTo(1);
+
+        assertThat(openTaskAssignee("FB-2")).isEqualTo("owner-f2");
+        assertThat(queryString("select due_at from tql_workflow_task "
+                + "where doc_id = ? and status = 'OPEN'", "FB-2")).isNull();
+        assertThat(queryString("select note from tql_workflow_history where doc_id = ? "
+                + "and transition = 'escalate'", "FB-2"))
+                .contains("answered no assignee").contains("owner-f2");
+        // Once: the cleared deadline means neither is met again.
+        assertThat(sweeper.sweep()).isZero();
+        assertThat(escalateHistoryCount("FB-2")).isEqualTo(1);
+    }
+
+    /**
+     * One task whose breach handling fails is rolled back to its own savepoint and skipped; the
+     * healthy task behind it in the same sweep still escalates (G35). Before this the first
+     * failure rolled the whole batch back, sweep after sweep.
+     */
+    @Test
+    void oneFailingBreachDoesNotBlockTheOthersInTheSweep() throws Exception {
+        assertThat(post("/poison-requests/PO-1/submit", "requester-1").statusCode())
+                .isEqualTo(200);
+        assertThat(post("/poison-requests/PO-2/submit", "requester-1").statusCode())
+                .isEqualTo(200);
+        WorkflowSweeper sweeper = runtime.context().lookup(
+                TesseraqlProperties.WORKFLOW_SWEEPER_BEAN, WorkflowSweeper.class);
+        try {
+            // PO-1 is due first and its resolver fails; PO-2 must still be reassigned.
+            assertThat(sweeper.sweep()).isEqualTo(1);
+            assertThat(openTaskAssignee("PO-2")).isEqualTo("fallback-po");
+            assertThat(openTaskAssignee("PO-1")).isEqualTo("approver-1");
+            assertThat(queryString("select due_at from tql_workflow_task "
+                    + "where doc_id = ? and status = 'OPEN'", "PO-1")).isNotNull();
+        } finally {
+            // The poison task is met (and skipped) on every sweep; take it out of the queue
+            // so the other cases' counts stay their own.
+            execute("update tql_workflow_task set status = 'DONE' where doc_id = 'PO-1'");
+        }
+    }
+
+    /**
+     * A sweep-fired command that matched no row is the route's refusal here too
+     * (TQL-WORKFLOW-3204): the task's savepoint takes the state advance back, the tasks stay
+     * open, and no history claims a change the table does not show (finder 7).
+     */
+    @Test
+    void anEscalateCommandThatMatchesNoRowRollsTheAdvanceBack() throws Exception {
+        assertThat(post("/hollow-requests/HO-1/submit", "requester-1").statusCode())
+                .isEqualTo(200);
+        WorkflowSweeper sweeper = runtime.context().lookup(
+                TesseraqlProperties.WORKFLOW_SWEEPER_BEAN, WorkflowSweeper.class);
+        try {
+            assertThat(sweeper.sweep()).isZero();
+            assertThat(instanceState("hollow_request", "HO-1")).isEqualTo("submitted");
+            assertThat(taskCount("HO-1", "OPEN")).isEqualTo(1);
+            assertThat(systemHistoryCount("HO-1", "approve")).isZero();
+        } finally {
+            execute("update tql_workflow_task set status = 'DONE' where doc_id = 'HO-1'");
+        }
+    }
+
+    private static void execute(String sql) throws Exception {
+        try (Connection connection = DriverManager.getConnection(
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+                Statement statement = connection.createStatement()) {
+            statement.execute(sql);
+        }
+    }
+
     private static HttpResponse<String> post(String path, String sub) throws Exception {
         return HttpClient.newHttpClient().send(
                 HttpRequest.newBuilder(URI.create("http://localhost:" + runtime.port() + path))
@@ -503,6 +616,27 @@ class WorkflowTransitionIntegrationTest {
                     + "owner_login varchar(64) not null, last_action varchar(32))");
             statement.execute("insert into keyed_requests (id, owner_login) values "
                     + "('KR-1','owner-k1')");
+            // A workflow whose escalated transition command carries a scope directive.
+            statement.execute("create table scoped_requests (id varchar(64) primary key, "
+                    + "unit varchar(32), last_action varchar(32), acted_by varchar(64))");
+            statement.execute("insert into scoped_requests (id, unit) values ('SC-1','U1')");
+            // A workflow whose reassign resolver reads the row it is told about: a fallback
+            // column that the resolver joins through a declared param, present or absent.
+            statement.execute("create table fallback_requests (id varchar(64) primary key, "
+                    + "owner_login varchar(64) not null, fallback_login varchar(64), "
+                    + "last_action varchar(32))");
+            statement.execute("insert into fallback_requests (id, owner_login, fallback_login) "
+                    + "values ('FB-1','owner-f1','fallback-f1'), ('FB-2','owner-f2', null), "
+                    + "('FB-3','owner-f3','fallback-f3')");
+            // A workflow whose reassign resolver fails for one document (a cast the row's key
+            // cannot satisfy) — the poison task of the batch-isolation case.
+            statement.execute("create table poison_requests (id varchar(64) primary key, "
+                    + "last_action varchar(32))");
+            statement.execute("insert into poison_requests (id) values ('PO-1'), ('PO-2')");
+            // A workflow whose escalated command matches no row.
+            statement.execute("create table hollow_requests (id varchar(64) primary key, "
+                    + "last_action varchar(32))");
+            statement.execute("insert into hollow_requests (id) values ('HO-1')");
         }
     }
 
@@ -778,6 +912,145 @@ class WorkflowTransitionIntegrationTest {
                 "update keyed_requests set last_action = 'approve' where id = /* key */ 'x'\n");
         Files.writeString(workflowDir.resolve("owner.sql"),
                 "select owner_login as assignee from keyed_requests where id = /* key */ 'x'\n");
+
+        // A scope over the unit column: an approver reaches their own unit's rows only. The
+        // escalated transition's command carries it (the transition idiom), and the sweeper,
+        // acting as the system, renders it as (1=1).
+        Files.createDirectories(home.resolve("scope"));
+        Files.writeString(home.resolve("scope/unit_scope.yml"), """
+                version: tesseraql/v1
+                id: unit_scope
+                kind: scope
+                match:
+                  - when: { role: approver }
+                    file: own_unit.sql
+                    params:
+                      unit: principal.claim.unit
+                """);
+        Files.writeString(home.resolve("scope/own_unit.sql"), "$.unit = /* unit */ 'U0'\n");
+        Files.writeString(workflowDir.resolve("scoped_request.yml"),
+                """
+                        version: tesseraql/v1
+                        id: scoped_request
+                        kind: workflow
+                        document: { type: scoped_request, table: scoped_requests, key: id }
+                        basePath: /scoped-requests
+                        security: { auth: bearer }
+                        initial: draft
+                        states:
+                          - { id: draft, type: initial }
+                          - { id: submitted }
+                          - { id: approved, type: terminal }
+                        transitions:
+                          - { id: submit, from: draft, to: submitted, command: { file: sc_submit.sql }, assign: { file: a_approver.sql } }
+                          - { id: approve, from: submitted, to: approved, command: { file: sc_approve.sql } }
+                        deadlines:
+                          - state: submitted
+                            within: 0s
+                            onBreach: { escalate: approve }
+                        """);
+        Files.writeString(workflowDir.resolve("sc_submit.sql"),
+                "update scoped_requests set last_action = 'submit' where id = /* key */ 'x'\n");
+        Files.writeString(workflowDir.resolve("sc_approve.sql"), "update scoped_requests set "
+                + "last_action = 'approve', acted_by = /* audit.user */ 'x' where id = /* key */ 'x'"
+                + " and /*%scope unit_scope on scoped_requests */ (1=1)\n");
+
+        // The reassign resolver in the documented shape: it reads the row it is told about
+        // through /* key */ and a declared param resolved against the loaded document.
+        Files.writeString(workflowDir.resolve("fallback_request.yml"),
+                """
+                        version: tesseraql/v1
+                        id: fallback_request
+                        kind: workflow
+                        document: { type: fallback_request, table: fallback_requests, key: id }
+                        basePath: /fallback-requests
+                        security: { auth: bearer }
+                        initial: draft
+                        states:
+                          - { id: draft, type: initial }
+                          - { id: submitted }
+                          - { id: approved, type: terminal }
+                        transitions:
+                          - { id: submit, from: draft, to: submitted, command: { file: fb_submit.sql }, assign: { file: fb_owner.sql } }
+                          - { id: approve, from: submitted, to: approved, command: { file: fb_approve.sql } }
+                        deadlines:
+                          - state: submitted
+                            within: 0s
+                            onBreach:
+                              reassign:
+                                file: fb_fallback.sql
+                                params:
+                                  owner: document.owner_login
+                        """);
+        Files.writeString(workflowDir.resolve("fb_submit.sql"),
+                "update fallback_requests set last_action = 'submit' where id = /* key */ 'x'\n");
+        Files.writeString(workflowDir.resolve("fb_approve.sql"),
+                "update fallback_requests set last_action = 'approve' where id = /* key */ 'x'\n");
+        Files.writeString(workflowDir.resolve("fb_owner.sql"),
+                "select owner_login as assignee from fallback_requests where id = /* key */ 'x'\n");
+        Files.writeString(workflowDir.resolve("fb_fallback.sql"),
+                "select fallback_login as assignee from fallback_requests "
+                        + "where id = /* key */ 'x' and owner_login = /* owner */ 'x' "
+                        + "and fallback_login is not null\n");
+
+        // The poison of the batch-isolation case: the resolver casts the key, which PO-1 (and
+        // only PO-1 — the sweep meets it first) cannot satisfy.
+        Files.writeString(workflowDir.resolve("poison_request.yml"),
+                """
+                        version: tesseraql/v1
+                        id: poison_request
+                        kind: workflow
+                        document: { type: poison_request, table: poison_requests, key: id }
+                        basePath: /poison-requests
+                        security: { auth: bearer }
+                        initial: draft
+                        states:
+                          - { id: draft, type: initial }
+                          - { id: submitted }
+                          - { id: approved, type: terminal }
+                        transitions:
+                          - { id: submit, from: draft, to: submitted, command: { file: po_submit.sql }, assign: { file: a_approver.sql } }
+                          - { id: approve, from: submitted, to: approved, command: { file: po_approve.sql } }
+                        deadlines:
+                          - state: submitted
+                            within: 0s
+                            onBreach: { reassign: { file: po_fallback.sql } }
+                        """);
+        Files.writeString(workflowDir.resolve("po_submit.sql"),
+                "update poison_requests set last_action = 'submit' where id = /* key */ 'x'\n");
+        Files.writeString(workflowDir.resolve("po_approve.sql"),
+                "update poison_requests set last_action = 'approve' where id = /* key */ 'x'\n");
+        Files.writeString(workflowDir.resolve("po_fallback.sql"),
+                "select 'fallback-po' as assignee where cast(replace(/* key */ 'PO-2', 'PO-2', '2')"
+                        + " as integer) = 2\n");
+
+        // The escalated command that matches no row: the route would refuse it (3204), and so
+        // must the sweeper — the state advance rolls back with it.
+        Files.writeString(workflowDir.resolve("hollow_request.yml"),
+                """
+                        version: tesseraql/v1
+                        id: hollow_request
+                        kind: workflow
+                        document: { type: hollow_request, table: hollow_requests, key: id }
+                        basePath: /hollow-requests
+                        security: { auth: bearer }
+                        initial: draft
+                        states:
+                          - { id: draft, type: initial }
+                          - { id: submitted }
+                          - { id: approved, type: terminal }
+                        transitions:
+                          - { id: submit, from: draft, to: submitted, command: { file: ho_submit.sql }, assign: { file: a_approver.sql } }
+                          - { id: approve, from: submitted, to: approved, command: { file: ho_approve.sql } }
+                        deadlines:
+                          - state: submitted
+                            within: 0s
+                            onBreach: { escalate: approve }
+                        """);
+        Files.writeString(workflowDir.resolve("ho_submit.sql"),
+                "update hollow_requests set last_action = 'submit' where id = /* key */ 'x'\n");
+        Files.writeString(workflowDir.resolve("ho_approve.sql"), "update hollow_requests set "
+                + "last_action = 'approve' where id = /* key */ 'x' and last_action = 'never'\n");
         return home;
     }
 

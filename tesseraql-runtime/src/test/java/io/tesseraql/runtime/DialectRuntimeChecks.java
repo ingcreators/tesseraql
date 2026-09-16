@@ -180,6 +180,86 @@ final class DialectRuntimeChecks {
     }
 
     /**
+     * The deadline sweeper's per-task fence on this vendor (docs/audit-low-leads.md slice 2b,
+     * G35): two overdue tasks, the earlier one's reassign resolver failing at execution, the
+     * later one's answering — the sweep must roll the failure back to its savepoint and still
+     * reassign the healthy task in the same transaction.
+     *
+     * <p>The construct is the chunk step's (a savepoint per unit, rolled back to on failure, never
+     * released — the commit releases it on every dialect), and it is the one this framework has
+     * shipped the same bug on twice; the savepoint ledger names this check as the sweeper's
+     * proof. On PostgreSQL the fence is what keeps the failed statement from aborting the
+     * transaction; on Oracle and SQL Server the rollback to the savepoint is what must work.
+     */
+    static void workflowSweepRoundTrip(javax.sql.DataSource dataSource, String dialect)
+            throws Exception {
+        io.tesseraql.operations.workflow.JdbcWorkflowTaskStore tasks = new io.tesseraql.operations.workflow.JdbcWorkflowTaskStore(
+                dataSource);
+        tasks.ensureSchema();
+        String docType = "dialect-sweep-" + java.util.UUID.randomUUID();
+        try (java.sql.Connection connection = dataSource.getConnection()) {
+            connection.setAutoCommit(false);
+            // Due order is sweep order: the failing task is met first.
+            tasks.openTask(connection, new io.tesseraql.core.workflow.WorkflowTaskStore.Task(
+                    docType, "POISON-1", "review", "alice", null,
+                    java.time.Instant.now().minusSeconds(120), null, null));
+            tasks.openTask(connection, new io.tesseraql.core.workflow.WorkflowTaskStore.Task(
+                    docType, "HEALTHY-1", "review", "carol", null,
+                    java.time.Instant.now().minusSeconds(60), null, null));
+            connection.commit();
+        }
+
+        // One rule for both tasks: the resolver reads a table that exists for the healthy key
+        // and not for the poison key — a missing relation fails at execution on every vendor.
+        WorkflowSweeper sweeper = new WorkflowSweeper(
+                java.util.List.of(new WorkflowSweeper.Rule(docType,
+                        "review",
+                        new WorkflowSweeper.Reassign(io.tesseraql.core.sql.Sql2WayParser.parse(
+                                "/*%if key == 'POISON-1' */"
+                                        + " select assignee from tql_dialect_sweep_missing "
+                                        + "/*%else*/"
+                                        + " select assignee from tql_dialect_sweep_fallback "
+                                        + "/*%end*/",
+                                io.tesseraql.core.expr.ExpressionFunctions.processDefault()),
+                                java.util.Map.of()),
+                        null, null,
+                        new WorkflowSweeper.Document("tql_dialect_sweep_fallback", "assignee",
+                                dialect))),
+                tasks, null, null, "dialect-check", dataSource, null);
+        try (java.sql.Connection connection = dataSource.getConnection();
+                java.sql.Statement statement = connection.createStatement()) {
+            statement.execute("create table tql_dialect_sweep_fallback (assignee varchar(64))");
+            statement.execute("insert into tql_dialect_sweep_fallback (assignee) values ('dave')");
+        }
+        try {
+            assertThat(sweeper.sweep()).as("the healthy task escalated past the poison")
+                    .isEqualTo(1);
+            try (java.sql.Connection connection = dataSource.getConnection();
+                    java.sql.PreparedStatement ps = connection.prepareStatement(
+                            "select doc_id, assignee, due_at from tql_workflow_task "
+                                    + "where doc_type = ? order by doc_id")) {
+                ps.setString(1, docType);
+                try (java.sql.ResultSet rs = ps.executeQuery()) {
+                    assertThat(rs.next()).isTrue();
+                    assertThat(rs.getString(1)).isEqualTo("HEALTHY-1");
+                    assertThat(rs.getString(2)).as("reassigned to the resolver's answer")
+                            .isEqualTo("dave");
+                    assertThat(rs.getTimestamp(3)).as("its deadline cleared: once").isNull();
+                    assertThat(rs.next()).isTrue();
+                    assertThat(rs.getString(1)).isEqualTo("POISON-1");
+                    assertThat(rs.getString(2)).as("the poison task untouched").isEqualTo("alice");
+                    assertThat(rs.getTimestamp(3)).as("still overdue").isNotNull();
+                }
+            }
+        } finally {
+            try (java.sql.Connection connection = dataSource.getConnection();
+                    java.sql.Statement statement = connection.createStatement()) {
+                statement.execute("drop table tql_dialect_sweep_fallback");
+            }
+        }
+    }
+
+    /**
      * Run ownership and the heartbeat on this vendor (docs/audit-hardening.md Decision 6).
      *
      * <p>V8 adds two columns, and a column add is exactly the migration shape that has a different

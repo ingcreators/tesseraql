@@ -52,6 +52,12 @@ resolution — are:
 3. the target of the per-task `delegate/{to}` operation (handing a task to
    someone absent forwards it once, same one-hop rule).
 
+All three ask under the same tenant: the request's resolved tenant at assignment and
+delegation, the tenant the task was opened under on the sweeper (the task row carries it).
+Until 0.18.0 only the third did — the assignment funnel looked the rule up under the
+resolved tenant's `toString` and the sweeper under the empty tenant, so under tenancy an
+absence rule was honoured by `delegate/{to}` alone (`docs/audit-low-leads.md`, G37).
+
 **Candidate groups are untouched** — a pool does not go on leave. **Existing tasks are
 untouched** — the window redirects what is assigned during it; tasks already held are
 exactly what the per-task delegate operation and the deadline sweeper are for.

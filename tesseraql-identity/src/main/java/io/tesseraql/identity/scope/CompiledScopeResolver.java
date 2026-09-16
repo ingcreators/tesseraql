@@ -117,6 +117,24 @@ public final class CompiledScopeResolver implements ScopeResolver {
                 + "principal); remove the when: for an unconditional arm, or name a predicate");
     }
 
+    /**
+     * The resolver the deadline sweeper renders a sweep-fired statement through
+     * (docs/approval-workflow.md, "Deadlines, escalation, and delegation"): every declared scope
+     * expands to {@code (1=1)} — the system acts on a document regardless of whose org unit it
+     * sits in, because the deadline the author declared is the authority and there is no
+     * requester to derive a narrower one from — while an undeclared scope is still
+     * {@code TQL-SQL-2107}, so a misspelled directive stays loud.
+     */
+    public ScopeResolver asSystem() {
+        return (scopeName, alias, context) -> {
+            if (!scopes.containsKey(scopeName)) {
+                throw new TqlException(UNKNOWN_SCOPE,
+                        "Scope '" + scopeName + "' is not declared under scope/");
+            }
+            return new Resolved(List.of(text("(1=1)")), Map.of());
+        };
+    }
+
     @Override
     public Resolved resolve(String scopeName, String alias, Map<String, Object> context) {
         List<CompiledArm> arms = scopes.get(scopeName);

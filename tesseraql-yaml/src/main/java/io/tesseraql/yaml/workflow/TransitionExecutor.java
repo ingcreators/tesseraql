@@ -176,8 +176,14 @@ public final class TransitionExecutor {
     public static Session begin(Connection connection, CompiledTransition transition,
             Collaborators collaborators, String docId, Map<String, Object> context)
             throws SQLException {
+        // The context's tenant is the resolved TenantContext record under tenancy: its id is
+        // what the instance and the task persist and what the delegation rule is looked up
+        // under. String.valueOf gave the record's toString — "TenantContext[id=…]" — so under
+        // tenancy no delegation rule was ever found at assignment (docs/audit-low-leads.md G37).
         Object tenant = context.get("tenant");
-        String tenantId = tenant == null ? null : String.valueOf(tenant);
+        String tenantId = tenant instanceof io.tesseraql.core.tenant.TenantContext scoped
+                ? scoped.id()
+                : tenant == null ? null : String.valueOf(tenant);
         SqlStatement statements = collaborators.statements().surface("workflow");
         collaborators.store().ensureInstance(connection, transition.docType(), docId,
                 transition.initial(), tenantId);

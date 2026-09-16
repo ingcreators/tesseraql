@@ -52,6 +52,11 @@ class ErrorCodeUniquenessTest {
                     + " yaml checks source defaults - the javadoc cross-references)"),
             Map.entry("WORKFLOW-3202", "a transition guard refused the request (single guard,"
                     + " or a dispatch where no member holds) - HTTP 422"),
+            // One rule at two sites: the transition's command matched no row, so the state never
+            // advances - refused on the route (409) and refused by the deadline sweeper for an
+            // auto-fired transition, whose task rolls back to its savepoint.
+            Map.entry("WORKFLOW-3204", "the transition's command updated no rows - the state"
+                    + " advance never stands, on the route or under the sweeper"),
             Map.entry("STUDIO-4040", "the studio object the request names does not exist"),
             Map.entry("SQL-4090", "a unique constraint violation, mapped per execution surface"),
             Map.entry("SQL-4002", "a check constraint violation, mapped per execution surface"),

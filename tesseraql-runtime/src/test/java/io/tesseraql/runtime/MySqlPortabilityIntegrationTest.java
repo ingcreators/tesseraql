@@ -142,6 +142,11 @@ class MySqlPortabilityIntegrationTest {
         DialectRuntimeChecks.documentSequenceRoundTrip(mysqlDataSource());
     }
 
+    @Test
+    void theWorkflowSweepIsolatesAFailingTaskOnThisDialect() throws Exception {
+        DialectRuntimeChecks.workflowSweepRoundTrip(mysqlDataSource(), "mysql");
+    }
+
     private static javax.sql.DataSource mysqlDataSource() {
         com.mysql.cj.jdbc.MysqlDataSource dataSource = new com.mysql.cj.jdbc.MysqlDataSource();
         dataSource.setUrl(MYSQL.getJdbcUrl());
