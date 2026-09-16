@@ -152,9 +152,36 @@ public final class SqlRenderer {
     private void renderScope(SqlNode.Scope node) {
         ScopeResolver.Resolved resolved = scopeResolver.resolve(node.name(), node.alias(),
                 scopeContext);
+        // `as boolean` makes the scope a SELECT-list flag (1/0), portable across dialects that
+        // lack a boolean type (SQL Server); otherwise it is a WHERE predicate rendered as-is.
+        if (node.asBoolean()) {
+            mapToSource("case when ", node.sourceLine());
+        }
+        if (resolved.fragments().isEmpty()) {
+            renderLayered(resolved.nodes(), resolved.bindings());
+        } else {
+            // Each arm's binds are private to its fragment: two arms naming the same bind
+            // render against their own values, not the last arm's (docs/data-scoping.md).
+            mapToSource("(", node.sourceLine());
+            for (int i = 0; i < resolved.fragments().size(); i++) {
+                ScopeResolver.Fragment fragment = resolved.fragments().get(i);
+                mapToSource(i == 0 ? "(" : " or (", node.sourceLine());
+                renderLayered(fragment.nodes(), fragment.bindings());
+                mapToSource(")", node.sourceLine());
+            }
+            mapToSource(")", node.sourceLine());
+        }
+        if (node.asBoolean()) {
+            mapToSource(" then 1 else 0 end", node.sourceLine());
+        }
+        coverage.coverLine(node.sourceLine());
+    }
+
+    /** Renders a sub-template with {@code bindings} layered over the scope, then restored. */
+    private void renderLayered(List<SqlNode> nodes, Map<String, Object> bindings) {
         Map<String, Object> saved = new HashMap<>();
         java.util.Set<String> added = new java.util.HashSet<>();
-        for (Map.Entry<String, Object> binding : resolved.bindings().entrySet()) {
+        for (Map.Entry<String, Object> binding : bindings.entrySet()) {
             if (scope.containsKey(binding.getKey())) {
                 saved.put(binding.getKey(), scope.get(binding.getKey()));
             } else {
@@ -163,20 +190,11 @@ public final class SqlRenderer {
             scope.put(binding.getKey(), binding.getValue());
         }
         try {
-            // `as boolean` makes the scope a SELECT-list flag (1/0), portable across dialects that
-            // lack a boolean type (SQL Server); otherwise it is a WHERE predicate rendered as-is.
-            if (node.asBoolean()) {
-                mapToSource("case when ", node.sourceLine());
-            }
-            renderNodes(resolved.nodes());
-            if (node.asBoolean()) {
-                mapToSource(" then 1 else 0 end", node.sourceLine());
-            }
+            renderNodes(nodes);
         } finally {
             saved.forEach(scope::put);
             added.forEach(scope::remove);
         }
-        coverage.coverLine(node.sourceLine());
     }
 
     /**

@@ -34,7 +34,7 @@ public final class FileDownloadProcessor implements Step {
         FileTransferService transfers = exchange.beans().lookup(
                 TesseraqlProperties.FILE_TRANSFER_BEAN,
                 FileTransferService.class);
-        if (TransferScope.own(transfers, transferId, appName, routeId).isEmpty()) {
+        if (TransferScope.own(transfers, transferId, appName, routeId, exchange).isEmpty()) {
             throw new TqlException(UNKNOWN, "Unknown transfer: " + transferId);
         }
         FileTransferService.Download download = transfers.download(transferId)

@@ -146,8 +146,7 @@ public final class CompiledScopeResolver implements ScopeResolver {
         Principal principal = ctx.get("principal") instanceof Principal p ? p : null;
         EvaluationContext evaluation = new EvaluationContext(ctx);
 
-        List<List<SqlNode>> predicates = new ArrayList<>();
-        Map<String, Object> bindings = new LinkedHashMap<>();
+        List<ScopeResolver.Fragment> fragments = new ArrayList<>();
         for (CompiledArm arm : arms) {
             if (!arm.matches(principal)) {
                 continue;
@@ -158,30 +157,20 @@ public final class CompiledScopeResolver implements ScopeResolver {
             if (arm.fragment() == null) {
                 continue; // a matching `apply: none` arm contributes nothing to the OR
             }
-            predicates.add(substituteAlias(arm.fragment(), alias));
+            // Each arm's binds stay with its fragment: folding every arm's params into one map
+            // let the last matching arm's value win a shared name, and the other arm's rows
+            // vanished, silently and in arm order (docs/audit-low-leads.md G27).
+            Map<String, Object> bindings = new LinkedHashMap<>();
             arm.params().forEach((bind, expr) -> bindings.put(bind,
                     evaluation.resolve(Arrays.asList(expr.split("\\.")))));
+            fragments.add(new ScopeResolver.Fragment(substituteAlias(arm.fragment(), alias),
+                    bindings));
         }
-        if (predicates.isEmpty()) {
+        if (fragments.isEmpty()) {
             return new Resolved(List.of(text("(1=0)")), Map.of()); // deny by default
         }
-        return new Resolved(combine(predicates), bindings);
-    }
-
-    /** OR-combines the matching fragments into {@code ((frag1) or (frag2) ...)}. */
-    private static List<SqlNode> combine(List<List<SqlNode>> predicates) {
-        List<SqlNode> out = new ArrayList<>();
-        out.add(text("("));
-        for (int i = 0; i < predicates.size(); i++) {
-            if (i > 0) {
-                out.add(text(" or "));
-            }
-            out.add(text("("));
-            out.addAll(predicates.get(i));
-            out.add(text(")"));
-        }
-        out.add(text(")"));
-        return out;
+        // The renderer OR-combines the fragments as ((frag1) or (frag2) ...).
+        return Resolved.of(fragments);
     }
 
     /** Replaces the {@code $} scope-target sentinel with the call site's {@code on <alias>} prefix. */

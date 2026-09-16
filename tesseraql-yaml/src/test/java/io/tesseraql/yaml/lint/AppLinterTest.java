@@ -2693,12 +2693,84 @@ class AppLinterTest {
         Files.writeString(dir.resolve("web/api/scoped/list.sql"),
                 "select id, name from items where tenant_id = /* tenant_id */ 'x'\n");
 
+        // The write side (docs/audit-low-leads.md G29): a command whose main step binds the
+        // tenant and whose second step does not — the lint read main alone from #753 to
+        // 0.18.0, so the step that crosses tenants destructively went uninspected.
+        Files.createDirectories(dir.resolve("web/api/orders"));
+        Files.writeString(dir.resolve("web/api/orders/post.yml"), """
+                version: tesseraql/v1
+                id: orders.create
+                kind: route
+                recipe: command-json
+                security:
+                  auth: public
+                input:
+                  name: { type: string, required: true }
+                steps:
+                  - id: main
+                    sql:
+                      file: insert.sql
+                      mode: update
+                      params:
+                        tenant_id: tenant.id
+                        name: params.name
+                  - id: tag
+                    sql:
+                      file: tag.sql
+                      mode: update
+                      params:
+                        name: params.name
+                response:
+                  json:
+                    status: 201
+                    body:
+                      created: steps.main.affectedRows
+                """);
+        Files.writeString(dir.resolve("web/api/orders/insert.sql"),
+                "insert into orders (tenant_id, name) values (/* tenant_id */ 't', /* name */ 'n')\n");
+        Files.writeString(dir.resolve("web/api/orders/tag.sql"),
+                "update orders set tagged = 1 where name = /* name */ 'n'\n");
+        // And a read whose main binds the tenant while a second source does not.
+        Files.createDirectories(dir.resolve("web/api/twice"));
+        Files.writeString(dir.resolve("web/api/twice/get.yml"), """
+                version: tesseraql/v1
+                id: twice.list
+                kind: route
+                recipe: query-json
+                security:
+                  auth: public
+                sources:
+                  main:
+                    sql:
+                      file: list.sql
+                      params:
+                        tenant_id: tenant.id
+                  totals:
+                    sql:
+                      file: totals.sql
+                response:
+                  json:
+                    body:
+                      data: main.rows
+                      totals: totals.rows
+                """);
+        Files.writeString(dir.resolve("web/api/twice/list.sql"),
+                "select id, name from items where tenant_id = /* tenant_id */ 'x'\n");
+        Files.writeString(dir.resolve("web/api/twice/totals.sql"),
+                "select count(*) as n from items\n");
+
         List<LintFinding> findings = new AppLinter().lint(dir);
 
         assertThat(findings).anyMatch(f -> f.code().equals("TQL-TENANT-3001")
                 && !f.isError() && f.source().contains("leaky"));
         assertThat(findings).noneMatch(f -> f.code().equals("TQL-TENANT-3001")
                 && f.source().contains("scoped"));
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-TENANT-3001")
+                && f.source().contains("orders") && f.message().contains("step 'tag'"));
+        assertThat(findings).noneMatch(f -> f.code().equals("TQL-TENANT-3001")
+                && f.source().contains("orders") && f.message().contains("step 'main'"));
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-TENANT-3001")
+                && f.source().contains("twice") && f.message().contains("source 'totals'"));
     }
 
     @Test

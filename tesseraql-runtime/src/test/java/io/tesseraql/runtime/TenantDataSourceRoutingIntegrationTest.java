@@ -163,6 +163,51 @@ class TenantDataSourceRoutingIntegrationTest {
         assertThat(noteCount("globex", "nope-imported")).isZero();
     }
 
+    /**
+     * A transfer's subtree is scoped by tenant (docs/audit-low-leads.md G31): another tenant
+     * holding the link reads it as unknown — status, file and cancel alike — and the file leg,
+     * which used to carry security alone, now resolves the tenant like the other legs, so a
+     * request naming none is refused under {@code required: true}.
+     */
+    @Test
+    void anotherTenantCannotSeeFetchOrCancelATransferAndTheFileLegResolvesTheTenant()
+            throws Exception {
+        String transferId = startTransfer("acme", "/api/items/export", "");
+        assertThat(awaitTerminal("acme", "/api/items/export/" + transferId)
+                .get("status").asText()).isEqualTo("COMPLETED");
+        String base = "http://localhost:" + runtime.port() + "/api/items/export/" + transferId;
+
+        HttpResponse<String> foreignStatus = HttpClient.newHttpClient().send(
+                HttpRequest.newBuilder(URI.create(base)).header("X-Tenant-Id", "globex").build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertThat(foreignStatus.statusCode()).isEqualTo(404);
+        assertThat(foreignStatus.body()).contains("TQL-LD-2822");
+        HttpResponse<String> foreignFile = HttpClient.newHttpClient().send(
+                HttpRequest.newBuilder(URI.create(base + "/file"))
+                        .header("X-Tenant-Id", "globex").build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertThat(foreignFile.statusCode()).isEqualTo(404);
+        HttpResponse<String> foreignCancel = HttpClient.newHttpClient().send(
+                HttpRequest.newBuilder(URI.create(base + "/cancel"))
+                        .header("X-Tenant-Id", "globex")
+                        .POST(HttpRequest.BodyPublishers.noBody()).build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertThat(foreignCancel.statusCode()).isEqualTo(404);
+
+        HttpResponse<String> noTenant = HttpClient.newHttpClient().send(
+                HttpRequest.newBuilder(URI.create(base + "/file")).build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertThat(noTenant.statusCode()).isEqualTo(400);
+        assertThat(noTenant.body()).contains("TQL-TENANT-4001");
+
+        HttpResponse<String> own = HttpClient.newHttpClient().send(
+                HttpRequest.newBuilder(URI.create(base + "/file"))
+                        .header("X-Tenant-Id", "acme").build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertThat(own.statusCode()).isEqualTo(200);
+        assertThat(own.body()).contains("acme-only");
+    }
+
     @Test
     void unknownTenantIsRejected() throws Exception {
         HttpResponse<String> response = HttpClient.newHttpClient().send(

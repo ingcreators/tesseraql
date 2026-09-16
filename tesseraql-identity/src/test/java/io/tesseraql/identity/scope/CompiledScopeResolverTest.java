@@ -40,7 +40,12 @@ class CompiledScopeResolverTest {
                         new MatchArm(when("role", "region-manager"), null, "by_region.sql",
                                 Map.of("regions", "principal.claim.regions")),
                         new MatchArm(when("permission", "orders:read-own"), null, "own_rows.sql",
-                                Map.of("uid", "principal.subject"))));
+                                Map.of("uid", "principal.subject")),
+                        // A second arm over the same fragment and the same bind name, from a
+                        // different claim: the shared-name shape the shipped procurement scope
+                        // has (docs/audit-low-leads.md G27).
+                        new MatchArm(when("role", "auditor"), null, "by_region.sql",
+                                Map.of("regions", "principal.claim.auditRegions"))));
         ScopeFile scopeFile = new ScopeFile(dir.resolve("orders_scope.yml"), definition);
         resolver = new CompiledScopeResolver(List.of(scopeFile), "");
     }
@@ -58,10 +63,16 @@ class CompiledScopeResolverTest {
         return new Principal("u9", "login", "Name", null, List.of(), roles, permissions, claims);
     }
 
+    /** Renders through the directive, so the renderer's per-fragment layering is under test. */
     private BoundSql resolve(String alias, Principal principal) {
-        ScopeResolver.Resolved resolved = resolver.resolve("orders_scope", alias,
-                principal == null ? Map.of() : Map.of("principal", principal));
-        return SqlRenderer.render(resolved.nodes(), resolved.bindings());
+        Map<String, Object> context = principal == null
+                ? Map.of()
+                : Map.of("principal", principal);
+        String directive = alias == null
+                ? "/*%scope orders_scope */ (1=1)"
+                : "/*%scope orders_scope on " + alias + " */ (1=1)";
+        return SqlRenderer.render(io.tesseraql.core.sql.Sql2WayParser.parse(directive), Map.of(),
+                resolver, context);
     }
 
     @Test
@@ -96,6 +107,20 @@ class CompiledScopeResolverTest {
                 .contains("o.created_by = ?");
         assertThat(bound.parameters()).extracting(BoundParameter::value)
                 .containsExactly("R1", "u9");
+    }
+
+    /**
+     * Two matching arms that name the same bind each render against their own values: the
+     * staff arm's regions and the auditor's, both present, in arm order. One bind map for the
+     * whole OR let the last arm's value win the name and the other arm's rows vanished.
+     */
+    @Test
+    void matchingArmsSharingABindNameEachKeepTheirOwnValues() {
+        BoundSql bound = resolve("o", principal(List.of("region-manager", "auditor"), List.of(),
+                Map.of("regions", List.of("M1", "M2"), "auditRegions", List.of("A1"))));
+        assertThat(bound.sql()).isEqualTo("((o.region in (?, ?)) or (o.region in (?)))");
+        assertThat(bound.parameters()).extracting(BoundParameter::value)
+                .containsExactly("M1", "M2", "A1");
     }
 
     @Test

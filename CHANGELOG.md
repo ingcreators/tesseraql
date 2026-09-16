@@ -24,6 +24,34 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **Scope arms that share a bind name each keep their own values.** `CompiledScopeResolver`
+  folded every matching arm's `params:` into one map, so two arms naming the same bind — the
+  shipped procurement scope's shape — rendered both fragments against the last arm's value and
+  the other arm's rows vanished, silently and in arm order. `ScopeResolver.Resolved` now carries
+  one fragment per matching arm and the renderer layers each arm's binds around its own fragment
+  (`docs/data-scoping.md` "Composition"). `docs/audit-low-leads.md`, slice 3b (G27).
+- **A named export source binds its own `params:` and renders under the caller's scope.**
+  `ExportQuery` carried a name and a path only, so a non-main `sources:` entry's `params:` were
+  dropped at build and the query rendered with `main`'s map — a header query bound null and
+  printed an empty header, on the inline and the file-export path alike (G28); and the inline
+  path rendered a named source resolver-less, so a `/*%scope … */` in it answered 500
+  `TQL-SQL-2106` (G30). The query now carries its `params:` as expressions, resolved at request
+  time on both paths over the request's map, and renders through the statement's scope resolver
+  like `main`. `docs/audit-low-leads.md`, slice 3b.
+- **The shared-schema lint inspects every SQL binding again.** `TQL-TENANT-3001` read `main`
+  alone from #753 (the unified-source refactor) to 0.18.0, so a command's `steps:` — the write
+  side, where a guessed id crosses tenants destructively — and a route's second source went
+  uninspected while `multi-tenancy.md` and `threat-model.md` named the lint as the control. It
+  walks `main`, `steps` and non-main `sources` now, one warning per binding. `docs/audit-low-leads.md`,
+  slice 3b (G29).
+- **A transfer's subtree is the tenant's, and its file leg resolves a tenant.** The
+  `{transferId}` status, file and cancel legs were scoped to app and route only, so a tenant of
+  the same deployment holding a link read another tenant's export and could cancel its run; and
+  the file leg carried security alone — no tenancy — so under `required: true` a request naming
+  no tenant was served the bytes. `TransferScope` compares the tenant the transfer was recorded
+  for (a foreign tenant's transfer is unknown, `TQL-LD-2822`) and the file leg takes the common
+  governance like the other two. A transfer recorded before 0.18.0 has no tenant and, under
+  tenancy, is reachable by no tenant. `docs/audit-low-leads.md`, slice 3b (G31).
 - **File transfers run on the tenant's pool, and an unknown tenant's transfer is refused.** In
   `database-per-tenant` and `schema-per-tenant` modes a `file-export` extracted and a
   `file-import` wrote on the main pool — every tenant, and an unknown tenant id the reads refuse

@@ -30,6 +30,11 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  *
  * <p>The header query runs on the extraction's own connection, inside its transaction and before
  * it, so a document reads exactly the state its rows came from.
+ *
+ * <p>And it binds exactly as a read route's named query does (docs/audit-low-leads.md slice 3b):
+ * its own {@code params:} over the request's map, on both executing paths (G28), and its scope
+ * directives through the caller's resolver (G30) — the two-argument render used to answer
+ * TQL-SQL-2106 to a scoped named source.
  */
 @Testcontainers
 class ExportDataSourcesIntegrationTest {
@@ -106,6 +111,94 @@ class ExportDataSourcesIntegrationTest {
                 .contains("Globex").doesNotContain("Acme Corporation");
     }
 
+    /** A named source's own {@code params:} reach its query on the query-export path. */
+    @Test
+    void aNamedSourceBindsItsOwnParamsOnTheInlinePath() throws Exception {
+        HttpResponse<byte[]> response = HTTP.send(
+                HttpRequest.newBuilder(URI.create("http://localhost:" + port
+                        + "/api/orders/print-one?order=SO-1002"))
+                        .GET().build(),
+                HttpResponse.BodyHandlers.ofByteArray());
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        try (PDDocument document = Loader.loadPDF(response.body())) {
+            String text = new PDFTextStripper().getText(document);
+            assertThat(text).contains("Order SO-1002", "Globex").doesNotContain("Acme");
+        }
+    }
+
+    /** The same, on the file-export path — the transfer service renders the named query. */
+    @Test
+    void aNamedSourceBindsItsOwnParamsOnTheTransferPath() throws Exception {
+        HttpResponse<String> started = HTTP.send(
+                HttpRequest.newBuilder(URI.create("http://localhost:" + port
+                        + "/api/orders/file"))
+                        .header("Content-Type", "application/json")
+                        .POST(HttpRequest.BodyPublishers.ofString("{\"order\": \"SO-1002\"}"))
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertThat(started.statusCode()).isEqualTo(202);
+        String transferId = new com.fasterxml.jackson.databind.ObjectMapper()
+                .readTree(started.body()).get("transferId").asText();
+        java.time.Instant deadline = java.time.Instant.now().plusSeconds(20);
+        String status;
+        do {
+            HttpResponse<String> polled = HTTP.send(HttpRequest.newBuilder(URI.create(
+                    "http://localhost:" + port + "/api/orders/file/" + transferId)).build(),
+                    HttpResponse.BodyHandlers.ofString());
+            status = new com.fasterxml.jackson.databind.ObjectMapper().readTree(polled.body())
+                    .get("status").asText();
+            assertThat(java.time.Instant.now()).isBefore(deadline);
+            Thread.sleep(100);
+        } while ("PENDING".equals(status) || "RUNNING".equals(status));
+        assertThat(status).isEqualTo("COMPLETED");
+        HttpResponse<byte[]> file = HTTP.send(HttpRequest.newBuilder(URI.create(
+                "http://localhost:" + port + "/api/orders/file/" + transferId + "/file")).build(),
+                HttpResponse.BodyHandlers.ofByteArray());
+        assertThat(file.statusCode()).isEqualTo(200);
+        try (PDDocument document = Loader.loadPDF(file.body())) {
+            assertThat(new PDFTextStripper().getText(document))
+                    .contains("Order SO-1002", "Globex").doesNotContain("Acme");
+        }
+    }
+
+    /**
+     * A scope directive in a named source renders through the caller's resolver: a buyer whose
+     * claim names Globex prints Globex's header. The resolver-less render answered 500 with
+     * TQL-SQL-2106 to any scoped named source.
+     */
+    @Test
+    void aScopedNamedSourceRendersUnderTheCallersScope() throws Exception {
+        HttpResponse<byte[]> response = HTTP.send(
+                HttpRequest.newBuilder(URI.create("http://localhost:" + port
+                        + "/api/orders/mine?order=SO-1002"))
+                        .header("Authorization", "Bearer " + token("buyer-1", "Globex"))
+                        .GET().build(),
+                HttpResponse.BodyHandlers.ofByteArray());
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        try (PDDocument document = Loader.loadPDF(response.body())) {
+            assertThat(new PDFTextStripper().getText(document)).contains("Order SO-1002", "Globex");
+        }
+    }
+
+    private static String token(String sub, String customer) throws Exception {
+        java.util.Base64.Encoder enc = java.util.Base64.getUrlEncoder().withoutPadding();
+        String header = enc.encodeToString("{\"alg\":\"HS256\"}"
+                .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        String payload = enc.encodeToString(new com.fasterxml.jackson.databind.ObjectMapper()
+                .writeValueAsBytes(TestClaims.addressed(Map.of("sub", sub,
+                        "roles", java.util.List.of("buyer"), "customer", customer))));
+        javax.crypto.Mac mac = javax.crypto.Mac.getInstance("HmacSHA256");
+        mac.init(new javax.crypto.spec.SecretKeySpec(
+                JWT_SECRET.getBytes(java.nio.charset.StandardCharsets.UTF_8), "HmacSHA256"));
+        String signature = enc.encodeToString(mac.doFinal(
+                (header + "." + payload).getBytes(java.nio.charset.StandardCharsets.US_ASCII)));
+        return header + "." + payload + "." + signature;
+    }
+
+    private static final String JWT_SECRET = "dev-only-secret-change-me-in-production";
+
     private static Path prepareAppHome() throws Exception {
         Path home = Files.createTempDirectory("export-sources-app");
         Files.createDirectories(home.resolve("config"));
@@ -121,8 +214,13 @@ class ExportDataSourcesIntegrationTest {
                       jdbcUrl: %s
                       username: %s
                       password: %s
+                  security:
+                    jwt:
+                      secret: %s
+                      audience: https://app.example.com
+                      rolesClaim: roles
                 """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
-                POSTGRES.getPassword()));
+                POSTGRES.getPassword(), JWT_SECRET));
         Path migrations = home.resolve("db/migration");
         Files.createDirectories(migrations);
         Files.writeString(migrations.resolve("V1__orders.sql"), """
@@ -213,6 +311,7 @@ class ExportDataSourcesIntegrationTest {
                 """);
         Files.writeString(print.resolve("header.sql"),
                 "select order_no, customer from orders order by order_no\n;\n");
+
         Files.writeString(print.resolve("order.html"), """
                 <html xmlns:th="http://www.thymeleaf.org">
                 <head><title>Order</title></head>
@@ -228,6 +327,128 @@ class ExportDataSourcesIntegrationTest {
                 </body>
                 </html>
                 """);
+
+        // A header source with its own params: (docs/audit-low-leads.md G28), on both executing
+        // paths — the inline query-export and the asynchronous file-export.
+        Path printOne = home.resolve("web/api/orders/print-one");
+        Files.createDirectories(printOne);
+        Files.writeString(printOne.resolve("get.yml"), """
+                version: tesseraql/v1
+                id: orders.printOne
+                kind: route
+                recipe: query-export
+                input:
+                  order: { type: string, required: true }
+                sources:
+                  main:
+                    sql:
+                      file: lines.sql
+                      params:
+                        order_no: params.order
+                  header:
+                    sql:
+                      file: header-one.sql
+                      params:
+                        no: params.order
+                export:
+                  format: pdf
+                  filename: order.pdf
+                  template: order.html
+                  maxRows: 100
+                  columns:
+                    - { name: item, label: Item }
+                    - { name: qty,  label: Qty }
+                """);
+        Files.writeString(printOne.resolve("lines.sql"),
+                "select item, qty from order_lines where order_no = /* order_no */ 'x' order by item\n;\n");
+        // The header binds a name main does not declare, so its own params: are what reach it.
+        Files.writeString(printOne.resolve("header-one.sql"),
+                "select order_no, customer from orders where order_no = /* no */ 'x'\n;\n");
+        Files.copy(print.resolve("order.html"), printOne.resolve("order.html"));
+
+        Path file = home.resolve("web/api/orders/file");
+        Files.createDirectories(file);
+        Files.writeString(file.resolve("post.yml"), """
+                version: tesseraql/v1
+                id: orders.file
+                kind: route
+                recipe: file-export
+                input:
+                  order: { type: string, required: true }
+                sources:
+                  main:
+                    sql:
+                      file: lines.sql
+                      params:
+                        order_no: params.order
+                  header:
+                    sql:
+                      file: header-one.sql
+                      params:
+                        no: params.order
+                export:
+                  format: pdf
+                  filename: order.pdf
+                  template: order.html
+                  maxRows: 100
+                  columns:
+                    - { name: item, label: Item }
+                    - { name: qty,  label: Qty }
+                """);
+        Files.copy(printOne.resolve("lines.sql"), file.resolve("lines.sql"));
+        Files.copy(printOne.resolve("header-one.sql"), file.resolve("header-one.sql"));
+        Files.copy(print.resolve("order.html"), file.resolve("order.html"));
+
+        // A scoped header source (G30): the buyer's claim confines the header to their customer.
+        Files.createDirectories(home.resolve("scope"));
+        Files.writeString(home.resolve("scope/orders_scope.yml"), """
+                version: tesseraql/v1
+                id: orders_scope
+                kind: scope
+                match:
+                  - when: { role: buyer }
+                    file: own_customer.sql
+                    params:
+                      customer: principal.claim.customer
+                """);
+        Files.writeString(home.resolve("scope/own_customer.sql"),
+                "$.customer = /* customer */ 'x'\n");
+        Path mine = home.resolve("web/api/orders/mine");
+        Files.createDirectories(mine);
+        Files.writeString(mine.resolve("get.yml"), """
+                version: tesseraql/v1
+                id: orders.mine
+                kind: route
+                recipe: query-export
+                security:
+                  auth: bearer
+                input:
+                  order: { type: string, required: true }
+                sources:
+                  main:
+                    sql:
+                      file: lines.sql
+                      params:
+                        order_no: params.order
+                  header:
+                    sql:
+                      file: header-mine.sql
+                      params:
+                        order_no: params.order
+                export:
+                  format: pdf
+                  filename: order.pdf
+                  template: order.html
+                  maxRows: 100
+                  columns:
+                    - { name: item, label: Item }
+                    - { name: qty,  label: Qty }
+                """);
+        Files.copy(printOne.resolve("lines.sql"), mine.resolve("lines.sql"));
+        Files.writeString(mine.resolve("header-mine.sql"),
+                "select order_no, customer from orders where order_no = /* order_no */ 'x'"
+                        + " and /*%scope orders_scope on orders */ (1=1)\n;\n");
+        Files.copy(print.resolve("order.html"), mine.resolve("order.html"));
         return home;
     }
 

@@ -206,7 +206,15 @@ public interface FileTransferService {
      */
     record TransferStatus(String transferId, String routeId, String appName, String direction,
             String status, long rows, Long expectedRows, List<RowError> errors, String filename,
-            boolean downloaded, String exitMessage) {
+            boolean downloaded, String exitMessage, String tenantId) {
+
+        /** The shape before a transfer carried the tenant it was resolved for. */
+        public TransferStatus(String transferId, String routeId, String appName, String direction,
+                String status, long rows, Long expectedRows, List<RowError> errors, String filename,
+                boolean downloaded, String exitMessage) {
+            this(transferId, routeId, appName, direction, status, rows, expectedRows, errors,
+                    filename, downloaded, exitMessage, null);
+        }
 
         /** The shape before a failed transfer carried the reason it failed for. */
         public TransferStatus(String transferId, String routeId, String appName, String direction,

@@ -399,10 +399,17 @@ public class SqlStep implements Step {
         }
         Map<String, Object> params = exchange.getProperty(TesseraqlProperties.SQL_PARAMS, Map.of(),
                 Map.class);
+        Map<String, Object> scopeContext = exchange.getProperty(TesseraqlProperties.CONTEXT,
+                Map.of(), Map.class);
         Map<String, Object> values = new LinkedHashMap<>(resolved);
-        for (io.tesseraql.core.files.ExportQuery query : queries) {
+        for (io.tesseraql.core.files.ExportQuery declared : queries) {
+            // Its own params: over main's map (docs/audit-low-leads.md G28), and its scope
+            // directives through the statement's resolver like main's — the two-argument
+            // overload here answered TQL-SQL-2106 to a scoped named source (G30).
+            io.tesseraql.core.files.ExportQuery query = declared.resolved(scopeContext);
             BoundSql bound = SqlRenderer.render(
-                    exportQueryNodes(exchange, query, statement), params);
+                    exportQueryNodes(exchange, query, statement), query.bindsOver(params),
+                    statement.scopes(), scopeContext, statement.files());
             try {
                 // Spooled like the extraction, and counted by the same ceiling: a cap that
                 // bounds the subject and lets a named query run unbounded bounds nothing

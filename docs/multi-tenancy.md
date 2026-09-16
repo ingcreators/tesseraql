@@ -99,6 +99,14 @@ RUNNING record the reaper closes as abandoned and the log names — never a COMP
 rows that did not land. Until 0.18.0 both recipes ran on the main pool in every mode, 202 and
 COMPLETED, for an unknown tenant too (`docs/audit-low-leads.md`, G24).
 
+The transfer's `{transferId}` subtree — status, file, cancel — is the tenant's as well as the
+route's ([edge hygiene](edge-hygiene.md) E0): a request resolved to another tenant, or to none
+where the transfer had one, reads the transfer as unknown (`TQL-LD-2822`). The file leg
+resolves the tenant like the other two, so `required: true` holds on the one URL that serves the
+bytes. Until 0.18.0 the subtree was scoped to app and route only and the file leg carried
+security alone (G31). A transfer recorded before 0.18.0 has no tenant and, under tenancy, is
+reachable by no tenant — recorded, not shimmed.
+
 The vocabulary is refused, not guessed: an enabled tenancy whose `mode` is not one of the three
 above, or whose `resolver.type` is not `header`, `claim` or `host`, does not boot
 (`TQL-TENANT-4032`) and does not lint (`TQL-TENANT-3002`); so does a per-tenant mode declaring
@@ -141,7 +149,7 @@ there is no request.
 
 | Code | Meaning |
 | --- | --- |
-| `TQL-TENANT-3001` | warning — a shared-schema SQL route neither binds `tenant.*` nor mentions a tenant column in its SQL; the query would leak rows across tenants. Bind `tenant.id` or filter by a tenant column. |
+| `TQL-TENANT-3001` | warning — a shared-schema SQL binding (`main`, a command `steps:` entry, a non-main `sources:` entry) neither binds `tenant.*` nor mentions a tenant column in its SQL; the statement would leak rows across tenants. Bind `tenant.id` or filter by a tenant column. The lint read `main` alone from #753 to 0.18.0. |
 | `TQL-TENANT-3002` | error — `tenancy.mode` or `tenancy.resolver.type` is outside its vocabulary, or a per-tenant mode declares no `tenancy.datasources`; the runtime refuses the same at boot. |
 | `TQL-TENANT-4001` | 400 — no tenant could be resolved for the request (with `required: true`). |
 | `TQL-TENANT-4031` | 403 — the resolved tenant has no configured datasource in a per-tenant mode; a file transfer for that tenant is refused the same way, before any transfer row. |
