@@ -639,7 +639,7 @@ Schema for TesseraQL shared decision documents (decisions/*.yml): named decision
 | --- | --- | --- |
 | `type` | string | Inline type of the input. |
 | `domain` | string | Field domain reference declaring the input's type. |
-| `match` | enum: `eq` \| `between` \| `in` \| `bool` \| `subtree` | How row cells compare against this input: eq (default, equality; empty cell = wildcard), between (inclusive range), in (membership in a small fixed set), bool, subtree (the bound org unit is in the cell's subtree; table sources only, resolved through the managed org closure). |
+| `match` | enum: `eq` \| `between` \| `in` \| `bool` \| `subtree` | How row cells compare against this input: eq (default, equality; empty cell = wildcard), between (a numeric range: a..b, >= n, <= n, or the open ends > n, < n), in (membership in a small fixed set), bool, subtree (the bound org unit is in the cell's subtree; table sources only, resolved through the managed org closure). |
 
 ##### decisions.decisions.outputs
 

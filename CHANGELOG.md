@@ -50,6 +50,15 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A decision table's `> n` / `< n` cell is an open end, not an inclusive bound one unit
+  away.** `DecisionTables` compiled a strict comparator to the nearest inclusive bound in the
+  literal's own scale — `> 100000` became `>= 100001` — so on a money column every amount
+  strictly between the two (100000.50, the ordinary case) matched the row below it, silently:
+  the design record's own archetype, the purchase-request and procurement gallery tables. And
+  a unique table partitioned as `<= 100000` / `> 100000` passed the overlap check and then
+  missed at runtime (`TQL-DECISION-4721`) for the same inputs. `Condition.Range` carries each
+  end's inclusivity, the overlap and containment primitives honour it, and the rounding is gone;
+  `decision-tables.md` says what `between` means. `docs/audit-low-leads.md`, slice 5 (G8).
 - **Restarting a confirmed two-factor enrollment no longer turns the factor off without the
   password.** `POST /_tesseraql/account/totp/begin` overwrote a confirmed secret with an
   unconfirmed one and cleared `confirmed_at`, so a session holder — a stolen cookie, an
