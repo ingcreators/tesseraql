@@ -161,6 +161,21 @@ final class InputRules implements LintRule {
                         "statusWhen: status " + arm.status() + " is not an HTTP status"));
             }
         }
+        // headersWhen: guards share statusWhen's language and ResponseHeaders parses them at
+        // build; only statusWhen had the lint (docs/audit-low-leads.md G10).
+        headerGuards(response).forEach((header, when) -> {
+            if (when == null || when.isBlank()) {
+                return;
+            }
+            try {
+                io.tesseraql.core.expr.ExpressionParser.parse(when, context.functions());
+            } catch (RuntimeException ex) {
+                findings.add(new LintFinding(LintCodes.MALFORMED_EXPRESSION, ERROR, source,
+                        "headersWhen: the guard on '" + header + "' does not parse: "
+                                + ex.getMessage(),
+                        context.lineWithin(route.source(), "headersWhen:", header + ":"), null));
+            }
+        });
         route.definition().input().forEach((name, field) -> {
             lintField(source, route, name, field, findings);
             lintElementContract(source, route, name, field, findings);
@@ -308,6 +323,19 @@ final class InputRules implements LintRule {
             }
             lintField(source, route, at, element, findings);
         });
+    }
+
+    /** Both renderers' headersWhen guards (json + html), header name to expression. */
+    private static java.util.Map<String, String> headerGuards(
+            io.tesseraql.yaml.model.ResponseSpec response) {
+        java.util.Map<String, String> guards = new java.util.LinkedHashMap<>();
+        if (response != null && response.json() != null) {
+            guards.putAll(response.json().headersWhen());
+        }
+        if (response != null && response.html() != null) {
+            guards.putAll(response.html().headersWhen());
+        }
+        return guards;
     }
 
     /** Both renderers' statusWhen arms (json + html), empty when absent. */

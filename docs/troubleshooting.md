@@ -89,6 +89,26 @@ The linter reports it, and the runtime refuses to start on it with the same code
 route and the binding; under `dev --watch` the route serves its compile error until the file
 is back.
 
+### `TQL-SQL-2101` / `2102` — an expression or a SQL file does not parse
+
+Lint reports both where they are written: `2102` for a 2-way SQL template the parser cannot
+read (an unterminated directive, a bind without its dummy), `2101` for an expression — a
+`/*%if*/` directive's, a `validate:` rule's, a `statusWhen:`, `headersWhen:`, step `when:`,
+notification `when:`/`recipient:` or workflow guard — naming the line where it has one. A
+string literal knows the escapes `\'`, `\"` and `\\` only, so `'\d'` is `2101`; the regex
+class is written `'\\d'`. A literal `matches()` pattern that does not compile is `2101` too.
+The runtime refuses a request that renders such a file with the same code, so a route that
+answers `2101` on every request has a SQL file the lint would have refused.
+
+### `TQL-SQL-2122` — an expression met an operand it cannot evaluate
+
+A relational comparison (`<`, `>`, `<=`, `>=`) on a `null` or on two values of unrelated
+kinds, arithmetic on a non-number, a division by zero, or a `matches()` pattern bound at
+request time that does not compile. The sentence names the operator and the operand kinds.
+It answers 500 on purpose: the request is ordinary — an optional input left out — and the
+template is what is defective. Guard the site (`minPrice != null && minPrice > 0`), or declare
+the input `required`; a `validate:` rule on an optional field takes the guard as its `when:`.
+
 ### `TQL-YAML-1066` / `1067` — the recipe reads a piece the document does not declare
 
 A `query-json`, `command-json` or `webhook` route answers through `response.json:` or

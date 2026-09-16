@@ -22,7 +22,14 @@ import java.util.List;
  *   call           : FUNCTION '(' or ( ',' or )* ')'
  * </pre>
  *
- * Hand-written with no external dependency to keep {@code tesseraql-core} dependency-free.
+ * <p>A string literal is quoted with {@code '} or {@code "} and knows three escapes —
+ * {@code \'}, {@code \"} and {@code \\}. Any other backslash is a syntax error naming the
+ * doubled spelling, because the lexer used to keep the character and drop the backslash, so a
+ * regex class written the natural way ({@code matches(x, '\d+')}) silently meant {@code d+}
+ * (docs/audit-low-leads.md G13). A {@code matches()} whose pattern is a literal compiles it here,
+ * once: a pattern that does not compile is a parse error the lint and the boot both report.
+ *
+ * <p>Hand-written with no external dependency to keep {@code tesseraql-core} dependency-free.
  */
 public final class ExpressionParser {
 
@@ -219,8 +226,8 @@ public final class ExpressionParser {
                         throw error(first.text() + "() takes " + arity + " argument"
                                 + (arity == 1 ? "" : "s") + ", got " + args.size());
                     }
-                    return new Expr.Call(first.text(), args,
-                            functions.custom(first.text()));
+                    return new Expr.Call(first.text(), args, functions.custom(first.text()),
+                            literalPattern(first.text(), args));
                 }
                 List<String> segments = new ArrayList<>();
                 segments.add(first.text());
@@ -230,6 +237,24 @@ public final class ExpressionParser {
                 }
                 return new Expr.Path(segments);
             }
+        }
+    }
+
+    /**
+     * The compiled pattern of a {@code matches()} whose second operand is a string literal, or
+     * {@code null} when the operand is anything else (compiled per evaluation, never held).
+     */
+    private java.util.regex.Pattern literalPattern(String function, List<Expr> args) {
+        if (!"matches".equals(function) || args.size() != 2
+                || !(args.get(1) instanceof Expr.Literal literal)
+                || !(literal.value() instanceof String pattern)) {
+            return null;
+        }
+        try {
+            return java.util.regex.Pattern.compile(pattern);
+        } catch (java.util.regex.PatternSyntaxException ex) {
+            throw error("matches(): the pattern does not compile: " + ex.getDescription()
+                    + " near index " + ex.getIndex());
         }
     }
 
@@ -322,8 +347,14 @@ public final class ExpressionParser {
             while (index < source.length() && source.charAt(index) != quote) {
                 char c = source.charAt(index);
                 if (c == '\\' && index + 1 < source.length()) {
+                    char escaped = source.charAt(index + 1);
+                    if (escaped != '\'' && escaped != '"' && escaped != '\\') {
+                        throw new TqlException(SYNTAX_ERROR, "Unknown escape '\\" + escaped
+                                + "' in a string literal: the escapes are \\', \\\" and \\\\;"
+                                + " a regex class is written doubled, as in '\\\\d'");
+                    }
                     index++;
-                    sb.append(source.charAt(index));
+                    sb.append(escaped);
                 } else {
                     sb.append(c);
                 }

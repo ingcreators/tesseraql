@@ -28,9 +28,10 @@ named query's `params:` against the live execution context, and says so in its j
 in the repository uses it. It is a wired capability, not a feature.
 
 **Path resolution is plain dotted segments.** `EvaluationContext.resolve` walks map keys,
-getters, and fields, with virtual `size`/`length`/`empty`. There is no indexing and no
-projection: `main.rows[0].id` and "the `id` of every row" are both unsayable. Whatever a param
-binds from a result set, it binds whole.
+a record's own accessors, bean getters and public fields, with virtual `size`/`length`/`empty`
+where a map has no key of that name. There is no indexing and no projection:
+`main.rows[0].id` and "the `id` of every row" are both unsayable. Whatever a param binds from
+a result set, it binds whole.
 
 **`nest:` composes, and only in JSON.** `JsonResponseRenderer.nest` groups a named query's
 rows by one join key and attaches them as a list under each parent. `ResponseSpec.HtmlResponse`

@@ -60,7 +60,9 @@ class ExpressionDepthTest {
         assertThat(eval("startsWith(name, 'sa') && endsWith(name, 'to')", scope))
                 .isEqualTo(true);
         assertThat(eval("matches(name, '[a-z]+')", scope)).isEqualTo(true);
-        assertThat(eval("matches(name, '\\d+')", scope)).isEqualTo(false);
+        // The regex class is spelled doubled: the lexer's escapes are \' \" \\ and nothing else.
+        assertThat(eval("matches(name, '\\\\d+')", scope)).isEqualTo(false);
+        assertThat(eval("matches('42', '\\\\d+')", scope)).isEqualTo(true);
         // Null-safe: predicates are false, transforms are null.
         assertThat(eval("contains(missing, 'x')", Map.of())).isEqualTo(false);
         assertThat(eval("lower(missing)", Map.of())).isNull();

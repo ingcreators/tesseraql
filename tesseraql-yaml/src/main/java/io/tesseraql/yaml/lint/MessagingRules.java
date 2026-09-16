@@ -147,6 +147,18 @@ final class MessagingRules {
                                 + ex.getMessage()));
             }
         }
+        // recipient: is an expression too (docs/notifications.md), parsed at build by
+        // NotifyEvents; only when: had the lint, so a typo here booted to a bare sentence
+        // (docs/audit-low-leads.md G10).
+        if (spec.recipient() != null && !spec.recipient().isBlank()) {
+            try {
+                io.tesseraql.core.expr.ExpressionParser.parse(spec.recipient(), functions);
+            } catch (RuntimeException ex) {
+                findings.add(new LintFinding(LintCodes.MALFORMED_EXPRESSION, ERROR, source,
+                        "Notification '" + id + "' has a malformed recipient: expression: "
+                                + ex.getMessage()));
+            }
+        }
         // An inbox message must be addressed (roadmap Phase 49): without a recipient there
         // is no user to deliver to, so this fails the build instead of dead-lettering.
         if (spec.channel() != null && "inbox".equals(config.getString(

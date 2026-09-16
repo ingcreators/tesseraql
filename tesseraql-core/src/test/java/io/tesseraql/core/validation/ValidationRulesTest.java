@@ -113,6 +113,43 @@ class ValidationRulesTest {
     }
 
     @Test
+    void anUnguardedRuleOnAnAbsentOptionalFieldIsRefusedAsCoded() {
+        // docs/audit-low-leads.md G11: the rule answered 422 with the field present and, with it
+        // absent, a raw IllegalArgumentException the command processor wrapped as TQL-SQL-2600.
+        // The refusal is coded now, names the guard, and is not a violation — a false here would
+        // report an optional field the caller left out as invalid.
+        ValidationRules rules = new ValidationRules(List.of(ValidationRules.expression(
+                "priceCap", null, "body.minPrice < 1000", "minPrice", null, null)));
+
+        assertThatThrownBy(() -> rules.evaluate(Map.of("body", Map.of("name", "x")), null,
+                ScopeResolver.UNSUPPORTED, null, null))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("TQL-SQL-2122")
+                .hasMessageContaining("the left operand is null");
+    }
+
+    @Test
+    void theDocumentedWhenGuardSkipsTheComparisonOnAnAbsentField() throws Exception {
+        ValidationRules rules = new ValidationRules(List.of(ValidationRules.expression(
+                "priceCap", "body.minPrice != null", "body.minPrice < 1000", "minPrice", null,
+                null)));
+
+        assertThat(rules.evaluate(Map.of("body", Map.of("name", "x")), null,
+                ScopeResolver.UNSUPPORTED, null, null)).isEmpty();
+    }
+
+    @Test
+    void aBadLiteralPatternFailsAtCompileTime() {
+        // docs/audit-low-leads.md unfiled 11: it used to pass lint and boot and throw a raw
+        // PatternSyntaxException on every request.
+        assertThatThrownBy(() -> ValidationRules.expression("zip", null,
+                "matches(body.zip, '(')", "zip", null, null))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("TQL-SQL-2101")
+                .hasMessageContaining("does not compile");
+    }
+
+    @Test
     void malformedExpressionFailsAtCompileTime() {
         assertThatThrownBy(() -> ValidationRules.expression("r", null, "body.x >", "x", null,
                 null))

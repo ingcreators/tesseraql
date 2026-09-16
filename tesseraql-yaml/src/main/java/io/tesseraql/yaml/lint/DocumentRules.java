@@ -146,7 +146,7 @@ final class DocumentRules {
         }
         List<SqlNode> nodes = context.sqlNodes(sqlFile);
         if (nodes == null) {
-            return; // SQL syntax / IO errors surface through other checks
+            return; // unreadable or unparseable: the context reported it
         }
         Set<String> placeholders = new LinkedHashSet<>();
         SqlNode.walk(nodes, node -> {
@@ -207,7 +207,7 @@ final class DocumentRules {
             }
             List<SqlNode> nodes = context.sqlNodes(slot.file());
             if (nodes == null) {
-                continue; // SQL syntax / IO errors surface through other checks
+                continue; // unreadable or unparseable: the context reported it
             }
             walkNegatedLists(nodes, List.of(), source, findings);
         }
@@ -777,6 +777,29 @@ final class DocumentRules {
         findings.add(new LintFinding(LintCodes.UNDECLARED_DATASOURCE, ERROR, source,
                 "datasource '" + name + "' is not declared under tesseraql.datasources",
                 context.lineOf(sourceFile, "datasource:"), null));
+    }
+
+    /**
+     * A step's {@code when:} guard parses ({@code TQL-SQL-2101}), on a route, a tool and a
+     * consumer alike. The compiler parsed it at build and no lint did, so a typo passed
+     * {@code lint} and {@code admission} and stopped the boot with a bare sentence naming no
+     * file, step or key (docs/audit-low-leads.md G10); the decision-consumption walk parses the
+     * same guard and skips one that does not parse, which is this rule's to report.
+     */
+    static void lintStepGuards(LintContext context, Path document, RouteDefinition definition,
+            String source, List<LintFinding> findings) {
+        definition.steps().forEach((name, step) -> {
+            if (step.when() == null || step.when().isBlank()) {
+                return;
+            }
+            try {
+                io.tesseraql.core.expr.ExpressionParser.parse(step.when(), context.functions());
+            } catch (RuntimeException ex) {
+                findings.add(new LintFinding(LintCodes.MALFORMED_EXPRESSION, ERROR, source,
+                        "Step '" + name + "' has a malformed when: expression: " + ex.getMessage(),
+                        context.lineWithin(document, "steps:", "id: " + name, "when:"), null));
+            }
+        });
     }
 
     static void lintRuleExpression(String ruleId, String expression, String source,

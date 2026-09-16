@@ -153,7 +153,7 @@ final class LintSupport {
 
     /**
      * The distinct bind expressions matching {@code matches} across a document's parseable SQL
-     * files. Unparseable SQL is its own lint's concern and contributes nothing here.
+     * files. A file that does not parse is the context's finding and contributes nothing here.
      */
     static Set<String> ambientBinds(LintContext context, Path source, RouteDefinition def,
             java.util.function.Predicate<String> matches) {

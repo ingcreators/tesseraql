@@ -191,7 +191,7 @@ validate:
     code: duplicate
     message: members.email.duplicate # a message key (see internationalization.md)
   dateOrder:
-    when: body.endDate != null       # optional guard; a falsy guard skips the rule
+    when: body.endDate != null       # the guard an optional field needs: `>=` on a null is refused
     rule: body.endDate >= body.startDate   # must hold for the input to be valid
     field: endDate
     code: end-before-start
@@ -217,7 +217,9 @@ violation, so a form repaints once. Each rule declares exactly one of:
 
 - `rule:` — a cross-field expression in the core expression language: comparisons, `&&`/`||`/`!`, dotted paths over `params`, `body`, `query`, `path`,
   `principal`, `tenant` (`params` and `query` name the same map — the examples here use
-  `params`). The language is whitelist-only — no method calls, no side effects.
+  `params`). The language is whitelist-only — no call syntax, no side effects. A rule that
+  compares an optional field needs its `when:` guard: `<`/`>` on an absent value is a coded
+  refusal, not a violation (see [the expression language](#the-expression-language)).
 - `file:` — a validation SQL file, a plain SQL-tool-runnable 2-way SELECT. It executes on
   the command's connection, inside the transaction, so it sees a consistent snapshot (and
   may lock rows with `FOR UPDATE` for balance checks). A non-SELECT fails at route build
@@ -334,16 +336,30 @@ share one deliberately small, side-effect-free expression language. It covers th
 arithmetic and string logic LOB rules actually need:
 
 - **Operators** (by precedence): `||`, `&&`, `==`/`!=`, `<`/`>`/`<=`/`>=`, `+`/`-`,
-  `*`/`/`/`%`, unary `!`/`-`, and `(...)` grouping. Arithmetic is decimal-exact
-  (`BigDecimal` — `qty * price <= budget` carries no float drift); `+` concatenates when
-  either side is a string; a `null` operand propagates `null`.
+  `*`/`/`/`%`, unary `!`/`-`, and `(...)` grouping. Arithmetic and comparison are
+  decimal-exact (`BigDecimal` — `qty * price <= budget` carries no float drift, and two
+  `bigint` keys past 2^53 stay apart); `+` concatenates when either side is a string. A
+  `null` operand propagates `null` through arithmetic, and `==`/`!=` are null-safe. A
+  relational comparison (`<`, `>`, `<=`, `>=`) on a `null`, or on two values of unrelated
+  kinds, is refused with `TQL-SQL-2122` — a 500, because the template is what is defective:
+  guard the site (`body.minPrice != null && body.minPrice < 1000`) or declare the input
+  `required`. So is arithmetic on a non-number and a division by zero.
+- **String literals** are quoted with `'` or `"` and know three escapes: `\'`, `\"` and
+  `\\`. Any other backslash is a parse error, so a regex class is written doubled —
+  `matches(body.zip, '\\d{3}-\\d{4}')`. A literal `matches()` pattern is compiled at build,
+  and one that does not compile is a lint error (`TQL-SQL-2101`).
 - **Functions** (whitelist-only — unknown names and wrong arities fail the build):
   the built-ins `length(s)`, `lower(s)`, `upper(s)`, `trim(s)`, `contains(s, sub)`,
   `startsWith(s, p)`, `endsWith(s, p)`, `matches(s, regex)`, `abs(n)`, `round(n)`,
   `floor(n)`, `ceil(n)`, `min(a, b)`, `max(a, b)`, `coalesce(a, b)`, plus any
   [custom functions](#custom-functions) installed from the app's modules. Built-in
   predicates are null-safe (`false` on null), transforms propagate `null`.
-- There is no method invocation, reflection, or assignment.
+- **Paths** read a map key, a record's own accessors (`principal.claim.<name>`,
+  `tenant.id`), a bean getter (`created.year`) or a public field, and nothing else. There is
+  no call syntax on a value and no assignment; a method every object has, a static method
+  or a static field answers `null` like any absent property (`docs/audit-low-leads.md`, G15).
+  An input or a column named `size`, `length` or `empty` is read as itself; the virtual
+  property of that name answers only where no such key exists.
 
 ```yaml
 validate:
