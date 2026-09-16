@@ -65,6 +65,9 @@ class LintRegistryOrderTest {
                         // Configuration and the whole-app views over it.
                         "PreferenceRules",
                         "OrgUnitRules",
+                        // The tenancy block's vocabulary beside the org-unit mode's
+                        // (docs/audit-low-leads.md G25).
+                        "TenancyConfigRules",
                         "WorkflowRules",
                         "AttachmentRules",
                         "MailRules",
