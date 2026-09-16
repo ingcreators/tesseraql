@@ -21,7 +21,7 @@ import java.util.Set;
  * per operation and published under the {@code decision.*} namespace.
  *
  * <p>A row is the <em>conjunction</em> of its cells; alternatives are separate rows resolved in
- * authored order. Cells are comparisons — equality, an inclusive range, membership in a small
+ * authored order. Cells are comparisons — equality, a numeric range, membership in a small
  * fixed set, a boolean — never expressions, so overlap between rows stays computable and a
  * table-backed source (a later slice) can evaluate the same semantics as one generated SELECT.
  * A derivation ("the caller holds the officer role") belongs in the {@code decide:} wiring,
@@ -101,25 +101,45 @@ public final class DecisionTables {
             }
         }
 
-        /** An inclusive range; a null end is open. At least one end is set. */
-        record Range(BigDecimal min, BigDecimal max) implements Condition {
+        /**
+         * A numeric interval; a null end is unbounded, and each set end is inclusive or not as
+         * the cell spelled it ({@code >= n} against {@code > n}). At least one end is set.
+         *
+         * <p>The ends are carried, not rounded away: a {@code > 100000} cell used to compile to
+         * the inclusive bound one unit up in the literal's own scale ({@code >= 100001}), so
+         * 100000.50 on a money column matched the row below it, and a unique table of
+         * {@code <= n} / {@code > n} passed the overlap check and then missed at runtime
+         * (docs/audit-low-leads.md, G8). Open ends cost the overlap primitives one comparison
+         * each on a totally ordered domain; nothing there needs integrality.
+         */
+        record Range(BigDecimal min, boolean minInclusive, BigDecimal max, boolean maxInclusive)
+                implements
+                    Condition {
+
+            /** Both ends inclusive: {@code a..b}, {@code >= a}, {@code <= b}, or one point. */
+            static Range closed(BigDecimal min, BigDecimal max) {
+                return new Range(min, true, max, true);
+            }
+
             @Override
             public boolean matches(Object candidate) {
                 BigDecimal number = toNumber(candidate);
                 if (number == null) {
                     return false;
                 }
-                return (min == null || number.compareTo(min) >= 0)
-                        && (max == null || number.compareTo(max) <= 0);
+                return aboveLower(number, min, minInclusive) && belowUpper(number, max,
+                        maxInclusive);
             }
 
             @Override
             public boolean intersects(Condition other) {
                 return switch (other) {
-                    case Range range -> (min == null || range.max() == null
-                            || range.max().compareTo(min) >= 0)
-                            && (max == null || range.min() == null
-                                    || range.min().compareTo(max) <= 0);
+                    // Two intervals meet when each one's lower end sits below the other's
+                    // upper end — at the same point only when both of those ends are closed.
+                    case Range range -> lowerBelowUpper(min, minInclusive, range.max(),
+                            range.maxInclusive())
+                            && lowerBelowUpper(range.min(), range.minInclusive(), max,
+                                    maxInclusive);
                     default -> other.intersects(this);
                 };
             }
@@ -127,12 +147,68 @@ public final class DecisionTables {
             @Override
             public boolean containedIn(Condition other) {
                 return switch (other) {
-                    case Range range -> (range.min() == null
-                            || (min != null && min.compareTo(range.min()) >= 0))
-                            && (range.max() == null
-                                    || (max != null && max.compareTo(range.max()) <= 0));
+                    // Every value here is in the other: our lower end is at or above theirs
+                    // (at the same point only if theirs is closed or ours is open), and
+                    // symmetrically above.
+                    case Range range -> lowerWithin(min, minInclusive, range.min(),
+                            range.minInclusive())
+                            && upperWithin(max, maxInclusive, range.max(),
+                                    range.maxInclusive());
                     default -> false;
                 };
+            }
+
+            private static boolean aboveLower(BigDecimal number, BigDecimal lower,
+                    boolean inclusive) {
+                if (lower == null) {
+                    return true;
+                }
+                int compared = number.compareTo(lower);
+                return compared > 0 || (compared == 0 && inclusive);
+            }
+
+            private static boolean belowUpper(BigDecimal number, BigDecimal upper,
+                    boolean inclusive) {
+                if (upper == null) {
+                    return true;
+                }
+                int compared = number.compareTo(upper);
+                return compared < 0 || (compared == 0 && inclusive);
+            }
+
+            private static boolean lowerBelowUpper(BigDecimal lower, boolean lowerInclusive,
+                    BigDecimal upper, boolean upperInclusive) {
+                if (lower == null || upper == null) {
+                    return true;
+                }
+                int compared = lower.compareTo(upper);
+                return compared < 0 || (compared == 0 && lowerInclusive && upperInclusive);
+            }
+
+            /** Whether the lower end (inner) starts at or after the other lower end (outer). */
+            private static boolean lowerWithin(BigDecimal inner, boolean innerInclusive,
+                    BigDecimal outer, boolean outerInclusive) {
+                if (outer == null) {
+                    return true;
+                }
+                if (inner == null) {
+                    return false;
+                }
+                int compared = inner.compareTo(outer);
+                return compared > 0 || (compared == 0 && (outerInclusive || !innerInclusive));
+            }
+
+            /** Whether the upper end (inner) stops at or before the other upper end (outer). */
+            private static boolean upperWithin(BigDecimal inner, boolean innerInclusive,
+                    BigDecimal outer, boolean outerInclusive) {
+                if (outer == null) {
+                    return true;
+                }
+                if (inner == null) {
+                    return false;
+                }
+                int compared = inner.compareTo(outer);
+                return compared < 0 || (compared == 0 && (outerInclusive || !innerInclusive));
             }
         }
 
@@ -359,14 +435,13 @@ public final class DecisionTables {
 
     /**
      * Parses a range cell: a plain number (an exact point), {@code a..b} (inclusive both), or
-     * one comparator {@code >= n}, {@code > n}, {@code <= n}, {@code < n}. Exclusive ends
-     * compile to the nearest representable inclusive bound by scale, keeping the condition a
-     * closed interval the overlap check can reason about.
+     * one comparator {@code >= n}, {@code > n}, {@code <= n}, {@code < n} — the strict ones
+     * are open ends, kept as such.
      */
     private static Condition range(String decision, String input, Object literal) {
         if (literal instanceof Number number) {
             BigDecimal point = new BigDecimal(number.toString());
-            return new Condition.Range(point, point);
+            return Condition.Range.closed(point, point);
         }
         String text = literal instanceof String s ? s.trim() : null;
         if (text == null || text.isEmpty()) {
@@ -384,24 +459,24 @@ public final class DecisionTables {
                     throw new TqlException(ROW, "Decision '" + decision + "' cell '" + input
                             + "': range '" + text + "' is inverted");
                 }
-                return new Condition.Range(min, max);
+                return Condition.Range.closed(min, max);
             }
             if (text.startsWith(">=")) {
-                return new Condition.Range(new BigDecimal(text.substring(2).trim()), null);
+                return Condition.Range.closed(new BigDecimal(text.substring(2).trim()), null);
             }
             if (text.startsWith("<=")) {
-                return new Condition.Range(null, new BigDecimal(text.substring(2).trim()));
+                return Condition.Range.closed(null, new BigDecimal(text.substring(2).trim()));
             }
             if (text.startsWith(">")) {
-                return new Condition.Range(
-                        exclusive(new BigDecimal(text.substring(1).trim()), true), null);
+                return new Condition.Range(new BigDecimal(text.substring(1).trim()), false,
+                        null, true);
             }
             if (text.startsWith("<")) {
-                return new Condition.Range(null,
-                        exclusive(new BigDecimal(text.substring(1).trim()), false));
+                return new Condition.Range(null, true,
+                        new BigDecimal(text.substring(1).trim()), false);
             }
             BigDecimal point = new BigDecimal(text);
-            return new Condition.Range(point, point);
+            return Condition.Range.closed(point, point);
         } catch (NumberFormatException ex) {
             throw new TqlException(ROW, badRange(decision, input, literal));
         }
@@ -411,12 +486,6 @@ public final class DecisionTables {
         return "Decision '" + decision + "' cell '" + input + "': a between cell is a number,"
                 + " 'a..b', or one comparator ('>= n', '> n', '<= n', '< n'), not '" + literal
                 + "'";
-    }
-
-    /** The neighbouring inclusive bound of an exclusive end, one unit in the bound's own scale. */
-    private static BigDecimal exclusive(BigDecimal bound, boolean lower) {
-        BigDecimal ulp = BigDecimal.ONE.movePointLeft(bound.scale());
-        return lower ? bound.add(ulp) : bound.subtract(ulp);
     }
 
     private static boolean sameValue(Object cell, Object candidate) {

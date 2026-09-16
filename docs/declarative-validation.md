@@ -302,7 +302,7 @@ decide:
     params: { amount: params.amount }
 ```
 
-A row is the conjunction of its cells — equality, an inclusive range (`between`),
+A row is the conjunction of its cells — equality, a numeric range (`between`),
 membership in a small set (`in`), a boolean, or an org-subtree test (`subtree`, table
 sources) — and an absent cell is a wildcard. Alternatives are separate rows; derivations
 ("the caller holds the officer role") belong in the `decide:` wiring, which is an

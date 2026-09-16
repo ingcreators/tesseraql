@@ -61,6 +61,84 @@ class DecisionTablesTest {
                 .containsEntry("route", "auto");
     }
 
+    /**
+     * A strict comparator is an open end, whatever the scale of the literal or the input
+     * (docs/audit-low-leads.md, G8). {@code > 100000} used to compile to {@code >= 100001} —
+     * one unit in the literal's own scale — so every amount strictly between the two, the
+     * ordinary case on a money column, matched the row below it.
+     */
+    @Test
+    void aStrictComparatorIsAnOpenEndAtEveryScale() {
+        DecisionTables.Table table = approvalRoute("first");
+
+        assertThat(table.evaluate(Map.of("category", "travel", "amount", 100000)))
+                .containsEntry("route", "auto");
+        assertThat(table.evaluate(Map.of("category", "travel",
+                "amount", new java.math.BigDecimal("100000.50"))))
+                .containsEntry("route", "director");
+        assertThat(table.evaluate(Map.of("category", "travel",
+                "amount", new java.math.BigDecimal("100000.01"))))
+                .containsEntry("route", "director");
+        assertThat(table.evaluate(Map.of("category", "travel", "amount", 100001)))
+                .containsEntry("route", "director");
+
+        // The upper end, and a literal with its own decimals: the input's scale is unrelated.
+        Map<String, String> inputs = Map.of("deltaPct", "between");
+        DecisionTables.Table lane = DecisionTables.table("lane", inputs, List.of("route"),
+                "first", null, List.of(
+                        new DecisionTables.RowSpec(Map.of("deltaPct", "< 3"),
+                                Map.of("route", "auto")),
+                        new DecisionTables.RowSpec(Map.of(), Map.of("route", "review"))));
+        assertThat(lane.evaluate(Map.of("deltaPct", new java.math.BigDecimal("2.99"))))
+                .containsEntry("route", "auto");
+        assertThat(lane.evaluate(Map.of("deltaPct", 3))).containsEntry("route", "review");
+        DecisionTables.Table scaled = DecisionTables.table("scaled", inputs, List.of("route"),
+                "first", null, List.of(
+                        new DecisionTables.RowSpec(Map.of("deltaPct", "> 100000.00"),
+                                Map.of("route", "director")),
+                        new DecisionTables.RowSpec(Map.of(), Map.of("route", "auto"))));
+        assertThat(scaled.evaluate(Map.of("deltaPct", new java.math.BigDecimal("100000.001"))))
+                .containsEntry("route", "director");
+    }
+
+    /**
+     * A unique table partitioned at a point by {@code <= n} / {@code > n} is what the overlap
+     * check certifies, and it must then answer for every input — the rounding left
+     * {@code (n, n+1)} in neither row, a 4721 miss on a table lint had just passed. Two closed
+     * ends meeting at a point still overlap, and an open end against a closed one does not.
+     */
+    @Test
+    void aPartitionAtAPointAnswersForEveryInputAndTheOverlapCheckSeesOpenEnds() {
+        Map<String, String> inputs = Map.of("amount", "between");
+        DecisionTables.Table partition = DecisionTables.table("partition", inputs,
+                List.of("lane"), "unique", null, List.of(
+                        new DecisionTables.RowSpec(Map.of("amount", "<= 100000"),
+                                Map.of("lane", "low")),
+                        new DecisionTables.RowSpec(Map.of("amount", "> 100000"),
+                                Map.of("lane", "high"))));
+        assertThat(partition.evaluate(Map.of("amount", 100000))).containsEntry("lane", "low");
+        assertThat(partition.evaluate(Map.of("amount", new java.math.BigDecimal("100000.50"))))
+                .containsEntry("lane", "high");
+
+        assertThatThrownBy(() -> DecisionTables.table("touching", inputs, List.of("lane"),
+                "unique", null, List.of(
+                        new DecisionTables.RowSpec(Map.of("amount", "<= 100000"),
+                                Map.of("lane", "low")),
+                        new DecisionTables.RowSpec(Map.of("amount", ">= 100000"),
+                                Map.of("lane", "high")))))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("TQL-DECISION-4714");
+        assertThatThrownBy(() -> DecisionTables.table("open-inside", inputs, List.of("lane"),
+                "unique", null, List.of(
+                        new DecisionTables.RowSpec(Map.of("amount", "< 100001"),
+                                Map.of("lane", "low")),
+                        new DecisionTables.RowSpec(Map.of("amount", "> 100000"),
+                                Map.of("lane", "high")))))
+                .as("(100000, 100001) is in both rows")
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("TQL-DECISION-4714");
+    }
+
     @Test
     void aMissWithoutADefaultRaisesInsteadOfResolvingNull() {
         DecisionTables.Table table = DecisionTables.table("fee",

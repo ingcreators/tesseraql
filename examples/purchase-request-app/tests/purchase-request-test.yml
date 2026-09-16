@@ -87,6 +87,17 @@ tests:
       rows:
         - assignee: approver-1
 
+  # "> 100000" is an open end: the first cent past the threshold routes to finance, as the
+  # column's numeric(12, 2) values do (docs/decision-tables.md, between).
+  - name: a cent past the threshold routes to finance
+    decide:
+      decision: approvalRoute
+    params:
+      amount: 100000.01
+    expect:
+      rows:
+        - assignee: cfo-1
+
   # The submit transition's assignee resolver consumes the approvalRoute decision
   # (decisions/approval.yml): the runtime seeds decision.* under the statement's
   # parameters exactly as this case does explicitly.

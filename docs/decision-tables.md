@@ -195,7 +195,7 @@ priority. Five match kinds cover the LOB patterns:
 | match | cell semantics | YAML row | table columns |
 |---|---|---|---|
 | `eq` (default) | equals; empty cell = wildcard | scalar or absent | one nullable column |
-| `between` | inclusive range; open ends | `">= 10000"`, `"5..10"` | `min`/`max` nullable pair |
+| `between` | a numeric range; an unbounded end is absent, and `> n` / `< n` are open ends — the first cent past `> 100000` is inside, `100000` itself is not, whatever the scale of the literal or the input | `">= 10000"`, `"5..10"`, `"> 100000"` | `min`/`max` nullable pair (both inclusive; a table row has no open end) |
 | `in` | membership in a small fixed set | list | normalized child table |
 | `subtree` | bound org unit is in the cell's subtree | unit id | unit-id column, resolved via `OrgUnitStore` |
 | `bool` | true/false; empty = wildcard | boolean | nullable boolean |
@@ -208,7 +208,9 @@ result as an input.
 
 ## Evaluation
 
-Both sources implement identical semantics:
+Both sources implement identical semantics for what both can express — a table row's
+`min`/`max` are inclusive, so a YAML `> n` has no table-side twin; promote it as `>= n'`
+with the next representable value of the column's own scale, not the literal's:
 
 - **YAML rows** evaluate in memory with the core expression evaluator at the same point
   in the request.
