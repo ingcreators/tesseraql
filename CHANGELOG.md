@@ -67,6 +67,37 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **A declaration is judged once, on both altitudes.** Seven declarations the linter and the
+  boot judged differently — or that neither judged — are one predicate now, reported at lint
+  and refused at boot with the same code and sentence (`docs/audit-low-leads.md` slice 13).
+  A `locale:`/`timezone:` reading the principal names a claim, `principal.claim.<name>`, and
+  nothing else (`TQL-YAML-1063`): `principal.subject` answered a 400 blaming the caller,
+  `principal.zoneinfo` (a forgotten `claim.`) rendered every temporal cell in the platform
+  zone on a lint-clean route, and the undocumented `principal.claims.<name>` spelling is
+  refused there too — in `params:` it stays what a record accessor resolves. A declared
+  input's `default:` is parsed into the declared type and held to the field's constraints
+  where the declaration is read (`TQL-YAML-1072`; a default on an `array` input, which
+  nothing binds, is refused too), and the binder binds the typed value: `type: number,
+  default: abc` linted clean, booted, answered 200 to every request that omitted the input
+  and 500 once bound into a compare, while a quoted `"5"` reached a statement as text. A
+  policy rule naming two of `role`/`permission`/`claim` is refused (`TQL-YAML-1412`): the
+  runtime took the first key and dropped the rest, so `{role: ADMIN, permission:
+  orders.approve}` granted the role and refused the permission holder; a rule with none of
+  the three stays the logged deny-all. `tesseraql.security.jwt.audience` is read once
+  (`JwtAudiences`): `[]`, `""`, `[""]` and `[" "]` are all "no audience" (`TQL-SEC-4048`) —
+  the last two linted clean and booted into a configuration that demanded a token `aud` of
+  `""`, refusing every identity-provider token while the CLI's own mint passed. `after:` on
+  a `query-export` is the export predicate's arm (`TQL-YAML-1041`, lint and boot); the
+  compiler's own lint-silent refusal under `TQL-ROUTE-3101` retires. A `result:` on a
+  `query-export` or `file-export` source is refused (`TQL-YAML-1064`): the export writer
+  reads every source through `columns:` and applied none, so the csv carried the raw text
+  under a lint-clean declaration. `response.file.contentType` declaring a `charset=` other
+  than UTF-8 is refused (`TQL-YAML-1073`) — the body is written as UTF-8 and the header lied
+  — and `response.redirect.location` with whitespace at either end (`TQL-YAML-1074`): a
+  trailing space was `%20` on the wire, a leading one kept the base path off the value and
+  the redirect left the application. `push.as:` placeholders are judged by the grammar the
+  runtime resolves — letters, digits, `_` and `.` — so `{batch.business-date}` is refused
+  instead of delivered literally (`TQL-YAML-1042`).
 - **`test --fail-on-regression` exits 3.** The coverage-regression gate answered 2 — the number
   the CLI's own exit-code table publishes as "nothing ran" — for a run whose suites had all
   passed, while `testing.md` published the same number as the gate: one script could not serve
@@ -236,6 +267,18 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A `result:` on a job's chunk reader or writer refuses the job where it registers.** The
+  0.17.0 note said "a lint error and a boot refusal"; only the lint existed. `tesseraql job
+  run` and the scheduler registered the job, the run reported COMPLETED, and a writer
+  navigating `row.note.sku` on the un-parsed text wrote NULL. `requireJob` judges the chunk
+  arm from the linter's predicate (`TQL-YAML-1064`), before any execution row.
+  `docs/audit-low-leads.md` slice 13 (TS-03).
+- **A command's or a transactional tool's `http:` source applies its `result:` declaration.**
+  The sources fetched before the transaction accepted the key and dropped it, so a declared
+  `date` stayed the partner's text and a declared `json` a string; on a query route the same
+  source was declared. (unfiled 14)
+- **`Principal`'s Javadoc names `principal.subject`.** It offered `principal.sub`, a path that
+  resolves to nothing. (unfiled 33)
 - **`test --report --fail-on-regression` refuses a corrupt `history.json`.** The CLI read the
   unreadable baseline as "no baseline yet", passed the gate unconditionally and overwrote the
   file with a one-entry ring — the O9 defect #652 fixed in the `report` goal and not in the CLI,

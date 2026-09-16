@@ -72,6 +72,49 @@ class AppLinterExportDeclarationsTest {
                 && finding.message().contains("'" + value + "'");
     }
 
+    /**
+     * A principal source is a claim and nothing else (docs/audit-low-leads.md XD-07a): an
+     * attribute answered 400 blaming the caller, a forgotten {@code claim.} rendered every
+     * cell in the platform zone on a lint-clean route, the undocumented {@code claims.} twin
+     * applied it — all refused here as at boot now.
+     */
+    @Test
+    void aPrincipalSourceThatIsNotAClaimIsRefused(@TempDir Path dir) throws Exception {
+        for (String source : List.of("principal.subject", "principal.zoneinfo",
+                "principal.claims.zoneinfo", "principal.claim.")) {
+            assertThat(new AppLinter().lint(route(dir.resolve(source.replace('.', '_')),
+                    "security:\n  auth: session\n",
+                    "  format: csv\n  timezone: " + source + "\n")))
+                    .as(source).anySatisfy(finding -> {
+                        assertThat(refuses("items.dump", "export.timezone", source)
+                                .test(finding)).isTrue();
+                        assertThat(finding.message()).contains("is not a claim",
+                                "principal.claim.<name>");
+                    });
+        }
+        assertThat(new AppLinter().lint(route(dir.resolve("claim"),
+                "security:\n  auth: session\n",
+                "  format: csv\n  timezone: principal.claim.zoneinfo\n")))
+                .noneMatch(finding -> "TQL-YAML-1063".equals(finding.code()));
+    }
+
+    @Test
+    void aSourcedInputsDefaultThatIsNotAZoneIsRefused(@TempDir Path dir) throws Exception {
+        assertThat(new AppLinter().lint(route(dir,
+                "input:\n  tz:\n    type: string\n    default: Asia/Tokio\n",
+                "  format: csv\n  timezone: query.tz\n")))
+                .anySatisfy(finding -> {
+                    assertThat(refuses("items.dump", "export.timezone", "query.tz")
+                            .test(finding)).isTrue();
+                    assertThat(finding.message()).contains("input tz's default:",
+                            "'Asia/Tokio' is not a time-zone id");
+                });
+        assertThat(new AppLinter().lint(route(dir.resolve("tokyo"),
+                "input:\n  tz:\n    type: string\n    default: Asia/Tokyo\n",
+                "  format: csv\n  timezone: query.tz\n")))
+                .noneMatch(finding -> "TQL-YAML-1063".equals(finding.code()));
+    }
+
     // Red on a site that classifies an ABSENT security block as authenticated (principal.*
     // would pass on a route nothing authenticates).
     @Test

@@ -385,6 +385,13 @@ indefinitely (key on mtime+size); `SecurityConfigFactory.parseRule` drops an unr
 rule shape → an all-misspelled policy becomes silent deny-all with no diagnostic; `parseIndex`
 returns `-1` on a bad menu index and the handler reports success doing nothing.
 
+*Addendum 2026-09-16 (`docs/audit-low-leads.md` slice 13, XD-07i): the logged deny-all stays
+the answer for a rule naming none of `role`/`permission`/`claim`. A rule naming two of them was
+the other silence — `parseRule` took the first key and dropped the rest, so `{role: ADMIN,
+permission: orders.approve}` granted the role and refused the permission holder, lint-clean and
+boot-clean. It is refused now, at lint and at boot, from one predicate
+(`PolicyCodes.shapeViolation`, `TQL-YAML-1412`).*
+
 ---
 
 ## Wave T — authoring tooling that loses or hides data

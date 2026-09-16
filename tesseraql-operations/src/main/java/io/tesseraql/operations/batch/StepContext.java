@@ -435,8 +435,10 @@ final class StepContext {
             return template;
         }
         EvaluationContext evaluation = new EvaluationContext(context());
-        java.util.regex.Matcher matcher = java.util.regex.Pattern
-                .compile("\\{([\\p{L}\\p{N}_.]+)}").matcher(template);
+        // The grammar is the lint's (FilenamePlaceholders): a spelling this does not resolve
+        // is one the lint refuses, so nothing is delivered with its braces on.
+        java.util.regex.Matcher matcher = io.tesseraql.yaml.app.FilenamePlaceholders.RESOLVED
+                .matcher(template);
         StringBuilder out = new StringBuilder();
         while (matcher.find()) {
             if (io.tesseraql.core.files.SplitExport.KEY.equals(matcher.group())) {

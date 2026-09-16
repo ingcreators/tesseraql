@@ -482,10 +482,11 @@ class AppLinterRouteExportTest {
     }
 
     @Test
-    void aFollowUpOnAQueryExportIsLeftToTheCompilersOwnRefusal(@TempDir Path dir)
+    void aFollowUpOnAQueryExportIsRefusedAtLintAsAtBoot(@TempDir Path dir)
             throws Exception {
-        // TQL-ROUTE-3101 is the boot's answer to after: on a query-export; a lint 1041 "add the
-        // statement" would send the author into it.
+        // after: on a query-export used to be the boot's own refusal and lint-silent, so a
+        // lint-clean tree did not boot (docs/audit-low-leads.md XD-07d); the predicate
+        // reports it here with the boot's sentence, and never "add the statement".
         Files.createDirectories(dir.resolve("config"));
         Files.writeString(dir.resolve("config/tesseraql.yml"), "tesseraql:\n  app:\n    name: t\n");
         Files.createDirectories(dir.resolve("web/items"));
@@ -511,7 +512,13 @@ class AppLinterRouteExportTest {
                 """);
 
         assertThat(new AppLinter().lint(dir))
-                .noneMatch(finding -> "TQL-YAML-1041".equals(finding.code()));
+                .filteredOn(finding -> "TQL-YAML-1041".equals(finding.code()))
+                .singleElement().satisfies(finding -> {
+                    assertThat(finding.isError()).isTrue();
+                    assertThat(finding.message()).contains("route 'items.dump'", "export.after",
+                            "query-export has no after: hook", "file-export");
+                    assertThat(finding.message()).doesNotContain("after.sql");
+                });
     }
 
     @Test

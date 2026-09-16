@@ -174,7 +174,8 @@ public final class SecurityConfigFactory {
         if (spec instanceof Map<?, ?> map && map.get("anyOf") instanceof List<?> anyOf) {
             for (Object element : anyOf) {
                 if (element instanceof Map<?, ?> rule) {
-                    java.util.Optional<Policy.Rule> parsed = parseRule((Map<String, Object>) rule);
+                    java.util.Optional<Policy.Rule> parsed = parseRule(id,
+                            (Map<String, Object>) rule);
                     if (parsed.isPresent()) {
                         rules.add(parsed.get());
                     } else {
@@ -191,7 +192,20 @@ public final class SecurityConfigFactory {
         return new Policy(id, rules);
     }
 
-    private static java.util.Optional<Policy.Rule> parseRule(Map<String, Object> rule) {
+    /**
+     * One {@code anyOf} rule. A rule naming two of {@code role}/{@code permission}/{@code claim}
+     * is refused first, from the linter's predicate ({@code TQL-YAML-1412}): the first key used
+     * to win silently, so {@code {role: ADMIN, permission: orders.approve}} granted the role and
+     * refused the permission holder (docs/audit-low-leads.md XD-07i).
+     */
+    private static java.util.Optional<Policy.Rule> parseRule(String id,
+            Map<String, Object> rule) {
+        String shape = io.tesseraql.yaml.app.PolicyCodes.shapeViolation(rule);
+        if (shape != null) {
+            throw new io.tesseraql.core.error.TqlException(
+                    io.tesseraql.yaml.app.PolicyCodes.AMBIGUOUS_RULE,
+                    "Policy '" + id + "': " + shape);
+        }
         if (rule.get("role") != null) {
             return java.util.Optional.of(Policy.Rule.ofRole(String.valueOf(rule.get("role"))));
         }
@@ -261,17 +275,13 @@ public final class SecurityConfigFactory {
      * <p>Every other {@code jwt} key is read through {@code getString}, through which a list cannot
      * arrive at all — so this one navigates instead. The claim side and the config side need two
      * different coercions and this is the config half: {@code aud} is string-or-array in the token,
-     * {@code audience} is string-or-list in the YAML, and the model holds a list either way.
+     * {@code audience} is string-or-list in the YAML, and the model holds a list either way. The
+     * reading is {@link io.tesseraql.yaml.app.JwtAudiences}', the linter's, so {@code [""]} is
+     * "no audience" here as it is there (docs/audit-low-leads.md XD-07i).
      */
     private static List<String> audiences(AppConfig config) {
-        Object declared = config.navigate("tesseraql.security.jwt.audience");
-        if (declared instanceof List<?> list) {
-            return stringList(list);
-        }
-        if (declared instanceof String single && !single.isBlank()) {
-            return List.of(single.trim());
-        }
-        return List.of();
+        return io.tesseraql.yaml.app.JwtAudiences.declared(
+                config.navigate("tesseraql.security.jwt.audience"));
     }
 
     private static java.time.Duration duration(AppConfig config, String key) {

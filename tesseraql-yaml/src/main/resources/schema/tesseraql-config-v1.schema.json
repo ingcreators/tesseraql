@@ -151,7 +151,7 @@
             },
             "policies": {
               "type": "object",
-              "description": "Named authorization policies: each grants when any listed role or permission matches.",
+              "description": "Named authorization policies: each grants when any listed rule matches, and a rule is exactly one condition - role, permission or claim (a rule naming two is refused, TQL-YAML-1412).",
               "additionalProperties": {
                 "type": "object",
                 "properties": {

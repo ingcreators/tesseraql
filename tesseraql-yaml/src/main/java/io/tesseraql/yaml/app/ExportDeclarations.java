@@ -23,6 +23,7 @@ import java.util.Arrays;
 import java.util.IllformedLocaleException;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Consumer;
@@ -150,9 +151,17 @@ public final class ExportDeclarations {
      * @param principal    whether a principal can be present (an authenticated route)
      * @param declaredBody whether the request body is limited to declared inputs
      *                     ({@code inputPolicy.unknownFields: reject}, the default)
+     * @param defaults     the declared {@code default:} of each top-level input that has one —
+     *                     the value a source names on every request that omits the input
      */
     public record Site(String app, String subject, Surface surface, Set<String> inputs,
-            boolean principal, boolean declaredBody) {
+            boolean principal, boolean declaredBody, Map<String, Object> defaults) {
+
+        /** A site whose inputs declare no default. */
+        public Site(String app, String subject, Surface surface, Set<String> inputs,
+                boolean principal, boolean declaredBody) {
+            this(app, subject, surface, inputs, principal, declaredBody, Map.of());
+        }
 
         /**
          * The site of a bound route: its recipe's surface, its declared inputs, whether a
@@ -169,9 +178,16 @@ public final class ExportDeclarations {
                     : "file-import".equals(route.recipe())
                             ? Surface.FILE_IMPORT
                             : Surface.QUERY_EXPORT;
+            Map<String, Object> defaults = new java.util.LinkedHashMap<>();
+            route.input().forEach((name, field) -> {
+                if (field.defaultValue() != null) {
+                    defaults.put(name, field.defaultValue());
+                }
+            });
             return new Site(app, "route '" + bounded(route.id()) + "'", surface,
                     route.input().keySet(), authenticated,
-                    route.effectiveInputPolicy().rejectsUnknownFields());
+                    route.effectiveInputPolicy().rejectsUnknownFields(),
+                    java.util.Collections.unmodifiableMap(defaults));
         }
 
         public static Site step(String app, String jobId, String stepId) {
@@ -244,11 +260,19 @@ public final class ExportDeclarations {
         locale(site, "export.locale", spec.locale(), excel, out);
         columns(site, "export.columns", spec.columns(), format, false, out);
         cellReference(site, "export.startCell", spec.startCell(), excel, out);
+        if (site.surface() == Surface.QUERY_EXPORT && spec.after() != null) {
+            // A query-export streams the rows and holds no execution to follow up on; the
+            // hook used to be the compiler's own refusal, lint-silent (export-declarations.md
+            // decision 26 deferred it), so a lint-clean tree did not boot.
+            out.add(new Violation(INCOMPLETE, Kind.INVALID, "export.after",
+                    site.prefix("export.after") + "a query-export has no after: hook - use the"
+                            + " file-export recipe for asynchronous extraction with follow-up"
+                            + " statements"));
+        }
         if (site.surface() == Surface.FILE_EXPORT && spec.after() != null
                 && (spec.after().sql() == null || spec.after().sql().file() == null
                         || spec.after().sql().file().isBlank())) {
-            // Used to escape buildFileExport as a NullPointerException; a query-export's
-            // after: stays the compiler's own refusal (TQL-ROUTE-3101).
+            // Used to escape buildFileExport as a NullPointerException.
             out.add(new Violation(INCOMPLETE, Kind.INVALID, "export.after",
                     site.prefix("export.after") + "a follow-up needs its statement - declare"
                             + " after.sql: { file: ... }"));
@@ -426,7 +450,10 @@ public final class ExportDeclarations {
      */
     public static void requireJob(String app, JobFile job, Consumer<String> warn) {
         DeclaredKinds.require(DeclaredKinds.inputViolations(job.definition()), warn);
+        DeclaredKinds.require(DeclaredKinds.chunkViolations(job.definition()), warn);
         String jobId = job.definition().id();
+        require(InputDefaults.violations(app, "job '" + bounded(jobId) + "'",
+                job.definition().input()), warn);
         Path directory = job.source() == null ? null : job.source().getParent();
         for (PipelineStep step : job.definition().pipeline()) {
             if (step.export() != null) {
@@ -632,6 +659,20 @@ public final class ExportDeclarations {
                 + " request.locale";
     }
 
+    /**
+     * {@code claim.<name>} with a name and no empty segment: the one principal path a zone or a
+     * locale reads ({@code principal.claim.} resolves the whole claim map, because the split
+     * drops the trailing empty segment).
+     */
+    private static boolean isClaimPath(String rest) {
+        if (!rest.startsWith("claim.")) {
+            return false;
+        }
+        String name = rest.substring("claim.".length());
+        return !name.isEmpty() && !name.startsWith(".") && !name.endsWith(".")
+                && !name.contains("..");
+    }
+
     private static void source(Site site, String key, String value, boolean locale,
             List<Violation> out) {
         String shown = "'" + bounded(value) + "'";
@@ -658,6 +699,17 @@ public final class ExportDeclarations {
                             + shown + " reads the principal, but the route is public - no"
                             + " principal is ever bound, so the value would silently be the"
                             + " platform default"));
+                } else if (!isClaimPath(rest)) {
+                    // Only a claim carries a zone or a language tag. An attribute (subject,
+                    // roles) used to reach the request-time judge and answer 400 with the
+                    // sign-in-profile sentence, and a name that resolves to nothing
+                    // (principal.zoneinfo, a forgotten claim.) rendered every temporal cell in
+                    // the platform zone on a lint-clean route (docs/audit-low-leads.md XD-07a).
+                    // The undocumented principal.claims.<name> spelling is refused here too.
+                    out.add(new Violation(INVALID_VALUE, Kind.INVALID, key, site.prefix(key)
+                            + shown + " is not a claim - a principal source is"
+                            + " principal.claim.<name>, the identity provider's claim carrying"
+                            + " the zone or the language tag"));
                 }
             }
             default -> {
@@ -683,6 +735,20 @@ public final class ExportDeclarations {
                                 + shown + " names no declared input - declare input: "
                                 + bounded(input) + ", or the value would silently be the"
                                 + " platform default"));
+                    } else if (next < 0 && site.defaults().get(input) != null) {
+                        // The input's default: is what this source names on every request
+                        // that omits it, and it is the author's literal — judged here as the
+                        // route's own timezone:/locale: literal is, instead of reaching the
+                        // request-time judge and answering 400 as the caller's mistake
+                        // (docs/audit-low-leads.md XD-07b, the filed instance).
+                        String literal = String.valueOf(site.defaults().get(input));
+                        Optional<String> problem = locale
+                                ? localeProblem(literal)
+                                : zoneProblem(literal);
+                        problem.ifPresent(why -> out.add(new Violation(INVALID_VALUE,
+                                Kind.INVALID, key, site.prefix(key) + "input " + bounded(input)
+                                        + "'s default: " + why + " - it is what " + shown
+                                        + " names on every request that omits the input")));
                     }
                 }
             }

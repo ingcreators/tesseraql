@@ -3,8 +3,8 @@ package io.tesseraql.compiler.binding;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
-import io.tesseraql.core.files.ColumnMapping;
-import io.tesseraql.core.files.ColumnValues;
+import io.tesseraql.yaml.app.InputDefaults;
+import io.tesseraql.yaml.app.InputValues;
 import io.tesseraql.yaml.model.InputField;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -16,8 +16,11 @@ import java.util.function.Function;
  * Validates and coerces declared route inputs into typed effective values (design ch. 6.3, 33.1).
  *
  * <p>Only declared inputs are produced (input whitelisting). Missing inputs fall back to their
- * declared default; required inputs without a value are rejected. Type coercion and the
- * {@code min}/{@code max}/{@code maxLength}/{@code enum} constraints are applied here.
+ * declared default — parsed and constrained like a caller's value, by {@link InputDefaults}, so
+ * a default the declaration refuses never reaches a statement (it is refused at lint and at
+ * boot from the same predicate). Required inputs without a value are rejected. Type coercion
+ * and the {@code min}/{@code max}/{@code maxLength}/{@code enum} constraints are
+ * {@link InputValues}' rules, held here to the field-error envelope.
  *
  * <p>{@code date}/{@code datetime}/{@code number} inputs parse with the negotiated request locale
  * and the field's {@code format} pattern, through the same machinery as file-transfer columns
@@ -139,7 +142,7 @@ public final class InputBinder {
                             "Missing required input '" + name + "'");
                 }
                 if (field.defaultValue() != null) {
-                    effective.put(name, field.defaultValue());
+                    effective.put(name, judged(name, () -> InputDefaults.typed(name, field)));
                 }
                 continue;
             }
@@ -172,32 +175,6 @@ public final class InputBinder {
             String dir = effective.get("dir") instanceof String legacy ? legacy : null;
             effective.put(entry.getKey() + "Sql", sortSql(String.valueOf(wire), dir));
         }
-    }
-
-    /** Parses and validates a sort wire value; returns the canonical form unchanged. */
-    private static String coerceSort(String name, InputField field, String raw) {
-        List<String> allowed = field.columns() == null ? List.of() : field.columns();
-        StringBuilder canonical = new StringBuilder();
-        for (String token : raw.split(",")) {
-            String key = token.strip();
-            if (key.isEmpty()) {
-                continue;
-            }
-            String column = key.startsWith("-") ? key.substring(1) : key;
-            if (!allowed.contains(column)) {
-                throw reject(name, "sort", Map.of("column", column),
-                        "Input '" + name + "' names a column outside its declared sort set: "
-                                + column);
-            }
-            if (!canonical.isEmpty()) {
-                canonical.append(',');
-            }
-            canonical.append(key);
-        }
-        if (canonical.isEmpty()) {
-            throw reject(name, "sort", Map.of(), "Input '" + name + "' carries no sort key");
-        }
-        return canonical.toString();
     }
 
     /** The safe ORDER BY fragment a validated wire value expands to. */
@@ -233,17 +210,19 @@ public final class InputBinder {
     }
 
     private static Object coerce(String name, InputField field, String raw, Locale locale) {
-        String type = field.type() == null ? "string" : field.type();
-        return switch (type) {
-            case "sort" -> coerceSort(name, field, raw);
-            case "integer" -> parseLong(name, raw);
-            case "number" -> field.format() == null
-                    ? parseDouble(name, raw)
-                    : parseFormatted(name, field, "number", raw, locale);
-            case "boolean" -> Boolean.parseBoolean(raw);
-            case "date", "datetime" -> parseFormatted(name, field, type, raw, locale);
-            default -> raw;
-        };
+        return judged(name, () -> InputValues.coerce(name, field, raw, locale));
+    }
+
+    /**
+     * Runs one of {@link InputValues}' judgements and turns its refusal into the field-error
+     * envelope: the rules say what is wrong, this class says it to the caller.
+     */
+    private static Object judged(String name, java.util.function.Supplier<Object> judgement) {
+        try {
+            return judgement.get();
+        } catch (InputValues.Refusal refusal) {
+            throw reject(name, refusal.code(), refusal.params(), refusal.getMessage());
+        }
     }
 
     /**
@@ -311,7 +290,7 @@ public final class InputBinder {
                             "Missing required input '" + path + "'");
                 }
                 if (declared.defaultValue() != null) {
-                    bound.put(fieldName, declared.defaultValue());
+                    bound.put(fieldName, judged(path, () -> InputDefaults.typed(path, declared)));
                 }
                 return;
             }
@@ -389,56 +368,13 @@ public final class InputBinder {
 
     /** Element coercion mirrors the scalar rules; an unparseable element names its index. */
     private static Object coerceElement(String at, String type, Object element) {
-        String text = String.valueOf(element);
-        return switch (type) {
-            case "integer" -> parseLong(at, text);
-            case "number" -> parseDouble(at, text);
-            case "boolean" -> Boolean.parseBoolean(text);
-            default -> element;
-        };
+        return judged(at, () -> InputValues.coerceElement(at, type, element));
     }
 
     private static Object validate(String name, InputField field, Object value,
             io.tesseraql.core.catalog.CatalogStore catalogs) {
-        if (value instanceof Number number) {
-            // Decimal-exact bounds (roadmap Phase 40): 5.9 violates max: 5, and fractional
-            // bounds like min: 0.5 are declarable — no long truncation.
-            java.math.BigDecimal decimal = new java.math.BigDecimal(number.toString());
-            if (field.min() != null && decimal.compareTo(field.min()) < 0) {
-                throw reject(name, "min", Map.of("min", field.min()),
-                        "Input '" + name + "' below minimum " + field.min());
-            }
-            if (field.max() != null && decimal.compareTo(field.max()) > 0) {
-                throw reject(name, "max", Map.of("max", field.max()),
-                        "Input '" + name + "' above maximum " + field.max());
-            }
-        }
+        judged(name, () -> InputValues.constrain(name, field, value));
         if (value instanceof String string) {
-            if (field.maxLength() != null && string.length() > field.maxLength()) {
-                throw reject(name, "maxLength", Map.of("maxLength", field.maxLength()),
-                        "Input '" + name + "' exceeds maxLength " + field.maxLength());
-            }
-            if (field.minLength() != null && string.length() < field.minLength()) {
-                throw reject(name, "minLength", Map.of("minLength", field.minLength()),
-                        "Input '" + name + "' is shorter than minLength " + field.minLength());
-            }
-            if (field.pattern() != null
-                    && !io.tesseraql.core.files.FieldPatterns.compiled(field.pattern())
-                            .matcher(string).matches()) {
-                throw reject(name, "pattern", Map.of("pattern", field.pattern()),
-                        "Input '" + name + "' does not match the declared pattern");
-            }
-            if (field.hasStringFormat()
-                    && !io.tesseraql.core.files.FieldFormats.matches(field.format(), string)) {
-                throw reject(name, field.format(), Map.of(),
-                        "Input '" + name + "' is not a valid " + field.format());
-            }
-            if (field.enumValues() != null && !field.enumValues().isEmpty()
-                    && !field.enumValues().contains(string)) {
-                throw reject(name, "enum",
-                        Map.of("options", String.join(", ", field.enumValues())),
-                        "Input '" + name + "' is not one of " + field.enumValues());
-            }
             validateAgainstCatalog(name, field, string, catalogs);
         }
         return value;
@@ -476,68 +412,6 @@ public final class InputBinder {
     private static boolean offers(io.tesseraql.core.catalog.CodeCatalog catalog, String value) {
         return catalog.options().stream()
                 .anyMatch(entry -> value.equals(String.valueOf(entry.key())));
-    }
-
-    private static long parseLong(String name, String raw) {
-        try {
-            return Long.parseLong(raw.trim());
-        } catch (NumberFormatException ex) {
-            throw reject(name, "integer", Map.of(),
-                    "Input '" + name + "' is not an integer: " + raw);
-        }
-    }
-
-    private static double parseDouble(String name, String raw) {
-        try {
-            return Double.parseDouble(raw.trim());
-        } catch (NumberFormatException ex) {
-            throw reject(name, "number", Map.of(),
-                    "Input '" + name + "' is not a number: " + raw);
-        }
-    }
-
-    /**
-     * What a formatless {@code type: datetime} field accepts, beside the column default.
-     *
-     * <p>{@code ViewFields} renders a datetime field as {@code <input type="datetime-local">},
-     * whose browsers submit {@code 2026-01-01T09:30} — while {@code ColumnValues}' column default
-     * is {@code yyyy-MM-dd HH:mm:ss}, the shape a CSV carries. A field with no {@code format:}
-     * therefore could not round-trip through the widget the framework picks for it, and the
-     * scaffolder only avoided it by always emitting an explicit {@code format:} of its own.
-     *
-     * <p>Tried after the column default rather than instead of it: a caller already posting the
-     * space-separated form keeps working, and this is purely an addition.
-     */
-    private static final String WIDGET_DATETIME = "yyyy-MM-dd'T'HH:mm[:ss]";
-
-    /** Locale-aware parsing through the file-transfer column machinery (mirrors import-side). */
-    private static Object parseFormatted(String name, InputField field, String type, String raw,
-            Locale locale) {
-        try {
-            return ColumnValues.parse(
-                    new ColumnMapping(name, null, null, type, field.format()), raw, locale);
-        } catch (IllegalArgumentException notTheColumnDefault) {
-            if (field.format() == null && "datetime".equals(type)) {
-                try {
-                    return ColumnValues.parse(
-                            new ColumnMapping(name, null, null, type, WIDGET_DATETIME), raw,
-                            locale);
-                } catch (IllegalArgumentException notTheWidgetFormEither) {
-                    throw invalidValue(name, field, type, raw);
-                }
-            }
-            throw invalidValue(name, field, type, raw);
-        }
-    }
-
-    /** The rejection a badly-formatted value earns, naming the declared format when there is one. */
-    private static TqlException invalidValue(String name, InputField field, String type,
-            String raw) {
-        Map<String, Object> params = field.format() == null
-                ? Map.of()
-                : Map.of("format", field.format());
-        return reject(name, type, params,
-                "Input '" + name + "' is not a valid " + type + ": " + raw);
     }
 
     /** The conditional-required rejection ({@code requiredWhen}, roadmap Phase 40). */

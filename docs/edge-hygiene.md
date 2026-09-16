@@ -352,7 +352,14 @@ one's own variant); `V-tab` (`controlAt` refusing HTAB) — exactly the two HTAB
 ### Filed, not fixed (from E3's measurement)
 
 - Item 7's literal-value lints (`response.file.contentType` charset, authored OWS in
-  `location:`) — a different rule per key, not one predicate; filed as before.
+  `location:`) — a different rule per key, not one predicate; filed as before. *Fixed
+  2026-09-16 (`docs/audit-low-leads.md` slice 13, EH-06): one predicate, `ResponseLiterals`,
+  reported at lint and refused at boot — a `charset=` other than UTF-8 is `TQL-YAML-1073` (the
+  body is written as UTF-8; honouring a declared encoding would be its own key, csv-import.md
+  decision 10's shape), whitespace at either end of `redirect.location` is `TQL-YAML-1074`. The
+  measurement found the leading case worse than decision 13's recorded trailing `%20`:
+  `BasePaths.join` leaves a value that does not start with `/` alone, so ` /pol` redirected
+  relative to the current page, outside the application.*
 
 ## E4 — a HEAD is a GET without the body
 

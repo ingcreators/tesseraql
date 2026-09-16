@@ -289,14 +289,18 @@ class ExportDeclarationCompileTest {
     }
 
     @Test
-    void aFollowUpOnAQueryExportKeepsTheCompilersOwnCode(@TempDir Path dir) throws Exception {
-        // after: on a query-export is TQL-ROUTE-3101 ("use the file-export recipe"), never a
-        // 1041 "add the statement" that leads the author straight into 3101.
+    void aFollowUpOnAQueryExportIsThePredicatesRefusal(@TempDir Path dir) throws Exception {
+        // after: on a query-export is the declaration predicate's arm now — the sentence the
+        // linter reports, with the app and the route named — where it used to be this
+        // builder's own code (docs/audit-low-leads.md XD-07d). Never "add the statement".
         assertThatThrownBy(() -> compile(dir, "query-export",
                 "export:\n  format: csv\n  after:\n    timing: extract\n", ""))
                 .isInstanceOf(TqlException.class)
-                .hasMessageContaining("TQL-ROUTE-3101")
-                .satisfies(ex -> assertThat(ex.getMessage()).doesNotContain("TQL-YAML-1041"));
+                .hasMessageContaining("TQL-YAML-1041")
+                .hasMessageContaining("app '")
+                .hasMessageContaining("export.after")
+                .hasMessageContaining("query-export has no after: hook")
+                .satisfies(ex -> assertThat(ex.getMessage()).doesNotContain("after.sql"));
     }
 
     @Test

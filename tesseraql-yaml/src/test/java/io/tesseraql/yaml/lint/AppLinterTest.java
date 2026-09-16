@@ -2966,6 +2966,35 @@ class AppLinterTest {
     }
 
     /**
+     * An audience that says nothing is no audience (docs/audit-low-leads.md XD-07i): an empty
+     * list and a blank string used to lint clean and be refused at boot, and a list of one
+     * blank linted clean, booted, and demanded a token {@code aud} of {@code ""} — every
+     * identity-provider token refused, while the CLI's own mint passed. The reading is the
+     * boot's, so all four spellings are the same error here.
+     */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"audience: []", "audience: \"\"",
+            "audience: [\"\"]", "audience: [\" \"]", "audience: ~"})
+    void flagsJwtConfigWhoseAudienceSaysNothing(String audience, @TempDir Path dir)
+            throws Exception {
+        assertThat(lintWithConfig(dir, """
+                  security:
+                    jwt:
+                      algorithm: RS256
+                      jwksUri: https://idp.example.com/jwks
+                      %s
+                """.formatted(audience))).as(audience)
+                .anyMatch(f -> f.code().equals("TQL-SEC-4048") && f.isError());
+        assertThat(lintWithConfig(dir.resolve("declared"), """
+                  security:
+                    jwt:
+                      algorithm: RS256
+                      jwksUri: https://idp.example.com/jwks
+                      audience: ["", https://app.example.com]
+                """)).noneMatch(f -> f.code().equals("TQL-SEC-4048"));
+    }
+
+    /**
      * The exclusion warning fires for every transport that has not claimed its files
      * (docs/audit-hardening.md Decision 4, docs/camel-removal.md slice 6c).
      *

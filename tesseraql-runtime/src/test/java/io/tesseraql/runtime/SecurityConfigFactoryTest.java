@@ -53,6 +53,54 @@ class SecurityConfigFactoryTest {
                 .isNotNull();
     }
 
+    /**
+     * A rule is one condition (docs/audit-low-leads.md XD-07i, {@code TQL-YAML-1412}): a rule
+     * naming a role and an in-namespace permission used to boot and grant the role while the
+     * permission holder was refused — the first key won silently. Refused here from the
+     * linter's predicate; the one-condition rules around it still parse.
+     */
+    @Test
+    void aRuleNamingTwoConditionsFailsTheBoot() {
+        org.assertj.core.api.Assertions
+                .assertThatThrownBy(() -> SecurityConfigFactory.build(new AppConfig(Map.of(
+                        "tesseraql", Map.of(
+                                "app", Map.of("name", "orders"),
+                                "security", Map.of("policies", Map.of(
+                                        "orders.approve", Map.of("anyOf", List.of(
+                                                Map.of("role", "READER"),
+                                                Map.of("role", "ADMIN",
+                                                        "permission", "orders.approve"))))))))))
+                .isInstanceOf(io.tesseraql.core.error.TqlException.class)
+                .hasMessageContaining("TQL-YAML-1412")
+                .hasMessageContaining("Policy 'orders.approve'")
+                .hasMessageContaining("names role and permission");
+    }
+
+    /**
+     * An audience that says nothing is no audience (docs/audit-low-leads.md XD-07i): {@code [""]}
+     * used to build a configuration demanding a token {@code aud} of {@code ""}, which no
+     * identity provider mints — every bearer request refused while the CLI's own mint passed.
+     * The reading is the linter's, so the four spellings are one refusal.
+     */
+    @Test
+    void anAudienceThatSaysNothingFailsTheBootLikeAnAbsentOne() {
+        for (Object audience : List.of(List.of(), "", List.of(""), List.of(" "))) {
+            org.assertj.core.api.Assertions
+                    .assertThatThrownBy(() -> SecurityConfigFactory.build(new AppConfig(Map.of(
+                            "tesseraql", Map.of("security", Map.of("jwt", Map.of(
+                                    "secret", "dev-only-secret-change-me-in-production",
+                                    "audience", audience)))))))
+                    .as(String.valueOf(audience))
+                    .isInstanceOf(io.tesseraql.core.error.TqlException.class)
+                    .hasMessageContaining("TQL-SEC-4048");
+        }
+        SecurityConfig declared = SecurityConfigFactory.build(new AppConfig(Map.of(
+                "tesseraql", Map.of("security", Map.of("jwt", Map.of(
+                        "secret", "dev-only-secret-change-me-in-production",
+                        "audience", List.of("", " api ")))))));
+        assertThat(declared.jwt().audience()).containsExactly("api");
+    }
+
     @Test
     void anUnrecognizedRuleYieldsAZeroRuleDenyAllPolicy() {
         // `permissions:` (plural) is a typo for `permission:`; the rule is unrecognized and

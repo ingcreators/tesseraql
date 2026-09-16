@@ -69,6 +69,8 @@ final class ToolRules implements LintRule {
         // and steps resolve exactly as a route's do (docs/audit-low-leads.md slice 8).
         RecipeShapeRules.report(context, config, tool.source(), definition,
                 io.tesseraql.yaml.app.RecipeShape.Surface.TOOL, source, findings);
+        ResponseLiteralRules.report(context, config, tool.source(), definition, source,
+                findings);
         RequestSourceRules.report(context, config, tool.source(), definition,
                 io.tesseraql.yaml.app.RecipeShape.Surface.TOOL, source, findings);
         DocumentRules.lintStepGuards(context, tool.source(), definition, source, findings);

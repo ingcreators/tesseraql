@@ -356,9 +356,13 @@ constraint or operational key written on the entry — `maxLength`, `pattern`, `
 and the rest — is refused (`TQL-YAML-1064`); the same key on the entry's domain is simply not
 applied on read.
 
-A declaration applies where a binding publishes rows: a route source and a command step in
-`mode: query`, whose `steps.<name>.rows` get the same treatment. The export reader keeps its own
-`columns:` vocabulary, and the batch readers keep the kind the database declares.
+A declaration applies where a binding publishes rows: a route source — an `http:` source
+included, on a query route, a command route and a transactional tool alike — and a command step
+in `mode: query`, whose `steps.<name>.rows` get the same treatment. The export reader keeps its
+own `columns:` vocabulary, so a `result:` on a `query-export` or `file-export` source is refused
+(`TQL-YAML-1064`, lint and boot) rather than accepted and dropped; the batch readers keep the
+kind the database declares, and a `result:` on a chunk reader or writer refuses the job where it
+registers, with the same code.
 
 A value that cannot be parsed into its kind fails the read with `TQL-SQL-2503`, naming the
 source, the column, the row index and the kind — never silently passed through as text, which

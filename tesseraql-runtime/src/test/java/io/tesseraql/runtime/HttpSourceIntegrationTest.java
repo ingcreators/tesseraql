@@ -78,6 +78,15 @@ class HttpSourceIntegrationTest {
             exchange.getResponseBody().write(body);
             exchange.close();
         });
+        upstream.createContext("/v1/due", exchange -> {
+            byte[] body = """
+                    {"items":[{"sku":"A-1","due":"2026/01/15","note":"{\\"lot\\":7}"}]}
+                    """.getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().set("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, body.length);
+            exchange.getResponseBody().write(body);
+            exchange.close();
+        });
         upstream.start();
         appHome = prepareAppHome(upstream.getAddress().getPort());
         runtime = TesseraqlRuntime.start(appHome, 0);
@@ -125,6 +134,26 @@ class HttpSourceIntegrationTest {
         JsonNode body = MAPPER.readTree(response.body());
         assertThat(body.get("rows")).hasSize(1);
         assertThat(body.get("fx")).isEmpty();
+    }
+
+    /**
+     * A command's {@code http:} source applies its {@code result:} declaration like a query's
+     * (docs/audit-low-leads.md, the {@code result:} sweep): the sources a command fetches before
+     * its transaction used to accept the key and drop it, so a declared date stayed the
+     * partner's text and a declared json stayed a string.
+     */
+    @Test
+    void aCommandsHttpSourceAppliesItsDeclaration() throws Exception {
+        HttpResponse<String> response = HttpClient.newHttpClient().send(HttpRequest.newBuilder(
+                URI.create("http://localhost:" + runtime.port() + "/mark"))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString("{}")).build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertThat(response.statusCode()).as(response.body()).isEqualTo(200);
+        JsonNode body = MAPPER.readTree(response.body());
+        assertThat(body.get("due")).hasSize(1);
+        assertThat(body.get("due").get(0).get("due").asText()).isEqualTo("2026-01-15");
+        assertThat(body.get("due").get(0).get("note").get("lot").asInt()).isEqualTo(7);
     }
 
     /** A reference API keyed by a list: the read side is no longer GET-only. */
@@ -230,6 +259,34 @@ class HttpSourceIntegrationTest {
                     status: 200
                     body:
                       matches: matches.rows
+                """.formatted(upstreamPort));
+        Path mark = target.resolve("web/mark");
+        Files.createDirectories(mark);
+        Files.writeString(mark.resolve("mark.sql"),
+                "update orders set status = 'MARKED' where id = 1\n");
+        Files.writeString(mark.resolve("post.yml"), """
+                version: tesseraql/v1
+                id: orders.mark
+                kind: route
+                recipe: command-json
+                sources:
+                  partner:
+                    http:
+                      url: http://localhost:%d/v1/due
+                      select: items
+                    result:
+                      due: { type: date, format: yyyy/MM/dd }
+                      note: { type: json }
+                steps:
+                  - id: mark
+                    sql:
+                      file: mark.sql
+                      mode: update
+                response:
+                  json:
+                    status: 200
+                    body:
+                      due: partner.rows
                 """.formatted(upstreamPort));
         Path degraded = target.resolve("web/degraded");
         Files.createDirectories(degraded);

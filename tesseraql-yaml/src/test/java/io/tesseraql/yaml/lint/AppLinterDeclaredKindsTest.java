@@ -171,6 +171,106 @@ class AppLinterDeclaredKindsTest {
                         + " language tag the JDK can format"));
     }
 
+    /**
+     * An input's {@code default:} is judged by the input's own rules (docs/audit-low-leads.md
+     * XD-07b, {@code TQL-YAML-1072}): {@code type: number, default: abc} linted clean, booted,
+     * and answered 200 to every request that omitted the input — 500 once bound into a numeric
+     * compare — while a caller sending the same text was refused.
+     */
+    @Test
+    void aDefaultTheInputRefusesIsAnErrorAtItsLine(@TempDir Path dir) throws Exception {
+        List<LintFinding> findings = new AppLinter().lint(app(dir, """
+                input:
+                  n:
+                    type: number
+                    default: abc
+                  dir:
+                    type: string
+                    enum: [asc, desc]
+                    default: up
+                  ok:
+                    type: integer
+                    default: "5"
+                """, ""));
+
+        assertThat(findings).filteredOn(f -> f.code().equals("TQL-YAML-1072")).hasSize(2)
+                .allSatisfy(f -> {
+                    assertThat(f.isError()).isTrue();
+                    assertThat(f.source()).isEqualTo("web/orders/get.yml");
+                    assertThat(f.line()).isNotNull();
+                })
+                .anySatisfy(f -> assertThat(f.message()).contains("route 'orders.list'",
+                        "input.n.default", "'abc'", "not a number"))
+                .anySatisfy(f -> assertThat(f.message()).contains("input.dir.default", "'up'",
+                        "not one of [asc, desc]"));
+    }
+
+    @Test
+    void aJobsInputDefaultIsJudgedLikeARoutes(@TempDir Path dir) throws Exception {
+        Path app = app(dir, "", "");
+        Files.createDirectories(app.resolve("batch/load"));
+        Files.writeString(app.resolve("batch/load/job.yml"), """
+                version: tesseraql/v1
+                id: nightly
+                kind: job
+                recipe: batch-pipeline
+                input:
+                  since:
+                    type: date
+                    default: yesterday
+                pipeline:
+                  - id: load
+                    sql:
+                      file: load.sql
+                      mode: update
+                """);
+        Files.writeString(app.resolve("batch/load/load.sql"),
+                "delete from src where created < /* params.since */'2026-01-01'\n");
+
+        assertThat(new AppLinter().lint(app)).anySatisfy(f -> {
+            assertThat(f.code()).isEqualTo("TQL-YAML-1072");
+            assertThat(f.source()).isEqualTo("batch/load/job.yml");
+            assertThat(f.message()).contains("job 'nightly'", "input.since.default",
+                    "'yesterday'", "not a valid date");
+        });
+    }
+
+    /**
+     * The export recipes apply no declaration (docs/audit-low-leads.md, the {@code result:}
+     * sweep): a {@code result:} on a query-export's source linted clean and booted, and the
+     * csv carried the raw text.
+     */
+    @Test
+    void aDeclarationOnAnExportRecipeIsAnError(@TempDir Path dir) throws Exception {
+        Path app = app(dir, "", "");
+        Files.createDirectories(app.resolve("web/dump"));
+        Files.writeString(app.resolve("web/dump/get.yml"), """
+                version: tesseraql/v1
+                id: orders.dump
+                kind: route
+                recipe: query-export
+                security:
+                  auth: public
+                export:
+                  format: csv
+                sources:
+                  main:
+                    sql:
+                      file: dump.sql
+                    result:
+                      note: { type: json }
+                """);
+        Files.writeString(app.resolve("web/dump/dump.sql"), "select id, note from orders\n");
+
+        assertThat(new AppLinter().lint(app)).anySatisfy(f -> {
+            assertThat(f.code()).isEqualTo(KIND);
+            assertThat(f.isError()).isTrue();
+            assertThat(f.source()).isEqualTo("web/dump/get.yml");
+            assertThat(f.message()).contains("route 'orders.dump' sources.main.result:",
+                    "query-export hands every source to the export writer");
+        });
+    }
+
     @Test
     void aDeclarationOnAChunkReaderIsAnError(@TempDir Path dir) throws Exception {
         Path app = app(dir, "", "    result: {}");

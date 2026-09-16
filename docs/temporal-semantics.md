@@ -409,7 +409,12 @@ dependency-free (decision 13's rule).
   about the rows whatever fetched them — so it applies where a `Binding` publishes rows: a
   route's `sources:` (every recipe that mounts them, tools and prompts included) and a
   command's `steps:` in `mode: query`, whose `steps.<name>.rows` get the same application
-  (`ResultDeclarationProcessor.apply`, one method for both). "The workflow reader, the lookup,
+  (`ResultDeclarationProcessor.apply`, one method for both). *Made precise again 2026-09-16
+  (`docs/audit-low-leads.md` slice 13): "every recipe" was not true. The two export recipes hand
+  every source to the export writer, which reads through `columns:` and applies no declaration,
+  so a `result:` there is refused with the others that publish no rows (`TQL-YAML-1064`, lint
+  and boot); and a command's or a transactional tool's `http:` sources, mounted before the
+  transaction, applied none — they do now, as a query route's do.* "The workflow reader, the lookup,
   the decision table" in decision 20's list have no binding to declare on: the workflow loads
   its document row by key, a `lookup:` borrows a route's SQL and reads three identifier
   columns, a decision table's outputs are typed by their own `domain:`. They keep the seam's
@@ -422,8 +427,11 @@ dependency-free (decision 13's rule).
   predicate (`DeclaredKinds`) at lint and at boot: a `type:` no request binds on `input:`, a
   kind outside json/date/datetime/number on `result:`, a `format:` the kind's parser refuses or
   one on `json`, a `result:` on a binding that publishes no rows (`update`, `call`, a sequence,
-  a spool), and — lint only, jobs have no boot compile of their own here — a `result:` on a
-  chunk reader or writer, which the typed batch readers never apply. The unknown-input-type
+  a spool), and — lint only when T3 shipped, "jobs have no boot compile of their own here",
+  which was inexact even then (`requireJob` existed) and untrue after decision 27; since
+  2026-09-16 the same predicate refuses the job where it registers, `docs/audit-low-leads.md`
+  slice 13 — a `result:` on a chunk reader or writer, which the typed batch readers never
+  apply. The unknown-input-type
   refusal is new behaviour: an application carrying a typo'd type today boots; after T3 it does
   not, and says which field.
 - **The read code is `TQL-SQL-2503`** (decision 15): the message names the source, the column,
@@ -484,7 +492,11 @@ boot (`type: ''`), and `ResultDomainResolutionTest` 3/3 red. Fix — 7/7, and th
   `TQL-YAML-1064`.
 - A `result:` on a job step's own `sql:` arm is an unknown key (`TQL-YAML-1043`, the step's
   creator does not read it); on a chunk reader or writer it is the lint error above and no boot
-  refusal, since a job's chunk compiles at run time.
+  refusal, since a job's chunk compiles at run time. *Fixed 2026-09-16 (`docs/audit-low-leads.md`
+  slice 13, TS-03): `DeclaredKinds.chunkViolations` is one predicate for the lint and for
+  `requireJob`, so `tesseraql job run` and the scheduler refuse the job before an execution row
+  — the 0.17.0 release note's "and a boot refusal" is true now. The measured consequence was a
+  writer navigating `row.note.sku` on the un-parsed text and writing NULL under COMPLETED.*
 - A route's `result:` does not reach a `lookup:` that borrows its SQL, a Studio data browse, or
   the suite runner's own reads — the readers outside a route's pipeline.
 

@@ -76,8 +76,8 @@ filename. A filename outside US-ASCII is sent in RFC 6266's `filename*` form bes
 every query column, column names as headers, and `<route id>.csv` as the filename.
 
 Every recipe reads the same way: `export:` says how rows are written and never what to read, so
-the extraction is a source like any other. An `export.after` block on `query-export` is a
-compile-time error (`TQL-ROUTE-3101`) — follow-up statements need `file-export`.
+the extraction is a source like any other. An `export.after` block on `query-export` is
+refused at lint and at boot (`TQL-YAML-1041`) — follow-up statements need `file-export`.
 
 ## The export: block
 
@@ -156,10 +156,14 @@ sources:
   template whose export declares no locale renders in English, as every locale-less template does.
   The linter warns when a `csv` or `pdf` export declares them over a column list with none; it
   cannot see a column the query derives. Each key stands on its own. A key is a literal such
-  as `ja-JP` or `Asia/Tokyo`, or on a route a request source: `principal.claim.locale`,
+  as `ja-JP` or `Asia/Tokyo`, or on a route a request source: `principal.claim.<name>`,
   `query.tz` naming a declared `input:`, `body.tz` (a declared input, unless
   `inputPolicy.unknownFields: ignore` admits any field), or `request.locale` (the negotiated
-  request locale). Each key falls back on its own: the route's literal, else the request source
+  request locale). A principal source names the identity provider's claim carrying the zone or
+  the language tag, and nothing else: `principal.subject` or a forgotten `claim.` is refused at
+  lint and boot. An input's `default:` is judged as the route's own literal is, because it is
+  what the source names on every request that omits the input. Each key falls back on its own:
+  the route's literal, else the request source
   when it resolves to a value, else the app configuration keys `tesseraql.files.locale` and
   `tesseraql.files.timezone` (literals, never source expressions), else the platform default. A
   job step's declaration is a literal and falls back to the same keys. A request-sourced value
@@ -496,9 +500,8 @@ queries like any other query.
 | --- | --- |
 | `TQL-YAML-1063` | An `export:`, `import:` or `tesseraql.files.*` literal the runtime cannot honour where it reads it — a zone, a language tag, a `csv`/`pdf` column pattern, an import column type, a cell reference, a mixed-case format name, or a request source naming nothing the surface binds. The linter's error and the boot refusal carry the same code |
 | `TQL-YAML-1005` | A declared key the format never reads (`bom:`, `sheet:`, `startCell:`, `template:` on the wrong format, `locale:` on a workbook, a `type:` the export does not render): a lint error, a boot warning. As a warning: a declaration honoured less than it reads |
-| `TQL-YAML-1041` | An incomplete export or import: a `file-export` route with no `export:` block, an `after:` without its statement, `splitBy:` without `{key}`, an export recipe with no `main` source file to read, a `file-import` route with no `import:` block, no `steps:` entry, or a row step naming no `file:`. The linter's error and the boot refusal carry the same code |
+| `TQL-YAML-1041` | An incomplete export or import: a `file-export` route with no `export:` block, an `after:` without its statement or on a `query-export` (which has no hook — only `file-export` supports one), `splitBy:` without `{key}`, an export recipe with no `main` source file to read, a `file-import` route with no `import:` block, no `steps:` entry, or a row step naming no `file:`. The linter's error and the boot refusal carry the same code |
 | `TQL-YAML-1006` | The export names a template that is not there, or the wrong kind of file for the format, at lint and at boot |
-| `TQL-ROUTE-3101` | A `query-export` route declares an `export.after:` block, which only `file-export` supports |
 | `TQL-LD-2801` | No codec for the declared format (the module is not installed) |
 | `TQL-FIELD-2001` | A request-sourced zone or locale the server cannot use (`code: timezone` / `locale`), refused before any SQL runs — 400 |
 | `TQL-LD-2802` | The document could not be written after the extraction ran — a codec, a column format or the spool; the message names the format and the file — 500 |

@@ -135,6 +135,26 @@ class AppLinterPushStepTest {
         }
     }
 
+    /**
+     * The lint judges the grammar the runtime resolves (docs/audit-low-leads.md, the
+     * {@code push.as:} grammar): a placeholder with a hyphen or a space passed as a context
+     * path and was delivered literally, braces and all.
+     */
+    @Test
+    void aPlaceholderTheRuntimeDoesNotResolveIsAnError(@TempDir Path dir) throws Exception {
+        for (String as : List.of("{batch.business-date}.csv", "{steps.extract filename}.csv",
+                "{batch.businessDate!}.csv")) {
+            List<LintFinding> findings = new AppLinter().lint(app(dir,
+                    "      transport: local\n      path: outbox\n"
+                            + "      file: steps.extract.transferId\n      as: \"" + as + "\""));
+            assertThat(findings).as(as).anySatisfy(finding -> {
+                assertThat(finding.code()).isEqualTo("TQL-YAML-1042");
+                assertThat(finding.severity()).isEqualTo("error");
+                assertThat(finding.message()).contains("delivers it literally");
+            });
+        }
+    }
+
     @Test
     void anUndeclaredCredentialWarnsAndTheDeliveredNameStaysBare(@TempDir Path dir)
             throws Exception {

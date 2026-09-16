@@ -140,7 +140,7 @@
               }
             },
             "additionalProperties": false,
-            "description": "A statement run once after the extraction, typically to mark the extracted rows. `file-export` only: on `query-export` it is a build error (TQL-ROUTE-3101), because a synchronous download has no transaction to hang it on."
+            "description": "A statement run once after the extraction, typically to mark the extracted rows. `file-export` only: on `query-export` it is refused at lint and boot (TQL-YAML-1041), because a synchronous download has no transaction to hang it on."
           },
           "maxRows": {
             "type": "integer",
@@ -430,7 +430,7 @@
           "description": "Refuse the request when this field is absent."
         },
         "default": {
-          "description": "The value bound when the request omits the field."
+          "description": "The value bound when the request omits the field, parsed into the declared type and held to the field's constraints like a caller's value (TQL-YAML-1072 at lint and boot when it is not one the field accepts); an array input binds no default."
         },
         "min": {
           "type": "number",

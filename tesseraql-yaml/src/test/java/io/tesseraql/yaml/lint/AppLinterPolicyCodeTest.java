@@ -70,6 +70,34 @@ class AppLinterPolicyCodeTest {
         assertThat(findings.get(0).message()).contains("framework's own mark");
     }
 
+    /**
+     * A rule is one condition (docs/audit-low-leads.md XD-07i, {@code TQL-YAML-1412}): a rule
+     * naming a role and an in-namespace permission linted clean, booted, and granted the role
+     * while refusing the permission holder — the runtime took the first key it recognised. The
+     * in-namespace spelling is the one the fence never saw; a rule with none of the three keys
+     * stays the boot's logged deny-all (silent-tolerance O10).
+     */
+    @Test
+    void aRuleNamingTwoConditionsIsRefused(@TempDir Path dir) throws Exception {
+        write(dir, """
+                      orders.approve:
+                        anyOf:
+                          - role: ADMIN
+                            permission: orders.approve
+                          - claim: { name: dept, value: finance }
+                            role: CFO
+                          - permissions: orders.read
+                """);
+        List<LintFinding> findings = new AppLinter().lint(dir).stream()
+                .filter(finding -> "TQL-YAML-1412".equals(finding.code())).toList();
+        assertThat(findings).hasSize(2);
+        assertThat(findings.get(0).level()).isEqualTo(LintFinding.Severity.ERROR);
+        assertThat(findings.get(0).message()).contains("Policy 'orders.approve'",
+                "names role and permission", "one rule per condition");
+        assertThat(findings.get(1).message()).contains("names role and claim");
+        assertThat(fence(new AppLinter().lint(dir))).isEmpty();
+    }
+
     /** Roles stay the deployment's vocabulary: a role rule is never fenced. */
     @Test
     void roleRulesAreNotFenced(@TempDir Path dir) throws Exception {

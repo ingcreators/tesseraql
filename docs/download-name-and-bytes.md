@@ -294,6 +294,12 @@ value — `location: "/foo "` now lands on `/foo%20`, stated under *What this br
 `design-4b.md` §1.9, §2 item 11, §9; W16-W23, W29*, W37, W41 (`noBackstop`, `noC0`, `nodel`,
 `overWideC0`, `bs3xx`, `nohx`, `hdrNameCase`).
 
+*Addendum 2026-09-16 (`docs/audit-low-leads.md` slice 13, EH-06): the trimming stays rejected;
+the literal is refused instead, at lint and at boot (`TQL-YAML-1074`, `ResponseLiterals`). The
+leading case this decision did not consider is the reason it is a refusal and not a cosmetic:
+`BasePaths.join` applies the app prefix only to a value starting with `/`, so `location: " /foo"`
+went out as `Location: %20/foo` — relative to the current page, outside the application.*
+
 ### 14 — The login bounce carries the query once
 
 `ErrorResponseRenderer:251-253`: `uri()` → `path()` (the normalized path — dot segments resolved,
@@ -890,7 +896,9 @@ Every unfiled defect the measurement surfaced, with its destination (the measure
   `docs/audit-low-leads.md` slice 9; the MCP transport never wrote a configured value);
   a literal-value lint at `ExportRules:189`'s seam for `export.filename`, `response.stream.filename`,
   `redirect.location` and `response.file.contentType` (#7 — `charset=Shift_JIS` over UTF-8 bytes;
-  an authored `location:` with OWS); the `headers:` `Content-Disposition` injection and F125
+  an authored `location:` with OWS — both refused at lint and boot since `docs/audit-low-leads.md`
+  slice 13, `TQL-YAML-1073`/`TQL-YAML-1074`; `export.filename` and `response.stream.filename`
+  stay filed); the `headers:` `Content-Disposition` injection and F125
   mangling (#15 — the helper does not run there; a lint since `docs/audit-low-leads.md` slice 9,
   `TQL-SEC-4153`); the `HX-Trigger` toast escape (#16 — one flag on
   a dedicated mapper, its own small pull request or here); an IDN host in an absolute `location:`

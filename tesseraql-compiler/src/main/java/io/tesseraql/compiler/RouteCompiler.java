@@ -44,8 +44,6 @@ public final class RouteCompiler {
             .getLogger(RouteCompiler.class);
 
     private static final TqlErrorCode UNSUPPORTED_RECIPE = new TqlErrorCode(TqlDomain.ROUTE, 3100);
-    /** TQL-ROUTE-3101: a query-export route declares an after: hook, which needs file-export. */
-    private static final TqlErrorCode INVALID_EXPORT = new TqlErrorCode(TqlDomain.ROUTE, 3101);
     private static final TqlErrorCode INVALID_REVIEW = new TqlErrorCode(TqlDomain.ROUTE, 3118);
     /** TQL-ROUTE-3112: a non-main command transaction cannot carry main-anchored features. */
     private static final TqlErrorCode MAIN_ANCHORED = new TqlErrorCode(TqlDomain.ROUTE, 3112);
@@ -516,6 +514,7 @@ public final class RouteCompiler {
         RouteDefinition definition = routeFile.definition();
         requireRecipeShape(definition, io.tesseraql.yaml.app.RecipeShape.Surface.ROUTE);
         requireRequestSources(definition, io.tesseraql.yaml.app.RecipeShape.Surface.ROUTE);
+        requireResponseLiterals(definition);
         requireRotationHonoured(definition);
         requireLockHonoured(definition, null);
         refuseWriteKeysOnSources(definition);
@@ -737,11 +736,19 @@ public final class RouteCompiler {
      * refuses, a {@code result:} on a binding that publishes no rows — from the predicate the
      * linter reports from, with one code ({@code TQL-YAML-1064}).
      */
-    private static void requireDeclaredKinds(RouteDefinition definition) {
+    private void requireDeclaredKinds(RouteDefinition definition) {
         java.util.List<io.tesseraql.yaml.app.DeclaredKinds.Violation> violations = new java.util.ArrayList<>(
                 io.tesseraql.yaml.app.DeclaredKinds.inputViolations(definition));
         violations.addAll(io.tesseraql.yaml.app.DeclaredKinds.resultViolations(definition));
         io.tesseraql.yaml.app.DeclaredKinds.require(violations, LOG::warn);
+        // An input's default: is the value every omitting request binds; it is held to the
+        // input's own type and constraints here, from the linter's predicate, instead of
+        // reaching a statement raw (docs/audit-low-leads.md XD-07b).
+        io.tesseraql.yaml.app.ExportDeclarations.require(
+                io.tesseraql.yaml.app.InputDefaults.violations(appName, "route '"
+                        + io.tesseraql.yaml.app.ExportDeclarations.bounded(definition.id())
+                        + "'", definition.input()),
+                LOG::warn);
     }
 
     /**
@@ -771,6 +778,19 @@ public final class RouteCompiler {
             io.tesseraql.yaml.app.RecipeShape.Surface surface) {
         io.tesseraql.yaml.app.ExportDeclarations.require(
                 io.tesseraql.yaml.app.RequestSources.violations(appName, definition, surface),
+                LOG::warn);
+    }
+
+    /**
+     * The response literals the edge writes as given, refused before any renderer is built
+     * (docs/audit-low-leads.md EH-06): a file response's {@code charset=} the body is not
+     * written in — the text is UTF-8 wherever it is encoded — and a redirect location with
+     * whitespace at either end, which the base-path join leaves alone when it does not start
+     * with {@code /}. The predicate is the linter's, so the two altitudes cannot disagree.
+     */
+    private void requireResponseLiterals(RouteDefinition definition) {
+        io.tesseraql.yaml.app.ExportDeclarations.require(
+                io.tesseraql.yaml.app.ResponseLiterals.violations(appName, definition),
                 LOG::warn);
     }
 
@@ -886,15 +906,20 @@ public final class RouteCompiler {
      * pins them for however long the partner takes, and a failure here fails the request before
      * a row is written or streamed. The mounting site owes the matching guard: whichever loop
      * mounts the remaining sources afterwards must skip the {@code http:} entries, or each
-     * partner is called twice per request.
+     * partner is called twice per request. Each source's {@code result:} declaration is applied
+     * here as {@link #source} applies it — a command's or a transactional tool's {@code http:}
+     * source accepted the key and dropped it (docs/audit-low-leads.md, the {@code result:}
+     * sweep).
      */
     private static PipelineBuilder httpSourcesFirst(PipelineBuilder step,
             RouteDefinition definition) {
         PipelineBuilder fetched = step;
         for (var entry : definition.sources().entrySet()) {
             if (entry.getValue().isHttp()) {
-                fetched = fetched.process(new io.tesseraql.compiler.binding.HttpSourceProcessor(
-                        entry.getKey(), entry.getValue().http()));
+                fetched = declaredKinds(fetched.process(
+                        new io.tesseraql.compiler.binding.HttpSourceProcessor(
+                                entry.getKey(), entry.getValue().http())),
+                        definition.id(), entry.getKey(), entry.getValue());
             }
         }
         return fetched;
@@ -1422,6 +1447,7 @@ public final class RouteCompiler {
         RouteDefinition definition = routeFile.definition();
         requireRecipeShape(definition, io.tesseraql.yaml.app.RecipeShape.Surface.CONSUMER);
         requireRequestSources(definition, io.tesseraql.yaml.app.RecipeShape.Surface.CONSUMER);
+        requireResponseLiterals(definition);
         requireLockHonoured(definition, "a queue consumer");
         refuseWriteKeysOnSources(definition);
         requireDeclaredKinds(definition);
@@ -1476,13 +1502,10 @@ public final class RouteCompiler {
         io.tesseraql.yaml.model.ExportSpec spec = definition.fileExport();
         String routeId = definition.id();
         Path routeDir = routeFile.source().getParent();
-        if (spec != null && spec.after() != null) {
-            throw new TqlException(INVALID_EXPORT, "Route '" + routeId + "': query-export has no"
-                    + " after: hook - use the file-export recipe for asynchronous extraction"
-                    + " with follow-up statements");
-        }
         // The declaration's values, refused (or warned about) before any codec is looked up —
-        // the same predicate the linter reports from (docs/export-declarations.md decision 1).
+        // the same predicate the linter reports from (docs/export-declarations.md decision 1);
+        // an after: hook on this recipe is one of its arms now, where it used to be this
+        // builder's own code and lint-silent (docs/audit-low-leads.md XD-07d).
         requireValidExport(definition, spec, routeDir);
         String format = spec != null && spec.format() != null ? spec.format() : "csv";
         io.tesseraql.core.files.FileCodec codec = requireCodec(definition, format,
@@ -2124,6 +2147,7 @@ public final class RouteCompiler {
         RouteDefinition definition = toolFile.definition();
         requireRecipeShape(definition, io.tesseraql.yaml.app.RecipeShape.Surface.TOOL);
         requireRequestSources(definition, io.tesseraql.yaml.app.RecipeShape.Surface.TOOL);
+        requireResponseLiterals(definition);
         requireLockHonoured(definition, "an MCP tool");
         refuseWriteKeysOnSources(definition);
         requireDeclaredKinds(definition);

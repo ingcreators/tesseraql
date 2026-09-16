@@ -82,6 +82,8 @@ final class ConsumerRules implements LintRule {
         // (docs/audit-low-leads.md slice 8).
         RecipeShapeRules.report(context, config, consumer.source(), definition,
                 io.tesseraql.yaml.app.RecipeShape.Surface.CONSUMER, source, findings);
+        ResponseLiteralRules.report(context, config, consumer.source(), definition, source,
+                findings);
         RequestSourceRules.report(context, config, consumer.source(), definition,
                 io.tesseraql.yaml.app.RecipeShape.Surface.CONSUMER, source, findings);
         DocumentRules.lintStepGuards(context, consumer.source(), definition, source, findings);
