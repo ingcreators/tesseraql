@@ -329,23 +329,36 @@ public final class RequestBinder implements Step {
         return engine != null && engine.permits(policyId, principal);
     }
 
+    /**
+     * The raw value a declared input binds from: the request's one merged parameter view —
+     * path, then query, then form ({@link io.tesseraql.pipeline.Request#param}) — and after
+     * it a body the edge did not parse as a form: a JSON object, or the {@code Map} a
+     * programmatic caller hands a mounted route.
+     *
+     * <p>The order is declared once, in {@code Request}, and this used to disagree with it:
+     * the body was read before the query, so {@code POST /echo?name=a} with a form field
+     * {@code name=b} bound {@code b} while the record said the query wins
+     * (docs/vertx-native.md decision 2). And after the query this read a request header of
+     * the input's name — a fallback the same decision said was gone. Every declared input on
+     * every route fell back to it: {@code Host} satisfied {@code required: true}, a
+     * {@code Priority: u=0, i} header — what Chrome and Firefox send over h2 — answered 400 to
+     * a shipped example's list page, {@code Cookie} bound the caller's whole cookie header into
+     * SQL. An input is fed by what the route declares; a header a provider needs is a
+     * {@code header.<name>} source on its {@code params:} (docs/audit-low-leads.md slice 9).
+     */
     private String rawValue(String name, Map<String, Object> body, Exchange exchange,
             Map<String, String> fromPath) {
         // A declared input that is also a path parameter is typed by its declaration and
-        // sourced by the URL. Reading the body first here let a field of that name replace the
-        // segment the request was addressed to — in path.*, in params.*, and in every bind
-        // downstream — so a route saying path.id could be handed an id the body chose.
+        // sourced by the URL — path.* is what the router matched, never what the body chose.
         if (fromPath.containsKey(name)) {
             return fromPath.get(name);
         }
-        if (body.containsKey(name) && body.get(name) != null) {
-            return String.valueOf(body.get(name));
+        String declared = exchange.request().param(name);
+        if (declared != null) {
+            return declared;
         }
-        java.util.List<String> query = exchange.request().queryParams().get(name);
-        if (query != null && !query.isEmpty()) {
-            return query.get(0);
-        }
-        return exchange.request().header(name);
+        Object fromBody = body.get(name);
+        return fromBody == null ? null : String.valueOf(fromBody);
     }
 
     /**

@@ -2571,7 +2571,12 @@ class AppLinterTest {
 
     @Test
     void quietOnAWellFormedValidateBlock(@TempDir Path dir) throws Exception {
+        // The field the rule binds is declared: a body.<name> the route does not declare is a
+        // field the mass-assignment guard refuses before the rule runs (TQL-YAML-1071).
         writeCommandRoute(dir, """
+                input:
+                  name:
+                    type: string
                 validate:
                   uniqueName:
                     file: check-name.sql

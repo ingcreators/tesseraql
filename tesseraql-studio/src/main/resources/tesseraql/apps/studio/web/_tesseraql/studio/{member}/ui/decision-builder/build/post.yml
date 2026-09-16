@@ -5,13 +5,7 @@ recipe: query-html
 
 # Generates the decide: YAML referencing one declared decision (pure text; copy into the route).
 input:
-  Cookie:
-    type: string
-    required: false
   _csrf:
-    type: string
-    required: false
-  X-CSRF-Token:
     type: string
     required: false
   decision:
@@ -25,9 +19,9 @@ sources:
       params:
         member: path.member
         shellPermissions: principal.permissions
-        shellCookie: params.Cookie
+        shellCookie: header.Cookie
         shellCsrf: params._csrf
-        shellCsrfHeader: params.X-CSRF-Token
+        shellCsrfHeader: header.X-CSRF-Token
         decision: params.decision
 response:
   html:

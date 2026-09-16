@@ -101,6 +101,20 @@ that names none is `TQL-YAML-1067`. A `file-import` route needs its `import:` bl
 `steps:` entry with a file; an export recipe needs a `main` source with a file to read; each is
 `TQL-YAML-1041`. All are lint errors and boot refusals with the same sentence.
 
+### `TQL-YAML-1069` / `1070` / `1071` — a source that never binds
+
+An input is fed by what the route declares: the path, the query, the form or JSON body. A
+request header is not among them — `Host`, `Accept`, `Priority` and `Cookie` arrive on every
+browser request under ordinary names, so an input spelled like one would be filled by the
+browser, not the caller. The one place a header is a source is a `service:` binding's
+`params:` (`cookie: header.Cookie`), read from the wire; the same spelling on a statement's
+`params:`, a validation rule's, an enrichment's or an export's `after:` is `TQL-YAML-1069`.
+`body.<name>` on a GET route is `TQL-YAML-1070`: a GET carries no body, so the value was
+null on every request — declare the input and read `query.<name>`. `body.<name>` naming a
+field the route does not declare under `input:` is `TQL-YAML-1071` when the route rejects
+unknown fields (the default): a request carrying the field is refused by the mass-assignment
+guard before anything binds. `1069` is a boot refusal as well; the other two are lint errors.
+
 ### `TQL-YAML-1004` and friends — a key is refused on this recipe
 
 Keys are recipe-scoped. `notify:` is command-only, `cache:` is query-only, `refreshOn:` is not a

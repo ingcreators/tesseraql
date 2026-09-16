@@ -4,9 +4,6 @@ kind: route
 recipe: query-html
 
 input:
-  Cookie:
-    type: string
-    required: false
   updated:
     type: string
     required: false
@@ -38,7 +35,7 @@ sources:
       name: studio.shell.studio.data
       params:
         member: path.member
-        shellCookie: params.Cookie
+        shellCookie: header.Cookie
         shellPermissions: principal.permissions
         updated: params.updated
         ds: params.ds

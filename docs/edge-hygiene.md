@@ -434,7 +434,9 @@ the protected-page row (401 where the GET gives 302). Fix — 6/6 and the differ
 - A `Content-Length` on a spooled download, so an HTTP/1.0 hop sees a truncation → **a design
   question for the export line**.
 - `body.*` declared on a GET route, which E2 makes unbindable by construction → the filed lint
-  (`export-declarations.md`, "lint hygiene / sweeps").
+  (`export-declarations.md`, "lint hygiene / sweeps"). *Shipped as `TQL-YAML-1070` in
+  `docs/audit-low-leads.md` slice 9, with `TQL-YAML-1071` for a `body.<name>` the route does
+  not declare.*
 
 ---
 

@@ -6,9 +6,6 @@ recipe: query-html
 # Preview-as-role: renders the menu filtered exactly as a caller holding the given role/permission
 # would see it (server-side visibleFor), so the author can verify visibility before shipping.
 input:
-  Cookie:
-    type: string
-    required: false
   role:
     type: string
     required: false
@@ -23,7 +20,7 @@ sources:
       params:
         member: path.member
         shellPermissions: principal.permissions
-        shellCookie: params.Cookie
+        shellCookie: header.Cookie
         role: params.role
         permission: params.permission
 response:

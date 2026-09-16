@@ -315,7 +315,11 @@ can show the canary's ring on purpose (open question 2).
 routes call providers registered only on the surface runtime (the `PortalProviders`
 precedent), and those providers make real HTTP calls (Decision 15) to the selected member's
 internal port at its prefixed address — `http://localhost:<port><basePath>/_tesseraql/ops/…`
-— forwarding the caller's session cookie (and CSRF token on actions). Sessions live in the
+— forwarding the caller's session cookie (and CSRF token on actions). The route declares the
+forwarding: `cookie: header.Cookie` (and `header.X-CSRF-Token`) on the service's `params:`,
+a header source the binder reads from the wire alone (`docs/audit-low-leads.md` slice 9 — until
+then the shells declared `Cookie` as an *input* and rode a header fallback every route had).
+Sessions live in the
 shared framework store, so the member authenticates the same principal and **re-runs its own
 grant checks**: authorization stays at the member, and the shell adds
 reach, not authority. The member's ops JSON API and providers are untouched — a member

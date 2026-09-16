@@ -14,9 +14,6 @@ input:
   slot:
     type: string
     required: false
-  Cookie:
-    type: string
-    required: false
   _csrf:
     type: string
     required: false
@@ -30,7 +27,7 @@ steps:
         slot: params.slot
         id: params.id
         permissions: principal.permissions
-        cookie: params.Cookie
+        cookie: header.Cookie
         csrf: params._csrf
 response:
   redirect:

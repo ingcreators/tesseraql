@@ -5,13 +5,7 @@ recipe: command-json
 
 # Sets/adds a feature flag in config/flags.yml (edit-gated). Served live on the next request.
 input:
-  Cookie:
-    type: string
-    required: false
   _csrf:
-    type: string
-    required: false
-  X-CSRF-Token:
     type: string
     required: false
   name:
@@ -31,9 +25,9 @@ steps:
       params:
         member: path.member
         shellPermissions: principal.permissions
-        shellCookie: params.Cookie
+        shellCookie: header.Cookie
         shellCsrf: params._csrf
-        shellCsrfHeader: params.X-CSRF-Token
+        shellCsrfHeader: header.X-CSRF-Token
         name: params.name
         value: params.value
         type: params.type

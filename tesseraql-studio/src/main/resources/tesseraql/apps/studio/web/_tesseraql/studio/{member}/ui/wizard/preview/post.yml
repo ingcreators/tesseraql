@@ -8,13 +8,7 @@ recipe: query-html
 # before either the download or the overlay write. The inputs are the union of every
 # wizard's fields, all optional — a half-filled form previews with blanks, not an error.
 input:
-  Cookie:
-    type: string
-    required: false
   _csrf:
-    type: string
-    required: false
-  X-CSRF-Token:
     type: string
     required: false
   kind:
@@ -100,9 +94,9 @@ sources:
       params:
         member: path.member
         shellPermissions: principal.permissions
-        shellCookie: params.Cookie
+        shellCookie: header.Cookie
         shellCsrf: params._csrf
-        shellCsrfHeader: params.X-CSRF-Token
+        shellCsrfHeader: header.X-CSRF-Token
         kind: params.kind
         discoveryUri: params.discoveryUri
         clientId: params.clientId

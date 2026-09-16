@@ -161,7 +161,7 @@ The service arm: a runtime provider answering rows from process state. It takes 
 | Property | Type | Description |
 | --- | --- | --- |
 | `name` | string | The named runtime service provider to call instead of running SQL (docs/extending.md): non-SQL runtime state (lanes, traces, file trees, …) read as rows. |
-| `params` | map of string | Each bind name to the bindable path supplying its value, such as `path.id`, `params.unit` or `principal.claim.tenant_id`. |
+| `params` | map of string | Each argument name to the bindable path supplying its value, such as `path.id`, `params.unit` or `principal.claim.tenant_id` — or `header.<Name>`, a request header read from the wire (first value, name matched without regard to case), never overridden by a query parameter or a body field of that name. A header is a provider's argument only: on a statement's `params:` it is refused (TQL-YAML-1069). |
 
 ### validate
 
@@ -1013,7 +1013,7 @@ The service arm: a runtime provider answering rows from process state. It takes 
 | Property | Type | Description |
 | --- | --- | --- |
 | `name` | string | The named runtime service provider to call instead of running SQL (docs/extending.md): non-SQL runtime state (lanes, traces, file trees, …) read as rows. |
-| `params` | map of string | Each bind name to the bindable path supplying its value, such as `path.id`, `params.unit` or `principal.claim.tenant_id`. |
+| `params` | map of string | Each argument name to the bindable path supplying its value, such as `path.id`, `params.unit` or `principal.claim.tenant_id` — or `header.<Name>`, a request header read from the wire (first value, name matched without regard to case), never overridden by a query parameter or a body field of that name. A header is a provider's argument only: on a statement's `params:` it is refused (TQL-YAML-1069). |
 
 ### resultField
 

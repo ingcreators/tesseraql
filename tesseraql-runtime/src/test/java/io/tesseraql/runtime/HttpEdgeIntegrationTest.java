@@ -137,6 +137,34 @@ class HttpEdgeIntegrationTest {
         assertThat(elapsedMs).isLessThan(2_500);
     }
 
+    /**
+     * A browser's headers are not the route's inputs (docs/audit-low-leads.md slice 9).
+     *
+     * <p>The binder fell back to a request header of the input's name, so a list page
+     * declaring {@code priority: {enum: [low, normal, high]}} — the helpdesk example's — answered
+     * 400 {@code TQL-FIELD-2001} to every Chrome and Firefox navigation over h2, where the
+     * browser sends {@code Priority: u=0, i}; {@code tesseraql dev} on HTTP/1.1 never
+     * reproduced it, the documented TLS edge did. The header is sent explicitly here, on the
+     * same declaration. The query parameter is still judged: a variant that stopped binding
+     * the input altogether is caught by the second request.
+     */
+    @Test
+    void aBrowsersPriorityHeaderIsNotTheRoutesPriorityInput() throws Exception {
+        HttpResponse<String> navigation = HttpClient.newHttpClient().send(HttpRequest.newBuilder(
+                URI.create("http://localhost:" + runtime.port() + "/api/tickets"))
+                .header("Priority", "u=0, i")
+                .build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(navigation.statusCode()).as(navigation.body()).isEqualTo(200);
+        assertThat(navigation.body()).contains("\"data\"");
+
+        HttpResponse<String> filtered = HttpClient.newHttpClient().send(HttpRequest.newBuilder(
+                URI.create("http://localhost:" + runtime.port() + "/api/tickets?priority=urgent"))
+                .header("Priority", "u=0, i")
+                .build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(filtered.statusCode()).isEqualTo(400);
+        assertThat(filtered.body()).contains("TQL-FIELD-2001");
+    }
+
     private static HttpResponse<String> postForm(String body) {
         try {
             HttpRequest post = HttpRequest.newBuilder(
@@ -207,6 +235,37 @@ class HttpEdgeIntegrationTest {
                       data: main.rows
                 """);
         Files.writeString(nap.resolve("nap.sql"), "select pg_sleep(1) as nap\n");
+
+        // The helpdesk example's list declaration: an enum input under a header's name.
+        Path tickets = target.resolve("web/api/tickets");
+        Files.createDirectories(tickets);
+        Files.writeString(tickets.resolve("get.yml"), """
+                version: tesseraql/v1
+                id: tickets
+                kind: route
+                recipe: query-json
+                security:
+                  auth: public
+                input:
+                  priority:
+                    type: string
+                    required: false
+                    enum: [low, normal, high]
+                sources:
+                  main:
+                    sql:
+                      file: tickets.sql
+                      mode: query
+                      params:
+                        priority: query.priority
+                response:
+                  json:
+                    body:
+                      priority: params.priority
+                      data: main.rows
+                """);
+        Files.writeString(tickets.resolve("tickets.sql"),
+                "select n from touched where coalesce(/* priority */'low', 'any') <> ''\n");
 
         Path touch = target.resolve("web/api/touch");
         Files.createDirectories(touch);

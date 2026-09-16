@@ -376,7 +376,13 @@ final class StackReconciler implements AutoCloseable {
                 action = "discard";
                 version = canary.version();
                 host.discardCanary(name);
-                applied(name, action, version);
+                // Housekeeping the intent did not ask for. A standing refusal of what it did
+                // ask for stays the record: written over by "discard applied", the next pass
+                // attempted the refused candidate again and `deploy status` read applied
+                // against a refused intent (docs/audit-low-leads.md, unfiled 73).
+                if (!refusalStands(name)) {
+                    applied(name, action, version);
+                }
             }
         } catch (RuntimeException refused) {
             LOG.warn("Deploy of '{}' refused ({} v{}); the serving runtime is untouched: {}",
@@ -402,6 +408,18 @@ final class StackReconciler implements AutoCloseable {
                 || !version.equals(last.version())) {
             return false;
         }
+        return recordStands(last, intent);
+    }
+
+    /** Whether the last record is a refusal the operator has not written past. */
+    private boolean refusalStands(String name) {
+        Status last = lastStatus(installRoot, name);
+        return last != null && "refused".equals(last.outcome())
+                && recordStands(last, stateFile(name));
+    }
+
+    /** The record answers the intent file as it is now: written no later than the record. */
+    private static boolean recordStands(Status last, Path intent) {
         try {
             java.time.Instant recorded = java.time.Instant.parse(last.at());
             java.time.Instant written = Files.getLastModifiedTime(intent).toInstant();
