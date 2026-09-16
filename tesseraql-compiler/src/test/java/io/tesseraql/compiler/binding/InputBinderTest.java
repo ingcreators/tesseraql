@@ -328,6 +328,47 @@ class InputBinderTest {
                         .containsEntry("format", "yyyy/MM/dd HH:mm"));
     }
 
+    private static InputField withDefault(String type, Object defaultValue, String format) {
+        return new InputField(type, false, defaultValue, null, null, null, null, null, null, null,
+                format, null, null, null, null, null, null, null, null, null, null);
+    }
+
+    /**
+     * An omitted input binds its default parsed into the declared type — the same coercion a
+     * caller's text gets (docs/audit-low-leads.md XD-07b). The raw literal used to travel: a
+     * quoted {@code "5"} on an integer input reached the statement as text, a date default as
+     * a string the driver could not bind to a date column, and a blank caller value took the
+     * same raw path.
+     */
+    @Test
+    void anOmittedInputBindsItsDefaultTyped() {
+        Map<String, Object> bound = InputBinder.bind(Map.of(
+                "n", withDefault("integer", "5", null),
+                "d", withDefault("date", "2026/01/15", "yyyy/MM/dd"),
+                "amount", withDefault("number", 10, null),
+                "q", withDefault("string", 7, null)),
+                name -> "q".equals(name) ? "" : null, Locale.JAPAN);
+
+        assertThat(bound).containsEntry("n", 5L)
+                .containsEntry("d", LocalDate.of(2026, 1, 15))
+                .containsEntry("amount", 10.0d)
+                .containsEntry("q", "7");
+    }
+
+    /**
+     * A default the declaration refuses is the declaration's fault, refused at lint and at
+     * boot before any request; should one reach the binder unjudged it is still the field
+     * error, never a raw bind.
+     */
+    @Test
+    void aDefaultTheInputRefusesNeverBindsRaw() {
+        assertThatThrownBy(() -> InputBinder.bind(Map.of("n", withDefault("number", "abc", null)),
+                value(null), Locale.ENGLISH))
+                .isInstanceOf(TqlException.class)
+                .satisfies(ex -> assertThat(firstField((TqlException) ex))
+                        .containsEntry("field", "n").containsEntry("code", "number"));
+    }
+
     @SuppressWarnings("unchecked")
     private static Map<String, Object> firstField(TqlException ex) {
         return (Map<String, Object>) ((List<?>) ex.details().get("fields")).get(0);

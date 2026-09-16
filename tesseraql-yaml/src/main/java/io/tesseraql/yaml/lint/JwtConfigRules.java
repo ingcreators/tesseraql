@@ -57,8 +57,12 @@ final class JwtConfigRules implements LintRule {
         // which is the thing being fixed; it is the one lint in the campaign that stops an existing
         // app booting until its config gains a value, and pre-1.0 is the only time that is
         // affordable.
+        // The reading is the boot's (JwtAudiences): an empty list, a blank string and a list
+        // of blanks all say nothing, and used to lint clean while the boot refused two of them
+        // and served the third fail-closed (docs/audit-low-leads.md XD-07i).
         if ((secret || keyMaterial)
-                && config.navigate("tesseraql.security.jwt.audience") == null) {
+                && io.tesseraql.yaml.app.JwtAudiences.declared(
+                        config.navigate("tesseraql.security.jwt.audience")).isEmpty()) {
             findings.add(new LintFinding(JWT_AUDIENCE_MISSING, ERROR, "config",
                     "tesseraql.security.jwt is configured without an audience, so any token the"
                             + " issuer minted for any other relying party is accepted; declare"

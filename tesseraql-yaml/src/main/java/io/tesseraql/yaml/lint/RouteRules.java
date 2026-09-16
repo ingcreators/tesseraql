@@ -104,6 +104,11 @@ final class RouteRules implements LintRule {
         RequestSourceRules.report(context, config, route.source(), definition,
                 io.tesseraql.yaml.app.RecipeShape.Surface.ROUTE, source, findings);
         RequestSourceRules.lintBodySources(context, route, source, findings);
+        // The response literals the edge writes as given (docs/audit-low-leads.md EH-06): a
+        // file response's charset= the body is not written in, a redirect location with
+        // whitespace at either end — from the predicate the compiler refuses from.
+        ResponseLiteralRules.report(context, config, route.source(), definition, source,
+                findings);
         DocumentRules.lintStepGuards(context, route.source(), definition, source, findings);
         // A negative timeout on a step or named source was clamped to 0 = unlimited by the
         // compiler — the inverse of the author's intent — so the guard was missing here.

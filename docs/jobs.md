@@ -553,7 +553,10 @@ pipeline:
   `steps.<id>.transferId`, but any transfer id the context can supply. Reading it
   counts as the transfer's first download. `as:` renames the delivery
   (`{dotted.path}` placeholders resolve against the job context; a bare filename
-  only — separators are refused at build time, `TQL-YAML-1042`). The roots the context
+  only — separators are refused at build time, `TQL-YAML-1042`). A placeholder is a
+  dotted path of letters, digits, `_` and `.` — the grammar the runtime resolves, judged
+  by the same pattern at build time, so `{batch.business-date}` is refused rather than
+  delivered with its braces on. The roots the context
   carries are `params`, `steps`, `batch` and `tenant`; `{steps.<id>.filename}` is the
   produced file's own name (for a split step, the bundle's). A placeholder the context
   cannot resolve — a root it does not carry, a `params.<name>` the job never declared,

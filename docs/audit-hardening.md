@@ -89,6 +89,14 @@ leave the hole open by default, which is the thing being fixed. `JwtConfigRules`
 navigates that config block. This is the one lint in the campaign that stops an existing app
 from booting until its config gains a value, and that cost is why it belongs pre-1.0.
 
+*Addendum 2026-09-16 (`docs/audit-low-leads.md` slice 13, XD-07i): "the same condition and
+with the same code" was true of an absent key only. The lint fired on `navigate(...) == null`
+while the boot refused an empty list and a blank string too, and let `[""]` through into a
+configuration that demanded a token `aud` of `""` — fail-closed against every identity
+provider while the CLI's own mint (which emits `aud: ""`) made a local smoke test pass. Both
+sides read the key through `JwtAudiences.declared` now: a string or a list, blank and `null`
+entries dropped, so `[]`, `""`, `[""]` and `[" "]` are all "no audience".*
+
 ## Decision 2 — for MCP, TesseraQL is an OAuth 2.0 resource server, and says so
 
 The current posture is deliberate and recorded in six places. `McpRouteBuilder`'s javadoc:

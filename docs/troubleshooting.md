@@ -154,6 +154,36 @@ field the route does not declare under `input:` is `TQL-YAML-1071` when the rout
 unknown fields (the default): a request carrying the field is refused by the mass-assignment
 guard before anything binds. `1069` is a boot refusal as well; the other two are lint errors.
 
+### `TQL-YAML-1072` — an input's `default:` is not a value the input accepts
+
+A declared `default:` is what the binder hands every request that omits the field, so it is
+judged as a caller's value would be, where the declaration is read. It is parsed into the
+declared type (`default: abc` on `type: number`, `default: yesterday` on `type: date`) and held
+to the field's constraints (`default: up` outside `enum: [asc, desc]`, `default: 0` under
+`min: 1`, a `sort` default naming a column outside `columns:`). A default on an `array` input is refused
+too — nothing binds it. The same predicate refuses the boot; the omitting request then binds
+the typed value, so a quoted `"5"` on an integer input reaches the statement as a number.
+Write the default as the caller would write the value.
+
+### `TQL-YAML-1073` / `1074` — a response literal the edge writes as given
+
+A file response's body is written as UTF-8 whatever `contentType:` says, so
+`charset=Shift_JIS` was a header contradicting its bytes: declare `charset=utf-8` or omit the
+parameter (`TQL-YAML-1073`). A redirect `location:` is written as given, so whitespace at
+either end reaches the wire — a trailing space as `%20`, and a leading one keeps the base path
+off the value (the join applies it only to a value starting with `/`), so the browser
+resolves the redirect relative to the current page, outside the application. Quote the
+literal without the space (`TQL-YAML-1074`). Both are lint errors and boot refusals.
+
+### `TQL-YAML-1412` — a policy rule names two conditions
+
+An `anyOf` rule is one condition: `role:`, `permission:` or `claim:`. A rule naming two —
+`{role: ADMIN, permission: orders.approve}` — used to apply the first the runtime recognised
+and drop the rest, so the permission holder was refused with the rule lint-clean. Split it
+into one rule per condition (the policy grants when any holds), or bundle the shared
+authority into a role. A rule naming none of the three is logged at boot and the policy
+denies everyone, as before.
+
 ### `TQL-SEC-4135` / `4139` / `4152` / `4153` — a response header the wire cannot carry
 
 A header name is a token — letters, digits and the punctuation `!#$%&'*+-.^_|~` or a

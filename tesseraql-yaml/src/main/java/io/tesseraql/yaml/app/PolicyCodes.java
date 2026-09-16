@@ -48,6 +48,18 @@ public final class PolicyCodes {
      */
     public static final TqlErrorCode TEMPLATE_UNRESOLVABLE = new TqlErrorCode(TqlDomain.YAML, 1409);
 
+    /**
+     * TQL-YAML-1412: a policy rule names more than one of {@code role}, {@code permission} and
+     * {@code claim}. A rule is exactly one condition; the runtime used to take the first key it
+     * recognised and drop the rest, so the written permission governed nothing. Reported at
+     * lint and refused at boot from the same predicate.
+     */
+    public static final TqlErrorCode AMBIGUOUS_RULE = new TqlErrorCode(TqlDomain.YAML, 1412);
+
+    /** The three conditions an {@code anyOf} rule may carry, one at a time. */
+    private static final java.util.List<String> RULE_KEYS = java.util.List.of("role",
+            "permission", "claim");
+
     /** {@code {path.name}} inside a policy id — the one interpolation a policy may carry. */
     private static final java.util.regex.Pattern PLACEHOLDER = java.util.regex.Pattern
             .compile("\\{([^{}]*)}");
@@ -96,6 +108,26 @@ public final class PolicyCodes {
                     + " policy is a fixed id, so an interpolated one names no policy at all.";
         }
         return null;
+    }
+
+    /**
+     * Why {@code rule} is not one condition, or {@code null} when it is: it names two or three
+     * of {@code role}/{@code permission}/{@code claim}. A rule with none of them is not judged
+     * here — the boot logs it and the policy denies everyone (docs/silent-tolerance.md O10).
+     */
+    public static String shapeViolation(java.util.Map<?, ?> rule) {
+        java.util.List<String> named = new java.util.ArrayList<>();
+        for (String key : RULE_KEYS) {
+            if (rule.get(key) != null) {
+                named.add(key);
+            }
+        }
+        if (named.size() < 2) {
+            return null;
+        }
+        return "an anyOf rule is one condition and this one names " + String.join(" and ",
+                named) + " - split it into one rule per condition (anyOf grants when any"
+                + " holds), or move the shared authority into a role that bundles the codes";
     }
 
     /**

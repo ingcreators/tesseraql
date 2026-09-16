@@ -7,7 +7,7 @@ import java.util.Map;
  * The authenticated caller resolved from a request (design ch. 10.9.2).
  *
  * <p>This is the value referenced by {@code principal.*} source expressions, for example
- * {@code principal.sub} or {@code principal.claim.tenant_id}, when binding SQL parameters.
+ * {@code principal.subject} or {@code principal.claim.tenant_id}, when binding SQL parameters.
  *
  * @param subject     stable subject identifier (JWT {@code sub})
  * @param loginId     human login id, when available

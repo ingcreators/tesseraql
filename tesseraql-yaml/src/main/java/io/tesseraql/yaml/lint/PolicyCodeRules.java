@@ -21,7 +21,9 @@ import java.util.Map;
  * vocabulary, and a deployment role may bundle any codes it likes.
  *
  * <p>The boot refusal in {@code SecurityConfigFactory} carries the same message via
- * {@link PolicyCodes#violation}, so the fence holds for a configuration that never linted.
+ * {@link PolicyCodes#violation}, so the fence holds for a configuration that never linted. A
+ * rule naming more than one of {@code role}/{@code permission}/{@code claim} is reported here
+ * and refused there from {@link PolicyCodes#shapeViolation} (docs/audit-low-leads.md XD-07i).
  */
 final class PolicyCodeRules implements LintRule {
 
@@ -49,6 +51,13 @@ final class PolicyCodeRules implements LintRule {
             }
             if (spec instanceof Map<?, ?> map && map.get("anyOf") instanceof List<?> anyOf) {
                 for (Object element : anyOf) {
+                    if (element instanceof Map<?, ?> rule) {
+                        String shape = PolicyCodes.shapeViolation(rule);
+                        if (shape != null) {
+                            findings.add(new LintFinding(PolicyCodes.AMBIGUOUS_RULE.toString(),
+                                    ERROR, "config", "Policy '" + id + "': " + shape));
+                        }
+                    }
                     if (element instanceof Map<?, ?> rule && rule.get("permission") != null) {
                         String code = String.valueOf(rule.get("permission"));
                         String violation = PolicyCodes.violation(appName, code);

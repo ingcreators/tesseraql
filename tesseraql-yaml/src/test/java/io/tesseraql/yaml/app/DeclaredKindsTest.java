@@ -98,6 +98,77 @@ class DeclaredKindsTest {
                 .contains("publishes none (mode: update)");
     }
 
+    /**
+     * The export recipes hand every source to the writer, which reads through {@code columns:}
+     * and applies no declaration (docs/audit-low-leads.md, the {@code result:} sweep): a
+     * {@code result:} there used to lint clean and boot, and the csv carried the raw text.
+     */
+    @Test
+    void aDeclarationOnAnExportRecipeIsRefusedNamingTheRecipe() {
+        for (String recipe : List.of("query-export", "file-export")) {
+            RouteDefinition route = route(recipe, Map.of(),
+                    Map.of("main", source(Map.of("note", field("json", null, null)))));
+
+            assertThat(DeclaredKinds.resultViolations(route)).as(recipe).singleElement()
+                    .extracting(DeclaredKinds.Violation::message).asString()
+                    .contains("route 'r' sources.main.result:")
+                    .contains(recipe + " hands every source to the export writer");
+        }
+        assertThat(DeclaredKinds.resultViolations(route("query-json", Map.of(),
+                Map.of("main", source(Map.of("note", field("json", null, null))))))).isEmpty();
+    }
+
+    /**
+     * A {@code result:} on a chunk reader or writer is the lint's error and, from the same
+     * predicate, the job registration's refusal (docs/audit-low-leads.md TS-03): {@code
+     * requireJob} used to return normally, the run reported COMPLETED, and a writer navigating
+     * the un-parsed text wrote NULL.
+     */
+    @Test
+    void aDeclarationOnAChunkReaderIsRefusedWhereTheJobRegisters(
+            @org.junit.jupiter.api.io.TempDir java.nio.file.Path dir) throws Exception {
+        java.nio.file.Files.createDirectories(dir.resolve("config"));
+        java.nio.file.Files.writeString(dir.resolve("config/tesseraql.yml"),
+                "tesseraql:\n  app:\n    name: t\n");
+        java.nio.file.Files.createDirectories(dir.resolve("batch/load"));
+        java.nio.file.Files.writeString(dir.resolve("batch/load/job.yml"), """
+                version: tesseraql/v1
+                id: nightly
+                kind: job
+                recipe: batch-pipeline
+                pipeline:
+                  - id: load
+                    chunk:
+                      reader:
+                        sql:
+                          file: read.sql
+                        result:
+                          payload: { type: json }
+                      writer:
+                        sql:
+                          file: write.sql
+                """);
+        java.nio.file.Files.writeString(dir.resolve("batch/load/read.sql"),
+                "select id, payload from src order by id\n");
+        java.nio.file.Files.writeString(dir.resolve("batch/load/write.sql"),
+                "insert into dst (id) values (/* row.id */1)\n");
+        io.tesseraql.yaml.manifest.JobFile job = new io.tesseraql.yaml.manifest.ManifestLoader()
+                .load(dir).jobs().get(0);
+
+        assertThat(DeclaredKinds.chunkViolations(job.definition())).singleElement()
+                .satisfies(violation -> {
+                    assertThat(violation.key()).isEqualTo("chunk.reader.result");
+                    assertThat(violation.message()).contains("job 'nightly' step 'load'",
+                            "chunk.reader.result: is not applied");
+                });
+        List<String> warned = new java.util.ArrayList<>();
+        assertThatThrownBy(() -> ExportDeclarations.requireJob("t", job, warned::add))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("TQL-YAML-1064")
+                .hasMessageContaining("chunk.reader.result: is not applied");
+        assertThat(warned).hasSize(1);
+    }
+
     /** Decision 23: an input parses in the request's locale, so locale: written there is refused. */
     @Test
     void aLocaleWrittenOnAnInputIsRefused() {
@@ -318,11 +389,16 @@ class DeclaredKindsTest {
 
     private static RouteDefinition route(Map<String, InputField> input,
             Map<String, Binding> bindings) {
+        return route("query-json", input, bindings);
+    }
+
+    private static RouteDefinition route(String recipe, Map<String, InputField> input,
+            Map<String, Binding> bindings) {
         Map<String, Binding> sources = new java.util.LinkedHashMap<>();
         Map<String, Binding> steps = new java.util.LinkedHashMap<>();
         bindings.forEach((name, binding) -> ("update".equals(binding.mode()) ? steps : sources)
                 .put(name, binding));
-        return new RouteDefinition("tesseraql/v1", "r", "route", "query-json", input, null,
+        return new RouteDefinition("tesseraql/v1", "r", "route", recipe, input, null,
                 null, null, null, null, steps, sources, null, null, null, null, null, null,
                 null, null, null, null, null, null, null, null, null, null);
     }

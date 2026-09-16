@@ -431,6 +431,12 @@ on it.** A lint-only 1005 for a boot REFUSAL would be a fourth kind under two co
 pre-existing and filed to lint hygiene. RUN: the synthesis is lint-silent and boot-3101 on that
 shape, exactly HEAD's (`ExportDeclarationCompileTest.aFollowUpOnAQueryExportKeepsTheCompilersOwnCode`).
 
+*Superseded 2026-09-16 (`docs/audit-low-leads.md` slice 13, XD-07d): the objection was to a
+lint-only code, not to the arm. `after:` on a query-export is an arm of `violations()` now —
+INVALID under the block's own `TQL-YAML-1041`, the same sentence at lint and at boot — and the
+compiler's own refusal under `TQL-ROUTE-3101` retires with it (pre-1.0; the code is no longer
+raised anywhere). The three guards that pinned the silence assert the arm.*
+
 ### PR 5b — the request, the chain, the job's configuration, the document code
 
 **27 — One altitude judges each provenance; the request judges only what the request supplied.**
@@ -1484,19 +1490,27 @@ Every unfiled defect the measurement found, routed elsewhere with its destinatio
   `messages/` exists. Until then `request.locale` can carry `und` and 5b passes it through.
 - **Lint hygiene / sweeps / audit-hardening:** `timezone: principal.subject` / `principal.roles`
   answers 400 blaming the caller — restrict `principal.` sources to `principal.claim.*` in 5a's
-  `sourceViolation`; a declared input's `default:` (`input: tz: {default: Asia/Tokio}` +
-  `timezone: query.tz`) is judged as the caller's — judge `input.<name>.default` when a
-  `query.<name>` source names it; a file-import route without an `import:` block NPEs at
-  `definition.rowStep().file()` before the predicate (fixed: `docs/audit-low-leads.md`,
-  `RecipeShape`); `after:` on a query-export is lint-silent and
-  boot-3101; a lint WARNING for `{key}` in `push.as:`; `conditions.zone` and bad-cron unshaped boot
-  refusals (fixed: `ConditionZone`, `CronExpressions`); the lint crash on a header-less document
-  (fixed: the linter loads tolerantly); TQL-YAML-1409 defined twice; the SEC-4048
-  (`[]`, `""`, `[""]`) and PolicyCodes lint/boot drifts; the header-fed input
-  (`RequestBinder.rawValue:348` vs `vertx-native.md:307` — fixed: the read is gone, a
-  provider declares `header.<Name>`, `docs/audit-low-leads.md` slice 9); `EvaluationContext`'s
-  reflective reach (`principal.toString` echoes every claim into the ERROR log); `body.*` on a
-  GET (fixed: `TQL-YAML-1070`, and an undeclared `body.<name>` as `TQL-YAML-1071`).
+  `sourceViolation` (fixed: the `principal` arm of `source()` requires `claim.<name>`,
+  `docs/audit-low-leads.md` slice 13); a declared input's `default:` (`input: tz: {default:
+  Asia/Tokio}` + `timezone: query.tz`) is judged as the caller's — judge `input.<name>.default`
+  when a `query.<name>` source names it (fixed wider: every default is parsed and constrained
+  by its own input, `InputDefaults`, `TQL-YAML-1072`; a zone or locale default still meets the
+  request-time judge as the caller's — that residue stays filed, see the slice-13 row); a
+  file-import route without an `import:` block NPEs at `definition.rowStep().file()` before the
+  predicate (fixed: `docs/audit-low-leads.md`, `RecipeShape`); `after:` on a query-export is
+  lint-silent and boot-3101 (fixed: decision 26's addendum); a lint WARNING for `{key}` in
+  `push.as:` (fixed as an ERROR by `export-hygiene.md` P7; the placeholder grammar is the
+  runtime's since slice 13); `conditions.zone` and bad-cron unshaped boot refusals (fixed:
+  `ConditionZone`, `CronExpressions`); the lint crash on a header-less document (fixed: the
+  linter loads tolerantly); TQL-YAML-1409 defined twice; the SEC-4048 (`[]`, `""`, `[""]`) and
+  PolicyCodes lint/boot drifts (fixed: `JwtAudiences` and `PolicyCodes.shapeViolation`,
+  `TQL-YAML-1412`, slice 13); the header-fed input (`RequestBinder.rawValue:348` vs
+  `vertx-native.md:307` — fixed: the read is gone, a provider declares `header.<Name>`,
+  `docs/audit-low-leads.md` slice 9); `EvaluationContext`'s reflective reach
+  (`principal.toString` echoes every claim into the ERROR log — the log consequence died with
+  5b's request-time judge, the reach itself with slice 11's G15, the `principal.` arm with
+  slice 13); `body.*` on a GET (fixed: `TQL-YAML-1070`, and an undeclared `body.<name>` as
+  `TQL-YAML-1071`).
 - **Runtime-replace campaign:** a refused hot deploy advances `catalog.json`; `deploy rollback`
   targets the refused version and leaves `previous` null — 5a widens the refusal surface it must
   survive.

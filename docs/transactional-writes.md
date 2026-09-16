@@ -148,7 +148,9 @@ sources:
 ```
 
 The CRUD scaffold ([scaffolding](scaffolding.md)) uses exactly this for its sortable list
-datagrid.
+datagrid. The `default:` is held to the same `enum` as a caller's value, where the
+declaration is read (`TQL-YAML-1072`, lint and boot): a default outside the set would reach
+the fragment on every request that omits the input, which is the normal case for a default.
 
 The whole header+lines shape ships runnable in the procurement gallery app
 (`examples/procurement-app`, `POST /api/requisitions`): a generated-key header step, a

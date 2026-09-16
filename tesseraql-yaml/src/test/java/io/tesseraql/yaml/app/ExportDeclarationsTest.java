@@ -12,6 +12,7 @@ import io.tesseraql.yaml.model.ImportSpec;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -266,6 +267,76 @@ class ExportDeclarationsTest {
         assertThat(refusals(publicRoute, export("csv", null, "principal.claim.zoneinfo")))
                 .singleElement().extracting(Violation::message).asString()
                 .contains("the route is public");
+    }
+
+    /**
+     * The principal arm reads one thing (docs/audit-low-leads.md XD-07a): {@code principal.claim.<name>}.
+     * An attribute ({@code subject}, {@code roles}) used to reach the request-time judge and
+     * answer 400 with the sign-in-profile sentence; a path that resolves to nothing
+     * ({@code principal.zoneinfo}, a forgotten {@code claim.}) rendered every temporal cell in
+     * the platform zone on a lint-clean, boot-clean route; the undocumented
+     * {@code principal.claims.<name>} twin applied the zone. All of them are this refusal now,
+     * at lint and at boot — the rows assert the refusal, never today's 400.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {"principal.subject", "principal.roles", "principal.claim",
+            "principal.claim.", "principal.zoneinfo", "principal.claims.zoneinfo",
+            "principal.claim..zoneinfo", "principal.sub"})
+    void aPrincipalSourceThatIsNotAClaimIsRefusedOnBothKeys(String source) {
+        assertThat(refusals(ROUTE, export("csv", null, source))).singleElement()
+                .satisfies(violation -> {
+                    assertThat(violation.code().toString()).isEqualTo("TQL-YAML-1063");
+                    assertThat(violation.key()).isEqualTo("export.timezone");
+                    assertThat(violation.message()).contains("route 'items.dump'",
+                            "'" + source + "'", "is not a claim", "principal.claim.<name>");
+                });
+        assertThat(refusals(ROUTE, export("csv", source, null))).singleElement()
+                .extracting(Violation::key).isEqualTo("export.locale");
+        // The public-route refusal still comes first: no principal is ever bound there.
+        Site publicRoute = new Site("t", "route 'items.dump'", Surface.QUERY_EXPORT, Set.of(),
+                false, true);
+        assertThat(refusals(publicRoute, export("csv", null, source))).singleElement()
+                .extracting(Violation::message).asString().contains("the route is public");
+    }
+
+    /**
+     * The filed instance of XD-07b: a source naming an input whose {@code default:} is not a
+     * zone (or a language tag) is refused where the declaration is read — the default is the
+     * author's literal and what the source names on every omitting request, and it used to
+     * reach the request-time judge as the caller's mistake (400, "Input 'tz'").
+     */
+    @Test
+    void aSourcedInputsDefaultIsJudgedAsTheAuthorsLiteral() {
+        Site defaulted = new Site("t", "route 'items.dump'", Surface.QUERY_EXPORT,
+                Set.of("tz", "lang", "n"), true, true,
+                Map.of("tz", "Asia/Tokio", "lang", "ja_JP", "n", 5));
+        assertThat(refusals(defaulted, export("csv", null, "query.tz"))).singleElement()
+                .satisfies(violation -> {
+                    assertThat(violation.code().toString()).isEqualTo("TQL-YAML-1063");
+                    assertThat(violation.key()).isEqualTo("export.timezone");
+                    assertThat(violation.message()).contains("input tz's default:",
+                            "'Asia/Tokio' is not a time-zone id", "'query.tz'",
+                            "every request that omits the input");
+                });
+        assertThat(refusals(defaulted, export("csv", "params.lang", null))).singleElement()
+                .extracting(Violation::message).asString()
+                .contains("input lang's default:", "'ja_JP' is not a language tag");
+        assertThat(refusals(defaulted, export("csv", null, "body.n"))).singleElement()
+                .extracting(Violation::message).asString().contains("'5' is not a time-zone id");
+        // A default that is a zone, no default at all, and a nested body path (the Site
+        // carries top-level defaults only) stay quiet.
+        Site good = new Site("t", "route 'items.dump'", Surface.QUERY_EXPORT,
+                Set.of("tz", "report"), true, true, Map.of("tz", "Asia/Tokyo"));
+        assertThat(refusals(good, export("csv", null, "query.tz"))).isEmpty();
+        assertThat(refusals(ROUTE, export("csv", null, "query.tz"))).isEmpty();
+        assertThat(refusals(good, export("csv", null, "body.report.tz"))).isEmpty();
+    }
+
+    @Test
+    void aClaimPathIsTheOnePrincipalSourceAccepted() {
+        assertThat(refusals(ROUTE, export("csv", null, "principal.claim.zoneinfo"))).isEmpty();
+        assertThat(refusals(ROUTE, export("csv", "principal.claim.locale", null))).isEmpty();
+        assertThat(refusals(ROUTE, export("csv", null, "principal.claim.https_zone"))).isEmpty();
     }
 
     @Test
@@ -538,9 +609,16 @@ class ExportDeclarationsTest {
             assertThat(violation.message()).contains("export.after", "after.sql");
         });
         assertThat(refusals(FILE_EXPORT, noFile)).hasSize(1);
-        // A query-export's after: is the compiler's own refusal (TQL-ROUTE-3101) — the
-        // predicate must not send the author to "add the statement" first.
-        assertThat(refusals(ROUTE, noSql)).isEmpty();
+        // A query-export has no after: hook at all: one refusal saying so, never "add the
+        // statement" — the arm used to be the compiler's own code and lint-silent
+        // (docs/audit-low-leads.md XD-07d), so a lint-clean tree did not boot.
+        assertThat(refusals(ROUTE, noSql)).singleElement().satisfies(violation -> {
+            assertThat(violation.code().toString()).isEqualTo("TQL-YAML-1041");
+            assertThat(violation.message()).contains("route 'items.dump'", "export.after",
+                    "query-export has no after: hook", "file-export");
+            assertThat(violation.message()).doesNotContain("after.sql");
+        });
+        assertThat(refusals(ROUTE, noFile)).hasSize(1);
         assertThat(refusals(Site.step("t", "j", "s"), noSql)).isEmpty();
     }
 

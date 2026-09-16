@@ -74,6 +74,13 @@ public final class DeclaredKinds {
     /** The mode of a binding that publishes rows a declaration can apply to. */
     private static final Set<String> ROW_MODES = Set.of("query");
 
+    /**
+     * The recipes whose sources are read by the export writer, which keeps its {@code columns:}
+     * vocabulary (docs/temporal-semantics.md decision 20) and never applies a {@code result:} —
+     * the builders hand every source to the extraction without the declaration stage.
+     */
+    private static final Set<String> EXPORT_RECIPES = Set.of("query-export", "file-export");
+
     private DeclaredKinds() {
     }
 
@@ -133,8 +140,10 @@ public final class DeclaredKinds {
     /**
      * Every {@code result:} entry of the route's {@code sources:} and {@code steps:} the
      * runtime could not honour: a kind outside {@link #RESULT_KINDS}, a {@code format:} the
-     * kind's parser refuses (or one on {@code json}, which reads none), or a declaration on a
-     * binding whose mode publishes no rows.
+     * kind's parser refuses (or one on {@code json}, which reads none), a declaration on a
+     * binding whose mode publishes no rows, or one on an export recipe, whose writer reads
+     * every source through its own {@code columns:} vocabulary and applies no declaration
+     * (docs/audit-low-leads.md, the {@code result:} sweep).
      */
     public static List<Violation> resultViolations(RouteDefinition route) {
         List<Violation> out = new ArrayList<>();
@@ -144,9 +153,48 @@ public final class DeclaredKinds {
         return out;
     }
 
+    /**
+     * Every {@code result:} on a job's chunk reader or writer, which the typed batch readers
+     * never apply — they keep the kind the read seam gives them — so a writer navigating
+     * {@code row.note.sku} on the un-parsed text wrote NULL with the run reported COMPLETED
+     * (docs/audit-low-leads.md TS-03). Reported at lint and refused at registration from this
+     * one predicate; the lint used to be alone.
+     */
+    public static List<Violation> chunkViolations(io.tesseraql.yaml.model.JobDefinition job) {
+        List<Violation> out = new ArrayList<>();
+        for (io.tesseraql.yaml.model.PipelineStep step : job.pipeline()) {
+            if (step.chunk() == null) {
+                continue;
+            }
+            chunkBinding(job, step, "reader", step.chunk().reader(), out);
+            chunkBinding(job, step, "writer", step.chunk().writer(), out);
+        }
+        return out;
+    }
+
+    private static void chunkBinding(io.tesseraql.yaml.model.JobDefinition job,
+            io.tesseraql.yaml.model.PipelineStep step, String role, Binding binding,
+            List<Violation> out) {
+        if (binding == null || binding.result().isEmpty()) {
+            return;
+        }
+        String key = "chunk." + role + ".result";
+        out.add(new Violation(key, "job '" + ExportDeclarations.bounded(job.id()) + "' step '"
+                + ExportDeclarations.bounded(step.id()) + "' " + key + ": is not applied - a"
+                + " chunk " + role + " reads each column in the kind the database declares, and"
+                + " a result: declaration is a route source's or a command step's"));
+    }
+
     private static void binding(RouteDefinition route, String key, Binding binding,
             List<Violation> out) {
         if (binding.result().isEmpty()) {
+            return;
+        }
+        if (EXPORT_RECIPES.contains(route.recipe())) {
+            out.add(new Violation(key + ".result", prefix(subject(route), key + ".result")
+                    + "a result: declaration applies to the rows a binding publishes, and a "
+                    + route.recipe() + " hands every source to the export writer, which reads"
+                    + " them through columns: and applies no declaration"));
             return;
         }
         if (!publishesRows(binding)) {

@@ -231,7 +231,7 @@ query-export / file-export output: format (csv, excel, pdf), filename, columns w
 | `columns` | array of [fileColumn](#filecolumn) | The columns written, in order, with their headings and format patterns. Omit it to write every column the rows carry, under its own name. |
 | `locale` | string | The locale date and number patterns render in, reaching typed or formatted columns on csv and pdf (a workbook never reads it and is refused for declaring it). A literal BCP 47 tag the JDK can format (`ja-JP`), or on a route a request source such as `principal.claim.locale`, `request.locale` or `query.lang` naming a declared input; a bad literal is refused at lint and boot (TQL-YAML-1063). Unset, `tesseraql.files.locale` applies. A job has no request, so a step's is a literal. |
 | `timezone` | string | The zone date and time values render in, reaching typed or formatted columns on csv and pdf and every temporal cell of an Excel grid or placement (a jxls report ignores it). A literal `ZoneId` (`Asia/Tokyo`, `+09:00`; region ids are case-sensitive), or on a route a request source such as `query.tz` naming a declared input; a bad literal is refused at lint and boot where the format reads it (TQL-YAML-1063). Unset, `tesseraql.files.timezone` applies. A job has no request, so a step's is a literal. |
-| `after` | [object](#exportafter) | A statement run once after the extraction, typically to mark the extracted rows. `file-export` only: on `query-export` it is a build error (TQL-ROUTE-3101), because a synchronous download has no transaction to hang it on. |
+| `after` | [object](#exportafter) | A statement run once after the extraction, typically to mark the extracted rows. `file-export` only: on `query-export` it is refused at lint and boot (TQL-YAML-1041), because a synchronous download has no transaction to hang it on. |
 | `maxRows` | integer | The ceiling for a format that holds every row before it writes (pdf, and the workbook template modes), defaulting to `tesseraql.resultMaterialization.maxRows`; a negative value opts out. A streaming format is never capped. |
 | `onOverflow` | string | `fail` (default) refuses an export past `maxRows` (TQL-LD-2850); `warn` truncates it at the cap and logs. |
 | `groupBy` | string | A column the rows are read as ordered groups by, each exposed to the template as a `key` and its own `rows`. The rows must be ordered by it (TQL-LD-2851). |
@@ -240,7 +240,7 @@ query-export / file-export output: format (csv, excel, pdf), filename, columns w
 
 #### export.after
 
-A statement run once after the extraction, typically to mark the extracted rows. `file-export` only: on `query-export` it is a build error (TQL-ROUTE-3101), because a synchronous download has no transaction to hang it on.
+A statement run once after the extraction, typically to mark the extracted rows. `file-export` only: on `query-export` it is refused at lint and boot (TQL-YAML-1041), because a synchronous download has no transaction to hang it on.
 
 | Property | Type | Description |
 | --- | --- | --- |
@@ -489,7 +489,7 @@ query-export / file-export output: format (csv, excel, pdf), filename, columns w
 | `columns` | array of [fileColumn](#filecolumn) | The columns written, in order, with their headings and format patterns. Omit it to write every column the rows carry, under its own name. |
 | `locale` | string | The locale date and number patterns render in, reaching typed or formatted columns on csv and pdf (a workbook never reads it and is refused for declaring it). A literal BCP 47 tag the JDK can format (`ja-JP`), or on a route a request source such as `principal.claim.locale`, `request.locale` or `query.lang` naming a declared input; a bad literal is refused at lint and boot (TQL-YAML-1063). Unset, `tesseraql.files.locale` applies. A job has no request, so a step's is a literal. |
 | `timezone` | string | The zone date and time values render in, reaching typed or formatted columns on csv and pdf and every temporal cell of an Excel grid or placement (a jxls report ignores it). A literal `ZoneId` (`Asia/Tokyo`, `+09:00`; region ids are case-sensitive), or on a route a request source such as `query.tz` naming a declared input; a bad literal is refused at lint and boot where the format reads it (TQL-YAML-1063). Unset, `tesseraql.files.timezone` applies. A job has no request, so a step's is a literal. |
-| `after` | [object](#pipelineexportafter) | A statement run once after the extraction, typically to mark the extracted rows. `file-export` only: on `query-export` it is a build error (TQL-ROUTE-3101), because a synchronous download has no transaction to hang it on. |
+| `after` | [object](#pipelineexportafter) | A statement run once after the extraction, typically to mark the extracted rows. `file-export` only: on `query-export` it is refused at lint and boot (TQL-YAML-1041), because a synchronous download has no transaction to hang it on. |
 | `maxRows` | integer | The ceiling for a format that holds every row before it writes (pdf, and the workbook template modes), defaulting to `tesseraql.resultMaterialization.maxRows`; a negative value opts out. A streaming format is never capped. |
 | `onOverflow` | string | `fail` (default) refuses an export past `maxRows` (TQL-LD-2850); `warn` truncates it at the cap and logs. |
 | `groupBy` | string | A column the rows are read as ordered groups by, each exposed to the template as a `key` and its own `rows`. The rows must be ordered by it (TQL-LD-2851). |
@@ -498,7 +498,7 @@ query-export / file-export output: format (csv, excel, pdf), filename, columns w
 
 ##### pipeline.export.after
 
-A statement run once after the extraction, typically to mark the extracted rows. `file-export` only: on `query-export` it is a build error (TQL-ROUTE-3101), because a synchronous download has no transaction to hang it on.
+A statement run once after the extraction, typically to mark the extracted rows. `file-export` only: on `query-export` it is refused at lint and boot (TQL-YAML-1041), because a synchronous download has no transaction to hang it on.
 
 | Property | Type | Description |
 | --- | --- | --- |
@@ -770,7 +770,7 @@ One column of a file transfer, in either form: the bare name, or an object addin
 | `description` | string | What this field is, in the words a caller reads. A wire field on both MCP surfaces derived from input: an mcp/ prompt's argument carries it in prompts/list, and an mcp/ tool's inputSchema carries it as the JSON Schema description a model follows. Declarable on a domain, and inherited from one. |
 | `type` | enum: `string` \| `integer` \| `number` \| `boolean` \| `date` \| `datetime` \| `array` \| `sort` \| `json` | The declared type. A supplied value is coerced to it and refused when it does not fit. `datetime` binds a date and time — with no `format:` it accepts the `yyyy-MM-ddTHH:mm` a datetime-local widget submits as well as the column default. `sort` is an ordered sort set (`-ship,order` - a leading `-` for descending) validated against `columns:`; the bound `params.<name>Sql` sibling carries the safe ORDER BY fragment. `json` is a read-only kind: legal on a domain and on a binding's `result:` entry, where a column's text is parsed into a JSON value; an `input:` declaring it is refused (TQL-YAML-1064). |
 | `required` | boolean | Refuse the request when this field is absent. |
-| `default` | any | The value bound when the request omits the field. |
+| `default` | any | The value bound when the request omits the field, parsed into the declared type and held to the field's constraints like a caller's value (TQL-YAML-1072 at lint and boot when it is not one the field accepts); an array input binds no default. |
 | `min` | number | Smallest accepted numeric value. |
 | `max` | number | Largest accepted numeric value. |
 | `maxLength` | integer ≥ 0 | Longest accepted string, in characters. |

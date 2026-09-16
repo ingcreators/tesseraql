@@ -32,9 +32,19 @@ final class PushStepRules {
         if (as == null || as.isBlank()) {
             return;
         }
-        java.util.regex.Matcher placeholder = PLACEHOLDER.matcher(as);
+        java.util.regex.Matcher placeholder = io.tesseraql.yaml.app.FilenamePlaceholders.WRITTEN
+                .matcher(as);
         while (placeholder.find()) {
             String path = placeholder.group(1);
+            if (!io.tesseraql.yaml.app.FilenamePlaceholders.resolves(path)) {
+                // The runtime's grammar is letters, digits, _ and . — anything else stays in
+                // the delivered name literally, braces included.
+                findings.add(new LintFinding(INCOMPLETE_PUSH_STEP, ERROR, source, "Step '"
+                        + step.id() + "': push as: placeholder {" + path + "} is not a dotted"
+                        + " path of letters, digits, _ and . - the runtime resolves no other"
+                        + " spelling and delivers it literally"));
+                continue;
+            }
             if (io.tesseraql.core.files.SplitExport.KEY.equals("{" + path + "}")) {
                 findings.add(new LintFinding(INCOMPLETE_PUSH_STEP, ERROR, source, "Step '"
                         + step.id() + "': push as: carries {key}, which a push never resolves -"
@@ -59,10 +69,6 @@ final class PushStepRules {
             }
         }
     }
-
-    /** A {@code {dotted.path}} placeholder in a delivered name. */
-    private static final java.util.regex.Pattern PLACEHOLDER = java.util.regex.Pattern
-            .compile("\\{([^{}]+)}");
 
     /** The roots a job's step context resolves ({@code StepContext.interpolate}). */
     private static final java.util.Set<String> CONTEXT_ROOTS = java.util.Set.of("params", "steps",

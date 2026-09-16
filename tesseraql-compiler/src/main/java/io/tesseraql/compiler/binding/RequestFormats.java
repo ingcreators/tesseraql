@@ -85,12 +85,14 @@ final class RequestFormats {
         return source;
     }
 
+    /**
+     * The value's owner, for the log line. A principal source that reaches a binder names a
+     * claim: the declaration predicate refuses every other principal path at lint and at boot
+     * (docs/audit-low-leads.md XD-07a), so there is no "principal attribute" to describe.
+     */
     private static String describe(String source) {
         if (source.startsWith(CLAIM_PREFIX)) {
             return "IdP claim '" + source.substring(CLAIM_PREFIX.length()) + "'";
-        }
-        if (source.startsWith(PRINCIPAL_PREFIX)) {
-            return "principal attribute '" + source.substring(PRINCIPAL_PREFIX.length()) + "'";
         }
         return "Input '" + fieldOf(source) + "'";
     }
