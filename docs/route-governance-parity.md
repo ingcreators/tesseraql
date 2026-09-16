@@ -79,7 +79,7 @@ Every other executor re-implements a subset.
 | `TransactionalCommandProcessor` (command, steps) | yes | yes | yes | yes | yes | yes | yes | yes |
 | `ValidationRules` | yes | yes | n/a | yes | yes | **—** | rides the command | **—** |
 | `query-export` URI (hand-built) | yes | yes | n/a | yes | yes | n/a | yes | **—** |
-| `JdbcFileTransferService` (row / query / after SQL) | **—** | **—** | n/a | **—** | partial | **—** | **—** | n/a |
+| `JdbcFileTransferService` (row / query / after SQL) | **—** | **—** | n/a | **—** | partial | **—** | yes (0.18.0) | n/a |
 | `JobExecutor` (batch steps) | yes | yes | n/a | refused | yes | **—** | **—** | n/a |
 | workflow `assign:` | yes | yes | yes | yes | yes | yes | rides the command | n/a |
 
@@ -316,6 +316,14 @@ Ordered so that each lands independently and the guard arrives before the long t
    `audit.user` holds and which tenant's pool applies have to be answered before anything is
    connected. Wiring them without answering would replace a loud refusal with a quiet guess —
    the same trade the scope cells decline.
+   **Answered for the transfer's pool, 2026-09-16** (`docs/audit-low-leads.md` slice 3a): the
+   "no caller" premise was false for a route-triggered transfer — its tenant was resolved on the
+   exchange since slice 3 and carried since #1131, just never used for the connection — and the
+   cell was not a loud refusal but the quiet guess itself: the main pool, 202, a file. The
+   transfer now runs on the request's tenant pool through `TenantRouting`, refuses an unknown
+   tenant with `TQL-TENANT-4031` before any row, and records its tenant for the `after:`
+   statement a first download fires. The rows and the record are two connections in a per-tenant
+   mode, rows first (`docs/multi-tenancy.md`). The audit binds stay open.
 
 7. ~~**The long tail.**~~ **Shipped, all of it.**
    The `lintEmit`/`lintValidation` calls missing from `lintConsumer` and `lintTool` were the

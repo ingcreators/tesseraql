@@ -24,6 +24,26 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **File transfers run on the tenant's pool, and an unknown tenant's transfer is refused.** In
+  `database-per-tenant` and `schema-per-tenant` modes a `file-export` extracted and a
+  `file-import` wrote on the main pool — every tenant, and an unknown tenant id the reads refuse
+  with `TQL-TENANT-4031`, got 202, COMPLETED and the shared pool's rows (an export) or wrote into
+  the shared schema (an import). `route-governance-parity.md` had deferred the cell as "a file
+  transfer runs with no caller"; a route-triggered transfer has one, and its tenant was resolved
+  on the exchange all along. Both recipes now resolve their pool through `TenantRouting` like
+  every other executor (`TransferPool` on the request), the service runs the extraction, the row
+  statement and the `after:` statement on it, and the transfer records its tenant (operations
+  V15) so the after-download statement resolves the same pool later. Where the pool is a tenant's,
+  the rows and the transfer record are two connections — rows first, then the verdict; a failure
+  between the two is a RUNNING record over landed rows, named in the log, never a COMPLETED
+  verdict over rows that did not land. `docs/audit-low-leads.md`, slice 3a (G24).
+- **A misspelled `tenancy.mode` or `tenancy.resolver.type` no longer switches isolation off.**
+  `schema_per_tenant` read as "not per-tenant" — no pools, no resolver, every tenant on the
+  shared pool, and the shared-schema lint (`TQL-TENANT-3001`) off with it; `claims` read as a
+  header resolver. Neither linted, neither logged. An enabled tenancy now refuses both at boot
+  (`TQL-TENANT-4032`) and at lint (`TQL-TENANT-3002`), as it refuses a per-tenant mode that
+  declares no `tenancy.datasources`. A stricter load is recorded, not shimmed: a deployment
+  that booted on a misspelling was never isolating. `docs/audit-low-leads.md`, slice 3a (G25).
 - **A workflow app boots on Oracle and SQL Server again.** The task store's `V2__delegated_from`
   bootstrap script (0.5.0, Phase 52) is `alter table … add column …` with no vendor variant, and
   its comment claimed every dialect parses it; Oracle (`"COLUMN" is a reserved word`) and SQL
