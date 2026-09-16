@@ -58,8 +58,9 @@ tesseraql mcp --transport http --port 8765
 ```
 
 The server prints the URL and serves until interrupted. Point the client at
-`http://host:8765/mcp`; `initialize` mints an `Mcp-Session-Id` the client echoes on later
-requests.
+`http://host:8765/mcp`; `initialize` mints an `Mcp-Session-Id` the client echoes on every
+later request. A JSON-RPC batch is accepted and answered as an array; a tool, resource or
+prompt that fails with a framework code reports its sentence once, beginning with the code.
 
 > stdout carries protocol frames only in stdio mode — the server redirects all logging to
 > stderr. Do not write to stdout from hooks or wrappers around it.
@@ -79,6 +80,20 @@ The write tools change source files, so the HTTP transport must not be exposed u
 - **Loopback by default.** `--bind` defaults to `127.0.0.1`. The server refuses to bind a
   non-loopback address without authentication unless you pass `--insecure` (and warns when it
   runs without auth at all).
+- **A web page cannot drive it.** Loopback alone is not a guard against a page open in the
+  developer's browser: a page on any site can `fetch` a local port with a no-cors `text/plain`
+  POST, and a DNS-rebinding page is same-origin to the server and reads the answers too. So the
+  HTTP transport judges the caller before the message, as the MCP specification requires of a
+  local server. A request that names an `Origin` is a browser page's, and the server answers
+  one from a loopback origin (an inspector page on another local port) or from an origin
+  `--allow-origin` names, and refuses every other with `403` (`TQL-MCP-4265`); a request with
+  no `Origin` is a non-browser client's. A `POST` must declare `application/json` (`415`,
+  `TQL-MCP-4266`), the one content type a browser cannot send without a preflight. Every
+  request after `initialize` carries the `Mcp-Session-Id` it was given (`400`, `TQL-MCP-4268`;
+  an unknown or idle-expired session is `404`, `TQL-MCP-4269`), a `MCP-Protocol-Version` the
+  server does not speak is `400` (`TQL-MCP-4267`), and the body is read to 10 MiB and no
+  further (`413`, `TQL-MCP-4270`). The runtime's `/_tesseraql/mcp` endpoint applies the same
+  judgements, allowing the application's own external origin beside loopback.
 - **`--read-only`** drops the write tools entirely (scaffold and drafts), leaving only the
   read tools — safe to expose for inspection on a shared host. It is a property of the
   server, never of one application: there is no reason to vary it per application, and a

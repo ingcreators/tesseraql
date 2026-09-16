@@ -88,14 +88,17 @@ final class OAuthRoutes {
             // RFC 9728 protected-resource metadata, path-inserted per member — the probe the
             // measured clients try first (docs/audit-hardening.md decision 2). One document
             // per member's MCP surface; the surface serves them because it is what holds the
-            // member list and the origin, and the fence already owns /.well-known/*.
-            for (String basePath : flow.memberAddresses().values()) {
+            // member list and the origin, and the fence already owns /.well-known/*. One
+            // pipeline per member, because the edge keys a mount by method and pipeline: N
+            // mounts on one id left only the last member's document served
+            // (docs/audit-low-leads.md slice 10, found by the Japanese member's row).
+            flow.memberAddresses().forEach((member, basePath) -> {
+                String pipeline = "system.oauth.resourceMetadata." + member;
                 HttpMounts.of(context).mount("GET",
                         "/.well-known/oauth-protected-resource" + basePath + "/_tesseraql/mcp",
-                        "system.oauth.resourceMetadata");
-            }
-            pipelines.pipeline("system.oauth.resourceMetadata")
-                    .process(this::resourceMetadata);
+                        pipeline);
+                pipelines.pipeline(pipeline).process(this::resourceMetadata);
+            });
         }
     }
 
@@ -106,8 +109,11 @@ final class OAuthRoutes {
         if (path == null || path.isBlank()) {
             path = exchange.request().uri();
         }
-        String resource = flow.issuer()
-                + path.substring("/.well-known/oauth-protected-resource".length());
+        // The resource as the wire spells it: the router hands the path decoded, so a member
+        // named in Japanese was published raw — not a URI — and the gate, the challenge and
+        // the member's audiences spell it encoded (docs/audit-low-leads.md, unfiled 48).
+        String resource = io.tesseraql.core.http.PercentEncoding.uriLiteral(flow.issuer()
+                + path.substring("/.well-known/oauth-protected-resource".length()));
         java.util.Map<String, Object> document = new java.util.LinkedHashMap<>();
         document.put("resource", resource);
         document.put("authorization_servers", java.util.List.of(flow.issuer()));

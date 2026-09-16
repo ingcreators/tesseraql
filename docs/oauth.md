@@ -84,11 +84,17 @@ default — nothing changes without opting in:
 tesseraql:
   mcp:
     auth: bearer          # public | bearer
-    # resource: urn:...   # optional override of the derived resource identifier
 ```
 
 Under `bearer`, the gate demands a token whose audience is this member's MCP resource —
-`<origin><base path>/_tesseraql/mcp` unless `tesseraql.mcp.resource` declares another name.
+`<origin><base path>/_tesseraql/mcp`, spelled as the wire spells a URI (a member named in
+Japanese is `/%E5%8F%97%E6%B3%A8/_tesseraql/mcp` in the document, the challenge and the token
+alike). Under the stack's authorization server that name is derived, full stop: the RFC 9728
+document publishes it, the challenge points at it and a grant carries it. A declared
+`tesseraql.mcp.resource` would be a name no client is ever told and no token could carry, so
+the stack refuses one at boot (`TQL-OAUTH-3005`), the way it refuses a second key source. The
+override exists for a standalone runtime behind an external issuer, where the identity
+provider decides what lands in `aud` ([audit-hardening.md](audit-hardening.md), decision 2).
 An unauthenticated call answers `401` with a `WWW-Authenticate` challenge naming the RFC 9728
 metadata, which is where the measured clients begin discovery. The token then rides through to
 each tool's own `security:` block, so per-tool `auth:` and `policy:` gate every call exactly as

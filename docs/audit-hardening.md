@@ -171,6 +171,17 @@ Two deployment facts belong in the eventual hosting documentation rather than in
 authorization server must be reachable from Anthropic's published egress range, and Claude
 allows ten seconds for discovery, registration and token endpoints.
 
+*Addendum, `docs/audit-low-leads.md` slice 10 (G6, unfiled 48).* Under the stack's own
+authorization server the identifier is derived and only derived: the document, the challenge
+and the grant all name `<origin><base path>/_tesseraql/mcp`, so a declared
+`tesseraql.mcp.resource` there was a name no client was told and no token could carry, and
+the gate refused every token without a diagnostic. The stack now refuses the key at boot
+(`TQL-OAUTH-3005`), the way it refuses a second key source; the override stays what decision
+6 needs it for — a standalone runtime behind an external issuer. The identifier is a URI and
+is spelled as the wire spells one at every site: a member named in Japanese is
+`/%E5%8F%97%E6%B3%A8/_tesseraql/mcp` in the document, the challenge (which folded the raw
+name to `?`), the member's audiences and the minted `aud`.
+
 **An intranet deployment does not need any of this, and that bounds when the work is due.**
 The dividing line between clients is not the transport, it is which side opens the connection.
 A remote connector is fetched *from the vendor's cloud* on every Claude surface — claude.ai,

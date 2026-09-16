@@ -81,15 +81,37 @@ class StackIssuerTest {
                 ORIGIN + "/shop/_tesseraql/mcp");
     }
 
+    /**
+     * Under the stack issuer the MCP resource is the address-derived name, full stop: the RFC
+     * 9728 document, the challenge and the grants all name that one, so a declared
+     * {@code tesseraql.mcp.resource} was a name no client was told and no token could carry —
+     * the gate refused every token, silently (docs/audit-low-leads.md, G6). It is refused at
+     * boot instead, the way a declared key source is.
+     */
     @Test
-    void aDeclaredMcpResourceReplacesTheDerivedOneInTheAudience() {
-        AppConfig applied = StackIssuer.apply(
-                config(Map.of("mcp", Map.of("resource", "urn:shop:mcp"))),
-                StackIssuer.jwt(ORIGIN, Map.of()), ORIGIN, "/shop", "this test");
+    void aDeclaredMcpResourceUnderTheStackIssuerIsRefused() {
+        AppConfig withOverride = config(Map.of("mcp", Map.of("resource", "urn:shop:mcp")));
 
-        // The same derivation the MCP transport gate uses: a declared resource IS the member's
-        // MCP name, so the audience carries it instead of the address-derived default.
-        assertThat(audience(applied)).containsExactly(ORIGIN + "/shop", ORIGIN, "urn:shop:mcp");
+        assertThatThrownBy(() -> StackIssuer.apply(withOverride,
+                StackIssuer.jwt(ORIGIN, Map.of()), ORIGIN, "/shop", "member 'shop'"))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("TQL-OAUTH-3005")
+                .hasMessageContaining("tesseraql.mcp.resource")
+                .hasMessageContaining("member 'shop'");
+    }
+
+    /**
+     * A member named in Japanese is addressed on the wire percent-encoded, and its MCP resource
+     * — a URI — is spelled the way the stack's document publishes it and a grant carries it
+     * (docs/audit-low-leads.md, unfiled 48). The address itself stays the catalogue's spelling.
+     */
+    @Test
+    void aJapaneseMembersMcpResourceIsSpelledAsTheWireSpellsIt() {
+        AppConfig applied = StackIssuer.apply(config(Map.of()),
+                StackIssuer.jwt(ORIGIN, Map.of()), ORIGIN, "/受注", "this test");
+
+        assertThat(audience(applied)).containsExactly(ORIGIN + "/受注", ORIGIN,
+                ORIGIN + "/%E5%8F%97%E6%B3%A8/_tesseraql/mcp");
     }
 
     @SuppressWarnings("unchecked")

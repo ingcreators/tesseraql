@@ -301,6 +301,35 @@ class AppMcpToolIntegrationTest {
         assertThat(wrongRole.path("result").isMissingNode()).isTrue();
     }
 
+    /**
+     * The runtime's endpoint judges the caller the way the dev server's does — the same
+     * handler, the headers handed through by the bridge: a web page's request (a foreign
+     * {@code Origin}, or a no-cors {@code text/plain} body) is refused before dispatch, a
+     * request after {@code initialize} needs its session, and a loopback page is admitted
+     * (docs/audit-low-leads.md, G1).
+     */
+    @Test
+    void theEndpointRefusesAWebPagesRequestBeforeDispatch() throws Exception {
+        HttpResponse<String> foreign = send(initializeBody(), null, null,
+                Map.of("Origin", "http://evil.example", "Content-Type", "application/json"));
+        assertThat(foreign.statusCode()).as(foreign.body()).isEqualTo(403);
+        assertThat(foreign.body()).contains("TQL-MCP-4265");
+
+        HttpResponse<String> plain = send(initializeBody(), null, null,
+                Map.of("Content-Type", "text/plain"));
+        assertThat(plain.statusCode()).as(plain.body()).isEqualTo(415);
+        assertThat(plain.body()).contains("TQL-MCP-4266");
+
+        HttpResponse<String> sessionless = send(rpcBody("tools/list", null), null, null,
+                Map.of("Content-Type", "application/json"));
+        assertThat(sessionless.statusCode()).as(sessionless.body()).isEqualTo(400);
+        assertThat(sessionless.body()).contains("TQL-MCP-4268");
+
+        HttpResponse<String> local = send(initializeBody(), null, null,
+                Map.of("Origin", "http://localhost:6274", "Content-Type", "application/json"));
+        assertThat(local.statusCode()).as(local.body()).isEqualTo(200);
+    }
+
     // ----- MCP helpers ------------------------------------------------------
 
     private JsonNode call(String tool, Map<String, Object> arguments, String bearer)
@@ -325,10 +354,15 @@ class AppMcpToolIntegrationTest {
 
     private static HttpResponse<String> post(String body, String session, String bearer)
             throws Exception {
+        return send(body, session, bearer, Map.of("Content-Type", "application/json"));
+    }
+
+    private static HttpResponse<String> send(String body, String session, String bearer,
+            Map<String, String> headers) throws Exception {
         HttpRequest.Builder request = HttpRequest.newBuilder(
                 URI.create("http://localhost:" + runtime.port() + "/_tesseraql/mcp"))
-                .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(body));
+        headers.forEach(request::header);
         if (session != null) {
             request.header("Mcp-Session-Id", session);
         }
@@ -537,7 +571,7 @@ class AppMcpToolIntegrationTest {
                 ui:
                   prefersBorder: true
                   csp:
-                    connectDomains: ["'self'"]
+                    connectDomains: ["https://api.example.com"]
                 """);
         Files.writeString(mcp.resolve("users-board.sql"), """
                 select u.id, u.name

@@ -39,6 +39,31 @@ All notable changes to TesseraQL are documented here. The format follows
   unknown fields is `TQL-YAML-1071`: a request carrying the field was refused by the
   mass-assignment guard before the bind, one without it bound null. Both point at the
   declaration to write. `docs/audit-low-leads.md` slice 9.
+- **The MCP transport judges the caller before the message.** A request to the dev server's
+  `/mcp` or an application's `/_tesseraql/mcp` that names an `Origin` is a browser page's:
+  one from a loopback origin, from the application's own external origin, or from an origin
+  `tesseraql mcp --allow-origin` names is answered, and every other is refused with `403`
+  (`TQL-MCP-4265`) — the MCP specification's guard against DNS rebinding, which makes a page
+  same-origin to a local server. A `POST` must declare `application/json` (`415`,
+  `TQL-MCP-4266`), the one content type a browser cannot send without a preflight — the two
+  together close the no-cors `text/plain` request any open page could send to a loopback dev
+  server without a JWT, which ran the write tools. A request after `initialize` carries the
+  `Mcp-Session-Id` it was given (`400`, `TQL-MCP-4268`; an unknown or idle-expired one is
+  `404`, `TQL-MCP-4269`, a coded envelope now), a `MCP-Protocol-Version` the server does not
+  speak is `400` (`TQL-MCP-4267`, as revision 2025-06-18 requires — the header was read and
+  consulted by nothing), and the dev transport reads a body to 10 MiB and no further (`413`,
+  `TQL-MCP-4270`). `docs/audit-low-leads.md` slice 10 (G1, G3, G7).
+- **The MCP server receives JSON-RPC batches.** An array of messages is dispatched element by
+  element and answered as an array (nothing for a batch of notifications; `-32600` for an
+  empty batch, one past 100 messages, or an `initialize` inside one), on stdio and over HTTP —
+  revision 2025-03-26, which the server negotiates, makes receiving a batch a MUST, and the
+  server answered one with `-32600`. `SUPPORTED` keeps its three revisions: narrowing it would
+  refuse clients on a mid-2025 SDK that work today.
+- **An MCP tool's input schema carries every string constraint the binder enforces.**
+  `pattern`, `minLength` and the `email`/`uuid`/`url` (as `uri`) formats ride into the schema
+  beside the types, ranges, `maxLength` and enums it always carried, at the top level and
+  inside an object element alike — the OpenAPI contract for the same field had them, so a
+  model told only `string` sent a SKU the binder refused (G4).
 
 ### Changed
 
@@ -111,6 +136,19 @@ All notable changes to TesseraQL are documented here. The format follows
 - **`tesseraql-yaml` carries Quartz's cron expression.** A job's `schedule.cron` is judged
   where it is written by the grammar the scheduler fires it by (`docs/audit-low-leads.md`
   decision 10); the scheduler, its thread pool and its job store stay out, as in the runtime.
+- **`tesseraql.mcp.resource` is refused under the stack's authorization server.** The stack's
+  RFC 9728 document, its challenge and its grants all name the address-derived resource
+  (`<origin><base path>/_tesseraql/mcp`), so a declared override was a name no client was
+  told and no token could carry — the transport gate refused every token with no diagnostic,
+  and `oauth.md`'s own `urn:` example could never work. `StackIssuer` refuses the key at boot
+  (`TQL-OAUTH-3005`), the way it refuses a second key source; the override stays for a
+  standalone runtime behind an external identity provider. Breaking for a stack member that
+  declared one (G6).
+- **The MCP Apps UI page says what the fragment is.** A UI resource is a static snapshot of
+  its own query, styled only by what its template links, inert to `hx-*` and never party to
+  the host's handshake — not the "interactive UI" that "presents the tool's result" the page
+  promised; the `csp` example is an origin, not the CSP keyword `'self'` (which, in a host's
+  sandbox, means the sandbox). Docs and two fixtures only (G5).
 
 ### Fixed
 
@@ -445,6 +483,28 @@ All notable changes to TesseraQL are documented here. The format follows
   notes from the pull requests that touched that directory since the previous `ext-v*` tag,
   over a full-history checkout, and a test drives the script over a repository it builds with
   framework and extension pull requests interleaved across two tags.
+- **A coded MCP failure reports its sentence once.** `TqlException.getMessage()` already
+  begins with the code, and the three catch sites in `McpServer` (tool call, resource read,
+  prompt get) prepended it again, so every coded error on the dev MCP server read
+  `TQL-X-n: TQL-X-n: …` (G2).
+- **A member named in Japanese has an MCP resource identifier that is a URI.** The gate's
+  default resource, the RFC 9728 document, the member's audiences and the minted `aud` all
+  spelled the raw base path — `/受注/_tesseraql/mcp`, which no URI can carry — and the
+  `WWW-Authenticate` challenge, the one site that crosses the wire as a header, folded it to
+  `?`, so a client following the challenge fetched a document that does not exist. The
+  resource is spelled `/%E5%8F%97%E6%B3%A8/_tesseraql/mcp` at every site now, and the
+  authorize endpoint accepts a `resource` in either spelling and mints the wire one
+  (unfiled 48).
+- **A stack of two or more members served one RFC 9728 document.** Every member's
+  `/.well-known/oauth-protected-resource/<member>/_tesseraql/mcp` was mounted on one pipeline
+  id, and the edge keys a mount by method and pipeline, so only the last member's document
+  answered; the others were the router's 404. One pipeline per member (unfiled 74, surfaced
+  by the Japanese-member row).
+- **The MCP transport's four remaining flat refusals are shaped.** A body that is not JSON —
+  or an empty one, which a dead branch let through as a 200 — is the JSON-RPC `-32700` the
+  stdio transport already sent, built in one place for both; an unknown session is the coded
+  envelope (`TQL-MCP-4269`); a serialisation failure is `-32603`. The envelope ledger now sees
+  a mapper-built flat body too (G7).
 
 ## 0.17.0 - 2026-09-15
 

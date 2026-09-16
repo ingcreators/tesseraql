@@ -224,10 +224,13 @@ catch up. `domains/` and `rules/` get their own small schemas and their own file
    `domains/` (or `rules/`) at all silently dropped every `domain:`/`use:` reference. The
    skip is gone: an unresolved reference fails the load whether or not the tree exists,
    named in the CHANGELOG.
-2. Does the MCP input schema advertise domain-derived constraints to the model once domains
-   resolve? `McpSchema`'s javadoc frames type-and-required as deliberate scope. Leaning yes for
-   enum/pattern/length: a model that sees the constraint produces a valid call, and the alternative
-   is a rejected tool call the model cannot diagnose.
+2. ~~Does the MCP input schema advertise domain-derived constraints to the model once domains
+   resolve?~~ **Closed: yes — shipped** (`docs/audit-low-leads.md` slice 10, G4). A domain's
+   constraints resolve onto the field before the schema is derived, and the schema now carries
+   every string constraint the binder enforces — `pattern`, `minLength`/`maxLength`, the
+   `email`/`uuid`/`url` formats — beside the types, ranges and enums it always carried, at the
+   top level and inside an object element alike; a model that sees the constraint produces a
+   valid call.
 3. Should the Rules page live in the portal, in Studio, or both? Domains chose the portal. Decided:
    portal for parity, with Studio linking to it rather than reimplementing — the Rules page sits in
    the studio sidebar's Documentation group next to Domains.

@@ -65,9 +65,18 @@ transactional command — and the MCP endpoint dispatches a `tools/call` to it. 
   rides into the tool's route, where its declared `auth`/`policy` run. A tool with no security
   is public; a tool with a policy enforces it; an unauthorized call comes back as an MCP tool
   error. Discovery (`tools/list`) is open so a client can see what the app offers.
+- **The endpoint judges the caller before the message.** A request that names an `Origin` is a
+  browser page's: the endpoint answers one from a loopback origin or from the application's
+  own external origin and refuses every other with `403` (`TQL-MCP-4265`) — the MCP
+  specification's guard against DNS rebinding, which makes a web page same-origin to a local
+  server. A `POST` must declare `application/json` (`415`, `TQL-MCP-4266`), the one content
+  type a browser cannot send without a preflight; a `MCP-Protocol-Version` the server does
+  not speak is `400` (`TQL-MCP-4267`); and every request after `initialize` carries the
+  `Mcp-Session-Id` it was given (`400`, `TQL-MCP-4268`; an unknown or idle-expired one is
+  `404`, `TQL-MCP-4269`). A JSON-RPC batch is accepted and answered as an array.
 - **The input schema is derived** from the route's `input:` constraints (types, required,
-  ranges, enums), so the model is guided toward valid arguments; validation still runs
-  server-side.
+  ranges, `minLength`/`maxLength`, `pattern`, the `email`/`uuid`/`url` formats, enums), so the
+  model is guided toward valid arguments; validation still runs server-side.
 - **The result** is the SQL/command result as JSON (`{ "rows": [...], "rowCount": n }` for a
   query), or a custom shape if the tool declares a `response: { json: ... }` block.
 - **Governance, lint, and coverage extend to tools.** A write (command) tool must declare an
@@ -130,12 +139,14 @@ the 2-way SQL — and the MCP endpoint answers `resources/list` and `resources/r
 
 ## MCP Apps UI
 
-A tool can hand back interactive UI instead of only JSON — the [MCP Apps
+A tool can hand back a rendered view beside its JSON — the [MCP Apps
 extension](https://modelcontextprotocol.io/community/seps/1865-mcp-apps-interactive-user-interfaces-for-mcp)
-(SEP-1865). TesseraQL's Hypermedia Components (`hc-*` markup) and htmx are the natural renderer,
-so the UI is a server-rendered fragment, not a client-side template: an application declares a
-**UI resource** as a `kind: ui` document under `mcp/` — a `query-html` (or `page`) definition,
-addressed by a stable `ui://` uri — and a `kind: tool` document references it with a `ui:` field.
+(SEP-1865). The view is a server-rendered `hc-*` fragment, not a client-side template: an
+application declares a **UI resource** as a `kind: ui` document under `mcp/` — a `query-html`
+(or `page`) definition, addressed by a stable `ui://` uri — and a `kind: tool` document
+references it with a `ui:` field. What the host receives is a snapshot of the resource's own
+query, rendered when it is read; the section below says exactly what that snapshot is and is
+not.
 
 ```yaml
 # mcp/orders-board.yml
@@ -165,7 +176,7 @@ response:
 ui:
   prefersBorder: true
   csp:
-    connectDomains: ["'self'"]
+    connectDomains: ["https://api.example.com"]
 ```
 
 ```yaml
@@ -180,6 +191,20 @@ then the Thymeleaf template. It therefore renders the same `hc-*` fragment a pag
 follows the blessed patterns in [docs/hypermedia-ui.md](hypermedia-ui.md), and any gap
 belongs upstream in the kit rather than in app CSS.
 
+**What the fragment is in a host.** An MCP Apps host renders the resource in a sandboxed frame
+of its own origin, with a content-security policy that admits nothing the resource does not
+declare, and delivers the tool's result to it over the extension's `ui/initialize` handshake.
+The fragment TesseraQL serves is the template's output and nothing more. It links no
+stylesheet, so the kit's `hc-*` classes render as the host's default text unless the template
+itself links `hc.min.css` by an absolute URL under the application's external origin and
+`resourceDomains` names that origin. It loads no htmx, so `hx-*` attributes are inert. It runs
+no script, so it never takes part in the handshake: it shows the rows its own `sources:` read
+at `resources/read` time, not the arguments or the result of the tool that linked it. A UI
+resource is therefore a **static snapshot** of its own query, styled only by what its
+template carries. The `csp` values are origins (`https://api.example.com`), never CSP keywords:
+`'self'` in a host's sandbox means the sandbox origin, not the application
+(`docs/audit-low-leads.md`, G5).
+
 The runtime serves it over the same `/_tesseraql/mcp` endpoint as the tools and resources.
 So:
 
@@ -191,8 +216,9 @@ So:
   rendering hints — `prefersBorder`, content-security-policy domains); `resources/read { "uri": ... }`
   runs the route and returns the rendered `hc-*` fragment as the resource's `contents`.
 - **Tools link to a UI resource.** A tool's `ui:` field is advertised as its
-  `_meta.ui.resourceUri`, so a host renders the linked fragment to present the tool's result
-  instead of showing the raw JSON.
+  `_meta.ui.resourceUri`, so a host that supports the extension renders the linked fragment
+  beside the tool's result — the fragment's own snapshot, as above, not a rendering of that
+  result.
 - **Security is per-resource and identical to a route.** The request's `Authorization: Bearer`
   rides into the UI resource's route, where its declared `auth`/`policy` run; an unauthorized read
   comes back as a `resources/read` JSON-RPC error. Discovery is open.

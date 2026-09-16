@@ -85,6 +85,50 @@ class McpInputSchemaTest {
                 .isEqualTo("The stock keeping unit to look up.");
     }
 
+    /**
+     * The string constraints the binder enforces — a regex, a minimum length, the email/uuid/url
+     * formats — ride into the schema the way they ride into the OpenAPI contract for the same
+     * field; a model told only {@code string} sent a SKU the binder refused
+     * (docs/audit-low-leads.md, G4). {@code url} is JSON Schema's {@code uri}.
+     */
+    @Test
+    void theStringConstraintsTheBinderEnforcesAreAdvertised() {
+        var definition = new io.tesseraql.yaml.SimpleYamlParser().parseRoute(
+                """
+                        version: tesseraql/v1
+                        id: items.find
+                        kind: route
+                        recipe: query-json
+                        input:
+                          sku: {type: string, required: true, pattern: "^[A-Z]{3}-\\\\d+$", minLength: 6, maxLength: 20}
+                          email: {type: string, format: email}
+                          ref: {type: string, format: uuid}
+                          site: {type: string, format: url}
+                          lines:
+                            type: array
+                            items:
+                              fields:
+                                code: {type: string, pattern: "^[a-z]+$", minLength: 2}
+                                contact: {type: string, format: email}
+                        """,
+                "<test>");
+
+        ObjectNode schema = McpInputSchema.fromInputs(definition.input());
+        ObjectNode properties = (ObjectNode) schema.path("properties");
+
+        assertThat(properties.path("sku").path("pattern").asText()).isEqualTo("^[A-Z]{3}-\\d+$");
+        assertThat(properties.path("sku").path("minLength").asInt()).isEqualTo(6);
+        assertThat(properties.path("sku").path("maxLength").asInt()).isEqualTo(20);
+        assertThat(properties.path("email").path("format").asText()).isEqualTo("email");
+        assertThat(properties.path("ref").path("format").asText()).isEqualTo("uuid");
+        assertThat(properties.path("site").path("format").asText()).isEqualTo("uri");
+
+        ObjectNode element = (ObjectNode) properties.path("lines").path("items").path("properties");
+        assertThat(element.path("code").path("pattern").asText()).isEqualTo("^[a-z]+$");
+        assertThat(element.path("code").path("minLength").asInt()).isEqualTo(2);
+        assertThat(element.path("contact").path("format").asText()).isEqualTo("email");
+    }
+
     /** A field with no description carries no key, rather than a null or an empty string. */
     @Test
     void aFieldWithoutOneCarriesNoDescription() {

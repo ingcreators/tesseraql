@@ -102,7 +102,7 @@ class ManifestLoaderTest {
                 ui:
                   prefersBorder: true
                   csp:
-                    connectDomains: ["'self'"]
+                    connectDomains: ["https://api.example.com"]
                 """);
         // A tool that links to the UI resource via its ui: field.
         java.nio.file.Files.writeString(dir.resolve("mcp/find.sql"), "select 1\n");
@@ -126,7 +126,7 @@ class ManifestLoaderTest {
             assertThat(ui.uri()).isEqualTo("ui://users/board");
             assertThat(ui.mimeType()).isEqualTo("text/html;profile=mcp-app");
             assertThat(ui.ui().prefersBorder()).isTrue();
-            assertThat(ui.ui().cspConnectDomains()).containsExactly("'self'");
+            assertThat(ui.ui().cspConnectDomains()).containsExactly("https://api.example.com");
         });
         assertThat(manifest.tools()).singleElement()
                 .satisfies(tool -> assertThat(tool.uiResource()).isEqualTo("ui://users/board"));

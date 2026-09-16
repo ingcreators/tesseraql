@@ -38,7 +38,9 @@ import picocli.CommandLine.Option;
  * HTTP transport reuses the framework's bearer-token check ({@code tesseraql.security.jwt}); it
  * refuses to expose tools off-loopback without authentication unless {@code --insecure} is given.
  * {@code --read-only} drops the write tools (scaffold, drafts) for safe shared exposure - a
- * property of the server, never of one application.
+ * property of the server, never of one application. A browser page may call the endpoint from a
+ * loopback origin or one {@code --allow-origin} names; any other {@code Origin} is refused
+ * (docs/audit-low-leads.md, G1).
  */
 @Command(name = "mcp", description = "Serve the developer MCP tools over stdio or HTTP.")
 public final class McpCommand implements Callable<Integer> {
@@ -80,6 +82,11 @@ public final class McpCommand implements Callable<Integer> {
     @Option(names = {"--insecure"}, description = "Allow the HTTP transport off-loopback without"
             + " authentication.")
     boolean insecure;
+
+    @Option(names = {"--allow-origin"}, paramLabel = "<origin>", description = "A browser"
+            + " origin (scheme://host[:port]) the HTTP transport answers besides loopback;"
+            + " repeatable. A request from any other Origin is refused (http transport).")
+    java.util.List<String> allowOrigins = new java.util.ArrayList<>();
 
     @Override
     public Integer call() throws Exception {
@@ -178,8 +185,15 @@ public final class McpCommand implements Callable<Integer> {
             System.err.println("WARNING: the MCP HTTP server has no authentication"
                     + (isLoopback(bind) ? " (bound to " + bind + ")." : " (--insecure)."));
         }
-        HttpTransport http = new HttpTransport(new McpHttpHandler(server, authenticator), bind,
-                port, "/mcp");
+        McpHttpHandler handler;
+        try {
+            handler = new McpHttpHandler(server, authenticator, "Bearer", allowOrigins);
+        } catch (IllegalArgumentException notAnOrigin) {
+            System.err.println("--allow-origin takes scheme://host[:port]: "
+                    + notAnOrigin.getMessage());
+            return 2;
+        }
+        HttpTransport http = new HttpTransport(handler, bind, port, "/mcp");
         http.start();
         Runtime.getRuntime().addShutdownHook(new Thread(http::stop));
         System.out.println("TesseraQL MCP serving at " + http.url()

@@ -554,3 +554,4 @@ Serve the developer MCP tools over stdio or HTTP.
 | `--port <port>` | — | HTTP port (http transport). Default: `8765`. |
 | `--bind <bind>` | — | HTTP bind address (http transport). Default: `127.0.0.1`. |
 | `--insecure` | — | Allow the HTTP transport off-loopback without authentication. |
+| `--allow-origin <origin>` | — | A browser origin (scheme://host[:port]) the HTTP transport answers besides loopback; repeatable. A request from any other Origin is refused (http transport). |

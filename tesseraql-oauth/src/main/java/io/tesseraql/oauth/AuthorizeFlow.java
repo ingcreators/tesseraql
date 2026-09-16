@@ -216,7 +216,11 @@ public final class AuthorizeFlow {
             return validated;
         }
         String resource = params.get("resource");
-        validated.resource = resource;
+        // Stored and minted as the wire spells it, whichever spelling the client sent: the
+        // gate demands the one audience the document published.
+        validated.resource = resource == null
+                ? null
+                : io.tesseraql.core.http.PercentEncoding.uriLiteral(resource);
         validated.member = memberFor(resource);
         if (validated.member == null) {
             validated.outcome = Outcome.redirect(errorRedirect(validated, "invalid_target"));
@@ -232,16 +236,21 @@ public final class AuthorizeFlow {
     /**
      * The member a resource identifier belongs to: its address, or anything under it — an MCP
      * surface's identifier lives below the member's address (stack-architecture.md decision 6).
-     * Static because the refresh-time re-resolution asks the same question.
+     * Static because the refresh-time re-resolution asks the same question. Both sides are
+     * compared as the wire spells a URI: the metadata document publishes a Japanese member's
+     * resource percent-encoded, the catalogue holds its address raw, and a client may send
+     * either spelling (docs/audit-low-leads.md, unfiled 48).
      */
     static String memberOf(String resource, Map<String, String> memberAddresses,
             String externalOrigin) {
         if (resource == null || externalOrigin == null || memberAddresses == null) {
             return null;
         }
+        String wire = io.tesseraql.core.http.PercentEncoding.uriLiteral(resource);
         for (Map.Entry<String, String> member : memberAddresses.entrySet()) {
-            String address = externalOrigin + member.getValue();
-            if (resource.equals(address) || resource.startsWith(address + "/")) {
+            String address = io.tesseraql.core.http.PercentEncoding.uriLiteral(
+                    externalOrigin + member.getValue());
+            if (wire.equals(address) || wire.startsWith(address + "/")) {
                 return member.getKey();
             }
         }
