@@ -35,7 +35,10 @@ import java.util.Map;
  * request parameter, so a token scoped to one application cannot deploy another by renaming an
  * upload field — and writes the same intent files {@code tesseraql deploy} writes, through the
  * host's narrow pen. The reconciler watching the install root stays the one mechanism that moves
- * a runtime; a refused deploy answers as this endpoint's response and writes nothing.
+ * a runtime; a deploy the preflight refuses answers as this endpoint's response and writes
+ * nothing. A candidate the host refuses at admission is judged after this endpoint has
+ * answered, so the verdict is read back from {@code GET /_tesseraql/deploy/<name>} — the status
+ * file the host writes, behind the same grant — which is what {@code deploy --url --wait} tails.
  *
  * <p>Two callers, one endpoint: a pipeline presents a bearer from {@code tesseraql token}
  * (validated against the stack file's {@code security.jwt.*}, grafted onto this runtime's
@@ -69,6 +72,31 @@ final class DeployRoutes {
 
         HttpMounts.of(context).mount("POST", "/_tesseraql/deploy", "system.deploy");
         pipelines.pipeline("system.deploy").process(this::deploy);
+        HttpMounts.of(context).mount("GET", "/_tesseraql/deploy/{name}",
+                "system.deploy.status");
+        pipelines.pipeline("system.deploy.status").process(this::status);
+    }
+
+    /**
+     * The host's last verdict on one member, for the caller whose deploy the endpoint answered
+     * before the host judged it: the status file's fields, or {@code {"name": …, "outcome":
+     * null}} when the host has recorded nothing. Behind the same grant as deploying the member.
+     */
+    private void status(Exchange exchange) throws Exception {
+        Principal principal = authenticate(exchange);
+        String name = String.valueOf(exchange.request().param("name"));
+        if (!Atoms.holds(principal.permissions(), Atoms.APP_DEPLOY_PREFIX, name)) {
+            throw new TqlException(PolicyEngine.FORBIDDEN, "Principal is not granted "
+                    + Atoms.APP_DEPLOY_PREFIX + name + ", which reading the host's verdict on"
+                    + " that application requires");
+        }
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("name", name);
+        body.put("outcome", null);
+        body.putAll(pen.status(name));
+        exchange.response().status(200);
+        exchange.response().header(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
+        exchange.setBody(MAPPER.writeValueAsString(body));
     }
 
     private void deploy(Exchange exchange) throws Exception {

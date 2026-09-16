@@ -179,10 +179,12 @@ live edit.
 
 ## Deploying one application
 
-Deploying is writing files. `catalog.json` names each member's active version, and
-`.upgrade/<name>.json` names a staged candidate and its traffic weight. A running host watches
-the install root and converges to what the files say, replacing exactly that member's runtime
-while the stack keeps serving
+Deploying is writing files. `.upgrade/<name>.json` names a candidate — a canary at its traffic
+weight, or a version to replace the serving one — and `catalog.json` names each member's
+serving version. A running host watches the install root and applies what the candidate file
+says, replacing exactly that member's runtime while the stack keeps serving and moving the
+catalogue to the version it now serves; the catalogue is the host's write, so it never names a
+version no host has started
 ([stack-architecture.md](https://github.com/ingcreators/tesseraql/blob/main/docs/stack-architecture.md)
 Decision 29). `tesseraql deploy` is the pen:
 
@@ -191,13 +193,13 @@ tesseraql deploy ./orders-2.1.0.tqlapp --stack /opt/tesseraql/apps        # repl
 tesseraql deploy ./orders-2.1.0.tqlapp --stack ... --canary --weight 10   # stage a canary
 tesseraql deploy weight orders 50 --stack ...                             # move the ramp
 tesseraql deploy promote orders --stack ...                               # candidate goes active
-tesseraql deploy rollback orders --stack ...                              # canary or last upgrade
-tesseraql deploy status orders --stack ...                                # read back both files
+tesseraql deploy rollback orders --stack ...                              # discard, or last served
+tesseraql deploy status orders --stack ...                                # read back both sides
 ```
 
 The package is a local path — getting bytes onto the host stays your deployment's concern — and
 `--sha256 <hex>` verifies it before anything is written. The command works with no host running:
-the state is written, and the next `host` start converges to it. `--stack` must be an install
+the candidate is written, and the next `host` start applies it. `--stack` must be an install
 root; a workspace of source trees has no version ledger and is refused (`TQL-UPGRADE-4092`),
 because it deploys by restarting the stack.
 
@@ -211,13 +213,16 @@ tesseraql deploy ./orders-2.1.0.tqlapp --url https://stack.example.com
 
 The endpoint checks the caller's `tql.app.deploy.<name>` grant against the **package's declared
 name** — never a request parameter, so a token scoped to `orders` cannot deploy `billing` by
-renaming anything — runs the same preflight, and writes the same intent on its own install
-root; a refused deploy answers as the response and writes nothing. This is how a pipeline
-deploys only the applications it manages, with a scoped short-lived token and no login to the
-host machine. The same endpoint has a browser face: the ops console's **Deploy** page
-(`/_tesseraql/ops/console/deploy`), shown to any signed-in holder of a `tql.app.deploy` grant,
-uploads a `.tqlapp` through the same checks ([ops console](ops-console.md#deploy)). It needs
-the stack file to carry the token issuer:
+renaming anything — runs the same preflight, and writes the same candidate on its own install
+root; a deploy the preflight refuses answers as the response and writes nothing. The host
+judges the candidate after the endpoint has answered, and its verdict is read back from
+`GET /_tesseraql/deploy/<name>` behind the same grant: `deploy --url --wait` tails it, exactly
+as the local mode tails the status file. This is how a pipeline deploys only the applications
+it manages, with a scoped short-lived token and no login to the host machine. The same endpoint
+has a browser face: the ops console's **Deploy** page (`/_tesseraql/ops/console/deploy`), shown
+to any signed-in holder of a `tql.app.deploy` grant, uploads a `.tqlapp` through the same
+checks and shows the host's last verdict per member ([ops console](ops-console.md#deploy)). It
+needs the stack file to carry the token issuer:
 
 ```yaml
 # tesseraql-stack.yml
@@ -248,7 +253,10 @@ asked to stop cooperatively at drain start: a run between steps stops with an ex
 point, a chunk step stops at its next committed checkpoint, and a run in its final step
 completes. Rerunning a stopped run goes through the operator's existing rerun, deliberately not
 automatically. **A failed replace is a no-op**: refused admission, a failed start, or a failed
-probe leaves the old runtime serving, and the refusal lands in the status file.
+probe leaves the old runtime serving and the catalogue naming it, and the refusal lands in the
+status file with the action and version it refused. The candidate stays on disk, refused, until
+you write something new — a rollback discards it, a re-deploy of the same package attempts it
+again — and the next cold start comes up on the serving version, not on the refused one.
 
 Two windows to know about. First, a staged canary's `--weight` gates **HTTP traffic only**: the
 candidate's jobs, pollers and outbox work from the moment it starts, claim-arbitrated against
@@ -260,12 +268,15 @@ relay follows the slot either way — a declared port only matters for reaching 
 beside the gateway.
 
 The host reports each attempt in `.upgrade/<name>.status.json`: applied, or refused with the
-refusal's own message. One file, one writer — the CLI writes intent, the host writes outcome.
-`deploy --wait` (and `promote --wait`) tails that file so a pipeline gets a synchronous exit
-code, and `deploy status` renders both sides. Membership stays start-time: a new name in the
-catalogue, or one removed, is the stack changing shape and waits for the next stack start (the
-host logs the owed restart). Previous versions stay on disk — they are rollback's working
-material.
+action, the version and the refusal's own message. The CLI writes the candidate; the host
+writes the catalogue and the status. `deploy --wait`, `promote --wait` and `rollback --wait`
+tail that file so a pipeline gets a synchronous exit code, and `deploy status` renders both
+sides — the host's verdict only when it is about a version on disk now, so an old refusal never
+reads as the current state. The sweep other nodes rely on does not re-attempt a candidate whose
+refusal is on record. Membership stays start-time: a new name in the catalogue, or one removed,
+is the stack changing shape and waits for the next stack start (the host logs the owed restart).
+Previous versions stay on disk — they are rollback's working material, and `rollback` targets
+the version that served, never one the host refused.
 
 Install-root write access is deploy authority over the whole stack: `catalog.json` is one file,
 so no permission arrangement scopes it per application. Hold the per-team line where teams

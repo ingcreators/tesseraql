@@ -279,18 +279,31 @@ public final class MultiAppHost implements AutoCloseable, StackReconciler.HostOp
                         ingressStrip(config)));
                 LOG.info("Hosting app {} v{} from {}", app.name(), app.version(), appHome);
 
+                // A staged canary is a candidate, and boot admits it as the running host
+                // would — the same guards, the same ready probe — and isolates it the same way
+                // (docs/runtime-replace.md structural decision 2's addendum): one that refuses
+                // is logged and recorded, and the stack comes up on the served versions. It
+                // used to start without the admission guards and take every member down when
+                // it failed. A pending replace candidate is not boot's to judge: the
+                // reconciler's first pass applies it, and moves the catalogue, exactly as on a
+                // running host.
                 upgrader.canary(app.name(), installRoot).ifPresent(canary -> {
-                    io.tesseraql.yaml.config.AppConfig candidateConfig = new io.tesseraql.yaml.manifest.ManifestLoader()
-                            .load(installRoot.resolve(canary.candidate().path()).normalize())
-                            .config();
-                    // The candidate answers the same address as the app it may replace, so it
-                    // serves the same base path.
-                    host.slots.put(app.name() + CANARY_SLOT, new Slot(canary.candidate(),
-                            host.startRuntime(canary.candidate(), candidateConfig, 0),
-                            ingressStrip(candidateConfig)));
-                    host.canaryWeights.put(app.name(), canary.weightPercent());
-                    LOG.info("Hosting canary {} v{} at {}% traffic",
-                            app.name(), canary.candidate().version(), canary.weightPercent());
+                    try {
+                        // The candidate answers the same address as the app it may replace, so
+                        // it serves the same base path.
+                        host.slots.put(app.name() + CANARY_SLOT,
+                                host.admitAndStart(canary.candidate()));
+                        host.canaryWeights.put(app.name(), canary.weightPercent());
+                        LOG.info("Hosting canary {} v{} at {}% traffic",
+                                app.name(), canary.candidate().version(),
+                                canary.weightPercent());
+                    } catch (RuntimeException refused) {
+                        LOG.warn("The staged canary {} v{} refused at boot; the stack comes up"
+                                + " on the serving version: {}", app.name(),
+                                canary.candidate().version(), refused.getMessage());
+                        StackReconciler.recordRefused(installRoot, app.name(), "stage",
+                                canary.candidate().version(), refused.getMessage());
+                    }
                 });
             }
             // The stack surface runtime, after the members so a datasource misconfiguration
@@ -337,12 +350,19 @@ public final class MultiAppHost implements AutoCloseable, StackReconciler.HostOp
      * moves back at the next stack start — recorded in {@code hosting.md} rather than engineered
      * around.
      */
-    @Override
     public synchronized void replace(InstalledApp entry) {
+        replace(entry, () -> {
+        });
+    }
+
+    /** As {@link #replace(InstalledApp)}; {@code swapped} runs between the swap and the drain. */
+    @Override
+    public synchronized void replace(InstalledApp entry, Runnable swapped) {
         Slot candidate = admitAndStart(entry);
         Slot retired = slots.put(entry.name(), candidate);
         LOG.info("Replaced {}: v{} -> v{} (the retiring runtime drains now)",
                 entry.name(), retired.entry().version(), entry.version());
+        swapped.run();
         retire(retired, "stopped: a deploy replaced " + entry.name() + " with v"
                 + entry.version() + " (cooperative stop)");
     }
@@ -385,14 +405,21 @@ public final class MultiAppHost implements AutoCloseable, StackReconciler.HostOp
      * Nothing starts: the promoted runtime has been serving its weight share already, which is
      * the strongest health check available.
      */
-    @Override
     public synchronized void promoteCanary(String appName) {
+        promoteCanary(appName, () -> {
+        });
+    }
+
+    /** As {@link #promoteCanary(String)}; {@code swapped} runs between the swap and the drain. */
+    @Override
+    public synchronized void promoteCanary(String appName, Runnable swapped) {
         Slot candidate = requireCanary(appName);
         slots.remove(appName + CANARY_SLOT);
         canaryWeights.remove(appName);
         Slot retired = slots.put(appName, candidate);
         LOG.info("Promoted canary {}: v{} -> v{} (the retiring runtime drains now)", appName,
                 retired.entry().version(), candidate.entry().version());
+        swapped.run();
         retire(retired, "stopped: a deploy promoted " + appName + " to v"
                 + candidate.entry().version() + " (cooperative stop)");
     }
@@ -853,22 +880,47 @@ public final class MultiAppHost implements AutoCloseable, StackReconciler.HostOp
      * moves a runtime.
      */
     HostContext.DeployPen deployPen() {
-        return (tqlapp, canary, weightPercent, sha256) -> {
-            io.tesseraql.operations.app.AppUpgrader upgrader = new io.tesseraql.operations.app.AppUpgrader();
-            io.tesseraql.operations.app.AppUpgrader.UpgradeResult result = sha256 != null
-                    ? upgrader.upgrade(tqlapp, installRoot,
-                            io.tesseraql.core.version.SemanticVersion.parse(
-                                    io.tesseraql.core.TesseraqlVersion.current()),
-                            canary, sha256)
-                    : upgrader.upgrade(tqlapp, installRoot,
-                            io.tesseraql.core.version.SemanticVersion.parse(
-                                    io.tesseraql.core.TesseraqlVersion.current()),
-                            canary);
-            if (canary && weightPercent != null) {
-                upgrader.setCanaryWeight(result.appName(), installRoot, weightPercent);
+        return new HostContext.DeployPen() {
+            @Override
+            public io.tesseraql.operations.app.AppUpgrader.UpgradeResult deploy(Path tqlapp,
+                    boolean canary, Integer weightPercent, String sha256) {
+                io.tesseraql.operations.app.AppUpgrader upgrader = new io.tesseraql.operations.app.AppUpgrader();
+                io.tesseraql.operations.app.AppUpgrader.UpgradeResult result = sha256 != null
+                        ? upgrader.upgrade(tqlapp, installRoot,
+                                io.tesseraql.core.version.SemanticVersion.parse(
+                                        io.tesseraql.core.TesseraqlVersion.current()),
+                                canary, sha256)
+                        : upgrader.upgrade(tqlapp, installRoot,
+                                io.tesseraql.core.version.SemanticVersion.parse(
+                                        io.tesseraql.core.TesseraqlVersion.current()),
+                                canary);
+                if (canary && weightPercent != null) {
+                    upgrader.setCanaryWeight(result.appName(), installRoot, weightPercent);
+                }
+                return result;
             }
-            return result;
+
+            @Override
+            public Map<String, Object> status(String name) {
+                return lastVerdict(name);
+            }
         };
+    }
+
+    /** The status file the host writes for {@code name}, as the pen and the origins hand it out. */
+    private Map<String, Object> lastVerdict(String name) {
+        StackReconciler.Status status = StackReconciler.lastStatus(installRoot, name);
+        if (status == null) {
+            return Map.of();
+        }
+        Map<String, Object> verdict = new java.util.LinkedHashMap<>();
+        verdict.put("name", status.name());
+        verdict.put("action", status.action());
+        verdict.put("version", status.version());
+        verdict.put("outcome", status.outcome());
+        verdict.put("message", status.message());
+        verdict.put("at", status.at());
+        return verdict;
     }
 
     /**
@@ -893,6 +945,11 @@ public final class MultiAppHost implements AutoCloseable, StackReconciler.HostOp
             public String version(String member) {
                 Slot slot = slots.get(member);
                 return slot == null || slot.entry() == null ? null : slot.entry().version();
+            }
+
+            @Override
+            public Map<String, Object> lastVerdict(String member) {
+                return MultiAppHost.this.lastVerdict(member);
             }
         };
     }

@@ -112,12 +112,16 @@ The browser face of the stack's deploy endpoint (`POST /_tesseraql/deploy` —
 [hosting.md](hosting.md#operating-a-host)): upload a `.tqlapp`, optionally staged as a canary
 with a traffic weight, and the running host's reconciler converges the stack to it without a
 restart. The page appears in the sidebar only for a signed-in holder of a `tql.app.deploy`
-grant, and it lists the members those grants cover with the version each serves right now.
+grant, and it lists the members those grants cover with the version each serves right now and
+the host's last verdict on each — applied, or refused with what was refused and why.
 
 The gate is display only. The form posts to the endpoint itself, which checks the caller's
 `tql.app.deploy.<name>` grant against the **package's declared name** — never a form field —
 so the page can widen what is listed, never what is deployed. A refusal (wrong application,
-stale version, failed preflight) renders inline on the form and writes nothing.
+stale version, failed preflight) renders inline on the form and writes nothing. The success
+banner says the intent is written; the host judges the candidate after that, and a candidate it
+refuses at admission shows in the table's verdict column, not in the banner — the page used to
+keep its success banner while the host had refused in silence.
 
 The upload writes to **the install root of the node that served the request**, and the versions
 listed are that node's. On a stack running on several nodes that is enough only when they share

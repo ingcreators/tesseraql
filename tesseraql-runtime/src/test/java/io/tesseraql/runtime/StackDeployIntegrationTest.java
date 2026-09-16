@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.operations.app.AppCatalog;
 import io.tesseraql.operations.app.AppInstaller;
+import io.tesseraql.operations.app.AppUpgrader;
+import io.tesseraql.operations.app.InstalledApp;
 import io.tesseraql.security.password.Pbkdf2PasswordEncoder;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -150,17 +152,92 @@ class StackDeployIntegrationTest {
         assertThat(body.path("fromVersion").asText()).isEqualTo("1.0.0");
         assertThat(body.path("toVersion").asText()).isEqualTo("2.0.0");
 
-        // The intent is written; the running host's reconciler converges to it.
+        // The intent is written — a candidate, the catalogue still the serving version — and
+        // the running host's reconciler applies it, moving the catalogue when it does.
+        assertThat(new AppCatalog(installRoot).find("shop").orElseThrow().version())
+                .isEqualTo("1.0.0");
+        assertThat(new AppUpgrader().pending("shop", installRoot)).get()
+                .extracting(InstalledApp::version).isEqualTo("2.0.0");
+        awaitServed("s2");
+        // The caller reads the host's verdict back through the endpoint's GET — the status
+        // file the host writes, behind the same grant — which is what `deploy --url --wait`
+        // tails (docs/audit-low-leads.md, unfiled 18). The catalogue moved at the swap, the
+        // verdict is written after it.
+        awaitVerdict(deployerBearer, "applied", "2.0.0");
         assertThat(new AppCatalog(installRoot).find("shop").orElseThrow().version())
                 .isEqualTo("2.0.0");
+        var verdict = MAPPER.readTree(status(deployerBearer).body());
+        assertThat(verdict.path("action").asText()).isEqualTo("replace");
+        assertThat(status(otherBearer).statusCode()).as("the grant is per application")
+                .isEqualTo(403);
+    }
+
+    /**
+     * A candidate the host refuses at admission: the endpoint answers 200 (the intent is
+     * written, exactly as the CLI's local mode), and the verdict reaches the caller through
+     * the GET and the deploy page — the host used to refuse in silence, the page kept its
+     * success banner, and the catalogue named the refused version.
+     */
+    @Test
+    @Order(10)
+    void aRefusedCandidatesVerdictReachesTheEndpointAndThePage() throws Exception {
+        Path home = appHome("5.0.0", "s2");
+        Files.writeString(home.resolve("config/overlay.yml"),
+                Files.readString(home.resolve("config/overlay.yml"))
+                        .replace("tesseraql:\n", "tesseraql:\n  modules:\n    - duckdb\n"));
+        HttpResponse<String> accepted = deploy(packaged(home, "5.0.0"), deployerBearer, "");
+        assertThat(accepted.statusCode()).as(accepted.body()).isEqualTo(200);
+
+        awaitVerdict(deployerBearer, "refused", "5.0.0");
+        var verdict = MAPPER.readTree(status(deployerBearer).body());
+        assertThat(verdict.path("action").asText()).isEqualTo("replace");
+        assertThat(verdict.path("message").asText()).contains("modules");
+        assertThat(new AppCatalog(installRoot).find("shop").orElseThrow().version())
+                .as("the catalogue names the version that serves").isEqualTo("4.0.0");
+        assertThat(itemName()).isEqualTo("s2");
+
+        BrowserSession deployer = signIn("deployer");
+        HttpResponse<String> page = CLIENT.send(HttpRequest.newBuilder(
+                URI.create("http://localhost:" + gateway.port()
+                        + "/_tesseraql/ops/console/deploy"))
+                .header("Cookie", deployer.cookie())
+                .header("Accept", "text/html")
+                .build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(page.body()).as("the page shows the host's verdict, not only the pen's")
+                .contains("refused replace v5.0.0").contains("modules");
+    }
+
+    private static HttpResponse<String> status(String bearer) throws Exception {
+        return CLIENT.send(HttpRequest.newBuilder(
+                URI.create("http://localhost:" + gateway.port() + "/_tesseraql/deploy/shop"))
+                .header("Authorization", "Bearer " + bearer)
+                .GET().build(), HttpResponse.BodyHandlers.ofString());
+    }
+
+    private static void awaitVerdict(String bearer, String outcome, String version)
+            throws Exception {
         long deadline = System.currentTimeMillis() + 60_000;
         while (System.currentTimeMillis() < deadline) {
-            if ("s2".equals(servedItemName())) {
-                return;
+            HttpResponse<String> response = status(bearer);
+            if (response.statusCode() == 200) {
+                var body = MAPPER.readTree(response.body());
+                if (outcome.equals(body.path("outcome").asText())
+                        && version.equals(body.path("version").asText())) {
+                    return;
+                }
             }
             Thread.sleep(200);
         }
-        assertThat(itemName()).as("the reconciler replaced the serving runtime").isEqualTo("s2");
+        throw new AssertionError("Timed out waiting for the host's verdict " + outcome + " v"
+                + version + "; last: " + status(bearer).body());
+    }
+
+    private static void awaitServed(String tag) throws Exception {
+        long deadline = System.currentTimeMillis() + 60_000;
+        while (System.currentTimeMillis() < deadline && !tag.equals(servedItemName())) {
+            Thread.sleep(200);
+        }
+        assertThat(itemName()).as("the reconciler replaced the serving runtime").isEqualTo(tag);
     }
 
     /** A package that is not newer than the installed version refuses — and writes nothing. */
@@ -276,13 +353,12 @@ class StackDeployIntegrationTest {
                 .isEqualTo("/_tesseraql/ops/console/deploy?deployed=shop"
                         + "&fromVersion=2.0.0&toVersion=3.0.0");
 
+        assertThat(new AppUpgrader().pending("shop", installRoot)).get()
+                .extracting(InstalledApp::version).isEqualTo("3.0.0");
+        awaitServed("s1");
+        awaitVerdict(deployerBearer, "applied", "3.0.0");
         assertThat(new AppCatalog(installRoot).find("shop").orElseThrow().version())
                 .isEqualTo("3.0.0");
-        long deadline = System.currentTimeMillis() + 60_000;
-        while (System.currentTimeMillis() < deadline && !"s1".equals(servedItemName())) {
-            Thread.sleep(200);
-        }
-        assertThat(itemName()).as("the reconciler replaced the serving runtime").isEqualTo("s1");
     }
 
     /**
@@ -308,6 +384,10 @@ class StackDeployIntegrationTest {
                 .isEqualTo("/_tesseraql/ops/console/deploy?deployed=shop"
                         + "&fromVersion=3.0.0&toVersion=4.0.0");
         assertThat(accepted.body()).isEmpty();
+        assertThat(new AppUpgrader().pending("shop", installRoot)).get()
+                .extracting(InstalledApp::version).isEqualTo("4.0.0");
+        awaitServed("s2");
+        awaitVerdict(deployerBearer, "applied", "4.0.0");
         assertThat(new AppCatalog(installRoot).find("shop").orElseThrow().version())
                 .isEqualTo("4.0.0");
     }

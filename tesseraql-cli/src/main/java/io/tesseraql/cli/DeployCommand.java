@@ -25,17 +25,18 @@ import picocli.CommandLine.Parameters;
 
 /**
  * {@code tesseraql deploy}: the operator's pen for the install root's deploy protocol
- * (docs/runtime-replace.md structural decision 3). The command writes intent —
- * {@code catalog.json} and {@code .upgrade/<name>.json}, through {@link AppUpgrader} — and a
- * running host's reconciler converges to it, replacing one application's runtime while the stack
- * keeps serving. With no host running the command still works: the state is written, and the next
- * host start converges to it, which is the file protocol's whole point.
+ * (docs/runtime-replace.md structural decision 3). The command writes a candidate —
+ * {@code .upgrade/<name>.json}, through {@link AppUpgrader} — and a running host's reconciler
+ * applies it, replacing one application's runtime while the stack keeps serving and moving
+ * {@code catalog.json} to the version it now serves. With no host running the command still
+ * works: the candidate is written, and the next host start applies it, which is the file
+ * protocol's whole point — and the catalogue names only versions a host has started.
  *
  * <p>The package is a local path; getting bytes onto the host stays the deployment's concern
  * (hosting.md's no-fetcher stance). {@code --stack} is explicit like {@code host}'s, because
  * production does not guess (docs/cli-surface.md decision 9). {@code --wait} tails the status
- * file the host alone writes, so a CI pipeline gets a synchronous exit code out of an
- * asynchronous host.
+ * file the host alone writes — through the stack's {@code GET /_tesseraql/deploy/<name>} in
+ * {@code --url} mode — so a CI pipeline gets a synchronous exit code out of an asynchronous host.
  */
 @Command(name = "deploy", description = "Deploy one application into a stack's install root; a"
         + " running host replaces its runtime without a restart.", subcommands = {
@@ -116,12 +117,6 @@ final class DeployCommand implements Callable<Integer> {
                     + " endpoint).");
             return 2;
         }
-        if (url != null && wait) {
-            System.err.println("--wait tails the install root's status file, which --url cannot"
-                    + " see. The endpoint already answers refusals synchronously; watch"
-                    + " convergence with `deploy status --stack <dir>` on the host.");
-            return 2;
-        }
         if (weight != null && !canary) {
             System.err.println("--weight is the staged canary's traffic share; pass it with"
                     + " --canary, or use 'deploy weight <name> <percent>' to move a running"
@@ -157,9 +152,9 @@ final class DeployCommand implements Callable<Integer> {
                 System.out.println("Deployed '" + result.appName() + "' " + result.toVersion()
                         + (result.fromVersion() == null
                                 ? ""
-                                : " (was " + result.fromVersion() + ")")
-                        + ". A running host converges to it; otherwise the next start serves"
-                        + " it.");
+                                : " (serving " + result.fromVersion() + ")")
+                        + ". A running host applies it now; otherwise the next start does."
+                        + " The host's verdict lands in the status file.");
             }
             return wait ? awaitOutcome(stack, result.appName(), before, waitTimeout) : 0;
         } catch (TqlException refused) {
@@ -198,9 +193,13 @@ final class DeployCommand implements Callable<Integer> {
         if (sha256 != null) {
             query.append(query.isEmpty() ? "" : "&").append("sha256=").append(sha256);
         }
-        String target = url.replaceAll("/+$", "") + "/_tesseraql/deploy"
-                + (query.isEmpty() ? "" : "?" + query);
+        String origin = url.replaceAll("/+$", "");
+        String target = origin + "/_tesseraql/deploy" + (query.isEmpty() ? "" : "?" + query);
         try {
+            // The verdict before the write, so --wait sees only a fresh one — the same rule
+            // the local mode applies to the status file's bytes.
+            String name = new AppInstaller().peek(tqlapp).name();
+            String before = wait ? remoteStatus(origin, name, token) : null;
             // Bounded like every other outbound call (docs/duplication-consolidation.md,
             // campaign 1): this upload had no timeout at all. The request bound is generous
             // because a bundle is tens of megabytes over whatever link reaches the stack.
@@ -219,10 +218,14 @@ final class DeployCommand implements Callable<Integer> {
                         + "' " + body.get("toVersion")
                         + (body.get("fromVersion") == null
                                 ? ""
-                                : (staged ? " beside the serving " : " (was ")
+                                : (staged ? " beside the serving " : " (serving ")
                                         + body.get("fromVersion") + (staged ? "" : ")"))
-                        + ". The stack's host converges to it.");
-                return 0;
+                        + ". The stack's host applies it; its verdict is at " + origin
+                        + "/_tesseraql/deploy/" + body.get("name") + ".");
+                return wait
+                        ? awaitRemoteOutcome(origin, String.valueOf(body.get("name")), token,
+                                before, waitTimeout)
+                        : 0;
             }
             System.err.println("The stack refused it (HTTP " + response.statusCode() + "): "
                     + refusalMessage(response.body()));
@@ -234,6 +237,55 @@ final class DeployCommand implements Callable<Integer> {
             Thread.currentThread().interrupt();
             return 1;
         }
+    }
+
+    /** The stack's recorded verdict on {@code name}, as the endpoint's JSON, or null when unreachable. */
+    private static String remoteStatus(String origin, String name, String token) {
+        try {
+            java.net.http.HttpResponse<String> response = java.net.http.HttpClient.newBuilder()
+                    .connectTimeout(java.time.Duration.ofSeconds(10)).build()
+                    .send(java.net.http.HttpRequest.newBuilder(java.net.URI.create(
+                            origin + "/_tesseraql/deploy/" + name))
+                            .timeout(java.time.Duration.ofSeconds(30))
+                            .header("Authorization", "Bearer " + token)
+                            .GET().build(), java.net.http.HttpResponse.BodyHandlers.ofString());
+            return response.statusCode() == 200 ? response.body() : null;
+        } catch (IOException unreachable) {
+            return null;
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            return null;
+        }
+    }
+
+    /**
+     * The remote twin of {@link #awaitOutcome}: polls {@code GET /_tesseraql/deploy/<name>}
+     * until the verdict changes from what it was before the write, and renders it as the same
+     * exit codes. The status the endpoint serves is the file the host writes — one record,
+     * read from the other side of the grant boundary.
+     */
+    private static Integer awaitRemoteOutcome(String origin, String name, String token,
+            String before, long timeoutSeconds) {
+        long deadline = System.nanoTime() + timeoutSeconds * 1_000_000_000L;
+        while (System.nanoTime() < deadline) {
+            String now = remoteStatus(origin, name, token);
+            if (now != null && !now.equals(before)) {
+                Integer verdict = renderOutcome(now);
+                if (verdict != null) {
+                    return verdict;
+                }
+            }
+            try {
+                Thread.sleep(POLL_MILLIS);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                return 1;
+            }
+        }
+        System.err.println("Timed out after " + timeoutSeconds + "s waiting for the host to"
+                + " report on '" + name + "'. The intent is written - a running host applies it"
+                + " shortly. The host reports at " + origin + "/_tesseraql/deploy/" + name + ".");
+        return 1;
     }
 
     /** {@code --token-file}, then {@code TESSERAQL_TOKEN} — never a command-line argument. */
@@ -303,20 +355,10 @@ final class DeployCommand implements Callable<Integer> {
         while (System.nanoTime() < deadline) {
             byte[] now = statusSnapshot(stack, name);
             if (now != null && !Arrays.equals(now, before)) {
-                Map<?, ?> status;
-                try {
-                    status = MAPPER.readValue(now, Map.class);
-                } catch (IOException torn) {
-                    status = null;
-                }
-                if (status != null && status.get("outcome") != null) {
-                    if ("applied".equals(status.get("outcome"))) {
-                        System.out.println("The host applied it: " + status.get("action") + " v"
-                                + status.get("version") + ".");
-                        return 0;
-                    }
-                    System.err.println("The host refused it: " + status.get("message"));
-                    return 2;
+                Integer verdict = renderOutcome(
+                        new String(now, java.nio.charset.StandardCharsets.UTF_8));
+                if (verdict != null) {
+                    return verdict;
                 }
             }
             try {
@@ -327,10 +369,34 @@ final class DeployCommand implements Callable<Integer> {
             }
         }
         System.err.println("Timed out after " + timeoutSeconds + "s waiting for the host to"
-                + " report on '" + name + "'. The intent is written - a running host converges"
-                + " shortly, and with no host running the next start serves it. The host"
-                + " reports in " + file + ".");
+                + " report on '" + name + "'. The intent is written - a running host applies it"
+                + " shortly, and with no host running the next start does. The host reports in "
+                + file + ".");
         return 1;
+    }
+
+    /**
+     * One status record as an exit code and a sentence — the host's action and version named
+     * either way, so a refusal says what was refused. Null when the record carries no outcome
+     * yet (a torn read, or a file without one).
+     */
+    private static Integer renderOutcome(String json) {
+        Map<?, ?> status;
+        try {
+            status = MAPPER.readValue(json, Map.class);
+        } catch (IOException torn) {
+            return null;
+        }
+        if (status == null || status.get("outcome") == null) {
+            return null;
+        }
+        String what = status.get("action") + " v" + status.get("version");
+        if ("applied".equals(status.get("outcome"))) {
+            System.out.println("The host applied it: " + what + ".");
+            return 0;
+        }
+        System.err.println("The host refused it (" + what + "): " + status.get("message"));
+        return 2;
     }
 
     /** {@code tesseraql deploy weight <name> <percent> --stack <dir>}: move the running ramp. */
@@ -400,11 +466,14 @@ final class DeployCommand implements Callable<Integer> {
     }
 
     /**
-     * {@code tesseraql deploy rollback <name> --stack <dir>}: discard a staged canary, or move
-     * the catalogue back onto the previous version's files.
+     * {@code tesseraql deploy rollback <name> --stack <dir>}: discard a candidate the host has
+     * not applied — a staged canary, a pending deploy — or write the previous served version as
+     * the candidate the host replaces onto. {@code --wait} tails the host's verdict as
+     * {@code deploy --wait} does: a rollback used to print success and return before the host
+     * had judged it.
      */
-    @Command(name = "rollback", description = "Discard a staged canary, or restore the previous"
-            + " version as active.")
+    @Command(name = "rollback", description = "Discard a candidate the host has not applied, or"
+            + " restore the previous version as active.")
     static final class RollbackCommand implements Callable<Integer> {
 
         @Parameters(index = "0", paramLabel = "<name>", description = "The application to roll"
@@ -415,21 +484,38 @@ final class DeployCommand implements Callable<Integer> {
                 + " install root.")
         Path stack;
 
+        @Option(names = {"--wait"}, description = "Wait for the running host to report the"
+                + " outcome in the member's .upgrade status file before exiting.")
+        boolean wait;
+
+        @Option(names = {"--wait-timeout"}, paramLabel = "<seconds>", description = "How long"
+                + " --wait waits before giving up loudly (default 300).")
+        long waitTimeout = 300;
+
         @Override
         public Integer call() {
             try {
                 requireInstallRoot(stack);
+                byte[] before = statusSnapshot(stack, name);
                 AppUpgrader upgrader = new AppUpgrader();
-                boolean staged = upgrader.canary(name, stack).isPresent();
+                boolean staged = upgrader.canary(name, stack).isPresent()
+                        || upgrader.pending(name, stack)
+                                .filter(pending -> new AppCatalog(stack).find(name)
+                                        .map(serving -> !serving.version()
+                                                .equals(pending.version()))
+                                        .orElse(true))
+                                .isPresent();
                 InstalledApp active = upgrader.rollback(name, stack);
                 if (staged) {
-                    System.out.println("Discarded the staged candidate; '" + name + "' stays at "
+                    System.out.println("Discarded the candidate; '" + name + "' stays at "
                             + (active == null ? "its serving version" : active.version()) + ".");
-                } else {
-                    System.out.println("Rolled back '" + name + "' to " + active.version()
-                            + ".");
+                    // A discard is the host's to converge as well (a canary slot to retire),
+                    // but nothing here is a verdict to wait for: the serving version stays.
+                    return 0;
                 }
-                return 0;
+                System.out.println("Rolling back '" + name + "' to " + active.version()
+                        + ". A running host applies it now; otherwise the next start does.");
+                return wait ? awaitOutcome(stack, name, before, waitTimeout) : 0;
             } catch (TqlException refused) {
                 System.err.println(refused.getMessage());
                 return 2;
@@ -439,7 +525,10 @@ final class DeployCommand implements Callable<Integer> {
 
     /**
      * {@code tesseraql deploy status [<name>] --stack <dir>}: reads back both sides of the
-     * protocol — the intent files the CLI writes, and the status file the host writes.
+     * protocol — the candidate the CLI writes, the catalogue and the status the host writes.
+     * The host's verdict is printed only when it is about what is on disk now — the served
+     * version, or the candidate — so a refusal of an earlier intent never reads as the current
+     * state.
      */
     @Command(name = "status", description = "Show each member's active version, staged canary,"
             + " and the host's last reported outcome.")
@@ -467,13 +556,22 @@ final class DeployCommand implements Callable<Integer> {
                 }
                 AppUpgrader upgrader = new AppUpgrader();
                 for (InstalledApp member : members) {
-                    System.out.println(member.name() + ": active " + member.version());
+                    System.out.println(member.name() + ": serving " + member.version());
                     Optional<AppUpgrader.CanaryStatus> staged = upgrader.canary(member.name(),
                             stack);
                     staged.ifPresent(canary -> System.out.println("  canary: "
                             + canary.candidate().version() + " at " + canary.weightPercent()
                             + "%"));
-                    lastOutcome(stack, member.name())
+                    Optional<InstalledApp> pending = upgrader.pending(member.name(), stack)
+                            .filter(candidate -> !candidate.version()
+                                    .equals(member.version()));
+                    pending.ifPresent(candidate -> System.out.println("  pending: "
+                            + candidate.version()));
+                    java.util.Set<String> current = new java.util.LinkedHashSet<>();
+                    current.add(member.version());
+                    staged.ifPresent(canary -> current.add(canary.candidate().version()));
+                    pending.ifPresent(candidate -> current.add(candidate.version()));
+                    lastOutcome(stack, member.name(), current)
                             .ifPresent(line -> System.out.println("  host: " + line));
                 }
                 return 0;
@@ -483,18 +581,23 @@ final class DeployCommand implements Callable<Integer> {
             }
         }
 
-        private static Optional<String> lastOutcome(Path stack, String name) {
+        /** The host's verdict when it is about a version on disk now; else nothing. */
+        private static Optional<String> lastOutcome(Path stack, String name,
+                java.util.Set<String> current) {
             byte[] bytes = statusSnapshot(stack, name);
             if (bytes == null) {
                 return Optional.empty();
             }
             try {
                 Map<?, ?> status = MAPPER.readValue(bytes, Map.class);
-                if ("applied".equals(status.get("outcome"))) {
-                    return Optional.of("applied " + status.get("action") + " v"
-                            + status.get("version") + " at " + status.get("at"));
+                if (!current.contains(String.valueOf(status.get("version")))) {
+                    return Optional.empty();
                 }
-                return Optional.of("refused: " + status.get("message"));
+                String what = status.get("action") + " v" + status.get("version");
+                if ("applied".equals(status.get("outcome"))) {
+                    return Optional.of("applied " + what + " at " + status.get("at"));
+                }
+                return Optional.of("refused " + what + ": " + status.get("message"));
             } catch (IOException torn) {
                 return Optional.empty();
             }

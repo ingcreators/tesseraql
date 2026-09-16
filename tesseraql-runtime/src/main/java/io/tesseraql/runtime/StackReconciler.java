@@ -22,9 +22,9 @@ import org.slf4j.LoggerFactory;
 
 /**
  * Converges a running host to the install root's state (docs/runtime-replace.md structural
- * decision 2): {@code catalog.json} names each member's active version, {@code .upgrade/<name>.json}
- * names a staged candidate and its weight, and boot already builds its whole hosting arrangement
- * by reading them — a host restart mid-canary "works" because boot is a reconciliation. This
+ * decision 2 and its addendum): {@code catalog.json} names each member's serving version,
+ * {@code .upgrade/<name>.json} names a candidate — a canary at its weight, or a replace to become
+ * the serving version — and boot already builds its hosting arrangement by reading them. This
  * class makes that continuous: <b>a running host converges to the same function of the same
  * files that boot computes.</b> One protocol, two read points, no new channel.
  *
@@ -32,13 +32,17 @@ import org.slf4j.LoggerFactory;
  * concurrent replaces of one member is a race nobody needs. Every pass reads the files fresh and
  * diffs against the live slots; every rule is idempotent, so duplicate watch events, a promote's
  * two file writes arriving as two events, and a pass racing a write all resolve to "read again,
- * diff again, nothing to do". <b>Failure does not loop</b>: a candidate that failed admission
- * stays failed, recorded in the status file, until the operator writes something new.
+ * diff again, nothing to do".
  *
- * <p><b>The host reports back through a file it alone writes</b> —
- * {@code .upgrade/<name>.status.json}, each attempt's outcome, applied or refused with the
- * refusal's own message. One file, one writer: the CLI writes intent, the host writes outcome,
- * and neither ever writes the other's file. Membership stays start-time on purpose: a new name
+ * <p><b>The CLI writes candidates; the host writes the catalogue and the status.</b> A replace
+ * candidate the host applies moves the catalogue at that moment, so the catalogue never names a
+ * version no host has started — it used to be the CLI's intent file, and a refused deploy named
+ * there failed the next cold start of the whole stack. The status file
+ * ({@code .upgrade/<name>.status.json}) records each attempt's outcome: applied, or refused with
+ * the action, the version and the refusal's own message. <b>Failure does not loop</b>: a
+ * candidate whose refusal is on record — same action, same version, the intent no newer than the
+ * record — is not attempted again until the operator writes something new; the sweep the shared
+ * root needs still runs, as a read and a diff. Membership stays start-time on purpose: a new name
  * in the catalogue, or one removed, is the stack changing shape — a stack deploy — so the
  * reconciler logs the owed restart and touches nothing.
  */
@@ -61,13 +65,20 @@ final class StackReconciler implements AutoCloseable {
 
         int canaryWeight(String appName);
 
-        void replace(InstalledApp entry);
+        /**
+         * Replaces the member's runtime with {@code entry}; {@code swapped} runs the moment the
+         * new runtime serves and before the old one drains, which is where the catalogue moves:
+         * a drain can take seconds, and an operator's {@code rollback} that read the catalogue
+         * in that window took an applied promote for one that had not happened.
+         */
+        void replace(InstalledApp entry, Runnable swapped);
 
         void stageCanary(InstalledApp entry, int weightPercent);
 
         void setCanaryWeight(String appName, int weightPercent);
 
-        void promoteCanary(String appName);
+        /** Promotes the staged canary; {@code swapped} as for {@link #replace}. */
+        void promoteCanary(String appName, Runnable swapped);
 
         void discardCanary(String appName);
     }
@@ -271,8 +282,10 @@ final class StackReconciler implements AutoCloseable {
             return;
         }
         Optional<AppUpgrader.CanaryStatus> staged;
+        Optional<InstalledApp> pending;
         try {
             staged = upgrader.canary(name, installRoot);
+            pending = upgrader.pending(name, installRoot);
         } catch (RuntimeException torn) {
             LOG.warn("Could not read '{}' upgrade state; skipping it this pass: {}", name,
                     torn.getMessage());
@@ -280,52 +293,130 @@ final class StackReconciler implements AutoCloseable {
         }
         InstalledApp stable = host.entry(name);
         InstalledApp canary = host.canaryEntry(name);
+        // What this pass attempts, named before the attempt so a refusal is recorded against it
+        // — and so the next pass can see the record and leave it alone.
+        String action = null;
+        String version = null;
         try {
             if (!catalogued.get().version().equals(stable.version())) {
-                // The catalogue moved. To the staged candidate's version = what a promote on
-                // disk looks like (the candidate has been serving its share — nothing starts);
-                // anywhere else = a direct upgrade, or a rollback, which is just the catalogue
-                // moving back onto files still on disk.
-                if (canary != null
-                        && canary.version().equals(catalogued.get().version())) {
-                    host.promoteCanary(name);
-                    applied(name, "promote", catalogued.get().version());
-                } else {
-                    host.replace(catalogued.get());
-                    applied(name, "replace", catalogued.get().version());
+                // The catalogue moved under this host: another node on a shared root applied a
+                // candidate, or boot read a catalogue this host's slots never saw. Onto the
+                // canary slot's version = a promote (nothing starts); anywhere else = a replace
+                // onto files already on disk. A refusal on record falls through to the canary
+                // rules, which still converge.
+                version = catalogued.get().version();
+                boolean promote = canary != null && canary.version().equals(version);
+                action = promote ? "promote" : "replace";
+                if (!refusedOnRecord(name, action, version, catalogFile())) {
+                    if (promote) {
+                        host.promoteCanary(name, () -> {
+                        });
+                    } else {
+                        host.replace(catalogued.get(), () -> {
+                        });
+                    }
+                    applied(name, action, version);
+                    // The pass acted; converge the rest (a rollback with a candidate still
+                    // staged, a weight written with the promote) on a follow-up pass rather
+                    // than acting twice on one read.
+                    requestPass();
+                    return;
                 }
-                // The pass acted; converge the rest (a rollback with a candidate still staged,
-                // a weight written with the promote) on a follow-up pass rather than acting
-                // twice on one read.
-                requestPass();
-                return;
+            } else if (pending.isPresent()
+                    && !pending.get().version().equals(stable.version())) {
+                // A replace candidate the host has not applied: a direct deploy, a promote of
+                // the canary this host runs, or a rollback onto files still on disk. Applying it
+                // is what moves the catalogue — the host's write, never the CLI's.
+                InstalledApp candidate = pending.get();
+                version = candidate.version();
+                boolean promote = canary != null && canary.version().equals(version);
+                action = promote ? "promote" : "replace";
+                if (!refusedOnRecord(name, action, version, stateFile(name))) {
+                    // The catalogue moves at the swap — the host's write, never the CLI's —
+                    // before the retiring runtime drains.
+                    Runnable moveCatalogue = () -> catalog.replace(candidate);
+                    if (promote) {
+                        host.promoteCanary(name, moveCatalogue);
+                    } else {
+                        host.replace(candidate, moveCatalogue);
+                    }
+                    applied(name, action, version);
+                    requestPass();
+                    return;
+                }
             }
             if (staged.isPresent()) {
                 InstalledApp candidate = staged.get().candidate();
                 int weight = staged.get().weightPercent();
+                version = candidate.version();
                 if (canary == null) {
+                    action = "stage";
+                    if (refusedOnRecord(name, action, version, stateFile(name))) {
+                        return;
+                    }
                     host.stageCanary(candidate, weight);
-                    applied(name, "stage", candidate.version());
-                } else if (!canary.version().equals(candidate.version())) {
+                    applied(name, action, version);
+                } else if (!canary.version().equals(version)) {
                     // The operator staged a different candidate over a running one: converge by
                     // retiring the runtime whose files no longer name it, then staging the one
                     // that does.
+                    action = "stage";
+                    if (refusedOnRecord(name, action, version, stateFile(name))) {
+                        return;
+                    }
                     host.discardCanary(name);
                     host.stageCanary(candidate, weight);
-                    applied(name, "stage", candidate.version());
+                    applied(name, action, version);
                 } else if (host.canaryWeight(name) != weight) {
+                    action = "weight " + weight;
                     host.setCanaryWeight(name, weight);
-                    applied(name, "weight " + weight, candidate.version());
+                    applied(name, action, version);
                 }
             } else if (canary != null) {
+                action = "discard";
+                version = canary.version();
                 host.discardCanary(name);
-                applied(name, "discard", canary.version());
+                applied(name, action, version);
             }
         } catch (RuntimeException refused) {
-            LOG.warn("Deploy of '{}' refused; the serving runtime is untouched: {}", name,
-                    refused.getMessage());
-            refused(name, refused.getMessage());
+            LOG.warn("Deploy of '{}' refused ({} v{}); the serving runtime is untouched: {}",
+                    name, action, version, refused.getMessage());
+            recordRefused(installRoot, name, action, version, refused.getMessage());
+            // The record keeps the next pass off this attempt; the rest of the member's state
+            // (a canary the intent no longer names) still converges on it.
+            requestPass();
         }
+    }
+
+    /**
+     * Whether the status file already records this very attempt as refused — same action, same
+     * version, and the intent file it answers no newer than the record. Then the operator has
+     * written nothing new since the refusal, and the pass leaves the candidate alone: the sweep
+     * that a shared root needs must not become a runtime start every fifteen seconds against
+     * one defect (docs/audit-low-leads.md, XD-08a). A re-deploy, a re-written weight, any newer
+     * intent file is the operator acting, and the next pass attempts again.
+     */
+    private boolean refusedOnRecord(String name, String action, String version, Path intent) {
+        Status last = lastStatus(installRoot, name);
+        if (last == null || !"refused".equals(last.outcome()) || !action.equals(last.action())
+                || !version.equals(last.version())) {
+            return false;
+        }
+        try {
+            java.time.Instant recorded = java.time.Instant.parse(last.at());
+            java.time.Instant written = Files.getLastModifiedTime(intent).toInstant();
+            return !written.isAfter(recorded);
+        } catch (IOException | RuntimeException unreadable) {
+            return false;
+        }
+    }
+
+    private Path stateFile(String name) {
+        return installRoot.resolve(".upgrade").resolve(name + ".json");
+    }
+
+    private Path catalogFile() {
+        return installRoot.resolve("catalog.json");
     }
 
     /** The host's report of one attempt; see the class javadoc for the one-file-one-writer rule. */
@@ -333,20 +424,40 @@ final class StackReconciler implements AutoCloseable {
             String at) {
     }
 
+    /** The last outcome the host recorded for {@code name}, or null (none, or unreadable). */
+    static Status lastStatus(Path installRoot, String name) {
+        Path file = installRoot.resolve(".upgrade").resolve(name + ".status.json");
+        if (!Files.isRegularFile(file)) {
+            return null;
+        }
+        try {
+            return MAPPER.readValue(Files.readAllBytes(file), Status.class);
+        } catch (IOException | RuntimeException torn) {
+            return null;
+        }
+    }
+
     private void applied(String name, String action, String version) {
         LOG.info("Deploy of '{}' applied: {} v{}", name, action, version);
-        writeStatus(new Status(name, action, version, "applied", null,
+        writeStatus(installRoot, new Status(name, action, version, "applied", null,
                 java.time.Instant.now().toString()));
     }
 
-    private void refused(String name, String message) {
-        writeStatus(new Status(name, null, null, "refused", message,
+    /**
+     * Records a refusal with what was refused — the action and the version — so the next pass
+     * (and boot, which records its own) can recognise the attempt and a reader can say which
+     * intent the verdict is about. Package-private: boot isolates a refusing canary the same way.
+     */
+    static void recordRefused(Path installRoot, String name, String action, String version,
+            String message) {
+        writeStatus(installRoot, new Status(name, action, version, "refused", message,
                 java.time.Instant.now().toString()));
     }
 
-    private void writeStatus(Status status) {
+    private static void writeStatus(Path installRoot, Status status) {
         try {
             Path dir = installRoot.resolve(".upgrade");
+            Files.createDirectories(dir);
             io.tesseraql.core.files.AtomicFiles.replace(
                     dir.resolve(status.name() + ".status.json"),
                     MAPPER.writeValueAsBytes(status));

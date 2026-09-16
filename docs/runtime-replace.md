@@ -154,7 +154,9 @@ front traffic), inherited rather than invented, and the claim machinery is the a
 way — but an operator staging a 10% canary should read that its *background* participation is
 not 10%, so `hosting.md`'s deploy section says it. And the no-op property carries the same fine
 print, stated rather than implied: **a failed replace is a topological no-op** — the old runtime
-never stopped, the catalogue never moved — while the candidate's business migrations that
+never stopped, the catalogue never moved (true since the 2026-09-16 addendum to structural
+decision 2; before it a direct deploy moved the catalogue ahead of the judgement) — while the
+candidate's business migrations that
 already ran stay ran (Flyway does not undo; expand/contract is precisely what makes a
 v2-migrated schema safe under a still-serving v1), and background work its brief life performed
 is real work, exactly as if a node had joined and left.
@@ -348,6 +350,61 @@ protocol first is what keeps the later UI from becoming a second mechanism. **Re
 polling** — a watch with event debounce is the same code with better latency and no idle churn;
 boot remains the fallback read point for anything a dead host missed.
 
+### Addendum (2026-09-16): the CLI writes candidates; the host writes the catalogue and the status
+
+*Decided 2026-09-15 (`docs/audit-low-leads.md`, decision 2; measured as XD-08a/XD-08b).* The
+decision above made `catalog.json` the CLI's intent file — a direct `deploy` moved it before any
+host had judged the candidate — while the same record kept calling it "the active version" that
+"never moved" on a failed replace. Both could not be true, and the measurement found the gap: a
+candidate the running host refused was isolated live (the replace is a no-op) but **named in the
+catalogue**, so the next cold start failed the whole stack on it; `previous` snapshotted the
+refused version, so `rollback` reported success and re-targeted it; and the sweep (`hosting.md`,
+"A stack on more than one node") re-attempted the same refused candidate every fifteen seconds,
+one runtime start per node per pass, which the guard sentence "no retry loop" had never been
+re-read against.
+
+The split is now by *judgement*, not by file: **the CLI writes candidates, the host writes the
+catalogue and the status.**
+
+- `.upgrade/<name>.json` carries the candidate with a **`mode`** — `canary` (staged beside the
+  serving version at its weight, as before) or `replace` (to become the serving version) — and
+  `previous`, the catalogue's entry at the time of the write. A direct `deploy` writes a
+  `replace` candidate; `promote` rewrites the staged canary as a `replace` candidate; `rollback`
+  of an applied candidate writes `previous` as a `replace` candidate, `rollback` of one not yet
+  applied clears it. A state file without a `mode` reads as `canary`, which is what every
+  pre-0.18 file meant.
+- **`catalog.json` moves only when a host applies a `replace` candidate** — at the swap, the
+  moment the candidate serves and before the retiring runtime drains (a drain takes seconds,
+  and a `rollback` written in that window must read the promote as applied) — so it names a
+  version that served, always, and boot on it can only start what has started before.
+  `previous` and the preflight floor are therefore served versions too, which is what
+  `rollback` was always specified against.
+- **A refusal is recorded once, with its action and version**, and the reconciler does not
+  re-attempt a candidate whose refusal is on record — same action, same version, the intent file
+  no newer than the status — until the operator writes something new. The sweep still runs
+  (a shared root's other nodes still need it); an idle sweep against a refused intent is a file
+  read and a diff, as an idle sweep always was. Re-deploying the same package is the operator
+  writing something new.
+- **Boot isolates a candidate.** A staged canary that refuses at boot is logged and recorded
+  `refused`; the stack comes up on the served versions. A pending `replace` candidate is not
+  boot's to judge at all: the reconciler's first pass applies it exactly as it would have on a
+  running host, so "the next start converges to it" stays true at the cost of starting that
+  member twice — the price of never booting the stack on an unjudged version.
+- **On a shared install root every node's apply writes the same catalogue bytes** through
+  `AtomicFiles.replace`; a second node reading the moved catalogue converges by the first rule
+  above (the catalogue moved → replace), as before. Benign, and stated so it is not read as a
+  race: the bytes are a function of the candidate the nodes all read.
+- The "one file, one writer" guard is restated as: intent files (`.upgrade/<name>.json`) are the
+  CLI's; the catalogue and the status file are the host's. `deploy status` prints the host's
+  verdict only when it is about the intent on disk — same version — so a stale refusal never
+  reads as the current state; `rollback` gained `--wait`; the remote pen's caller and the
+  console's deploy page read the verdict back through `GET /_tesseraql/deploy/<name>`, which
+  serves the status file the host writes, and `deploy --url --wait` tails it.
+
+Pre-1.0 (AGENTS.md rule 10): the state file gains a field and the catalogue's writer changes; no
+migration — a host that boots on a 0.17 install root finds a catalogue of served versions and,
+at most, a canary-mode candidate, both of which it already understood.
+
 ## Structural decision 3: the operator's pen is a `deploy` verb
 
 The lifecycle library has no owner (measured above), and a file protocol with no pen is not an
@@ -466,12 +523,14 @@ into 2.
 - **TQL-UPGRADE-4092** — `deploy` against a directory with no `catalog.json`: names what an
   install root is, and that a source-tree workspace deploys by restart. (Next free in the
   UPGRADE domain after 4090/4091; the APP 42xx run is at 4217.)
-- **One file, one writer** — intent files (CLI) and the status file (host) have disjoint
-  writers; state writes are atomic moves. The reconciler never writes intent, so a host bug
-  cannot destroy an operator's staged deploy.
-- **No retry loop** — the reconciler acts on events; a failed candidate stays failed and
-  recorded until the operator acts. An event-driven failure is one loud line, not a hot loop of
-  runtime starts against the same defect.
+- **One file, one writer** — the intent file (CLI) and the catalogue plus the status file
+  (host) have disjoint writers; state writes are atomic moves. The reconciler never writes
+  intent, so a host bug cannot destroy an operator's staged deploy. (Restated by the addendum to
+  structural decision 2: the catalogue moved from the CLI's side to the host's.)
+- **No retry loop** — a failed candidate stays failed and recorded, with its action and version,
+  until the operator acts; the sweep that #911 added reads the record and does not re-attempt
+  what it names. A failure is one loud line, not a hot loop of runtime starts against the same
+  defect — pinned by a test that counts attempts, since the earlier guard counted none.
 
 ## Test plan
 

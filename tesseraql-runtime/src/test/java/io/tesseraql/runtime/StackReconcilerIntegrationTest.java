@@ -45,7 +45,9 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  * live are one function of the same files.
  *
  * <p>Ordered: the tests narrate one deploy lifecycle — upgrade, canary, weight, promote,
- * rollback, a refused candidate, and the restart.
+ * rollback, a refused candidate, the restart, and a refused direct deploy survived by the next
+ * cold start (docs/audit-low-leads.md, XD-08a: the catalogue is the host's write, so it never
+ * names a version no host has started).
  */
 @Testcontainers
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
@@ -101,10 +103,16 @@ class StackReconcilerIntegrationTest {
         assertThat(itemName()).isEqualTo("s1");
 
         UPGRADER.upgrade(packageApp("2.0.0", "s2"), installRoot, FRAMEWORK);
+        // The CLI wrote a candidate; the catalogue is the host's to move.
+        assertThat(new AppCatalog(installRoot).find("shop")).get()
+                .extracting(InstalledApp::version).isEqualTo("1.0.0");
 
-        await("the catalogue's new version serves", () -> "s2".equals(itemNameQuietly()));
+        await("the candidate serves", () -> "s2".equals(itemNameQuietly()));
         await("the applied outcome lands in the status file",
                 () -> statusFile().contains("\"applied\"") && statusFile().contains("2.0.0"));
+        assertThat(new AppCatalog(installRoot).find("shop")).get()
+                .as("the host moved the catalogue when it applied the candidate")
+                .extracting(InstalledApp::version).isEqualTo("2.0.0");
     }
 
     /** A staged canary appears at its written weight, and a weight edit reaches the live roll. */
@@ -136,6 +144,11 @@ class StackReconcilerIntegrationTest {
                 () -> !gateway.host().hasCanary("shop")
                         && gateway.host().port("shop") == candidatePort);
         assertThat(itemName()).isEqualTo("s3");
+        // The host moved the catalogue at the swap, before the retiring runtime's drain — so
+        // a rollback written now, in the drain window, reads the promote as applied.
+        await("the catalogue names the promoted version",
+                () -> "3.0.0".equals(new AppCatalog(installRoot).find("shop")
+                        .map(InstalledApp::version).orElse("")));
     }
 
     /** A rollback is the catalogue moving back onto files still on disk: a plain replace. */
@@ -208,6 +221,78 @@ class StackReconcilerIntegrationTest {
                 () -> gateway.host().canaryWeight("shop") == 40);
 
         assertThat(gateway.host().appNames()).containsExactly("shop");
+    }
+
+    /**
+     * A refused direct deploy leaves the catalogue naming the version that serves, so the next
+     * cold start comes up on it — it used to come up on the refused version and fail every
+     * member — and the reconciler's first pass does not re-attempt what its record already
+     * refused.
+     */
+    @Test
+    @Order(8)
+    void aRefusedDirectDeployIsSurvivedByTheNextColdStart() throws Exception {
+        Path home = appHome("6.0.0", "s2");
+        Files.writeString(home.resolve("config/overlay.yml"),
+                Files.readString(home.resolve("config/overlay.yml"))
+                        .replace("tesseraql:\n", "tesseraql:\n  modules:\n    - duckdb\n"));
+        UPGRADER.upgrade(packaged(home, "6.0.0"), installRoot, FRAMEWORK);
+
+        await("the refusal lands in the status file with its action and version",
+                () -> statusFile().contains("\"refused\"")
+                        && statusFile().contains("\"action\":\"replace\"")
+                        && statusFile().contains("\"version\":\"6.0.0\""));
+        // The intent no longer names the canary the last order staged: it is discarded on the
+        // pass after the refusal, and the serving version answers alone.
+        await("the canary the intent no longer names is discarded",
+                () -> !gateway.host().hasCanary("shop"));
+        assertThat(itemName()).isEqualTo("s2");
+        assertThat(new AppCatalog(installRoot).find("shop")).get()
+                .as("the catalogue names the version that serves, not the refused one")
+                .extracting(InstalledApp::version).isEqualTo("2.0.0");
+        String refusedAt = statusFile();
+
+        gateway.close();
+        // The previous order's membership probe registered a name with no files on disk; a
+        // cold start reads the whole catalogue, so the ledger is put back to the one member.
+        Files.writeString(installRoot.resolve("catalog.json"), MAPPER.writeValueAsString(
+                new AppCatalog(installRoot).find("shop").map(List::of).orElseThrow()));
+        gateway = MultiAppGateway.start(installRoot, 0);
+
+        assertThat(itemName()).as("the stack came up on the serving version").isEqualTo("s2");
+        assertThat(gateway.host().hasCanary("shop")).isFalse();
+        // The refusal is on record against this intent: the first pass left it alone.
+        assertThat(statusFile()).isEqualTo(refusedAt);
+        // The operator's next write: discarding the candidate converges to "nothing pending".
+        UPGRADER.rollback("shop", installRoot);
+        assertThat(UPGRADER.pending("shop", installRoot)).isEmpty();
+    }
+
+    /**
+     * Boot isolates a candidate the way the running host does: a staged canary that refuses at
+     * a cold start is logged and recorded, and the stack comes up on the serving version — it
+     * used to take every member down with it (docs/audit-low-leads.md, unfiled 17).
+     */
+    @Test
+    @Order(9)
+    void aRefusingCanaryDoesNotTakeTheColdStartDown() throws Exception {
+        InstalledApp refusing = new AppCatalog(installRoot).find("shop").orElseThrow();
+        InstalledApp candidate = new InstalledApp("shop", "6.0.0", "shop/6.0.0",
+                refusing.entitledTenants());
+        assertThat(installRoot.resolve(candidate.path())).as("placed by the last order")
+                .isDirectory();
+        gateway.close();
+        Files.writeString(installRoot.resolve(".upgrade/shop.json"),
+                "{\"previous\":null,\"candidate\":" + MAPPER.writeValueAsString(candidate)
+                        + ",\"canaryWeight\":10,\"mode\":\"canary\"}");
+
+        gateway = MultiAppGateway.start(installRoot, 0);
+
+        assertThat(itemName()).as("the stack came up on the serving version").isEqualTo("s2");
+        assertThat(gateway.host().hasCanary("shop")).isFalse();
+        assertThat(statusFile()).contains("\"refused\"").contains("\"action\":\"stage\"")
+                .contains("\"version\":\"6.0.0\"").contains("modules");
+        Files.delete(installRoot.resolve(".upgrade/shop.json"));
     }
 
     private static String statusFile() {

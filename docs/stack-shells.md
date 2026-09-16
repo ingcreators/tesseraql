@@ -391,8 +391,9 @@ target-shape sketch; this design is that work, and the sketch lands as the third
   `tql.app.deploy.<name>` against the **package's declared name**, runs `AppUpgrader.preflight`,
   and writes the same intent files the reconciler already consumes. The reconciler stays the
   one mechanism; the endpoint is a pen with authentication, exactly as the file protocol's
-  design promised. Refusals surface as the endpoint's response *and* are not written — a
-  refused deploy leaves no intent.
+  design promised. A preflight refusal surfaces as the endpoint's response *and* is not
+  written — it leaves no intent; the host's admission verdict comes after the response and is
+  read back from `GET /_tesseraql/deploy/<name>` (the deploy page shows it too).
 - **The CLI grows the remote mode**: `tesseraql deploy <package> --url <origin>` with a
   bearer from `tesseraql token` — the dual shape `token` itself has (`--app` xor `--url`),
   here `--stack` xor `--url`. A pipeline deploys with a scoped token instead of install-root
@@ -470,7 +471,8 @@ is deliberately not promised here. That design is [studio-shell.md](studio-shell
   switcher; no `tql.app.use` atoms → no tiles and no fence crossing.
 - **The deploy endpoint checks the atom against the package's declared name** — not a
   request parameter — so a token scoped to `orders` cannot deploy `billing` by renaming an
-  upload field. A refused deploy writes no intent.
+  upload field. A deploy the preflight refuses writes no intent; one the host refuses at
+  admission is recorded in the status file the endpoint's GET serves.
 - **No new atoms without a surface.** The table in structural decision 1 is exhaustive;
   a verb arrives only with the surface that checks it.
 - **TQL-YAML-1405 (widened twice)** — an application name containing `.` is refused, and

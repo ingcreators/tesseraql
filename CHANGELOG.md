@@ -24,6 +24,19 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **The CLI writes candidates; the host writes the catalogue and the status.** The install
+  root's deploy protocol (`runtime-replace.md` structural decision 2, amended) split its files
+  by writer and made `catalog.json` the CLI's intent file — a direct `deploy` moved it before
+  any host had judged the candidate — while calling it the served version that "never moved"
+  on a failed replace. Now `.upgrade/<name>.json` carries the candidate with a `mode` (`canary`
+  or `replace`; a file without one is a canary, what every earlier file meant): `deploy` writes
+  a replace candidate, `promote` rewrites the staged canary as one, `rollback` writes the
+  previous served version as one or discards a candidate the host never applied. The catalogue
+  moves only when a host applies a replace candidate, so it names a version that served —
+  always — and `previous` and the preflight floor are served versions too. `AppUpgrader`
+  gains `pending`; `deploy status` prints `serving` and `pending:`; `rollback` prints "Rolling
+  back … A running host applies it now"; `HostContext.DeployPen` gains `status`,
+  `MemberOrigins` `lastVerdict`. `docs/audit-low-leads.md`, slice 7 (decision 2).
 - **`TotpStore` confirms an enrollment and activates its recovery codes in one call.**
   `beginEnrollment` takes the plain recovery codes with the secret, `confirmEnrollment` takes
   their hashes and writes `confirmed_at`, the hashes and the cleared pending copy in one
@@ -50,6 +63,37 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A refused deploy no longer fails the next cold start, and rollback targets a version that
+  served.** A direct deploy the running host refused was isolated live (the replace is a no-op)
+  but named in `catalog.json`, so the next stack start — a reboot, a reschedule, a framework
+  upgrade — failed every member on it (`TQL-LD-2801`, exit 2, the gateway never bound); the
+  same catalogue was what `rollback` snapshotted as `previous`, so `rollback` reported success,
+  did nothing, re-targeted the refused version for good, and refused the served version's own
+  package as "not newer". With the catalogue the host's write (Changed, above) neither can
+  happen: a refused candidate leaves the catalogue on the serving version, the next cold start
+  comes up on it, and `rollback` discards a candidate no host applied. `docs/audit-low-leads.md`,
+  slice 7 (XD-08a, XD-08b).
+- **A refused candidate is attempted once, recorded with its action and version.** The
+  reconcile sweep a shared install root needs re-attempted a refused candidate every fifteen
+  seconds — a pool start, three Flyway rounds, a route compile and a WARN per node per pass,
+  indefinitely, against the guard sentence "no retry loop" — and the status record carried no
+  action or version, so no reader could say what had been refused. The record now names both,
+  the reconciler leaves a candidate whose refusal is on record alone until the intent file is
+  newer than the record, and `deploy status` prints a verdict only when it is about a version
+  on disk now. `docs/audit-low-leads.md`, slice 7 (unfiled 16, 57, 60).
+- **Boot isolates a candidate.** A staged canary that refused at a cold start took every member
+  down with it (`MultiAppHost.start`'s one `try`), and started without the admission guards the
+  running host applies. Boot admits a canary through the same guards and ready probe, and one
+  that refuses is logged, recorded and skipped; a pending replace candidate is the reconciler's
+  first pass to judge, so "the next start converges to it" stays true without booting on an
+  unjudged version. `docs/audit-low-leads.md`, slice 7 (unfiled 17).
+- **The host's verdict reaches the caller who cannot see the install root.** `deploy --url` and
+  the console's deploy page answered success once the intent was written — the pen's answer —
+  and a candidate the host then refused reached them at the next restart; `--url --wait` was
+  refused outright and `rollback` had no `--wait`. `GET /_tesseraql/deploy/<name>` serves the
+  status file behind the same `tql.app.deploy.<name>` grant, `deploy --url --wait` tails it,
+  the deploy page shows the last verdict per member, and `rollback --wait` tails the file as
+  `deploy --wait` does. `docs/audit-low-leads.md`, slice 7 (unfiled 18, 59).
 - **The Studio data browser reads one schema and writes one row.** The table listing and every
   metadata read were scoped to the connection's catalog alone, so on a shared database whose
   application writes `currentSchema` in its URL — the topology `cli-surface.md`,

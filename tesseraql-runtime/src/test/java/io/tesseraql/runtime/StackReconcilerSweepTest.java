@@ -65,13 +65,14 @@ class StackReconcilerSweepTest {
         }
 
         @Override
-        public void replace(InstalledApp entry) {
+        public void replace(InstalledApp entry, Runnable swapped) {
             // The operation log first, the map last: the map update is what the test's
             // convergence poll observes, so it must be the publication — this once ran the
             // other way round, and the poll could see the new version while the operations
             // list was still one instruction short of the entry the assertion wanted.
             operations.add("replace " + entry.name() + " " + entry.version());
             stable.put(entry.name(), entry);
+            swapped.run();
         }
 
         @Override
@@ -85,7 +86,7 @@ class StackReconcilerSweepTest {
         }
 
         @Override
-        public void promoteCanary(String appName) {
+        public void promoteCanary(String appName, Runnable swapped) {
             throw new UnsupportedOperationException();
         }
 
@@ -137,8 +138,8 @@ class StackReconcilerSweepTest {
             throws IOException, InterruptedException {
         FakeHost host = new FakeHost() {
             @Override
-            public void replace(InstalledApp entry) {
-                super.replace(entry);
+            public void replace(InstalledApp entry, Runnable swapped) {
+                super.replace(entry, swapped);
                 long end = System.nanoTime() + Duration.ofMillis(300).toNanos();
                 while (System.nanoTime() < end) {
                     Thread.onSpinWait();

@@ -98,6 +98,11 @@ final class OpsShellProviders {
             return Map.of();
         }
 
+        /** The host's last recorded verdict on {@code member} — the deploy page's table. */
+        default Map<String, Object> lastVerdict(String member) {
+            return Map.of();
+        }
+
         /**
          * Whether this runtime carries the stack's deploy endpoint — the surface runtime's
          * pen. The unhosted boot has no pen, so the deploy page neither lists nor answers
@@ -139,6 +144,11 @@ final class OpsShellProviders {
                     Map<String, String> versions = new LinkedHashMap<>();
                     names.forEach(name -> versions.put(name, origins.version(name)));
                     return versions;
+                }
+
+                @Override
+                public Map<String, Object> lastVerdict(String member) {
+                    return origins.lastVerdict(member);
                 }
 
                 @Override
@@ -340,6 +350,17 @@ final class OpsShellProviders {
             app.put("name", name);
             app.put("version", versions.get(name) == null ? "-" : versions.get(name));
             app.put("canary", targets.hasCanary(name));
+            // The host's verdict on the last intent, so a refusal reaches the operator here
+            // and not at the next restart: the page's success banner is the pen's answer
+            // (the intent is written), the host's comes after it.
+            Map<String, Object> verdict = targets.lastVerdict(name);
+            app.put("outcome", verdict.get("outcome"));
+            app.put("verdict", verdict.get("outcome") == null
+                    ? null
+                    : verdict.get("action") + " v" + verdict.get("version")
+                            + ("refused".equals(verdict.get("outcome"))
+                                    ? ": " + verdict.get("message")
+                                    : ""));
             apps.add(app);
         }
         Map<String, Object> model = new LinkedHashMap<>();
