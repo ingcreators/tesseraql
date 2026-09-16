@@ -34,6 +34,16 @@ final class StackIssuer {
      */
     private static final TqlErrorCode NO_ORIGIN = new TqlErrorCode(TqlDomain.OAUTH, 3002);
 
+    /**
+     * TQL-OAUTH-3005: `tesseraql.mcp.resource` was declared where the stack's authorization
+     * server issues. The stack's RFC 9728 document, its challenge and its grants all name the
+     * address-derived resource — a declared name is one no client is told and no grant can be
+     * minted for, so the transport gate refused every token (docs/audit-low-leads.md, G6).
+     * Remove the key; the override is for a standalone runtime behind an external issuer.
+     */
+    private static final TqlErrorCode MCP_RESOURCE_DECLARED = new TqlErrorCode(TqlDomain.OAUTH,
+            3005);
+
     /** The published key set, relative to the stack origin. */
     static final String JWKS_PATH = "/_tesseraql/oauth/jwks";
 
@@ -106,14 +116,20 @@ final class StackIssuer {
                         + " keeps only claim names and audience)");
             }
         }
+        if (config.getString("tesseraql.mcp.resource").isPresent()) {
+            throw new TqlException(MCP_RESOURCE_DECLARED, "The stack's authorization server"
+                    + " names " + describedAs + "'s MCP resource from its address, but the"
+                    + " configuration declares tesseraql.mcp.resource — a name the stack's"
+                    + " metadata document never publishes and its grants never carry, so no"
+                    + " token could pass the gate; remove the key");
+        }
         Map<String, Object> root = SystemApps.deepCopy(config.root());
         Map<String, Object> tesseraql = SystemApps.childMap(root, "tesseraql");
         Map<String, Object> security = SystemApps.childMap(tesseraql, "security");
         Map<String, Object> block = SystemApps.childMap(security, "jwt");
         Object declared = block.get("audience");
         block.putAll(jwt);
-        block.put("audience", audiences(declared, externalOrigin, basePath,
-                config.getString("tesseraql.mcp.resource").orElse(null)));
+        block.put("audience", audiences(declared, externalOrigin, basePath));
         return new AppConfig(root);
     }
 
@@ -133,7 +149,7 @@ final class StackIssuer {
      * anyway, and it stays one member's name — the per-member boundary is untouched.
      */
     private static List<String> audiences(Object declared, String externalOrigin,
-            String basePath, String declaredMcpResource) {
+            String basePath) {
         java.util.LinkedHashSet<String> audience = new java.util.LinkedHashSet<>();
         if (declared instanceof List<?> list) {
             list.forEach(value -> audience.add(String.valueOf(value)));
@@ -143,10 +159,10 @@ final class StackIssuer {
         String address = externalOrigin + (basePath == null ? "" : basePath);
         audience.add(address);
         audience.add(externalOrigin);
-        // The same derivation the MCP transport gate uses, override included.
-        audience.add(declaredMcpResource != null
-                ? declaredMcpResource
-                : address + "/_tesseraql/mcp");
+        // The same derivation the MCP transport gate uses — the wire spelling of the address's
+        // /_tesseraql/mcp subordinate, which is what the stack's document publishes and what a
+        // grant for it therefore carries.
+        audience.add(McpRoutes.resource(externalOrigin, basePath));
         return List.copyOf(audience);
     }
 

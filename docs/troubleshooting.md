@@ -128,6 +128,28 @@ refused the same way (`TQL-SEC-4139`). A route's own `headers:` key with such a 
 `Content-Disposition` whose `filename=` is built from a placeholder is neither quoted nor
 encoded on the wire — name a download with `response.file: filename:`, which is both.
 
+### `TQL-MCP-4265` / `4266` / `4267` / `4268` / `4269` / `4270` — the MCP endpoint refused the request, not the message
+
+The MCP transport judges the caller before it reads the JSON-RPC message. `4265` (403): the
+request named an `Origin` that is neither loopback nor one the server allows — a web page is
+calling, which the MCP specification's guard against DNS rebinding refuses; a local client
+page uses a loopback origin, and the dev server admits others with `--allow-origin`. `4266`
+(415): the `POST` did not declare `Content-Type: application/json`. `4267` (400): the
+`MCP-Protocol-Version` header names a revision the server does not speak — send the one
+`initialize` negotiated, or none. `4268` (400): a request after `initialize` carried no
+`Mcp-Session-Id`; `4269` (404): the one it carried names no live session — initialize
+again. `4270` (413): the body exceeds the dev transport's 10 MiB ceiling. A body that is not
+JSON is answered inside the protocol, as JSON-RPC `-32700`.
+
+### `TQL-OAUTH-3005` — `tesseraql.mcp.resource` declared under the stack issuer
+
+The stack's authorization server names a member's MCP resource from its address
+(`<origin><base path>/_tesseraql/mcp`): its metadata document publishes that name and its
+grants carry it. A declared `tesseraql.mcp.resource` is a name no client is told and no
+token could carry, so the member is refused at boot rather than refusing every token
+silently. Remove the key; the override is for a standalone runtime behind an external
+identity provider ([oauth.md](oauth.md)).
+
 ### `TQL-YAML-1004` and friends — a key is refused on this recipe
 
 Keys are recipe-scoped. `notify:` is command-only, `cache:` is query-only, `refreshOn:` is not a

@@ -169,6 +169,15 @@ a breaking change to an error shape, recorded not bridged (AGENTS.md rule 10). A
 names every main-source file writing an error body outside the renderer and `ErrorEnvelope`;
 OAuth and SCIM stay listed with their RFC citations as the reason.
 
+*Addendum, `docs/audit-low-leads.md` slice 10 (G7).* Slice 9 converted the MCP transport's
+two string-literal bodies (401, 405) and left the four it built with a mapper — the parse
+error, the dead empty-body branch, the unknown session, the serialisation failure — which the
+ledger's literal grep cannot see. They are shaped now, by layer: a refusal of the HTTP request
+is the coded envelope (`TQL-MCP-4269` for the session), a failure of the JSON-RPC message is
+the JSON-RPC error the stdio transport already sent for the same failure (`-32700`, `-32603`),
+built in one place for both transports. The ledger gained a second predicate — a fresh Jackson
+object whose first key is `error` — so a mapper-built flat body is refused by default too.
+
 ### Structural decision 7: every code answers the status question
 
 The renderer's `httpStatus` switch names 56 codes; 555 exist. Sixteen domains fall through

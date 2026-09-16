@@ -160,13 +160,15 @@ is a `resources/read` JSON-RPC error). Lint keeps resources read-only and uri-ad
 governance gate scores them like read routes (never `advanced`), and an `mcp-resource` coverage
 kind tracks the resources declarative suites exercise.
 
-**Application MCP Apps UI** (delivered): a tool can hand back interactive UI instead of only JSON —
+**Application MCP Apps UI** (delivered): a tool can hand back a rendered view beside its JSON —
 the [MCP Apps extension](https://modelcontextprotocol.io/community/seps/1865-mcp-apps-interactive-user-interfaces-for-mcp)
 (SEP-1865). An application declares a UI resource as a `kind: ui` document under `mcp/` — a
 `query-html` / `page` definition addressed by a stable `ui://` uri — and a `kind: tool` document
 links to one with a `ui:` field. The compiler builds the UI resource into a read-only internal
 route that server-renders an `hc-*` fragment through the existing template pipeline (so any gap
-belongs upstream in the kit, mandatory rule 11, not in app CSS); the runtime serves it over the same
+belongs upstream in the kit, mandatory rule 11, not in app CSS) — a static snapshot of the
+resource's own query, styled only by what its template links, which is what a sandboxed host
+shows (`docs/app-mcp.md`, "What the fragment is in a host"); the runtime serves it over the same
 `/_tesseraql/mcp` endpoint, tagging it `text/html;profile=mcp-app`, carrying its `_meta.ui` rendering
 hints, advertising a linking tool's `_meta.ui.resourceUri`, and negotiating the
 `io.modelcontextprotocol/ui` extension in `initialize`. Security is per-resource (the bearer token

@@ -620,6 +620,14 @@ public final class ErrorResponseRenderer implements Step {
             case MCP -> switch (code.number()) {
                 case 4263 -> 401;
                 case 4264 -> 405;
+                // The transport's caller judgements (docs/audit-low-leads.md, G1/G3/G7): a
+                // foreign Origin, a non-JSON POST, an unserved revision, a missing session,
+                // an unknown session, a body past the ceiling.
+                case 4265 -> 403;
+                case 4266 -> 415;
+                case 4267, 4268 -> 400;
+                case 4269 -> 404;
+                case 4270 -> 413;
                 default -> 500;
             };
             case LD -> switch (code.number()) {

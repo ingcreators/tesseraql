@@ -12,15 +12,41 @@ import io.tesseraql.pipeline.Step;
  * {@code /_tesseraql/mcp} (roadmap Phase 24 follow-on), bridging the platform-http request to the
  * transport-agnostic {@link McpHttpHandler}. {@code initialize} mints a session the client echoes;
  * {@code POST} carries one JSON-RPC message; {@code DELETE} ends the session. Each tool runs its own
- * route security, so there is no transport-level auth gate - discovery is open and a tool that
- * declares a policy enforces it on call.
+ * route security, so the transport-level gate is {@code tesseraql.mcp.auth} (public by default)
+ * - discovery is open and a tool that declares a policy enforces it on call. The handler judges
+ * the caller's {@code Origin} and {@code Content-Type} (docs/audit-low-leads.md, G1); the bridge
+ * hands both through, and the runtime allows its own external origin beside loopback.
  */
 final class McpRoutes {
+
+    /** The path every application's MCP surface sits at, below its base path. */
+    static final String PATH = "/_tesseraql/mcp";
 
     private final McpHttpHandler handler;
 
     McpRoutes(McpHttpHandler handler) {
         this.handler = handler;
+    }
+
+    /**
+     * The application's MCP resource identifier (RFC 8707) as the wire spells it:
+     * {@code <origin><base path>/_tesseraql/mcp}, percent-encoded. A resource is a URI, and it
+     * was built raw everywhere — a Japanese application's name is not a URI, and the one site
+     * that crosses the wire as a header, the challenge, folded it to {@code ?}
+     * (docs/audit-low-leads.md, unfiled 48). ASCII is its own wire form, so every ASCII name
+     * reads exactly as before.
+     */
+    static String resource(String externalOrigin, String basePath) {
+        return io.tesseraql.core.http.PercentEncoding.uriLiteral(
+                (externalOrigin == null ? "" : externalOrigin)
+                        + (basePath == null ? "" : basePath) + PATH);
+    }
+
+    /** The RFC 9728 document's address for that resource, spelled the same way. */
+    static String metadataUrl(String externalOrigin, String basePath) {
+        return io.tesseraql.core.http.PercentEncoding.uriLiteral(
+                externalOrigin + "/.well-known/oauth-protected-resource"
+                        + (basePath == null ? "" : basePath) + PATH);
     }
 
     void install(RuntimeContext context) {
@@ -35,9 +61,9 @@ final class McpRoutes {
                                 new io.tesseraql.compiler.binding.ErrorResponseRenderer())));
         // Each verb answers on its own pipeline (one shared bridge): a single target for all
         // three would collide on the id.
-        HttpMounts.of(context).mount("POST", "/_tesseraql/mcp", "mcp.endpoint.post");
-        HttpMounts.of(context).mount("GET", "/_tesseraql/mcp", "mcp.endpoint.get");
-        HttpMounts.of(context).mount("DELETE", "/_tesseraql/mcp", "mcp.endpoint.delete");
+        HttpMounts.of(context).mount("POST", PATH, "mcp.endpoint.post");
+        HttpMounts.of(context).mount("GET", PATH, "mcp.endpoint.get");
+        HttpMounts.of(context).mount("DELETE", PATH, "mcp.endpoint.delete");
 
         Step bridge = bridge();
         pipelines.pipeline("mcp.endpoint.post").process(bridge);
@@ -51,7 +77,9 @@ final class McpRoutes {
                     exchange.request().method() == null ? "POST" : exchange.request().method(),
                     exchange.request().header("Authorization"),
                     exchange.request().header(McpHttpHandler.SESSION_HEADER),
-                    exchange.request().header("MCP-Protocol-Version"),
+                    exchange.request().header(McpHttpHandler.PROTOCOL_VERSION_HEADER),
+                    exchange.request().header("Origin"),
+                    exchange.request().header("Content-Type"),
                     exchange.getBody(String.class));
             McpHttpHandler.Response response = handler.handle(request);
             exchange.response().status(response.status());

@@ -27,12 +27,28 @@ import java.util.Set;
  *
  * <p>Each of tools, resources, and prompts is advertised in {@code initialize} only when the server
  * actually registers some. Unknown methods return JSON-RPC {@code method not found}.
+ *
+ * <p>A JSON-RPC batch (an array of messages) is dispatched element by element and answered as an
+ * array of the responses, or as nothing when every element was a notification. Revision
+ * 2025-03-26, which this server negotiates, makes receiving a batch a MUST; the server refused
+ * one with {@code -32600} while promising that revision (docs/audit-low-leads.md, G3).
  */
 public final class McpServer {
 
-    /** MCP revisions this server speaks; it echoes the client's if listed, else {@link #LATEST}. */
+    /**
+     * MCP revisions this server speaks; it echoes the client's if listed, else {@link #LATEST}.
+     * The two older entries stay: a client on a mid-2025 SDK refuses a server that answers a
+     * revision it does not list, and the reference server advertises the same set over
+     * Streamable HTTP (docs/audit-low-leads.md, G3 — the narrowing is the fix not taken).
+     */
     private static final Set<String> SUPPORTED = Set.of("2024-11-05", "2025-03-26", "2025-06-18");
     private static final String LATEST = "2025-06-18";
+
+    /**
+     * The most elements one batch may carry. The body is bounded by the transport; this bounds
+     * the dispatches one request buys, the way the reference server bounds its batches.
+     */
+    static final int MAX_BATCH = 100;
 
     static final int PARSE_ERROR = -32700;
     static final int INVALID_REQUEST = -32600;
@@ -78,6 +94,35 @@ public final class McpServer {
      * {@link McpCallContext} (the request's auth header) is passed through to tool handlers.
      */
     public Optional<JsonNode> handle(JsonNode message, McpCallContext context) {
+        if (message != null && message.isArray()) {
+            return handleBatch(message, context);
+        }
+        return handleOne(message, context, false);
+    }
+
+    /**
+     * A batch: each element answered in order, the notifications answering nothing. An empty
+     * array is one invalid request (JSON-RPC 2.0 section 6), and {@code initialize} inside a
+     * batch is refused per element — the lifecycle forbids batching it, and the transport mints
+     * a session for a top-level {@code initialize} only.
+     */
+    private Optional<JsonNode> handleBatch(JsonNode batch, McpCallContext context) {
+        if (batch.isEmpty()) {
+            return Optional.of(error(null, INVALID_REQUEST, "Empty batch"));
+        }
+        if (batch.size() > MAX_BATCH) {
+            return Optional.of(error(null, INVALID_REQUEST,
+                    "Batch of " + batch.size() + " exceeds " + MAX_BATCH + " messages"));
+        }
+        ArrayNode responses = mapper.createArrayNode();
+        for (JsonNode message : batch) {
+            handleOne(message, context, true).ifPresent(responses::add);
+        }
+        return responses.isEmpty() ? Optional.empty() : Optional.of(responses);
+    }
+
+    private Optional<JsonNode> handleOne(JsonNode message, McpCallContext context,
+            boolean batched) {
         if (message == null || !message.isObject()) {
             return Optional.of(error(null, INVALID_REQUEST, "Expected a JSON-RPC object"));
         }
@@ -97,6 +142,10 @@ public final class McpServer {
         JsonNode params = message.get("params");
         switch (method) {
             case "initialize" :
+                if (batched) {
+                    return Optional.of(error(id, INVALID_REQUEST,
+                            "initialize must not be part of a batch"));
+                }
                 return Optional.of(result(id, initialize(params)));
             case "ping" :
                 return Optional.of(result(id, mapper.createObjectNode()));
@@ -193,7 +242,8 @@ public final class McpServer {
         try {
             outcome = tool.handler().handle(arguments, context);
         } catch (TqlException ex) {
-            outcome = McpToolResult.error(ex.code() + ": " + ex.getMessage());
+            // Its sentence, once: TqlException.getMessage() already begins with the code.
+            outcome = McpToolResult.error(ex.getMessage());
         } catch (Exception ex) {
             String detail = ex.getMessage() != null ? ex.getMessage() : ex.toString();
             outcome = McpToolResult.error(detail);
@@ -256,7 +306,7 @@ public final class McpServer {
         try {
             text = resource.reader().read(context);
         } catch (TqlException ex) {
-            return error(id, INTERNAL_ERROR, ex.code() + ": " + ex.getMessage());
+            return error(id, INTERNAL_ERROR, ex.getMessage());
         } catch (Exception ex) {
             return error(id, INTERNAL_ERROR,
                     ex.getMessage() != null ? ex.getMessage() : ex.toString());
@@ -327,7 +377,7 @@ public final class McpServer {
         try {
             outcome = prompt.handler().handle(arguments, context);
         } catch (TqlException ex) {
-            return error(id, INTERNAL_ERROR, ex.code() + ": " + ex.getMessage());
+            return error(id, INTERNAL_ERROR, ex.getMessage());
         } catch (Exception ex) {
             return error(id, INTERNAL_ERROR,
                     ex.getMessage() != null ? ex.getMessage() : ex.toString());
@@ -345,6 +395,26 @@ public final class McpServer {
             content.put("text", message.text() == null ? "" : message.text());
         }
         return result(id, result);
+    }
+
+    /** Whether {@code version} is a revision this server negotiates. */
+    static boolean supports(String version) {
+        return version != null && SUPPORTED.contains(version);
+    }
+
+    /**
+     * The JSON-RPC {@code -32700} response for a body that is not JSON, {@code id} null because
+     * none was parsed. One construction for both transports: the stdio transport answered a
+     * parse failure this way while the HTTP transport shipped a flat, uncoded body
+     * (docs/audit-low-leads.md, G7).
+     */
+    JsonNode parseError(String detail) {
+        return error(null, PARSE_ERROR, "Parse error: " + detail);
+    }
+
+    /** The JSON-RPC {@code -32603} response for a reply the transport could not serialise. */
+    JsonNode internalError(String detail) {
+        return error(null, INTERNAL_ERROR, "Internal error: " + detail);
     }
 
     private String pretty(JsonNode node) {

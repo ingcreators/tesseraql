@@ -1492,13 +1492,16 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 // the authorization-server campaign's resource slice): tesseraql.mcp.auth is
                 // public by default — nothing changes without opting in — and `bearer` demands
                 // a token whose audience is THIS surface's canonical resource identifier,
-                // derived from the address unless declared. The 401 carries the RFC 9728
-                // resource_metadata challenge whenever the resource is absolute, because the
-                // measured clients discover through the challenge first.
+                // derived from the address unless declared (and never declared under the stack
+                // issuer, which StackIssuer refuses: its document and grants know only the
+                // derived name). The 401 carries the RFC 9728 resource_metadata challenge
+                // whenever the resource is absolute, because the measured clients discover
+                // through the challenge first. Both are spelled as the wire spells a URI.
                 String mcpAuth = manifest.config().getString("tesseraql.mcp.auth")
                         .orElse("public");
                 io.tesseraql.mcp.McpAuthenticator mcpGate = null;
                 String mcpChallenge = "Bearer";
+                String origin = hostContext == null ? null : hostContext.externalOrigin();
                 if ("bearer".equals(mcpAuth)) {
                     if (security.jwt() == null) {
                         throw new io.tesseraql.core.error.TqlException(
@@ -1508,20 +1511,17 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                         + " configured — the gate has nothing to verify a"
                                         + " token against");
                     }
-                    String origin = hostContext == null ? null : hostContext.externalOrigin();
                     String mcpResource = manifest.config()
                             .getString("tesseraql.mcp.resource")
-                            .orElse((origin == null ? "" : origin)
-                                    + (basePath == null ? "" : basePath) + "/_tesseraql/mcp");
+                            .orElse(McpRoutes.resource(origin, basePath));
                     io.tesseraql.security.SecurityConfig.JwtConfig gate = withAudience(
                             security.jwt(), mcpResource);
                     io.tesseraql.security.jwt.JwtAuthenticator mcpJwt = new io.tesseraql.security.jwt.JwtAuthenticator(
                             gate, jwksFetcher(httpCallClient, gate, hostContext));
                     mcpGate = mcpJwt::authenticate;
                     if (origin != null) {
-                        mcpChallenge = "Bearer resource_metadata=\"" + origin
-                                + "/.well-known/oauth-protected-resource"
-                                + (basePath == null ? "" : basePath) + "/_tesseraql/mcp\"";
+                        mcpChallenge = "Bearer resource_metadata=\""
+                                + McpRoutes.metadataUrl(origin, basePath) + "\"";
                     }
                 } else if (!"public".equals(mcpAuth)) {
                     throw new io.tesseraql.core.error.TqlException(
@@ -1532,9 +1532,12 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                     + " per-primitive auth:/policy: continue underneath"
                                     + " either");
                 }
+                // A browser page may call the surface from the application's own origin and
+                // from loopback; any other Origin is the rebinding page the specification's
+                // MUST refuses (docs/audit-low-leads.md, G1).
                 new McpRoutes(
-                        new io.tesseraql.mcp.McpHttpHandler(mcpServer, mcpGate,
-                                mcpChallenge))
+                        new io.tesseraql.mcp.McpHttpHandler(mcpServer, mcpGate, mcpChallenge,
+                                origin == null ? List.of() : List.of(origin)))
                         .install(context);
                 LOG.info(
                         "Serving {} MCP tool(s), {} resource(s), {} UI resource(s), and {} prompt(s)"

@@ -42,6 +42,18 @@ class StdioTransportTest {
     @Test
     void aMalformedLineYieldsAParseError() throws Exception {
         String output = serve("not json at all\n");
-        assertThat(output).contains("\"code\":" + McpServer.PARSE_ERROR);
+        assertThat(output).contains("\"code\":" + McpServer.PARSE_ERROR)
+                .contains("\"id\":null");
+    }
+
+    /** A batch line is answered by one array line (docs/audit-low-leads.md, G3). */
+    @Test
+    void aBatchLineIsAnsweredByOneArrayLine() throws Exception {
+        String output = serve("[{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"ping\"},"
+                + "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"ping\"}]\n");
+        String[] lines = output.strip().split("\n");
+        assertThat(lines).hasSize(1);
+        assertThat(lines[0]).startsWith("[").endsWith("]").contains("\"id\":1")
+                .contains("\"id\":2");
     }
 }

@@ -92,6 +92,31 @@ class AuthorizeFlowTest {
         assertThat(outcome.consent()).containsEntry("member", "shop");
     }
 
+    /**
+     * A Japanese member's resource arrives as the metadata document spelled it — percent-encoded
+     * — while the catalogue holds the address raw; both spellings resolve, and the resource is
+     * kept as the wire spells it, which is the audience the member's gate demands
+     * (docs/audit-low-leads.md, unfiled 48).
+     */
+    @Test
+    void aJapaneseMembersResourceResolvesInEitherSpellingAndIsKeptAsTheWireSpellsIt() {
+        Map<String, String> members = Map.of("受注", "/受注");
+        String wire = ORIGIN + "/%E5%8F%97%E6%B3%A8/_tesseraql/mcp";
+
+        assertThat(AuthorizeFlow.memberOf(wire, members, ORIGIN)).isEqualTo("受注");
+        assertThat(AuthorizeFlow.memberOf(ORIGIN + "/受注/_tesseraql/mcp", members, ORIGIN))
+                .isEqualTo("受注");
+        assertThat(AuthorizeFlow.memberOf(ORIGIN + "/%E5%8F%97%E6%B3%A8x", members, ORIGIN))
+                .isNull();
+
+        AuthorizeFlow japanese = new AuthorizeFlow(store, provider, members, ORIGIN, clock);
+        AuthorizeFlow.Outcome outcome = japanese.authorize(
+                query(q -> q.put("resource", ORIGIN + "/受注/_tesseraql/mcp")), "u-1", "eve",
+                grants);
+        assertThat(outcome.consent()).containsEntry("member", "受注")
+                .containsEntry("resource", wire);
+    }
+
     @Test
     void theFirstAuthorizeOwesTheConsentScreen() {
         AuthorizeFlow.Outcome outcome = flow.authorize(query(q -> {

@@ -61,7 +61,10 @@ class OAuthIssuerUnificationIntegrationTest {
         seedDatabase();
         work = Files.createTempDirectory("tesseraql-issuer-unification-work");
         installRoot = Files.createTempDirectory("tesseraql-issuer-unification-it");
-        new AppInstaller().install(packaged(appHome()), installRoot);
+        new AppInstaller().install(packaged(appHome("shop", "s1")), installRoot);
+        // A member named in Japanese: addressed on the wire as /%E5%8F%97%E6%B3%A8, its MCP
+        // resource a URI spelled the same way (docs/audit-low-leads.md, unfiled 48).
+        new AppInstaller().install(packaged(appHome("受注", "s2")), installRoot);
         // The origin must be declared before the gateway binds, so the port is picked first.
         port = freePort();
         Files.writeString(installRoot.resolve(
@@ -529,28 +532,102 @@ class OAuthIssuerUnificationIntegrationTest {
         // finding: every AS-minted MCP token passed the door and failed every tool with
         // TQL-SEC-4143, because the member's derived audiences stopped at its address while
         // the token names the MCP resource below it.
-        HttpResponse<String> called = mcp(mcpResource, access,
-                "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\","
-                        + "\"params\":{\"name\":\"items.tool\",\"arguments\":{}}}");
+        HttpResponse<String> called = call(mcpResource, access, opened);
         assertThat(called.statusCode()).as(called.body()).isEqualTo(200);
         JsonNode result = MAPPER.readTree(called.body()).path("result");
         assertThat(result.path("isError").asBoolean(false)).as(called.body()).isFalse();
         assertThat(called.body()).as(called.body()).contains("data");
     }
 
+    /**
+     * A member named in Japanese: the document is at the wire-spelled well-known and names the
+     * wire-spelled resource; the challenge carries that spelling, not the {@code ?} the header
+     * folded a raw name to; and a grant for that resource opens the surface and runs the tool —
+     * the gate, the mint and the member's audiences agree on the one spelling
+     * (docs/audit-low-leads.md, unfiled 48).
+     */
+    @Test
+    @org.junit.jupiter.api.Order(7)
+    void aJapaneseMembersMcpSurfaceIsNamedAsTheWireSpellsIt() throws Exception {
+        String wire = "http://localhost:" + port + "/%E5%8F%97%E6%B3%A8/_tesseraql/mcp";
+
+        HttpResponse<String> metadata = CLIENT.send(HttpRequest.newBuilder(
+                URI.create("http://localhost:" + port
+                        + "/.well-known/oauth-protected-resource/%E5%8F%97%E6%B3%A8/_tesseraql/mcp"))
+                .build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(metadata.statusCode()).as(metadata.body()).isEqualTo(200);
+        assertThat(MAPPER.readTree(metadata.body()).get("resource").asText()).isEqualTo(wire);
+
+        HttpResponse<String> challenged = mcp(wire, null);
+        assertThat(challenged.statusCode()).isEqualTo(401);
+        String challenge = challenged.headers().firstValue("WWW-Authenticate").orElse("");
+        assertThat(challenge)
+                .contains("resource_metadata=\"http://localhost:" + port
+                        + "/.well-known/oauth-protected-resource/%E5%8F%97%E6%B3%A8/_tesseraql/mcp\"")
+                .doesNotContain("?");
+
+        String[] session = signIn("alice");
+        String form = "_csrf=" + enc(session[1]) + "&client_id=codex&redirect_uri="
+                + enc("http://127.0.0.1:49681/callback/x") + "&state=jp"
+                + "&code_challenge=" + enc(challenge(VERIFIER))
+                + "&resource=" + enc(wire) + "&decision=approve";
+        HttpResponse<String> approved = CLIENT.send(HttpRequest.newBuilder(
+                URI.create("http://localhost:" + port + "/_tesseraql/oauth/decision"))
+                .header("Cookie", session[0])
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .POST(HttpRequest.BodyPublishers.ofString(form)).build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertThat(approved.statusCode()).as(approved.body()).isEqualTo(303);
+        String code = approved.headers().firstValue("Location").orElseThrow()
+                .replaceAll(".*[?&]code=([^&]+).*", "$1");
+        HttpResponse<String> minted = CLIENT.send(HttpRequest.newBuilder(
+                URI.create("http://localhost:" + port + "/_tesseraql/oauth/token"))
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .POST(HttpRequest.BodyPublishers.ofString(
+                        "grant_type=authorization_code&client_id=codex&code=" + enc(code)
+                                + "&redirect_uri=" + enc("http://127.0.0.1:49681/callback/x")
+                                + "&code_verifier=" + enc(VERIFIER)))
+                .build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(minted.statusCode()).as(minted.body()).isEqualTo(200);
+        String access = MAPPER.readTree(minted.body()).get("access_token").asText();
+        JsonNode payload = MAPPER.readTree(
+                Base64.getUrlDecoder().decode(access.split("\\.")[1]));
+        assertThat(payload.get("aud").asText()).isEqualTo(wire);
+
+        HttpResponse<String> opened = mcp(wire, access);
+        assertThat(opened.statusCode()).as(opened.body()).isEqualTo(200);
+        HttpResponse<String> called = call(wire, access, opened);
+        assertThat(called.statusCode()).as(called.body()).isEqualTo(200);
+        assertThat(MAPPER.readTree(called.body()).path("result").path("isError")
+                .asBoolean(false)).as(called.body()).isFalse();
+        assertThat(called.body()).as(called.body()).contains("s2");
+    }
+
     private static HttpResponse<String> mcp(String endpoint, String bearer) throws Exception {
-        return mcp(endpoint, bearer,
+        return mcp(endpoint, bearer, null,
                 "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{}}");
     }
 
-    private static HttpResponse<String> mcp(String endpoint, String bearer, String body)
-            throws Exception {
+    /** The items tool, called on the session {@code initialized} minted. */
+    private static HttpResponse<String> call(String endpoint, String bearer,
+            HttpResponse<String> initialized) throws Exception {
+        return mcp(endpoint, bearer,
+                initialized.headers().firstValue("Mcp-Session-Id").orElseThrow(),
+                "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\","
+                        + "\"params\":{\"name\":\"items.tool\",\"arguments\":{}}}");
+    }
+
+    private static HttpResponse<String> mcp(String endpoint, String bearer, String session,
+            String body) throws Exception {
         HttpRequest.Builder request = HttpRequest.newBuilder(URI.create(endpoint))
                 .header("Content-Type", "application/json")
                 .header("Accept", "application/json, text/event-stream")
                 .POST(HttpRequest.BodyPublishers.ofString(body));
         if (bearer != null) {
             request.header("Authorization", "Bearer " + bearer);
+        }
+        if (session != null) {
+            request.header("Mcp-Session-Id", session);
         }
         return CLIENT.send(request.build(), HttpResponse.BodyHandlers.ofString());
     }
@@ -604,10 +681,13 @@ class OAuthIssuerUnificationIntegrationTest {
         try (Connection connection = DriverManager.getConnection(
                 POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
                 Statement statement = connection.createStatement()) {
-            statement.execute("create schema s1");
-            statement.execute(
-                    "create table s1.items (id serial primary key, name varchar(200) not null)");
-            statement.execute("insert into s1.items (name) values ('s1')");
+            for (String schema : java.util.List.of("s1", "s2")) {
+                statement.execute("create schema " + schema);
+                statement.execute("create table " + schema
+                        + ".items (id serial primary key, name varchar(200) not null)");
+                statement.execute("insert into " + schema + ".items (name) values ('" + schema
+                        + "')");
+            }
             for (String ddl : io.tesseraql.identity.DefaultIdentityPack.schema("postgres")
                     .split(";")) {
                 if (!ddl.isBlank()) {
@@ -630,8 +710,8 @@ class OAuthIssuerUnificationIntegrationTest {
         }
     }
 
-    /** The user-admin example renamed to {@code shop}, plus a bearer-protected items route. */
-    private static Path appHome() throws IOException {
+    /** The user-admin example renamed to {@code name}, plus a bearer-protected items route. */
+    private static Path appHome(String name, String schema) throws IOException {
         Path home = work.resolve("app-" + System.nanoTime());
         Path source = Paths.get("..", "examples", "user-admin-app").toAbsolutePath().normalize();
         try (Stream<Path> files = Files.walk(source)) {
@@ -654,7 +734,7 @@ class OAuthIssuerUnificationIntegrationTest {
         }
         Files.writeString(exampleConfig, config
                 .replace(allowLocalhost, "")
-                .replace("permission: user-admin.", "permission: shop.")
+                .replace("permission: user-admin.", "permission: " + name + ".")
                 // The member sheds its own key source — under the stack issuer a declared
                 // secret is a second issuer and refused (TQL-OAUTH-3001); its declared
                 // audience stays and the origin joins it.
@@ -666,16 +746,16 @@ class OAuthIssuerUnificationIntegrationTest {
         Files.writeString(home.resolve("config/overlay.yml"), """
                 tesseraql:
                   app:
-                    name: shop
+                    name: %s
                     version: 1.0.0
                   mcp:
                     auth: bearer
                 db:
                   main:
-                    url: %s&currentSchema=s1
+                    url: %s&currentSchema=%s
                     username: %s
                     password: %s
-                """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
+                """.formatted(name, POSTGRES.getJdbcUrl(), schema, POSTGRES.getUsername(),
                 POSTGRES.getPassword()));
         Path mcpDir = home.resolve("mcp");
         Files.createDirectories(mcpDir);

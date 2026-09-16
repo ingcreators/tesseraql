@@ -58,18 +58,8 @@ public final class StdioTransport {
         try {
             message = mapper.readTree(line);
         } catch (JsonProcessingException ex) {
-            return Optional.of(parseError(ex.getOriginalMessage()));
+            return Optional.of(server.parseError(ex.getOriginalMessage()));
         }
         return server.handle(message);
-    }
-
-    private JsonNode parseError(String detail) {
-        var response = mapper.createObjectNode();
-        response.put("jsonrpc", "2.0");
-        response.set("id", mapper.nullNode());
-        response.putObject("error")
-                .put("code", McpServer.PARSE_ERROR)
-                .put("message", "Parse error: " + detail);
-        return response;
     }
 }

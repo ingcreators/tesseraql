@@ -471,7 +471,9 @@ a declared key source is refused as a second issuer (`TQL-OAUTH-3001`; the origi
 required by `TQL-OAUTH-3002`). One call the design paragraph above forced into the open: a
 runtime's accepted audiences are **its own address plus the stack origin, plus — refined
 2026-08-24, the Codex acceptance's second finding — its own MCP resource**
-(`address + /_tesseraql/mcp`, or the declared `tesseraql.mcp.resource`). An OAuth grant for a
+(`address + /_tesseraql/mcp`, as the wire spells it; a declared `tesseraql.mcp.resource` is
+refused under the stack issuer since `docs/audit-low-leads.md` slice 10 — the document and the
+grants know only the derived name). An OAuth grant for a
 member's MCP surface names that subordinate resource (RFC 8707), and a tool call re-runs the
 route's own bearer validation with the granted token, so a member that stopped at its address
 passed every such token through the transport gate and refused it at every tool

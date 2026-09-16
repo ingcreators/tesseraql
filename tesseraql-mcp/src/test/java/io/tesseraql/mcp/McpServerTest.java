@@ -54,6 +54,12 @@ class McpServerTest {
                         .handler((args, ctx) -> McpPromptResult.user("a greeting",
                                 "Say hello to " + args.get("who")))
                         .build())
+                .prompt(McpPrompt.builder("refused")
+                        .handler((args, ctx) -> {
+                            throw new TqlException(new TqlErrorCode(TqlDomain.MCP, 4001),
+                                    "refused");
+                        })
+                        .build())
                 .build();
     }
 
@@ -130,13 +136,91 @@ class McpServerTest {
         assertThat(result.get("content").get(0).get("text").asText()).contains("kaboom");
     }
 
+    /**
+     * A coded failure reads as its sentence, once: {@code TqlException.getMessage()} already
+     * begins with the code, and the three catch sites prepended it again, so every coded error
+     * on every primitive read {@code TQL-X-n: TQL-X-n: …} (docs/audit-low-leads.md, G2).
+     */
     @Test
-    void aTqlExceptionSurfacesItsErrorCodeInTheToolError() {
+    void aTqlExceptionSurfacesItsErrorCodeOnceInTheToolError() {
         JsonNode result = call("{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"tools/call\","
                 + "\"params\":{\"name\":\"denied\"}}").get("result");
         assertThat(result.get("isError").asBoolean()).isTrue();
         assertThat(result.get("content").get(0).get("text").asText())
-                .contains("TQL-MCP-4001").contains("nope");
+                .isEqualTo("TQL-MCP-4001: nope");
+    }
+
+    @Test
+    void aFailingPromptIsAJsonRpcErrorCarryingTheCodeOnce() {
+        JsonNode error = call("{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"prompts/get\","
+                + "\"params\":{\"name\":\"refused\"}}").get("error");
+        assertThat(error.get("code").asInt()).isEqualTo(-32603);
+        assertThat(error.get("message").asText()).isEqualTo("TQL-MCP-4001: refused");
+    }
+
+    // ----- batches (docs/audit-low-leads.md, G3) -----
+
+    /**
+     * Revision 2025-03-26 makes receiving a batch a MUST, and this server negotiates that
+     * revision; a batch answered {@code -32600 "Expected a JSON-RPC object"}.
+     */
+    @Test
+    void aBatchIsDispatchedElementByElementAndAnsweredAsAnArray() {
+        JsonNode responses = call("[{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"ping\"},"
+                + "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"},"
+                + "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\","
+                + "\"params\":{\"name\":\"echo\",\"arguments\":{\"text\":\"batched\"}}}]");
+        assertThat(responses.isArray()).isTrue();
+        assertThat(responses).hasSize(2);
+        assertThat(responses.get(0).get("id").asInt()).isEqualTo(2);
+        assertThat(responses.get(1).get("id").asInt()).isEqualTo(3);
+        assertThat(responses.get(1).get("result").get("content").get(0).get("text").asText())
+                .isEqualTo("batched");
+    }
+
+    @Test
+    void aBatchOfOnlyNotificationsAnswersNothing() {
+        assertThat(call("[{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}]"))
+                .isNull();
+    }
+
+    @Test
+    void anEmptyBatchIsOneInvalidRequest() {
+        JsonNode response = call("[]");
+        assertThat(response.isObject()).isTrue();
+        assertThat(response.get("error").get("code").asInt()).isEqualTo(-32600);
+    }
+
+    /** The lifecycle forbids batching initialize; the element is refused, the rest answered. */
+    @Test
+    void initializeInsideABatchIsRefusedPerElement() {
+        JsonNode responses = call("[{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\"},"
+                + "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"ping\"}]");
+        assertThat(responses.get(0).get("error").get("code").asInt()).isEqualTo(-32600);
+        assertThat(responses.get(0).get("error").get("message").asText()).contains("batch");
+        assertThat(responses.get(1).has("result")).isTrue();
+    }
+
+    @Test
+    void aBatchPastTheCeilingIsRefusedWhole() {
+        StringBuilder batch = new StringBuilder("[");
+        for (int i = 0; i <= McpServer.MAX_BATCH; i++) {
+            batch.append(i == 0 ? "" : ",")
+                    .append("{\"jsonrpc\":\"2.0\",\"id\":").append(i)
+                    .append(",\"method\":\"ping\"}");
+        }
+        JsonNode response = call(batch.append("]").toString());
+        assertThat(response.isObject()).isTrue();
+        assertThat(response.get("error").get("code").asInt()).isEqualTo(-32600);
+    }
+
+    /** The revisions the transport's header check consults are the ones initialize echoes. */
+    @Test
+    void supportsNamesTheNegotiableRevisions() {
+        assertThat(McpServer.supports("2025-06-18")).isTrue();
+        assertThat(McpServer.supports("2025-03-26")).isTrue();
+        assertThat(McpServer.supports("1999-01-01")).isFalse();
+        assertThat(McpServer.supports(null)).isFalse();
     }
 
     @Test
@@ -174,7 +258,7 @@ class McpServerTest {
     void promptsListReturnsEveryRegisteredPromptWithItsArguments() {
         JsonNode prompts = call("{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"prompts/list\"}")
                 .get("result").get("prompts");
-        assertThat(prompts).hasSize(1);
+        assertThat(prompts).hasSize(2);
         JsonNode greet = prompts.get(0);
         assertThat(greet.get("name").asText()).isEqualTo("greet");
         assertThat(greet.get("title").asText()).isEqualTo("Greeting");
@@ -245,7 +329,7 @@ class McpServerTest {
         assertThat(response.has("result")).isFalse();
         JsonNode error = response.get("error");
         assertThat(error.get("code").asInt()).isEqualTo(-32603);
-        assertThat(error.get("message").asText()).contains("TQL-MCP-4001").contains("denied");
+        assertThat(error.get("message").asText()).isEqualTo("TQL-MCP-4001: denied");
     }
 
     @Test

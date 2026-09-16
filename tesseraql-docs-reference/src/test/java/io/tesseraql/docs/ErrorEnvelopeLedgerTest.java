@@ -25,6 +25,11 @@ import org.junit.jupiter.api.Test;
  * where one does not; a hand-spelled envelope must be argued here, in review, with a reason.
  * The deliberate non-envelope shapes — OAuth's RFC 6749 body and SCIM's RFC 7644 body — are
  * mapper-built against their specs and never spell this literal, so they need no entry.
+ *
+ * <p>The second predicate is the flat body a mapper builds: a fresh Jackson object whose
+ * first key is {@code error}. The MCP transport's four remaining flat refusals were built
+ * exactly so and survived the literal grep for a year (docs/audit-low-leads.md, G7); the
+ * OAuth and SCIM bodies put their spec's own keys first and are not matched.
  */
 class ErrorEnvelopeLedgerTest {
 
@@ -32,6 +37,10 @@ class ErrorEnvelopeLedgerTest {
 
     private static final Set<String> LEDGER = new TreeSet<>(List.of(
             "tesseraql-core/src/main/java/io/tesseraql/core/error/ErrorEnvelope.java"));
+
+    /** A fresh object node whose first key is {@code error}: a flat error body, mapper-built. */
+    private static final java.util.regex.Pattern MAPPER_BUILT_FLAT_BODY = java.util.regex.Pattern
+            .compile("createObjectNode\\(\\);\\s*\\n\\s*\\w+\\.put\\(\"error\",");
 
     @Test
     void everyHandSpelledEnvelopeIsOnTheLedger() throws IOException {
@@ -48,7 +57,9 @@ class ErrorEnvelopeLedgerTest {
                             // The key alone, not the brace-prefixed literal: a writer
                             // concatenating the envelope from fragments never spells
                             // {"error" as one piece, but it must spell the key.
-                            if (Files.readString(path).contains("\\\"error\\\":")) {
+                            String source = Files.readString(path);
+                            if (source.contains("\\\"error\\\":")
+                                    || MAPPER_BUILT_FLAT_BODY.matcher(source).find()) {
                                 found.add(REPO.relativize(path).toString().replace('\\', '/'));
                             }
                         } catch (IOException unreadable) {
