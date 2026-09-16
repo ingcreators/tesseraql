@@ -67,7 +67,7 @@ public final class FileTransferStatusProcessor implements Step {
                 TesseraqlProperties.FILE_TRANSFER_BEAN,
                 FileTransferService.class);
         FileTransferService.TransferStatus status = TransferScope
-                .own(transfers, transferId, appName, routeId).orElse(null);
+                .own(transfers, transferId, appName, routeId, exchange).orElse(null);
         if (Negotiation.prefersHtml(exchange)) {
             respondCard(exchange, transferId, status, transfers);
             return;

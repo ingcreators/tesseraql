@@ -76,10 +76,16 @@ public final class FileExportStartProcessor implements Step {
         FileWriteSpec formatted = writeSpec.withFormatting(
                 RequestFormats.locale(exchange, locale),
                 RequestFormats.timezone(exchange, timezone));
+        // Each named source's params: resolve here, on the request, because the extraction
+        // runs off it (docs/export-pipeline.md decision 2).
+        Map<String, Object> context = exchange.getProperty(TesseraqlProperties.CONTEXT,
+                Map.of(), Map.class);
+        java.util.List<io.tesseraql.core.files.ExportQuery> resolvedQueries = queries.stream()
+                .map(query -> query.resolved(context)).toList();
         String transferId = transfers.startExport(new FileTransferService.ExportRequest(
                 routeId, appName, format, formatted,
                 filename, querySqlFile, Map.copyOf(params), afterTiming, afterSqlFile,
-                rowCap, queries, ExportSources.values(exchange, httpSources),
+                rowCap, resolvedQueries, ExportSources.values(exchange, httpSources),
                 ExportEnrichment.enricher(exchange, enrichments),
                 ExportEnrichment.window(enrichments))
                 .on(TransferPools.of(exchange)));

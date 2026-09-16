@@ -63,7 +63,7 @@ public final class TransferCancelProcessor implements Step {
         // Whose it is, before anything is asked of it: a cancel that reached the run first
         // would have stopped a transfer this route was then going to call unknown.
         FileTransferService.TransferStatus status = TransferScope
-                .own(transfers, transferId, appName, routeId).orElse(null);
+                .own(transfers, transferId, appName, routeId, exchange).orElse(null);
         boolean requested = status != null && transfers.cancel(transferId);
         if (Negotiation.prefersHtml(exchange)) {
             Locale locale = Locale.forLanguageTag(exchange.getProperty(

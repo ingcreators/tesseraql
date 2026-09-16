@@ -547,7 +547,7 @@ public final class JdbcFileTransferService implements FileTransferService {
                 transferId, transfer.routeId(), transfer.appName(), transfer.direction(),
                 executionStatus, transfer.rowCount(), transfer.expectedRows(),
                 transfer.errors(), transfer.filename(), transfer.downloadedAt() != null,
-                exitMessage));
+                exitMessage, transfer.tenantId()));
     }
 
     /** The connected vendor (for label normalization and the row-limit clause), detected once. */
@@ -1609,8 +1609,10 @@ public final class JdbcFileTransferService implements FileTransferService {
         }
         Map<String, Object> values = new LinkedHashMap<>(resolved);
         for (ExportQuery query : queries) {
+            // The query's own params: over the request's map (docs/audit-low-leads.md G28).
             values.put(query.name(), execute(connection,
-                    SqlRenderer.render(parse(query.sqlFile()), params), cap, spools));
+                    SqlRenderer.render(parse(query.sqlFile()), query.bindsOver(params)), cap,
+                    spools));
         }
         return Map.copyOf(values);
     }

@@ -1667,8 +1667,12 @@ public final class RouteCompiler {
             mount(context, "GET", routeFile.urlPath() + "/{transferId}/file", routeId + ".file");
         }
         PipelineBuilder fileRoute = pipelines.pipeline(routeId + ".file");
-        applySecurity(fileRoute, definition.security(), "GET",
-                routeFile.urlPath() + "/{transferId}/file");
+        // Governance, not just security, like the status and cancel legs (docs/csv-import.md):
+        // with security alone the one URL that serves the bytes resolved no tenant, so under
+        // `required: true` a request naming no tenant — or another's — was answered
+        // (docs/audit-low-leads.md G31).
+        applyCommonGovernance(fileRoute, routeId + ".file", "GET",
+                routeFile.urlPath() + "/{transferId}/file", definition);
         fileRoute.process(new io.tesseraql.compiler.binding.FileDownloadProcessor(appName,
                 routeId));
     }
@@ -2567,8 +2571,11 @@ public final class RouteCompiler {
         java.util.List<io.tesseraql.core.files.ExportQuery> queries = new java.util.ArrayList<>();
         definition.sources().forEach((name, binding) -> {
             if (!RouteDefinition.MAIN.equals(name) && binding.file() != null) {
+                // The source's own params: travel as expressions; the executing path resolves
+                // them at request time (docs/audit-low-leads.md G28).
                 queries.add(new io.tesseraql.core.files.ExportQuery(name,
-                        dir.resolve(binding.file()).normalize()));
+                        dir.resolve(binding.file()).normalize(), binding.params(),
+                        java.util.Map.of()));
             }
         });
         return java.util.List.copyOf(queries);

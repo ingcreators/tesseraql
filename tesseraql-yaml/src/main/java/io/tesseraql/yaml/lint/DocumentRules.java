@@ -401,9 +401,17 @@ final class DocumentRules {
     }
 
     /**
-     * In shared-schema tenancy, every tenant-owned query must constrain rows by the tenant or it
-     * leaks data across tenants (design ch. 30.4). Warns when an enabled shared-schema app has a
-     * SQL route that neither binds {@code tenant.*} nor mentions a tenant column.
+     * In shared-schema tenancy, every tenant-owned statement must constrain rows by the tenant or
+     * it leaks data across tenants (design ch. 30.4). Warns, per binding, when an enabled
+     * shared-schema app has a SQL binding — {@code main}, a command {@code steps:} entry, a
+     * non-main {@code sources:} entry — that neither binds {@code tenant.*} nor mentions a
+     * tenant column.
+     *
+     * <p>It read {@code main} alone from #753 to 0.18.0: the unified-source refactor collapsed
+     * the bindings it walked to one, so every command step — the write side, where a guessed id
+     * crosses tenants destructively — and every second source went uninspected while
+     * {@code multi-tenancy.md} and {@code threat-model.md} named this lint as the control
+     * (docs/audit-low-leads.md G29).
      */
     static void lintTenantPredicate(LintContext context, AppConfig config, Path documentSource,
             RouteDefinition definition, String source, List<LintFinding> findings) {
@@ -414,23 +422,36 @@ final class DocumentRules {
         if (!enabled || !"shared-schema".equals(mode)) {
             return;
         }
-        if (definition.main() == null || definition.main().isContract()
-                || definition.main().file() == null) {
-            return;
+        java.util.Map<String, Binding> bindings = new java.util.LinkedHashMap<>();
+        if (definition.main() != null) {
+            bindings.put(RouteDefinition.MAIN, definition.main());
         }
-        boolean boundToTenant = definition.main().params().values().stream()
-                .anyMatch(expr -> expr != null && expr.startsWith("tenant."));
-        if (boundToTenant) {
-            return;
-        }
-        Path sqlFile = documentSource.getParent().resolve(definition.main().file());
-        String sql = Files.isRegularFile(sqlFile) ? context.content(sqlFile) : null;
-        if (sql != null && sql.toLowerCase().contains("tenant")) {
-            return;
-        }
-        findings.add(new LintFinding(SHARED_SCHEMA_WITHOUT_TENANT_PREDICATE, WARNING, source,
-                "Shared-schema route '" + definition.id()
-                        + "' has no tenant predicate; bind tenant.id or filter by a tenant column"));
+        definition.steps().forEach((id, binding) -> bindings.put("step '" + id + "'", binding));
+        definition.sources().forEach((name, binding) -> {
+            if (!RouteDefinition.MAIN.equals(name)) {
+                bindings.put("source '" + name + "'", binding);
+            }
+        });
+        bindings.forEach((label, binding) -> {
+            if (binding == null || binding.isContract() || binding.file() == null) {
+                return;
+            }
+            boolean boundToTenant = binding.params().values().stream()
+                    .anyMatch(expr -> expr != null && expr.startsWith("tenant."));
+            if (boundToTenant) {
+                return;
+            }
+            Path sqlFile = documentSource.getParent().resolve(binding.file());
+            String sql = Files.isRegularFile(sqlFile) ? context.content(sqlFile) : null;
+            if (sql != null && sql.toLowerCase().contains("tenant")) {
+                return;
+            }
+            findings.add(new LintFinding(SHARED_SCHEMA_WITHOUT_TENANT_PREDICATE, WARNING, source,
+                    "Shared-schema route '" + definition.id() + "' "
+                            + (RouteDefinition.MAIN.equals(label) ? "" : label + " ")
+                            + "has no tenant predicate; bind tenant.id or filter by a tenant"
+                            + " column"));
+        });
     }
 
     /** The write recipes an optimistic-locking nudge applies to, whatever surface mounts them. */

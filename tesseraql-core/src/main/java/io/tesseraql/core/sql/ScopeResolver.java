@@ -42,12 +42,47 @@ public interface ScopeResolver {
      */
     Resolved resolve(String scopeName, String alias, Map<String, Object> context);
 
-    /** A resolved scope: a predicate sub-template and the bind values it evaluates against. */
-    record Resolved(List<SqlNode> nodes, Map<String, Object> bindings) {
+    /**
+     * A resolved scope: a predicate sub-template and the bind values it evaluates against — or,
+     * when several arms matched, one {@link Fragment} per arm, each with its own binds
+     * (docs/data-scoping.md "Composition"). The renderer OR-combines the fragments and layers
+     * each fragment's binds around that fragment alone, so two arms that name the same bind
+     * ({@code /* units *}{@code /} in a staff arm and a manager arm) each render against their
+     * own values. One map for every fragment used to let the last matching arm's value win the
+     * name, and the other arm's rows vanished — silently, in arm order
+     * (docs/audit-low-leads.md G27).
+     *
+     * @param nodes     the single sub-template, or the whole OR-combination for a resolver that
+     *                  composes it itself (unused by the renderer when {@code fragments} is set)
+     * @param bindings  the binds of the single sub-template
+     * @param fragments the per-arm fragments, empty for the single-template shape
+     */
+    record Resolved(List<SqlNode> nodes, Map<String, Object> bindings,
+            List<Fragment> fragments) {
+
+        /** The single-template shape: one predicate, one bind map. */
+        public Resolved(List<SqlNode> nodes, Map<String, Object> bindings) {
+            this(nodes, bindings, List.of());
+        }
+
         public Resolved {
             nodes = List.copyOf(nodes);
             // Bind values may legitimately be null (e.g. an absent principal claim), so this
             // names the null-permitting copy rather than OrderedCopies.map.
+            bindings = bindings == null ? Map.of() : OrderedCopies.mapAllowingNulls(bindings);
+            fragments = fragments == null ? List.of() : List.copyOf(fragments);
+        }
+
+        /** The OR-combination of {@code fragments}, each rendered against its own binds. */
+        public static Resolved of(List<Fragment> fragments) {
+            return new Resolved(List.of(), Map.of(), fragments);
+        }
+    }
+
+    /** One matching arm's predicate and the binds it — and only it — evaluates against. */
+    record Fragment(List<SqlNode> nodes, Map<String, Object> bindings) {
+        public Fragment {
+            nodes = List.copyOf(nodes);
             bindings = bindings == null ? Map.of() : OrderedCopies.mapAllowingNulls(bindings);
         }
     }
