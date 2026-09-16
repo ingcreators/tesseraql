@@ -24,6 +24,15 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A workflow app boots on Oracle and SQL Server again.** The task store's `V2__delegated_from`
+  bootstrap script (0.5.0, Phase 52) is `alter table … add column …` with no vendor variant, and
+  its comment claimed every dialect parses it; Oracle (`"COLUMN" is a reserved word`) and SQL
+  Server (`Incorrect syntax near 'column'`) do not, so `JdbcWorkflowTaskStore.ensureSchema` — run
+  at boot by every app whose workflows assign tasks — has failed on both vendors since 0.5.0. No
+  suite booted a workflow app on either; slice 2b's new dialect check (`workflowSweepRoundTrip`,
+  which bootstraps the task store first) found it on its first gated run. Both vendors now have
+  their own V2 (Oracle `add delegated_from varchar2(256)`, SQL Server behind a `col_length`
+  guard). `docs/audit-low-leads.md`, slice 2b.
 - **The deadline sweeper resolves for the task it is told about.** Four defects in one engine
   path, each silent (`docs/audit-low-leads.md`, slice 2b). An `onBreach.escalate` on a transition
   whose command carries `/*%scope … */` — the transition idiom, and the docs' own example — could
