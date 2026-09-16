@@ -29,6 +29,16 @@ public final class TenantDataSources implements TenantDataSourceResolver, AutoCl
 
     private static final TqlErrorCode NO_TENANT_DATASOURCE = new TqlErrorCode(TqlDomain.TENANT,
             4031);
+    /**
+     * TQL-TENANT-4032: {@code tenancy.mode} names no isolation mode, or a per-tenant mode declares
+     * no {@code tenancy.datasources} — the boot refuses rather than serving every tenant the
+     * shared pool (docs/multi-tenancy.md).
+     */
+    private static final TqlErrorCode INVALID_TENANCY_CONFIG = new TqlErrorCode(TqlDomain.TENANT,
+            4032);
+    /** The isolation modes (docs/multi-tenancy.md); anything else is a refusal, not a fallback. */
+    static final java.util.Set<String> MODES = java.util.Set.of("shared-schema",
+            "schema-per-tenant", "database-per-tenant");
 
     private final Map<String, HikariDataSource> byTenant;
     private final boolean perTenant;
@@ -47,6 +57,24 @@ public final class TenantDataSources implements TenantDataSourceResolver, AutoCl
         String mode = config.getString("tenancy.mode").orElse("");
         boolean perTenant = "database-per-tenant".equals(mode) || "schema-per-tenant".equals(mode);
         Object node = config.navigate("tenancy.datasources");
+        // A misspelled mode used to read as "not per-tenant": no pools, no resolver, every
+        // tenant on the shared pool, and the shared-schema lint switched off with it — the
+        // isolation whose whole contract is structural, gone on a typo, silently
+        // (docs/audit-low-leads.md G25). An enabled tenancy names one of the three modes or the
+        // boot refuses; a per-tenant mode with no pools would refuse every tenant, so it is
+        // refused once, here.
+        if (config.getBoolean("tenancy.enabled", false)) {
+            if (!mode.isEmpty() && !MODES.contains(mode)) {
+                throw new TqlException(INVALID_TENANCY_CONFIG, "tenancy.mode '" + mode
+                        + "' is not an isolation mode; use shared-schema, schema-per-tenant or"
+                        + " database-per-tenant");
+            }
+            if (perTenant && (!(node instanceof Map<?, ?> declared) || declared.isEmpty())) {
+                throw new TqlException(INVALID_TENANCY_CONFIG, "tenancy.mode '" + mode
+                        + "' isolates tenants by pool but tenancy.datasources declares none;"
+                        + " every tenant would be refused (TQL-TENANT-4031)");
+            }
+        }
         if (!perTenant || !(node instanceof Map<?, ?> datasources) || datasources.isEmpty()) {
             return new TenantDataSources(Map.of(), perTenant);
         }

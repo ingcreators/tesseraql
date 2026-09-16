@@ -67,6 +67,7 @@ public final class AppLinter {
                 new ScopeRules(),
                 new PreferenceRules(),
                 new OrgUnitRules(),
+                new TenancyConfigRules(),
                 new WorkflowRules(),
                 new AttachmentRules(),
                 new MailRules(),

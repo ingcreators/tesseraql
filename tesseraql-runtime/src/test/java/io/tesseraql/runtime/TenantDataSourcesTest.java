@@ -54,6 +54,37 @@ class TenantDataSourcesTest {
         assertThat(pools.dataSourceFor("globex", SHARED)).isSameAs(SHARED);
     }
 
+    /**
+     * A misspelled mode used to read as "not per-tenant" — no pools, no resolver, every tenant on
+     * the shared pool, in silence (docs/audit-low-leads.md G25). An enabled tenancy refuses it.
+     */
+    @Test
+    void anEnabledTenancyWithAMisspelledModeIsRefusedAtLoad() {
+        AppConfig config = new AppConfig(Map.of(
+                "tenancy", Map.of("enabled", "true", "mode", "schema_per_tenant")));
+        assertThatThrownBy(() -> TenantDataSources.load(config))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("TQL-TENANT-4032")
+                .hasMessageContaining("schema_per_tenant");
+    }
+
+    @Test
+    void anEnabledPerTenantModeWithNoPoolsIsRefusedAtLoad() {
+        AppConfig config = new AppConfig(Map.of(
+                "tenancy", Map.of("enabled", "true", "mode", "database-per-tenant")));
+        assertThatThrownBy(() -> TenantDataSources.load(config))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("TQL-TENANT-4032")
+                .hasMessageContaining("tenancy.datasources");
+    }
+
+    @Test
+    void aDisabledTenancyIgnoresItsModeAsBefore() {
+        AppConfig config = new AppConfig(Map.of(
+                "tenancy", Map.of("enabled", "false", "mode", "schema_per_tenant")));
+        assertThat(TenantDataSources.load(config).dataSourceFor("acme", SHARED)).isSameAs(SHARED);
+    }
+
     @Test
     void noTenancyModeResolvesToTheSharedPool() {
         TenantDataSources pools = TenantDataSources.load(new AppConfig(Map.of()));

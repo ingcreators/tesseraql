@@ -105,6 +105,12 @@ public final class JdbcFileTransferService implements FileTransferService {
     private long reviewTtlMillis = DEFAULT_REVIEW_TTL_MILLIS;
     private io.tesseraql.core.telemetry.Tracer tracer = io.tesseraql.core.telemetry.NoopTracer.INSTANCE;
     private java.util.function.Supplier<io.tesseraql.core.events.TopicBus> topicBus;
+    /**
+     * The tenant's pool by id, for the {@code after:} statement a first download fires on a
+     * later request than the export's (docs/multi-tenancy.md); {@code null} until a per-tenant
+     * mode wires one, and then it refuses an unknown tenant as every other executor does.
+     */
+    private java.util.function.Function<String, DataSource> tenantPools;
 
     /**
      * One constructor, and the heartbeat is an argument rather than a setter: a transfer is
@@ -122,6 +128,119 @@ public final class JdbcFileTransferService implements FileTransferService {
         this.dataSource = dataSource;
         this.codecs = codecs;
         this.functions = functions;
+    }
+
+    /**
+     * The per-tenant pools (a per-tenant isolation mode's resolver), consulted by tenant id when
+     * a recorded transfer's {@code after:} statement runs on first download — the one transfer
+     * statement that runs outside the request that resolved the tenant.
+     */
+    public JdbcFileTransferService tenantPools(
+            java.util.function.Function<String, DataSource> tenantPools) {
+        this.tenantPools = tenantPools;
+        return this;
+    }
+
+    /** The pool a request's own SQL runs on: its tenant's, or the service's main datasource. */
+    private DataSource poolOf(FileTransferService.TransferPool pool) {
+        return pool == null || pool.dataSource() == null ? dataSource : pool.dataSource();
+    }
+
+    /**
+     * The pool a recorded transfer's tenant maps to today. A tenant recorded on the transfer with
+     * no pool to resolve it — the mode was per-tenant when the export ran — is a refusal, not the
+     * shared pool: the fail-closed rule every executor follows (docs/multi-tenancy.md).
+     */
+    private DataSource poolOf(String tenantId) {
+        if (tenantId == null || tenantId.isBlank()) {
+            return dataSource;
+        }
+        DataSource pool = tenantPools == null ? null : tenantPools.apply(tenantId);
+        if (pool == null) {
+            throw new TqlException(TRANSFER_ERROR, "Transfer was recorded for tenant '" + tenantId
+                    + "' but no per-tenant datasource resolves it; its after: statement"
+                    + " cannot run on the shared pool");
+        }
+        return pool;
+    }
+
+    /**
+     * A run's two connections when its pool is a tenant's (docs/multi-tenancy.md): the rows on the
+     * tenant pool, the transfer record and the execution verdict on {@code main}, where the
+     * framework tables live in every mode. On the main pool they are one connection and one
+     * transaction, as they always were.
+     *
+     * <p>Two connections cannot commit as one. The order is the rows first, then the verdict: a
+     * failure between the two leaves rows that landed under a RUNNING record the reaper closes
+     * as abandoned and this class names at WARNING — never a COMPLETED verdict over rows that
+     * did not land. The compare-and-set on the verdict still runs before either commit, so a
+     * transfer finished elsewhere still writes nothing.
+     */
+    private final class Bookkeeping implements AutoCloseable {
+
+        private final Connection work;
+        private final Connection record;
+        private final boolean split;
+        private final boolean recordAutoCommit;
+
+        Bookkeeping(Connection work, DataSource pool) throws SQLException {
+            this.work = work;
+            this.split = pool != dataSource;
+            this.record = split ? dataSource.getConnection() : work;
+            this.recordAutoCommit = split && record.getAutoCommit();
+            if (split) {
+                record.setAutoCommit(false);
+            }
+        }
+
+        /** The connection the transfer record and the verdict are written on. */
+        Connection record() {
+            return record;
+        }
+
+        /** Rows first, then the verdict; one commit when they share a connection. */
+        void commit(String what) throws SQLException {
+            if (split) {
+                work.commit();
+                try {
+                    record.commit();
+                } catch (SQLException ex) {
+                    LOG.warn("File {} committed its rows on the tenant pool but its verdict could"
+                            + " not be recorded on main; the execution stays RUNNING until the"
+                            + " reaper closes it as abandoned", what, ex);
+                    throw ex;
+                }
+                return;
+            }
+            record.commit();
+        }
+
+        void rollback() throws SQLException {
+            if (split) {
+                record.rollback();
+            }
+            work.rollback();
+        }
+
+        @Override
+        public void close() {
+            if (split) {
+                Transactions.restoreQuietly(record, recordAutoCommit, "transfer record");
+                try {
+                    record.close();
+                } catch (SQLException ignored) {
+                    // the record connection is returned to its pool best-effort; the verdict is
+                    // already committed or rolled back
+                }
+            }
+        }
+    }
+
+    /** The vendor a statement's dialect follows: the pool's own when it is not the main one. */
+    private String vendorOf(DataSource pool) {
+        return pool == dataSource
+                ? vendor()
+                : io.tesseraql.core.util.DatabaseVendors.vendor(pool).orElse(null);
     }
 
     /**
@@ -210,6 +329,9 @@ public final class JdbcFileTransferService implements FileTransferService {
             io.tesseraql.core.util.SqlScripts.applyForVendor(dataSource,
                     JdbcFileTransferService.class,
                     "/tesseraql/db/migration/operations/V13__transfer_expected_rows.sql");
+            io.tesseraql.core.util.SqlScripts.applyForVendor(dataSource,
+                    JdbcFileTransferService.class,
+                    "/tesseraql/db/migration/operations/V15__transfer_tenant.sql");
         } catch (SQLException ex) {
             throw new TqlException(TRANSFER_ERROR,
                     "Failed to create file transfer schema: " + ex.getMessage());
@@ -241,7 +363,8 @@ public final class JdbcFileTransferService implements FileTransferService {
         String transferId = jobs.startExecution(request.routeId(), request.appName(), "import",
                 null);
         insertTransfer(transferId, request.routeId(), request.appName(), "IMPORT",
-                request.format(), null, null, null, Map.of(), expectedRows);
+                request.format(), null, null, null, Map.of(), expectedRows,
+                request.pool().tenantId());
         executor.submit(guarded(transferId, () -> {
             try {
                 runImport(transferId, request, codec, upload, expectedRejects);
@@ -287,7 +410,7 @@ public final class JdbcFileTransferService implements FileTransferService {
                 split ? io.tesseraql.core.files.SplitExport.zipName(filename) : filename,
                 request.afterTiming(),
                 request.afterSqlFile() == null ? null : request.afterSqlFile().toString(),
-                request.params());
+                request.params(), null, request.pool().tenantId());
         executor.submit(guarded(transferId, () -> runExport(transferId, request, codec, filename)));
         return transferId;
     }
@@ -513,7 +636,8 @@ public final class JdbcFileTransferService implements FileTransferService {
             if (claimFirstDownload(transferId)
                     && AFTER_DOWNLOAD.equals(transfer.afterTiming())
                     && transfer.afterSqlFile() != null) {
-                runAfterSql(Path.of(transfer.afterSqlFile()), transfer.params());
+                runAfterSql(Path.of(transfer.afterSqlFile()), transfer.params(),
+                        transfer.tenantId());
             }
         } catch (RuntimeException ex) {
             closeQuietly(content);
@@ -614,7 +738,9 @@ public final class JdbcFileTransferService implements FileTransferService {
         long[] nextTick = {System.nanoTime() + PROGRESS_INTERVAL_NANOS};
         boolean[] stopping = {false};
         io.tesseraql.core.telemetry.Span span = span("import", request.rowSqlFile());
-        try (Connection connection = dataSource.getConnection();
+        DataSource pool = poolOf(request.pool());
+        try (Connection connection = pool.getConnection();
+                Bookkeeping books = new Bookkeeping(connection, pool);
                 java.io.InputStream content = tempStore.openInput(upload)) {
             boolean autoCommit = connection.getAutoCommit();
             connection.setAutoCommit(false);
@@ -678,13 +804,13 @@ public final class JdbcFileTransferService implements FileTransferService {
                     // an import is one transaction with a savepoint per row, so a stop that
                     // arrives before the commit takes everything with it. A partial import
                     // nobody asked for would be the worse outcome.
-                    connection.rollback();
+                    books.rollback();
                     recordRows(transferId, 0, errors);
                     jobs.stopExecution(transferId, "Import cancelled; nothing was written");
                     return;
                 }
                 if (expectedRejects != null && !parseRejected.equals(expectedRejects)) {
-                    connection.rollback();
+                    books.rollback();
                     recordRows(transferId, 0, errors);
                     jobs.failExecution(transferId, BATCH_PARSE_MOVED
                             + ": the file no longer parses as it did when it was reviewed ("
@@ -695,7 +821,7 @@ public final class JdbcFileTransferService implements FileTransferService {
                 boolean rollbackAll = !errors.isEmpty()
                         && ON_ERROR_ROLLBACK.equals(request.onError());
                 if (rollbackAll) {
-                    connection.rollback();
+                    books.rollback();
                     recordRows(transferId, 0, errors);
                     jobs.failExecution(transferId, errors.size()
                             + " row(s) rejected; import rolled back");
@@ -708,15 +834,15 @@ public final class JdbcFileTransferService implements FileTransferService {
                     // that was. As a conditional update in this transaction it is a
                     // compare-and-set: losing it means someone else already wrote this row's
                     // outcome, and the honest answer is to keep nothing.
-                    recordRows(connection, transferId, applied[0], errors);
-                    if (!jobs.completeExecution(connection, transferId)) {
-                        connection.rollback();
+                    recordRows(books.record(), transferId, applied[0], errors);
+                    if (!jobs.completeExecution(books.record(), transferId)) {
+                        books.rollback();
                         recordRows(transferId, 0, errors);
                         LOG.warn("File import {} was finished elsewhere while it ran;"
                                 + " nothing was written", transferId);
                         return;
                     }
-                    connection.commit();
+                    books.commit("import " + transferId);
                     committed = true;
                 }
                 // The completion signal (docs/csv-import.md decision 6). It fires here rather
@@ -735,7 +861,7 @@ public final class JdbcFileTransferService implements FileTransferService {
                 // 17). Rolling back is a no-op once the commit above has run.
                 if (!committed) {
                     try {
-                        connection.rollback();
+                        books.rollback();
                     } catch (SQLException rollback) {
                         failure.addSuppressed(rollback);
                     }
@@ -1283,7 +1409,9 @@ public final class JdbcFileTransferService implements FileTransferService {
         io.tesseraql.core.telemetry.Span span = span("export", request.querySqlFile());
         SpoolWriter writer = null;
         boolean spoolRecorded = false;
-        try (Connection connection = dataSource.getConnection()) {
+        DataSource pool = poolOf(request.pool());
+        try (Connection connection = pool.getConnection();
+                Bookkeeping books = new Bookkeeping(connection, pool)) {
             boolean autoCommit = connection.getAutoCommit();
             connection.setAutoCommit(false);
             List<SpooledRows> spools = new ArrayList<>();
@@ -1297,7 +1425,7 @@ public final class JdbcFileTransferService implements FileTransferService {
                 writer = created;
                 try (created;
                         PreparedStatement statement = prepareExtraction(connection, bound,
-                                vendor());
+                                vendorOf(pool));
                         ResultSet results = executeExtraction(statement);
                         OutputStream out = new io.tesseraql.core.spool.SpoolOutput(writer)) {
                     io.tesseraql.core.files.ResultSetRows iterator = new io.tesseraql.core.files.ResultSetRows(
@@ -1321,23 +1449,23 @@ public final class JdbcFileTransferService implements FileTransferService {
                 // reap in between made the bytes unreachable — download() serves only a COMPLETED
                 // execution — and the expiry sweep collects only spools whose uri it can see, so
                 // the file would have sat there forever.
-                recordSpool(connection, transferId, writer.toRef(), rows);
+                recordSpool(books.record(), transferId, writer.toRef(), rows);
                 spoolRecorded = true;
-                if (!jobs.completeExecution(connection, transferId)) {
-                    connection.rollback();
+                if (!jobs.completeExecution(books.record(), transferId)) {
+                    books.rollback();
                     tempStore.delete(writer.toRef());
                     LOG.warn("File export {} was finished elsewhere while it ran; the produced"
                             + " file was discarded", transferId);
                     return;
                 }
-                connection.commit();
+                books.commit("export " + transferId);
                 span.attribute("rowCount", rows);
             } catch (Throwable ex) {
                 // Everything, not Exception: restoring autocommit below COMMITS an open
                 // transaction (docs/two-way-sql-parser.md decision 17). These bodies return a
                 // value from inside the transaction, so they keep their own bracket.
                 try {
-                    connection.rollback();
+                    books.rollback();
                 } catch (SQLException rollback) {
                     // A rollback that also fails must not replace the failure that matters.
                     ex.addSuppressed(rollback);
@@ -1395,8 +1523,8 @@ public final class JdbcFileTransferService implements FileTransferService {
         }
     }
 
-    private void runAfterSql(Path afterSqlFile, Map<String, Object> params) {
-        try (Connection connection = dataSource.getConnection()) {
+    private void runAfterSql(Path afterSqlFile, Map<String, Object> params, String tenantId) {
+        try (Connection connection = poolOf(tenantId).getConnection()) {
             executeUpdate(connection, SqlRenderer.render(parse(afterSqlFile), params));
         } catch (SQLException ex) {
             throw new TqlException(TRANSFER_ERROR,
@@ -1560,14 +1688,14 @@ public final class JdbcFileTransferService implements FileTransferService {
     private record TransferRow(String routeId, String appName, String direction, String format,
             String filename, String spoolUri, long rowCount, Long expectedRows,
             List<RowError> errors, String afterTiming, String afterSqlFile,
-            Map<String, Object> params, Timestamp downloadedAt) {
+            Map<String, Object> params, Timestamp downloadedAt, String tenantId) {
     }
 
     private void insertTransfer(String transferId, String routeId, String appName,
             String direction, String format, String filename, String afterTiming,
             String afterSqlFile, Map<String, Object> params) {
         insertTransfer(transferId, routeId, appName, direction, format, filename, afterTiming,
-                afterSqlFile, params, null);
+                afterSqlFile, params, null, null);
     }
 
     /**
@@ -1578,14 +1706,15 @@ public final class JdbcFileTransferService implements FileTransferService {
      */
     private void insertTransfer(String transferId, String routeId, String appName,
             String direction, String format, String filename, String afterTiming,
-            String afterSqlFile, Map<String, Object> params, Long expectedRows) {
+            String afterSqlFile, Map<String, Object> params, Long expectedRows,
+            String tenantId) {
         try (Connection connection = dataSource.getConnection();
                 PreparedStatement statement = connection.prepareStatement("""
                         insert into tql_file_transfer
                           (transfer_id, route_id, app_name, direction, format, filename,
                            after_timing, after_sql_file, params_json, row_count, created_at,
-                           expected_rows)
-                        values (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)""")) {
+                           expected_rows, tenant_id)
+                        values (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)""")) {
             applyTimeout(statement);
             statement.setString(1, transferId);
             statement.setString(2, routeId);
@@ -1602,6 +1731,7 @@ public final class JdbcFileTransferService implements FileTransferService {
             } else {
                 statement.setLong(11, expectedRows);
             }
+            statement.setString(12, tenantId);
             statement.executeUpdate();
         } catch (SQLException ex) {
             throw new TqlException(TRANSFER_ERROR,
@@ -1721,7 +1851,8 @@ public final class JdbcFileTransferService implements FileTransferService {
                         rs.getString("after_timing"),
                         rs.getString("after_sql_file"),
                         fromJsonParams(rs.getString("params_json")),
-                        rs.getTimestamp("downloaded_at")));
+                        rs.getTimestamp("downloaded_at"),
+                        rs.getString("tenant_id")));
             }
         } catch (SQLException ex) {
             throw new TqlException(TRANSFER_ERROR,
