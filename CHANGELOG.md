@@ -50,6 +50,27 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **The Studio data browser reads one schema and writes one row.** The table listing and every
+  metadata read were scoped to the connection's catalog alone, so on a shared database whose
+  application writes `currentSchema` in its URL — the topology `cli-surface.md`,
+  `stack-architecture.md` and `multi-tenancy.md` recommend — a same-named table in a second
+  schema listed twice, its columns merged with the other's, and the primary-key read answered
+  whichever schema's row the driver returned last: the row editor linked Edit through the OTHER
+  table's key, and an update keyed on it matched three rows, committed them on the
+  auto-committed connection, and only then answered `TQL-STUDIO-4234` "Expected to update
+  exactly one row, but 3 matched" — data loss reported as a refusal, with no audit row. The
+  listing, `getColumns` and `getPrimaryKeys` take `connection.getSchema()` (escaped as an exact
+  pattern), the UPDATE runs in its own transaction and rolls back on any count but one, and the
+  edit form refuses a key that matches more than one row. On H2 this also stops every
+  `INFORMATION_SCHEMA` table from listing. `docs/audit-low-leads.md`, slice 6 (DN-06f, the
+  row editor's post-hoc guarantee).
+- **A data-browser export's error note is one record, and the failure is logged.** The note
+  was `"# " + message`, and a driver's message spans lines (PostgreSQL's `Hint:` and
+  `Position:`, DuckDB's `Did you mean`), so a failed download carried a second CSV record; and
+  neither the export's nor the browse page's failure left a server-side trace. The message is
+  folded onto the one line and both catches log at WARN (a refused table name at DEBUG); the
+  200 + `#` note stays, as `download-name-and-bytes.md` decision 1 decided with the audit's
+  question on the table. `docs/audit-low-leads.md`, slice 6 (DN-06g, F108).
 - **A decision table's `> n` / `< n` cell is an open end, not an inclusive bound one unit
   away.** `DecisionTables` compiled a strict comparator to the nearest inclusive bound in the
   literal's own scale — `> 100000` became `>= 100001` — so on a money column every amount

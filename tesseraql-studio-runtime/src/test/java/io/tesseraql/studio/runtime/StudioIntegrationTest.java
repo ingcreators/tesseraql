@@ -3057,31 +3057,116 @@ class StudioIntegrationTest {
 
     @Test
     void uiDataBrowserExportOfAnUnreadableTableIsANote() throws Exception {
-        // The catalog walk lists every schema, the export selects on the search path: a table
-        // in a second schema resolves and then fails to read. That failure is the other
-        // exception the provider catches — the note branch must hold it too, or the download
-        // is a 500 page.
+        // A read the database refuses is the other exception the provider catches — the note
+        // branch must hold it too, or the download is a 500 page — and the note is ONE record,
+        // first byte to last (docs/download-name-and-bytes.md decision 1): the driver's message
+        // spans lines (PostgreSQL's Hint: and Position:), and an unfolded second line was a
+        // second CSV record (docs/audit-low-leads.md, DN-06g). The trigger is an ordering filter
+        // on a uuid column with a value that is not one: the browser binds it as text and the
+        // database has no uuid > varchar operator. (The trigger used to be a same-named table in
+        // a second schema, which listed and then failed to read — the listing is schema-scoped
+        // now, so that table is simply unknown.)
         try (java.sql.Connection c = java.sql.DriverManager.getConnection(POSTGRES.getJdbcUrl(),
                 POSTGRES.getUsername(), POSTGRES.getPassword());
                 java.sql.Statement s = c.createStatement()) {
-            s.execute("create schema if not exists probe_other");
-            s.execute("create table if not exists probe_other.ghost (id int primary key)");
+            s.execute("create table if not exists probe_typed (id uuid primary key)");
         }
         try {
             HttpResponse<String> response = get(
-                    "/_tesseraql/studio/user-admin/ui/data/export?table=ghost", true);
+                    "/_tesseraql/studio/user-admin/ui/data/export?table=probe_typed"
+                            + "&fc0=id&fo0=gt&fv0=abc",
+                    true);
 
             assertThat(response.statusCode()).isEqualTo(200);
             assertThat(response.headers().firstValue("Content-Type").orElse(""))
                     .contains("text/csv");
-            assertThat(response.body()).startsWith("# Export failed: ").endsWith("\r\n");
+            String body = response.body();
+            assertThat(body).startsWith("# Export failed: ").endsWith("\r\n")
+                    .contains("operator does not exist");
+            assertThat(body.substring(0, body.length() - 2))
+                    .as("one record: the driver's Hint:/Position: lines are folded")
+                    .doesNotContain("\n").doesNotContain("\r");
+        } finally {
+            try (java.sql.Connection c = java.sql.DriverManager.getConnection(
+                    POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+                    java.sql.Statement s = c.createStatement()) {
+                s.execute("drop table if exists probe_typed");
+            }
+        }
+    }
+
+    /**
+     * The browser reads one schema — the connection's own — and writes one row
+     * (docs/audit-low-leads.md, DN-06f and the row editor's post-hoc guarantee). Two same-named
+     * tables in two schemas, each with a primary key under PostgreSQL's default constraint name,
+     * used to list twice, and the primary-key read answered whichever schema's row the driver
+     * returned last: the editor then linked Edit through the OTHER table's key, and an update
+     * keyed on it matched three rows, committed them on the auto-committed connection, and
+     * only then reported "Expected to update exactly one row, but 3 matched".
+     */
+    @Test
+    void uiDataBrowserReadsTheConnectionsSchemaAndWritesOneRow() throws Exception {
+        try (java.sql.Connection c = java.sql.DriverManager.getConnection(POSTGRES.getJdbcUrl(),
+                POSTGRES.getUsername(), POSTGRES.getPassword());
+                java.sql.Statement s = c.createStatement()) {
+            s.execute("create schema if not exists probe_other");
+            s.execute("create table if not exists probe_other.tql_users (id int primary key)");
+            s.execute("create table if not exists probe_editable"
+                    + " (id int primary key, ref varchar(20), note varchar(40))");
+            s.execute("create table if not exists probe_other.probe_editable"
+                    + " (ref varchar(20) primary key, id int, note varchar(40))");
+            s.execute("insert into probe_editable values (1, 'ACME', 'first'),"
+                    + " (2, 'ACME', 'second'), (3, 'ACME', 'third'), (4, 'ZZZ', 'other')");
+        }
+        try {
+            // (a) The listing is the connection's schema: one tql_users, one probe_editable.
+            String page = get("/_tesseraql/studio/user-admin/ui/data", true).body();
+            assertThat(page).containsOnlyOnce("<option value=\"tql_users\"")
+                    .containsOnlyOnce("<option value=\"probe_editable\"");
+
+            // (b) The key is this schema's: the browse page links Edit through id, not ref.
+            String browse = get("/_tesseraql/studio/user-admin/ui/data?table=probe_editable",
+                    true).body();
+            assertThat(browse).contains("k0=id").doesNotContain("k0=ref");
+
+            // (c) An update keyed on the other schema's key column is refused before any SQL,
+            // and the rows are untouched — the assertion that matters is the data, which a
+            // refusal reported after a committed multi-row UPDATE would not satisfy.
+            HttpResponse<String> refused = postForm("/_tesseraql/studio/user-admin/ui/data/edit",
+                    "table=probe_editable&k0=ref&v0=ACME&confirm=true"
+                            + "&cn0=note&cv0=CLOBBERED&cs0=true");
+            assertThat(refused.statusCode()).as(refused::body).isEqualTo(400);
+            assertThat(refused.body()).contains("TQL-STUDIO-4234");
+            assertThat(notes()).containsExactly("first", "second", "third", "other");
+
+            // (d) Keyed on the true key, one row changes.
+            assertThat(postForm("/_tesseraql/studio/user-admin/ui/data/edit",
+                    "table=probe_editable&k0=id&v0=2&confirm=true&cn0=note&cv0=renamed&cs0=true")
+                    .statusCode()).isEqualTo(303);
+            assertThat(notes()).containsExactly("first", "renamed", "third", "other");
         } finally {
             try (java.sql.Connection c = java.sql.DriverManager.getConnection(
                     POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
                     java.sql.Statement s = c.createStatement()) {
                 s.execute("drop schema if exists probe_other cascade");
+                s.execute("drop table if exists probe_editable");
             }
         }
+    }
+
+    /** The notes of {@code probe_editable} in id order. */
+    private static java.util.List<String> notes() throws Exception {
+        java.util.List<String> notes = new java.util.ArrayList<>();
+        try (java.sql.Connection c = java.sql.DriverManager.getConnection(POSTGRES.getJdbcUrl(),
+                POSTGRES.getUsername(), POSTGRES.getPassword());
+                java.sql.Statement s = c.createStatement();
+                java.sql.ResultSet rs = s.executeQuery(
+                        "select note from probe_editable order by id")) {
+            while (rs.next()) {
+                notes.add(rs.getString(1));
+            }
+        }
+        return notes;
     }
 
     @Test

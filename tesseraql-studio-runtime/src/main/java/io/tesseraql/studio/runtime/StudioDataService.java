@@ -37,10 +37,16 @@ import org.apache.commons.csv.CSVPrinter;
  * requested table against the live catalog before use, so neither can ever be an injection
  * vector.
  *
- * <p>On a server datasource the table list is the connection's own catalog, as always. A
- * {@code duckdb} connection's own catalog is empty scratch by design — everything interesting
- * is an attach or a lake — so there the browser lists tables and views across every catalog
- * visible on the connection, displayed and addressed as {@code catalog.schema.table}.
+ * <p>On a server datasource the table list is the connection's own catalog <em>and schema</em>
+ * ({@code current_schema()} on PostgreSQL — the {@code currentSchema} a shared-database
+ * application writes in its URL), and every metadata read is scoped the same way. It used to
+ * be catalog-only: on a database with a same-named table in a second schema the browser listed
+ * the name twice, read the other schema's columns and primary key, and — the key being the
+ * other table's — committed a multi-row UPDATE it then reported as rejected
+ * (docs/audit-low-leads.md, DN-06f). A {@code duckdb} connection's own catalog is empty scratch
+ * by design — everything interesting is an attach or a lake — so there the browser lists
+ * tables and views across every catalog visible on the connection, displayed and addressed as
+ * {@code catalog.schema.table}.
  *
  * <p>Row editing stays on {@code main}: non-main data is derived data (a projection, a replica,
  * a query engine's view of files), so the editor never grows a datasource parameter.
@@ -104,13 +110,17 @@ final class StudioDataService {
 
     /**
      * One browsable table: its JDBC coordinates plus the display form the UI addresses it by
-     * (bare name on a server datasource, {@code catalog.schema.table} on a duckdb one).
+     * (bare name on a server datasource, {@code catalog.schema.table} on a duckdb one), and
+     * whether generated SQL spells the coordinates out. A server ref keeps the bare name in
+     * SQL — the connection's search path resolves it to the schema the listing was read from —
+     * and its schema for the metadata reads.
      */
-    private record TableRef(String catalog, String schema, String name, String display) {
+    private record TableRef(String catalog, String schema, String name, String display,
+            boolean qualified) {
 
         /** The identifier as it appears in generated SQL, each part quoted independently. */
         String quoted(String quote) {
-            if (schema == null) {
+            if (!qualified) {
                 return quoteId(quote, name);
             }
             return quoteId(quote, catalog) + "." + quoteId(quote, schema) + "."
@@ -154,19 +164,42 @@ final class StudioDataService {
                         continue;
                     }
                     refs.add(new TableRef(catalog, schema, name,
-                            catalog + "." + schema + "." + name));
+                            catalog + "." + schema + "." + name, true));
                 }
             }
             return refs;
         }
-        try (ResultSet rs = metaData.getTables(connection.getCatalog(), null, "%",
-                new String[]{"TABLE"})) {
+        // The connection's own schema, as the canonical catalog reader (CatalogIntrospector)
+        // scopes it; null where the vendor has no schema axis (MySQL), which leaves the catalog
+        // to do the scoping as before.
+        String schema = connection.getSchema();
+        try (ResultSet rs = metaData.getTables(connection.getCatalog(),
+                exactPattern(metaData, schema), "%", new String[]{"TABLE"})) {
             while (rs.next()) {
                 String name = rs.getString("TABLE_NAME");
-                refs.add(new TableRef(connection.getCatalog(), null, name, name));
+                refs.add(new TableRef(connection.getCatalog(), schema, name, name, false));
             }
         }
         return refs;
+    }
+
+    /**
+     * A metadata name as an exact LIKE pattern: the pattern arguments of {@code getTables} and
+     * {@code getColumns} treat {@code _} and {@code %} as wildcards, so {@code hd_2} would also
+     * read {@code hdx2}'s tables. Null stays null (no filter).
+     */
+    private static String exactPattern(DatabaseMetaData metaData, String name)
+            throws SQLException {
+        if (name == null) {
+            return null;
+        }
+        String escape = metaData.getSearchStringEscape();
+        if (escape == null || escape.isEmpty()) {
+            return name;
+        }
+        return name.replace(escape, escape + escape)
+                .replace("_", escape + "_")
+                .replace("%", escape + "%");
     }
 
     private static boolean isDuckDb(DatabaseMetaData metaData) throws SQLException {
@@ -323,8 +356,9 @@ final class StudioDataService {
     private static Map<String, Integer> columnTypes(Connection connection, TableRef ref)
             throws SQLException {
         Map<String, Integer> columns = new LinkedHashMap<>();
-        try (ResultSet rs = connection.getMetaData().getColumns(ref.catalog(), ref.schema(),
-                ref.name(), "%")) {
+        DatabaseMetaData metaData = connection.getMetaData();
+        try (ResultSet rs = metaData.getColumns(ref.catalog(),
+                exactPattern(metaData, ref.schema()), exactPattern(metaData, ref.name()), "%")) {
             while (rs.next()) {
                 columns.put(rs.getString("COLUMN_NAME"), rs.getInt("DATA_TYPE"));
             }
@@ -475,6 +509,12 @@ final class StudioDataService {
                         field.put("pk", containsIgnoreCase(pkColumns, name));
                         fields.add(field);
                     }
+                    // A full primary key names one row; a second match means the key the
+                    // metadata answered is not this table's, and the form must not present
+                    // one of several rows as "the row".
+                    if (rs.next()) {
+                        throw new IllegalStateException("The key matches more than one row");
+                    }
                     return new RowView(ref.display(), pkColumns, fields);
                 }
             }
@@ -486,8 +526,10 @@ final class StudioDataService {
     /**
      * Applies a PK-scoped single-row UPDATE (Track J4): changed columns are validated against
      * the live catalog, values bind coerced to the column's JDBC type (empty string sets NULL),
-     * primary-key columns are never updatable, and exactly one row must be affected. The caller
-     * gates this behind the edit atom + an explicit confirm and records the audit entry.
+     * primary-key columns are never updatable, and exactly one row must be affected — inside
+     * the statement's own transaction, so a wider match is rolled back rather than reported
+     * after it committed (docs/audit-low-leads.md, the row editor's post-hoc guarantee). The
+     * caller gates this behind the edit atom + an explicit confirm and records the audit entry.
      */
     int updateRow(String table, Map<String, String> pk, Map<String, String> changes) {
         if (!isEditEnabled()) {
@@ -522,16 +564,20 @@ final class StudioDataService {
             }
             sql.append(" where ");
             appendKeyPredicate(sql, binds, quote, pkColumns, columnTypes, pk);
-            try (PreparedStatement statement = connection.prepareStatement(sql.toString())) {
-                statement.setQueryTimeout(queryTimeoutSeconds);
-                bindAll(statement, binds);
-                int affected = statement.executeUpdate();
-                if (affected != 1) {
-                    throw new IllegalStateException(
-                            "Expected to update exactly one row, but " + affected + " matched");
-                }
-                return affected;
-            }
+            return io.tesseraql.core.sql.Transactions.call(connection, "studio.data.update",
+                    c -> {
+                        try (PreparedStatement statement = c.prepareStatement(sql.toString())) {
+                            statement.setQueryTimeout(queryTimeoutSeconds);
+                            bindAll(statement, binds);
+                            int affected = statement.executeUpdate();
+                            if (affected != 1) {
+                                throw new IllegalStateException(
+                                        "Expected to update exactly one row, but " + affected
+                                                + " matched");
+                            }
+                            return affected;
+                        }
+                    });
         } catch (SQLException ex) {
             throw new IllegalStateException("Update failed: " + ex.getMessage(), ex);
         }

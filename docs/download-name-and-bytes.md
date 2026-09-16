@@ -429,7 +429,10 @@ stamps and per-column provenance, are in each pull request's description.
 **Contract.** `studio.data.export` returns a `String` on every branch, never `null`, never a Map.
 Normal: RFC 4180 as Commons CSV `RFC4180` writes it — header record first, `\r\n` after every
 record including the last; an empty result set is the header alone; no mark. Disabled: exactly
-`# The data browser is disabled.\r\n`. Error: `"# " + message + "\r\n"`. Wire: 200,
+`# The data browser is disabled.\r\n`. Error: `"# " + message + "\r\n"` with the message's
+line breaks folded to spaces — a driver's second line (PostgreSQL's `Hint:`/`Position:`,
+DuckDB's `Did you mean`) would otherwise be a second record (`docs/audit-low-leads.md`,
+DN-06g); the failure itself is logged at WARN, which the note alone never was. Wire: 200,
 `text/csv; charset=utf-8`, `attachment; filename="data.csv"`, body = the String byte for byte, in
 both topologies (hosted: `{"__value__": …}` across the loopback hop, unwrapped at
 `WorkshopTargets:95-96`). The `startsWith("login_id,")` pin the record named is wrong on the fix

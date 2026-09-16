@@ -587,10 +587,16 @@ ships as its own slice once the phase opens:
   table (live `getPrimaryKeys`; PK-less tables get no affordance and the form says why). The
   edit form ticks columns to apply (a ticked empty value sets `NULL`; untouched columns stay);
   the UPDATE is PK-scoped with validated identifiers and type-coerced bound values, must affect
-  exactly one row, never updates PK columns, and always requires the explicit confirm
-  (`TQL-STUDIO-4232` → 422; other rejections `TQL-STUDIO-4234` → 400). Audited as the row
-  identity plus the column names — never the values. `StudioDataService.primaryKey`/`row`/
-  `updateRow`; `studio.data.editForm`/`studio.data.update` providers; `/ui/data/edit` page.
+  exactly one row — inside its own transaction, rolled back otherwise — never updates PK
+  columns, and always requires the explicit confirm (`TQL-STUDIO-4232` → 422; other rejections
+  `TQL-STUDIO-4234` → 400). Audited as the row identity plus the column names — never the
+  values. `StudioDataService.primaryKey`/`row`/`updateRow`; `studio.data.editForm`/
+  `studio.data.update` providers; `/ui/data/edit` page. *Amended 2026-09-16
+  (`docs/audit-low-leads.md`, DN-06f): the listing and every metadata read are scoped to the
+  connection's own schema, not the catalog alone — a same-named table in a second schema of a
+  shared database (`currentSchema` in the URL) used to hand the editor the other table's key,
+  and the "exactly one row" check ran after an auto-committed UPDATE, so three rows were
+  overwritten and then reported as rejected.*
 - [x] **J5 — authoring feedback** — *done*: the shipped JSON Schema
   (`schema/tesseraql-v1.schema.json`) now covers the full document surface — the linter-synced
   recipe enum (drift-tested by `SchemaSyncTest`, machine-checkable), `kind: route|job|view`,

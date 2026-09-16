@@ -1234,6 +1234,10 @@ final class StudioProviders {
                     try {
                         model.put("tables", studioData.tables(datasource));
                     } catch (RuntimeException ex) {
+                        // The page shows the message; the operator's log carries the cause —
+                        // a failed listing used to leave no server-side trace at all.
+                        LOG.warn("Data browser could not list the tables of datasource '{}'",
+                                datasource, ex);
                         model.put("tables", java.util.List.of());
                         model.put("error", ex.getMessage());
                         return model;
@@ -1400,10 +1404,28 @@ final class StudioProviders {
                                 str(params, "sort"),
                                 dataSortDir(params), dataCombinator(params),
                                 dataFilters(params));
+                    } catch (IllegalArgumentException refused) {
+                        // A refused request (no such table): the caller's, not the operator's.
+                        LOG.debug("Data browser export refused: {}", refused.getMessage());
+                        return note(refused.getMessage());
                     } catch (RuntimeException ex) {
-                        return "# " + ex.getMessage() + "\r\n";
+                        // The download stays a one-line note (docs/download-name-and-bytes.md
+                        // decision 1); the failure itself is the operator's to see.
+                        LOG.warn("Data browser export of '{}' on datasource '{}' failed",
+                                str(params, "table"), str(params, "ds"), ex);
+                        return note(ex.getMessage());
                     }
                 });
+    }
+
+    /**
+     * The export's error note: one {@code # …} record, first byte to last
+     * (docs/download-name-and-bytes.md decision 1). A driver's message may span lines —
+     * PostgreSQL's {@code Position:} and {@code Hint:}, DuckDB's {@code Did you mean} — and a
+     * second line is a second CSV record, so the message is folded onto the one line.
+     */
+    private static String note(String message) {
+        return "# " + (message == null ? "" : message.replaceAll("\\R+", " ")) + "\r\n";
     }
 
     /**
