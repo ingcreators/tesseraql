@@ -8,7 +8,8 @@ security:
 
 # A service, not a bare contract (docs/session-administration.md): disabling flips the
 # status AND ends every session of the subject - disabled means disabled now, not at
-# cookie expiry.
+# cookie expiry - AND revokes the login's live invite/reset links. The caller's own
+# account is refused (TQL-IAM-4037); the page offers no Disable for it.
 
 steps:
   - id: main
@@ -16,6 +17,7 @@ steps:
       name: iam.disableUser
       params:
         userId: path.id
+        subject: principal.subject
 response:
   redirect:
     location: /_tesseraql/admin/users/{path.id}?disabled=1

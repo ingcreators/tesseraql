@@ -11,9 +11,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.cert.CertPath;
 import java.security.cert.CertPathValidator;
-import java.security.cert.CertificateExpiredException;
 import java.security.cert.CertificateFactory;
-import java.security.cert.CertificateNotYetValidException;
 import java.security.cert.PKIXParameters;
 import java.security.cert.TrustAnchor;
 import java.security.cert.X509Certificate;
@@ -94,9 +92,9 @@ public final class MtlsAuthenticator {
         }
         List<X509Certificate> chain = parse(forwardedCertificate);
         X509Certificate leaf = chain.get(0);
-        checkValidity(leaf);
+        Instant at = checkValidity(leaf);
         if (!trustAnchors.isEmpty()) {
-            verifyChain(chain);
+            verifyChain(chain, at);
         }
         Principal match = matchIdentity(leaf);
         if (match == null) {
@@ -131,17 +129,25 @@ public final class MtlsAuthenticator {
         }
     }
 
-    private void checkValidity(X509Certificate leaf) {
+    /**
+     * Refuses a certificate outside its validity window by more than the clock skew, and
+     * returns the instant the chain is validated at: now, or the nearer edge of the leaf's
+     * window when now sits inside the leeway beyond it. The skew widens the window — the
+     * leeway the option documents — and never narrows it: checking {@code now + skew} and
+     * {@code now - skew} both against the window, as this once did, refused every certificate
+     * for {@code skew} after issuance and before expiry (docs/audit-low-leads.md slice 4, G40).
+     */
+    private Instant checkValidity(X509Certificate leaf) {
         Instant now = Instant.now();
-        try {
-            leaf.checkValidity(Date.from(now.plus(clockSkew)));
-            leaf.checkValidity(Date.from(now.minus(clockSkew)));
-        } catch (CertificateExpiredException | CertificateNotYetValidException ex) {
+        Instant notBefore = leaf.getNotBefore().toInstant();
+        Instant notAfter = leaf.getNotAfter().toInstant();
+        if (notBefore.isAfter(now.plus(clockSkew)) || notAfter.isBefore(now.minus(clockSkew))) {
             throw new TqlException(PolicyEngine.UNAUTHORIZED, "Client certificate is not valid");
         }
+        return now.isBefore(notBefore) ? notBefore : now.isAfter(notAfter) ? notAfter : now;
     }
 
-    private void verifyChain(List<X509Certificate> chain) {
+    private void verifyChain(List<X509Certificate> chain, Instant at) {
         // The forwarded header normally carries only the leaf; any anchor that travels with it is
         // dropped so the path terminates at, rather than includes, a trust anchor.
         Set<X500Principal> anchorSubjects = new LinkedHashSet<>();
@@ -161,6 +167,9 @@ public final class MtlsAuthenticator {
             PKIXParameters params = new PKIXParameters(trustAnchors);
             // Mesh/edge CAs typically publish no CRL/OCSP; revocation is the terminator's job.
             params.setRevocationEnabled(false);
+            // The same leeway the leaf got: a path validated at a strict now would refuse the
+            // certificate the window check just admitted.
+            params.setDate(Date.from(at));
             CertPathValidator.getInstance("PKIX").validate(certPath, params);
         } catch (java.security.GeneralSecurityException ex) {
             throw new TqlException(PolicyEngine.UNAUTHORIZED, "Client certificate is not trusted");

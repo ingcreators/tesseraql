@@ -346,7 +346,7 @@ tesseraql:
     mtls:
       forwardedHeader: ssl-client-cert        # the header the edge forwards the cert in (no default)
       trustBundle: ${secret.file.client_ca}   # optional PEM CA bundle; enables in-app PKIX validation
-      clockSkew: 60s                          # leeway for the certificate validity window (default 0)
+      clockSkew: 60s                          # leeway widening the certificate validity window at both ends (default 0)
       clients:
         billing-service:
           subjectDn: "CN=billing-service,O=Acme"   # exactly one matcher (see below)

@@ -29,6 +29,8 @@ final class AccountViews {
     private static final TqlErrorCode PASSWORD_UNAVAILABLE = new TqlErrorCode(TqlDomain.ACCOUNT,
             4803);
     private static final TqlErrorCode WRONG_PASSWORD = new TqlErrorCode(TqlDomain.ACCOUNT, 4804);
+    /** Two-factor authentication is on: the enforced secret leaves only through disable. */
+    private static final TqlErrorCode TOTP_ENFORCED = new TqlErrorCode(TqlDomain.ACCOUNT, 4807);
 
     private AccountViews() {
     }
@@ -119,9 +121,10 @@ final class AccountViews {
                             enrollment.secret());
                     totpModel.put("otpauth", otpauth);
                     totpModel.put("qrSvg", QrSvg.render(otpauth));
-                    totp.pendingRecovery(tenant(params), subject(params))
-                            .ifPresent(pending -> totpModel.put("recoveryCodes",
-                                    java.util.List.of(pending.split(" "))));
+                    if (enrollment.pendingRecovery() != null) {
+                        totpModel.put("recoveryCodes",
+                                java.util.List.of(enrollment.pendingRecovery().split(" ")));
+                    }
                 }
             });
         }
@@ -377,15 +380,25 @@ final class AccountViews {
         return Map.of("ok", true, "marked", marked);
     }
 
-    /** Starts (or restarts) TOTP enrollment: a fresh secret, stored unconfirmed. */
+    /**
+     * Starts (or restarts a pending) TOTP enrollment: a fresh secret, stored unconfirmed. A
+     * confirmed enrollment is refused (TQL-ACCOUNT-4807): restarting it would overwrite the
+     * enforced secret with an unconfirmed one and let the password alone sign in again — the
+     * second factor leaves only through {@link #totpDisable}, which asks for the password
+     * (docs/credential-lifecycle.md).
+     */
     static Map<String, Object> totpBegin(Map<String, Object> params,
             io.tesseraql.core.credential.TotpStore totp) {
         requireTotp(totp);
-        totp.beginEnrollment(tenant(params), subject(params),
-                io.tesseraql.security.totp.Totp.generateSecret());
+        if (totp.enrollment(tenant(params), subject(params))
+                .filter(e -> e.confirmed()).isPresent()) {
+            throw new TqlException(TOTP_ENFORCED,
+                    "Two-factor authentication is on - disable it with your password first");
+        }
         // Recovery codes are minted with the secret and shown while pending (the same
         // exposure as the pending secret itself); confirmation hashes and activates them.
-        totp.storePendingRecovery(tenant(params), subject(params),
+        totp.beginEnrollment(tenant(params), subject(params),
+                io.tesseraql.security.totp.Totp.generateSecret(),
                 String.join(" ", generateRecoveryCodes()));
         return Map.of("ok", true);
     }
@@ -425,7 +438,12 @@ final class AccountViews {
         }
     }
 
-    /** Confirms the pending enrollment with a valid code - nothing enforces until this. */
+    /**
+     * Confirms the pending enrollment with a valid code - nothing enforces until this. The
+     * confirm and the activation of the recovery codes shown during enrollment (hashed at
+     * rest, the plain pending copy dropped — docs/credential-lifecycle.md) are one store
+     * write: a failure leaves the enrollment pending, never enforced without its codes.
+     */
     static Map<String, Object> totpConfirm(Map<String, Object> params,
             io.tesseraql.core.credential.TotpStore totp) {
         requireTotp(totp);
@@ -435,18 +453,15 @@ final class AccountViews {
                 ? -1
                 : io.tesseraql.security.totp.Totp.matchedStep(enrollment.get().secret(),
                         text(params.get("code"), ""));
+        List<String> recoveryHashes = enrollment.isEmpty()
+                || enrollment.get().pendingRecovery() == null
+                        ? List.of()
+                        : java.util.Arrays.stream(enrollment.get().pendingRecovery().split(" "))
+                                .map(AccountViews::recoveryHash).toList();
         if (step < 0 || !totp.markUsedStep(tenant(params), subject(params), step)
-                || !totp.confirmEnrollment(tenant(params), subject(params))) {
+                || !totp.confirmEnrollment(tenant(params), subject(params), recoveryHashes)) {
             throw new TqlException(INVALID_VALUE, "That code did not match - try again");
         }
-        // Activate the recovery codes shown during enrollment: hash them at rest and drop
-        // the plain pending copy (docs/credential-lifecycle.md).
-        totp.pendingRecovery(tenant(params), subject(params)).ifPresent(pending -> {
-            totp.replaceRecoveryCodes(tenant(params), subject(params),
-                    java.util.Arrays.stream(pending.split(" "))
-                            .map(AccountViews::recoveryHash).toList());
-            totp.storePendingRecovery(tenant(params), subject(params), null);
-        });
         return Map.of("ok", true);
     }
 

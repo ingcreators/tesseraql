@@ -207,13 +207,15 @@ and recorded like any other — and it is time-boxed when you asked for a durati
 
 The card appears when an administrator has made you **eligible** for a role you do not
 hold ([IAM Admin](iam-admin.md#eligible-roles)). Taking one grants it for the window you
-ask for, up to its limit, with a reason when the eligibility requires one — and it expires
-by itself, so there is nothing to remember to give back. **End now** returns it early.
+ask for, up to its limit, with a reason when the eligibility requires one. The grant expires
+by itself at your next sign-in; in the session that took it, **End now** is what gives the
+role back before then.
 
 Taking a role is the one thing that changes a signed-in principal without a new sign-in.
 Your session's principal is re-read on the spot, so the role is live on your very next
 request. Your other sessions pick it up when they next sign in; nothing else about a
-signed-in principal refreshes mid-session, and that stays true.
+signed-in principal refreshes mid-session — not even the window's close — and that stays
+true.
 
 `POST /_tesseraql/account/elevate` is a framework route rather than a declared one, for the
 same reason as the sign-out endpoints beside it: only that layer reads the session cookie.
@@ -251,7 +253,9 @@ value else declared default.
 
 A `TQL-ACCOUNT` domain, codes in the 48xx block: `4801` undeclared preference key,
 `4802` invalid value for a declared preference, `4803` password change unavailable
-(SSO-only sign-in), `4804` current-password mismatch, `4805` account surface disabled.
+(SSO-only sign-in), `4804` current-password mismatch, `4805` account surface disabled,
+`4806` an inbox message that is not the caller's, `4807` restarting a confirmed two-factor
+enrollment (disable it with the password first).
 
 ## Security posture
 

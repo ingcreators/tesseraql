@@ -28,28 +28,14 @@ class VendorMigrationSetTest {
     private static final Path MIGRATIONS = Path.of("src/main/resources/tesseraql/db/migration");
 
     /**
-     * The gaps that predate this test, recorded rather than fixed here.
-     *
-     * <p>Two components have a partial variant set. {@code totp/V2__totp_recovery.sql} has no
-     * Oracle or SQL Server file, and neither does
-     * {@code workflow-task/V2__delegated_from.sql} — while the {@code V1} and {@code V3} scripts
-     * beside them both do. Each missing version is listed in its store's {@code ensureSchema},
-     * so the bootstrap applies the common script in its place on every boot; what those vendors
-     * skip is the Flyway history entry.
-     *
-     * <p>Whether the common statements are right for those vendors is <em>unverified</em>. They
-     * spell {@code varchar} where the V1 variants deliberately spell {@code varchar2} and
-     * {@code nvarchar}, and one is an {@code alter table … add column}, whose {@code column}
-     * keyword the two vendors do not take. No dialect suite enrolls a recovery code or delegates
-     * a task, so nothing has ever run them there. Settling that is its own change with its own
-     * gated run, not this slice's.
-     *
-     * <p><b>This set shrinks and never grows.</b> A new entry means a vendor variant was skipped.
+     * No vendor directory is allowed a partial set. Two were, once: {@code totp} and
+     * {@code workflow-task} each shipped a {@code V2} with no Oracle or SQL Server file while
+     * their {@code V1} and {@code V3} had both, and the common script silently ran in the gap.
+     * Both turned out wrong there — the {@code add column} keyword failed every workflow-app
+     * boot on both vendors, and the common {@code timestamp} was a SQL Server rowversion that
+     * refused every recovery-code insert (docs/audit-low-leads.md slices 2b and 4). The
+     * exemption list that recorded them is gone with them; a new gap fails here.
      */
-    private static final Set<String> KNOWN_GAPS = Set.of(
-            "totp-oracle", "totp-sqlserver",
-            "workflow-task-oracle", "workflow-task-sqlserver");
-
     @Test
     void everyVendorDirectoryHoldsTheSameMigrationNames() throws IOException {
         try (Stream<Path> directories = Files.list(MIGRATIONS)) {
@@ -65,7 +51,7 @@ class VendorMigrationSetTest {
         for (String vendor : new String[]{"oracle", "sqlserver"}) {
             String name = component + "-" + vendor;
             Path variant = common.resolveSibling(name);
-            if (!Files.isDirectory(variant) || KNOWN_GAPS.contains(name)) {
+            if (!Files.isDirectory(variant)) {
                 // Not every component needs a vendor variant at all; only a partial one is a bug.
                 continue;
             }

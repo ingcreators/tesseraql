@@ -124,7 +124,7 @@ Each table reads: **threat → vector → control → residual**. Controls are c
 | --- | --- | --- | --- |
 | Information disclosure (secret) | reading a credential from source, logs, or an artifact | secrets are references resolved lazily per use, never written to logs or generated artifacts | the secret provider's own storage is the operator's |
 | Information disclosure (error) | provoking a stack trace or internal detail | generic error bodies; federated-auth failures return generic 401/400 with contents never echoed | — |
-| Repudiation | denying an action | opt-in `tql_route_audit` records who/what/when over declared inputs, excluding masked/classified fields; trace ids correlate logs | the audit is opt-in and the operator's retention |
+| Repudiation | denying an action | opt-in `tql_route_audit` records who/what/when over declared inputs, excluding masked/classified fields; trace ids correlate logs | the audit is opt-in and the operator's retention; the framework's Java-mounted system routes (sign-in/out, elevation, the token exchange, invite/reset acceptance, bulk disable) land no row |
 
 ### The shared-app surface
 

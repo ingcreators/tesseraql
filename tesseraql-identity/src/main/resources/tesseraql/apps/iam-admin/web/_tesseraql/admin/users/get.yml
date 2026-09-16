@@ -45,3 +45,5 @@ response:
       selected: params.selected
       q: params.q
       page: page
+      # The caller's own row gets no selection checkbox: the bulk endpoint refuses it too.
+      self: principal.subject

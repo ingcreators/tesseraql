@@ -30,7 +30,10 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  * The invitation loop end to end (roadmap Phase 50 slice 2): the IAM admin invites, the
  * account exists as INVITED — refused at login — the accept link sets the first password
  * and flips it ACTIVE, the token works once, re-inviting resends politely, and a taken
- * login refuses.
+ * login refuses. And the operator's decision holds against the link they mailed
+ * (docs/audit-low-leads.md slice 4, G39): withdrawing kills the token, the accept leg
+ * activates only an account that is still INVITED, and a withdrawn login can be invited
+ * again with a corrected address.
  */
 @Testcontainers
 class InviteIntegrationTest {
@@ -122,6 +125,92 @@ class InviteIntegrationTest {
                 .isEqualTo(409);
     }
 
+    /**
+     * Withdrawing an invitation: the console offers it on the INVITED row (and neither
+     * Enable nor Disable), the login can be invited again — to a corrected address, with a
+     * fresh link that works — and the first link is dead. The re-invite comes first and is
+     * what proves the token died with the withdrawal: a live one would still be inside its
+     * cooldown and no second mail could go out, and once the account is INVITED again only
+     * the token's absence keeps the first link from activating it. (Posting the first link
+     * while the account is DISABLED would consume it and hide a missing revoke — that leg is
+     * the next test's.)
+     */
+    @Test
+    void aWithdrawnInvitationsLinkIsDeadAndTheLoginCanBeInvitedAgain() throws Exception {
+        invite("regretted", "Regretted Hire", "wrong-address@example.com");
+        String userId = userId("regretted");
+        String firstToken = URLDecoder.decode(latestAcceptUrl("regretted")
+                .replaceAll(".*token=", ""), StandardCharsets.UTF_8);
+
+        String detail = adminGet("/_tesseraql/admin/users/" + userId).body();
+        assertThat(detail).contains("/_tesseraql/admin/users/" + userId + "/withdraw")
+                .doesNotContain("/_tesseraql/admin/users/" + userId + "/enable")
+                .doesNotContain("/_tesseraql/admin/users/" + userId + "/disable");
+
+        HttpResponse<String> withdrawn = adminPost(
+                "/_tesseraql/admin/users/" + userId + "/withdraw");
+        assertThat(withdrawn.statusCode()).as(withdrawn::body).isEqualTo(303);
+        assertThat(withdrawn.headers().firstValue("Location").orElse(""))
+                .endsWith("/_tesseraql/admin/users/" + userId + "?withdrawn=1");
+        assertThat(adminGet("/_tesseraql/admin/users/" + userId + "?withdrawn=1").body())
+                .contains("Invitation withdrawn").contains("DISABLED");
+        assertThat(status("regretted")).isEqualTo("DISABLED");
+
+        // Invited again, to the right address: back to INVITED, a second mail, a link that
+        // works — and the first link is dead.
+        long mails = inviteMailCount("regretted");
+        assertThat(invite("regretted", "Regretted Hire", "right-address@example.com")
+                .headers().firstValue("Location").orElse("")).contains("invited=1");
+        assertThat(status("regretted")).isEqualTo("INVITED");
+        assertThat(inviteMailCount("regretted")).isEqualTo(mails + 1);
+        assertThat(latestInvite("regretted").payload().get("to"))
+                .isEqualTo("right-address@example.com");
+        String secondToken = URLDecoder.decode(latestAcceptUrl("regretted")
+                .replaceAll(".*token=", ""), StandardCharsets.UTF_8);
+        assertThat(secondToken).isNotEqualTo(firstToken);
+        assertThat(postForm("/_tesseraql/invite", "token=" + firstToken + "&next=Sneaky123")
+                .headers().firstValue("Location").orElse("")).contains("invalid=1");
+        assertThat(status("regretted")).as("the withdrawn link activates nothing")
+                .isEqualTo("INVITED");
+        assertThat(loginCookie("regretted", "Sneaky123")).isNull();
+        assertThat(postForm("/_tesseraql/invite", "token=" + secondToken + "&next=Welcome456")
+                .headers().firstValue("Location").orElse("")).contains("invited=1");
+        assertThat(loginCookie("regretted", "Welcome456")).isNotNull();
+        // Once usable, the login refuses another invite - a withdrawn account was never
+        // signed into; this one has been.
+        assertThat(invite("regretted", "", "again@example.com").statusCode()).isEqualTo(409);
+    }
+
+    /**
+     * The accept leg's own gate, apart from the token's death: an account that is no longer
+     * INVITED — here disabled straight in the store, the token left live — is not activated
+     * by its link. The dead-link answer, no password written, no sign-in.
+     */
+    @Test
+    void anAcceptLinkCannotActivateAnAccountThatIsNoLongerInvited() throws Exception {
+        invite("sidelined", "", "sidelined@example.com");
+        String token = URLDecoder.decode(latestAcceptUrl("sidelined")
+                .replaceAll(".*token=", ""), StandardCharsets.UTF_8);
+        javax.sql.DataSource main = runtime.context().lookup("main", javax.sql.DataSource.class);
+        try (java.sql.Connection connection = main.getConnection();
+                java.sql.Statement statement = connection.createStatement()) {
+            statement.execute(
+                    "update tql_users set status = 'DISABLED' where login_id = 'sidelined'");
+        }
+
+        assertThat(postForm("/_tesseraql/invite", "token=" + token + "&next=Welcome789")
+                .headers().firstValue("Location").orElse("")).contains("invalid=1");
+        assertThat(status("sidelined")).isEqualTo("DISABLED");
+        assertThat(loginCookie("sidelined", "Welcome789")).isNull();
+        try (java.sql.Connection connection = main.getConnection();
+                java.sql.Statement statement = connection.createStatement();
+                java.sql.ResultSet rs = statement.executeQuery(
+                        "select password_hash from tql_users where login_id = 'sidelined'")) {
+            assertThat(rs.next()).isTrue();
+            assertThat(rs.getString(1)).as("no password written for a dead link").isNull();
+        }
+    }
+
     /** The invite action sits behind the tql.iam.admin.write atom. */
     @Test
     void aSessionWithoutTheRoleIsRefused() throws Exception {
@@ -156,6 +245,58 @@ class InviteIntegrationTest {
                                 + "&email=" + email))
                 .build();
         return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
+    private static String userId(String loginId) throws Exception {
+        return column(loginId, "user_id");
+    }
+
+    private static String status(String loginId) throws Exception {
+        return column(loginId, "status");
+    }
+
+    private static String column(String loginId, String column) throws Exception {
+        javax.sql.DataSource main = runtime.context().lookup("main", javax.sql.DataSource.class);
+        try (java.sql.Connection connection = main.getConnection();
+                java.sql.PreparedStatement ps = connection.prepareStatement(
+                        "select " + column + " from tql_users where login_id = ?")) {
+            ps.setString(1, loginId);
+            try (java.sql.ResultSet rs = ps.executeQuery()) {
+                assertThat(rs.next()).as("a tql_users row for " + loginId).isTrue();
+                return rs.getString(1);
+            }
+        }
+    }
+
+    private static HttpResponse<String> adminGet(String path) throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(
+                URI.create("http://localhost:" + runtime.port() + path))
+                .header("Cookie", adminCookie)
+                .build();
+        return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
+    private static HttpResponse<String> adminPost(String path) throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(
+                URI.create("http://localhost:" + runtime.port() + path))
+                .header("Cookie", adminCookie)
+                .header("X-CSRF-Token", adminCsrf)
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .POST(HttpRequest.BodyPublishers.noBody())
+                .build();
+        return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
+    private static NotifyEvents.Envelope latestInvite(String loginId) {
+        return runtime.context().lookup(
+                TesseraqlProperties.OUTBOX_STORE_BEAN,
+                io.tesseraql.operations.outbox.JdbcOutboxStore.class)
+                .recent(200).stream()
+                .filter(NotifyEvents::isNotification)
+                .map(event -> NotifyEvents.parse(event.payloadJson()))
+                .filter(envelope -> envelope.source().equals("identity.invite")
+                        && loginId.equals(envelope.payload().get("loginId")))
+                .findFirst().orElseThrow();
     }
 
     private static long inviteMailCount(String loginId) {

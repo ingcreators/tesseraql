@@ -16,6 +16,8 @@
 <p class="hc-alert" data-variant="success" role="status"
    th:if="${disabled != null}" th:text="#{tql.iam.userDisabledTheirActive}">User disabled. Their active sessions have ended.</p>
 <p class="hc-alert" data-variant="success" role="status"
+   th:if="${withdrawn != null}" th:text="#{tql.iam.invitationWithdrawn}">Invitation withdrawn. The mailed link no longer works; the login can be invited again.</p>
+<p class="hc-alert" data-variant="success" role="status"
    th:if="${signedout == 'one'}" th:text="#{tql.iam.deviceSignedOut}">Device signed out.</p>
 <p class="hc-alert" data-variant="success" role="status"
    th:if="${signedout == 'all'}" th:text="#{tql.iam.signedOutEverywhereAll}">Signed out everywhere. All of this user's sessions have ended.</p>
@@ -42,18 +44,30 @@
 <section class="hc-card" id="actions">
   <div class="hc-card__header" th:text="#{tql.iam.actions}">Actions</div>
   <div class="hc-card__body hc-stack">
+    <!-- Actions follow state (docs/console-ux-refresh.md, status vocabulary): an active
+         user offers Disable, a disabled one Enable, an invited one Withdraw - the disable
+         action on an account with no credential, which kills the mailed link. The caller's
+         own row offers nothing: the server refuses it too (TQL-IAM-4037). -->
     <div class="hc-cluster">
-      <form method="post" th:action="@{|/_tesseraql/admin/users/${u.user_id}/enable|}" th:if="${u.status != 'ACTIVE'}">
+      <form method="post" th:action="@{|/_tesseraql/admin/users/${u.user_id}/enable|}" th:if="${u.status == 'DISABLED'}">
         <input type="hidden" name="_csrf" th:value="${_csrf}">
         <button type="submit" class="hc-button" data-variant="primary" th:text="#{tql.iam.enableUser}">Enable user</button>
       </form>
-      <form method="post" th:action="@{|/_tesseraql/admin/users/${u.user_id}/disable|}" th:if="${u.status == 'ACTIVE'}">
+      <form method="post" th:action="@{|/_tesseraql/admin/users/${u.user_id}/withdraw|}" th:if="${u.status == 'INVITED'}">
+        <input type="hidden" name="_csrf" th:value="${_csrf}">
+        <button type="submit" class="hc-button" data-variant="error"
+                th:attr="data-hc-confirm=|Withdraw the invitation for ${u.login_id}? The mailed link stops working.|"
+                data-hc-confirm-title="Confirm withdraw"
+                data-hc-confirm-label="Withdraw" data-hc-confirm-variant="error" th:text="#{tql.iam.withdrawInvitation}">Withdraw invitation</button>
+      </form>
+      <form method="post" th:action="@{|/_tesseraql/admin/users/${u.user_id}/disable|}" th:if="${u.status == 'ACTIVE' and u.user_id != self}">
         <input type="hidden" name="_csrf" th:value="${_csrf}">
         <button type="submit" class="hc-button" data-variant="error"
                 th:attr="data-hc-confirm=|Disable user ${u.login_id}? Their active sessions end immediately.|"
                 data-hc-confirm-title="Confirm disable"
                 data-hc-confirm-label="Disable" data-hc-confirm-variant="error" th:text="#{tql.iam.disableUser}">Disable user</button>
       </form>
+      <p class="hc-field__message" th:if="${u.status == 'ACTIVE' and u.user_id == self}" th:text="#{tql.iam.thisIsYourOwnAccount}">This is your own account: another administrator disables it.</p>
     </div>
   </div>
 </section>

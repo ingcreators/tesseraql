@@ -138,6 +138,11 @@ class MySqlPortabilityIntegrationTest {
     }
 
     @Test
+    void totpEnrollmentRoundTripsOnThisDialect() throws Exception {
+        DialectRuntimeChecks.totpEnrollmentRoundTrip(mysqlDataSource());
+    }
+
+    @Test
     void documentSequencesSeedAndAllocateOnThisDialect() throws Exception {
         DialectRuntimeChecks.documentSequenceRoundTrip(mysqlDataSource());
     }

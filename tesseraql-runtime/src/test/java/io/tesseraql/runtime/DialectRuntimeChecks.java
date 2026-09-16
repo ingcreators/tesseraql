@@ -359,6 +359,58 @@ final class DialectRuntimeChecks {
                 "/tesseraql/db/migration/catalog/V1__catalog_version.sql");
     }
 
+    /**
+     * TOTP enrollment with its recovery codes on this vendor's schema (docs/audit-low-leads.md
+     * slice 4, G42): begin, confirm — one transaction activating the hashes — a code consumed
+     * once, then disable removing both tables' rows, with the bootstrap applied twice as a
+     * second boot would. The common {@code V2} script's {@code timestamp} was a SQL Server
+     * rowversion, so every confirm there enabled the factor and then failed to store its
+     * codes; the vendor scripts this proves did not exist. The tenant is named: the untenanted
+     * sentinel is the empty string, which Oracle stores as NULL (filed, not fixed here).
+     */
+    static void totpEnrollmentRoundTrip(javax.sql.DataSource dataSource) throws Exception {
+        io.tesseraql.operations.credential.JdbcTotpStore store = new io.tesseraql.operations.credential.JdbcTotpStore(
+                dataSource);
+        store.ensureSchema();
+        store.ensureSchema();
+        String subject = "dialect-totp-" + java.util.UUID.randomUUID();
+        store.beginEnrollment("t1", subject, "JBSWY3DPEHPK3PXP", "aaaa-bbbb cccc-dddd");
+        var pending = store.enrollment("t1", subject).orElseThrow();
+        assertThat(pending.confirmed()).isFalse();
+        assertThat(pending.pendingRecovery()).isEqualTo("aaaa-bbbb cccc-dddd");
+        assertThat(store.markUsedStep("t1", subject, 12345L)).isTrue();
+        assertThat(store.confirmEnrollment("t1", subject,
+                java.util.List.of(AccountViews.recoveryHash("aaaa-bbbb"),
+                        AccountViews.recoveryHash("cccc-dddd"))))
+                .as("confirmed with its recovery codes").isTrue();
+        var confirmed = store.enrollment("t1", subject).orElseThrow();
+        assertThat(confirmed.confirmed()).isTrue();
+        assertThat(confirmed.pendingRecovery()).as("the plain copy dropped").isNull();
+        assertThat(recoveryRows(dataSource, subject)).isEqualTo(2);
+        assertThat(store.consumeRecoveryCode("t1", subject,
+                AccountViews.recoveryHash("aaaa-bbbb"))).isTrue();
+        assertThat(store.consumeRecoveryCode("t1", subject,
+                AccountViews.recoveryHash("aaaa-bbbb"))).as("single use").isFalse();
+        assertThat(store.confirmEnrollment("t1", subject, java.util.List.of()))
+                .as("nothing pending to confirm").isFalse();
+        assertThat(store.remove("t1", subject)).isTrue();
+        assertThat(store.enrollment("t1", subject)).isEmpty();
+        assertThat(recoveryRows(dataSource, subject)).as("removed with the enrollment").isZero();
+    }
+
+    private static int recoveryRows(javax.sql.DataSource dataSource, String subject)
+            throws Exception {
+        try (java.sql.Connection connection = dataSource.getConnection();
+                java.sql.PreparedStatement ps = connection.prepareStatement(
+                        "select count(*) from tql_totp_recovery where subject = ?")) {
+            ps.setString(1, subject);
+            try (java.sql.ResultSet rs = ps.executeQuery()) {
+                rs.next();
+                return rs.getInt(1);
+            }
+        }
+    }
+
     /** Typed CSV import + export + download: exercises transfers on the vendor schema. */
     static void fileTransferRoundTrip(TesseraqlRuntime runtime, String appName) throws Exception {
         String importId = startTransfer(runtime, "/api/items/import",

@@ -132,6 +132,11 @@ class OraclePortabilityIntegrationTest {
         DialectRuntimeChecks.catalogVersionTableApplies(dataSource());
     }
 
+    @Test
+    void totpEnrollmentRoundTripsOnThisDialect() throws Exception {
+        DialectRuntimeChecks.totpEnrollmentRoundTrip(dataSource());
+    }
+
     private static javax.sql.DataSource dataSource() throws Exception {
         oracle.jdbc.datasource.impl.OracleDataSource dataSource = new oracle.jdbc.datasource.impl.OracleDataSource();
         dataSource.setURL(ORACLE.getJdbcUrl());

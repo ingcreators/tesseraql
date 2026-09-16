@@ -1872,7 +1872,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
             // itself is — a hosted member serves no /_tesseraql/admin of its own
             // (docs/stack-shells.md structural decision 3).
             if (hostedApps.contains("iam-admin")) {
-                new IamAdminRoutes().install(context);
+                new IamAdminRoutes(credentialTokens).install(context);
             }
             // Password recovery (roadmap Phase 50 slice 1): fail-fast validation - a half
             // configuration must not silently produce a reset page that goes nowhere.

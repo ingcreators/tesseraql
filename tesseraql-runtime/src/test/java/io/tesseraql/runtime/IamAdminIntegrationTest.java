@@ -452,6 +452,42 @@ class IamAdminIntegrationTest {
         assertThat(get("/_tesseraql/admin/users/u2", true).body()).contains("ACTIVE");
     }
 
+    /**
+     * An administrator cannot disable their own account, per user or in bulk
+     * (docs/audit-low-leads.md slice 4, G43): the same request would end the caller's own
+     * session and, for the last holder of {@code tql.iam.admin.write}, leave the deployment
+     * with no administrator the console can bring back. The page offers no Disable and no
+     * checkbox for that row, and the server refuses it whole — with {@code TQL-IAM-4037},
+     * before anything else in the selection is touched. The store-wide session the other
+     * cases use is not a store row; this one signs in as {@code u1}, which is.
+     */
+    @Test
+    void anAdministratorCannotDisableTheirOwnAccount() throws Exception {
+        Session self = session("u1", List.of("tql.iam.admin.view", "tql.iam.admin.write"));
+
+        String detail = get("/_tesseraql/admin/users/u1", self).body();
+        assertThat(detail).contains("This is your own account")
+                .doesNotContain("/_tesseraql/admin/users/u1/disable");
+        assertThat(get("/_tesseraql/admin/users/u2", self).body())
+                .contains("/_tesseraql/admin/users/u2/disable");
+        String list = get("/_tesseraql/admin/users", self).body();
+        assertThat(list).contains("name=\"ids\" value=\"u2\"")
+                .doesNotContain("name=\"ids\" value=\"u1\"");
+
+        HttpResponse<String> perUser = postForm("/_tesseraql/admin/users/u1/disable", "", self);
+        assertThat(perUser.statusCode()).as(perUser::body).isEqualTo(409);
+        assertThat(perUser.body()).contains("TQL-IAM-4037");
+        HttpResponse<String> bulk = postForm("/_tesseraql/admin/users/bulk",
+                "action=disable&ids=u2&ids=u1", self);
+        assertThat(bulk.statusCode()).as(bulk::body).isEqualTo(409);
+        assertThat(bulk.body()).contains("TQL-IAM-4037");
+        // Nothing changed and the caller is still signed in: the row before u1 in the
+        // selection was not disabled either.
+        assertThat(get("/_tesseraql/admin/users/u1", self).statusCode()).isEqualTo(200);
+        assertThat(get("/_tesseraql/admin/users/u1", self).body()).contains("ACTIVE");
+        assertThat(get("/_tesseraql/admin/users/u2", self).body()).contains("ACTIVE");
+    }
+
     /** The bulk endpoint rides the same gates as the per-user writes. */
     @Test
     void bulkRequiresAuthentication() throws Exception {

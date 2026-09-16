@@ -400,15 +400,14 @@ final class OpsAccountProviders {
                     return model;
                 })
                 // Disabled means disabled: the status flips AND every session of the
-                // subject ends now, not at cookie expiry. Identity and realm resolve
-                // lazily like identity.invite (they bind later).
+                // subject ends now, not at cookie expiry, AND the login's live credential
+                // tokens die (IdentityDisables — shared with the bulk endpoint). The route
+                // passes the session principal's subject so the caller's own account is
+                // refused. Identity and realm resolve lazily like identity.invite.
                 .register("iam.disableUser", params -> {
-                    String userId = String.valueOf(params.get("userId"));
-                    identity()
-                            .executeUpdate(realm(),
-                                    io.tesseraql.identity.IdentityContracts.DISABLE_USER,
-                                    Map.of("userId", userId));
-                    deps.sessionStore().invalidateOthersFor(userId, "");
+                    IdentityDisables.disable(identity(), realm(), deps.sessionStore(),
+                            deps.credentialTokens(), String.valueOf(params.get("userId")),
+                            String.valueOf(params.get("subject")));
                     return Map.of("disabled", true);
                 })
                 // TOTP self-service (roadmap Phase 50 slice 3): begin/confirm/disable.

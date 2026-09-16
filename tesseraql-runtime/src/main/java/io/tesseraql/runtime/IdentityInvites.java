@@ -55,8 +55,17 @@ final class IdentityInvites {
                 Map.of("loginId", loginId));
         if (!existing.isEmpty()) {
             // Re-inviting a still-INVITED account just re-mails (subject to the token
-            // cooldown); anything already usable refuses - no silent account takeover.
-            if (!"INVITED".equals(String.valueOf(existing.get(0).get("status")))) {
+            // cooldown). A withdrawn one (DISABLED, never signed into) goes back to INVITED
+            // with the operator's latest name and address - the contract's own predicate,
+            // no credential, is what keeps a once-usable account out of reach. Anything
+            // else refuses - no silent account takeover.
+            String status = String.valueOf(existing.get(0).get("status"));
+            boolean reinvited = "DISABLED".equals(status)
+                    && identity.executeUpdate(realm, IdentityContracts.REINVITE_USER, mapOf(
+                            "userId", String.valueOf(existing.get(0).get("user_id")),
+                            "displayName", displayName.isBlank() ? loginId : displayName,
+                            "email", email)) > 0;
+            if (!"INVITED".equals(status) && !reinvited) {
                 throw new TqlException(TAKEN, "Login '" + loginId + "' already exists");
             }
         } else {
