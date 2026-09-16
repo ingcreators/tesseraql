@@ -1487,9 +1487,11 @@ Every unfiled defect the measurement found, routed elsewhere with its destinatio
   `sourceViolation`; a declared input's `default:` (`input: tz: {default: Asia/Tokio}` +
   `timezone: query.tz`) is judged as the caller's — judge `input.<name>.default` when a
   `query.<name>` source names it; a file-import route without an `import:` block NPEs at
-  `definition.rowStep().file()` before the predicate; `after:` on a query-export is lint-silent and
+  `definition.rowStep().file()` before the predicate (fixed: `docs/audit-low-leads.md`,
+  `RecipeShape`); `after:` on a query-export is lint-silent and
   boot-3101; a lint WARNING for `{key}` in `push.as:`; `conditions.zone` and bad-cron unshaped boot
-  refusals; the lint crash on a header-less document; TQL-YAML-1409 defined twice; the SEC-4048
+  refusals (fixed: `ConditionZone`, `CronExpressions`); the lint crash on a header-less document
+  (fixed: the linter loads tolerantly); TQL-YAML-1409 defined twice; the SEC-4048
   (`[]`, `""`, `[""]`) and PolicyCodes lint/boot drifts; the header-fed input
   (`RequestBinder.rawValue:348` vs `vertx-native.md:307`); `EvaluationContext`'s reflective reach
   (`principal.toString` echoes every claim into the ERROR log); `body.*` on a GET.

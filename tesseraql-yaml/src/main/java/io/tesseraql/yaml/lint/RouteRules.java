@@ -92,6 +92,11 @@ final class RouteRules implements LintRule {
                     "Unknown route recipe '" + definition.recipe() + "'",
                     context.lineOf(route.source(), "recipe:"), null));
         }
+        // The pieces the recipe reads — its response arm, each binding's arm, an import's
+        // block and row write, an export's main — from the predicate the compiler refuses
+        // from (docs/audit-low-leads.md slice 8): each used to lint clean and NPE the boot.
+        RecipeShapeRules.report(context, config, route.source(), definition,
+                io.tesseraql.yaml.app.RecipeShape.Surface.ROUTE, source, findings);
         // A negative timeout on a step or named source was clamped to 0 = unlimited by the
         // compiler — the inverse of the author's intent — so the guard was missing here.
         definition.steps().forEach((name, step) -> {

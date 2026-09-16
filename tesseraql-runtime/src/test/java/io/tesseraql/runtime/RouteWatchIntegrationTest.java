@@ -154,6 +154,39 @@ class RouteWatchIntegrationTest {
     }
 
     /**
+     * A route whose 2-way SQL file is gone fails its reload, naming the file, and serves the
+     * compile-failure stub (docs/audit-low-leads.md slice 8): the source read the statement
+     * lazily, so the save used to report "1 changed", the route mounted, and every request
+     * answered a raw {@code NoSuchFileException} as an internal error until the file came back.
+     */
+    @Test
+    void aMissingSqlFileFailsTheReloadNamingItInsteadOfMountingA500() throws Exception {
+        Path gone = appHome.resolve("web/api/gone");
+        Files.createDirectories(gone);
+        Files.writeString(gone.resolve("gone.sql"), "select 'here' as answer\n");
+        Files.writeString(gone.resolve("get.yml"), routeYaml("gone", "gone"));
+        assertThat(await("/api/gone", response -> response.statusCode() == 200).body())
+                .contains("here");
+
+        // The statement leaves; the document is saved again (an editor's ordinary sequence).
+        Files.delete(gone.resolve("gone.sql"));
+        Files.writeString(gone.resolve("get.yml"), routeYaml("gone", "gone") + "# saved\n");
+        HttpResponse<String> stub = await("/api/gone",
+                response -> response.statusCode() == 500
+                        && response.body().contains("TQL-ROUTE-3103"));
+        assertThat(stub.body()).contains("TQL-ROUTE-3103").doesNotContain("gone.sql");
+        awaitWatchLine(line -> line.contains("failed to compile")
+                && line.contains("TQL-SQL-2103") && line.contains("gone.sql"));
+        awaitWatchLine(line -> line.contains("1 failed"));
+
+        // The statement comes back and the next save recovers the route.
+        Files.writeString(gone.resolve("gone.sql"), "select 'back' as answer\n");
+        Files.writeString(gone.resolve("get.yml"), routeYaml("gone", "gone"));
+        assertThat(await("/api/gone", response -> response.statusCode() == 200
+                && response.body().contains("back")).body()).contains("back");
+    }
+
+    /**
      * Polls until a watch line matching {@code expected} arrives (or 10s elapse). The route swap
      * is observable over HTTP before the watcher publishes its line, so asserting the list
      * immediately after the HTTP flip races the callback.

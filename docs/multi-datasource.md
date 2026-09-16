@@ -48,6 +48,10 @@ sources:
     sql:
       file: sales-summary.sql
       mode: query
+response:
+  json:
+    body:
+      rows: main.rows
 ```
 
 A page composing several result sets may pick per query — the route-level value is

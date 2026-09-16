@@ -70,17 +70,29 @@ final class JobSchedules {
             if (trigger == null || trigger.schedule() == null) {
                 continue;
             }
-            schedule(schedules, job.definition().id(), trigger.schedule());
+            schedule(schedules, job, trigger.schedule());
         }
     }
 
-    private void schedule(Schedules schedules, String jobId, TriggerSpec.Schedule schedule) {
+    private void schedule(Schedules schedules, JobFile job, TriggerSpec.Schedule schedule) {
+        String jobId = job.definition().id();
         if (schedule.fixedDelay() != null && !schedule.fixedDelay().isBlank()) {
             long period = Durations.toMillis(schedule.fixedDelay());
             schedules.every("schedule." + jobId, period,
                     () -> runClaimed(jobId, periodWindow(period)));
             LOG.log(System.Logger.Level.INFO, "Scheduled job {0} every {1}ms", jobId, period);
         } else if (schedule.cron() != null && !schedule.cron().isBlank()) {
+            // The expression judged before the schedule is registered, by the predicate the
+            // linter reports from (docs/audit-low-leads.md slice 8): the refusal is coded and
+            // names the job and its file, where the scheduler's own — an uncoded exception
+            // the boot wrapped as "Failed to start" — named the schedule and nothing else.
+            io.tesseraql.yaml.app.CronExpressions.problem(schedule.cron()).ifPresent(problem -> {
+                throw io.tesseraql.core.error.TqlException
+                        .builder(io.tesseraql.yaml.app.CronExpressions.INVALID)
+                        .message("Job '" + jobId + "' schedule.cron: " + problem)
+                        .source(job.source() == null ? null : job.source().toString())
+                        .build();
+            });
             // The scheduled time, not the woken time: it is identical on every node, which is
             // what lets the claim below give one firing to exactly one of them.
             schedules.cron("schedule." + jobId, schedule.cron(),

@@ -59,24 +59,25 @@ final class SymbolsCommand implements Callable<Integer> {
         configOptions.apply();
         Path home = app.toAbsolutePath().normalize();
         List<Broken> broken = new ArrayList<>();
-        // The tolerant load the hot reloader uses: an unparseable route document costs its own
-        // symbols, not the run. A failure outside the route tree (a broken shared definition,
-        // job, or MCP document) still aborts the whole load, so it degrades one step further —
+        // The tolerant load the hot reloader and the linter use: a route, job, consumer,
+        // workflow or MCP document that does not parse costs its own symbols, not the run, and
+        // is named here. A failure in what every document resolves through (the configuration,
+        // a shared definition) still aborts the whole load, so it degrades one step further —
         // config alone still yields policies and message keys, and the walks below are this
         // command's own. Editor intelligence must survive the app being mid-edit.
-        List<ManifestLoader.BrokenRoute> brokenRoutes = new ArrayList<>();
+        List<ManifestLoader.BrokenDocument> brokenDocuments = new ArrayList<>();
         AppManifest manifest;
         AppConfig config;
         try {
-            manifest = new ManifestLoader().load(home, brokenRoutes);
+            manifest = new ManifestLoader().load(home, brokenDocuments);
             config = manifest.config();
         } catch (RuntimeException ex) {
             manifest = null;
             config = ManifestLoader.configOnly(home);
             broken.add(new Broken("(app manifest)", rootMessage(ex)));
         }
-        for (ManifestLoader.BrokenRoute route : brokenRoutes) {
-            broken.add(new Broken(relative(home, route.source()), route.error()));
+        for (ManifestLoader.BrokenDocument document : brokenDocuments) {
+            broken.add(new Broken(relative(home, document.source()), document.error()));
         }
         ObjectMapper mapper = io.tesseraql.yaml.JsonMappers.constrained();
         ObjectNode document = mapper.createObjectNode();

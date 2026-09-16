@@ -1,9 +1,7 @@
 package io.tesseraql.yaml.lint;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.tesseraql.core.error.TqlException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -197,10 +195,14 @@ class AppLinterHttpSourceTest {
 
         // One namespace makes the collision a duplicate key rather than a cross-map shadow,
         // so the lint that compared http: names against queries: names retires — and the
-        // parser refuses the document outright instead of keeping the second silently.
-        assertThatThrownBy(() -> new AppLinter().lint(dir))
-                .isInstanceOf(TqlException.class)
-                .hasMessageContaining("Duplicate field 'rates'");
+        // parser refuses the document outright instead of keeping the second silently. The
+        // linter reports that refusal as the document's one finding (docs/audit-low-leads.md
+        // slice 8); it used to escape lint as the parser's exception.
+        assertThat(new AppLinter().lint(dir)).anySatisfy(finding -> {
+            assertThat(finding.code()).isEqualTo("TQL-YAML-1001");
+            assertThat(finding.source()).isEqualTo("web/orders/get.yml");
+            assertThat(finding.message()).contains("Duplicate field 'rates'");
+        });
     }
 
     @Test

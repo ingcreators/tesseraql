@@ -80,6 +80,63 @@ class AppLifecycleCommandsTest {
         assertThat(finding.has("column")).isTrue();
     }
 
+    /**
+     * {@code lint --format json} always prints the findings document (docs/cli-surface.md
+     * decision 10a's addendum, docs/audit-low-leads.md slice 8): a document that does not parse
+     * is one finding at that file, exit 1. It used to escape the verb as the parser's coded
+     * sentence — stdout empty, exit 2 — which the editor then misread as a CLI that predates
+     * the JSON contract and kept a stale Problems panel. The shapes are the origin's: a job
+     * whose {@code as:} is an unquoted flow mapping (the file no other feed named), and an
+     * empty route.
+     */
+    @Test
+    void lintJsonPrintsADocumentWhenADocumentDoesNotParse(@TempDir Path dir) throws Exception {
+        Path app = scaffold(dir);
+        Files.createDirectories(app.resolve("batch/report"));
+        Files.writeString(app.resolve("batch/report/job.yml"), """
+                version: tesseraql/v1
+                id: report
+                kind: job
+                recipe: batch-pipeline
+                pipeline:
+                  - id: send
+                    push:
+                      to: s3://bucket
+                      as: {nope}
+                """);
+        Files.createDirectories(app.resolve("web/empty"));
+        Files.writeString(app.resolve("web/empty/get.yml"), "");
+
+        Captured broken = executeCapturing("lint", "--app", app.toString(), "--format", "json");
+
+        assertThat(broken.exitCode()).isOne();
+        JsonNode report = new ObjectMapper().readTree(broken.stdout());
+        assertThat(report.get("errors").asLong()).isGreaterThanOrEqualTo(2);
+        java.util.List<String> sources = new java.util.ArrayList<>();
+        for (JsonNode candidate : report.get("findings")) {
+            if ("TQL-YAML-1001".equals(candidate.get("code").asText())) {
+                sources.add(candidate.get("source").asText());
+            }
+        }
+        assertThat(sources).containsExactlyInAnyOrder("batch/report/job.yml",
+                "web/empty/get.yml");
+    }
+
+    /** The symbols feed names a broken job, not {@code (app manifest)}, since the same slice. */
+    @Test
+    void symbolsNamesAnUnparseableJobDocument(@TempDir Path dir) throws Exception {
+        Path app = scaffold(dir);
+        Files.createDirectories(app.resolve("batch/report"));
+        Files.writeString(app.resolve("batch/report/job.yml"), "kind: job\n  bad indentation:\n");
+
+        Captured captured = executeCapturing("symbols", "--app", app.toString());
+
+        assertThat(captured.exitCode()).isZero();
+        JsonNode document = new ObjectMapper().readTree(captured.stdout());
+        assertThat(document.get("routes").size()).isPositive();
+        assertThat(brokenSources(document)).containsExactly("batch/report/job.yml");
+    }
+
     @Test
     void symbolsPrintsPoliciesMessagesAndRoutesWithLines(@TempDir Path dir) throws Exception {
         Path app = scaffold(dir);

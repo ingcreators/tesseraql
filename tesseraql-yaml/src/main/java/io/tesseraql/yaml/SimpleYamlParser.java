@@ -21,7 +21,11 @@ import java.util.Map;
  */
 public final class SimpleYamlParser {
 
-    private static final TqlErrorCode SCHEMA_ERROR = new TqlErrorCode(TqlDomain.YAML, 1001);
+    /**
+     * TQL-YAML-1001: a document does not parse or lacks its header — public so the linter can
+     * file an uncoded load failure under the code every parse failure carries.
+     */
+    public static final TqlErrorCode SCHEMA_ERROR = new TqlErrorCode(TqlDomain.YAML, 1001);
     private static final String EXPECTED_VERSION = "tesseraql/v1";
 
     private final ObjectMapper mapper = YamlMappers.constrained();

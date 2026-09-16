@@ -220,7 +220,10 @@ midnight, and its days are the days the window *opens*: `MON-FRI 22:00-06:00` ad
 at 05:00 (Friday's window, still open) and refuses Monday at 05:00.
 
 Hours are read in `tesseraql.security.conditions.zone`, defaulting to the JVM's zone. Name one
-if your servers may move: "login hours" means the business's hours.
+if your servers may move: "login hours" means the business's hours. The value is read as
+written and judged like every declared zone — a region id such as `Asia/Tokyo` or an offset —
+so a misspelling is a lint error naming the key (`TQL-SEC-4147`), and the runtime refuses to
+start on it with the same sentence.
 
 A grant whose conditions this request does not satisfy is **dropped from the active view** —
 its role leaves `roles` and its permissions leave `permissions` unless another surviving grant

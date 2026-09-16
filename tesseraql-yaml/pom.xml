@@ -46,6 +46,25 @@
       <groupId>com.fasterxml.jackson.dataformat</groupId>
       <artifactId>jackson-dataformat-yaml</artifactId>
     </dependency>
+    <!--
+      Quartz's cron expression, without Quartz's scheduler — the runtime's own declaration,
+      repeated here for the module boundary's sake (docs/audit-low-leads.md decision 10): a
+      job's schedule.cron is judged where it is written by the grammar the scheduler will fire
+      it by, so the linter's answer and the boot's are one. A second parser would be a second
+      grammar (the two disagree at the edges), and a hand-rolled one a third; the library the
+      runtime already carries is the one that cannot drift. The scheduler, its thread pool and
+      its JDBC job store are not used, so c3p0 is excluded as the runtime excludes it.
+    -->
+    <dependency>
+      <groupId>org.quartz-scheduler</groupId>
+      <artifactId>quartz</artifactId>
+      <exclusions>
+        <exclusion>
+          <groupId>com.mchange</groupId>
+          <artifactId>c3p0</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
 
     <dependency>
       <groupId>org.junit.jupiter</groupId>

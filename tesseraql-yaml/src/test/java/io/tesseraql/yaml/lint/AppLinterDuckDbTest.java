@@ -34,6 +34,10 @@ class AppLinterDuckDbTest {
                 id: sales.summary
                 kind: route
                 recipe: query-json
+                response:
+                  json:
+                    body:
+                      rows: main.rows
                 datasource: analytics
                 sources:
                   main:
@@ -95,6 +99,10 @@ class AppLinterDuckDbTest {
                 id: orders.list
                 kind: route
                 recipe: query-json
+                response:
+                  json:
+                    body:
+                      rows: main.rows
                 sources:
                   main:
                     sql:
@@ -260,6 +268,10 @@ class AppLinterDuckDbTest {
                 id: h.read
                 kind: route
                 recipe: query-json
+                response:
+                  json:
+                    body:
+                      rows: main.rows
                 datasource: analytics
                 sources:
                   main:
@@ -312,6 +324,10 @@ class AppLinterDuckDbTest {
                 id: d.ok
                 kind: route
                 recipe: query-json
+                response:
+                  json:
+                    body:
+                      rows: main.rows
                 datasource: analytics
                 sources:
                   main:
@@ -328,6 +344,10 @@ class AppLinterDuckDbTest {
                 id: d.ghost
                 kind: route
                 recipe: query-json
+                response:
+                  json:
+                    body:
+                      rows: main.rows
                 datasource: analytics
                 sources:
                   main:

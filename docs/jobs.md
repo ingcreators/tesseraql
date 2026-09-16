@@ -51,6 +51,14 @@ trigger:
 `cron` takes a Quartz cron expression (seconds-first). `fixedDelay` re-fires at
 a fixed period. Declare one or the other, not both.
 
+Both are judged where they are written. A `cron` the scheduler cannot fire — the
+five-field crontab spelling, or `*` in both day fields where Quartz wants `?` in one —
+is a lint error naming the job and the file (`TQL-YAML-1068`). The runtime refuses to
+start on it with the same sentence; it used to refuse with the scheduler's own, naming
+the schedule and nothing else. A `fixedDelay` that is not a duration is
+`TQL-YAML-1054`, as a poll trigger's `delay` is. The grammar is Quartz's own, the one
+the scheduler computes fire times with.
+
 A third trigger kind chains lightly: `after: <jobId>` fires the job when the named job's
 execution **completes successfully** in the same app, carrying the parent's business date —
 enough for "extract, then send". A trigger declares one kind; a chain must name a declared

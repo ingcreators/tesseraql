@@ -36,6 +36,10 @@ class AppLinterDatasourceTest {
                 id: sales.summary
                 kind: route
                 recipe: query-json
+                response:
+                  json:
+                    body:
+                      rows: main.rows
                 datasource: reporting
                 sources:
                   main:
@@ -51,6 +55,10 @@ class AppLinterDatasourceTest {
                 id: sales.ghost
                 kind: route
                 recipe: query-json
+                response:
+                  json:
+                    body:
+                      rows: main.rows
                 datasource: warehouse
                 sources:
                   main:
@@ -190,6 +198,10 @@ class AppLinterDatasourceTest {
                 id: dashboard.view
                 kind: route
                 recipe: query-json
+                response:
+                  json:
+                    body:
+                      rows: main.rows
                 sources:
                   main:
                     sql:

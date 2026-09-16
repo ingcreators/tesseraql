@@ -65,6 +65,10 @@ final class ToolRules implements LintRule {
                     "MCP tool '" + definition.id() + "' has no description; it is the hint the"
                             + " model uses to decide when to call the tool"));
         }
+        // Each binding's arm, from the predicate the compiler refuses from: a tool's sources
+        // and steps resolve exactly as a route's do (docs/audit-low-leads.md slice 8).
+        RecipeShapeRules.report(context, config, tool.source(), definition,
+                io.tesseraql.yaml.app.RecipeShape.Surface.TOOL, source, findings);
         if (definition.main() != null && !definition.main().isContract()
                 && definition.main().file() != null
                 && !Files.isRegularFile(

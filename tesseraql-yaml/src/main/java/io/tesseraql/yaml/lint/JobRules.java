@@ -71,6 +71,7 @@ final class JobRules implements LintRule {
             lintPollJob(config, job, source, findings);
         }
         if (job.definition().trigger() != null && job.definition().trigger().schedule() != null) {
+            lintSchedule(job, job.definition().trigger().schedule(), source, findings);
             CalendarRules.lintScheduleCalendar(job, job.definition().trigger().schedule(),
                     calendars, source,
                     findings);
@@ -167,6 +168,38 @@ final class JobRules implements LintRule {
             }
             if (step.push() != null) {
                 PushStepRules.lintPushStep(config, job, step, source, findings);
+            }
+        }
+    }
+
+    /**
+     * The two ways a {@code schedule:} says when (docs/jobs.md): a {@code cron:} judged by the
+     * grammar the scheduler fires it by (the predicate the runtime refuses from —
+     * docs/audit-low-leads.md slice 8), and a {@code fixedDelay:} that must be a duration
+     * (the invalid-trigger code, as the poll trigger's {@code delay:} is). Both used to
+     * lint clean and fail the boot: the cron as an uncoded exception with the scheduler's
+     * reason and no file, the delay as the duration parser's refusal.
+     */
+    private void lintSchedule(io.tesseraql.yaml.manifest.JobFile job,
+            io.tesseraql.yaml.model.TriggerSpec.Schedule schedule, String source,
+            List<LintFinding> findings) {
+        if (schedule.cron() != null && !schedule.cron().isBlank()) {
+            io.tesseraql.yaml.app.CronExpressions.problem(schedule.cron())
+                    .ifPresent(problem -> findings.add(new LintFinding(
+                            io.tesseraql.yaml.app.CronExpressions.INVALID.toString(), ERROR,
+                            source, "Job '" + job.definition().id() + "' schedule.cron: "
+                                    + problem,
+                            context.lineWithin(job.source(), "schedule:", "cron:"), null)));
+        }
+        if (schedule.fixedDelay() != null && !schedule.fixedDelay().isBlank()) {
+            try {
+                io.tesseraql.core.util.Durations.toMillis(schedule.fixedDelay());
+            } catch (RuntimeException ex) {
+                findings.add(new LintFinding(LintCodes.INVALID_JOB_TRIGGER, ERROR, source,
+                        "Job '" + job.definition().id() + "' schedule.fixedDelay: '"
+                                + schedule.fixedDelay() + "' is not a duration"
+                                + " (<number><unit> with unit ms/s/m/h/d, for example 30s)",
+                        context.lineWithin(job.source(), "schedule:", "fixedDelay:"), null));
             }
         }
     }
