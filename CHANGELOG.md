@@ -67,6 +67,44 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **A string literal in the expression language knows three escapes, and refuses the
+  rest.** `\'`, `\"` and `\\` are the escapes; any other backslash is a parse error
+  (`TQL-SQL-2101`) naming the doubled spelling. The lexer kept the character and dropped the
+  backslash for every escape it did not know, so `matches(zip, '\d{3}-\d{4}')` — the natural
+  spelling of a postal-code rule — was the regex `d{3}-d{4}`, which rejects every valid code
+  and accepts `ddd-dddd`, with lint silent. A regex class is written doubled: `'\\d{3}'`. A
+  breaking change: no shipped example or gallery app wrote a backslash inside an expression
+  literal. `docs/audit-low-leads.md` slice 11 (G13).
+- **A relational comparison on a `null`, or on two values of unrelated kinds, is a coded
+  refusal.** `<`, `>`, `<=`, `>=` with a `null` operand threw a raw `IllegalArgumentException`,
+  and `'10' > 9` or `date > '2026-01-01'` a raw `ClassCastException` — an uncoded 500 with a
+  stack trace per request on the most natural optional filter (`/*%if minPrice > 0 */` with
+  `minPrice` left out) and on a `validate:` rule whose field the caller omitted (the command
+  processor wrapped it as `TQL-SQL-2600`). Both are `TQL-SQL-2122` now, a sentence naming the
+  operator, the operand kinds and the guard (`minPrice != null && minPrice > 0`), never a
+  value; so is arithmetic on a non-number and a division by zero. The code answers 500 like
+  `TQL-SQL-2118` and for the same reason: the request is ordinary and the template is what is
+  defective, because its author did not guard the site (`docs/two-way-sql-parser.md` decision
+  10). Not `false`: a `validate:` rule reading a false would report an optional field the
+  caller left out as a violation. `==`/`!=` stay null-safe. (G11)
+- **A map key named `size`, `length` or `empty` wins over the virtual property.** The
+  virtual answer was consulted before the key on every nested scope, so an input or a column
+  by one of those everyday names was unreachable: `params.size` was the number of bound
+  inputs, `params.empty` the map's emptiness, and a batch writer copying `row.size` into a
+  `size` column wrote the column count. A present key is the author's value; the virtual
+  property answers where no key of that name exists, so `params.lines.size`, `!ids.empty` and
+  the absent-value answers are unchanged. (G12)
+- **A dotted path reads a map key, a record's own accessors, a bean getter or a public
+  instance field, and nothing else.** The evaluator tried the bare segment name as a method
+  on every class, which invoked `String.strip`, `Object.toString` (a principal's every claim
+  into a log), `getClass` and through it every getter of `Class` up to `URL.openStream` on the
+  code-source jar; a bare name matching a public static method (`created.now`) escaped as an
+  uncaught `IllegalArgumentException`. The bare name resolves only what a record itself
+  declares (`principal.claim.<name>`, `tenant.id`); `getX`/`isX` still resolve on any value
+  (`created.year`); a method every object has, a static method or a static field answers
+  `null` like any absent property. The Javadoc and the two doc pages that promised "no method
+  invocation, reflection" now say what is true. (G15)
+
 - **A request header no longer feeds a declared input.** After the path, the body and the
   query, the request binder read a request header of the input's name — a fallback
   `docs/vertx-native.md` decision 2 recorded as removed. Every declared input on every route
@@ -151,6 +189,36 @@ All notable changes to TesseraQL are documented here. The format follows
   sandbox, means the sandbox). Docs and two fixtures only (G5).
 
 ### Fixed
+
+- **Lint reports a 2-way SQL file that does not parse.** `LintContext.sqlNodes` swallowed the
+  parse failure on the premise that another lint owned the SQL; none did, and nothing loads a
+  query route's SQL before its first request. A truncated directive (`/*%if minPrice > */`) or
+  an unknown function in one linted clean, passed `tesseraql admission`, booted, and answered
+  500 with `TQL-SQL-2101` on every request of the route — and the injection, negated-list,
+  bind-name and normalization lints all skipped the file. The failure is one ERROR per file
+  now, with the parser's own code (`TQL-SQL-2102` for the template, `TQL-SQL-2101` for a
+  directive's expression) and its line; the SQL parser also carries the directive's line and
+  text onto a directive expression that does not parse, which used to reach the lint and the
+  boot as a bare sentence. `docs/audit-low-leads.md` slice 11 (G9).
+- **Lint parses the three manifest expression positions it did not.** A response
+  `headersWhen:` guard (JSON and HTML arms), a step's `when:` (routes, tools, consumers) and a
+  notification's `recipient:` were parsed only at boot, so a typo in one passed `lint` and
+  `admission` and stopped `tesseraql dev` with the one line `TQL-SQL-2101: Unexpected end of
+  expression`, naming no file, step or key — three boots to find three typos. Each is a
+  positioned `TQL-SQL-2101` lint error beside its already-linted sibling (`statusWhen`, the
+  notification `when:`, a validation rule). (G10)
+- **Two numbers compare as decimals.** `==` and `<` compared through `double`, so two `bigint`
+  keys past 2^53 compared equal when they differ (`document.ownerId == principal.claim.uid`
+  on Snowflake-style ids passed for the neighbouring owner) and `qty * price <= budget` —
+  the doc's own example of exactness — rounded its exact product before comparing it.
+  Comparison is `BigDecimal`-exact like the arithmetic; `10 == 10.0 == 10.00` still holds, a
+  non-finite double keeps the IEEE ordering. (G14)
+- **A `matches()` pattern compiles once, at parse.** A literal pattern is compiled when the
+  expression is parsed, so one that does not compile is a parse error (`TQL-SQL-2101`) lint
+  and boot both report — it used to pass both and throw a raw `PatternSyntaxException` on
+  every request. A pattern that is not a literal compiles per evaluation and is held nowhere;
+  the process-wide cache keyed on the evaluated text grew by one entry per distinct value a
+  request bound. A non-literal that does not compile is `TQL-SQL-2122`. (F121, unfiled 11)
 
 - **A download declares its length.** The edge framed every streamed body as chunked, which
   HTTP/1.0 does not have: an HTTP/1.0 client — nginx to its upstream, at its default — read

@@ -243,7 +243,8 @@ final class DecisionRules implements LintRule {
         try {
             parsed = io.tesseraql.core.expr.ExpressionParser.parse(expression, functions);
         } catch (RuntimeException unparseable) {
-            // A malformed expression is its own lint's concern.
+            // A guard that does not parse is WorkflowRules' finding, a step when: DocumentRules'
+            // (lintStepGuards); this walk judges only what parsed.
             return;
         }
         List<List<String>> paths = new ArrayList<>();

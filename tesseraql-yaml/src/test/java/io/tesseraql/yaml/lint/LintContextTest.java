@@ -64,20 +64,52 @@ class LintContextTest {
     }
 
     @Test
-    void malformedContentIsNullWithoutItsOwnFinding(@TempDir Path dir) throws Exception {
-        // A document that does not parse is already reported where it loads; the context
+    void aMalformedYamlDocumentIsNullWithoutItsOwnFinding(@TempDir Path dir) throws Exception {
+        // A YAML document that does not parse is already reported where it loads; the context
         // must not double-report it.
         Path yml = dir.resolve("broken.yml");
         Files.writeString(yml, "a: [unclosed\n");
-        Path sql = dir.resolve("broken.sql");
-        Files.writeString(sql, "select /*%if body.x */ 1\n"); // unterminated directive
         List<LintFinding> findings = new ArrayList<>();
         LintContext context = new LintContext(dir, findings, Set.of(),
                 io.tesseraql.core.expr.ExpressionFunctions.processDefault(),
                 io.tesseraql.core.files.FileCodecs.of());
 
         assertThat(context.tree(yml)).isNull();
-        assertThat(context.sqlNodes(sql)).isNull();
         assertThat(findings).isEmpty();
+    }
+
+    @Test
+    void anUnparseableSqlFileIsOneFindingWithTheParsersCodeAndLine(@TempDir Path dir)
+            throws Exception {
+        // Nothing loads a query route's SQL before its first request, so this memo is the
+        // only static gate that sees the failure (docs/audit-low-leads.md G9). It used to
+        // answer null on the premise that another lint owned the SQL; none did.
+        Path sql = dir.resolve("broken.sql");
+        Files.writeString(sql, "select 1\n/*%if body.x */ 1\n"); // unterminated directive
+        Path directive = dir.resolve("directive.sql");
+        Files.writeString(directive, "select 1\nwhere 1 = 1\n/*%if q > */ and x = 1 /*%end*/\n");
+        List<LintFinding> findings = new ArrayList<>();
+        LintContext context = new LintContext(dir, findings, Set.of(),
+                io.tesseraql.core.expr.ExpressionFunctions.processDefault(),
+                io.tesseraql.core.files.FileCodecs.of());
+
+        assertThat(context.sqlNodes(sql)).isNull();
+        // Every rule that asks answers null off the memo; the failure surfaces once per file.
+        assertThat(context.sqlNodes(dir.resolve(".").resolve("broken.sql"))).isNull();
+        assertThat(context.sqlNodes(directive)).isNull();
+        assertThat(findings).hasSize(2);
+        assertThat(findings.get(0)).satisfies(finding -> {
+            assertThat(finding.code()).isEqualTo("TQL-SQL-2102");
+            assertThat(finding.severity()).isEqualTo("error");
+            assertThat(finding.source()).isEqualTo("broken.sql");
+            assertThat(finding.line()).isNotNull(); // the parser names the line it stopped at
+            assertThat(finding.message()).contains("does not parse");
+        });
+        assertThat(findings.get(1)).satisfies(finding -> {
+            assertThat(finding.code()).isEqualTo("TQL-SQL-2101");
+            assertThat(finding.source()).isEqualTo("directive.sql");
+            assertThat(finding.line()).isEqualTo(3);
+            assertThat(finding.message()).contains("Unexpected end of expression in 'q >'");
+        });
     }
 }

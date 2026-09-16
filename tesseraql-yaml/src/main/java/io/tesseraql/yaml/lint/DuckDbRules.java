@@ -365,7 +365,7 @@ final class DuckDbRules implements LintRule {
         String text = context.content(sqlFile);
         List<SqlNode> nodes = text == null ? null : context.sqlNodes(sqlFile);
         if (nodes == null) {
-            return; // SQL syntax / IO errors surface through other checks
+            return; // unreadable or unparseable: the context reported it
         }
         List<SqlNode.FilePath> filePaths = new ArrayList<>();
         SqlNode.walk(nodes, node -> {

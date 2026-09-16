@@ -590,7 +590,11 @@ Recorded as they were hit, so the next slice does not re-learn them.
 - **The expression parser has no non-truncation oracle.** Measured green today, so it is a net
   rather than a fix, and it inspects the returned expression rather than the node tree.
 - **The scope name is not validated as an identifier**, though the alias is.
-- **`TQL-SQL-2101` carries no source line and no expression text.**
+- **`TQL-SQL-2101` carries no source line and no expression text.** *Closed for the SQL
+  surface by `docs/audit-low-leads.md` slice 11 (G9): `Sql2WayParser` rebuilds a directive
+  expression's parse failure with the directive's line and the expression text, and
+  `LintContext` reports it as a positioned finding. A manifest expression's 2101 still names
+  only what the lint that reports it adds.*
 
 ## What the plan got wrong
 

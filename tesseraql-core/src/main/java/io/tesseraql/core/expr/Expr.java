@@ -1,5 +1,8 @@
 package io.tesseraql.core.expr;
 
+import io.tesseraql.core.error.TqlDomain;
+import io.tesseraql.core.error.TqlErrorCode;
+import io.tesseraql.core.error.TqlException;
 import java.util.List;
 import java.util.Objects;
 
@@ -10,11 +13,26 @@ import java.util.Objects;
  * logical {@code &&}/{@code ||}/{@code !}, grouping, and — since roadmap Phase 40 — arithmetic
  * ({@code + - * / %}, decimal-exact), string concatenation via {@code +}, and a whitelist of
  * pure functions: the built-ins ({@link Call#FUNCTIONS}) plus any operator-installed
- * {@link ExpressionFunction}s, whose contract is equally side-effect-free. There is still no
- * method invocation, reflection, or assignment, so evaluation cannot trigger side effects
- * (guardrail design ch. 20.6).
+ * {@link ExpressionFunction}s, whose contract is equally side-effect-free. The grammar has no
+ * call syntax on a value and no assignment: a dotted path reads a value the way
+ * {@link EvaluationContext} says it does, and nothing else is invoked.
+ *
+ * <p>Evaluation fails as coded (docs/audit-low-leads.md slice 11): an operand an operator
+ * cannot evaluate — a relational comparison on a {@code null} or on two values of unrelated
+ * kinds, arithmetic on a non-number, a division by zero, a {@code matches()} pattern bound at
+ * request time that does not compile — is {@link #UNEVALUABLE_OPERAND}, never a raw
+ * {@code IllegalArgumentException} or {@code ClassCastException}. The template is what is
+ * defective, not the request, so the code answers 500 the way the empty negated list's
+ * refusal does (docs/two-way-sql-parser.md decision 10); the author guards the site
+ * ({@code minPrice != null && minPrice > 0}).
  */
 public sealed interface Expr {
+
+    /**
+     * An operand the expression could not evaluate at request time. The sentence names the
+     * operator and the operand kinds, never a value: an operand may be a claim or a row.
+     */
+    TqlErrorCode UNEVALUABLE_OPERAND = new TqlErrorCode(TqlDomain.SQL, 2122);
 
     /** Evaluates this expression against the given variable scope. */
     Object eval(EvaluationContext context);
@@ -102,12 +120,27 @@ public sealed interface Expr {
             }
             java.math.BigDecimal a = decimal(l);
             java.math.BigDecimal b = decimal(r);
+            try {
+                return switch (operator) {
+                    case ADD -> a.add(b);
+                    case SUB -> a.subtract(b);
+                    case MUL -> a.multiply(b);
+                    case DIV -> a.divide(b, java.math.MathContext.DECIMAL64);
+                    case MOD -> a.remainder(b);
+                };
+            } catch (ArithmeticException ex) {
+                throw refuse(symbol() + ": " + ex.getMessage() + " — guard the divisor"
+                        + " (x != 0 && …)");
+            }
+        }
+
+        private String symbol() {
             return switch (operator) {
-                case ADD -> a.add(b);
-                case SUB -> a.subtract(b);
-                case MUL -> a.multiply(b);
-                case DIV -> a.divide(b, java.math.MathContext.DECIMAL64);
-                case MOD -> a.remainder(b);
+                case ADD -> "+";
+                case SUB -> "-";
+                case MUL -> "*";
+                case DIV -> "/";
+                case MOD -> "%";
             };
         }
 
@@ -115,10 +148,16 @@ public sealed interface Expr {
             if (value instanceof java.math.BigDecimal bd) {
                 return bd;
             }
-            if (value instanceof Number number) {
+            if (value instanceof Number number && !nonFinite(number)) {
                 return new java.math.BigDecimal(number.toString());
             }
-            throw new IllegalArgumentException("Not a number: " + value);
+            throw refuse("arithmetic needs numbers, and met " + kind(value));
+        }
+
+        /** {@code type: number} admits NaN and the infinities, which no decimal can hold. */
+        static boolean nonFinite(Number number) {
+            return (number instanceof Double d && !Double.isFinite(d))
+                    || (number instanceof Float f && !Float.isFinite(f));
         }
     }
 
@@ -140,7 +179,8 @@ public sealed interface Expr {
      * resolved function at parse, so the tree evaluates with the set it was parsed under —
      * {@code custom} is {@code null} exactly when {@code name} is a built-in.
      */
-    record Call(String name, List<Expr> args, ExpressionFunction custom) implements Expr {
+    record Call(String name, List<Expr> args, ExpressionFunction custom,
+            java.util.regex.Pattern regex) implements Expr {
 
         /** function name → arity. */
         public static final java.util.Map<String, Integer> FUNCTIONS = java.util.Map.ofEntries(
@@ -153,15 +193,25 @@ public sealed interface Expr {
                 java.util.Map.entry("min", 2), java.util.Map.entry("max", 2),
                 java.util.Map.entry("coalesce", 2));
 
-        private static final java.util.concurrent.ConcurrentHashMap<String, java.util.regex.Pattern> PATTERNS = new java.util.concurrent.ConcurrentHashMap<>();
-
         public Call {
             args = List.copyOf(args);
         }
 
         /** A built-in call; custom calls carry their resolved function. */
         public Call(String name, List<Expr> args) {
-            this(name, args, null);
+            this(name, args, null, null);
+        }
+
+        /**
+         * A call whose {@code matches()} pattern is not a literal, or a custom call. The parser
+         * compiles a literal pattern once and hands it in as {@code regex}: a bad one is its
+         * refusal, so lint and the boot see it, and no request compiles it again. A pattern
+         * that is not a literal compiles per evaluation and is held nowhere — the cache that
+         * keyed on the evaluated text grew by one entry per distinct value a request bound
+         * (docs/audit-low-leads.md F121).
+         */
+        public Call(String name, List<Expr> args, ExpressionFunction custom) {
+            this(name, args, custom, null);
         }
 
         @Override
@@ -184,9 +234,9 @@ public sealed interface Expr {
                         && String.valueOf(a).startsWith(String.valueOf(b));
                 case "endsWith" -> a != null && b != null
                         && String.valueOf(a).endsWith(String.valueOf(b));
-                case "matches" -> a != null && b != null && PATTERNS
-                        .computeIfAbsent(String.valueOf(b), java.util.regex.Pattern::compile)
-                        .matcher(String.valueOf(a)).matches();
+                case "matches" -> a != null && b != null
+                        && (regex != null ? regex : compile(String.valueOf(b)))
+                                .matcher(String.valueOf(a)).matches();
                 case "abs" -> a == null ? null : Arithmetic.decimal(a).abs();
                 case "round" -> a == null
                         ? null
@@ -208,6 +258,15 @@ public sealed interface Expr {
             };
         }
 
+        private static java.util.regex.Pattern compile(String pattern) {
+            try {
+                return java.util.regex.Pattern.compile(pattern);
+            } catch (java.util.regex.PatternSyntaxException ex) {
+                throw refuse("matches(): the pattern bound at request time does not compile ("
+                        + ex.getDescription() + " near index " + ex.getIndex() + ")");
+            }
+        }
+
         /**
          * Dispatches to the function captured at parse. A miss here means the node was built
          * by hand with the built-in constructor for a non-built-in name — a clear error beats
@@ -226,7 +285,17 @@ public sealed interface Expr {
         }
     }
 
-    /** Equality / relational comparison. */
+    /**
+     * Equality / relational comparison. Two numbers compare as decimals, whatever their boxed
+     * kinds — {@code 10 == 10.0} holds and two {@code bigint} keys past 2<sup>53</sup> stay
+     * apart; {@code ==}/{@code !=} on anything else is {@link Objects#equals}, so {@code null}
+     * is equal to itself and to nothing else. A relational operator on a {@code null} or on
+     * two values of unrelated kinds is {@link #UNEVALUABLE_OPERAND}: the language propagates
+     * {@code null} through arithmetic and answers {@code false} for a predicate, and this is
+     * the one place where a silent answer would be either wrong or unknowable (a
+     * {@code validate:} rule reading a false as a violation of an optional field), so the
+     * site is refused and the guard is named.
+     */
     record Comparison(Operator operator, Expr left, Expr right) implements Expr {
         public enum Operator {
             EQ, NE, LT, GT, LE, GE
@@ -248,21 +317,64 @@ public sealed interface Expr {
 
         private static boolean equalValues(Object l, Object r) {
             if (l instanceof Number ln && r instanceof Number rn) {
-                return Double.compare(ln.doubleValue(), rn.doubleValue()) == 0;
+                return compareNumbers(ln, rn) == 0;
             }
             return Objects.equals(l, r);
         }
 
-        private static int compare(Object l, Object r) {
+        private int compare(Object l, Object r) {
             if (l instanceof Number ln && r instanceof Number rn) {
-                return Double.compare(ln.doubleValue(), rn.doubleValue());
+                return compareNumbers(ln, rn);
             }
-            if (l instanceof Comparable<?> && r != null) {
-                @SuppressWarnings("unchecked")
-                Comparable<Object> lc = (Comparable<Object>) l;
-                return lc.compareTo(r);
+            if (l == null || r == null) {
+                throw refuse(symbol() + ": " + (l == null ? "the left" : "the right")
+                        + " operand is null — guard the site (x != null && …) or declare the"
+                        + " input required");
             }
-            throw new IllegalArgumentException("Values are not comparable: " + l + ", " + r);
+            if (l instanceof Comparable<?> comparable) {
+                try {
+                    @SuppressWarnings("unchecked")
+                    Comparable<Object> lc = (Comparable<Object>) comparable;
+                    return lc.compareTo(r);
+                } catch (ClassCastException unrelated) {
+                    // fall through to the refusal: the kinds are named there
+                }
+            }
+            throw refuse(symbol() + ": " + kind(l) + " and " + kind(r) + " are not comparable"
+                    + " — a relational operator takes two numbers, two strings, or two temporal"
+                    + " values of one kind");
         }
+
+        /**
+         * Decimal-exact, like the arithmetic ({@code compareTo}, so {@code 10 == 10.00}); a
+         * non-finite double has no decimal and keeps the IEEE ordering.
+         */
+        private static int compareNumbers(Number l, Number r) {
+            if (Arithmetic.nonFinite(l) || Arithmetic.nonFinite(r)) {
+                return Double.compare(l.doubleValue(), r.doubleValue());
+            }
+            return Arithmetic.decimal(l).compareTo(Arithmetic.decimal(r));
+        }
+
+        private String symbol() {
+            return switch (operator) {
+                case EQ -> "==";
+                case NE -> "!=";
+                case LT -> "<";
+                case GT -> ">";
+                case LE -> "<=";
+                case GE -> ">=";
+            };
+        }
+    }
+
+    /** The coded refusal every evaluation-time failure is raised as. */
+    static TqlException refuse(String sentence) {
+        return new TqlException(UNEVALUABLE_OPERAND, sentence);
+    }
+
+    /** An operand's kind for a sentence — its class, never its value. */
+    static String kind(Object value) {
+        return value == null ? "null" : value.getClass().getSimpleName();
     }
 }

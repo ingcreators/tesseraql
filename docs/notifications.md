@@ -483,7 +483,7 @@ the build like any other kind.
 - `notify:` on a non-command recipe (`TQL-YAML-1004`)
 - a notification without a `channel:`, a job step with both or neither of
   `sql:`/`notify:`, or `attach:` on a channel that is not mail (`TQL-FIELD-2004`)
-- a malformed `when:` guard (`TQL-SQL-2101`)
+- a malformed `when:` guard or `recipient:` expression (`TQL-SQL-2101`)
 - a channel the config does not declare (`TQL-YAML-1102`, warning — another environment's
   config may declare it)
 - a mail channel's `template:` that is not a file inside the app home

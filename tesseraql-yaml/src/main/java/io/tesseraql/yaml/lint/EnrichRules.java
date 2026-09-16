@@ -138,7 +138,8 @@ final class EnrichRules {
     static boolean bindsKeys(LintContext context, Path sqlFile) {
         List<SqlNode> nodes = context.sqlNodes(sqlFile);
         if (nodes == null) {
-            // Unparseable SQL is its own lint's concern; do not double-report it here.
+            // Unreadable or unparseable: the context reported it, and a file that cannot render
+            // binds nothing — there is no second finding to make here.
             return true;
         }
         // The walk visits a loop's body itself, so the For case only checks the list source.

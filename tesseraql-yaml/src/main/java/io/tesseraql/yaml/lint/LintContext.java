@@ -1,7 +1,9 @@
 package io.tesseraql.yaml.lint;
 
+import static io.tesseraql.yaml.lint.LintFinding.Severity.ERROR;
 import static io.tesseraql.yaml.lint.LintFinding.Severity.WARNING;
 
+import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.expr.ExpressionFunctions;
 import io.tesseraql.core.sql.Sql2WayParser;
 import io.tesseraql.core.sql.SqlNode;
@@ -23,9 +25,13 @@ import java.util.Set;
  * <p>It is also the one failure policy for a file a rule cannot read. An unreadable file
  * surfaces once as {@code TQL-YAML-1053} and every accessor answers {@code null} — never a
  * silent empty value that lets a lint pass on content it could not see (the fail-open shape
- * the silent-tolerance campaign hunted). Malformed content also answers {@code null} but adds
- * no finding of its own: a document that does not parse is already reported with a parse code
- * where it loads, or by the lint that owns the SQL, and the context never double-reports it.
+ * the silent-tolerance campaign hunted). A YAML document that does not parse also answers
+ * {@code null} without a finding of its own: the manifest loader reports it with a parse code
+ * where it loads. A 2-way SQL file that does not parse is the context's own finding, once per
+ * file, with the parser's code and its line: nothing loads a query route's SQL before its
+ * first request, so the lint is the first and only static gate that can see it
+ * (docs/audit-low-leads.md G9 — a directive typo used to lint clean, pass admission, boot and
+ * answer 500 on every request, and every SQL lint that reads the nodes skipped the file).
  */
 final class LintContext {
 
@@ -191,7 +197,9 @@ final class LintContext {
 
     /**
      * The file parsed as a 2-way SQL template, once per run; {@code null} when the file is
-     * unreadable (reported by {@link #content}) or unparseable (its own lint's concern).
+     * unreadable (reported by {@link #content}) or does not parse — reported here, once, with
+     * the parser's own code ({@code TQL-SQL-2102} for the template, {@code TQL-SQL-2101} for a
+     * directive's expression) and the line it names.
      */
     List<SqlNode> sqlNodes(Path file) {
         return sqlNodes.computeIfAbsent(key(file), f -> {
@@ -201,7 +209,12 @@ final class LintContext {
             }
             try {
                 return Optional.of(Sql2WayParser.parse(text, functions));
-            } catch (RuntimeException unparseable) {
+            } catch (TqlException unparseable) {
+                findings.add(new LintFinding(unparseable.code().toString(), ERROR, source(f),
+                        "The 2-way SQL file does not parse: " + unparseable.sentence()
+                                + " — the runtime refuses every request that renders it, and"
+                                + " every lint that reads its statements was skipped",
+                        unparseable.line().orElse(null), null));
                 return Optional.empty();
             }
         }).orElse(null);

@@ -282,4 +282,24 @@ class Sql2WayParserTest {
 
         assertThat(bound.sql()).isEqualTo("select x -- don't\nfrom t where id = ?");
     }
+
+    @Test
+    void aDirectiveExpressionThatDoesNotParseNamesItsLineAndItsText() {
+        // The expression parser knows neither, so TQL-SQL-2101 reached the lint and the boot as
+        // a bare sentence (docs/two-way-sql-parser.md, the open item; docs/audit-low-leads.md G9).
+        String sql = "select * from t where 1 = 1\n/*%if q > */ and x = /* q */1 /*%end*/";
+
+        assertThatThrownBy(() -> Sql2WayParser.parse(sql,
+                io.tesseraql.core.expr.ExpressionFunctions.builtInsOnly()))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("TQL-SQL-2101")
+                .hasMessageContaining("Unexpected end of expression in 'q >'")
+                .satisfies(ex -> assertThat(((TqlException) ex).line()).hasValue(2));
+        assertThatThrownBy(() -> Sql2WayParser.parse(
+                "select 1 where id = /* nope(id) */1",
+                io.tesseraql.core.expr.ExpressionFunctions.builtInsOnly()))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("Unknown function 'nope()'")
+                .satisfies(ex -> assertThat(((TqlException) ex).line()).hasValue(1));
+    }
 }

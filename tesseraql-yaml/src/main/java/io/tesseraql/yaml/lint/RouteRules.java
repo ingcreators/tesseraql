@@ -104,6 +104,7 @@ final class RouteRules implements LintRule {
         RequestSourceRules.report(context, config, route.source(), definition,
                 io.tesseraql.yaml.app.RecipeShape.Surface.ROUTE, source, findings);
         RequestSourceRules.lintBodySources(context, route, source, findings);
+        DocumentRules.lintStepGuards(context, route.source(), definition, source, findings);
         // A negative timeout on a step or named source was clamped to 0 = unlimited by the
         // compiler — the inverse of the author's intent — so the guard was missing here.
         definition.steps().forEach((name, step) -> {

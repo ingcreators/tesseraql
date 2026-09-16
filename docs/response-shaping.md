@@ -235,8 +235,9 @@ response:
 ```
 
 The first truthy arm wins (else the declared `status`). Works on `response.html` too;
-conditions are pre-compiled at build (`TQL-YAML-1020`), and each arm's status rides into
-the generated OpenAPI as a response entry.
+conditions are pre-compiled at build (`TQL-YAML-1020`; a `headersWhen:` guard that does not
+parse is `TQL-SQL-2101` at lint), and each arm's status rides into the generated OpenAPI as a
+response entry.
 
 ## Default response headers
 

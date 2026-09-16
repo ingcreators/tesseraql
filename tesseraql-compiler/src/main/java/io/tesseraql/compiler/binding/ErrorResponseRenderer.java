@@ -704,6 +704,14 @@ public final class ErrorResponseRenderer implements Step {
                 // should be unreachable in an app that lints (docs/two-way-sql-parser.md
                 // decision 10).
                 case 2118 -> 500;
+                // An operand an expression could not evaluate at request time — a relational
+                // comparison on a null or on unrelated kinds, arithmetic on a non-number, a
+                // pattern bound at request time that does not compile. The same reasoning as
+                // 2118, written out for the same reason: the request is ordinary (an optional
+                // input left out) and the template is what is defective, because its author did
+                // not guard the site. Before the code existed this was an uncoded 500 with a
+                // stack trace per request (docs/audit-low-leads.md G11).
+                case 2122 -> 500;
                 default -> 500;
             };
             case TENANT, APP -> switch (code.number()) {

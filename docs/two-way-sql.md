@@ -135,9 +135,14 @@ Conditions use the core expression language — the same whitelist-only language
 [declarative validation](declarative-validation.md): comparisons, `&&`/`||`/`!`, literals,
 dotted paths over the bound names, and the whitelisted functions (the built-ins plus any
 [custom functions](declarative-validation.md#custom-functions) installed from the app's
-modules). There are no method calls and no side effects. A bare value is truthy when it is
+modules). There is no call syntax and no side effect: a dotted path reads a map key, a
+record's own accessors, a bean getter or a public field. A bare value is truthy when it is
 non-null (a `Boolean` counts as itself), so `q != null && q != ""` is the idiomatic guard for
-an optional text filter. The `where 1 = 1` anchor keeps the statement valid in both a plain
+an optional text filter, and `minPrice != null && minPrice > 0` for an optional number or
+date. A `<`/`>` on a `null` is refused with `TQL-SQL-2122` rather than answered `false`: the
+request is ordinary, and the unguarded site is the defect. A string literal knows the
+escapes `\'`, `\"` and `\\` and no other, so a regex class is written doubled
+(`matches(code, '\\d+')`). The `where 1 = 1` anchor keeps the statement valid in both a plain
 tool and every rendered variant.
 
 A directive's keyword ends at the first whitespace, so a long condition may wrap onto the next
@@ -269,8 +274,11 @@ A few rules keep every file executable as-is:
 - **Don't author `LIMIT`/`FETCH` on a paginated route** — the framework appends the dialect's
   pagination clause at execution time, and `TQL-YAML-1018` warns when the file carries its own
   ([pagination.md](pagination.md)).
-- A file that does not parse as a 2-way template fails at build/serve time with
-  `TQL-SQL-2102`, naming the offending line.
+- A file that does not parse as a 2-way template is a lint error — `TQL-SQL-2102` for the
+  template, `TQL-SQL-2101` for a directive whose expression does not parse, each naming the
+  directive's line — and the runtime refuses every request that renders it with the same
+  code. Nothing loads a query route's file before its first request, so the lint is the
+  gate (`docs/audit-low-leads.md`, G9).
 
 ## What lint checks
 
@@ -279,6 +287,7 @@ statically:
 
 | Code | Meaning |
 | --- | --- |
+| `TQL-SQL-2101` / `2102` | a SQL file does not parse — a directive's expression, or the template itself (an unterminated directive, a bind without its dummy) |
 | `TQL-SQL-2103` | a route, step, or validation rule references a missing SQL file |
 | `TQL-SQL-2104` | an UPDATE declares `expect.rowCount` but has no version-column predicate (optimistic locking half-wired) |
 | `TQL-SQL-2105` | an UPDATE has a version predicate but no `expect.rowCount` (a stale edit would silently affect zero rows) |

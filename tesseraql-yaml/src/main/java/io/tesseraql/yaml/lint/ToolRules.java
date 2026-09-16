@@ -71,6 +71,7 @@ final class ToolRules implements LintRule {
                 io.tesseraql.yaml.app.RecipeShape.Surface.TOOL, source, findings);
         RequestSourceRules.report(context, config, tool.source(), definition,
                 io.tesseraql.yaml.app.RecipeShape.Surface.TOOL, source, findings);
+        DocumentRules.lintStepGuards(context, tool.source(), definition, source, findings);
         if (definition.main() != null && !definition.main().isContract()
                 && definition.main().file() != null
                 && !Files.isRegularFile(

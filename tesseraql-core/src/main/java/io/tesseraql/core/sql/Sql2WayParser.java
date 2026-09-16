@@ -3,6 +3,7 @@ package io.tesseraql.core.sql;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
+import io.tesseraql.core.expr.Expr;
 import io.tesseraql.core.expr.ExpressionParser;
 import java.util.ArrayList;
 import java.util.List;
@@ -245,9 +246,9 @@ public final class Sql2WayParser {
         }
         boolean list = skipWhitespacePeek() == '(';
         SqlNode node = list
-                ? new SqlNode.ListBind(expr, ExpressionParser.parse(expr, functions),
+                ? new SqlNode.ListBind(expr, parseExpression(expr, directive.sourceLine()),
                         precededByNotIn(commentStart), directive.sourceLine())
-                : new SqlNode.Bind(expr, ExpressionParser.parse(expr, functions),
+                : new SqlNode.Bind(expr, parseExpression(expr, directive.sourceLine()),
                         directive.sourceLine());
         skipDummy(list, expr);
         return node;
@@ -309,7 +310,7 @@ public final class Sql2WayParser {
     private SqlNode parseIf(Directive first) {
         List<SqlNode.If.Branch> branches = new ArrayList<>();
         String ifCondition = first.argument("if");
-        branches.add(new SqlNode.If.Branch(ExpressionParser.parse(ifCondition, functions),
+        branches.add(new SqlNode.If.Branch(parseExpression(ifCondition, first.sourceLine()),
                 ifCondition, first.sourceLine(), parseBlock()));
         // `else` ends the chain. The renderer takes the first branch with no condition and stops,
         // so anything written after the else parses, ships and can never run — and because only
@@ -326,7 +327,7 @@ public final class Sql2WayParser {
                     }
                     String elseifCondition = terminator.argument("elseif");
                     branches.add(new SqlNode.If.Branch(
-                            ExpressionParser.parse(elseifCondition, functions),
+                            parseExpression(elseifCondition, terminator.sourceLine()),
                             elseifCondition, terminator.sourceLine(), parseBlock()));
                 }
                 case "else" -> {
@@ -386,7 +387,7 @@ public final class Sql2WayParser {
             throw error("Expected end for 'for', found '" + terminator.keyword() + "'");
         }
         pendingTerminator = null;
-        return new SqlNode.For(itemVar, listExpr, ExpressionParser.parse(listExpr, functions),
+        return new SqlNode.For(itemVar, listExpr, parseExpression(listExpr, first.sourceLine()),
                 separator, first.sourceLine(), body);
     }
 
@@ -665,6 +666,24 @@ public final class Sql2WayParser {
 
     private TqlException error(String message) {
         return TqlException.builder(PARSE_ERROR).message(message).line(line).build();
+    }
+
+    /**
+     * A directive's expression, parsed with the directive's line and its text on the failure.
+     * The expression parser knows neither, so its {@code TQL-SQL-2101} used to reach the lint
+     * and the boot as a bare sentence — a file's worth of directives to bisect by hand
+     * (docs/two-way-sql-parser.md, the open item this closes for the SQL surface).
+     */
+    private Expr parseExpression(String expression, int sourceLine) {
+        try {
+            return ExpressionParser.parse(expression, functions);
+        } catch (TqlException ex) {
+            throw TqlException.builder(ex.code())
+                    .message(ex.sentence() + " in '" + expression + "'")
+                    .line(sourceLine)
+                    .cause(ex)
+                    .build();
+        }
     }
 
     private record Directive(boolean control, boolean embedded, String content, int sourceLine) {
