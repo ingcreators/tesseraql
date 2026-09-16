@@ -116,11 +116,13 @@ response:
     view: orders.detail.view  # view source: defaults to main
 ```
 
-Every source publishes the same envelope into the execution context: `<name>.rows`,
-`<name>.rowCount`, `<name>.first` — plus `<name>.body` / `<name>.status` / `<name>.error` on the
-`http` arm. The envelope is inviolable: spooled results cannot be indexed, so `first` is the only
-head access, and metadata never needs a parallel namespace. `main` is not a slot; it is the source
-name the defaults resolve to.
+Every source publishes the same envelope into the execution context: `<name>.rows` and
+`<name>.rowCount` — plus `<name>.body` / `<name>.status` / `<name>.error` on the `http` arm.
+The envelope is inviolable: spooled results cannot be indexed, and metadata never needs a
+parallel namespace. `main` is not a slot; it is the source name the defaults resolve to. A
+job step's read and an export's model add `.first`, the head row; a route source does not
+publish it — a template reads the head row as `${main.rows[0]}`, and a `params:` entry has no
+index, so a route binds a single row by declaring the query to return one.
 
 ## Decisions — the acquisition vocabulary
 

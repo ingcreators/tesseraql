@@ -42,7 +42,10 @@ public final class FileTempStore implements TempStore {
 
     @Override
     public InputStream openInput(SpoolRef ref) throws IOException {
-        return Files.newInputStream(Paths.get(ref.uri()));
+        // The file's size rides with the stream: the edge declares it as the download's
+        // length (docs/audit-low-leads.md slice 9, XD-09b).
+        Path file = Paths.get(ref.uri());
+        return io.tesseraql.core.http.SizedBody.of(Files.newInputStream(file), Files.size(file));
     }
 
     @Override

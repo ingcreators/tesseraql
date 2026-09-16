@@ -56,6 +56,9 @@ public final class AttachmentDownloadProcessor implements Step {
         exchange.response().header(Headers.CONTENT_TYPE, contentType);
         exchange.response().header("Content-Disposition",
                 io.tesseraql.core.http.ContentDisposition.attachment(filename));
-        exchange.setBody(f.content());
+        // The size recorded at upload is the download's length (docs/audit-low-leads.md
+        // slice 9, XD-09b) on a store whose stream does not measure itself.
+        exchange.setBody(io.tesseraql.core.http.SizedBody.of(f.content(),
+                f.metadata().byteSize()));
     }
 }

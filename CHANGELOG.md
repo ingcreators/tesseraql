@@ -114,6 +114,48 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A download declares its length.** The edge framed every streamed body as chunked, which
+  HTTP/1.0 does not have: an HTTP/1.0 client — nginx to its upstream, at its default — read
+  the body to EOF, so a mid-body failure that closed the connection read as a complete file,
+  and the stack gateway, which cannot forward chunks to such a client, buffered the whole
+  body in heap first (a 300 MB export cost 560 MB). A spool, a staged database spool, a blob
+  and an attachment know their size before the first byte; the stores hand it to the edge on
+  the body (`SizedBody`), the edge writes `Content-Length` for a sized stream, a HEAD carries
+  it, and the shell's proxied transfer download forwards the member's. `hosting.md` names
+  `proxy_http_version 1.1` as the ingress setting and why. `docs/audit-low-leads.md` slice 9
+  (XD-09b, unfiled 20).
+- **A response header's name is judged, not only its value.** No writer read a header name's
+  characters, and Vert.x validates the name inside the transport, where the refusal hangs the
+  response: `"X Space": typo` under `security.responseHeaders` linted clean, booted, and hung
+  every compiled route, classpath asset and event stream; a route's own `headers:` key with a
+  space hung that route. A name that is not an RFC 9110 token is refused at lint and at boot
+  for the defaults (`TQL-SEC-4135`), at lint for a route's key (`TQL-SEC-4152`), and by the
+  edge as a 500 on the route's thread when code writes one. A default the transport owns
+  (`Content-Length`, `Connection`, `tql.*`) is refused at boot too (`TQL-SEC-4139`, the
+  lint's code) — the classpath asset writer sent it ahead of the transport's own, so a default
+  `Content-Length: 3` made every framework stylesheet three bytes long.
+  `docs/audit-low-leads.md` slice 9 (DN-02a).
+- **A `Content-Disposition` built from a placeholder is a lint warning.** A `headers:` entry
+  spelling `filename="{params.name}"` by hand is neither quoted nor encoded on the wire — a
+  quote in the value ends the name and starts a parameter, a non-ASCII name folds to `?`.
+  `TQL-SEC-4153` points at `response.file: filename:`, which does both; a literal disposition,
+  `inline` included, is left alone. `docs/audit-low-leads.md` slice 9 (DN-02c).
+- **The gateway's root redirect encodes its query.** The `Location` carried the request's
+  query verbatim; Netty accepts a DEL or C0 byte in a request-target that Vert.x refuses in a
+  header, so `GET /?a=<DEL>b` was a 502 blamed on the member, with a stack trace per request.
+  The query rides through the same encoder as the target; an authored `%XX` triplet is kept.
+  `docs/audit-low-leads.md` slice 9 (unfiled 47).
+- **An app-wide default `Cache-Control` no longer replaces an asset's or a stream's own.**
+  The static-asset and event-stream writers put the defaults after their own headers, so a
+  `Cache-Control` declared for the pages made every stylesheet and script uncacheable and
+  overwrote the stream's `no-store` — the opposite of the precedence `route-defaults.md`
+  promises. The defaults go first; the writer's own headers win by name.
+  `docs/audit-low-leads.md` slice 9 (unfiled 50).
+- **`<source>.first` is documented as what it is.** Three documents promised every route
+  source a `.first` head row; only a job step's read and an export's model publish one, and
+  the MCP prompt recipe as written rendered a null customer. The recipe reads
+  `${customer.rows[0].name}`; the envelope's sentence and the glossary say which surfaces
+  carry `.first`. `docs/audit-low-leads.md` slice 9 (unfiled 13).
 - **A refused deploy stays refused through the housekeeping that follows it.** A replace the
   host refused while a canary the intent no longer named was still up had its refusal record
   written over by the next pass's "discard applied" — so the pass after that attempted the

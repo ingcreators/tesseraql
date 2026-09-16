@@ -1501,8 +1501,8 @@ Every unfiled defect the measurement found, routed elsewhere with its destinatio
   targets the refused version and leaves `previous` null — 5a widens the refusal surface it must
   survive.
 - **HTTP edge:** GET with a form content-type through the gateway → raw 500 from `BodyHandler`;
-  HTTP/1.0 mid-body close reading as a complete file; `dev` loading manifests outside its
-  `TqlException` catch.
+  HTTP/1.0 mid-body close reading as a complete file (fixed: a download declares its length,
+  `docs/audit-low-leads.md` slice 9); `dev` loading manifests outside its `TqlException` catch.
 - **Studio backlog:** `renderExportPdf:480` builds its spec without `withFormatting`.
 - **Nowhere:** a mid-stream truncation guard — structurally impossible for exports (spool-first).
 - **5a's own vocabulary question:** whether to add `time` to the `type:` vocabulary (a schema edit)

@@ -352,6 +352,15 @@ truncated large exports mid-download. An application keeps whatever limits it de
 deployment that wants a limit in front of every application sets one at the ingress, where it can be
 tuned per route and per client.
 
+**Speak HTTP/1.1 to the upstream.** nginx forwards to its upstream over HTTP/1.0 unless
+`proxy_http_version 1.1` is set, and HTTP/1.0 has no chunked framing: a body the runtime cannot
+size is written to EOF, and the gateway, which cannot forward chunks to such a client, buffers
+that body whole in heap before answering. A download — an export, an attachment, a transfer
+file — declares its length, so it streams through the gateway and a truncated one reads as
+truncated on any version. An event stream has no length, so it needs the HTTP/1.1 hop, and
+`proxy_buffering off` (the runtime also sends `X-Accel-Buffering: no`) so frames pass through
+live. Envoy, HAProxy and the kamal-proxy path speak HTTP/1.1 upstream by default.
+
 **Forwarded headers pass through by default.** The gateway does not strip the mTLS forwarded header an
 application declares, because it cannot tell a caller's copy from the edge's without knowing which
 sources are trusted — and stripping it unconditionally destroyed the edge's own value, which made

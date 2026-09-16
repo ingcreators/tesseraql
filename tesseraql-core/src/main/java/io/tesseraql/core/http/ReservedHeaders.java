@@ -42,4 +42,33 @@ public final class ReservedHeaders {
         String lower = name.toLowerCase(Locale.ROOT);
         return TRANSPORT_OWNED.contains(lower) || lower.startsWith("tql.");
     }
+
+    /**
+     * Why {@code name} is not a header name the wire can carry, or null when it is one: an
+     * RFC 9110 token — non-empty, every character a letter, a digit or one of
+     * {@code !#$%&'*+-.^_`|~}. A space, a colon, a slash or a non-ASCII letter is not a name
+     * the transport writes; Vert.x refuses it as the header is added, inside the transport,
+     * where the refusal hangs the response instead of failing it. Every writer judges the
+     * name here first — the lint and the boot for a declared header, the edge for one written
+     * by code — where a refusal still has a status (docs/audit-low-leads.md, DN-02a).
+     */
+    public static String notAToken(String name) {
+        if (name == null || name.isEmpty()) {
+            return "is empty - a header name is a token: letters, digits and !#$%&'*+-.^_`|~";
+        }
+        for (int i = 0; i < name.length(); i++) {
+            char c = name.charAt(i);
+            if (!isTchar(c)) {
+                return "carries " + String.format("U+%04X", (int) c) + " at index " + i
+                        + " - a header name is a token: letters, digits and !#$%&'*+-.^_`|~,"
+                        + " with no space, colon or non-ASCII character";
+            }
+        }
+        return null;
+    }
+
+    private static boolean isTchar(char c) {
+        return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')
+                || "!#$%&'*+-.^_`|~".indexOf(c) >= 0;
+    }
 }

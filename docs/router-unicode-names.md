@@ -57,7 +57,11 @@ reading and by the guards below run before the fix.
    forwarded to a member stays exactly as the client sent it. ASCII is its own wire form, so
    every ASCII member compares exactly as before.
 3. **The root redirect's `Location` is wire text** (R0): `uriLiteral(rootTarget)`, the same
-   encoder every framework redirect uses; the query string rides along as before.
+   encoder every framework redirect uses; the query string rides along as before. *Amended
+   in `docs/audit-low-leads.md` slice 9 (unfiled 47): the query rides through the same encoder
+   — Netty accepts a DEL or C0 byte in a request-target that Vert.x refuses in a header, so a
+   query echoed raw was a 502 blamed on the member; an authored `%XX` triplet is kept, so a
+   well-formed query is byte-identical.*
 4. **`BasePaths.relative` strips the wire spelling of the base first, then the raw one** (R1):
    a URL read back off the request is wire text; a caller passing decoded text still strips.
 5. **`CookiePath.bind` publishes wire text** (R1): the `Path=` attribute is what the browser

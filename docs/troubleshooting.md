@@ -115,6 +115,19 @@ field the route does not declare under `input:` is `TQL-YAML-1071` when the rout
 unknown fields (the default): a request carrying the field is refused by the mass-assignment
 guard before anything binds. `1069` is a boot refusal as well; the other two are lint errors.
 
+### `TQL-SEC-4135` / `4139` / `4152` / `4153` — a response header the wire cannot carry
+
+A header name is a token — letters, digits and the punctuation `!#$%&'*+-.^_|~` or a
+backtick, nothing else — and the transport refuses any other name where the refusal hangs the
+response instead of failing it. A default under `security.responseHeaders` with a space, a colon, a trailing blank or a
+non-ASCII letter in its name is refused at lint and at boot (`TQL-SEC-4135`, the value check's
+code). One the transport owns (`Content-Length`, `Connection`, the `tql.` namespace) is
+refused the same way (`TQL-SEC-4139`). A route's own `headers:` key with such a name is
+`TQL-SEC-4152`, and the edge answers 500 rather than hanging if one reaches it.
+`TQL-SEC-4153` is a warning: a
+`Content-Disposition` whose `filename=` is built from a placeholder is neither quoted nor
+encoded on the wire — name a download with `response.file: filename:`, which is both.
+
 ### `TQL-YAML-1004` and friends — a key is refused on this recipe
 
 Keys are recipe-scoped. `notify:` is command-only, `cache:` is query-only, `refreshOn:` is not a

@@ -353,6 +353,12 @@ final class AssetRoutes implements RuntimeContext.Service {
 
     /** The response headers every asset carries, whether it is answered 200 or 304. */
     private void headers(HttpServerResponse response, String etag) {
+        // The app's security.responseHeaders: an asset is a response leaving the runtime like any
+        // other, and it is served by a hand-written surface the compiler never sees. First, so
+        // the writer's own headers below win by name — the precedence route-defaults.md
+        // promises ("route-local always wins"); written after them, an app-wide Cache-Control
+        // replaced every asset's caching policy (docs/audit-low-leads.md slice 9, unfiled 50).
+        securityHeaders().forEach(response::putHeader);
         response.putHeader("ETag", etag);
         response.putHeader("Cache-Control", "public, max-age=300");
         response.putHeader("X-Content-Type-Options", "nosniff");
@@ -360,9 +366,6 @@ final class AssetRoutes implements RuntimeContext.Service {
         // opaque-origin sandbox (allow-scripts WITHOUT allow-same-origin), and ES module loads
         // from there are CORS-gated. Assets carry no credentials or per-user data.
         response.putHeader("Access-Control-Allow-Origin", "*");
-        // The app's security.responseHeaders: an asset is a response leaving the runtime like any
-        // other, and it is served by a hand-written surface the compiler never sees.
-        securityHeaders().forEach(response::putHeader);
     }
 
     /**

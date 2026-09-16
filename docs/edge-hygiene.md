@@ -88,7 +88,16 @@ what each turned out to be.
    `ResponseHeaderDefaults.from`, so the three writers that bypass the edge's backstop are safe
    by construction rather than each taught the check. `HX-Trigger` and any map/list header
    value: `JsonWriteFeature.ESCAPE_NON_ASCII` on the header mapper, so the wire value is ASCII
-   and the toast text arrives intact.
+   and the toast text arrives intact. *Addendum 2026-09-16 (`docs/audit-low-leads.md` slice 9,
+   DN-02a): this covered the value and not the name. No writer read a header name's characters,
+   and Vert.x validates the name inside the transport, so `"X Space": typo` in the defaults
+   linted clean, booted, and hung every compiled route, every classpath asset and every stream;
+   a transport-owned default (`Content-Length`) was refused by the lint alone and sent by the
+   asset writer ahead of the transport's own. `ResponseHeaderDefaults.from` refuses both now
+   (`TQL-SEC-4135`, `TQL-SEC-4139`), the route lint refuses a non-token key (`TQL-SEC-4152`),
+   and the edge refuses one written by code on the route's thread, where it is still a 500. The
+   MCP `HttpTransport` was never a writer of `security.responseHeaders` — its headers are
+   literals and the challenge — so "three writers" was two.*
 
 ### The four, in build order
 
@@ -428,11 +437,15 @@ the protected-page row (401 where the GET gives 302). Fix — 6/6 and the differ
   slice** (`download-name-and-bytes.md` "Filed, not fixed").
 - The `headers:` `Content-Disposition` quoted-string grammar and the `?` fold of a non-ASCII
   declared name → filed; the caller injects into a header the caller receives, and `filename:`
-  is the documented spelling for a download name.
+  is the documented spelling for a download name. *A lint since `docs/audit-low-leads.md`
+  slice 9 (DN-02c, `TQL-SEC-4153`): a `filename=` built from a placeholder is pointed at
+  `response.file: filename:`; a literal disposition, `inline` included, is left alone.*
 - IDN hosts; `[`/`]` in a path → file-only.
 - `dev` manifests outside the `TqlException` catch → **slice 9** (F114).
 - A `Content-Length` on a spooled download, so an HTTP/1.0 hop sees a truncation → **a design
-  question for the export line**.
+  question for the export line**. *Answered in `docs/audit-low-leads.md` slice 9 (XD-09b): the
+  length rides on the body (`SizedBody`), the edge frames a sized stream by it, and a HEAD
+  carries it.*
 - `body.*` declared on a GET route, which E2 makes unbindable by construction → the filed lint
   (`export-declarations.md`, "lint hygiene / sweeps"). *Shipped as `TQL-YAML-1070` in
   `docs/audit-low-leads.md` slice 9, with `TQL-YAML-1071` for a `body.<name>` the route does

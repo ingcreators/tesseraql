@@ -135,14 +135,17 @@ public final class SseRoutes {
                 onConnection(connection, open -> {
                     if (!gone.get()) {
                         response.setStatusCode(200);
+                        // The app's security.responseHeaders, before the first frame: a stream
+                        // cannot be given headers by a completion hook, which is why the
+                        // response-wide mechanism the design leaned toward could not reach here.
+                        // First, so the stream's own headers win by name: written after them,
+                        // an app-wide Cache-Control replaced the stream's no-store
+                        // (docs/audit-low-leads.md slice 9, unfiled 50).
+                        securityHeaders(runtimeContext).forEach(response::putHeader);
                         response.putHeader("Content-Type", "text/event-stream; charset=utf-8");
                         response.putHeader("Cache-Control", "no-store");
                         // Buffering reverse proxies (nginx) must pass frames through live.
                         response.putHeader("X-Accel-Buffering", "no");
-                        // The app's security.responseHeaders, before the first frame: a stream
-                        // cannot be given headers by a completion hook, which is why the
-                        // response-wide mechanism the design leaned toward could not reach here.
-                        securityHeaders(runtimeContext).forEach(response::putHeader);
                         response.setChunked(true);
                     }
                 });

@@ -561,9 +561,18 @@ final class RouteEdge {
     private void stream(RoutingContext ctx, Context connection, Exchange exchange,
             InputStream body, int status, List<Map.Entry<String, String>> wire) {
         HttpServerResponse response = ctx.response();
+        // A body that measured itself — a spool, a staged database spool, a blob, an
+        // attachment — is framed by its length (docs/audit-low-leads.md slice 9, XD-09b):
+        // chunked framing does not exist on HTTP/1.0, so an HTTP/1.0 client (nginx to its
+        // upstream, at its default) read a stream to EOF and a mid-body close read as a
+        // complete file, and the stack gateway buffered the whole body to serve such a
+        // client. With the length declared a short body is a truncated one on every version,
+        // the HEAD carries the length (E4), and the gateway streams. A body nothing measured
+        // stays chunked.
+        long length = io.tesseraql.core.http.SizedBody.lengthOf(body);
         if (HeadRequests.isHead(ctx.request())) {
-            // A streamed body has no length to claim; the HEAD gets the headers alone (E4),
-            // and the body is closed unread.
+            // The HEAD gets the headers and the length the writer knows, and the body is
+            // closed unread.
             try {
                 body.close();
             } catch (IOException ignored) {
@@ -572,7 +581,7 @@ final class RouteEdge {
             connection.runOnContext(reply -> {
                 if (!response.ended()) {
                     headers(response, status, wire);
-                    HeadRequests.endWithoutBody(response, -1);
+                    HeadRequests.endWithoutBody(response, length);
                 }
             });
             return;
@@ -582,7 +591,12 @@ final class RouteEdge {
             response.closeHandler(closed -> gone.set(true));
             response.exceptionHandler(failure -> gone.set(true));
             headers(response, status, wire);
-            response.setChunked(true);
+            if (length >= 0) {
+                response.putHeader(io.vertx.core.http.HttpHeaders.CONTENT_LENGTH,
+                        Long.toString(length));
+            } else {
+                response.setChunked(true);
+            }
         });
         try (InputStream in = body) {
             byte[] chunk = new byte[CHUNK_BYTES];
@@ -681,6 +695,15 @@ final class RouteEdge {
                 LOG.warn("Route {} set response header '{}', which the transport owns;"
                         + " not sent", exchange.getFromRouteId(), name);
                 return;
+            }
+            // A name that is not a token is refused here too (docs/audit-low-leads.md slice 9,
+            // DN-02a): Vert.x refuses it as the header is added, inside runOnContext, where
+            // the refusal hung the buffered response; here it is still a 500.
+            String notAToken = ReservedHeaders.notAToken(name);
+            if (notAToken != null) {
+                throw new IllegalStateException("Response header '" + name + "' of route "
+                        + exchange.getFromRouteId() + " " + notAToken
+                        + "; refusing to write it");
             }
             for (String value : values) {
                 if (value == null) {

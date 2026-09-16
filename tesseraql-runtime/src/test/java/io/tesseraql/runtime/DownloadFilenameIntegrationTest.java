@@ -228,6 +228,89 @@ class DownloadFilenameIntegrationTest {
                         + "%E3%83%88-2026-03-31.csv");
     }
 
+    /**
+     * A download declares its length (docs/audit-low-leads.md slice 9, XD-09b): the edge
+     * framed every streamed body as chunked, which HTTP/1.0 does not have — so an HTTP/1.0
+     * client, nginx to its upstream at its default, read the body to EOF and a mid-body close
+     * read as a complete file, and the stack gateway buffered the whole body to serve such a
+     * client. A spool, a staged database spool and an attachment all know their size before
+     * the first byte, so each of the three download shapes carries {@code Content-Length} and
+     * no chunked framing; a raw HTTP/1.0 exchange on the member port sees the length too, and
+     * a HEAD carries it (E4). The attachment row catches a fix that sized exports only.
+     */
+    @Test
+    void aDownloadDeclaresItsLength() throws Exception {
+        String reader = token(List.of("USER_READ"));
+        String writer = token(List.of("USER_WRITE"));
+        String operator = token(List.of("BATCH_OPERATOR"));
+
+        // The inline query-export: the file temp store's spool.
+        HttpResponse<byte[]> export = HTTP_1_1.send(request("/api/dl/ascii", reader).build(),
+                HttpResponse.BodyHandlers.ofByteArray());
+        assertLength(export, "the inline export");
+
+        // The attachment: the blob store's object, sized by the upload's record.
+        HttpResponse<String> uploaded = upload("/reports/R-1/files", writer, "sized.pdf",
+                "%PDF-1.4 sized stub, twenty-nine bytes".getBytes(StandardCharsets.UTF_8));
+        assertThat(uploaded.statusCode()).isEqualTo(201);
+        String id = MAPPER.readTree(uploaded.body()).path("id").asText();
+        HttpResponse<byte[]> attachment = HTTP_1_1.send(
+                request("/reports/R-1/files/" + id, writer).build(),
+                HttpResponse.BodyHandlers.ofByteArray());
+        assertLength(attachment, "the attachment");
+
+        // The async export's file, served by the operations surface.
+        HttpResponse<String> run = HTTP_1_1.send(
+                request("/_tesseraql/ops/batch/jobs/user.exportNamed/run", operator)
+                        .header("Content-Type", "application/json")
+                        .POST(HttpRequest.BodyPublishers.ofString("{\"businessDate\":"
+                                + " \"2026-03-31\"}"))
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertThat(run.body()).contains("COMPLETED");
+        HttpResponse<byte[]> transfer = HTTP_1_1.send(
+                request("/_tesseraql/ops/batch/transfers/"
+                        + transferIdOf("user.exportNamed#extract") + "/file", operator).build(),
+                HttpResponse.BodyHandlers.ofByteArray());
+        assertLength(transfer, "the transfer file");
+
+        // HTTP/1.0 on the member port: the version nginx speaks upstream by default. The
+        // length is the whole framing there — without it the body is EOF-delimited.
+        String head = rawHead("GET /api/dl/ascii HTTP/1.0\r\nHost: localhost\r\n"
+                + "Authorization: Bearer " + reader + "\r\n\r\n");
+        assertThat(head).as(head).containsIgnoringCase("content-length: "
+                + export.body().length);
+        assertThat(head.toLowerCase(java.util.Locale.ROOT)).doesNotContain("transfer-encoding");
+
+        // And a HEAD carries the length the GET would have had.
+        HttpResponse<Void> headOnly = HTTP_1_1.send(request("/api/dl/ascii", reader)
+                .method("HEAD", HttpRequest.BodyPublishers.noBody()).build(),
+                HttpResponse.BodyHandlers.discarding());
+        assertThat(headOnly.statusCode()).isEqualTo(200);
+        assertThat(headOnly.headers().firstValue("content-length"))
+                .hasValue(Long.toString(export.body().length));
+    }
+
+    private static void assertLength(HttpResponse<byte[]> response, String what) {
+        assertThat(response.statusCode()).as(what).isEqualTo(200);
+        assertThat(response.body().length).as(what + " has a body").isGreaterThan(0);
+        assertThat(response.headers().firstValue("content-length")).as(what)
+                .hasValue(Long.toString(response.body().length));
+        assertThat(response.headers().firstValue("transfer-encoding")).as(what).isEmpty();
+    }
+
+    /** One raw exchange on the member port; the response head, as sent. */
+    private static String rawHead(String request) throws Exception {
+        try (java.net.Socket socket = new java.net.Socket("localhost", runtime.port())) {
+            socket.setSoTimeout(10_000);
+            socket.getOutputStream().write(request.getBytes(StandardCharsets.ISO_8859_1));
+            socket.getOutputStream().flush();
+            String text = new String(socket.getInputStream().readAllBytes(),
+                    StandardCharsets.ISO_8859_1);
+            return text.contains("\r\n\r\n") ? text.substring(0, text.indexOf("\r\n\r\n")) : text;
+        }
+    }
+
     private static String disposition(String path) throws Exception {
         HttpResponse<String> response = HTTP_1_1.send(
                 request(path, token(List.of("USER_READ"))).build(),

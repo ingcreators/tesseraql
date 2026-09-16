@@ -121,6 +121,26 @@ final class RedirectLocationApp {
                       Location: "/api/items/{params.id}"
                       X-Msg: "{params.id}"
                 """);
+        // A declared header whose NAME is not a token: the lint refuses it, the boot does
+        // not, and the edge must answer 500 rather than hang (docs/audit-low-leads.md
+        // slice 9, DN-02a).
+        route(home, "go/badname", """
+                version: tesseraql/v1
+                id: go.badname
+                kind: route
+                recipe: query-json
+                input:
+                  id:
+                    in: query
+                    type: string
+                response:
+                  json:
+                    status: 200
+                    headers:
+                      "X Typo": "{params.id}"
+                    body:
+                      ok: true
+                """);
         route(home, "go/toast", """
                 version: tesseraql/v1
                 id: go.toast

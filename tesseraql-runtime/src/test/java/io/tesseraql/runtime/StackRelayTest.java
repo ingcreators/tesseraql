@@ -782,6 +782,49 @@ class StackRelayTest {
         }
     }
 
+    /**
+     * The query the root redirect carries is wire text too (docs/audit-low-leads.md slice 9,
+     * unfiled 47): Netty accepts a DEL byte in a request-target and Vert.x refuses it in a
+     * header, so a query echoed raw landed in the catch-all as a 502 blamed on the member, with
+     * a stack trace per request. Raw sockets, because the JDK client refuses to send the byte.
+     * An authored triplet is kept — a well-formed query is byte-identical.
+     */
+    @Test
+    void theRootRedirectEncodesItsQuery() throws Exception {
+        StackRelay relay = new StackRelay(client, CATALOGUE, Map.of(), TrustedProxies.NONE,
+                appId -> originPort, () -> originPort, "/_tesseraql/portal");
+        HttpServer front = vertx.createHttpServer(StackRelay.frontOptions(0, false));
+        front.requestHandler(relay::handle);
+        int port = await(front.listen()).actualPort();
+        try {
+            String del = rawHead(port, "GET /?a=\u007Fb HTTP/1.1\r\nHost: localhost\r\n"
+                    + "Connection: close\r\n\r\n");
+            assertThat(del).startsWith("HTTP/1.1 307");
+            assertThat(del).containsIgnoringCase("location: /_tesseraql/portal?a=%7Fb");
+
+            String encoded = rawHead(port, "GET /?q=%E5%8F%97%26x=1 HTTP/1.1\r\n"
+                    + "Host: localhost\r\nConnection: close\r\n\r\n");
+            assertThat(encoded).startsWith("HTTP/1.1 307");
+            assertThat(encoded).containsIgnoringCase(
+                    "location: /_tesseraql/portal?q=%E5%8F%97%26x=1");
+        } finally {
+            await(front.close());
+        }
+    }
+
+    /** One raw exchange on {@code port}; the response head, as sent. */
+    private static String rawHead(int port, String request) throws Exception {
+        try (java.net.Socket socket = new java.net.Socket("localhost", port)) {
+            socket.setSoTimeout(10_000);
+            socket.getOutputStream().write(
+                    request.getBytes(java.nio.charset.StandardCharsets.ISO_8859_1));
+            socket.getOutputStream().flush();
+            String text = new String(socket.getInputStream().readAllBytes(),
+                    java.nio.charset.StandardCharsets.ISO_8859_1);
+            return text.contains("\r\n\r\n") ? text.substring(0, text.indexOf("\r\n\r\n")) : text;
+        }
+    }
+
     // ---------------------------------------------------------------- the origin
 
     private static void serveStub(io.vertx.core.http.HttpServerRequest request) {
