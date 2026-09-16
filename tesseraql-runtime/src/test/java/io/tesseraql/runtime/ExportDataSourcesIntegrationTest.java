@@ -349,7 +349,7 @@ class ExportDataSourcesIntegrationTest {
                     sql:
                       file: header-one.sql
                       params:
-                        order_no: params.order
+                        no: params.order
                 export:
                   format: pdf
                   filename: order.pdf
@@ -361,8 +361,9 @@ class ExportDataSourcesIntegrationTest {
                 """);
         Files.writeString(printOne.resolve("lines.sql"),
                 "select item, qty from order_lines where order_no = /* order_no */ 'x' order by item\n;\n");
+        // The header binds a name main does not declare, so its own params: are what reach it.
         Files.writeString(printOne.resolve("header-one.sql"),
-                "select order_no, customer from orders where order_no = /* order_no */ 'x'\n;\n");
+                "select order_no, customer from orders where order_no = /* no */ 'x'\n;\n");
         Files.copy(print.resolve("order.html"), printOne.resolve("order.html"));
 
         Path file = home.resolve("web/api/orders/file");
@@ -384,7 +385,7 @@ class ExportDataSourcesIntegrationTest {
                     sql:
                       file: header-one.sql
                       params:
-                        order_no: params.order
+                        no: params.order
                 export:
                   format: pdf
                   filename: order.pdf
