@@ -729,6 +729,12 @@ an individual statement is bounded by its SQL timeout, not preempted. Cancelling
 execution that is not running answers `409` with `TQL-BATCH-4042` — a finished run has
 nothing left to stop.
 
+A file transfer is an execution too, and the same flag stops it: an import at its next row,
+an export at its next row boundary — the extraction rolls back, the partial file is discarded,
+and the row reads `STOPPED` with the rows it reached ([file-transfers.md](file-transfers.md)).
+An `export:` pipeline step's transfer stopped this way fails the step, because the file the
+job would continue with was never produced.
+
 ## Observing runs
 
 Every run is persisted as an execution with its steps, visible three ways:

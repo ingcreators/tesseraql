@@ -237,6 +237,9 @@ has none from export steps any more.
   boot fails Flyway `V3__job_execution_actor.sql` (RUN twice on two fresh databases; the database
   never boots). HIGH, the documented external-scheduler flow — the batch/CLI line, its own filing.
 - A failed download's wire shape (500 `TQL-ROUTE-5000`) — P3 records the reason, P8 projects it.
+  *Neither reached it: a COMPLETED export has no failure to record. Closed by
+  docs/audit-low-leads.md slice 15 (XH-02): `download()` answers `TQL-LD-2868` (410) naming the
+  temp store, on the route and the operations console alike.*
 - `temp.store: blob` is unmeasured end to end (no object store here); `BlobTempStore.blobRef`
   keys on `ref.id()` exactly as `JdbcTempStore` does (READ `:76-79`), so the helper covers it by
   construction.
@@ -309,9 +312,14 @@ The three pinned `{key}`-last shapes and the placeholder-only shapes are unchang
 ### Filed, not fixed (from P1's measurement)
 
 - The case-insensitive-filesystem collision (`Abc` and `abc` are two entries and one file on
-  Windows or macOS; the 2857 check is case-sensitive) — filed as it was.
+  Windows or macOS; the 2857 check is case-sensitive) — filed as it was. *Closed by
+  docs/audit-low-leads.md slice 15 (decision 5): the collision map is keyed by the entry name
+  folded to one case, and a pair that folds together is refused with 2857 naming both keys.*
 - The emoji fold (`😀` → `_`, so two emoji keys collide) — `safe()`'s class is `\p{L}\p{N}`; a
-  design question for the split-export line, not this slice.
+  design question for the split-export line, not this slice. *Taken with decision 5: symbols
+  still fold to `_` and a colliding pair is refused naming both keys — never a silent rename.
+  Combining marks, which the same class folded, are kept (`\p{M}`) after NFC; reserved DOS
+  stems are prefixed.*
 - Whether `zipName` should cut at the codec's extension instead of the last dot — moot once P7's
   warning names a mismatched extension.
 
@@ -473,7 +481,10 @@ still carries no reason until P8. No test asserted the raw shapes.
   `ExportWrite` — the Studio backlog.
 - The transfer span invisible to the ops traces API (no `app` attribute) — the ops line.
 - 2831's absolute app-home path and the 2853/2855 value snippets inside a recorded reason — the
-  error-hygiene line.
+  error-hygiene line. *Measured by docs/audit-low-leads.md (XH-12): 2853 never quoted a value;
+  2855's eight-character fragment is the JDK's, reachable by no supported engine (XH-08, still
+  filed); 2831's path — and 2837's, added by P4 — closed in slice 15: both codecs spell the
+  template relative to the application home.*
 
 ---
 
@@ -886,7 +897,11 @@ keys and the sentence.
   the mitigation. *Fixed by [`edge-hygiene.md`](edge-hygiene.md) E0, measured wider: the bytes,
   the card, the cancel, through import routes too.*
 - The transfer span invisible to the ops traces API (no `app` attribute) — the ops line.
-- `rowCount` 0 on every failed export — the error-hygiene line.
+- `rowCount` 0 on every failed export — the error-hygiene line. *Measured wider by
+  docs/audit-low-leads.md (XH-26): every RUNNING export read 0 too, because the export arm
+  inherited decision 8's card and cadence but not the counter that feeds them. Closed in slice
+  15: the row source publishes the rows handed over on the import's tick through its own
+  connection; FAILED and STOPPED keep the rows reached.*
 
 ---
 

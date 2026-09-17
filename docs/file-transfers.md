@@ -30,9 +30,11 @@ caller, and a self-polling job card for a browser. The card carries its own poll
 writes the cadence the server chose, and a terminal card carries no trigger at all — which is
 how the polling stops. An id this runtime does not know is a `404` for the API and a `200`
 tombstone for the card, because a poller that receives an error keeps polling an error.
-`POST {path}/{transferId}/cancel` asks a running import to stop; the request is a flag its row
-loop reads between rows, so the stop lands at a row boundary and leaves nothing written — an
-import is one transaction, and a stop before the commit takes every applied row with it.
+`POST {path}/{transferId}/cancel` asks a running transfer to stop; the request is a flag the
+import's row loop and the export's row source read between rows, so the stop lands at a row
+boundary and leaves nothing written. An import is one transaction, and a stop before the commit
+takes every applied row with it; an export rolls its extraction back, discards the partial file,
+and records `STOPPED` with the rows it had reached.
 
 Every transfer is also tracked as a batch execution, so imports and exports show up app-scoped
 in the [operations console](ops-console.md). Being an execution, a running transfer writes the
@@ -328,15 +330,25 @@ extraction query. The start request answers `202` with the transfer URLs, and th
 subtree:
 
 - `POST {path}` → `{ "transferId": ..., "statusUrl": "{path}/{transferId}", "fileUrl": "{path}/{transferId}/file" }`
-- `GET {path}/{transferId}` — the transfer state: `status` (`RUNNING`, then `COMPLETED` or
-  `FAILED`), `rowCount`, `filename` (for a `splitBy:` export, the bundle's name), `downloaded`,
-  and `fileUrl` once completed. A `FAILED` export carries `code` — the framework's error code
-  the run recorded, such as `TQL-LD-2802` for a document that could not be written or
-  `TQL-LD-2810` for a statement that failed — and `reason`, the framework's own sentence for it.
-  The driver's text never reaches this face; it is on the execution row, behind the operations
-  API. Every URL the status carries is a wire URL, prefixed under a base path like the 202's.
+- `GET {path}/{transferId}` — the transfer state: `status` (`RUNNING`, then `COMPLETED`,
+  `FAILED` or `STOPPED`), `rowCount`, `filename` (for a `splitBy:` export, the bundle's name),
+  `downloaded`, and `fileUrl` once completed. A `FAILED` export carries `code` — the framework's
+  error code the run recorded, such as `TQL-LD-2802` for a document that could not be written
+  or `TQL-LD-2810` for a statement that failed — and `reason`, the framework's own sentence for
+  it. The driver's text never reaches this face; it is on the execution row, behind the
+  operations API. Every URL the status carries is a wire URL, prefixed under a base path like
+  the 202's.
 - `GET {path}/{transferId}/file` — streams the finished file; an unknown transfer is 404, a
-  transfer that is still running (or failed, or is an import) is 409
+  transfer that is still running (or failed, or stopped, or is an import) is 409, and a
+  completed export whose bytes this node cannot open any more is 410 (`TQL-LD-2868`)
+
+`rowCount` means, per state: while `RUNNING`, the rows handed to the codec so far, published
+every couple of seconds through a connection of its own so a poller sees it while the
+extraction's transaction is still open. On `COMPLETED` it is the rows in the file; on `FAILED`
+or `STOPPED`, the rows the run had reached when it ended (the file itself was discarded). An
+import counts applied rows instead, and records 0 whenever it rolled back. The job card's poll
+cadence backs off from two seconds to ten once the count passes five thousand, on both
+directions.
 
 Under [multi-tenancy](multi-tenancy.md) a transfer is the request's SQL: in a per-tenant
 isolation mode the extraction, the row statement and the `after:` statement run on the tenant's
@@ -511,7 +523,8 @@ queries like any other query.
 | `TQL-LD-2820` | `file-import` received an empty request body |
 | `TQL-LD-2821` | The file transfer service is not configured in this runtime |
 | `TQL-LD-2822` | Unknown transfer id (status or download) — 404 |
-| `TQL-LD-2823` | The transfer has no downloadable file yet (still running, failed, or an import) — 409 |
+| `TQL-LD-2823` | The transfer has no downloadable file yet (still running, failed, stopped, or an import) — 409 |
+| `TQL-LD-2868` | A completed export whose produced file this node cannot open — a node-local `file` temp store on a stack whose members share the transfer table, a spool an external cleaner removed. The message names the store; a rerun produces the file again — 410 |
 | `TQL-LD-2824` / `TQL-LD-2825` | Poll-driven import variants — see [connectors.md](connectors.md) |
 | `TQL-LD-2830` | PDF is output-only; `file-import` cannot read it |
 | `TQL-LD-2850` | A format that holds every row passed its `maxRows:` |
@@ -519,7 +532,7 @@ queries like any other query.
 | `TQL-LD-2852` | A placement export's rows reached template content below the data area |
 | `TQL-LD-2853` / `TQL-LD-2854` / `TQL-LD-2855` | A row value, shape or spool the re-readable row set could not carry |
 | `TQL-LD-2856` | A codec asked for a row source its streaming declaration does not match |
-| `TQL-LD-2857` | Two `splitBy:` keys name the same file once made safe for a filesystem |
+| `TQL-LD-2857` | Two `splitBy:` keys name the same file once made safe for a filesystem — the same name outright, or the same name up to case, which a case-insensitive filesystem reads as one file; the message names both keys |
 | `TQL-LD-2858` | A `splitBy:` export's `filename:` carries no `{key}` |
 | `TQL-YAML-1041` | A malformed `export:` **pipeline step** — no arm to read the rows, no format, or a `download`-timed follow-up ([the export step](jobs.md#the-export-step)) |
 

@@ -144,7 +144,7 @@ tql:
       TQL-LD-2850: The export exceeded its row cap.
       TQL-LD-2853: A value could not be spooled.
       TQL-LD-2855: The rows could not be spooled.
-      TQL-LD-2856: The workbook template could not be read.
+      TQL-LD-2856: The export asked its codec for rows in a shape the declaration did not promise.
       TQL-LD-2857: Two groups named the same file.
   session:
     expiredTitle: Session expired
@@ -164,6 +164,7 @@ tql:
     "403": Forbidden
     "404": Not Found
     "409": Conflict
+    "410": Gone
     "422": Unprocessable Entity
     "429": Too Many Requests
     "500": Internal Server Error

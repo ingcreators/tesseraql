@@ -192,6 +192,13 @@ close ordering already supports all of this — it outlives the Camel drain prec
 winding down during it keeps saying so. The same request-then-drain applies on the stack's own
 stop (the section below), because it is the same `close()`.
 
+*As built (docs/audit-low-leads.md slice 15):* the same request goes to the file-transfer
+service at drain start — a running export stops at its next row boundary and an import at its
+next tick, each recording the drain's reason as `STOPPED` — and the service's `close` then waits
+for them under the same declared bound before the pools close. Before this the transfer executor
+was shut down without waiting, so an export outliving the drain failed on a closed pool and
+stayed `RUNNING` for the reaper.
+
 **The swap leaves one race, closed rather than tolerated** (asked in review: is the handling
 graceful end to end?). The relay resolves the target port per request, so a request that
 resolved the old port just before the swap can reach the old runtime after its consumer

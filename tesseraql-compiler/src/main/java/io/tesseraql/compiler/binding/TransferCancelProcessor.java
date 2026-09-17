@@ -18,11 +18,11 @@ import java.util.Map;
  * Asks a running transfer to stop (docs/csv-import.md decision 6): {@code POST
  * {path}/{transferId}/cancel}.
  *
- * <p>Cooperative, and the answer says so. The request sets a flag the import's row loop reads
- * between rows, so this responds with the transfer's state <em>now</em> rather than with the
- * state it is about to reach — and the card the browser gets back is still a running card, which
- * keeps polling and shows the stop when it lands. Claiming "cancelled" here would be a promise
- * made by the wrong side of the boundary.
+ * <p>Cooperative, and the answer says so. The request sets a flag the import's row loop and the
+ * export's row source read between rows, so this responds with the transfer's state <em>now</em>
+ * rather than with the state it is about to reach — and the card the browser gets back is
+ * still a running card, which keeps polling and shows the stop when it lands. Claiming
+ * "cancelled" here would be a promise made by the wrong side of the boundary.
  *
  * <p>A finished run has nothing to stop, and that is not an error: the answer is the terminal
  * card, which is exactly what the caller wanted to know.

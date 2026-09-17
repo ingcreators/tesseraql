@@ -11,8 +11,9 @@ import io.tesseraql.pipeline.TesseraqlProperties;
 
 /**
  * Streams a completed export's file (design ch. 28). Unknown transfers are 404, exports that are
- * still running (or failed) are 409; the first successful fetch triggers a {@code download}-timed
- * follow-up statement.
+ * still running (or failed, or stopped) are 409, a completed export whose bytes this node cannot
+ * open is 410 (the service's own refusal); the first successful fetch triggers a
+ * {@code download}-timed follow-up statement.
  */
 public final class FileDownloadProcessor implements Step {
 
@@ -40,7 +41,7 @@ public final class FileDownloadProcessor implements Step {
         FileTransferService.Download download = transfers.download(transferId)
                 .orElseThrow(() -> new TqlException(NOT_READY,
                         "Transfer " + transferId + " has no downloadable file (not an export,"
-                                + " still running, or failed)"));
+                                + " still running, stopped, or failed)"));
         exchange.response().status(200);
         exchange.response().header(Headers.CONTENT_TYPE, download.contentType());
         exchange.response().header("Content-Disposition",

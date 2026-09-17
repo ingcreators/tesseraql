@@ -2506,6 +2506,16 @@ public final class TesseraqlRuntime implements AutoCloseable {
         // force-cut it. The force timeout stays, unchanged, as the last resort for a run that
         // ignores the flag.
         closeQuietly(() -> jobExecutor.requestDrainStop(drainReason));
+        // A running transfer is an execution too, and is asked the same way at the same moment:
+        // an export stops at its next row boundary, an import at its next tick, each recording
+        // this reason. Left alone, an export outlived the drain and failed when the pools
+        // closed under it — RUNNING for the reaper (docs/audit-low-leads.md slice 15).
+        io.tesseraql.operations.files.JdbcFileTransferService fileTransfers = runtimeContext
+                .lookup(TesseraqlProperties.FILE_TRANSFER_BEAN,
+                        io.tesseraql.operations.files.JdbcFileTransferService.class);
+        if (fileTransfers != null) {
+            closeQuietly(() -> fileTransfers.requestDrainStop(drainReason));
+        }
         // The same gesture for live streams, and for the same reason the comment above gives. A
         // stream is long-lived by design — its producer parks for twenty-five seconds at a time
         // and the stream lasts fifteen minutes — so waiting for one is not an option and the edge
@@ -2520,9 +2530,10 @@ public final class TesseraqlRuntime implements AutoCloseable {
         // nothing counts a compiled pipeline but the edge — so the edge counts its own and is
         // asked here, under the same declared bound that strategy used.
         RouteEdge edge = runtimeContext.lookup(RouteEdge.BEAN, RouteEdge.class);
+        Long declaredBound = runtimeContext.lookup(SHUTDOWN_TIMEOUT_BEAN, Long.class);
+        long bound = declaredBound == null ? 45_000L : declaredBound;
         if (edge != null) {
-            Long bound = runtimeContext.lookup(SHUTDOWN_TIMEOUT_BEAN, Long.class);
-            closeQuietly(() -> edge.drain(bound == null ? 45_000L : bound));
+            closeQuietly(() -> edge.drain(bound));
         }
         try {
             runtimeContext.close();
@@ -2535,18 +2546,15 @@ public final class TesseraqlRuntime implements AutoCloseable {
             // it down first rejects a transfer a draining route submits.
             closeQuietly(pinningSource);
             closeQuietly(otelSdk);
-            io.tesseraql.operations.files.JdbcFileTransferService fileTransfers = runtimeContext
-                    .lookup(
-                            TesseraqlProperties.FILE_TRANSFER_BEAN,
-                            io.tesseraql.operations.files.JdbcFileTransferService.class);
+            // Waits, under the declared drain bound, for the transfers asked to stop above — so
+            // a transfer's own verdict lands before the pools it needs close beneath it.
             if (fileTransfers != null) {
-                fileTransfers.close();
+                closeQuietly(() -> fileTransfers.close(java.time.Duration.ofMillis(bound)));
             }
             // The heartbeat thread outlives the drain for the same reason the tracer does: an
             // execution still finishing during the drain is still one that must say so. It closes
-            // after the transfer service, not with the job executor, because that close is
-            // executor.shutdown() and does not await — stopping the pulse first would silence
-            // route transfers that are still running.
+            // after the transfer service, whose close waits for the transfers it asked to stop
+            // — stopping the pulse first would silence route transfers that are still running.
             closeQuietly(runtimeContext.lookup(TesseraqlProperties.EXECUTION_HEARTBEATS_BEAN,
                     io.tesseraql.operations.batch.ExecutionHeartbeats.class));
             try {
