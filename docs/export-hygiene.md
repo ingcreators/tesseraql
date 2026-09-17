@@ -480,6 +480,10 @@ still carries no reason until P8. No test asserted the raw shapes.
 - Studio's export preview writes (`StudioSupport:483/515`) call the codec directly, outside
   `ExportWrite` — the Studio backlog.
 - The transfer span invisible to the ops traces API (no `app` attribute) — the ops line.
+  *Closed by docs/audit-low-leads.md slice 16 (XH-11): the span carries the request's app, and
+  the trace pages take a scope of their own (decision 4) that admits an unattributed root for
+  the wildcard reader — the console's Javadoc had promised that, and a test asserted it with
+  a predicate the scope never built.*
 - 2831's absolute app-home path and the 2853/2855 value snippets inside a recorded reason — the
   error-hygiene line. *Measured by docs/audit-low-leads.md (XH-12): 2853 never quoted a value;
   2855's eight-character fragment is the JDK's, reachable by no supported engine (XH-08, still
@@ -897,6 +901,7 @@ keys and the sentence.
   the mitigation. *Fixed by [`edge-hygiene.md`](edge-hygiene.md) E0, measured wider: the bytes,
   the card, the cancel, through import routes too.*
 - The transfer span invisible to the ops traces API (no `app` attribute) — the ops line.
+  *Closed in docs/audit-low-leads.md slice 16 (XH-11); see P3's ledger above.*
 - `rowCount` 0 on every failed export — the error-hygiene line. *Measured wider by
   docs/audit-low-leads.md (XH-26): every RUNNING export read 0 too, because the export arm
   inherited decision 8's card and cadence but not the counter that feeds them. Closed in slice

@@ -137,7 +137,7 @@ public final class StudioRuntimeExtension implements RuntimeExtension {
         // and names an endpoint + model; the api key stays a lazy config read so a
         // ${secret.*} reference resolves at call time, never at startup. The endpoint
         // must pass the same deny-by-default egress allow-list an httpCall step
-        // obeys — an off-allow-list host fails the boot (SEC 4085).
+        // obeys — an off-allow-list host fails the boot (SEC 4094).
         final io.tesseraql.studio.CopilotService copilotService = manifest.config()
                 .getString("tesseraql.copilot.enabled")
                 .map(Boolean::parseBoolean).orElse(false)

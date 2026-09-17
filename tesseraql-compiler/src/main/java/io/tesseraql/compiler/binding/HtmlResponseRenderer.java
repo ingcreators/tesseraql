@@ -109,11 +109,11 @@ public final class HtmlResponseRenderer implements Step {
         this.viewBinding = viewBinding;
         this.boundViews = boundViews;
         if (viewBinding != null && response.template() != null) {
-            throw new TqlException(new TqlErrorCode(TqlDomain.VIEW, 3302),
+            throw new TqlException(ViewBinding.UNRESOLVED_VIEW,
                     "response.html declares both template: and view: — they are mutually exclusive");
         }
         if (viewBinding != null && !boundViews.isEmpty()) {
-            throw new TqlException(new TqlErrorCode(TqlDomain.VIEW, 3302),
+            throw new TqlException(ViewBinding.UNRESOLVED_VIEW,
                     "response.html.views binds declarative parts to a template: route — a view:"
                             + " route embeds through its own document instead");
         }

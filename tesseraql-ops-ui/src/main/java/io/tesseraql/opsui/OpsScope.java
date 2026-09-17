@@ -58,6 +58,26 @@ public final class OpsScope {
     }
 
     /**
+     * The root-span filter for the trace pages (docs/audit-low-leads.md decision 4): an
+     * attributed root passes exactly as {@link #view} says, and an <em>unattributed</em> root —
+     * {@code null}, framework-internal work such as an outbound call, or a trace whose
+     * attributed root the ring has evicted — passes only for a caller holding the wildcard
+     * {@code tql.ops.view.*}.
+     *
+     * <p>Its own predicate on purpose. {@link #view} is one predicate for five tables, and its
+     * {@code app != null} is the fence the shared-database work put in front of the grant; a
+     * runtime's own in-memory spans are exactly what its console should show
+     * (docs/app-isolation-model.md decision 4), and the wildcard reader was promised the
+     * unattributed ones from the start. Admitting null here restores that promise without
+     * touching the table scope.
+     */
+    public static Predicate<String> traces(Object permissions, Set<String> servedApps) {
+        Predicate<String> attributed = view(permissions, servedApps);
+        boolean wildcard = holdsWildcard(VIEW_PREFIX, permissions);
+        return app -> app == null ? wildcard : attributed.test(app);
+    }
+
+    /**
      * The app-name filter for a caller's <em>deploy</em> authority — the deploy page's member
      * table (docs/stack-shells.md, the deploy page). Reach only: the endpoint re-checks the
      * atom against the package's declared name on every submit.
@@ -111,5 +131,11 @@ public final class OpsScope {
             return app -> true;
         }
         return app -> scoped.contains(prefix + app);
+    }
+
+    /** Whether the caller holds the terminal {@code *} under {@code prefix}. */
+    private static boolean holdsWildcard(String prefix, Object permissions) {
+        return permissions instanceof List<?> codes
+                && codes.stream().map(String::valueOf).anyMatch((prefix + "*")::equals);
     }
 }

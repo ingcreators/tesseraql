@@ -68,6 +68,10 @@ class StatusMappingLedgerTest {
             "TQL-SEC-4071", "TQL-SEC-4072", "TQL-SEC-4080", "TQL-SEC-4081", "TQL-SEC-4082",
             "TQL-SEC-4083", "TQL-SEC-4084", "TQL-SEC-4085", "TQL-SEC-4087", "TQL-SEC-4088",
             "TQL-SEC-4089", "TQL-SEC-4090", "TQL-SEC-4091", "TQL-SEC-4092", "TQL-SEC-4093",
+            // 4094: the copilot endpoint refused at boot (off the egress allow-list, or not an
+            // absolute URL) — renumbered off the FTPS lint's 4085 (docs/audit-low-leads.md
+            // slice 16).
+            "TQL-SEC-4094",
             // 4121: the boot-time invite/recovery channel refusals — split out of 4120,
             // which the renderer answers 404 for the invitation surface being absent.
             "TQL-SEC-4100", "TQL-SEC-4110", "TQL-SEC-4121",

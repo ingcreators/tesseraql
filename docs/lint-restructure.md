@@ -33,7 +33,10 @@ decided.
   `"warning"` at ~360 call sites); TQL-FIELD-2004 alone answers four distinct problems
   (a command step declaring `enrich:`, a job step declaring no work, two bindings, `chunk:`
   beside a binding). The generated error reference merges those into one row, and the
-  `ErrorCodeUniquenessTest` guard added this campaign can only police *declared constants* —
+  `ErrorCodeUniquenessTest` guard added this campaign can only police *declared constants* (and,
+  since docs/audit-low-leads.md slice 16, fully-qualified declarations and anonymous
+  `new TqlErrorCode(...)` constructions at a throw site — which found two numbers declared twice
+  and one shared by two different rules) —
   string-literal lint codes are outside its reach.
 - **Rule order is load-bearing only where tests say so.** `lint()` is a hand-ordered call
   sequence of ~35 family methods; a handful of tests assert emission order within one family,

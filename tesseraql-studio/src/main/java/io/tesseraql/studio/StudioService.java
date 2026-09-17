@@ -50,13 +50,13 @@ public final class StudioService {
 
     static final TqlErrorCode READ_ONLY = new TqlErrorCode(TqlDomain.STUDIO, 4030);
     static final TqlErrorCode NOT_FOUND = new TqlErrorCode(TqlDomain.STUDIO, 4040);
-    static final TqlErrorCode CONNECTORS = new TqlErrorCode(TqlDomain.STUDIO, 4231);
-    private static final TqlErrorCode RECORDER = new TqlErrorCode(TqlDomain.STUDIO, 4233);
+    public static final TqlErrorCode CONNECTORS = new TqlErrorCode(TqlDomain.STUDIO, 4231);
+    public static final TqlErrorCode RECORDER = new TqlErrorCode(TqlDomain.STUDIO, 4233);
     /** Capturing a baseline without a schema sidecar to copy (409). */
     private static final TqlErrorCode NO_SCHEMA = new TqlErrorCode(TqlDomain.STUDIO, 4236);
     private static final java.util.regex.Pattern SECRET_REF = java.util.regex.Pattern
             .compile("\\$\\{secret\\.[A-Za-z0-9_.-]+\\}");
-    private static final TqlErrorCode NEW_ROUTE = new TqlErrorCode(TqlDomain.STUDIO, 4224);
+    public static final TqlErrorCode NEW_ROUTE = new TqlErrorCode(TqlDomain.STUDIO, 4224);
     static final TqlErrorCode CONFLICT = new TqlErrorCode(TqlDomain.STUDIO, 4090);
     private static final Pattern LEADING_DIGITS = Pattern.compile("^\\d+");
     private static final Pattern IDENTIFIER = Pattern.compile("[A-Za-z0-9_-]+");

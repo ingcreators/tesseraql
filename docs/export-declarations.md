@@ -1508,7 +1508,8 @@ Every unfiled defect the measurement found, routed elsewhere with its destinatio
   `push.as:` (fixed as an ERROR by `export-hygiene.md` P7; the placeholder grammar is the
   runtime's since slice 13); `conditions.zone` and bad-cron unshaped boot refusals (fixed:
   `ConditionZone`, `CronExpressions`); the lint crash on a header-less document (fixed: the
-  linter loads tolerantly); TQL-YAML-1409 defined twice; the SEC-4048 (`[]`, `""`, `[""]`) and
+  linter loads tolerantly); TQL-YAML-1409 defined twice (*closed in docs/audit-low-leads.md
+  slice 16, XD-07h: the lint raises the compiler's constant*); the SEC-4048 (`[]`, `""`, `[""]`) and
   PolicyCodes lint/boot drifts (fixed: `JwtAudiences` and `PolicyCodes.shapeViolation`,
   `TQL-YAML-1412`, slice 13); the header-fed input (`RequestBinder.rawValue:348` vs
   `vertx-native.md:307` — fixed: the read is gone, a provider declares `header.<Name>`,

@@ -71,6 +71,15 @@ Spans for recent requests, with total and self time in milliseconds. Use it to f
 route is slow and which part of it is slow. The audit page links each entry to its trace,
 so a report of "this screen hung at 09:14" is one click from the span that hung.
 
+A trace is listed under the application its root span names: a route's request, a job's
+run, a file transfer's extraction or import (the transfer's span carries the application
+too, so a `tql.ops.view.<name>` holder sees their own transfers here). A root that names
+no application — the framework's own outbound work, or a trace whose attributed root the
+retention ring has already dropped — is listed for the wildcard reader (`tql.ops.view.*`)
+and for nobody else; the tables on the other pages never list an unattributed row at all.
+The error-rate and slow-span metrics on the overview count every retained span, whatever
+the reader's scope, because they describe the runtime, not one application.
+
 ## Transfers
 
 Every asynchronous file transfer: its route, direction, format, status, row count, the

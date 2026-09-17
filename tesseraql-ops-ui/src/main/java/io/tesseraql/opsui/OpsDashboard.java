@@ -173,8 +173,11 @@ public final class OpsDashboard {
      * Builds the overview with the batch executions and traces narrowed to the apps the caller may
      * operate ({@code tql.ops.view.<name>} scope); runtime-wide diagnostics (lanes,
      * slow SQL, pinning, aggregate trace metrics) stay unfiltered behind the entry permission.
+     * The traces take the caller's trace scope, which admits an unattributed root the table
+     * scope refuses (docs/audit-low-leads.md decision 4).
      */
-    public Overview overview(int recentLimit, java.util.function.Predicate<String> appFilter) {
+    public Overview overview(int recentLimit, java.util.function.Predicate<String> appFilter,
+            java.util.function.Predicate<String> traceFilter) {
         List<JobExecution> executions = jobs.listExecutions(SCAN_LIMIT).stream()
                 .filter(execution -> appFilter.test(execution.appName()))
                 .toList();
@@ -188,8 +191,13 @@ public final class OpsDashboard {
                 .toList();
         List<Alert> alerts = alerts();
         return new Overview(new BatchSummary(executions.size(), byStatus, recent),
-                laneStatuses(lanes), slowSql.recent(), traces(appFilter), traceMetrics(),
+                laneStatuses(lanes), slowSql.recent(), traces(traceFilter), traceMetrics(),
                 pinning(), !alerts.isEmpty(), alerts);
+    }
+
+    /** The overview with one scope for both: the shape before the trace scope was its own. */
+    public Overview overview(int recentLimit, java.util.function.Predicate<String> appFilter) {
+        return overview(recentLimit, appFilter, appFilter);
     }
 
     /**
@@ -410,11 +418,13 @@ public final class OpsDashboard {
     }
 
     /**
-     * The recent spans narrowed to the caller's app scope (design ch. 26.11): a span is visible
+     * The recent spans narrowed to the caller's trace scope (design ch. 26.11): a span is visible
      * when the root of its retained trace carries an {@code app} attribute the filter accepts.
      * Spans without app attribution (framework-internal work, or traces whose attributed root has
-     * been evicted from the ring) are visible only to callers the filter lets see everything
-     * ({@code tql.ops.view.*}).
+     * been evicted from the ring) reach the filter as {@code null}; {@code OpsScope.traces}
+     * admits them for the wildcard reader ({@code tql.ops.view.*}) and hides them from every
+     * per-app grant, and the table scope ({@code OpsScope.view}) hides them from everyone — the
+     * filter decides, this method does not (docs/audit-low-leads.md decision 4).
      */
     public List<SpanSample> traces(java.util.function.Predicate<String> appFilter) {
         java.util.Set<String> visible = new java.util.HashSet<>();

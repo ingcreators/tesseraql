@@ -93,6 +93,47 @@ class GeneratedReferenceTest {
         assertThat(scanned.values().stream().mapToInt(Map::size).sum()).isGreaterThan(250);
     }
 
+    /**
+     * A code named in passing is not provenance (docs/audit-low-leads.md slice 16, DN-06b): a
+     * comment explaining a neighbour, a Javadoc sentence, a printed hint. The provenance column
+     * says "the raising files", and only the meaning half of the scan had ever applied the rule
+     * — so the published reference listed {@code ErrorIndex.java} itself as a raise site of
+     * {@code TQL-LD-2810}, 110 links in all, and hid seven real raise sites behind "+N more".
+     * A bare literal handed to a lint reporter stays a raise site: that literal IS the code.
+     */
+    @Test
+    void aCodeNamedInACommentOrAPrintedHintIsNotProvenance(
+            @org.junit.jupiter.api.io.TempDir Path repo) throws IOException {
+        Path tree = Files.createDirectories(repo.resolve("m/src/main/java"));
+        Files.writeString(tree.resolve("Raiser.java"), """
+                class Raiser {
+                    static final TqlErrorCode X = new TqlErrorCode(TqlDomain.LD, 2810);
+                }
+                """);
+        Files.writeString(tree.resolve("Lint.java"), """
+                class Lint {
+                    void lint() {
+                        report("TQL-LD-2810", "the transfer service failed");
+                    }
+                }
+                """);
+        Files.writeString(tree.resolve("Neighbour.java"), """
+                /** {@code TQL-LD-2810} is raised at twenty sites; this class raises none. */
+                class Neighbour {
+                    void hint() {
+                        // the transfer service answers TQL-LD-2810 for this
+                        System.err.println("see TQL-LD-2810 for the transfer's own reason");
+                    }
+                }
+                """);
+
+        Map<String, Map<Integer, ErrorIndex.Code>> scanned = ErrorIndex.scan(repo);
+
+        assertThat(scanned.get("LD").get(2810).sources())
+                .as("the raising files, and no file that only mentions the code")
+                .containsExactly("m/src/main/java/Lint.java", "m/src/main/java/Raiser.java");
+    }
+
     @Test
     void yamlSurfaceRendersTheDocumentContract() throws IOException {
         String surface = ReferenceGenerator.yamlSurface(REPO);

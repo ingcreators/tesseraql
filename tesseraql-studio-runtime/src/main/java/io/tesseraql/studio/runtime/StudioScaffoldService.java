@@ -58,7 +58,7 @@ final class StudioScaffoldService {
             return new CatalogIntrospector().introspect(connection);
         } catch (SQLException ex) {
             throw new TqlException(INTROSPECT_ERROR,
-                    "Failed to read the database catalog: " + ex.getMessage());
+                    "Failed to read the database catalog: " + ex.getMessage(), ex);
         }
     }
 
@@ -91,7 +91,7 @@ final class StudioScaffoldService {
             return new TableIntrospector().introspect(connection, table);
         } catch (SQLException ex) {
             throw new TqlException(INTROSPECT_ERROR,
-                    "Failed to introspect table '" + table + "': " + ex.getMessage());
+                    "Failed to introspect table '" + table + "': " + ex.getMessage(), ex);
         }
     }
 }

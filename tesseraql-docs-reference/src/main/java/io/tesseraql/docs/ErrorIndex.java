@@ -51,8 +51,10 @@ final class ErrorIndex {
      * {@code TQL-ROUTE-3100}'s eight distinct refusals all published as "unknown recipe".
      */
     private static final Pattern CODE_CONSTANT = Pattern.compile(
-            "static\\s+final\\s+TqlErrorCode\\s+([A-Za-z_][A-Za-z0-9_]*)\\s*=\\s*"
-                    + "new\\s+TqlErrorCode\\(\\s*TqlDomain\\.([A-Z]+)\\s*,\\s*(\\d+)\\s*\\)");
+            "static\\s+final\\s+(?:io\\.tesseraql\\.core\\.error\\.)?TqlErrorCode\\s+"
+                    + "([A-Za-z_][A-Za-z0-9_]*)\\s*=\\s*new\\s+(?:io\\.tesseraql\\.core\\.error\\.)?"
+                    + "TqlErrorCode\\(\\s*(?:io\\.tesseraql\\.core\\.error\\.)?TqlDomain\\.([A-Z]+)"
+                    + "\\s*,\\s*(\\d+)\\s*\\)");
 
     /** The declaring types a constant's own declaration can carry, so a use is not confused. */
     private static final List<String> CONSTANT_TYPES = List.of("String", "TqlErrorCode");
@@ -280,6 +282,17 @@ final class ErrorIndex {
     private static void collect(Map<String, Map<Integer, Code>> byDomain, Matcher matcher,
             String rel, String source, Lexed lexed) {
         while (matcher.find()) {
+            if (quotedInProse(source, lexed, matcher.start(), matcher.end())
+                    || lexed.insideComment(matcher.start(), matcher.end())) {
+                // A code named in passing — a comment explaining a neighbour, a Javadoc
+                // sentence, a printed hint — is not raised here. The provenance column is "the
+                // raising files"; adding this file to it published 110 false links and pushed
+                // seven real raise sites behind "+N more" (docs/audit-low-leads.md slice 16,
+                // DN-06b). The meaning was already refused for the same reason below; the
+                // provenance half had never been given the rule. A file whose only mention is a
+                // comment therefore leaves the index for that code — correct: it never raises it.
+                continue;
+            }
             Code code = byDomain.computeIfAbsent(matcher.group(1), domain -> new TreeMap<>())
                     .computeIfAbsent(Integer.parseInt(matcher.group(2)),
                             number -> new Code(new TreeSet<>(), new TreeSet<>(), new TreeSet<>()));

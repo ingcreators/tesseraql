@@ -309,9 +309,14 @@ public final class JdbcFileTransferService implements FileTransferService {
         return this;
     }
 
-    private io.tesseraql.core.telemetry.Span span(String mode, Object sqlId) {
+    private io.tesseraql.core.telemetry.Span span(String mode, String appName, Object sqlId) {
+        // The app rides the root: a transfer runs on no request, so this span is its trace's
+        // root, and a root with no app attribution is hidden from every per-app reader of the
+        // ops traces (docs/audit-low-leads.md slice 16, XH-11) — the surface attribute existed
+        // so transfers would stop being invisible, and without the app they still were.
         return tracer.start("tesseraql.sql.execute")
                 .attribute("surface", "transfer")
+                .attribute("app", appName)
                 .attribute("mode", mode)
                 .attribute("sqlId", String.valueOf(sqlId));
     }
@@ -356,7 +361,7 @@ public final class JdbcFileTransferService implements FileTransferService {
                     "/tesseraql/db/migration/operations/V15__transfer_tenant.sql");
         } catch (SQLException ex) {
             throw new TqlException(TRANSFER_ERROR,
-                    "Failed to create file transfer schema: " + ex.getMessage());
+                    "Failed to create file transfer schema: " + ex.getMessage(), ex);
         }
     }
 
@@ -765,7 +770,7 @@ public final class JdbcFileTransferService implements FileTransferService {
             }
         } catch (SQLException ex) {
             throw new TqlException(TRANSFER_ERROR,
-                    "Failed to list file transfers: " + ex.getMessage());
+                    "Failed to list file transfers: " + ex.getMessage(), ex);
         }
         return summaries;
     }
@@ -845,7 +850,7 @@ public final class JdbcFileTransferService implements FileTransferService {
             }
         } catch (SQLException ex) {
             throw new TqlException(TRANSFER_ERROR,
-                    "Failed to list expirable transfers: " + ex.getMessage());
+                    "Failed to list expirable transfers: " + ex.getMessage(), ex);
         }
         int expired = 0;
         for (String[] transfer : due) {
@@ -967,7 +972,8 @@ public final class JdbcFileTransferService implements FileTransferService {
         // clock, because they are the same boundary — "between rows, occasionally".
         long[] nextTick = {System.nanoTime() + PROGRESS_INTERVAL_NANOS};
         boolean[] stopping = {false};
-        io.tesseraql.core.telemetry.Span span = span("import", request.rowSqlFile());
+        io.tesseraql.core.telemetry.Span span = span("import", request.appName(),
+                request.rowSqlFile());
         DataSource pool = poolOf(request.pool());
         try (Connection connection = pool.getConnection();
                 Bookkeeping books = new Bookkeeping(connection, pool);
@@ -1461,7 +1467,7 @@ public final class JdbcFileTransferService implements FileTransferService {
             statement.executeUpdate();
         } catch (SQLException ex) {
             throw new TqlException(TRANSFER_ERROR,
-                    "Failed to park the import batch: " + ex.getMessage());
+                    "Failed to park the import batch: " + ex.getMessage(), ex);
         }
     }
 
@@ -1507,7 +1513,7 @@ public final class JdbcFileTransferService implements FileTransferService {
                 }
             }
         } catch (SQLException ex) {
-            throw new TqlException(TRANSFER_ERROR, failure + ": " + ex.getMessage());
+            throw new TqlException(TRANSFER_ERROR, failure + ": " + ex.getMessage(), ex);
         }
         return batches;
     }
@@ -1529,7 +1535,7 @@ public final class JdbcFileTransferService implements FileTransferService {
             return statement.executeUpdate() == 1;
         } catch (SQLException ex) {
             throw new TqlException(TRANSFER_ERROR,
-                    "Failed to retire the import batch: " + ex.getMessage());
+                    "Failed to retire the import batch: " + ex.getMessage(), ex);
         }
     }
 
@@ -1546,7 +1552,7 @@ public final class JdbcFileTransferService implements FileTransferService {
             return statement.executeUpdate() == 1;
         } catch (SQLException ex) {
             throw new TqlException(TRANSFER_ERROR,
-                    "Failed to claim the import batch: " + ex.getMessage());
+                    "Failed to claim the import batch: " + ex.getMessage(), ex);
         }
     }
 
@@ -1579,7 +1585,7 @@ public final class JdbcFileTransferService implements FileTransferService {
             }
         } catch (SQLException ex) {
             throw new TqlException(TRANSFER_ERROR,
-                    "Failed to read the import batch: " + ex.getMessage());
+                    "Failed to read the import batch: " + ex.getMessage(), ex);
         }
     }
 
@@ -1636,7 +1642,8 @@ public final class JdbcFileTransferService implements FileTransferService {
     private void runExport(String transferId, ExportRequest request, FileCodec codec,
             String filename) {
         List<SqlNode> query = parse(request.querySqlFile());
-        io.tesseraql.core.telemetry.Span span = span("export", request.querySqlFile());
+        io.tesseraql.core.telemetry.Span span = span("export", request.appName(),
+                request.querySqlFile());
         SpoolWriter writer = null;
         boolean spoolRecorded = false;
         Observed observed = null;
@@ -1785,7 +1792,7 @@ public final class JdbcFileTransferService implements FileTransferService {
             executeUpdate(connection, SqlRenderer.render(parse(afterSqlFile), params));
         } catch (SQLException ex) {
             throw new TqlException(TRANSFER_ERROR,
-                    "Post-download statement failed: " + ex.getMessage());
+                    "Post-download statement failed: " + ex.getMessage(), ex);
         }
     }
 
@@ -1994,7 +2001,7 @@ public final class JdbcFileTransferService implements FileTransferService {
             statement.executeUpdate();
         } catch (SQLException ex) {
             throw new TqlException(TRANSFER_ERROR,
-                    "Failed to record file transfer: " + ex.getMessage());
+                    "Failed to record file transfer: " + ex.getMessage(), ex);
         }
     }
 
@@ -2038,7 +2045,7 @@ public final class JdbcFileTransferService implements FileTransferService {
             });
         } catch (SQLException ex) {
             throw new TqlException(TRANSFER_ERROR,
-                    "Failed to record the exported file: " + ex.getMessage());
+                    "Failed to record the exported file: " + ex.getMessage(), ex);
         }
     }
 
@@ -2083,7 +2090,7 @@ public final class JdbcFileTransferService implements FileTransferService {
             return statement.executeUpdate() == 1;
         } catch (SQLException ex) {
             throw new TqlException(TRANSFER_ERROR,
-                    "Failed to mark download: " + ex.getMessage());
+                    "Failed to mark download: " + ex.getMessage(), ex);
         }
     }
 
@@ -2115,7 +2122,7 @@ public final class JdbcFileTransferService implements FileTransferService {
             }
         } catch (SQLException ex) {
             throw new TqlException(TRANSFER_ERROR,
-                    "Failed to read file transfer: " + ex.getMessage());
+                    "Failed to read file transfer: " + ex.getMessage(), ex);
         }
     }
 
@@ -2130,7 +2137,7 @@ public final class JdbcFileTransferService implements FileTransferService {
             update(connection, sql, bindings);
         } catch (SQLException ex) {
             throw new TqlException(TRANSFER_ERROR,
-                    "Failed to update file transfer: " + ex.getMessage());
+                    "Failed to update file transfer: " + ex.getMessage(), ex);
         }
     }
 
@@ -2145,7 +2152,7 @@ public final class JdbcFileTransferService implements FileTransferService {
             statement.executeUpdate();
         } catch (SQLException ex) {
             throw new TqlException(TRANSFER_ERROR,
-                    "Failed to update file transfer: " + ex.getMessage());
+                    "Failed to update file transfer: " + ex.getMessage(), ex);
         }
     }
 

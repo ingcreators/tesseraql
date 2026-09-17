@@ -96,6 +96,14 @@ final class OpsActions {
     }
 
     /**
+     * The caller's trace scope: the view scope for an attributed root, and the wildcard grant's
+     * say over an unattributed one (docs/audit-low-leads.md decision 4).
+     */
+    Predicate<String> traceScope(Object permissions) {
+        return io.tesseraql.opsui.OpsScope.traces(permissions, servedApps);
+    }
+
+    /**
      * The caller's per-app <em>run</em> scope — acting, not seeing: run/cancel jobs, redeliver
      * outbox and dead-lettered events. Granted separately ({@code tql.ops.run.<name>}), so an
      * on-call reader is not an acting pen.

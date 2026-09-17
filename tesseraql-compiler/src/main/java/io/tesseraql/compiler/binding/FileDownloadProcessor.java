@@ -18,7 +18,7 @@ import io.tesseraql.pipeline.TesseraqlProperties;
 public final class FileDownloadProcessor implements Step {
 
     private static final TqlErrorCode UNKNOWN = new TqlErrorCode(TqlDomain.LD, 2822);
-    private static final TqlErrorCode NOT_READY = new TqlErrorCode(TqlDomain.LD, 2823);
+    public static final TqlErrorCode NOT_READY = new TqlErrorCode(TqlDomain.LD, 2823);
 
     private final String appName;
     private final String routeId;

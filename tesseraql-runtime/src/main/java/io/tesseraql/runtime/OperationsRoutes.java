@@ -251,7 +251,8 @@ final class OperationsRoutes {
 
         pipelines.pipeline("ops.overview")
                 .process(VIEW).process(requireAnyOpsView())
-                .process(jsonProcessor(exchange -> dashboard.overview(20, viewScope(exchange))));
+                .process(jsonProcessor(exchange -> dashboard.overview(20, viewScope(exchange),
+                        traceScope(exchange))));
 
         pipelines.pipeline("ops.lanes")
                 .process(VIEW).process(requireAnyOpsView())
@@ -264,19 +265,20 @@ final class OperationsRoutes {
 
         pipelines.pipeline("ops.traces")
                 .process(VIEW).process(requireAnyOpsView())
-                .process(jsonProcessor(exchange -> mapList(dashboard.traces(viewScope(exchange)),
+                .process(jsonProcessor(exchange -> mapList(dashboard.traces(traceScope(exchange)),
                         OperationsRoutes::spanWire)));
 
         pipelines.pipeline("ops.traceTree")
                 .process(VIEW).process(requireAnyOpsView())
-                .process(jsonProcessor(exchange -> mapList(dashboard.traceTree(viewScope(exchange)),
+                .process(jsonProcessor(exchange -> mapList(
+                        dashboard.traceTree(traceScope(exchange)),
                         OperationsRoutes::traceNodeWire)));
 
         pipelines.pipeline("ops.traceSummary")
                 .process(VIEW).process(requireAnyOpsView())
                 .process(jsonProcessor(exchange -> dashboard.traceSummaries(
                         exchange.request().param("filter"),
-                        viewScope(exchange))));
+                        traceScope(exchange))));
 
         pipelines.pipeline("ops.traceMetrics")
                 .process(VIEW).process(requireAnyOpsView())
@@ -520,6 +522,11 @@ final class OperationsRoutes {
         return actions.viewScope(permissions(exchange));
     }
 
+    /** The caller's trace scope — the view scope, plus the wildcard's say over an unattributed root. */
+    private Predicate<String> traceScope(Exchange exchange) {
+        return actions.traceScope(permissions(exchange));
+    }
+
     /** The caller's per-app run scope — acting, not seeing ({@code tql.ops.run.<name>}). */
     private Predicate<String> runScope(Exchange exchange) {
         return actions.runScope(permissions(exchange));
@@ -709,8 +716,8 @@ final class OperationsRoutes {
         if (download == null) {
             // TQL-LD-2823 (409): the transfer exists but has no downloadable file yet — the
             // same refusal a route-level download answers.
-            throw TqlException.builder(new io.tesseraql.core.error.TqlErrorCode(
-                    io.tesseraql.core.error.TqlDomain.LD, 2823))
+            throw TqlException
+                    .builder(io.tesseraql.compiler.binding.FileDownloadProcessor.NOT_READY)
                     .message("Transfer '" + id + "' has no downloadable file")
                     .build();
         }

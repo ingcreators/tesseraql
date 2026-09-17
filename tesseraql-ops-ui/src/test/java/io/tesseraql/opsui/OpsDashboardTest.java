@@ -117,6 +117,13 @@ class OpsDashboardTest {
                 .allSatisfy(summary -> assertThat(summary.slowCount()).isGreaterThan(0));
     }
 
+    /**
+     * The scopes are the ones {@code OpsScope} builds, never a hand-built predicate: the
+     * wildcard row used to pass {@code app -> true}, a predicate the scope never produced, and
+     * was green while every unattributed root was hidden from the wildcard reader too
+     * (docs/audit-low-leads.md slice 16, XH-11; decision 4 gives the trace pages their own
+     * predicate and keeps the table fence).
+     */
     @Test
     void traceViewsNarrowToTheRootSpansAppAttribution() {
         RingTracer tracer = new RingTracer(10);
@@ -130,9 +137,11 @@ class OpsDashboardTest {
         tracer.start("tesseraql.outbox.dispatch").end();
 
         OpsDashboard dashboard = new OpsDashboard(null, null, null, tracer, 200L);
+        java.util.Set<String> served = java.util.Set.of("orders", "billing");
 
         // A per-app grant sees only its own traces; unattributed spans stay hidden.
-        java.util.function.Predicate<String> ordersOnly = "orders"::equals;
+        java.util.function.Predicate<String> ordersOnly = OpsScope.traces(
+                List.of("tql.ops.view.orders"), served);
         assertThat(dashboard.traceTree(ordersOnly)).singleElement().satisfies(
                 root -> assertThat(root.span().attributes()).containsEntry("app", "orders"));
         assertThat(dashboard.traces(ordersOnly))
@@ -143,8 +152,19 @@ class OpsDashboardTest {
                 .satisfies(summary -> assertThat(summary.rootSpan()).isEqualTo("tesseraql.route"));
 
         // The wildcard scope (tql.ops.view.*) sees everything, including unattributed traces.
-        assertThat(dashboard.traceTree(app -> true)).hasSize(3);
-        assertThat(dashboard.traces(app -> true)).hasSize(5);
+        java.util.function.Predicate<String> wildcard = OpsScope.traces(
+                List.of("tql.ops.view.*"), served);
+        assertThat(dashboard.traceTree(wildcard)).as("roots under the wildcard").hasSize(3);
+        assertThat(dashboard.traces(wildcard)).hasSize(5);
+
+        // The table scope keeps its fence: the same wildcard grant, read as the tables read
+        // it, sees the two attributed roots and no unattributed one.
+        assertThat(dashboard.traceTree(OpsScope.view(List.of("tql.ops.view.*"), served)))
+                .as("roots under the table scope").hasSize(2);
+        // A root attributed to an app this runtime does not serve is nobody's, wildcard or not.
+        Span foreign = tracer.start("tesseraql.route").attribute("app", "elsewhere");
+        foreign.end();
+        assertThat(dashboard.traceTree(wildcard)).hasSize(3);
     }
 
     @Test

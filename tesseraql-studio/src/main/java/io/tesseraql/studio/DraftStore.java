@@ -26,7 +26,7 @@ import java.util.stream.Stream;
  */
 final class DraftStore {
 
-    private static final TqlErrorCode TRAVERSAL = new TqlErrorCode(TqlDomain.STUDIO, 4002);
+    static final TqlErrorCode TRAVERSAL = new TqlErrorCode(TqlDomain.STUDIO, 4002);
     private static final TqlErrorCode INVALID_DRAFT = new TqlErrorCode(TqlDomain.STUDIO, 4221);
 
     /** Compiles a draft before it is promoted ({@link StudioService#preview}). */

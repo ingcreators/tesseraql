@@ -931,7 +931,8 @@ Every unfiled defect the measurement surfaced, with its destination (the measure
   `uriLiteral(target)` on its two lines and one wire row.
 - **File-only**: `security.responseHeaders` absent on query/file-export downloads (documented
   deliberate at `docs/route-defaults.md:99-100`, #8); `ErrorIndex` indexing a literal code in a
-  comment (#9 — a slice-4 trap: refer to codes by constant name in `src/main`); the two BOM
+  comment (#9 — a slice-4 trap: refer to codes by constant name in `src/main`; *closed by
+  docs/audit-low-leads.md slice 16, DN-06b: provenance skips comments and quoted prose*); the two BOM
   sniffers (#10); the mail leg's JVM-default RFC 2231 charset (#22); `%`+HEXDIG in an ASCII
   `filename=` (RFC 6266 Appendix D's advice would move the ASCII wire); U+034F and the Hangul
   fillers (`Default_Ignorable` but neither `Cc` nor `Cf`, and Java has no API for the property);

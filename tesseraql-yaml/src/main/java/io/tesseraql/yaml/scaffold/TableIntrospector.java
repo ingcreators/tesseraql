@@ -44,7 +44,7 @@ public final class TableIntrospector {
                     foreignKeys);
         } catch (SQLException ex) {
             throw new TqlException(INTROSPECT_ERROR,
-                    "Failed to introspect table '" + tableName + "': " + ex.getMessage());
+                    "Failed to introspect table '" + tableName + "': " + ex.getMessage(), ex);
         }
     }
 

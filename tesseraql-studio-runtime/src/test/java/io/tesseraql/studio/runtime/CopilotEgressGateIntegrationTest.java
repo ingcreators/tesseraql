@@ -19,7 +19,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  * The copilot endpoint obeys the outbound egress allow-list (docs/copilot.md): every chat
  * turn ships app source to the configured endpoint, so a copilot whose endpoint host is not
  * in {@code tesseraql.http.outbound.allowedHosts} must fail the boot with
- * {@code TQL-SEC-4085} — the same deny-by-default rule an {@code http-call} step obeys,
+ * {@code TQL-SEC-4094} — the same deny-by-default rule an {@code http-call} step obeys,
  * and the same fail-fast posture as the invite config ({@code TQL-SEC-4120}).
  */
 @Testcontainers
@@ -37,7 +37,7 @@ class CopilotEgressGateIntegrationTest {
             // TqlException rather than relabeling it (docs/boot-phases.md).
             assertThatThrownBy(() -> TesseraqlRuntime.start(appHome, 0))
                     .isInstanceOf(TqlException.class)
-                    .hasMessageContaining("TQL-SEC-4085")
+                    .hasMessageContaining("TQL-SEC-4094")
                     .hasMessageContaining("Copilot endpoint host 'api.example.com'")
                     .hasMessageContaining("tesseraql.http.outbound.allowedHosts")
                     .hasMessageContaining("allowedHosts:\n        - api.example.com");
@@ -58,7 +58,7 @@ class CopilotEgressGateIntegrationTest {
         try {
             assertThatThrownBy(() -> TesseraqlRuntime.start(appHome, 0))
                     .isInstanceOf(TqlException.class)
-                    .hasMessageContaining("TQL-SEC-4085")
+                    .hasMessageContaining("TQL-SEC-4094")
                     .hasMessageContaining("api.example.com");
         } finally {
             delete(appHome);

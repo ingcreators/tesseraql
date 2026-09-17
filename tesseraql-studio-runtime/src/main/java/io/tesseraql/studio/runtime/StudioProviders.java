@@ -933,8 +933,7 @@ final class StudioProviders {
                     Map<String, Object> recordable = studio.recordability(method, path);
                     if (!Boolean.TRUE.equals(recordable.get("recordable"))) {
                         throw new io.tesseraql.core.error.TqlException(
-                                new io.tesseraql.core.error.TqlErrorCode(
-                                        io.tesseraql.core.error.TqlDomain.STUDIO, 4233),
+                                io.tesseraql.studio.StudioService.RECORDER,
                                 String.valueOf(recordable.get("reason")));
                     }
                     Map<String, String> query = parseQueryString(str(params, "query"));
@@ -1101,9 +1100,7 @@ final class StudioProviders {
                                         str(params, "tokenRef"));
                         if (token == null) {
                             throw new io.tesseraql.core.error.TqlException(
-                                    new io.tesseraql.core.error.TqlErrorCode(
-                                            io.tesseraql.core.error.TqlDomain.STUDIO,
-                                            4231),
+                                    io.tesseraql.studio.StudioService.CONNECTORS,
                                     "An outbound SCIM target needs a token secret "
                                             + "reference like ${secret.env.SCIM_TOKEN}");
                         }
@@ -1892,10 +1889,10 @@ final class StudioProviders {
                                     introspector.introspect(connection));
                         } catch (java.sql.SQLException ex) {
                             throw new io.tesseraql.core.error.TqlException(
-                                    new io.tesseraql.core.error.TqlErrorCode(
-                                            io.tesseraql.core.error.TqlDomain.APP, 5204),
+                                    io.tesseraql.yaml.scaffold.CatalogIntrospector.INTROSPECT_ERROR,
                                     "Schema introspection failed for datasource '"
-                                            + entry.getKey() + "': " + ex.getMessage());
+                                            + entry.getKey() + "': " + ex.getMessage(),
+                                    ex);
                         }
                     }
                     // refreshSchema evicts the overlay memo itself, at the write. Nothing here
@@ -1975,8 +1972,7 @@ final class StudioProviders {
                                 field.apply("table"), field.apply("columnLines"),
                                 field.apply("primaryKey"));
                         default -> throw new io.tesseraql.core.error.TqlException(
-                                new io.tesseraql.core.error.TqlErrorCode(
-                                        io.tesseraql.core.error.TqlDomain.STUDIO, 4224),
+                                io.tesseraql.studio.StudioService.NEW_ROUTE,
                                 "Unknown DDL operation: " + operation);
                     };
                     return Map.of("ddl", ddl);
