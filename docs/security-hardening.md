@@ -259,7 +259,7 @@ reviewer can check each claim against the source.
 
 | Requirement | Status | Evidence |
 | --- | --- | --- |
-| Deny-by-default egress | met | `tesseraql.http.outbound.allowedHosts` (and the copilot endpoint, `TQL-SEC-4085`); a bare `*` is rejected at admission (`TQL-ADM-4703`) |
+| Deny-by-default egress | met | `tesseraql.http.outbound.allowedHosts` (and the copilot endpoint, `TQL-SEC-4094`); a bare `*` is rejected at admission (`TQL-ADM-4703`) |
 | A hardening gate for shared apps | met | the admission profile enforces declarative-only, defined policies, bounded egress, and CSP before publish |
 | Secret hygiene in development | met | `SECURITY.md` — never commit secrets; do not bind-mount host credential directories into the Dev Container |
 | A published security policy surfaced to users | met | [`SECURITY.md`](https://github.com/ingcreators/tesseraql/blob/main/SECURITY.md) states the supported-versions policy (latest-release-only pre-1.0, tightening to a support window at 1.0), private vulnerability reporting, and dev-secret hygiene; linked from this page |

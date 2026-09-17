@@ -87,6 +87,14 @@ class ErrorCodeUniquenessTest {
             Map.entry("SQL-4091", "a foreign-key violation, mapped per surface"),
             Map.entry("WORKFLOW-3203", "the task is not assigned to the caller - HTTP 403"),
             Map.entry("WORKFLOW-3210", "the workflow feature's backing store is not configured"),
+            // One rule at two altitudes: the calendars document refused as it is parsed, and a
+            // calendar refused as it is validated - an unusable calendar declaration either way.
+            Map.entry("BATCH-4205", "a calendar declaration that cannot mean anything, refused"
+                    + " at parse or at validation"),
+            // One rule at two reads: the tenancy block as the settings read it and as the
+            // per-tenant pools read it (docs/audit-low-leads.md slice 3a, G25).
+            Map.entry("TENANT-4032", "an enabled tenancy block that cannot be honoured - a"
+                    + " resolver type or a datasource declaration the runtime cannot use"),
             Map.entry("YAML-1201", "a manifest path escapes the app home (traversal guard)"),
             Map.entry("GOV-3001", "a route needing review has no valid approval, reported by"
                     + " the CLI command and the maven goal alike"));
@@ -103,6 +111,8 @@ class ErrorCodeUniquenessTest {
                     + " (a notify: block, a pipeline step)"),
             Map.entry("FIELD-4621", "a catalog's source declaration is contradictory or"
                     + " incomplete"),
+            Map.entry("SEC-4048", "a JWT validation block declaring no audience"),
+            Map.entry("SEC-4066", "an mtls client declaring the removed untyped san: matcher"),
             Map.entry("SEC-4132", "an invalid security.defaults declaration"),
             Map.entry("VIEW-3323", "a filters: entry names an input the route does not"
                     + " declare"),
@@ -128,13 +138,30 @@ class ErrorCodeUniquenessTest {
             Map.entry("VIEW-3318", "an embedded view that embeds further"),
             Map.entry("YAML-1007", "a message catalog file is malformed"),
             Map.entry("YAML-1102", "a notification channel that is not usable - invalid where"
-                    + " it is declared, or named where it is not"),
-            Map.entry("YAML-1409", "a route policy that resolves an atom from the request but"
-                    + " cannot resolve on this route"));
+                    + " it is declared, or named where it is not"));
 
+    /** The core error package, spelled or imported: a declaration reads the same either way. */
+    private static final String FQN = "(?:io\\.tesseraql\\.core\\.error\\.)?";
+
+    /**
+     * A runtime code constant, imported or fully qualified. The qualified spelling was invisible
+     * to this guard (docs/audit-low-leads.md slice 16, unfiled 12): thirty declarations, two of
+     * them a second declaration of a number already held, a third sharing its number with a lint
+     * that means something else.
+     */
     private static final Pattern DECLARATION = Pattern.compile(
-            "TqlErrorCode\\s+([A-Z_0-9]+)\\s*=\\s*new\\s+TqlErrorCode\\(\\s*TqlDomain\\.([A-Z]+)"
-                    + "\\s*,\\s*(\\d+)\\s*\\)");
+            "TqlErrorCode\\s+([A-Z_0-9]+)\\s*=\\s*new\\s+" + FQN + "TqlErrorCode\\(\\s*" + FQN
+                    + "TqlDomain\\.([A-Z]+)\\s*,\\s*(\\d+)\\s*\\)");
+
+    /**
+     * A code constructed where it is thrown, named by nothing — the other blind spot. Each such
+     * site is a declaration of the number as much as a constant is, so it counts as one
+     * ({@code File:line}); a second spelling of a number a constant already holds is exactly
+     * the drift this guard exists to refuse, and the fix is to reference the constant.
+     */
+    private static final Pattern CONSTRUCTION = Pattern.compile(
+            "new\\s+" + FQN + "TqlErrorCode\\(\\s*" + FQN + "TqlDomain\\.([A-Z]+)\\s*,\\s*(\\d+)"
+                    + "\\s*\\)");
 
     /** A lint family's code constant: {@code static final String NAME = "TQL-DOMAIN-n"}. */
     private static final Pattern LINT_DECLARATION = Pattern.compile(
@@ -246,18 +273,47 @@ class ErrorCodeUniquenessTest {
                 .isEmpty();
     }
 
-    /** Every declaration the pattern finds, as code to {@code File#CONSTANT} sites. */
+    /**
+     * Every declaration the pattern finds, as code to {@code File#CONSTANT} sites — and, for the
+     * runtime idiom, every anonymous construction as a {@code File:line} site.
+     */
     private static Map<String, Set<String>> declarations(Pattern pattern) throws IOException {
         Map<String, Set<String>> byCode = new TreeMap<>();
         for (Path source : mainSources()) {
-            Matcher declaration = pattern.matcher(Files.readString(source));
+            String content = Files.readString(source);
+            List<int[]> declared = new java.util.ArrayList<>();
+            Matcher declaration = pattern.matcher(content);
             while (declaration.find()) {
                 String code = declaration.group(2) + "-" + declaration.group(3);
                 byCode.computeIfAbsent(code, key -> new TreeSet<>())
                         .add(source.getFileName() + "#" + declaration.group(1));
+                declared.add(new int[]{declaration.start(), declaration.end()});
+            }
+            if (pattern != DECLARATION) {
+                continue;
+            }
+            Matcher constructed = CONSTRUCTION.matcher(content);
+            while (constructed.find()) {
+                int at = constructed.start();
+                if (declared.stream().anyMatch(span -> span[0] <= at && at < span[1])) {
+                    continue;
+                }
+                String code = constructed.group(1) + "-" + constructed.group(2);
+                byCode.computeIfAbsent(code, key -> new TreeSet<>())
+                        .add(source.getFileName() + ":" + lineOf(content, at));
             }
         }
         return byCode;
+    }
+
+    private static int lineOf(String content, int offset) {
+        int line = 1;
+        for (int i = 0; i < offset; i++) {
+            if (content.charAt(i) == '\n') {
+                line++;
+            }
+        }
+        return line;
     }
 
     private static List<Path> mainSources() throws IOException {

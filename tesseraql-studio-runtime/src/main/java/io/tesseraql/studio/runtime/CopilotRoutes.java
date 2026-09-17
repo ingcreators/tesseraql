@@ -97,7 +97,7 @@ final class CopilotRoutes {
             CopilotService copilot, String member) {
         SseRoutes.register(context, pageOf(member) + "/stream", (principal, query) -> {
             if (copilot == null) {
-                throw new TqlException(new TqlErrorCode(TqlDomain.STUDIO, 4235),
+                throw new TqlException(io.tesseraql.studio.CopilotService.COPILOT,
                         "The copilot is not configured"
                                 + " (tesseraql.copilot.enabled/endpoint/model)");
             }
@@ -148,7 +148,7 @@ final class CopilotRoutes {
 
     private void requireCopilot() {
         if (copilot == null) {
-            throw new TqlException(new TqlErrorCode(TqlDomain.STUDIO, 4235),
+            throw new TqlException(io.tesseraql.studio.CopilotService.COPILOT,
                     "The copilot is not configured (tesseraql.copilot.enabled/endpoint/model)");
         }
     }

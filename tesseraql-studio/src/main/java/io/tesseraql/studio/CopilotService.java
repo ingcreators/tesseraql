@@ -32,7 +32,7 @@ import java.util.function.Supplier;
  */
 public final class CopilotService {
 
-    private static final TqlErrorCode COPILOT = new TqlErrorCode(TqlDomain.STUDIO, 4235);
+    public static final TqlErrorCode COPILOT = new TqlErrorCode(TqlDomain.STUDIO, 4235);
     private static final TqlErrorCode UNKNOWN_TURN = new TqlErrorCode(TqlDomain.STUDIO, 4040);
     private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
     private static final int MAX_CONVERSATIONS = 32;

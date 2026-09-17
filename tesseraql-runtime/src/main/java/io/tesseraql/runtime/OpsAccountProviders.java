@@ -138,7 +138,8 @@ final class OpsAccountProviders {
                 .register("ops.overview",
                         params -> io.tesseraql.opsui.OpsViews.overview(
                                 deps.opsDashboard().overview(20,
-                                        deps.opsActions().viewScope(params.get("permissions"))),
+                                        deps.opsActions().viewScope(params.get("permissions")),
+                                        deps.opsActions().traceScope(params.get("permissions"))),
                                 deps.opsDashboard().health(),
                                 io.tesseraql.core.TesseraqlVersion.current()))
                 // The audit page is always mounted; the provider owns the honest
@@ -158,7 +159,7 @@ final class OpsAccountProviders {
                                 deps.routeAuditStore() != null))
                 .register("ops.traces",
                         params -> io.tesseraql.opsui.OpsViews.traces(deps.opsDashboard().traceTree(
-                                deps.opsActions().viewScope(params.get("permissions")))))
+                                deps.opsActions().traceScope(params.get("permissions")))))
                 .register("ops.transfers", params -> {
                     java.util.function.Predicate<String> scope = deps.opsActions()
                             .viewScope(params.get("permissions"));

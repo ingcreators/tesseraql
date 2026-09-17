@@ -195,18 +195,72 @@ class SlowSqlIntegrationTest {
         assertThat(MAPPER.readTree(slowOnly.body())).isNotEmpty();
     }
 
+    /**
+     * A transfer's span carries its app (docs/audit-low-leads.md slice 16, XH-11): the span the
+     * transfer service starts is its trace's root — a transfer runs on no request — and a root
+     * with no {@code app} attribute is invisible to every per-app reader of the traces API, so
+     * the {@code surface=transfer} span existed and no {@code tql.ops.view.<app>} holder could
+     * list it. Asserted under the per-app grant, the one the attribute decides. (The copied
+     * example keeps its own name, {@code user-admin}, in {@code config/tesseraql.yml}.)
+     */
+    @Test
+    void aTransferSpanIsListedUnderThePerAppViewGrant() throws Exception {
+        HttpResponse<String> started = HttpClient.newHttpClient().send(
+                HttpRequest.newBuilder(URI.create(
+                        "http://localhost:" + runtime.port() + "/api/export"))
+                        .POST(HttpRequest.BodyPublishers.noBody()).build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertThat(started.statusCode()).isEqualTo(202);
+        String transferId = MAPPER.readTree(started.body()).get("transferId").asText();
+        java.time.Instant deadline = java.time.Instant.now().plusSeconds(20);
+        while (true) {
+            JsonNode status = MAPPER.readTree(HttpClient.newHttpClient().send(
+                    HttpRequest.newBuilder(URI.create("http://localhost:" + runtime.port()
+                            + "/api/export/" + transferId)).build(),
+                    HttpResponse.BodyHandlers.ofString()).body());
+            if (!"RUNNING".equals(status.get("status").asText())) {
+                assertThat(status.get("status").asText()).isEqualTo("COMPLETED");
+                break;
+            }
+            assertThat(java.time.Instant.now()).isBefore(deadline);
+            Thread.sleep(100);
+        }
+
+        HttpResponse<String> traces = HttpClient.newHttpClient().send(
+                HttpRequest.newBuilder(URI.create(
+                        "http://localhost:" + runtime.port() + "/_tesseraql/ops/traces"))
+                        .header("Authorization", "Bearer "
+                                + token(List.of("BATCH_OPERATOR"),
+                                        List.of("tql.ops.view.user-admin")))
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertThat(traces.statusCode()).isEqualTo(200);
+        assertThat(MAPPER.readTree(traces.body()))
+                .as("the transfer's span under tql.ops.view.user-admin")
+                .anySatisfy(span -> {
+                    assertThat(span.get("attributes").path("surface").asText())
+                            .isEqualTo("transfer");
+                    assertThat(span.get("attributes").path("app").asText())
+                            .isEqualTo("user-admin");
+                });
+    }
+
     private static String token() throws Exception {
         return token(List.of("BATCH_OPERATOR"));
     }
 
     private static String token(List<String> roles) throws Exception {
+        // tql.ops.view.* keeps full trace visibility under the per-app scope.
+        return token(roles, List.of("tql.ops.view.*"));
+    }
+
+    private static String token(List<String> roles, List<String> permissions) throws Exception {
         Base64.Encoder encoder = Base64.getUrlEncoder().withoutPadding();
         String header = encoder
                 .encodeToString("{\"alg\":\"HS256\"}".getBytes(StandardCharsets.UTF_8));
-        // tql.ops.view.* keeps full trace visibility under the per-app scope.
         String payload = encoder
                 .encodeToString(MAPPER.writeValueAsBytes(TestClaims.addressed(Map.of(
-                        "sub", "ops", "roles", roles, "permissions", List.of("tql.ops.view.*")))));
+                        "sub", "ops", "roles", roles, "permissions", permissions))));
         Mac mac = Mac.getInstance("HmacSHA256");
         mac.init(new SecretKeySpec(
                 "dev-only-secret-change-me-in-production".getBytes(StandardCharsets.UTF_8),
@@ -286,6 +340,26 @@ class SlowSqlIntegrationTest {
                       data: main.rows
                 """);
         Files.writeString(secureDir.resolve("secure.sql"), "select 1 as ok\n");
+
+        // A public file-export route: its run is a transfer, and its span a root of its own.
+        Path exportDir = target.resolve("web/api/export");
+        Files.createDirectories(exportDir);
+        Files.writeString(exportDir.resolve("post.yml"), """
+                version: tesseraql/v1
+                id: export
+                kind: route
+                recipe: file-export
+                security:
+                  auth: public
+                export:
+                  format: csv
+                  filename: ok.csv
+                sources:
+                  main:
+                    sql:
+                      file: export.sql
+                """);
+        Files.writeString(exportDir.resolve("export.sql"), "select 1 as ok\n;\n");
         return target;
     }
 

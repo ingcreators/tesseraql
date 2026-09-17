@@ -72,7 +72,7 @@ public final class RetentionSweeper {
             // has lapsed - before this, a key never re-presented lived forever.
             idempotency = deleteExpiredIdempotency(connection, now);
         } catch (SQLException ex) {
-            throw new TqlException(SWEEP_ERROR, "Retention sweep failed: " + ex.getMessage());
+            throw new TqlException(SWEEP_ERROR, "Retention sweep failed: " + ex.getMessage(), ex);
         }
         int attachments = attachmentRetention == null
                 ? 0

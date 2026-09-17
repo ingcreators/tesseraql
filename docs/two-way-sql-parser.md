@@ -564,6 +564,8 @@ Recorded as they were hit, so the next slice does not re-learn them.
    reference row for a code that did not exist yet, with an em-dash meaning. A javadoc on the lint
    that mentioned `TQL-SQL-2118` added `DocumentRules.java` to that code's provenance, where the
    renderer is the only thing that raises it. Describe the other code; do not spell it.
+   *The provenance half of this trap closed in docs/audit-low-leads.md slice 16 (DN-06b): a
+   comment no longer lands its file in "Raised in". The Meaning column's rule still holds.*
 2. **A slice that changes a record's shape needs a `clean` before its build is believable**, and a
    slice rebased onto another slice of the same campaign needs the full verify run again — both
    parser slices edited the same file in different regions and merged without a textual conflict.

@@ -170,9 +170,10 @@ that this site deliberately avoids `copyOf`. Two consequences, and both are trap
 
 So the scanner lexes out comments first and matches code only. This is the same shape as the
 `ErrorIndex` trap the 2-way SQL parser campaign recorded, arriving from the other direction — and
-that trap is still live at HEAD rather than historical. `ErrorIndex` lexes comments for the meaning
-column, but `collect` adds provenance unconditionally. So a `TQL-*` code named in a comment in a
-new file still lands that file on the generated page and forces a regeneration.
+that trap was still live at HEAD rather than historical. `ErrorIndex` lexed comments for the
+meaning column, but `collect` added provenance unconditionally. So a `TQL-*` code named in a
+comment in a new file still landed that file on the generated page and forced a regeneration.
+*Closed by docs/audit-low-leads.md slice 16 (DN-06b): provenance skips comments and prose too.*
 
 Slice 2 re-measured the count and it is **three, not four**, and only under a matcher that drops
 the trailing parenthesis (`McpServer`, `ReportDoc`, `LintContext`). Under the census pattern as

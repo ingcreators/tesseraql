@@ -41,7 +41,7 @@ public final class ErrorResponseRenderer implements Step {
      * TQL-ROUTE-5000: an unexpected internal error — the failure carried no TesseraQL error
      * code (HTTP 500).
      */
-    private static final TqlErrorCode INTERNAL_ERROR = new TqlErrorCode(TqlDomain.ROUTE, 5000);
+    public static final TqlErrorCode INTERNAL_ERROR = new TqlErrorCode(TqlDomain.ROUTE, 5000);
 
     private final ObjectMapper mapper = io.tesseraql.yaml.JsonMappers.constrained();
     private final I18nSettings i18n;
@@ -573,13 +573,14 @@ public final class ErrorResponseRenderer implements Step {
                 // 4230/4231/4233/4234: route-form / connector / recorder / row-edit input
                 // rejected (Phase 43 Track J); 4237: a decision-rows grid save that cannot
                 // reach the decision compile (wrong target / malformed grid)
-                // 4241: a menu edit naming an index the menu does not have
+                // 4241: a menu edit naming an index the menu does not have; 4244: one whose
+                // index is not a number; 4004: a Studio request missing a parameter
                 // 4003/4222: a caller-crafted path or template escaping the app home;
                 // 4225-4229, 4238/4239, 4243: overlay/calendar/job-policy/migration edits
                 // that cannot mean anything; 4240: an unknown wizard name. All the caller's
                 // input — the status ledger's audit found them reading Internal Server Error.
-                case 4002, 4003, 4222, 4224, 4225, 4226, 4227, 4228, 4229, 4230, 4231, 4233,
-                        4234, 4237, 4238, 4239, 4240, 4241, 4243 ->
+                case 4002, 4003, 4004, 4222, 4224, 4225, 4226, 4227, 4228, 4229, 4230, 4231,
+                        4233, 4234, 4237, 4238, 4239, 4240, 4241, 4243, 4244 ->
                     400;
                 case 4030, 4031 -> 403; // the library's read-only refusals (McpDevTools instances)
                 // 4043: unknown workshop member — or out of the caller's tql.studio.edit

@@ -729,7 +729,7 @@ public final class MultiAppHost implements AutoCloseable, StackReconciler.HostOp
                     + " rather than with any application: place the jar where this distribution"
                     + " reads one — lib/ in the container image, lib/ext/ beside the launcher, or"
                     + " a path in TESSERAQL_CLASSPATH — and start again. 'tesseraql modules fetch"
-                    + " --stack' collects what the declaration names.");
+                    + " --stack' collects what the declaration names.", noDriver);
         }
     }
 

@@ -179,7 +179,7 @@ lets a job's `http:` step complete it.
 All outbound HTTP is governed by `tesseraql.http.outbound`. Egress is **deny by default**: a
 call may only target a host in `allowedHosts`, so a step can never reach an arbitrary URL.
 The same allow-list gates the [Studio copilot](copilot.md) endpoint — a configured copilot
-whose endpoint host is not allow-listed fails the boot with `TQL-SEC-4085`.
+whose endpoint host is not allow-listed fails the boot with `TQL-SEC-4094`.
 
 ```yaml
 tesseraql:

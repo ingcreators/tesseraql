@@ -34,8 +34,6 @@ final class RouteRules implements LintRule {
 
     private static final String INVALID_INPUT_POLICY = "TQL-FIELD-2006";
 
-    private static final String POLICY_TEMPLATE_UNRESOLVABLE = "TQL-YAML-1409";
-
     /** The run's memoized IO and cross-rule state, set at the top of {@link #lint}. */
     private LintContext context;
 
@@ -202,8 +200,13 @@ final class RouteRules implements LintRule {
             String templateViolation = io.tesseraql.yaml.app.PolicyCodes.templateViolation(
                     definition.security().policy(), pathParams(route.urlPath()));
             if (templateViolation != null) {
-                findings.add(new LintFinding(POLICY_TEMPLATE_UNRESOLVABLE, ERROR, source,
-                        templateViolation, context.lineOf(route.source(), "policy:"), null));
+                // The code is the compiler's own, spelled once (docs/audit-low-leads.md slice
+                // 16, XD-07h): a string twin here shared the number by an allow-list entry and
+                // nothing else, the way the sibling 1406 never did.
+                findings.add(new LintFinding(
+                        io.tesseraql.yaml.app.PolicyCodes.TEMPLATE_UNRESOLVABLE.toString(), ERROR,
+                        source, templateViolation, context.lineOf(route.source(), "policy:"),
+                        null));
             } else if (!DocumentRules.policyDefined(config, definition.security().policy())) {
                 findings.add(new LintFinding(LintCodes.UNDEFINED_POLICY, WARNING, source,
                         "Route references undefined policy '" + definition.security().policy()

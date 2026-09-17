@@ -24,6 +24,22 @@ final class StudioSupport {
     static final Logger LOG = LoggerFactory.getLogger(StudioSupport.class);
 
     /**
+     * TQL-SEC-4094: the copilot endpoint is not an absolute http(s) URL, or its host is outside
+     * the egress allow-list — a boot refusal.
+     */
+    // It shared 4085 with the FTPS trust-store lint until docs/audit-low-leads.md slice 16
+    // widened the uniqueness guard's sight to inline constructions; two rules, one number,
+    // renumbered here as the newer of the two.
+    static final io.tesseraql.core.error.TqlErrorCode COPILOT_ENDPOINT_REFUSED = new io.tesseraql.core.error.TqlErrorCode(
+            io.tesseraql.core.error.TqlDomain.SEC, 4094);
+
+    /** TQL-STUDIO-4244: a menu edit whose index is not a number at all (HTTP 400). */
+    // Apart from 4241's index that names no item; it borrowed 4241's number by an inline
+    // construction until docs/audit-low-leads.md slice 16.
+    static final io.tesseraql.core.error.TqlErrorCode MENU_INDEX_NOT_A_NUMBER = new io.tesseraql.core.error.TqlErrorCode(
+            io.tesseraql.core.error.TqlDomain.STUDIO, 4244);
+
+    /**
      * TQL-STUDIO-4234: the data-browser row edit was rejected — editor disabled, unknown
      * table, no row matches the key, or the update failed (HTTP 400).
      */
@@ -270,7 +286,7 @@ final class StudioSupport {
      * The configured copilot endpoint, gated by the same deny-by-default egress allow-list an
      * {@code httpCall} step obeys (docs/copilot.md): every turn ships app source to this
      * endpoint, so a host outside {@code tesseraql.http.outbound.allowedHosts} fails the boot
-     * with {@code TQL-SEC-4085} — a chat must never become the one outbound call the egress
+     * with {@code TQL-SEC-4094} — a chat must never become the one outbound call the egress
      * policy does not govern.
      */
     static String copilotEndpoint(io.tesseraql.yaml.config.AppConfig config,
@@ -284,15 +300,13 @@ final class StudioSupport {
         }
         if (host == null) {
             throw new io.tesseraql.core.error.TqlException(
-                    new io.tesseraql.core.error.TqlErrorCode(
-                            io.tesseraql.core.error.TqlDomain.SEC, 4085),
+                    COPILOT_ENDPOINT_REFUSED,
                     "tesseraql.copilot.endpoint '" + endpoint
                             + "' must be an absolute http or https URL");
         }
         if (!outbound.isHostAllowed(host)) {
             throw new io.tesseraql.core.error.TqlException(
-                    new io.tesseraql.core.error.TqlErrorCode(
-                            io.tesseraql.core.error.TqlDomain.SEC, 4085),
+                    COPILOT_ENDPOINT_REFUSED,
                     "Copilot endpoint host '" + host
                             + "' is not in tesseraql.http.outbound.allowedHosts (egress is"
                             + " deny by default); allow it:\n"
@@ -309,8 +323,7 @@ final class StudioSupport {
     static void requireCopilot(io.tesseraql.studio.CopilotService copilot) {
         if (copilot == null) {
             throw new io.tesseraql.core.error.TqlException(
-                    new io.tesseraql.core.error.TqlErrorCode(
-                            io.tesseraql.core.error.TqlDomain.STUDIO, 4235),
+                    io.tesseraql.studio.CopilotService.COPILOT,
                     "The copilot is not configured (tesseraql.copilot.enabled/endpoint/"
                             + "model)");
         }
@@ -320,8 +333,7 @@ final class StudioSupport {
         String value = str(params, key);
         if (value == null || value.isBlank()) {
             throw new io.tesseraql.core.error.TqlException(
-                    new io.tesseraql.core.error.TqlErrorCode(
-                            io.tesseraql.core.error.TqlDomain.STUDIO, 4231),
+                    io.tesseraql.studio.StudioService.CONNECTORS,
                     "Missing required field: " + key);
         }
         return value.trim();
@@ -409,9 +421,7 @@ final class StudioSupport {
         try {
             return Integer.parseInt(String.valueOf(value).strip());
         } catch (NumberFormatException ex) {
-            throw new io.tesseraql.core.error.TqlException(
-                    new io.tesseraql.core.error.TqlErrorCode(
-                            io.tesseraql.core.error.TqlDomain.STUDIO, 4241),
+            throw new io.tesseraql.core.error.TqlException(MENU_INDEX_NOT_A_NUMBER,
                     "Menu index '" + value + "' is not a number");
         }
     }

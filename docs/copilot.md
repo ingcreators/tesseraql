@@ -39,7 +39,7 @@ and the API key rides as a bearer header. The
 [outbound egress allow-list](connectors.md) **applies**: the endpoint's host must be in
 `tesseraql.http.outbound.allowedHosts` — egress is deny by default, exactly as for an
 `http:` step — and a configured copilot whose host is not allow-listed fails the
-boot with `TQL-SEC-4085`, an error that names the host and the YAML to add. Configuring
+boot with `TQL-SEC-4094`, an error that names the host and the YAML to add. Configuring
 `tesseraql.copilot.endpoint` alone is deliberately not enough: allow-listing the host is
 the second, explicit authorization to ship your app's source there.
 

@@ -30,6 +30,12 @@ final class StudioRoutes {
 
     private static final AuthStep AUTH = new AuthStep("authenticate", "bearer", null, null);
 
+    /** TQL-STUDIO-4004: a Studio request without a parameter its verb requires (HTTP 400). */
+    // It borrowed 4002's number - the draft path traversal - by an inline construction until
+    // docs/audit-low-leads.md slice 16, when the uniqueness guard learned to see one.
+    private static final io.tesseraql.core.error.TqlErrorCode MISSING_PARAMETER = new io.tesseraql.core.error.TqlErrorCode(
+            io.tesseraql.core.error.TqlDomain.STUDIO, 4004);
+
     private final ObjectMapper mapper = io.tesseraql.yaml.JsonMappers.constrained();
     private final StudioService studio;
     private final RouteReloader reloader;
@@ -234,9 +240,7 @@ final class StudioRoutes {
     private static String require(Exchange exchange, String name) {
         String value = exchange.request().param(name);
         if (value == null || value.isBlank()) {
-            throw new io.tesseraql.core.error.TqlException(
-                    new io.tesseraql.core.error.TqlErrorCode(
-                            io.tesseraql.core.error.TqlDomain.STUDIO, 4002),
+            throw new io.tesseraql.core.error.TqlException(MISSING_PARAMETER,
                     "Missing '" + name + "' parameter");
         }
         return value;

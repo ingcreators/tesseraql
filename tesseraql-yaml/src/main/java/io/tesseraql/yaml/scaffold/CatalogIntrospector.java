@@ -26,7 +26,7 @@ import java.util.TreeMap;
  */
 public final class CatalogIntrospector {
 
-    private static final TqlErrorCode INTROSPECT_ERROR = new TqlErrorCode(TqlDomain.APP, 5204);
+    public static final TqlErrorCode INTROSPECT_ERROR = new TqlErrorCode(TqlDomain.APP, 5204);
 
     /** Introspects the catalog reachable through {@code connection}'s current schema. */
     public CatalogSchema introspect(Connection connection) {
@@ -43,7 +43,7 @@ public final class CatalogIntrospector {
             return new CatalogSchema(tables);
         } catch (SQLException ex) {
             throw new TqlException(INTROSPECT_ERROR,
-                    "Failed to introspect database catalog: " + ex.getMessage());
+                    "Failed to introspect database catalog: " + ex.getMessage(), ex);
         }
     }
 

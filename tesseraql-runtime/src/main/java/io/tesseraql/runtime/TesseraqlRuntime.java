@@ -40,6 +40,12 @@ public final class TesseraqlRuntime implements AutoCloseable {
     static final Logger LOG = LoggerFactory.getLogger(TesseraqlRuntime.class);
     private static final io.tesseraql.core.outbox.OutboxEventSink LOGGING_SINK = event -> LOG
             .info("Outbox delivered {} {}", event.eventType(), event.id());
+    /** TQL-SEC-4121: an identity mail flow (invite, recovery) declared without its channel or url, or on a channel that is not mail. */
+    private static final io.tesseraql.core.error.TqlErrorCode IDENTITY_MAIL_MISDECLARED = new io.tesseraql.core.error.TqlErrorCode(
+            io.tesseraql.core.error.TqlDomain.SEC, 4121);
+    /** TQL-MCP-4262: tesseraql.mcp.auth names a gate the transport cannot serve. */
+    private static final io.tesseraql.core.error.TqlErrorCode MCP_AUTH_UNSERVABLE = new io.tesseraql.core.error.TqlErrorCode(
+            io.tesseraql.core.error.TqlDomain.MCP, 4262);
     private static final io.tesseraql.core.error.TqlErrorCode DUPLICATE_JOB = new io.tesseraql.core.error.TqlErrorCode(
             io.tesseraql.core.error.TqlDomain.APP, 4202);
     /** TQL-YAML-1112: a declared HTTP thread count that is not a positive integer. */
@@ -1285,15 +1291,13 @@ public final class TesseraqlRuntime implements AutoCloseable {
             if (inviteUrl != null || inviteChannel != null) {
                 if (inviteUrl == null || inviteChannel == null) {
                     throw new io.tesseraql.core.error.TqlException(
-                            new io.tesseraql.core.error.TqlErrorCode(
-                                    io.tesseraql.core.error.TqlDomain.SEC, 4121),
+                            IDENTITY_MAIL_MISDECLARED,
                             "tesseraql.identity.invite needs BOTH channel: and url:");
                 }
                 if (!io.tesseraql.yaml.notify.NotificationChannels.MAIL.equals(
                         notificationChannels.require(inviteChannel).type())) {
                     throw new io.tesseraql.core.error.TqlException(
-                            new io.tesseraql.core.error.TqlErrorCode(
-                                    io.tesseraql.core.error.TqlDomain.SEC, 4121),
+                            IDENTITY_MAIL_MISDECLARED,
                             "Invite channel '" + inviteChannel + "' must be type mail");
                 }
                 inviteEnabled = true;
@@ -1506,8 +1510,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 if ("bearer".equals(mcpAuth)) {
                     if (security.jwt() == null) {
                         throw new io.tesseraql.core.error.TqlException(
-                                new io.tesseraql.core.error.TqlErrorCode(
-                                        io.tesseraql.core.error.TqlDomain.MCP, 4262),
+                                MCP_AUTH_UNSERVABLE,
                                 "tesseraql.mcp.auth is bearer, but no JWT validation is"
                                         + " configured — the gate has nothing to verify a"
                                         + " token against");
@@ -1526,8 +1529,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     }
                 } else if (!"public".equals(mcpAuth)) {
                     throw new io.tesseraql.core.error.TqlException(
-                            new io.tesseraql.core.error.TqlErrorCode(
-                                    io.tesseraql.core.error.TqlDomain.MCP, 4262),
+                            MCP_AUTH_UNSERVABLE,
                             "tesseraql.mcp.auth '" + mcpAuth + "' is not served at the"
                                     + " transport gate yet — public and bearer are; the"
                                     + " per-primitive auth:/policy: continue underneath"
@@ -1888,21 +1890,18 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 recoveryChannel = manifest.config()
                         .getString("tesseraql.identity.recovery.channel")
                         .orElseThrow(() -> new io.tesseraql.core.error.TqlException(
-                                new io.tesseraql.core.error.TqlErrorCode(
-                                        io.tesseraql.core.error.TqlDomain.SEC, 4121),
+                                IDENTITY_MAIL_MISDECLARED,
                                 "tesseraql.identity.recovery.enabled needs a channel:"));
                 if (!io.tesseraql.yaml.notify.NotificationChannels.MAIL.equals(
                         notificationChannels.require(recoveryChannel).type())) {
                     throw new io.tesseraql.core.error.TqlException(
-                            new io.tesseraql.core.error.TqlErrorCode(
-                                    io.tesseraql.core.error.TqlDomain.SEC, 4121),
+                            IDENTITY_MAIL_MISDECLARED,
                             "Recovery channel '" + recoveryChannel + "' must be type mail");
                 }
                 recoveryUrl = manifest.config()
                         .getString("tesseraql.identity.recovery.url")
                         .orElseThrow(() -> new io.tesseraql.core.error.TqlException(
-                                new io.tesseraql.core.error.TqlErrorCode(
-                                        io.tesseraql.core.error.TqlDomain.SEC, 4121),
+                                IDENTITY_MAIL_MISDECLARED,
                                 "tesseraql.identity.recovery.enabled needs a url:"));
             }
             if (recoveryEnabled || inviteEnabled) {

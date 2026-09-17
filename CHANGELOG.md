@@ -72,6 +72,27 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **Three error codes renumbered or split where one number meant two things.** The copilot
+  endpoint refusal (not an absolute URL, or a host outside the egress allow-list) is
+  `TQL-SEC-4094`; it shared `TQL-SEC-4085` with the FTPS trust-store lint. A Studio request
+  missing a parameter is `TQL-STUDIO-4004` (it borrowed the draft-path traversal's 4002), and
+  a menu edit whose index is not a number is `TQL-STUDIO-4244` (it borrowed 4241's "names no
+  item"). All three were anonymous `new TqlErrorCode(...)` constructions at the throw site,
+  which the uniqueness guard could not see; it sees them now, together with fully-qualified
+  declarations (`docs/audit-low-leads.md` slice 16, unfiled 12).
+- **The error-code reference's "Raised in" column lists raising files only.** A code named in
+  a comment, a Javadoc sentence or a printed hint no longer puts that file in the column: 97
+  codes lose 110 links that were never raise sites and seven regain a raise site the false
+  links had pushed behind "+N more". A code mentioned only in comments leaves the index (none
+  did). (DN-06b)
+- **The operations traces take a scope of their own.** A trace whose root names no
+  application — the framework's own outbound work, or a trace whose attributed root the ring
+  has dropped — is listed for the `tql.ops.view.*` reader and hidden from every per-app grant;
+  the tables' scope keeps its fence and lists no unattributed row at all
+  (`docs/audit-low-leads.md` decision 4). The console's documentation had promised the
+  wildcard reader those traces since the ops surface was built; the shared-database fence
+  removed them silently.
+
 - **A split export refuses two keys that are one file on a case-insensitive filesystem.**
   `TQL-LD-2857` now fires for group keys whose entry names differ only by case (`Abc` and
   `abc`), naming both keys, where it fired only for the exact collision and let Windows ask
@@ -302,6 +323,23 @@ All notable changes to TesseraQL are documented here. The format follows
   sandbox, means the sandbox). Docs and two fixtures only (G5).
 
 ### Fixed
+
+- **A wrapped `SQLException` carries its cause.** Twenty-five `catch (SQLException)` sites
+  built their `TqlException` from the message alone, so the stack every 5xx logs ended at the
+  wrap with no `Caused by:` — the SQLState, the vendor code and the driver's own chain gone.
+  Every one now chains the exception; a ledger test refuses a new site that does not
+  (`docs/audit-low-leads.md` slice 16, F107; the `schema` verb's own site, the one that broke
+  the CLI's connection-refused shaping, closed in slice 12).
+- **A file transfer's span is listed under its application.** The span the transfer service
+  starts is its trace's root and carried no `app` attribute, so no `tql.ops.view.<name>`
+  holder could list the `surface=transfer` span the contract-execution work added to make
+  transfers visible. It carries the request's application now. (XH-11)
+- **`OpenTelemetryMeter` builds one instrument per name.** Every request built a fresh OTel
+  counter and histogram — a descriptor registration per call, with the SDK deduplicating the
+  result; both are memoized as the JDK meter's are. (F109)
+- **`TQL-YAML-1409` is declared once.** The lint spelled the compiler's code a second time as
+  a string constant tied to it by an allow-list entry alone; it raises the compiler's constant,
+  as its sibling 1406 always did. (XD-07h)
 
 - **An export says how far it got.** A running export read `0 rows` for its whole life and a
   failed one recorded 0 whatever it had read: every write of the counter sat inside the

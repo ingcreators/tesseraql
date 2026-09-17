@@ -350,7 +350,7 @@ final class AccountViews {
                 }
             } catch (java.sql.SQLException ex) {
                 throw new TqlException(TASKS_ERROR,
-                        "Failed to read the task queue: " + ex.getMessage());
+                        "Failed to read the task queue: " + ex.getMessage(), ex);
             }
         }
         model.put("rows", rows);

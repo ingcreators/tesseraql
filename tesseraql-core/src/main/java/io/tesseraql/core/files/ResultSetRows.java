@@ -80,7 +80,7 @@ public final class ResultSetRows implements Iterator<Map<String, Object>>, Named
             // and fail mode raises before the codec has accepted a row it cannot hold.
             return pending && cap.admits(count);
         } catch (SQLException ex) {
-            throw new TqlException(readError, "Export query failed: " + ex.getMessage());
+            throw new TqlException(readError, "Export query failed: " + ex.getMessage(), ex);
         }
     }
 
@@ -98,7 +98,7 @@ public final class ResultSetRows implements Iterator<Map<String, Object>>, Named
             count++;
             return row;
         } catch (SQLException ex) {
-            throw new TqlException(readError, "Export query failed: " + ex.getMessage());
+            throw new TqlException(readError, "Export query failed: " + ex.getMessage(), ex);
         }
     }
 }
