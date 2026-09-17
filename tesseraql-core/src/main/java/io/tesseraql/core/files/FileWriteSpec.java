@@ -66,6 +66,29 @@ public record FileWriteSpec(List<ColumnMapping> columns, String sheet, Path temp
         return splitBy != null && !splitBy.isBlank();
     }
 
+    /**
+     * The template as a refusal names it: relative to {@code resources} when it lies inside
+     * (the spelling the declaration used, so two routes declaring the same file name in
+     * different directories stay apart), its file name when it does not or no root is known —
+     * never the absolute path, which puts the host's directory layout on the execution row an
+     * operator reads (docs/audit-low-leads.md slice 15, XH-12). Null without a template.
+     */
+    public String templateName() {
+        if (template == null) {
+            return null;
+        }
+        if (resources != null) {
+            ConfinedPath root = ConfinedPath.under(resources);
+            java.util.Optional<Path> inside = root.confine(template)
+                    .filter(confined -> !confined.equals(root.root()));
+            if (inside.isPresent()) {
+                return root.root().relativize(inside.get()).toString().replace('\\', '/');
+            }
+        }
+        Path name = template.getFileName();
+        return name == null ? template.toString() : name.toString();
+    }
+
     /** This spec with the per-request locale and time zone resolved. */
     public FileWriteSpec withFormatting(String resolvedLocale, String resolvedTimezone) {
         return new FileWriteSpec(columns, sheet, template, startCell, resources,

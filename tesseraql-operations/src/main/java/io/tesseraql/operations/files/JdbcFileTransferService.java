@@ -39,6 +39,7 @@ import java.sql.Savepoint;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -79,9 +80,22 @@ public final class JdbcFileTransferService implements FileTransferService {
     private static final TqlErrorCode BATCH_FOREIGN = new TqlErrorCode(TqlDomain.LD, 2864);
     private static final TqlErrorCode BATCH_PARSE_MOVED = new TqlErrorCode(TqlDomain.LD, 2865);
     private static final TqlErrorCode BATCH_SPOOL_GONE = new TqlErrorCode(TqlDomain.LD, 2866);
+    /**
+     * TQL-LD-2868: a COMPLETED export whose produced file this node cannot open — a node-local
+     * spool written by another member, a file an external cleaner removed, a spool row deleted
+     * from under the transfer. The record still points at the bytes; the bytes are gone. Answered
+     * 410 on the route and the ops console alike (docs/audit-low-leads.md slice 15, XH-02); it
+     * used to escape as an unchecked I/O error and read "Internal Server Error".
+     */
+    private static final TqlErrorCode SPOOL_GONE = new TqlErrorCode(TqlDomain.LD, 2868);
     private static final int MAX_RECORDED_ERRORS = 100;
-    /** How often a running import publishes its counter and looks for a stop request. */
+    /** How often a running transfer publishes its counter and looks for a stop request. */
     private static final long PROGRESS_INTERVAL_NANOS = java.time.Duration.ofSeconds(2).toNanos();
+    /** What a stopped export records when nobody named a reason: the operator's Cancel. */
+    private static final String EXPORT_CANCELLED = "Export cancelled; nothing was written";
+    private static final String IMPORT_CANCELLED = "Import cancelled; nothing was written";
+    /** How long {@link #close()} waits for the transfers it asked to stop, unless told otherwise. */
+    private static final java.time.Duration DEFAULT_CLOSE_BOUND = java.time.Duration.ofSeconds(30);
     /** The review window, unless the app narrows or widens it (tesseraql.transfers.reviewTtl). */
     private static final long DEFAULT_REVIEW_TTL_MILLIS = 30 * 60 * 1000L;
     /** A parked batch's life: waiting, spent, replaced by a newer upload, or swept. */
@@ -99,6 +113,14 @@ public final class JdbcFileTransferService implements FileTransferService {
     private final io.tesseraql.core.expr.ExpressionFunctions functions;
     private final ObjectMapper mapper = io.tesseraql.yaml.JsonMappers.constrained();
     private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
+    /**
+     * The transfers running on {@link #executor} right now, by id — what a closing runtime asks
+     * to stop (docs/audit-low-leads.md slice 15, unfiled 45). The job executor keeps the same
+     * ledger for its runs.
+     */
+    private final Set<String> owned = java.util.concurrent.ConcurrentHashMap.newKeySet();
+    /** The reason a drain gave for stopping a transfer, so the STOPPED row says so. */
+    private final Map<String, String> drainRequested = new java.util.concurrent.ConcurrentHashMap<>();
 
     private volatile String dialect;
     private int sqlTimeoutSeconds;
@@ -444,6 +466,7 @@ public final class JdbcFileTransferService implements FileTransferService {
         // window as readily as an async one.
         SpoolWriter writer = null;
         boolean spoolRecorded = false;
+        Observed observed = null;
         try (ExecutionHeartbeats.Pulse _ = heartbeats.start(transferId);
                 Connection connection = extraction.getConnection()) {
             boolean autoCommit = connection.getAutoCommit();
@@ -464,11 +487,19 @@ public final class JdbcFileTransferService implements FileTransferService {
                             results, extractionDialect,
                             effectiveCap(codec, request.writeSpec(), request.rowCap()),
                             TRANSFER_ERROR);
+                    observed = new Observed(transferId, iterator);
                     io.tesseraql.core.files.ExportWrite.write(codec, request.writeSpec(),
-                            tempStore, iterator, request.enricher(), request.enrichWindow(),
+                            tempStore, observed, request.enricher(), request.enrichWindow(),
                             values, filename, out);
                     rows = iterator.count();
                     writer.incrementRows(rows);
+                }
+                if (observed.stopped()) {
+                    // The step's export was asked to stop (the ops console's cancel on its
+                    // execution, or the runtime's drain): the extraction rolls back below, the
+                    // partial file is nobody's, and the step fails saying so — a job cannot
+                    // continue on a file that was not produced.
+                    throw new Stopped(stopReason(transferId, EXPORT_CANCELLED));
                 }
                 if (request.afterExtract() != null) {
                     executeUpdate(connection, request.afterExtract());
@@ -504,12 +535,139 @@ public final class JdbcFileTransferService implements FileTransferService {
                 // are this method's to reclaim.
                 closeQuietly(spools);
             }
-        } catch (Exception ex) {
-            // An unrecorded writer spool is nobody else's to reclaim.
+        } catch (Stopped stop) {
+            discardWriterSpool(writer, stop);
+            recordReached(transferId, observed);
+            jobs.stopExecution(transferId, stop.getMessage());
+            throw new TqlException(TRANSFER_ERROR, "Export step stopped: " + stop.getMessage(),
+                    stop);
+        } catch (Throwable ex) {
+            // Throwable, not Exception: an Error out of a buffered codec used to skip this arm
+            // and leave the writer's spool (INSERTED by the try-with-resources on a staging
+            // store) for ever (docs/audit-low-leads.md slice 15, unfiled 44). An unrecorded
+            // writer spool is nobody else's to reclaim.
             discardWriterSpool(spoolRecorded ? null : writer, ex);
-            jobs.failExecution(transferId, ex.getMessage());
+            recordReached(transferId, observed);
+            jobs.failExecution(transferId,
+                    ex.getMessage() != null ? ex.getMessage() : ex.toString());
+            if (ex instanceof Error error) {
+                throw error;
+            }
             throw new TqlException(TRANSFER_ERROR,
                     "Export step failed: " + ex.getMessage(), ex);
+        }
+    }
+
+    /**
+     * An export's row source under observation (docs/audit-low-leads.md slice 15, XH-26 and
+     * unfiled 8): on the import's tick — every two seconds, between rows — the rows handed over
+     * so far are published to the transfer row through a connection of their own, and the cancel
+     * flag is read. Both are questions for the database, so both are asked on an interval; one
+     * clock, because they are the same boundary.
+     *
+     * <p>The counter goes through its own connection on purpose: the extraction holds a
+     * transaction that rolls back on failure, and a count written inside it is invisible to a
+     * poller until the commit and gone with the rollback — which is how every running export
+     * read "0 rows" for its whole life, the card never backed off its two-second poll, and a
+     * failed export recorded nothing of how far it got.
+     *
+     * <p>A stop lands at a row boundary: the iterator simply runs dry. A streaming codec ends
+     * its document there; a buffering one still writes what it holds, into a spool the caller
+     * then discards — the import loop stops the same way, by no longer doing work, because the
+     * codec owns the loop and no exception need cross it.
+     */
+    private final class Observed
+            implements
+                Iterator<Map<String, Object>>,
+                io.tesseraql.core.files.NamedRows {
+
+        private final String transferId;
+        private final io.tesseraql.core.files.ResultSetRows source;
+        private long nextTick = System.nanoTime() + PROGRESS_INTERVAL_NANOS;
+        private boolean stopped;
+
+        Observed(String transferId, io.tesseraql.core.files.ResultSetRows source) {
+            this.transferId = transferId;
+            this.source = source;
+        }
+
+        /** Whether a stop request was seen — the run's answer is then STOPPED, not COMPLETED. */
+        boolean stopped() {
+            return stopped;
+        }
+
+        /** Rows handed over so far. */
+        long count() {
+            return source.count();
+        }
+
+        @Override
+        public List<String> columns() {
+            return source.columns();
+        }
+
+        @Override
+        public boolean hasNext() {
+            if (stopped) {
+                return false;
+            }
+            if (System.nanoTime() >= nextTick) {
+                nextTick = System.nanoTime() + PROGRESS_INTERVAL_NANOS;
+                recordProgress(transferId, source.count());
+                stopped = jobs.isCancelRequested(transferId);
+                if (stopped) {
+                    return false;
+                }
+            }
+            return source.hasNext();
+        }
+
+        @Override
+        public Map<String, Object> next() {
+            // The tick is asked in hasNext() alone: a codec that asked and was told yes must
+            // get its row, or a tick landing between the two calls would turn a stop into a
+            // NoSuchElementException the codec reports as a failed write.
+            if (stopped) {
+                throw new java.util.NoSuchElementException();
+            }
+            return source.next();
+        }
+    }
+
+    /** An export asked to stop, carrying the reason its STOPPED row records. */
+    private static final class Stopped extends RuntimeException {
+
+        private static final long serialVersionUID = 1L;
+
+        Stopped(String reason) {
+            super(reason);
+        }
+    }
+
+    /**
+     * What a stopped transfer says happened: the drain's wording when a closing runtime asked,
+     * the operator's when an operator did — the same rule the job executor applies to its runs.
+     */
+    private String stopReason(String transferId, String operators) {
+        String drain = drainRequested.get(transferId);
+        return drain != null ? drain : operators;
+    }
+
+    /**
+     * The rows an export reached when it ended short of COMPLETED — its own connection, after
+     * the rollback, so the count survives the transaction that did not (XH-26: a failed export
+     * used to record 0 whatever it had read). Best effort: a count that cannot be written must
+     * not replace the failure being recorded.
+     */
+    private void recordReached(String transferId, Observed observed) {
+        if (observed == null) {
+            return;
+        }
+        try {
+            recordProgress(transferId, observed.count());
+        } catch (RuntimeException ex) {
+            LOG.warn("File export {} reached {} rows but the count could not be recorded: {}",
+                    transferId, observed.count(), ex.getMessage());
         }
     }
 
@@ -518,7 +676,8 @@ public final class JdbcFileTransferService implements FileTransferService {
      * closed by its try-with-resources (on a staging store, INSERTED) and its reference recorded
      * nowhere, so the bytes — 0 B for a buffered codec, the partial document for a streaming one —
      * stayed for ever, unreachable by the retention sweep. Null when the failure came before the
-     * writer existed; a delete that fails rides the failure that matters.
+     * writer existed; a delete that fails rides the failure that matters, or is logged when the
+     * run ended by a stop rather than a failure.
      */
     private void discardWriterSpool(SpoolWriter writer, Throwable failed) {
         if (writer == null) {
@@ -527,7 +686,12 @@ public final class JdbcFileTransferService implements FileTransferService {
         try {
             tempStore.delete(writer.toRef());
         } catch (RuntimeException deleting) {
-            failed.addSuppressed(deleting);
+            if (failed == null) {
+                LOG.warn("A stopped export's spool {} was not reclaimed: {}",
+                        writer.toRef().uri(), deleting.getMessage());
+            } else {
+                failed.addSuppressed(deleting);
+            }
         }
     }
 
@@ -627,7 +791,18 @@ public final class JdbcFileTransferService implements FileTransferService {
             content = tempStore.openInput(
                     exportSpool(transferId, transfer.spoolUri(), transfer.rowCount()));
         } catch (IOException ex) {
-            throw new UncheckedIOException(ex);
+            // The record says COMPLETED and points at bytes this node cannot open. Coded, with
+            // the store named, because the usual cause is the deployment: a node-local file
+            // store on a stack whose members share the transfer table — the reason the db and
+            // blob stores exist. A rerun produces the file again; nothing here can.
+            throw TqlException.builder(SPOOL_GONE)
+                    .message("Transfer " + transferId + " completed, but its file cannot be"
+                            + " opened on this node (tesseraql.temp.store: "
+                            + tempStore.getClass().getSimpleName() + "): " + ex.getMessage()
+                            + " - run the export again, or move the temp store off the node"
+                            + " with tesseraql.temp.store: db")
+                    .cause(ex)
+                    .build();
         }
         // The first-download claim, and the after-download SQL it gates, follow the open: a
         // request whose bytes could not be opened has delivered nothing and must not be recorded
@@ -690,9 +865,58 @@ public final class JdbcFileTransferService implements FileTransferService {
         return expired;
     }
 
-    /** Stops accepting work and lets running transfers finish. */
+    /**
+     * Asks every transfer this service is running to stop cooperatively, recording {@code reason}
+     * on the STOPPED rows - a closing runtime's first act, beside the same request to its job
+     * executor (docs/runtime-replace.md). An export stops at its next row boundary and an import
+     * at its next tick; both roll back and record the reason. Best-effort per transfer: a
+     * request that cannot be written must not stop the drain from asking the rest.
+     */
+    public void requestDrainStop(String reason) {
+        for (String transferId : List.copyOf(owned)) {
+            try {
+                drainRequested.put(transferId, reason);
+                if (jobs.requestCancel(transferId)) {
+                    LOG.info("Requested a cooperative stop of transfer {}: {}", transferId,
+                            reason);
+                }
+            } catch (RuntimeException ex) {
+                LOG.warn("Could not request a cooperative stop of transfer {}: {}", transferId,
+                        ex.getMessage());
+            }
+        }
+    }
+
+    /** {@link #close(java.time.Duration)} under the default bound. */
     public void close() {
+        close(DEFAULT_CLOSE_BOUND);
+    }
+
+    /**
+     * Stops accepting work, asks the transfers still running to stop, and waits for them within
+     * {@code bound}. A transfer that stops in time writes its own STOPPED row; one that does not
+     * is named in a warning and left RUNNING for the reaper to declare abandoned. A plain
+     * {@code shutdown()} that did not wait let the pools close under a running export, which
+     * then failed with the pool's own error and stayed RUNNING for the reaper
+     * (docs/audit-low-leads.md slice 15, unfiled 45).
+     */
+    public void close(java.time.Duration bound) {
         executor.shutdown();
+        if (owned.isEmpty()) {
+            return;
+        }
+        requestDrainStop("stopped: the runtime is shutting down (cooperative stop)");
+        try {
+            if (!executor.awaitTermination(bound.toMillis(),
+                    java.util.concurrent.TimeUnit.MILLISECONDS)) {
+                LOG.warn("Transfers still running after the {} close bound, left for the"
+                        + " reaper: {}", bound, List.copyOf(owned));
+            }
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            LOG.warn("Interrupted while waiting for running transfers, left for the reaper: {}",
+                    List.copyOf(owned));
+        }
     }
 
     /**
@@ -704,6 +928,9 @@ public final class JdbcFileTransferService implements FileTransferService {
      * to {@code .error} while its rows committed anyway.
      */
     private Runnable guarded(String transferId, Runnable work) {
+        // Owned from the submit, not from the first pulse: a drain that lands between the two
+        // must still find the transfer to ask.
+        owned.add(transferId);
         return () -> {
             try (ExecutionHeartbeats.Pulse _ = heartbeats.start(transferId)) {
                 work.run();
@@ -712,6 +939,9 @@ public final class JdbcFileTransferService implements FileTransferService {
                 // frame, and the failure was the only trace of a parse that never reached a row.
                 LOG.warn("File transfer {} failed: {}", transferId, ex.toString(), ex);
                 jobs.failExecution(transferId, ex.toString());
+            } finally {
+                owned.remove(transferId);
+                drainRequested.remove(transferId);
             }
         };
     }
@@ -806,7 +1036,7 @@ public final class JdbcFileTransferService implements FileTransferService {
                     // nobody asked for would be the worse outcome.
                     books.rollback();
                     recordRows(transferId, 0, errors);
-                    jobs.stopExecution(transferId, "Import cancelled; nothing was written");
+                    jobs.stopExecution(transferId, stopReason(transferId, IMPORT_CANCELLED));
                     return;
                 }
                 if (expectedRejects != null && !parseRejected.equals(expectedRejects)) {
@@ -1409,6 +1639,7 @@ public final class JdbcFileTransferService implements FileTransferService {
         io.tesseraql.core.telemetry.Span span = span("export", request.querySqlFile());
         SpoolWriter writer = null;
         boolean spoolRecorded = false;
+        Observed observed = null;
         DataSource pool = poolOf(request.pool());
         try (Connection connection = pool.getConnection();
                 Bookkeeping books = new Bookkeeping(connection, pool)) {
@@ -1432,11 +1663,28 @@ public final class JdbcFileTransferService implements FileTransferService {
                             results, vendor(),
                             effectiveCap(codec, request.writeSpec(), request.rowCap()),
                             TRANSFER_ERROR);
+                    observed = new Observed(transferId, iterator);
                     io.tesseraql.core.files.ExportWrite.write(codec, request.writeSpec(),
-                            tempStore, iterator, request.enricher(), request.enrichWindow(),
+                            tempStore, observed, request.enricher(), request.enrichWindow(),
                             values, filename, out);
                     rows = iterator.count();
                     writer.incrementRows(rows);
+                }
+                if (observed.stopped()) {
+                    // The cooperative stop, the export's half (docs/audit-low-leads.md slice
+                    // 15, unfiled 8): the mount, the card and the flag promised it for imports
+                    // and exports alike, and only the import loop ever read the flag. The
+                    // extraction rolls back, the partial file is discarded, and the row says
+                    // STOPPED with the rows it reached — the card renders that as cancelled,
+                    // and the download answers 409 as for any run that did not complete.
+                    books.rollback();
+                    discardWriterSpool(writer, null);
+                    recordReached(transferId, observed);
+                    String reason = stopReason(transferId, EXPORT_CANCELLED);
+                    jobs.stopExecution(transferId, reason);
+                    LOG.info("File export {} stopped after {} rows: {}", transferId,
+                            observed.count(), reason);
+                    return;
                 }
                 if (AFTER_EXTRACT.equals(request.afterTiming())
                         && request.afterSqlFile() != null) {
@@ -1481,10 +1729,19 @@ public final class JdbcFileTransferService implements FileTransferService {
                 // are this method's to reclaim.
                 closeQuietly(spools);
             }
-        } catch (Exception ex) {
+        } catch (Throwable ex) {
+            // Throwable, not Exception: an Error out of a buffered codec (an OutOfMemoryError,
+            // say) used to skip this arm for guarded()'s, which fails the execution but reclaims
+            // nothing — the writer's spool, INSERTED by the try-with-resources on a staging
+            // store, stayed for ever (docs/audit-low-leads.md slice 15, unfiled 44). Rethrown
+            // after the discard so the Error still reaches guarded()'s WARN with its stack.
             span.recordError(ex);
             // An unrecorded writer spool is nobody else's to reclaim.
             discardWriterSpool(spoolRecorded ? null : writer, ex);
+            recordReached(transferId, observed);
+            if (ex instanceof Error error) {
+                throw error;
+            }
             // The stack rides the line: the message alone said nothing about where a codec or a
             // driver failed, and this WARN was the only trace of the failure anywhere.
             LOG.warn("File export {} failed: {}", transferId, ex.getMessage(), ex);

@@ -184,7 +184,7 @@ public final class JxlsFileCodec implements FileCodec {
         }
         // A declared template is used or refused, never silently replaced by the grid: the
         // declaration chose a mode, and streams() answered for that mode.
-        requireWorkbook(spec.template(), spec.resources());
+        requireWorkbook(spec);
         if (spec.startCell() != null) {
             // Placement walks the rows once, but its mode is declared as buffering because the
             // template workbook is held whole — so the re-readable source is the one it is given.
@@ -202,12 +202,19 @@ public final class JxlsFileCodec implements FileCodec {
      * slice 14), so what reaches here is a template that vanished, was replaced by a directory,
      * was never a workbook, or arrived through a spec no compiler fenced; the confinement is
      * the pdf codec's own rule, kept here as its defence-in-depth twin.
+     *
+     * <p>The refusal names the template as the declaration spelled it — relative to the app
+     * home, or its file name — and never the home's absolute path: the sentence is the
+     * execution row's exit message, which an operator reads (docs/audit-low-leads.md slice 15,
+     * XH-12).
      */
-    private static void requireWorkbook(Path template, Path resources) {
+    private static void requireWorkbook(FileWriteSpec spec) {
+        Path template = spec.template();
+        Path resources = spec.resources();
         String reason;
         if (resources != null && !io.tesseraql.core.files.ConfinedPath.under(resources)
                 .contains(template)) {
-            reason = "is outside the application home '" + resources + "'";
+            reason = "is outside the application home";
         } else if (Files.isDirectory(template)) {
             reason = "is a directory";
         } else if (!Files.isRegularFile(template)) {
@@ -226,8 +233,9 @@ public final class JxlsFileCodec implements FileCodec {
             }
         }
         if (reason != null) {
-            throw new TqlException(TEMPLATE_UNUSABLE, "The workbook template " + template + " "
-                    + reason + " - restore the file the export declares, or fix template:");
+            throw new TqlException(TEMPLATE_UNUSABLE, "The workbook template "
+                    + spec.templateName() + " " + reason
+                    + " - restore the file the export declares, or fix template:");
         }
     }
 

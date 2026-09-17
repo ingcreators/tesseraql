@@ -315,6 +315,28 @@ For a batch job's chunk step the equivalent is the managed `tql_job_skips` table
 records the row key and message for each skipped row until `skipLimit` fails the step
 ([jobs.md](jobs.md#the-chunk-step)).
 
+A running export's `rowCount` is the rows handed to the codec so far, refreshed every couple
+of seconds; a `FAILED` or `STOPPED` export keeps the count it had reached, and its file is
+gone. `STOPPED` is the cooperative stop — the route's Cancel, the operations console's, or a
+runtime shutting down — and the execution's exit message says which.
+
+### `TQL-LD-2868` — a completed export's file cannot be opened
+
+The transfer says `COMPLETED` and points at bytes this node cannot read: with the default
+node-local `tesseraql.temp.store: file`, a stack member other than the one that ran the export
+answers its `/file` with 410, and so does any node after an external cleaner emptied the spool
+directory. The message names the store. Run the export again, or move the temp store off the
+node with `tesseraql.temp.store: db` ([file-transfers.md](file-transfers.md)).
+
+### `TQL-LD-2857` — two `splitBy:` keys name one file
+
+A split export refuses two group keys whose entry names are the same once made safe for a
+filesystem — the same name outright, or the same up to case, which Windows and macOS read as
+one file. The message names both keys; either rename the source values or split on a column
+whose values differ by more than case. Combining marks are kept (an abugida key is spelled as
+it is) and a name Windows reserves for a device (`CON`, `NUL`, `COM1`…) is prefixed with an
+underscore rather than refused.
+
 ### Health is DOWN but the application answers
 
 The health probe covers the datasources, not just the HTTP port. The ops console overview

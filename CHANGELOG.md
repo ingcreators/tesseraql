@@ -8,6 +8,11 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- `TQL-LD-2868` (410): a completed export whose produced file this node cannot open — a
+  node-local `file` temp store behind a stack, an externally emptied spool directory — on the
+  route's `/file` and the operations console alike. It used to escape as an unchecked I/O error
+  and answer 500 `TQL-ROUTE-5000` (docs/audit-low-leads.md slice 15).
+
 - **The editor navigates a view's `source:` to the route that declares it.** The last
   "not currently supported" line of the VS Code extension — go-to-definition for named
   queries, spelled `sources:` since the unified source model — is closed
@@ -66,6 +71,18 @@ All notable changes to TesseraQL are documented here. The format follows
   model told only `string` sent a SKU the binder refused (G4).
 
 ### Changed
+
+- **A split export refuses two keys that are one file on a case-insensitive filesystem.**
+  `TQL-LD-2857` now fires for group keys whose entry names differ only by case (`Abc` and
+  `abc`), naming both keys, where it fired only for the exact collision and let Windows ask
+  and macOS Archive Utility overwrite. Combining marks are kept in a key — `हिन्दी` is
+  spelled as it is, `की` and `कू` are two documents — after the key is composed (NFC), so
+  a decomposed spelling and a composed one are one entry and a collision the export can see;
+  every combining mark used to fold to `_`. A name Windows reserves for a device (`CON`,
+  `NUL`, `COM1`…) is prefixed with an underscore, a trailing dot becomes one, and the
+  100-unit bound cuts on a grapheme boundary. Breaking for a split whose keys differ only by
+  case: that export now fails with 2857 instead of producing a bundle two readers disagree
+  about. `docs/audit-low-leads.md` slice 15 (decision 5).
 
 - **A document's files are fenced by the application home, on every altitude.** Every file a
   route, tool or consumer names by relative path — its statements (`sources`, `steps`,
@@ -285,6 +302,39 @@ All notable changes to TesseraQL are documented here. The format follows
   sandbox, means the sandbox). Docs and two fixtures only (G5).
 
 ### Fixed
+
+- **An export says how far it got.** A running export read `0 rows` for its whole life and a
+  failed one recorded 0 whatever it had read: every write of the counter sat inside the
+  extraction's transaction, invisible until the commit and gone with the rollback, so the job
+  card's progress line lied and its poll never backed off. The row source now publishes the
+  rows handed to the codec on the import's two-second tick through a connection of its own;
+  `RUNNING` shows the count as it grows, `FAILED` and `STOPPED` keep the rows reached
+  (`docs/audit-low-leads.md` slice 15, XH-26).
+- **Cancel stops a running export.** The mount, the card and the flag promised a stop for
+  imports and exports alike, and only the import loop ever read the flag: an own-route Cancel
+  answered `cancelRequested: true` and the export ran to `COMPLETED` with its file served.
+  The export's row source reads the flag on the same tick and stops at a row boundary — the
+  extraction rolls back, the partial file is discarded, the execution reads `STOPPED`, the
+  card reads cancelled and `/file` answers 409. A job's `export:` step stopped this way fails
+  the step. (unfiled 8)
+- **A runtime stopping under a running transfer records the stop.** The transfer executor was
+  shut down without waiting, so an export outliving the drain failed on a closed pool and
+  stayed `RUNNING` for the reaper to call abandoned. The drain now asks every running transfer
+  to stop at its start, beside the same request to the job executor, and waits for them under
+  the declared shutdown bound; each records the drain's reason. (unfiled 45)
+- **An `Error` out of a codec releases the writer's spool.** The export's failure arm caught
+  `Exception`, so an `OutOfMemoryError` from a buffered codec skipped the spool discard the
+  export-hygiene work added and left the writer's bytes for ever — on a staging store, a row
+  the retention sweep cannot see. Both arms now catch `Throwable`, discard, and rethrow the
+  `Error`. (unfiled 44)
+- **A template refusal names the template as the declaration spelled it.** `TQL-LD-2831`'s
+  "is not a file" and every `TQL-LD-2837` reason printed the template's absolute path — the
+  host's directory layout on an execution row an operator reads. Both codecs now spell it
+  relative to the application home (`web/orders/print/missing.html`), or by file name when it
+  lies outside; the outside-the-home refusals no longer print the home either. (XH-12)
+- **The catalogue's sentence for `TQL-LD-2856` described a code that had moved.** A failed
+  export carrying 2856 told the user its workbook template was unreadable; the code is the
+  row-source mismatch, and the sentence (en and ja) now says so. (unfiled 43)
 
 - **A route's files are the hot reload's fingerprint, keyed by route.** The reload's content
   diff printed a route's *directory* (its immediate files), shared by every route in it, so

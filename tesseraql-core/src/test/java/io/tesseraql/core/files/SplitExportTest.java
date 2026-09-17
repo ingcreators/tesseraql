@@ -292,48 +292,131 @@ class SplitExportTest {
 
     @Test
     void aKeyIsMadeSafeForAFilesystem() {
-        assertThat(SplitExport.safe("東京/支店")).isEqualTo("東京_支店");
+        assertThat(SplitExport.safe("\u6771\u4eac/\u652f\u5e97"))
+                .isEqualTo("\u6771\u4eac_\u652f\u5e97");
         // A traversal attempt loses both its separator and its leading dots.
         assertThat(SplitExport.safe("../etc")).isEqualTo("__etc");
         assertThat(SplitExport.safe("")).isEqualTo("_");
+        // A trailing dot is a name Win32 silently strips: one underscore, as for a leading run.
+        assertThat(SplitExport.safe("abc.")).isEqualTo("abc_");
+        assertThat(SplitExport.safe("v1..")).isEqualTo("v1_");
     }
 
     /**
-     * The bound cuts on a code-point boundary and keeps the key's case (docs/export-hygiene.md
-     * P1). A cut at unit 100 through a surrogate pair left a lone surrogate the ZIP encoder
-     * refuses ("malformed input"), and the over-length branch alone lower-cased — so {@code A}×101
-     * collided with {@code a}×101 while {@code A}×100 and {@code a}×100 did not.
+     * Letters keep their marks (docs/audit-low-leads.md slice 15, unfiled 9): the class used to
+     * be {@code \p{L}\p{N}}, so every combining mark became an underscore — {@code हिन्दी}
+     * shipped as {@code ह_न_द_}, and {@code की} and {@code कू} were one file. Decomposed text
+     * (what macOS emits) is composed first, so the NFD spelling names the NFC file.
      */
     @Test
-    void aLongKeyIsCutOnACodePointBoundaryAndKeepsItsCase() {
-        String odd = "X" + "𠮷".repeat(50); // 101 UTF-16 units; unit 100 is a LOW surrogate
-        String cut = SplitExport.safe(odd);
-        assertThat(cut).hasSize(99).startsWith("X𠮷");
-        assertThat(Character.isHighSurrogate(cut.charAt(cut.length() - 1))).isFalse();
-        assertThat(SplitExport.safe("A".repeat(101))).isEqualTo("A".repeat(100));
-    }
-
-    @Test
-    void twoLongKeysDifferingInCaseAreTwoDocuments() throws Exception {
-        String upper = "A".repeat(101);
-        String lower = "a".repeat(101);
+    void aKeyKeepsItsCombiningMarksAndIsComposed() throws Exception {
+        String hindi = "\u0939\u093f\u0928\u094d\u0926\u0940";
+        assertThat(SplitExport.safe(hindi)).isEqualTo(hindi);
+        String nfc = "caf\u00e9";
+        String nfd = "cafe\u0301";
+        assertThat(SplitExport.safe(nfd)).isEqualTo(nfc);
+        assertThat(SplitExport.safe("\u304c")).as("NFD が composes").isEqualTo("\u304c");
+        String ki = "\u0915\u0940";
+        String ku = "\u0915\u0942";
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         long groups = SplitExport.write(CODEC, spec(),
-                spool(List.of(row(upper, "ann"), row(lower, "bob"))),
+                spool(List.of(row(ki, "ann"), row(ku, "bob"))),
                 Map.of(), "dept", "team-{key}.txt", out);
         assertThat(groups).isEqualTo(2);
-        assertThat(entries(out.toByteArray())).containsKeys(
-                "team-" + "A".repeat(100) + ".txt", "team-" + "a".repeat(100) + ".txt");
+        assertThat(entries(out.toByteArray())).containsKeys("team-" + ki + ".txt",
+                "team-" + ku + ".txt");
+    }
+
+    /**
+     * The same word in two normalisation forms is one file on a normalisation-insensitive
+     * filesystem, so it is a collision this export refuses — naming both keys — rather than
+     * two entries a macOS extraction would silently merge.
+     */
+    @Test
+    void anNfcAndAnNfdKeyAreOneFileAndRefused() {
+        String nfc = "caf\u00e9";
+        String nfd = "cafe\u0301";
+        assertThatThrownBy(() -> SplitExport.write(CODEC, spec(),
+                spool(List.of(row(nfc, "ann"), row(nfd, "bob"))), Map.of(), "dept",
+                "team-{key}.txt", new ByteArrayOutputStream()))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("'" + nfc + "'")
+                .hasMessageContaining("'" + nfd + "'")
+                .extracting(error -> ((TqlException) error).code().toString())
+                .isEqualTo("TQL-LD-2857");
+    }
+
+    /**
+     * Windows reserves a handful of stems for devices whatever the extension; an entry whose
+     * stem is one of them cannot be extracted there. The entry is prefixed, not the key: the
+     * reservation is a property of the whole name, so {@code orders-CON.csv} is fine.
+     */
+    @Test
+    void aReservedDeviceNameIsPrefixed() throws Exception {
+        assertThat(SplitExport.entryName("{key}.csv", "CON")).isEqualTo("_CON.csv");
+        assertThat(SplitExport.entryName("{key}.csv", "nul")).isEqualTo("_nul.csv");
+        assertThat(SplitExport.entryName("{key}.tar.gz", "com1")).isEqualTo("_com1.tar.gz");
+        assertThat(SplitExport.entryName("{key}", "LPT9")).isEqualTo("_LPT9");
+        assertThat(SplitExport.entryName("orders-{key}.csv", "CON")).isEqualTo("orders-CON.csv");
+        assertThat(SplitExport.entryName("{key}.csv", "CONSOLE")).isEqualTo("CONSOLE.csv");
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        SplitExport.write(CODEC, spec(), spool(List.of(row("AUX", "ann"))), Map.of(), "dept",
+                "{key}.txt", out);
+        assertThat(entries(out.toByteArray())).containsOnlyKeys("_AUX.txt");
+    }
+
+    /**
+     * The bound cuts on a grapheme boundary and keeps the key's case (docs/export-hygiene.md
+     * P1). A cut at unit 100 through a surrogate pair left a lone surrogate the ZIP encoder
+     * refuses ("malformed input"), a cut between a base letter and its mark strands the mark,
+     * and the over-length branch alone lower-cased — so {@code A}×101 collided with
+     * {@code a}×101 while {@code A}×100 and {@code a}×100 did not.
+     */
+    @Test
+    void aLongKeyIsCutOnAGraphemeBoundaryAndKeepsItsCase() {
+        String odd = "X" + "\ud842\udfb7".repeat(50); // 101 UTF-16 units; unit 100 is a LOW surrogate
+        String cut = SplitExport.safe(odd);
+        assertThat(cut).hasSize(99).startsWith("X\ud842\udfb7");
+        assertThat(Character.isHighSurrogate(cut.charAt(cut.length() - 1))).isFalse();
+        assertThat(SplitExport.safe("A".repeat(101))).isEqualTo("A".repeat(100));
+        // Unit 100 is a combining mark with no composed form: the cut steps back to its base,
+        // never between the two.
+        String marked = "x".repeat(99) + "x\u0301" + "y".repeat(10);
+        assertThat(SplitExport.safe(marked)).isEqualTo("x".repeat(99));
+    }
+
+    /**
+     * Two keys differing only in case are one file on a case-insensitive filesystem, so the
+     * export refuses them naming both keys (docs/audit-low-leads.md decision 5) — long and
+     * short alike. This row pinned the opposite, two documents for {@code A}×101 and
+     * {@code a}×101, when the over-length branch's accidental lower-casing was removed; the
+     * position it recorded was "keep the case", which still holds: both entries keep theirs,
+     * and neither is written.
+     */
+    @Test
+    void twoKeysDifferingOnlyInCaseAreRefusedNamingBoth() {
+        for (String[] pair : new String[][]{{"Abc", "abc"}, {"A".repeat(101), "a".repeat(101)}}) {
+            assertThatThrownBy(() -> SplitExport.write(CODEC, spec(),
+                    spool(List.of(row(pair[0], "ann"), row(pair[1], "bob"))), Map.of(), "dept",
+                    "team-{key}.txt", new ByteArrayOutputStream()))
+                    .as(pair[0].length() + " units")
+                    .isInstanceOf(TqlException.class)
+                    .hasMessageContaining("'" + pair[0] + "'")
+                    .hasMessageContaining("'" + pair[1] + "'")
+                    .hasMessageContaining("case-insensitive filesystem")
+                    .extracting(error -> ((TqlException) error).code().toString())
+                    .isEqualTo("TQL-LD-2857");
+        }
     }
 
     @Test
     void aKeyEndingInAnAstralLetterPastTheBoundIsWritten() throws Exception {
-        String odd = "X" + "𠮷".repeat(50);
+        String odd = "X" + "\ud842\udfb7".repeat(50);
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         SplitExport.write(CODEC, spec(), spool(List.of(row(odd, "ann"))), Map.of(), "dept",
                 "team-{key}.txt", out);
         assertThat(entries(out.toByteArray()).keySet()).singleElement().asString()
-                .startsWith("team-X𠮷").endsWith("𠮷.txt");
+                .startsWith("team-X\ud842\udfb7").endsWith("\ud842\udfb7.txt");
     }
 
     /**

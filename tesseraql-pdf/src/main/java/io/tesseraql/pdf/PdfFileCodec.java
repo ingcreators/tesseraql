@@ -108,7 +108,7 @@ public final class PdfFileCodec implements FileCodec {
             throw new TqlException(RENDER_FAILED, "PDF rendering failed"
                     + (spec.template() == null
                             ? ""
-                            : " for template '" + spec.template().getFileName() + "'")
+                            : " for template '" + spec.templateName() + "'")
                     + ": " + ex.getMessage());
         }
         out.write(DeterministicPdf.normalize(rendered.toByteArray()));
@@ -147,14 +147,17 @@ public final class PdfFileCodec implements FileCodec {
         }
         Path template = spec.template().toAbsolutePath().normalize();
         if (!Files.isRegularFile(template)) {
+            // Named as the declaration spelled it, not by the host's absolute path: this
+            // sentence lands on the execution row an operator reads (docs/audit-low-leads.md
+            // slice 15, XH-12).
             throw new TqlException(RENDER_FAILED,
-                    "PDF template '" + spec.template() + "' is not a file");
+                    "PDF template '" + spec.templateName() + "' is not a file");
         }
         io.tesseraql.core.files.ConfinedPath root = io.tesseraql.core.files.ConfinedPath
                 .under(spec.resources() == null ? template.getParent() : spec.resources());
         Path confined = root.confine(template)
-                .orElseThrow(() -> new TqlException(OUTSIDE_ROOT, "PDF template '" + template
-                        + "' is outside the app resource root '" + root.root() + "'"));
+                .orElseThrow(() -> new TqlException(OUTSIDE_ROOT, "PDF template '"
+                        + spec.templateName() + "' is outside the app resource root"));
         return PdfTemplates.render(root.root(),
                 root.root().relativize(confined).toString().replace('\\', '/'), model, locale);
     }

@@ -7,9 +7,12 @@ import io.tesseraql.core.util.OrderedCopies;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.file.attribute.FileTime;
+import java.text.BreakIterator;
+import java.text.Normalizer;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -34,7 +37,11 @@ import java.util.zip.ZipOutputStream;
  */
 public final class SplitExport {
 
-    /** TQL-LD-2857: two group keys name the same file once made safe for a filesystem. */
+    /**
+     * TQL-LD-2857: two group keys name the same file once made safe for a filesystem — the same
+     * name outright, or the same name up to case, which a case-insensitive filesystem reads as
+     * one file (docs/audit-low-leads.md decision 5).
+     */
     static final TqlErrorCode FILENAME_COLLISION = new TqlErrorCode(TqlDomain.LD, 2857);
     /** TQL-LD-2858: a split export's filename carries no {@code {key}} placeholder. */
     public static final TqlErrorCode NO_KEY_PLACEHOLDER = new TqlErrorCode(TqlDomain.LD, 2858);
@@ -65,6 +72,23 @@ public final class SplitExport {
 
     /** The placeholder together with the run of separators on either side of it. */
     private static final Pattern KEY_WITH_SEPARATORS = Pattern.compile("[-_.]*\\{key}[-_.]*");
+
+    /**
+     * What a filename component may not be made of: anything but letters, marks, digits and the
+     * three separators. Marks are in the class because every abugida and every decomposed
+     * (NFD) key is made of them — the position {@code SqlIdentifiers} records for identifiers —
+     * and a class without them turned {@code हिन्दी} into {@code ह_न_द_} and made {@code की}
+     * and {@code कू} one file.
+     */
+    private static final Pattern UNSAFE = Pattern.compile("[^\\p{L}\\p{M}\\p{N}._-]");
+
+    /**
+     * The names Windows reserves for devices whatever the extension: an entry whose stem is one
+     * of these cannot be extracted there. Matched case-insensitively against the stem up to the
+     * first dot, which is how Win32 reads them.
+     */
+    private static final Pattern RESERVED_STEM = Pattern
+            .compile("(?i)CON|PRN|AUX|NUL|COM[0-9]|LPT[0-9]");
 
     private SplitExport() {
     }
@@ -115,17 +139,27 @@ public final class SplitExport {
         }
         ExportGroups groups = ExportGroups.of(rows, splitBy);
         Map<String, Map<Object, Object>> perDocument = perDocumentValues(values, splitBy);
-        Map<String, Object> entries = new LinkedHashMap<>();
+        // Keyed by the entry name folded to one case: a bundle is opened on whatever filesystem
+        // the recipient has, and on a case-insensitive one `Abc` and `abc` are one file, the
+        // second overwriting the first (or Windows asking, or macOS Archive Utility not asking).
+        // Refused here, once, naming both keys — a silent rename would be the tolerance the
+        // repo's rule forbids, and two entries a Linux reader keeps apart are still one file for
+        // the partner-drop consumer the split was declared for.
+        Map<String, Entry> entries = new LinkedHashMap<>();
         long written = 0;
         // finish() rather than close(): the caller owns the stream it handed over.
         ZipOutputStream zip = new ZipOutputStream(out);
         for (ExportGroups.Group group : groups) {
-            String entry = filename.replace(KEY, safe(group.key()));
-            Object previous = entries.putIfAbsent(entry, group.key());
+            String entry = entryName(filename, group.key());
+            Entry previous = entries.putIfAbsent(entry.toLowerCase(Locale.ROOT),
+                    new Entry(group.key(), entry));
             if (previous != null) {
-                throw new TqlException(FILENAME_COLLISION, "Groups '" + previous + "' and '"
-                        + group.key() + "' both name '" + entry + "' once made safe for a"
-                        + " filesystem - one document would overwrite the other");
+                String how = previous.name().equals(entry)
+                        ? "both name '" + entry + "' once made safe for a filesystem"
+                        : "name '" + previous.name() + "' and '" + entry
+                                + "', one file on a case-insensitive filesystem";
+                throw new TqlException(FILENAME_COLLISION, "Groups '" + previous.key() + "' and '"
+                        + group.key() + "' " + how + " - one document would overwrite the other");
             }
             ZipEntry zipEntry = new ZipEntry(entry);
             zipEntry.setLastModifiedTime(ENTRY_TIME);
@@ -213,30 +247,58 @@ public final class SplitExport {
         return perDocument;
     }
 
+    /** One entry already claimed: the group key it came from and the name as written. */
+    private record Entry(Object key, String name) {
+    }
+
     /**
-     * A group key as a filename component: anything a filesystem or a zip reader would object to
-     * becomes an underscore, and the result is bounded. Two keys that collide after this fail
-     * rather than overwrite, which is the whole reason {@code {key}} is mandatory.
+     * The entry's name: the declared filename with its placeholder replaced by the key made
+     * safe, and a leading underscore where the result would be a name Windows reserves for a
+     * device — {@code {key}.csv} with the key {@code CON} is {@code _CON.csv}, not a file no
+     * recipient there can extract. The stem is judged as Win32 judges it, up to the first dot
+     * and whatever the case.
+     */
+    static String entryName(String filename, Object key) {
+        String entry = filename.replace(KEY, safe(key));
+        int dot = entry.indexOf('.');
+        String stem = dot < 0 ? entry : entry.substring(0, dot);
+        return RESERVED_STEM.matcher(stem).matches() ? "_" + entry : entry;
+    }
+
+    /**
+     * A group key as a filename component: composed once (NFC), then anything a filesystem or a
+     * zip reader would object to becomes an underscore, and the result is bounded. Two keys that
+     * collide after this fail rather than overwrite, which is the whole reason {@code {key}} is
+     * mandatory.
      *
-     * <p>The bound cuts on a code-point boundary: a cut through a surrogate pair leaves a lone
-     * surrogate the ZIP name encoder refuses, and the export failed after the query ran. The
-     * key's case is kept — the over-length branch alone used to lower-case, so two long keys
-     * differing only in case collided while the same short keys did not.
+     * <p>NFC first, because the same word arrives in two forms — macOS emits decomposed text,
+     * every other source composed — and two forms are two groups; folded to one form here, a
+     * pair that would be one file on a normalisation-insensitive filesystem is a collision this
+     * class can see. Letters keep their marks (see {@link #UNSAFE}). A leading or trailing run
+     * of dots becomes one underscore: the leading one is a hidden file or a traversal, the
+     * trailing one a name Win32 silently strips.
+     *
+     * <p>The bound cuts on a grapheme boundary: a cut through a surrogate pair left a lone
+     * surrogate the ZIP name encoder refuses, and a cut between a base letter and its mark
+     * strands the mark. The key's case is kept — the over-length branch alone used to
+     * lower-case, so two long keys differing only in case collided while the same short keys
+     * did not; both pairs are now refused together, by the fold {@link #write} keys on.
      */
     static String safe(Object key) {
-        String text = String.valueOf(key);
-        String cleaned = text.replaceAll("[^\\p{L}\\p{N}._-]", "_").replaceAll("^\\.+", "_");
+        String text = Normalizer.normalize(String.valueOf(key), Normalizer.Form.NFC);
+        String cleaned = UNSAFE.matcher(text).replaceAll("_")
+                .replaceAll("^\\.+", "_").replaceAll("\\.+$", "_");
         if (cleaned.isBlank()) {
             return "_";
         }
         if (cleaned.length() <= KEY_BOUND) {
             return cleaned;
         }
-        int end = Character.isHighSurrogate(cleaned.charAt(KEY_BOUND - 1))
-                && Character.isLowSurrogate(cleaned.charAt(KEY_BOUND))
-                        ? KEY_BOUND - 1
-                        : KEY_BOUND;
-        return cleaned.substring(0, end);
+        BreakIterator graphemes = BreakIterator.getCharacterInstance();
+        graphemes.setText(cleaned);
+        int end = graphemes.isBoundary(KEY_BOUND) ? KEY_BOUND : graphemes.preceding(KEY_BOUND);
+        // A single grapheme wider than the bound (a base under a hundred marks) has no cut.
+        return end <= 0 ? "_" : cleaned.substring(0, end);
     }
 
     /** A zip entry ends with closeEntry(), not with the codec closing the whole archive. */

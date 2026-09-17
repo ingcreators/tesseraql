@@ -256,6 +256,9 @@ class SharedTempStoreIntegrationTest {
     /**
      * A download that cannot open its bytes is not recorded as delivered: the first-download
      * claim (and the after-download SQL it gates) follows a successful open, not the request.
+     * And it is coded (docs/audit-low-leads.md slice 15, XH-02): a COMPLETED export whose spool
+     * is gone answers 410 {@code TQL-LD-2868} naming the store, where it used to escape as an
+     * unchecked I/O error and read 500 {@code TQL-ROUTE-5000}.
      */
     @Test
     void aDownloadThatFailsIsNotRecordedAsDelivered() throws Exception {
@@ -268,7 +271,8 @@ class SharedTempStoreIntegrationTest {
         assertThat(spoolRows(spoolId)).isZero();
 
         HttpResponse<String> file = get("/api/orders/export-async/" + transferId + "/file");
-        assertThat(file.statusCode()).isNotEqualTo(200);
+        assertThat(file.statusCode()).as("the wire shape: %s", file.body()).isEqualTo(410);
+        assertThat(file.body()).contains("TQL-LD-2868").doesNotContain("TQL-ROUTE-5000");
         JsonNode after = MAPPER.readTree(get("/api/orders/export-async/" + transferId).body());
         assertThat(after.get("downloaded").asBoolean())
                 .as("a failed download is not a download").isFalse();

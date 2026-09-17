@@ -495,7 +495,7 @@ Its five states map onto machinery that mostly exists:
 | running | the transfer's execution row, with the progress line |
 | done | `COMPLETED`, with the report of what the database rejected |
 | failed | `FAILED`, saying whether anything was written |
-| cancelled | the cooperative stop request, once the row loop reads it |
+| cancelled | the cooperative stop request, once the row loop (or an export's row source) reads it |
 | expired | an unknown or swept transfer id — `200`, a tombstone, no trigger |
 
 Two of those are not free. **Cancel has no source today**: the job repository holds
@@ -609,6 +609,13 @@ get the card, watch it, download from the done card. The card's `done` state is 
 only direction-aware part — an import's done card shows what the database rejected,
 an export's shows the download link — so the state is written direction-aware from
 the start rather than retrofitted when the second consumer arrives.
+
+*Addendum (docs/audit-low-leads.md slice 15, XH-26): the card, the progress line and the
+poll cadence were inherited; the counter that feeds them was not. An export's only write of
+`row_count` sat inside its extraction's transaction, so every running export read "0 rows"
+and the cadence never backed off. The export's row source now publishes on the import's tick
+through its own connection, and reads the cancel flag there — the export half of decision 6's
+stop, which the import loop alone had honoured.*
 
 What an export deliberately does *not* inherit is the review phase. There is nothing
 to validate before writing a file the user has not received yet, and the contract's

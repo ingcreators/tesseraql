@@ -245,6 +245,27 @@ class JxlsFileCodecLimitsTest {
     }
 
     /**
+     * The refusal names the template as the declaration spelled it, relative to the app home,
+     * and never by the host's absolute path: the sentence is the execution row's exit message
+     * (docs/audit-low-leads.md slice 15, XH-12). Two routes may declare the same file name in
+     * different directories, so the directory stays and the home goes.
+     */
+    @Test
+    void aTemplateThatIsNotAWorkbookIsNamedRelativeToTheAppHome() throws Exception {
+        Path home = Files.createDirectories(dir.resolve("app"));
+        Path missing = home.resolve("web/reports/gone.xlsx");
+        FileWriteSpec spec = new FileWriteSpec(
+                List.of(ColumnMapping.of("name"), ColumnMapping.of("body")), null, missing, null,
+                home, null, null);
+        assertThatThrownBy(() -> codec.write(new ByteArrayOutputStream(), spec,
+                ExportModel.repeatable(List.of(row("a", "b")), Map.of())))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("TQL-LD-2837")
+                .hasMessageContaining("template web/reports/gone.xlsx does not exist")
+                .hasMessageNotContaining(home.toString());
+    }
+
+    /**
      * A workbook outside the application home is refused before a byte is written, whatever
      * mode the spec declares (docs/audit-low-leads.md slice 14, XH-14): lint and boot fence
      * the declaration, and this is the codec's own twin of the pdf codec's rule, for a spec
@@ -267,7 +288,8 @@ class JxlsFileCodecLimitsTest {
                     .isInstanceOf(TqlException.class)
                     .hasMessageContaining("TQL-LD-2837")
                     .hasMessageContaining("outside the application home")
-                    .hasMessageContaining(outside.getFileName().toString());
+                    .hasMessageContaining(outside.getFileName().toString())
+                    .hasMessageNotContaining(home.toString());
             assertThat(out.size()).as("nothing written before the refusal").isZero();
         }
         FileWriteSpec confined = new FileWriteSpec(

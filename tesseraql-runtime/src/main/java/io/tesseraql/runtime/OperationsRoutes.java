@@ -694,7 +694,8 @@ final class OperationsRoutes {
      * Streams one completed export (docs/analytics-experience.md track 3). Unknown ids and
      * transfers outside the caller's {@code tql.ops.view.<name>} scope read the same 404; a
      * transfer that is not a completed export is a 409 ({@code TQL-LD-2823}, the route
-     * download's refusal).
+     * download's refusal); a completed export whose bytes this node cannot open is the
+     * service's own 410, the same on both faces.
      */
     private void transferFile(Exchange exchange) throws java.io.IOException {
         String id = exchange.request().param("id");

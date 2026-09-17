@@ -156,6 +156,46 @@ class TransferRouteScopeIntegrationTest {
         assertThat(MAPPER.readTree(own.body()).get("cancelRequested").asBoolean()).isFalse();
     }
 
+    /**
+     * The export half of the cooperative stop (docs/audit-low-leads.md slice 15, unfiled 8 and
+     * XH-26): the mount, the card and the flag promised a stop for imports and exports alike,
+     * and only the import loop read the flag — an own-route cancel answered
+     * {@code cancelRequested: true} and the export ran to COMPLETED with its file served. The
+     * run is paced by a per-row {@code pg_sleep} over six thousand rows, so the row source
+     * publishes its counter and reads the flag between fetch batches: the status says how far
+     * the run got while RUNNING, the stop lands at a row boundary as STOPPED with the rows it
+     * reached, the file answers 409 and the card reads cancelled.
+     */
+    @Test
+    void aCancelThroughItsOwnRouteStopsTheExportAndTheFileAnswers409() throws Exception {
+        String transferId = startTransfer("/api/orders/export-long", jwt("ADMIN"));
+        JsonNode running = awaitProgress("/api/orders/export-long/" + transferId, jwt("ADMIN"));
+        assertThat(running.get("status").asText()).isEqualTo("RUNNING");
+        assertThat(running.get("rowCount").asLong()).as("rows reached while RUNNING")
+                .isPositive();
+
+        HttpResponse<String> cancel = post("/api/orders/export-long/" + transferId + "/cancel",
+                jwt("ADMIN"));
+        assertThat(cancel.statusCode()).isEqualTo(200);
+        assertThat(MAPPER.readTree(cancel.body()).get("cancelRequested").asBoolean())
+                .as("cancel %s after %s", cancel.body(), running).isTrue();
+
+        JsonNode done = awaitTerminal("/api/orders/export-long/" + transferId, jwt("ADMIN"));
+        assertThat(done.get("status").asText()).as("terminal status: %s", done)
+                .isEqualTo("STOPPED");
+        assertThat(done.get("rowCount").asLong()).as("rows reached at the stop")
+                .isPositive().isLessThan(6_000);
+
+        HttpResponse<String> file = get("/api/orders/export-long/" + transferId + "/file",
+                jwt("ADMIN"));
+        assertThat(file.statusCode()).as("a stopped export's file: %s", file.body())
+                .isEqualTo(409);
+        assertThat(file.body()).contains("TQL-LD-2823");
+        HttpResponse<String> card = get("/api/orders/export-long/" + transferId, jwt("ADMIN"),
+                "text/html");
+        assertThat(card.body()).contains("Cancelled").doesNotContain("/file");
+    }
+
     private static String startTransfer(String path, String bearer) throws Exception {
         HttpRequest.Builder request = HttpRequest.newBuilder(
                 URI.create("http://localhost:" + runtime.port() + path))
@@ -168,6 +208,22 @@ class TransferRouteScopeIntegrationTest {
                 HttpResponse.BodyHandlers.ofString());
         assertThat(response.statusCode()).isEqualTo(202);
         return MAPPER.readTree(response.body()).get("transferId").asText();
+    }
+
+    /** The status once the run has published a row count and is still RUNNING. */
+    private static JsonNode awaitProgress(String statusPath, String bearer) throws Exception {
+        Instant deadline = Instant.now().plus(Duration.ofSeconds(20));
+        while (true) {
+            JsonNode status = MAPPER.readTree(get(statusPath, bearer).body());
+            if (!"RUNNING".equals(status.get("status").asText())
+                    || status.get("rowCount").asLong() > 0) {
+                return status;
+            }
+            if (Instant.now().isAfter(deadline)) {
+                throw new AssertionError("Transfer published no progress: " + status);
+            }
+            Thread.sleep(100);
+        }
     }
 
     private static JsonNode awaitTerminal(String statusPath, String bearer) throws Exception {
@@ -294,6 +350,17 @@ class TransferRouteScopeIntegrationTest {
                 "  auth: bearer\n  policy: orders.admin\n",
                 "select order_no, (select 1 from pg_sleep(0.5) where orders.order_no is not null)"
                         + " as pause from orders order by order_no\n;\n");
+        // Six thousand rows at two milliseconds each, six fetch batches of a thousand: the run
+        // stays RUNNING for about twelve seconds and the row source sees its two-second tick
+        // between batches, which a four-row extraction (executed whole before its first row
+        // returns) never does. The sleep's ARGUMENT depends on the row: a function scan is
+        // materialized and rescanned unless a parameter it reads changed, so a constant
+        // pg_sleep behind a row-dependent WHERE runs once for the whole query. No ORDER BY: a
+        // sort would run every sleep before the first row.
+        writeExportRoute(home, "web/api/orders/export-long", "orders.exportLong",
+                "  auth: bearer\n  policy: orders.admin\n",
+                "select g as n, (select 1 from pg_sleep(0.002 * sign(g))) as pause"
+                        + " from generate_series(1, 6000) g\n;\n");
         writeImportRoute(home);
         return home;
     }

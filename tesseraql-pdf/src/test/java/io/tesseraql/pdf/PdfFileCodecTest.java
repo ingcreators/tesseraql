@@ -272,7 +272,28 @@ class PdfFileCodecTest {
                 io.tesseraql.core.files.ExportModel.repeatable(rows(), java.util.Map.of())))
                 .isInstanceOf(TqlException.class)
                 .satisfies(ex -> assertThat(((TqlException) ex).code().toString())
-                        .isEqualTo("TQL-LD-2832"));
+                        .isEqualTo("TQL-LD-2832"))
+                .hasMessageContaining("evil.html")
+                .hasMessageNotContaining(elsewhere.toString())
+                .hasMessageNotContaining(appHome.toString());
+    }
+
+    /**
+     * A template gone after boot is named as the declaration spelled it — relative to the app
+     * home — and never by the host's absolute path, because the sentence is the execution row's
+     * exit message (docs/audit-low-leads.md slice 15, XH-12). Two routes may declare the same
+     * file name in different directories, so the directory stays and the home goes.
+     */
+    @Test
+    void aMissingTemplateIsNamedRelativeToTheAppHome() throws Exception {
+        Path template = appHome.resolve("web/orders/print/missing.html");
+        assertThatThrownBy(() -> codec.write(new ByteArrayOutputStream(),
+                new FileWriteSpec(List.of(), null, template, null, appHome, null, null),
+                io.tesseraql.core.files.ExportModel.repeatable(rows(), java.util.Map.of())))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("TQL-LD-2831")
+                .hasMessageContaining("'web/orders/print/missing.html' is not a file")
+                .hasMessageNotContaining(appHome.toString());
     }
 
     @Test
