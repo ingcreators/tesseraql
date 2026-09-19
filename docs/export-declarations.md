@@ -430,7 +430,10 @@ assertion (variant SR green — cosmetic).
 longer asks a workbook for a locale the same linter refuses — without it an excel export in a
 multilingual app has no lint-clean state (three attackers RUN). 4622's removal (it guards nothing on
 any export surface — `codes` never reaches an export) stays the lookups record's; it is NOT
-extended to jobs.
+extended to jobs. *As built 2026-09-19 ([audit-low-leads.md](audit-low-leads.md) slice 17):
+the lookups record received it — 4622, its four cases and the two export routes'
+`CatalogBinder(fixedLocale)` step are deleted; the SN row below now pins the absence of any
+catalog rule on a workbook export.*
 
 **26 — `after:` on a query-export stays the compiler's `TQL-ROUTE-3101`; the lint stays silent
 on it.** A lint-only 1005 for a boot REFUSAL would be a fourth kind under two codes; the drift is
@@ -1486,7 +1489,8 @@ Every unfiled defect the measurement found, routed elsewhere with its destinatio
 - **Lookups record / export hygiene:** `TQL-FIELD-4622` guarding nothing on any export surface,
   the dead `CatalogBinder(fixedLocale)` step on export routes, `docs/lookups.md` decision 12's
   Export row, the #742 CHANGELOG framing; the two `CatalogBinder` sites' collapsed
-  `formatDeclaration` — do NOT extend 4622 to jobs.
+  `formatDeclaration` — do NOT extend 4622 to jobs. *All five closed by
+  [audit-low-leads.md](audit-low-leads.md) slice 17 (2026-09-19): deleted, not extended.*
 - **Base-path emission ledger:** the status JSON's `fileUrl` drops the base path
   (`FileTransferStatusProcessor:94`; `FileTransferIntegrationTest:138` asserts `endsWith` only) —
   fixed by `export-hygiene.md` P8, with the card's double-prefixed Download and cancel beside it.

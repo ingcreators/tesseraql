@@ -41,7 +41,7 @@ collation is locale-dependent, and code masters already carry a display-order co
 
 ## Showing the name
 
-In a hand-written template, the catalogs are in the model under `codes`:
+In a hand-written HTML template, the catalogs are in the model under `codes`:
 
 ```html
 <td th:text="${codes.payment_method.of(row.payment_method)}">Bank transfer</td>
@@ -50,6 +50,12 @@ In a hand-written template, the catalogs are in the model under `codes`:
 `of(...)` returns the name, or the code itself when the catalog has no name for it. A
 missing name is a gap in the master data, not a reason to blank a cell in a document
 someone is reading.
+
+`codes` is on every HTML page, whether the template was written by hand or ejected from a
+view. It is not in an export's template or a mail's: no export writes a catalog name — an
+export writes the code — and a name in a document comes through
+[`enrich:`](response-shaping.md#fetching-a-reference-by-key) or a named query the export
+declares.
 
 In a [declarative view](declarative-views.md), point the column at a domain instead:
 
@@ -119,14 +125,10 @@ raw code.
 The key set never narrows with the labels. Whether a code may be written is a question
 about the key set, so a missing translation can never turn into a failed transaction.
 
-An **export** answers in its own `locale:`, not the requesting browser's. An export has
-no request to negotiate a locale from — it is often generated on a schedule and read by
-someone who never made a request. When your catalogs carry per-language names, a `csv` or
-`pdf` export must declare `locale:` (or `tesseraql.files.locale`); the build refuses the
-undeclared case rather than letting the server's locale decide. A workbook never reads
-`locale:` — its cells carry values the reader's own locale renders — so an `excel` export is
-not asked for one, and is refused when it declares one
-([file-transfers.md](file-transfers.md)).
+An **export** renders no catalog name in any language: it writes the code, and a name in
+a document comes through `enrich:` or a named query. An export's `locale:` is the locale its
+numbers, dates and times are formatted in ([file-transfers.md](file-transfers.md)); the
+export-declaration rules judge it, and no catalog rule asks for it.
 
 ## When a table and filters are not enough
 
@@ -216,6 +218,15 @@ None of this is the guarantee. `invalidates:` is an optimization — a master wr
 another system raises nothing. Underneath sit the hold's expiry and the validation
 path's re-read, so a stale catalog is a display delay and never a wrong rejection.
 
+**A catalog that cannot load fails the screens that read it, and only those.** A catalog
+loads on the first read that asks for it. So a table missing on one environment — or a
+datasource down at first touch — answers `TQL-APP-4206` (a 500: the fault is the server's)
+on the pages that render its codes and on the commands that validate against it, while
+every other route serves. The failed load is held for a few seconds rather than retried on
+every request; the log names the catalog and its tables, and `GET /_tesseraql/ops/catalogs`
+shows the catalog as never loaded with the error beside it. Once the table exists, the next
+interval — or a maintenance write naming the table, or the operations refresh — loads it.
+
 ## Catalog or enrichment?
 
 The choice is **size**, not key arity.
@@ -248,8 +259,7 @@ Both resolve composite keys, and both read the same at the call site.
 | `TQL-FIELD-4619` | per-language names in an app that negotiates one locale |
 | `TQL-FIELD-4620` | `invalidates:` that drops nothing, or on a recipe with no commit |
 | `TQL-FIELD-4621` | a contradictory source, or a `file:` that is not there |
-| `TQL-FIELD-4622` | an export that renders codes but declares no locale |
-| `TQL-APP-4206` | a catalog could not be loaded and has never loaded |
+| `TQL-APP-4206` | a catalog could not be loaded and has never loaded; its readers answer 500 until it does |
 | `TQL-APP-4207` | catalogs declared alongside per-tenant datasources |
 
 ## In the editor

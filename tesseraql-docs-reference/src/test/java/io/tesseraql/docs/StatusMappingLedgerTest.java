@@ -41,6 +41,11 @@ class StatusMappingLedgerTest {
 
     /** Codes in scope whose 500 is the recorded decision. */
     private static final Set<String> RECORDED = new TreeSet<>(List.of(
+            // APP-4206: a code catalog that could not be loaded and has never loaded — a table
+            // missing on this environment, a datasource down at first touch. The server's
+            // fault wearing a refusal number; mapped 500 in the switch, not the domain's 404
+            // (docs/audit-low-leads.md unfiled 19).
+            "TQL-APP-4206",
             // Lint findings and boot refusals: raised at author/boot time, never through the
             // renderer (calendar/chunk/chain/overlap/heartbeat rules; the reaped-execution
             // record lives on the execution row).

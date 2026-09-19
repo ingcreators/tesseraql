@@ -72,6 +72,23 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **`TQL-FIELD-4622` is deleted: no export renders a catalog name.** The rule refused a
+  `csv` or `pdf` export that declared no `locale:` in an app whose catalogs carry
+  per-language names, on the 0.14.0 premise that an export's code names answer in the
+  export's locale. They never did — both export chains hand the codec the declared source
+  names only, and a template reading `${codes.x.of(...)}` on an export fails with
+  `TQL-LD-2831` — so the ERROR failed the default lint gate for a capability the surface does
+  not have. The rule, its four cases and the export routes' dead `CatalogBinder(fixedLocale)`
+  step are gone; an export's `locale:` is the formatting locale the export-declaration rules
+  judge, and a name in a document comes through `enrich:` or a named query. This supersedes
+  the 0.14.0 entry "An export's code names answer in the export's locale"; `docs/lookups.md`
+  decision 12 and `docs/code-catalogs.md` say what an export does render
+  (`docs/audit-low-leads.md` slice 17: XD-04a, XD-04b, XD-04c).
+- **A code catalog loads on the first read that asks for it.** `codes` is still published to
+  every route, but a route that never asks for a catalog never loads one, so a catalog that
+  cannot load fails the screens that render its codes and the commands that validate against
+  it, and nothing else. Iterating `codes` in a template still resolves every catalog
+  (`docs/lookups.md` decision 14 as built).
 - **Three error codes renumbered or split where one number meant two things.** The copilot
   endpoint refusal (not an absolute URL, or a host outside the egress allow-list) is
   `TQL-SEC-4094`; it shared `TQL-SEC-4085` with the FTPS trust-store lint. A Studio request
@@ -324,6 +341,25 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A code catalog that has never loaded no longer takes every route of the app down.** One
+  `table:` catalog on a table missing from this environment answered 404 `TQL-APP-4206` on
+  every route — JSON reads, commands, exports, MCP tools, pages that never rendered its
+  codes — because the binder on every route's head loaded every catalog on the request, the
+  domain's default status is 404, and a 4xx logs at DEBUG. It now fails its readers with a
+  500 (the server's fault, not the caller's), the failing load is held for the version
+  stamp's interval rather than re-run on every request, the log names the catalog and its
+  tables, and `GET /_tesseraql/ops/catalogs` shows the catalog as never loaded with the
+  error beside it. An invalidation naming the table, the operations refresh or the
+  interval's end tries again (`docs/audit-low-leads.md` slice 17, unfiled 19).
+- **A coded refusal raised while a template resolves a value keeps its code.** Thymeleaf
+  wraps what a model object throws in its own processing exception, so a refusal raised on a
+  read — the never-loaded catalog above — answered an uncoded `TQL-ROUTE-5000` from a
+  hand-written template and `TQL-APP-4206` from a declarative view; the engine's own
+  failures (a missing template, a malformed expression) are unchanged.
+- **The catalog integration test requests the export it wrote.** #742's csv fixture stood
+  under the comment "an export renders through a template like any other surface" and was
+  never fetched; it is fetched now, and pins the opposite: the csv carries the code and no
+  name, whatever language the request negotiated (unfiled 32).
 - **A wrapped `SQLException` carries its cause.** Twenty-five `catch (SQLException)` sites
   built their `TqlException` from the message alone, so the stack every 5xx logs ended at the
   wrap with no `Caused by:` — the SQLState, the vendor code and the driver's own chain gone.

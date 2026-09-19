@@ -1576,12 +1576,11 @@ public final class RouteCompiler {
 
         PipelineBuilder route = pipelines.pipeline(routeId);
         applyCommonGovernance(route, routeFile);
+        // No catalog binder on an export: nothing downstream reads `codes` — the codecs
+        // receive the declared source names only (docs/lookups.md, decision 12 as built).
         PipelineBuilder step = route
                 .process(new RequestBinder(definition, routeFile.urlPath(),
-                        compiledAppHome, functions))
-                .process(new io.tesseraql.compiler.binding.CatalogBinder(
-                        formatDeclaration(spec == null ? null : spec.locale(),
-                                "tesseraql.files.locale")));
+                        compiledAppHome, functions));
         step = httpSourcesFirst(step, definition);
         step.process(new io.tesseraql.compiler.binding.QueryExportBinder(codec, writeSpec,
                 formatting("locale", spec == null ? null : spec.locale()),
@@ -1761,12 +1760,7 @@ public final class RouteCompiler {
         applyCommonGovernance(route, routeFile);
         PipelineBuilder exportStep = route
                 .process(new RequestBinder(definition, routeFile.urlPath(),
-                        compiledAppHome, functions))
-                // The export's own locale, not the requesting browser's (docs/lookups.md,
-                // decision 12): a document must not carry names in one language and its
-                // numbers and dates in another.
-                .process(new io.tesseraql.compiler.binding.CatalogBinder(
-                        formatDeclaration(spec.locale(), "tesseraql.files.locale")));
+                        compiledAppHome, functions));
         exportStep = httpSourcesFirst(exportStep, definition);
         exportStep.process(new io.tesseraql.compiler.binding.FileExportStartProcessor(
                 routeId, routeFile.urlPath(), appName, format,
@@ -1839,16 +1833,6 @@ public final class RouteCompiler {
             String format, String key) {
         return codecs.require(format, io.tesseraql.yaml.app.ExportDeclarations.Site
                 .route(appName, definition).prefix(key));
-    }
-
-    /**
-     * The catalog binder's fixed locale: the route's literal, else the app-wide configuration,
-     * collapsed here because a lookup catalog has no per-request chain to walk.
-     */
-    private String formatDeclaration(String declared, String configKey) {
-        return declared != null && !declared.isBlank()
-                ? declared
-                : config.getString(configKey).orElse(null);
     }
 
     /**

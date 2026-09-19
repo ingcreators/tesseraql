@@ -922,7 +922,8 @@ Every unfiled defect the measurement surfaced, with its destination (the measure
   verbatim as the cell format; the PDF template's `Locale.ROOT` context; the `TQL-LD-2856`
   missing-template code; the `'null'` format text on a step without `format:`; the caller's
   principal in `params_json`; `TQL-LD-2801`'s hint that always names the excel module;
-  `TQL-FIELD-4622` guarding nothing.
+  `TQL-FIELD-4622` guarding nothing (*deleted by [audit-low-leads.md](audit-low-leads.md)
+  slice 17*).
 - **The export-declarations record**: the lint/boot gap for inert export keys closes with a boot
   warning from the linter's own predicate, never a refusal; the same un-linted app also shipped a
   split bundle mislabelled under the per-document name on a VALID declaration.

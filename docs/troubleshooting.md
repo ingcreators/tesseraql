@@ -337,6 +337,16 @@ whose values differ by more than case. Combining marks are kept (an abugida key 
 it is) and a name Windows reserves for a device (`CON`, `NUL`, `COM1`…) is prefixed with an
 underscore rather than refused.
 
+### `TQL-APP-4206` — a code catalog could not be loaded and has never loaded
+
+A page that renders a code, or a command that validates one, answers 500 with this code
+while every other route serves: the catalog's table is missing on this environment, or its
+datasource was down the first time anything asked. The log names the catalog and its
+tables, and `GET /_tesseraql/ops/catalogs` shows the catalog as never loaded with the error
+beside it. Create the table (or bring the datasource back); the store tries again within a
+few seconds, at once on a maintenance write naming the table, or on
+`POST /_tesseraql/ops/catalogs/{name}/refresh` ([code-catalogs.md](code-catalogs.md)).
+
 ### Health is DOWN but the application answers
 
 The health probe covers the datasources, not just the HTTP port. The ops console overview
