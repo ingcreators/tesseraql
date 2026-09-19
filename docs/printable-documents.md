@@ -56,8 +56,11 @@ locale before they reached the model. A template that cannot be rendered fails t
 `TQL-LD-2831` naming the template.
 The model is:
 
-- `rows` — the query rows, values already formatted per the column mappings (locale, time
-  zone, `format:` patterns — the same rules as CSV output)
+- `main` — `{ rows, rowCount }`: the query rows, values already formatted per the column
+  mappings (locale, time zone, `format:` patterns — the same rules as CSV output), under the
+  same key a route publishes its default result; a template iterates `${main.rows}`. The
+  export's other declared `sources:` land under their own names (the invoice example below
+  reads `header`).
 - `columns` — `{ name, header }` per declared column
 - `fontFamilies` — the app's font families as a CSS `font-family` list, for templates that do
   not name fonts themselves

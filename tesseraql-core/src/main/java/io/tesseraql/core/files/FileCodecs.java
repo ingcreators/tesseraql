@@ -36,9 +36,11 @@ public final class FileCodecs {
      * Registers a codec under its format, the last one put winning as it always has — and says
      * so when a different class takes a format another codec held (docs/export-hygiene.md P7):
      * a module codec answering {@code csv} silently decided every export and import that read
-     * this set. A refusal here would fail every app carrying the module; the lint that names the
-     * shape is the lint's (docs/codec-discovery.md decision 3). The line describes THIS codec
-     * set, which since decision 1 is the one set every arm of an application reads.
+     * this set. A refusal here would fail every app carrying the module, so the line is the
+     * whole answer today — no lint names two codecs on one format (docs/codec-discovery.md
+     * decision 3 lints an unknown format; a duplicate-format lint was scoped and
+     * never shipped). The line describes THIS codec set, which since decision 1 is the one set
+     * every arm of an application reads.
      */
     private static void put(Map<String, FileCodec> codecs, FileCodec codec) {
         FileCodec previous = codecs.put(codec.format(), codec);

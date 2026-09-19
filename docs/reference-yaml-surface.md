@@ -224,7 +224,7 @@ query-export / file-export output: format (csv, excel, pdf), filename, columns w
 | Property | Type | Description |
 | --- | --- | --- |
 | `format` | string | The format the rows are written as. `csv` is built in; `excel` and `pdf` need their modules (TQL-LD-2801 when the codec is absent). |
-| `filename` | string | The download filename, defaulting to the document id plus the format's extension. `{dotted.path}` interpolates a context value, and a `splitBy:` export must carry `{key}`. |
+| `filename` | string | The download filename, defaulting to the document id plus the format's extension. On a route it is a literal name except `{key}`, which a `splitBy:` export must carry; on a job's export step `{dotted.path}` also interpolates a step-context value (`{batch.businessDate}`). |
 | `template` | string | A workbook or print template colocated with the document: an .xlsx for excel, an .html for pdf. A path that does not exist fails the build rather than quietly writing a plain grid. |
 | `sheet` | string | For workbook formats, the sheet to write. |
 | `startCell` | string | Placement mode: where data rows start in the template, e.g. `B5`. Refused without a template (TQL-YAML-1041), and refused on pdf (TQL-YAML-1005) — a page lays out through its template, not through cell positions. |
@@ -328,7 +328,7 @@ Stream the generated file back as the response body (`query-export`). Documented
 
 | Property | Type | Description |
 | --- | --- | --- |
-| `filename` | string | The download filename offered to the client, as a literal or a bindable path. |
+| `filename` | string | The download filename offered to the client, a literal — it is not evaluated. |
 
 #### response.redirect
 
@@ -348,7 +348,7 @@ Render a template into a file and answer with it as a download.
 | `status` | integer | The status answered on success (default 200). |
 | `template` \* | string | The template rendered into the file. |
 | `contentType` | string | The Content-Type of the produced file. |
-| `filename` | string | The download filename offered to the client, as a literal or a bindable path. |
+| `filename` | string | The download filename offered to the client, a literal — it is not evaluated. |
 | `model` | map of string | Extra model entries for the template: each name to the bindable path supplying it. The value is read as a path, not as data — every renderer stringifies it and parses the result, so a non-string is silently mangled. |
 
 #### response.text
@@ -482,7 +482,7 @@ query-export / file-export output: format (csv, excel, pdf), filename, columns w
 | Property | Type | Description |
 | --- | --- | --- |
 | `format` | string | The format the rows are written as. `csv` is built in; `excel` and `pdf` need their modules (TQL-LD-2801 when the codec is absent). |
-| `filename` | string | The download filename, defaulting to the document id plus the format's extension. `{dotted.path}` interpolates a context value, and a `splitBy:` export must carry `{key}`. |
+| `filename` | string | The download filename, defaulting to the document id plus the format's extension. On a route it is a literal name except `{key}`, which a `splitBy:` export must carry; on a job's export step `{dotted.path}` also interpolates a step-context value (`{batch.businessDate}`). |
 | `template` | string | A workbook or print template colocated with the document: an .xlsx for excel, an .html for pdf. A path that does not exist fails the build rather than quietly writing a plain grid. |
 | `sheet` | string | For workbook formats, the sheet to write. |
 | `startCell` | string | Placement mode: where data rows start in the template, e.g. `B5`. Refused without a template (TQL-YAML-1041), and refused on pdf (TQL-YAML-1005) — a page lays out through its template, not through cell positions. |

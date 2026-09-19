@@ -1,11 +1,13 @@
 # The documentation site — tutorial, cookbook, generated reference
 
 Status: design v2 accepted 2026-07-04, superseding v1 (#274) before implementation
-started. v1 proposed a hand-rolled Java static-site generator; v2 replaces it with
-**Astro Starlight on Cloudflare**, mirroring the deployment that already serves the
-Hypermedia Components documentation from the same organization. This is the
-documentation-site leg of roadmap Phase 35; Maven Central, the Gradle plugin, and
-official images are that phase's other legs and remain open.
+started; the sidebar was restructured by reader intent on 2026-08-09
+([documentation-ia.md](documentation-ia.md)). v1 proposed a hand-rolled Java static-site
+generator; v2 replaces it with **Astro Starlight on Cloudflare**, mirroring the deployment
+that already serves the Hypermedia Components documentation from the same organization.
+This is the documentation-site leg of roadmap Phase 35; of that phase's other legs, Maven
+Central (0.7.1), the Homebrew tap, the Scoop bucket and the GHCR demo image have shipped,
+and the Gradle plugin and the runtime image remain open.
 
 TesseraQL's documentation already exists and is good: ~40 cookbook and design documents
 under `docs/`, a deep JSON Schema of the whole YAML surface, and an error taxonomy with
@@ -36,10 +38,10 @@ front door: one place to read it, navigate it, search it — and reference pages
   touch `docs-site/src/content/` by hand; the synced output is gitignored.
 - **Curated navigation with a completeness guard.** One navigation manifest
   (`docs-site/nav.mjs`) drives both the Starlight sidebar and the sync step: every
-  `docs/*.md` is mapped into a section (Tutorial / Building applications / Platform
-  services / Security & identity / Operations / Project & design) or excluded
-  explicitly (internal trackers), and the sync fails the build when a new document is
-  neither — a doc can never silently miss the site. `starlight-links-validator` then
+  `docs/*.md` is mapped into a section of its `SECTIONS` list (the manifest is the list
+  of sections; the taxonomy decision is [documentation-ia.md](documentation-ia.md)) or
+  excluded explicitly (internal trackers), and the sync fails the build when a new
+  document is neither — a doc can never silently miss the site. `starlight-links-validator` then
   fails the build on broken internal links or anchors over the rendered route graph.
 
 ## The generated reference
@@ -70,7 +72,8 @@ Hypermedia Components: `wrangler.jsonc` at the repo root points the assets bindi
 Assets `_redirects` cannot express 200-rewrites). Production deploys track `main`;
 non-production branches get preview versions (`npx wrangler versions upload`) — every
 PR that touches the docs gets a URL. The CI `docs-site` job runs the same build
-command as Cloudflare, so green CI implies a clean deploy.
+command as Cloudflare, so green CI implies a clean build; the deploy step itself
+(`wrangler`) runs only in Cloudflare's build, and a failure there does not reproduce in CI.
 
 Dashboard-side setup (create the Worker from the repo, attach
 `tesseraql.ingcreators.com` as the fallback domain, add the

@@ -528,7 +528,7 @@
           "properties": {
             "filename": {
               "type": "string",
-              "description": "The download filename offered to the client, as a literal or a bindable path."
+              "description": "The download filename offered to the client, a literal — it is not evaluated."
             }
           },
           "additionalProperties": true,
@@ -574,7 +574,7 @@
             },
             "filename": {
               "type": "string",
-              "description": "The download filename offered to the client, as a literal or a bindable path."
+              "description": "The download filename offered to the client, a literal — it is not evaluated."
             },
             "model": {
               "type": "object",

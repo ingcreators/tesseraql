@@ -94,7 +94,7 @@
           },
           "filename": {
             "type": "string",
-            "description": "The download filename, defaulting to the document id plus the format's extension. `{dotted.path}` interpolates a context value, and a `splitBy:` export must carry `{key}`."
+            "description": "The download filename, defaulting to the document id plus the format's extension. On a route it is a literal name except `{key}`, which a `splitBy:` export must carry; on a job's export step `{dotted.path}` also interpolates a step-context value (`{batch.businessDate}`)."
           },
           "template": {
             "type": "string",

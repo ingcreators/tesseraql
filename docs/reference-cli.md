@@ -3,7 +3,7 @@
 
 Every `tesseraql` subcommand, generated from the command model the binary itself parses with, so it cannot describe a flag that does not exist. `tesseraql <command> --help` prints the same content at the terminal.
 
-Most commands take `--app <dir>`, the application home they act on. Every subcommand calls the same engine as the matching Maven goal, so a CLI loop and a CI pipeline do the same work.
+Most commands take `--app <dir>`, the application home they act on. The build gates — `lint`, `test`, `coverage`, `generate`, `schema`, `migrate`, `identity-schema`, `package`, `release-diff`, `governance`, `admission` and `verify` — call the same engine as the matching `tesseraql:` Maven goal (`tesseraql:package-app` for `package`, `tesseraql:verify-evidence` for `verify`, `tesseraql:report` for `test --report`), so a CLI loop and a CI pipeline do the same work. Every other subcommand is the CLI's alone, and `tesseraql:release-evidence` is CI's alone.
 
 [`dev`](#dev) · [`host`](#host) · [`deploy`](#deploy) · [`routes`](#routes) · [`new`](#new) · [`scaffold`](#scaffold) · [`lint`](#lint) · [`token`](#token) · [`test`](#test) · [`coverage`](#coverage) · [`generate`](#generate) · [`schema`](#schema) · [`symbols`](#symbols) · [`release-diff`](#release-diff) · [`governance`](#governance) · [`admission`](#admission) · [`migrate`](#migrate) · [`job`](#job) · [`identity-schema`](#identity-schema) · [`package`](#package) · [`verify`](#verify) · [`modules`](#modules) · [`embedded-db`](#embedded-db) · [`duckdb`](#duckdb) · [`mcp`](#mcp)
 

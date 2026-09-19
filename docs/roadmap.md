@@ -435,8 +435,10 @@ taxonomy.
 > keeps `docs/` the canonical tree, and a Reference section (the YAML surface from the
 > JSON schema, the 300+ `TQL-*` codes from a source scan) generated as committed,
 > drift-guarded markdown by `tesseraql-docs-reference`. The one-time Cloudflare
-> dashboard setup is the runbook in `docs-site/DEPLOYMENT.md` (operator step). Maven
-> Central, the Gradle plugin, and official images remain open.
+> dashboard setup is the runbook in `docs-site/DEPLOYMENT.md` (operator step). Of the
+> phase's other legs, Maven Central (first real publish 0.7.1), the Homebrew tap, the
+> Scoop bucket and the GHCR demo image have shipped; the Gradle plugin, SDKMAN and the
+> runtime image (Tier 3 item 6 below) remain open.
 
 ### Phase 36 — security review and support policy
 
@@ -1210,7 +1212,8 @@ JRE prerequisite, built per-OS on `v*` tags). This shapes every channel below.
      shape, making this the lowest-friction primary.
   4. *Homebrew tap (macOS/Linux) + Scoop/WinGet (Windows)* — payload is the bundled-JVM app-image (no
      JRE prerequisite); the package manager owns `upgrade`; the release workflow bumps the
-     formula/manifest.
+     formula/manifest. **Shipped (0.7.0):** `brew install ingcreators/tap/tesseraql`,
+     `scoop install tesseraql`, both bumped by `release.yml`; WinGet is not.
 - **Tier 3 — complements / later.**
   5. *install.sh / install.ps1* (`curl … | sh`): detect OS/arch → fetch the latest app-image → unpack
      to `~/.tesseraql` + symlink; re-run to upgrade. Fallback where no package manager exists.
@@ -1457,8 +1460,8 @@ None block Phase 18; flagged for the maintainer as their horizons approach.
    would break SQL-first (principle 1) and the module boundaries (principle 5). The `WorkflowStore`
    SPI and the `kind: workflow` document keep the seam an external engine could later plug into. The
    full design is in [docs/approval-workflow.md](approval-workflow.md).
-3. **Adoption timing**: Maven Central and the docs site sit in Horizon 6; pull them forward
-   if external adoption becomes a near-term goal.
+3. **Adoption timing**: Maven Central and the docs site sat in Horizon 6; both were pulled
+   forward and shipped (the site 2026-07-04, Central with 0.7.1).
 4. **AI ambition** (Phase 24): the dev-tool MCP server is the scoped bet, and it shipped with
    its protocol core factored out (`tesseraql-mcp`) so the runtime can later serve
    application-declared MCP endpoints from YAML (the Phase 24 "next step"). Deeper

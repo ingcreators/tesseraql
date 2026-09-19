@@ -23,9 +23,10 @@ import java.util.regex.Pattern;
 /**
  * Phase 38 Tier 1: a passive, opt-out, non-blocking "a newer release is available" notice.
  *
- * <p>The CLI distribution is downloaded by hand (GitHub Releases) and has no package-manager upgrade
- * path yet, so a user on a stale — or broken — build (the 0.3.0 {@code --embedded-db} packaging bug
- * that 0.3.1 fixed) has no in-tool signal that a fix shipped. This closes that blind spot.
+ * <p>A user on a stale — or broken — build (the 0.3.0 {@code --embedded-db} packaging bug that
+ * 0.3.1 fixed) had no in-tool signal that a fix shipped. This closes that blind spot, beside the
+ * package managers: the Homebrew tap and the Scoop bucket carry {@code upgrade}/{@code update}
+ * since 0.7.0 (docs/upgrading.md), and a hand-installed archive has only this notice.
  *
  * <p>Design: the notice is printed only from a small per-user cache file, so a run adds <em>zero</em>
  * latency and never touches the network on its hot path. When that cache is missing or older than the
@@ -96,7 +97,8 @@ final class UpdateNotifier {
         String latest = cache.getProperty(LATEST_VERSION_KEY);
         if (latest != null && isNewer(latest, currentVersion)) {
             err.println("A newer TesseraQL is available: " + latest + " (current " + currentVersion
-                    + "). Download: " + RELEASES_URL);
+                    + "). brew upgrade tesseraql / scoop update tesseraql, or download: "
+                    + RELEASES_URL);
         }
     }
 

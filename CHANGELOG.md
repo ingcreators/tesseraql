@@ -401,6 +401,35 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **The CLI reference states the Maven parity the right way round.** The generated page and
+  the getting-started page claimed every subcommand has a matching Maven goal; thirteen of
+  twenty-five do not. Both now name the twelve build gates that share an engine with a
+  `tesseraql:` goal (`package-app`, `verify-evidence` and `report` under their CLI names) and
+  say the rest are the CLI's alone; a ledger test derives the list from the plugin's `@Mojo`
+  names (`docs/audit-low-leads.md` slice 23, F116).
+- **The distribution pages say what shipped.** The roadmap and the docs-site record still
+  called Maven Central, Homebrew and Scoop open (Central's first real publish was 0.7.1;
+  brew/scoop shipped with 0.7.0); the upgrade page told package-manager users to re-download
+  an archive and the update notice pointed only at GitHub Releases; the docs-site record named
+  a six-section sidebar the site replaced in August (`nav.mjs` `SECTIONS` is the list). All
+  four read the current state (F83, F84, F85, unfiled 31).
+- **Three descriptions promised what the code does not do.** The `lookups` record claimed
+  request-scoped enrichment memoization — never built; one fetch per `enrich:` block. The
+  shared `export.filename` schema description said `{dotted.path}` interpolates — true on a
+  job step, false on a route, where the name is literal except `{key}` — and
+  `response.file/stream.filename` claimed "a bindable path"; both now say what each arm does,
+  and the reference regenerated. The printable-documents page and two Javadocs named the pdf
+  template's model key `rows`; the key is `main`, and a template written to `rows` rendered an
+  empty document without a line logged — a `PdfFileCodecTest` row now pins the model's keys
+  (F122, DN-03d, unfiled 24, 30, 46).
+- **The developer-setup files reason in this codebase's terms.** `.vscode/settings.json`'s
+  null-analysis rationale named Jackson and Camel (Jackson never carried JSpecify metadata;
+  Camel is gone) — it names `junit-jupiter-api` and `webjars-locator-lite` with the command to
+  re-derive them; `docs/build.md`'s suppression example and `CONTRIBUTING.md`'s bare `mvn` are
+  current; `wrangler.jsonc` drops a `$schema` into an undeclared package and
+  `docs-site/DEPLOYMENT.md` pins `npx wrangler@4`, with "clean deploy" corrected to "clean
+  build" where CI never runs the deploy tool. Two ledger tests hold the setup files
+  Camel-free and the worker config's `$schema` resolvable (F94, F95, unfiled 65, 66).
 - **A HEAD of a download takes neither the first-download claim nor the follow-up.** Since
   every GET mount answered HEAD (0.18.0, unreleased), a HEAD of `…/file` — a link checker, a
   monitor, `curl -I` — ran the whole download: the transfer read as `downloaded: true` and the

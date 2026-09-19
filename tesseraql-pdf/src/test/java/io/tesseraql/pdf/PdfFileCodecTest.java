@@ -155,6 +155,44 @@ class PdfFileCodecTest {
         assertThat(text).contains("利用者一覧", "佐藤花子", "田中太郎", "1 / 1");
     }
 
+    /**
+     * The template's model is the one docs/printable-documents.md lists: {@code main} carrying
+     * the rows, {@code columns}, {@code fontFamilies}, and the export's other declared sources
+     * under their own names — never a bare {@code rows}. The page named {@code rows} for three
+     * months after the key became {@code main} (docs/audit-low-leads.md slice 23, unfiled 24), and
+     * a template written to it rendered an empty document, COMPLETED, without a line logged: a
+     * Thymeleaf iteration over a null collection is silent, so the model's key set is what a
+     * guard has to read.
+     */
+    @Test
+    void theTemplateModelIsTheDocumentedOne() throws Exception {
+        Path routeDir = Files.createDirectories(appHome.resolve("web/users/keys"));
+        Files.writeString(routeDir.resolve("keys.html"), """
+                <html xmlns:th="http://www.thymeleaf.org">
+                <body>
+                  <p th:text="|main:${main != null} count:${main.rowCount}|">main</p>
+                  <p th:text="|columns:${columns != null} fonts:${fontFamilies != null}|">c</p>
+                  <p th:text="|header:${header.first.customer}|">header</p>
+                  <p th:text="|rows:${rows == null} sql:${sql == null}|">absent</p>
+                </body>
+                </html>
+                """);
+
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        codec.write(out, new FileWriteSpec(List.of(
+                new ColumnMapping("user_name", null, null, null, null)),
+                null, routeDir.resolve("keys.html"), null, appHome, null, null),
+                io.tesseraql.core.files.ExportModel.repeatable(rows(), java.util.Map.of(
+                        "header", java.util.Map.of("rows", List.of(java.util.Map.of("customer",
+                                "ACME")), "rowCount", 1, "first",
+                                java.util.Map.of("customer", "ACME")))));
+
+        String text = extractText(out.toByteArray());
+        assertThat(text).contains("main:true count:2", "columns:true fonts:true", "header:ACME");
+        // The retired keys are absent — a template written to them reads null and renders nothing.
+        assertThat(text).contains("rows:true sql:true");
+    }
+
     @Test
     void gridExportRendersASqlTimeAsWallClockText() throws Exception {
         Map<String, Object> row = new LinkedHashMap<>();

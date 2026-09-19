@@ -44,9 +44,9 @@ branch `main`.
 | --- | --- |
 | Project name | `tesseraql-docs` |
 | Build command | `cd docs-site && corepack enable && pnpm install --frozen-lockfile && pnpm run build` |
-| Deploy command | `npx wrangler deploy` |
+| Deploy command | `npx wrangler@4 deploy` |
 | Builds for non-production branches | ☑ checked |
-| **Advanced — Non-production branch deploy command** | `npx wrangler versions upload` |
+| **Advanced — Non-production branch deploy command** | `npx wrangler@4 versions upload` |
 | **Advanced — Path** | *(leave empty / `/`)* — `wrangler.jsonc` lives at the repo root |
 | API token | **+ Create new token**; accept the default scoped token |
 
@@ -94,4 +94,8 @@ prefix.
 
 Nothing manual: pushes to `main` build and deploy; PR branches build preview
 versions. If a deploy misbehaves, check the Worker build logs in the dashboard, then
-`.github/workflows/ci.yml` (`docs-site` job) for the same failure reproduced in CI.
+`.github/workflows/ci.yml` (`docs-site` job) for the same failure reproduced in CI — a
+failure in the *build* half, that is. The deploy half is `wrangler`'s and runs only in
+Cloudflare's build: CI never invokes it, so a wrangler failure shows in the dashboard alone.
+The `@4` on the two commands pins the major, because Cloudflare reads a wrangler version
+from the `package.json` at the Path and the Path (`/`) has none.

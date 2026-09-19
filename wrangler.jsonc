@@ -7,8 +7,12 @@
 //
 // See docs-site/DEPLOYMENT.md for the dashboard-side setup (project create, build
 // command, preview versions, custom domain, zone route).
+//
+// No "$schema": wrangler is not a dependency of docs-site/ (its workerd binary would join
+// every install for a deploy that runs only in Cloudflare's build, as `npx wrangler@4`), so
+// a $schema path into node_modules resolved nowhere. For editor validation, `npm i -g
+// wrangler@4` and point a local "$schema" at its config-schema.json without committing it.
 {
-  "$schema": "docs-site/node_modules/wrangler/config-schema.json",
   "name": "tesseraql-docs",
   "main": "worker.mjs",
   "compatibility_date": "2026-07-01",

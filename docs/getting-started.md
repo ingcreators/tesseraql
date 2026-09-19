@@ -98,7 +98,11 @@ tesseraql package --app .            # build a .tqlapp under work/
 ```
 
 `migrate` (apply/info/validate/repair), `schema`, `governance`, `identity-schema`, and `verify`
-round out the surface. Every subcommand calls the same engine as the matching Maven goal.
+round out the surface. The build gates — `lint`, `test`, `coverage`, `generate`, `schema`,
+`migrate`, `identity-schema`, `package`, `release-diff`, `governance`, `admission`, `verify` —
+call the same engine as the matching Maven goal, so a CLI loop and a CI pipeline do the same
+work; the developer and operator verbs (`dev`, `host`, `deploy`, `new`, `scaffold`, …) are the
+CLI's alone.
 
 Prefer your own editor over Studio? `tesseraql dev --watch` watches the `web/`
 tree — plus `workflow/` and the shared definitions (`decisions/`, `rules/`, `scope/`,
