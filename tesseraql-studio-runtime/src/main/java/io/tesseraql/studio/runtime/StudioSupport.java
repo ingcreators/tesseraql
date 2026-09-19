@@ -482,9 +482,16 @@ final class StudioSupport {
      * Renders a {@code query-export} {@code format: pdf} route's PDF for the Studio preview (backlog
      * A1 follow-up) through the application's PDF codec, or {@code null} when its codec set has
      * no {@code pdf} (the optional {@code tesseraql-pdf} module is not declared).
+     *
+     * @param rows     the document's main rows
+     * @param values   the route's other declared sources under their own names, as the served
+     *                 route hands them to the codec (docs/audit-low-leads.md XH-10)
+     * @param defaults the app's {@code tesseraql.files.locale}/{@code .timezone}, the rung the
+     *                 route's own chain reads after a literal (XH-19)
      */
     static byte[] renderExportPdf(io.tesseraql.yaml.model.ExportSpec export,
             Path routeDir, Path appHome, List<Map<String, Object>> rows,
+            Map<String, Object> values, io.tesseraql.yaml.config.FileDefaults defaults,
             io.tesseraql.core.files.FileCodecs codecs) {
         io.tesseraql.core.files.FileCodec codec;
         try {
@@ -495,14 +502,16 @@ final class StudioSupport {
         Path template = export.template() == null || export.template().isBlank()
                 ? null
                 : routeDir.resolve(export.template());
-        // The preview follows a literal locale: and timezone: (docs/export-hygiene.md P6); a
-        // request-sourced value has no request here and stays unresolved, as the codec's default.
+        // The preview follows a literal locale: and timezone: (docs/export-hygiene.md P6), else
+        // the app's configured default, as the route's chain does after its literal rung; a
+        // request-sourced value has no request here and falls to the configured default too.
+        // literal() first: localeOr would take a source expression for a locale tag.
         io.tesseraql.core.files.FileWriteSpec spec = export.toWriteSpec(template, appHome)
-                .withFormatting(literal(export.locale()), literal(export.timezone()));
+                .withFormatting(defaults.localeOr(literal(export.locale())),
+                        defaults.timezoneOr(literal(export.timezone())));
         java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
         try {
-            codec.write(out, spec, io.tesseraql.core.files.ExportModel.repeatable(rows,
-                    java.util.Map.of()));
+            codec.write(out, spec, io.tesseraql.core.files.ExportModel.repeatable(rows, values));
         } catch (Exception ex) {
             throw new IllegalStateException("PDF render failed: " + ex.getMessage(), ex);
         }

@@ -478,7 +478,12 @@ still carries no reason until P8. No test asserted the raw shapes.
 ### Filed, not fixed (from P3's measurement)
 
 - Studio's export preview writes (`StudioSupport:483/515`) call the codec directly, outside
-  `ExportWrite` — the Studio backlog.
+  `ExportWrite` — the Studio backlog. *Measured 2026-09-15 (docs/audit-low-leads.md XH-10): the
+  dispatch buys a one-document preview nothing (no spool, no split, the 2802 lift replaced by the
+  preview's own catch); the real defect on the same line was the seam's arguments — `main` alone
+  and `Map.of()` as values, so the documented header-and-lines template was refused as broken in
+  the preview. Fixed by slice 19: the seam carries the route's other declared sources, shaped as
+  the export shapes them (`rows`, `rowCount`, `first`). The direct call stays.*
 - The transfer span invisible to the ops traces API (no `app` attribute) — the ops line.
   *Closed by docs/audit-low-leads.md slice 16 (XH-11): the span carries the request's app, and
   the trace pages take a scope of their own (decision 4) that admits an unattributed root for
@@ -730,7 +735,10 @@ or documented template moves. A template error's code changes from 2802 (route) 
 
 - The Studio preview's columns are still locale- and zone-blind beyond the two keys threaded here
   (`ExportSpec.toWriteSpec` passes null for both; the preview now applies literals only) — the
-  Studio backlog.
+  Studio backlog. *Fixed by docs/audit-low-leads.md slice 19 (XH-19): the preview reads the app's
+  `tesseraql.files.locale`/`timezone` past the literal rung, as the route's chain does; a
+  request-sourced declaration falls to the same default (`literal()` first — `localeOr` would take
+  the expression for a tag). The source rung itself stays unresolved in the preview.*
 - `InboxNotifier.java:33`'s bare `Context` (JVM default) and `MailNotifier.java:109,152`'s ROOT
   subject render — the notifications line.
 

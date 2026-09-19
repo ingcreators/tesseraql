@@ -357,6 +357,19 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **Studio's PDF preview renders what the route renders.** The preview handed the codec the
+  sample's `main.rows` and nothing else, so the documented header-and-lines template — a second
+  declared source read through `header.first.customer` — was refused as broken
+  (`TQL-LD-2831`) in the preview and printed on the route. The route's other declared sources
+  now reach the preview under their own names, shaped as the export shapes them (`rows`,
+  `rowCount`, `first`), from the sample or from live data (`docs/audit-low-leads.md` slice 19,
+  XH-10).
+- **Studio's PDF preview formats in the app's locale and zone.** Past a literal `locale:` /
+  `timezone:` the preview fell to the JVM's defaults, where the route reads
+  `tesseraql.files.locale` / `tesseraql.files.timezone`: `1,234.50` and a UTC wall clock in the
+  preview, `1.234,50` and Tokyo's in the download. The preview reads the configured defaults
+  now; a request-sourced declaration, which has no request in the preview, falls to them too
+  (XH-19).
 - **A mis-grouped number is refused, not read a hundredfold.** `DecimalFormat`'s lenient parse
   accepts the grouping separator at any position, so `1234,50` under `#,##0.00` — on a
   `result:` entry or an import column with a `format:` — was `123450`, in every locale, with

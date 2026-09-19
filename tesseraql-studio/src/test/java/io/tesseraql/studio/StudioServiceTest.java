@@ -744,7 +744,7 @@ class StudioServiceTest {
         StudioService studio = new StudioService(new ManifestLoader().load(dir), true);
 
         byte[] fakePdf = {'%', 'P', 'D', 'F', '-', '1', '.', '4'};
-        StudioService.PdfRender pdf = (export, routeDir, rows) -> {
+        StudioService.PdfRender pdf = (export, routeDir, rows, values) -> {
             assertThat(export.format()).isEqualTo("pdf");
             assertThat(rows).hasSize(1); // from the sample's main.rows
             return fakePdf;

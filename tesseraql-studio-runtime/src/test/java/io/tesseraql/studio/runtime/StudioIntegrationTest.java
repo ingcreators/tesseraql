@@ -1505,6 +1505,47 @@ class StudioIntegrationTest {
         assertThat(render.get("output").asText()).startsWith("data:application/pdf;base64,");
     }
 
+    /**
+     * The preview renders what the route renders (docs/audit-low-leads.md slice 19, XH-10): a
+     * template over the route's second declared source previews as it prints. The seam used to
+     * carry {@code main} alone, so the documented header-and-lines template was refused as
+     * broken ({@code TQL-LD-2831} on {@code header.first.customer}) in the preview and printed
+     * on the route. Sample data and live data alike.
+     */
+    @Test
+    void renderEndpointRendersAHeaderAndLinesTemplateFromItsDeclaredSources() throws Exception {
+        String sample = MAPPER.writeValueAsString(Map.of("sampleModel",
+                "main:\n  rows:\n    - item: widget\n      amount: 1234.5\n"
+                        + "header:\n  rowCount: 1\n  first:\n    customer: ACME\n"
+                        + "  rows:\n    - customer: ACME\n"));
+        HttpResponse<String> response = post(
+                "/_tesseraql/studio/render?path=" + enc("web/api/orders/print/get.yml"), sample,
+                true);
+        assertThat(response.statusCode()).isEqualTo(200);
+        JsonNode render = MAPPER.readTree(response.body());
+        assertThat(render.get("ok").asBoolean()).as(render.toString()).isTrue();
+        assertThat(render.get("kind").asText()).isEqualTo("pdf");
+        assertThat(pdfText(render.get("output").asText())).contains("ACME").contains("widget");
+
+        // Live: both sources run in the sandbox, header lands under its name, the template reads it.
+        String live = MAPPER.writeValueAsString(Map.of("sampleModel", "{}", "live", "true"));
+        JsonNode liveRender = MAPPER.readTree(post(
+                "/_tesseraql/studio/render?path=" + enc("web/api/orders/print/get.yml"), live,
+                true).body());
+        assertThat(liveRender.get("ok").asBoolean()).as(liveRender.toString()).isTrue();
+        assertThat(pdfText(liveRender.get("output").asText())).contains("ACME").contains("widget");
+    }
+
+    /** The text of a {@code data:application/pdf;base64,} preview. */
+    private static String pdfText(String dataUrl) throws IOException {
+        byte[] pdf = java.util.Base64.getDecoder()
+                .decode(dataUrl.substring("data:application/pdf;base64,".length()));
+        try (org.apache.pdfbox.pdmodel.PDDocument document = org.apache.pdfbox.Loader
+                .loadPDF(pdf)) {
+            return new org.apache.pdfbox.text.PDFTextStripper().getText(document);
+        }
+    }
+
     @Test
     void uiSourceRouteOffersRenderedPreviewPanel() throws Exception {
         HttpResponse<String> response = get("/_tesseraql/studio/user-admin/ui/source?path="
@@ -4274,6 +4315,53 @@ class StudioIntegrationTest {
                 """);
         Files.writeString(target.resolve("web/api/stages/rates.sql"),
                 "select 'P1' as code, 12.5 as rate\n");
+        // The documented header-and-lines print template (file-transfers.md "What a template
+        // can see"): main is the lines, header a second declared source the template reads
+        // through `first` (docs/audit-low-leads.md XH-10).
+        Files.createDirectories(target.resolve("web/api/orders/print"));
+        Files.writeString(target.resolve("web/api/orders/print/get.yml"), """
+                version: tesseraql/v1
+                id: orders.print
+                kind: route
+                recipe: query-export
+
+                security:
+                  auth: bearer
+                  policy: users.read
+
+                export:
+                  format: pdf
+                  filename: order.pdf
+                  template: order.html
+                  columns:
+                    - { name: item, label: Item }
+                    - { name: amount, label: Amount, type: number, format: "#,##0.00" }
+
+                sources:
+                  main:
+                    sql:
+                      file: lines.sql
+                  header:
+                    sql:
+                      file: header.sql
+                """);
+        Files.writeString(target.resolve("web/api/orders/print/lines.sql"),
+                "select 'widget' as item, 1234.5 as amount\n");
+        Files.writeString(target.resolve("web/api/orders/print/header.sql"),
+                "select 'ACME' as customer\n");
+        Files.writeString(target.resolve("web/api/orders/print/order.html"), """
+                <html xmlns:th="http://www.thymeleaf.org">
+                <body>
+                <h1 th:text="${header.first.customer}">customer</h1>
+                <table>
+                  <tr th:each="row : ${main.rows}">
+                    <td th:text="${row.item}">item</td>
+                    <td th:text="${row.amount}">amount</td>
+                  </tr>
+                </table>
+                </body>
+                </html>
+                """);
         // A table-backed decision over `shipping_fee_rules` (seeded live in seedScaffoldTable and
         // introspected by the schema.json overlay above): the data browser badges each mapped
         // column's role and the docs table page chips the table as backing the decision.
