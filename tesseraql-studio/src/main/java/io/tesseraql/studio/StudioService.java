@@ -330,9 +330,15 @@ public final class StudioService {
      */
     @FunctionalInterface
     public interface PdfRender {
-        /** PDF bytes for the export route, or null when the {@code tesseraql-pdf} module is absent. */
+        /**
+         * PDF bytes for the export route, or null when the {@code tesseraql-pdf} module is
+         * absent. {@code rows} are the document's main rows; {@code values} its other declared
+         * sources under their own names, each a {@code {rows, rowCount, first}} result as the
+         * sample or the live run supplied it — what the served route hands the codec, so a
+         * header-and-lines template previews as it prints (docs/audit-low-leads.md XH-10).
+         */
         byte[] render(io.tesseraql.yaml.model.ExportSpec export, Path routeDir,
-                List<Map<String, Object>> rows);
+                List<Map<String, Object>> rows, Map<String, Object> values);
     }
 
     /**

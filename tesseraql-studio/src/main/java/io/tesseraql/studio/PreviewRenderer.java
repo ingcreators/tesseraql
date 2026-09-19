@@ -349,7 +349,7 @@ final class PreviewRenderer {
         }
         io.tesseraql.yaml.model.ExportSpec export = definition.fileExport();
         if (export != null && "pdf".equalsIgnoreCase(export.format())) {
-            return renderPdfRoute(export, resolve.apply(relativePath).getParent(), context,
+            return renderPdfRoute(definition, resolve.apply(relativePath).getParent(), context,
                     pdfRender);
         }
         EvaluationContext evaluation = new EvaluationContext(context);
@@ -366,11 +366,15 @@ final class PreviewRenderer {
 
     /**
      * Renders a {@code query-export} {@code format: pdf} route to a {@code data:} URL preview (Studio
-     * backlog A1 follow-up): the sample's {@code main.rows} feed the route's PDF, produced by the
-     * runtime-provided {@link PdfRender} over the canonical PDF codec. Degrades to a clear message
-     * when no PDF renderer/codec is available (the optional {@code tesseraql-pdf} module is absent).
+     * backlog A1 follow-up): the context's {@code main.rows} feed the route's PDF, produced by the
+     * runtime-provided {@link PdfRender} over the canonical PDF codec, and the route's other
+     * declared sources ride along under their own names as the served route hands them to the
+     * codec (docs/audit-low-leads.md XH-10) — the seam used to carry {@code main} alone, so the
+     * documented header-and-lines template failed in the preview and printed on the route.
+     * Degrades to a clear message when no PDF renderer/codec is available (the optional
+     * {@code tesseraql-pdf} module is absent).
      */
-    private RenderResult renderPdfRoute(io.tesseraql.yaml.model.ExportSpec export, Path routeDir,
+    private RenderResult renderPdfRoute(RouteDefinition definition, Path routeDir,
             Map<String, Object> context, PdfRender pdfRender) {
         if (pdfRender == null) {
             return RenderResult.invalid("pdf",
@@ -378,7 +382,8 @@ final class PreviewRenderer {
         }
         byte[] pdf;
         try {
-            pdf = pdfRender.render(export, routeDir, sampleRows(context));
+            pdf = pdfRender.render(definition.fileExport(), routeDir, sampleRows(context),
+                    declaredSources(definition, context));
         } catch (RuntimeException ex) {
             return RenderResult.invalid("pdf", StudioService.rootMessage(ex));
         }
@@ -388,6 +393,34 @@ final class PreviewRenderer {
         }
         return RenderResult.ok("pdf", "data:application/pdf;base64,"
                 + java.util.Base64.getEncoder().encodeToString(pdf));
+    }
+
+    /**
+     * The route's declared sources other than {@code main}, as the context holds them — the
+     * sample's or the live run's — in declaration order, each shaped as an export's named
+     * result is ({@code rows}, {@code rowCount}, {@code first}; docs/file-transfers.md "What a
+     * template can see"), so a template reading {@code header.first.customer} previews as it
+     * prints. A source the context lacks is left out, as the route's own {@code values} leave
+     * out a source that published nothing.
+     */
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> declaredSources(RouteDefinition definition,
+            Map<String, Object> context) {
+        Map<String, Object> values = new LinkedHashMap<>();
+        definition.sources().keySet().forEach(name -> {
+            Object value = RouteDefinition.MAIN.equals(name) ? null : context.get(name);
+            if (value instanceof Map<?, ?> result && result.get("rows") instanceof List<?> rows
+                    && !result.containsKey("first")) {
+                Map<String, Object> shaped = new LinkedHashMap<>((Map<String, Object>) result);
+                shaped.putAll(io.tesseraql.core.files.ExportModel.result(
+                        (List<Map<String, Object>>) rows, rows.size()));
+                value = shaped;
+            }
+            if (value != null) {
+                values.put(name, value);
+            }
+        });
+        return values;
     }
 
     /** The sample's {@code main.rows} as the export route's query rows, or empty. */

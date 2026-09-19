@@ -171,8 +171,13 @@ public final class StudioRuntimeExtension implements RuntimeExtension {
         // renders through the application's PDF codec when the optional tesseraql-pdf module is
         // declared, returning null (a graceful "module absent" message) otherwise — so
         // Studio stays free of the heavy openhtmltopdf/pdfbox stack.
-        io.tesseraql.studio.StudioService.PdfRender studioPdf = (export, routeDir,
-                rows) -> StudioSupport.renderExportPdf(export, routeDir, appHome, rows, codecs);
+        // The preview formats as the route does past its literal rung: the app's configured
+        // files.locale/timezone (docs/audit-low-leads.md XH-19), never the JVM's.
+        io.tesseraql.yaml.config.FileDefaults fileDefaults = io.tesseraql.yaml.config.FileDefaults
+                .of(manifest.config());
+        io.tesseraql.studio.StudioService.PdfRender studioPdf = (export, routeDir, rows,
+                values) -> StudioSupport.renderExportPdf(export, routeDir, appHome, rows, values,
+                        fileDefaults, codecs);
         new StudioRoutes(studio, reloader, studioTests,
                 studioScaffold, studioEdit, studioMask, studioPdf).install(context);
         // The member's workshop API: what the studio shell delegates to

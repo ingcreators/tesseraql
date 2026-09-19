@@ -121,6 +121,15 @@ and is being adopted (see E below).
      free of the heavy optional `tesseraql-pdf` stack via a `StudioService.PdfRender` callback the
      runtime fills (degrades to a clear message when the module is absent). Source/render CSP gains
      `data:` in `frame-src`.
+     - **The preview renders what the route renders** — *done 2026-09-19* (`docs/audit-low-leads.md`
+       slice 19): the seam carries the route's other declared sources under their own names, each
+       shaped as the export shapes a named result (`rows`, `rowCount`, `first`), so the documented
+       header-and-lines template (`header.first.customer`) previews as it prints, from the sample
+       or from live data (XH-10); and the preview formats in the app's `tesseraql.files.locale` /
+       `timezone` past a literal declaration, as the route does, never the JVM's (XH-19). A
+       request-sourced `locale:`/`timezone:` still has no request here and falls to the configured
+       default. The direct codec call stays: `ExportWrite`'s spool, split and 2802 lift buy a
+       one-document preview nothing.
    - **Output-field masking** — *done*: the JSON preview applies a `query-json` route's
      `response.json.fields` masking (hide/redact per policy/classification/mask), reusing the canonical
      `FieldPolicyApplier` evaluated for the sample principal the developer puts under `principal` in the
