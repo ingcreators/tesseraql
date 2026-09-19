@@ -139,6 +139,21 @@ class SqlServerPortabilityIntegrationTest {
         DialectRuntimeChecks.totpEnrollmentRoundTrip(dataSource());
     }
 
+    @Test
+    void theInboxHoldsAFullTitleAndBodyOnThisDialect() throws Exception {
+        DialectRuntimeChecks.inboxRoundTrip(dataSource());
+    }
+
+    @Test
+    void theRouteAuditSchemaAppliesOnThisDialect() throws Exception {
+        DialectRuntimeChecks.routeAuditRoundTrip(dataSource());
+    }
+
+    @Test
+    void aCredentialTokenRoundTripsOnThisDialect() throws Exception {
+        DialectRuntimeChecks.credentialTokenRoundTrip(dataSource());
+    }
+
     private static javax.sql.DataSource dataSource() {
         com.microsoft.sqlserver.jdbc.SQLServerDataSource dataSource = new com.microsoft.sqlserver.jdbc.SQLServerDataSource();
         dataSource.setURL(SQLSERVER.getJdbcUrl());

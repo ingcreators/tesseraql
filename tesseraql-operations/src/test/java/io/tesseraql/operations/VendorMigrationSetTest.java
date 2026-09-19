@@ -48,7 +48,7 @@ class VendorMigrationSetTest {
     private static void assertVariantsMatch(Path common) {
         String component = common.getFileName().toString();
         Set<String> expected = scriptNames(common);
-        for (String vendor : new String[]{"oracle", "sqlserver"}) {
+        for (String vendor : new String[]{"oracle", "sqlserver", "mysql"}) {
             String name = component + "-" + vendor;
             Path variant = common.resolveSibling(name);
             if (!Files.isDirectory(variant)) {
@@ -65,7 +65,8 @@ class VendorMigrationSetTest {
     }
 
     private static boolean isVendorVariant(String directory) {
-        return directory.endsWith("-oracle") || directory.endsWith("-sqlserver");
+        return directory.endsWith("-oracle") || directory.endsWith("-sqlserver")
+                || directory.endsWith("-mysql");
     }
 
     private static Set<String> scriptNames(Path directory) {

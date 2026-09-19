@@ -4,12 +4,12 @@ import io.tesseraql.core.inbox.InboxStore;
 import io.tesseraql.core.outbox.OutboxEvent;
 import io.tesseraql.yaml.notify.NotificationChannels;
 import io.tesseraql.yaml.notify.NotifyEvents;
+import java.nio.file.Path;
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
 import org.thymeleaf.TemplateEngine;
 import org.thymeleaf.context.Context;
-import org.thymeleaf.templatemode.TemplateMode;
-import org.thymeleaf.templateresolver.StringTemplateResolver;
 
 /**
  * Delivers a notification into the per-user inbox (roadmap Phase 49): the third channel
@@ -18,10 +18,22 @@ import org.thymeleaf.templateresolver.StringTemplateResolver;
  * notifier's trust model: templates are operator-configured, never taken from the payload.
  * An envelope without a recipient throws, so the dispatcher's retry/dead-letter policy
  * surfaces the misaddressing in ops (lint TQL-YAML-1034 prevents it at build time).
+ *
+ * <p>The render is locale-less and reads English, like a mail body and a print template
+ * that declares no locale (docs/internationalization.md): the title is persisted and read
+ * by every reader of the bell, so the delivering host's own locale — a bare Thymeleaf
+ * context is the JVM default — must not be frozen into it (docs/audit-low-leads.md XH-20).
+ * The recipient's language is a decision the record defers.
  */
 final class InboxNotifier {
 
-    private final TemplateEngine engine = inlineEngine();
+    private final TemplateEngine engine;
+
+    InboxNotifier(Path appHome) {
+        // The one inline engine a notification renders through: the app's message catalog
+        // rides it, so [(#{key})] resolves in a title as in a mail body (unfiled 54).
+        this.engine = io.tesseraql.yaml.template.Templates.inlineEngine(appHome);
+    }
 
     void send(NotificationChannels.Channel channel, NotifyEvents.Envelope envelope,
             OutboxEvent event, InboxStore inbox) {
@@ -30,7 +42,7 @@ final class InboxNotifier {
             throw new IllegalStateException("Inbox notification '" + envelope.source()
                     + "' carries no recipient");
         }
-        Context context = new Context();
+        Context context = new Context(Locale.ENGLISH);
         context.setVariable("payload", envelope.payload());
         Map<String, Object> eventModel = new LinkedHashMap<>();
         eventModel.put("id", event.id());
@@ -46,19 +58,17 @@ final class InboxNotifier {
                 envelope.source(), truncate(title, 500), truncate(body, 2000));
     }
 
+    /**
+     * The first {@code max} characters, never cutting a surrogate pair in two: the store's
+     * columns hold 500 and 2,000 characters on every vendor (Oracle's in {@code CHAR}
+     * semantics, docs/inbox.md), and an unpaired surrogate is not a character a driver can
+     * encode.
+     */
     private static String truncate(String value, int max) {
-        return value == null || value.length() <= max ? value : value.substring(0, max);
-    }
-
-    private static TemplateEngine inlineEngine() {
-        StringTemplateResolver resolver = new StringTemplateResolver();
-        resolver.setTemplateMode(TemplateMode.TEXT);
-        TemplateEngine engine = new TemplateEngine();
-        // Shared framework templates use @{/x}; Thymeleaf's own builder refuses a
-        // context-relative link outside a web context, so every engine needs this one
-        // (docs/base-path.md).
-        engine.setLinkBuilder(new io.tesseraql.yaml.template.BasePathLinkBuilder());
-        engine.setTemplateResolver(resolver);
-        return engine;
+        if (value == null || value.length() <= max) {
+            return value;
+        }
+        int cut = Character.isHighSurrogate(value.charAt(max - 1)) ? max - 1 : max;
+        return value.substring(0, cut);
     }
 }

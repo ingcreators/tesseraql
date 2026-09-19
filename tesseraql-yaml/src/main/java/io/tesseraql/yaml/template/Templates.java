@@ -91,6 +91,26 @@ public final class Templates {
         return ex;
     }
 
+    /**
+     * The inline TEXT engine a notification's subject, an inbox title and body render through
+     * (docs/notifications.md): a string template, the base-path link builder every engine
+     * carries, and the app's message catalog — so {@code [(#{key})]} resolves in a subject or a
+     * title as it does in the mail body, instead of rendering the {@code ??key_??} marker
+     * (docs/audit-low-leads.md unfiled 54). The caller renders with {@link java.util.Locale#ENGLISH},
+     * the locale every locale-less render reads (docs/internationalization.md).
+     */
+    public static TemplateEngine inlineEngine(Path appHome) {
+        Path root = appHome.toAbsolutePath().normalize();
+        org.thymeleaf.templateresolver.StringTemplateResolver resolver = new org.thymeleaf.templateresolver.StringTemplateResolver();
+        resolver.setTemplateMode(TemplateMode.TEXT);
+        TemplateEngine engine = new TemplateEngine();
+        engine.setLinkBuilder(new BasePathLinkBuilder());
+        engine.setTemplateResolver(resolver);
+        engine.setMessageResolver(new CatalogMessageResolver(root.resolve("messages"),
+                I18nSettings.builtinCatalog()));
+        return engine;
+    }
+
     /** The render's context: the model, the locale, and the app catalog read once for it. */
     private static Context context(Path root, java.util.Locale locale, Map<String, Object> model) {
         Context context = new Context(locale, model);

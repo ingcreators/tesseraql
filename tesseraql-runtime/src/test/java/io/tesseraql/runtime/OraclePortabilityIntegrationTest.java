@@ -137,6 +137,21 @@ class OraclePortabilityIntegrationTest {
         DialectRuntimeChecks.totpEnrollmentRoundTrip(dataSource());
     }
 
+    @Test
+    void theInboxHoldsAFullTitleAndBodyOnThisDialect() throws Exception {
+        DialectRuntimeChecks.inboxRoundTrip(dataSource());
+    }
+
+    @Test
+    void theRouteAuditSchemaAppliesOnThisDialect() throws Exception {
+        DialectRuntimeChecks.routeAuditRoundTrip(dataSource());
+    }
+
+    @Test
+    void aCredentialTokenRoundTripsOnThisDialect() throws Exception {
+        DialectRuntimeChecks.credentialTokenRoundTrip(dataSource());
+    }
+
     private static javax.sql.DataSource dataSource() throws Exception {
         oracle.jdbc.datasource.impl.OracleDataSource dataSource = new oracle.jdbc.datasource.impl.OracleDataSource();
         dataSource.setURL(ORACLE.getJdbcUrl());

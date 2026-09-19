@@ -338,6 +338,218 @@ class NotificationDeliveryTest {
                 "PENDING", 0, null, Instant.now(), null, "user-admin", null, null));
     }
 
+    // ---- a notification renders in a named locale (docs/audit-low-leads.md slice 20) ----
+
+    /**
+     * An inbox title renders in English whatever the delivering JVM's locale is (XH-20): the
+     * title is persisted and read by every reader of the bell, and a bare Thymeleaf context
+     * froze the host's own locale into it ({@code 1.234,50 de_DE} on a German host). The
+     * {@code #locale} token keeps the row red on an English CI JVM, where the number alone
+     * would pass by inheritance.
+     */
+    @Test
+    void anInboxTitleRendersInEnglishWhateverTheJvmSays() throws Exception {
+        java.util.Locale jvm = java.util.Locale.getDefault();
+        java.util.Locale.setDefault(java.util.Locale.GERMANY);
+        try {
+            MemoryInbox inbox = new MemoryInbox();
+            NotificationSink sink = new NotificationSink(NotificationChannels.load(new AppConfig(
+                    Map.of("tesseraql", Map.of("notifications", Map.of("channels", Map.of(
+                            "bell", Map.of("type", "inbox",
+                                    "title", "[(${#numbers.formatDecimal(payload.total,1,2)})]"
+                                            + " [(${#locale})]"))))),
+                    name -> null)), appHome, inbox, null, gateway());
+
+            sink.send(inboxNotification("bell", Map.of("total", 1234.5)));
+
+            // The decimal point and the locale token: a German host said `1234,50 de_DE`.
+            assertThat(inbox.titles).containsExactly("1234.50 en");
+        } finally {
+            java.util.Locale.setDefault(jvm);
+        }
+    }
+
+    /**
+     * A mail subject renders in the locale the body renders in (XH-20). The subject was
+     * pinned to {@code Locale.ROOT} — on every JVM — so a template-created date abbreviated
+     * its day and month names ({@code Thu 5 Mar}) while the body of the same mail spelled
+     * them out; {@code #locale} was empty where the body's is {@code en}.
+     */
+    @Test
+    void aMailSubjectRendersInEnglishLikeTheBody() throws Exception {
+        Map<String, Object> channel = Map.of(
+                "type", "mail",
+                "host", "localhost",
+                "port", MAIL.getSmtp().getPort(),
+                "from", "noreply@example.com",
+                "to", "x@example.com",
+                "subject", "[(${#dates.format(#dates.create(2026,3,5),'EEEE d MMMM')})]"
+                        + " [(${#locale})]",
+                "template", "templates/mail/welcome.txt");
+        NotificationSink sink = sink(Map.of("dated-mail", channel));
+
+        MAIL.purgeEmailFromAllMailboxes();
+        sink.send(notification("dated-mail", Map.of("userName", "x", "email", "x@example.com")));
+
+        MAIL.waitForIncomingEmail(1);
+        assertThat(MAIL.getReceivedMessages()[0].getSubject()).isEqualTo("Thursday 5 March en");
+    }
+
+    /**
+     * A message key resolves in a subject and in an inbox title as it does in a mail body
+     * (unfiled 54): the two inline engines set no message resolver, so {@code [(#{key})]}
+     * rendered the {@code ??key_??} marker beside a body that read {@code messages/en.yml}.
+     */
+    @Test
+    void aMessageKeyResolvesInASubjectAndAnInboxTitle() throws Exception {
+        Files.createDirectories(appHome.resolve("messages"));
+        Files.writeString(appHome.resolve("messages/en.yml"), """
+                notice:
+                  subject: Your report is ready
+                  title: New report
+                """);
+        MemoryInbox inbox = new MemoryInbox();
+        NotificationSink sink = new NotificationSink(NotificationChannels.load(new AppConfig(
+                Map.of("tesseraql", Map.of("notifications", Map.of("channels", Map.of(
+                        "bell", Map.of("type", "inbox", "title", "[(#{notice.title})]"),
+                        "keyed-mail", Map.of(
+                                "type", "mail",
+                                "host", "localhost",
+                                "port", MAIL.getSmtp().getPort(),
+                                "from", "noreply@example.com",
+                                "to", "x@example.com",
+                                "subject", "[(#{notice.subject})]",
+                                "template", "templates/mail/welcome.txt"))))),
+                name -> null)), appHome, inbox, null, gateway());
+
+        sink.send(inboxNotification("bell", Map.of()));
+        MAIL.purgeEmailFromAllMailboxes();
+        sink.send(notification("keyed-mail", Map.of("userName", "x", "email", "x@example.com")));
+
+        assertThat(inbox.titles).containsExactly("New report");
+        MAIL.waitForIncomingEmail(1);
+        assertThat(MAIL.getReceivedMessages()[0].getSubject()).isEqualTo("Your report is ready");
+    }
+
+    /**
+     * An attachment keeps its name on the mail wire (DN-06d, unfiled 53): jakarta.mail's
+     * {@code setFileName} encoded it in the JVM's default charset — {@code ??.csv} under
+     * {@code -Dfile.encoding=COMPAT} on a Western host — wrote no ASCII fallback, decorated the
+     * part's {@code Content-Type} with a {@code name} parameter in that charset, and passed a
+     * CR LF through into the header block. The one Content-Disposition writer every download
+     * uses writes the fallback beside a UTF-8 ext-value, with the controls folded.
+     */
+    @Test
+    void anAttachmentKeepsItsNameOnTheMailWire() throws Exception {
+        jakarta.mail.BodyPart file = attachedPart("\u58f2\u4e0a.csv");
+
+        String disposition = file.getHeader("Content-Disposition")[0];
+        assertThat(disposition).contains("attachment").contains("filename=\"")
+                .contains("filename*=UTF-8''%E5%A3%B2%E4%B8%8A.csv");
+        // jakarta.mail's own reader decodes the ext-value back to the name.
+        assertThat(file.getFileName()).isEqualTo("\u58f2\u4e0a.csv");
+        // No `name` parameter in the JVM charset behind the disposition's back.
+        assertThat(file.getHeader("Content-Type")[0]).isEqualTo("text/csv")
+                .doesNotContain("name");
+    }
+
+    /** The original defect, under the charset an operator's {@code -Dfile.encoding} would set. */
+    @Test
+    void anAttachmentNameSurvivesAnIso88591Jvm() throws Exception {
+        java.lang.reflect.Field charset = jakarta.mail.internet.MimeUtility.class
+                .getDeclaredField("defaultMIMECharset");
+        charset.setAccessible(true);
+        Object before = charset.get(null);
+        charset.set(null, "ISO-8859-1");
+        try {
+            jakarta.mail.BodyPart file = attachedPart("\u58f2\u4e0a.csv");
+            assertThat(file.getHeader("Content-Disposition")[0])
+                    .contains("filename*=UTF-8''%E5%A3%B2%E4%B8%8A.csv")
+                    .doesNotContain("ISO-8859-1");
+            assertThat(file.getFileName()).isEqualTo("\u58f2\u4e0a.csv");
+        } finally {
+            charset.set(null, before);
+        }
+        // The wrong fix — a process-global mail.mime.charset — was not taken.
+        assertThat(System.getProperty("mail.mime.charset")).isNull();
+    }
+
+    /** A name carrying CR LF cannot open a new header line in the part (unfiled 53). */
+    @Test
+    void anAttachmentNameCannotInjectAHeader() throws Exception {
+        jakarta.mail.BodyPart file = attachedPart("a\r\nX-Injected: 1.csv");
+
+        String[] disposition = file.getHeader("Content-Disposition");
+        assertThat(disposition).hasSize(1);
+        // Folded into the quoted name, on the one line: never a second header.
+        assertThat(disposition[0]).doesNotContain("\r").doesNotContain("\n")
+                .contains("filename=\"a__X-Injected");
+        assertThat(file.getHeader("X-Injected")).isNull();
+    }
+
+    /** One mail with one attachment named {@code filename}, its file part as GreenMail received it. */
+    private static jakarta.mail.BodyPart attachedPart(String filename) throws Exception {
+        Map<String, Object> channel = Map.of(
+                "type", "mail",
+                "host", "localhost",
+                "port", MAIL.getSmtp().getPort(),
+                "from", "noreply@example.com",
+                "to", "ops@example.com",
+                "template", "templates/mail/welcome.txt");
+        NotificationSink sink = sink(Map.of("report-mail", channel),
+                oneTransfer("tr-2", new io.tesseraql.core.files.FileTransferService.Download(
+                        filename, "text/csv",
+                        new java.io.ByteArrayInputStream(
+                                "sku,price\n".getBytes(StandardCharsets.UTF_8)))));
+        MAIL.purgeEmailFromAllMailboxes();
+        sink.send(notification("report-mail", "tr-2",
+                Map.of("userName", "ops", "email", "ops@example.com")));
+        MAIL.waitForIncomingEmail(1);
+        jakarta.mail.Multipart multipart = (jakarta.mail.Multipart) MAIL.getReceivedMessages()[0]
+                .getContent();
+        return multipart.getBodyPart(1);
+    }
+
+    private static OutboxEvent inboxNotification(String channel, Map<String, Object> payload) {
+        OutboxEvent toInsert = NotifyEvents.event(channel, "reports.ready", "sato", null,
+                payload, "user-admin");
+        return new OutboxEvent("evt-inbox-" + payload.hashCode(), toInsert.aggregateType(),
+                toInsert.aggregateId(), toInsert.eventType(), toInsert.payloadJson(), "PENDING",
+                0, null, Instant.now(), null, toInsert.appName(), null, null);
+    }
+
+    /** An inbox that keeps what it was handed. */
+    private static final class MemoryInbox implements io.tesseraql.core.inbox.InboxStore {
+
+        private final java.util.List<String> titles = new java.util.ArrayList<>();
+
+        @Override
+        public void deliver(String eventId, String tenantId, String subject, String channel,
+                String source, String title, String body) {
+            titles.add(title);
+        }
+
+        @Override
+        public int unreadCount(String tenantId, String subject) {
+            return 0;
+        }
+
+        @Override
+        public java.util.List<InboxMessage> recent(String tenantId, String subject, int limit) {
+            return java.util.List.of();
+        }
+
+        @Override
+        public boolean markRead(String tenantId, String subject, String eventId) {
+            return false;
+        }
+
+        @Override
+        public int markAllRead(String tenantId, String subject) {
+            return 0;
+        }
+    }
+
     /** The outbound gateway a delivery leaves through; localhost is the test's own receiver. */
     private static io.tesseraql.yaml.http.OutboundGateway gateway() {
         AppConfig outbound = new AppConfig(Map.of("tesseraql", Map.of("http", Map.of("outbound",

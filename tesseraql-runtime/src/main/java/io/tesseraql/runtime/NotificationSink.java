@@ -19,7 +19,7 @@ final class NotificationSink implements OutboxEventSink {
     private final NotificationChannels channels;
     private final MailNotifier mail;
     private final WebhookNotifier webhook;
-    private final InboxNotifier inboxNotifier = new InboxNotifier();
+    private final InboxNotifier inboxNotifier;
     private final io.tesseraql.core.inbox.InboxStore inbox;
 
     NotificationSink(NotificationChannels channels, Path appHome,
@@ -41,6 +41,7 @@ final class NotificationSink implements OutboxEventSink {
         // message instead of a NullPointerException.
         this.mail = new MailNotifier(appHome,
                 transfers == null ? null : transfers::download);
+        this.inboxNotifier = new InboxNotifier(appHome);
         this.inbox = inbox;
     }
 

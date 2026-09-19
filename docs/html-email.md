@@ -198,4 +198,5 @@ existing inline TEXT template shown as a plain input; creating/wiring channels
 - **Plain flavor** — TesseraQL mail is Thymeleaf-only; the plain flavor's
   manual-interpolation mode has no consumer here.
 - **Localized mail bodies** — mail renders locale-less (English/default
-  catalogs) today; unchanged by this design.
+  catalogs) today, the subject and the inbox title with it since 0.18.0
+  ([audit-low-leads.md](audit-low-leads.md) XH-20); unchanged by this design.

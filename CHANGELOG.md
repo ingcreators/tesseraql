@@ -72,6 +72,13 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **The Oracle inbox table declares its title in characters and its body as a CLOB.**
+  `tql_user_notification.title` is `varchar2(500 char)` and `body` a `clob`: under Oracle's
+  default BYTE semantics a 167-character CJK title the notifier had kept "within 500" was
+  `ORA-12899` at the store and the notification dead-lettered; and `varchar2(2000 char)`
+  would still cap the body at 4,000 bytes. The table is created by `ensureSchema` outside
+  Flyway, so an Oracle table created before this keeps its byte-counted columns
+  (`docs/audit-low-leads.md` slice 20, unfiled 56).
 - **Studio's live preview runs the route's row stages.** **Use live data** used to run the
   route's SQL and hand the template the raw rows: a `result:` declaration was never applied
   (a text column declared `type: json` stayed a string, so the served page rendered
@@ -357,6 +364,32 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A notification renders in English, whatever the server's locale.** An inbox title and
+  body rendered through a bare Thymeleaf context — the delivering JVM's default locale, frozen
+  into a stored title every reader of the bell sees (`1.234,50 de_DE` on a German host) — and a
+  mail subject was pinned to `Locale.ROOT` while the body rendered in English, so a
+  template-created date abbreviated its day and month in the subject and spelled them out in
+  the body. All three render in English now, the locale every locale-less render reads
+  (`docs/audit-low-leads.md` slice 20, XH-20).
+- **`[(#{key})]` resolves in a mail subject and an inbox title.** Neither inline engine carried
+  the app's message catalog, so a key rendered the `??key_??` marker beside a body that read
+  `messages/en.yml`; both render through one engine that does (unfiled 54).
+- **A mail attachment keeps its name.** jakarta.mail encoded the attachment's name in the
+  JVM's default charset — `??.csv` for `売上.csv` under `-Dfile.encoding=COMPAT` — wrote no
+  ASCII fallback, and passed a CR LF in the name through into the part's header block. The
+  part now carries the codec's `Content-Type` and a `Content-Disposition` written by the
+  framework's one filename writer: ASCII fallback, UTF-8 ext-value, controls folded
+  (DN-06d, unfiled 53).
+- **An inbox title is never cut inside a surrogate pair.** The 500-character truncation
+  could split one; it steps back a unit (unfiled 56).
+- **The inbox, the route audit and the credential tokens create their tables on MySQL.**
+  Their common scripts — applied by each store's own `ensureSchema`, outside Flyway — spelled
+  `create index if not exists`, which MySQL 8 refuses as a syntax error: an app declaring an
+  inbox channel could not create its table, `tesseraql.audit.routes.enabled` failed the boot,
+  and a password reset or invitation could not store its token. MySQL variants of the three
+  scripts create the index plainly (a second boot's duplicate-key error is tolerated, as it
+  already was for every column add); the dialect suites apply all three on Oracle, SQL Server
+  and MySQL now (unfiled 77).
 - **Studio's PDF preview renders what the route renders.** The preview handed the codec the
   sample's `main.rows` and nothing else, so the documented header-and-lines template — a second
   declared source read through `header.first.customer` — was refused as broken
