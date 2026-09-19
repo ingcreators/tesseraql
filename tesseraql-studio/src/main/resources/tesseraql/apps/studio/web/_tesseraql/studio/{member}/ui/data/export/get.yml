@@ -57,6 +57,8 @@ response:
   file:
     template: data.csv.tpl
     contentType: "text/csv; charset=utf-8"
-    filename: data.csv
+    # The browsed table names the download (docs/route-filename-placeholders.md decision 6):
+    # a request value folded to a filename component, so orders downloads as orders.csv.
+    filename: "{params.table}.csv"
     model:
       csv: main

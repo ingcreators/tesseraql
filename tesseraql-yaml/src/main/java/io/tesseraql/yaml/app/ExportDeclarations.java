@@ -152,23 +152,27 @@ public final class ExportDeclarations {
      *                     ({@code inputPolicy.unknownFields: reject}, the default)
      * @param defaults     the declared {@code default:} of each top-level input that has one —
      *                     the value a source names on every request that omits the input
+     * @param pathParams   the {@code {name}} parameters of the route's URL path — the
+     *                     {@code path.<name>} roots a filename placeholder may name
+     *                     (docs/route-filename-placeholders.md decision 5); empty for a job
      */
     public record Site(String app, String subject, Surface surface, Set<String> inputs,
-            boolean principal, boolean declaredBody, Map<String, Object> defaults) {
+            boolean principal, boolean declaredBody, Map<String, Object> defaults,
+            Set<String> pathParams) {
 
-        /** A site whose inputs declare no default. */
+        /** A site whose inputs declare no default and whose URL declares no parameter. */
         public Site(String app, String subject, Surface surface, Set<String> inputs,
                 boolean principal, boolean declaredBody) {
-            this(app, subject, surface, inputs, principal, declaredBody, Map.of());
+            this(app, subject, surface, inputs, principal, declaredBody, Map.of(), Set.of());
         }
 
         /**
          * The site of a bound route: its recipe's surface, its declared inputs, whether a
          * principal can be bound (a route whose merged {@code security.auth} is present and not
-         * {@code public} — the defaults are merged before either side judges), and whether the
-         * body is limited to declared fields.
+         * {@code public} — the defaults are merged before either side judges), whether the
+         * body is limited to declared fields, and the parameters its URL path declares.
          */
-        public static Site route(String app, RouteDefinition route) {
+        public static Site route(String app, RouteDefinition route, String urlPath) {
             boolean authenticated = route.security() != null
                     && route.security().auth() != null
                     && !"public".equals(route.security().auth());
@@ -186,12 +190,31 @@ public final class ExportDeclarations {
             return new Site(app, "route '" + bounded(route.id()) + "'", surface,
                     route.input().keySet(), authenticated,
                     route.effectiveInputPolicy().rejectsUnknownFields(),
-                    java.util.Collections.unmodifiableMap(defaults));
+                    java.util.Collections.unmodifiableMap(defaults), pathParams(urlPath));
         }
 
-        public static Site step(String app, String jobId, String stepId) {
+        /** The {@code {name}} parameters a URL template declares. */
+        private static Set<String> pathParams(String urlPath) {
+            Set<String> names = new java.util.LinkedHashSet<>();
+            java.util.regex.Matcher matcher = io.tesseraql.core.sql.SqlIdentifiers.PLACEHOLDER
+                    .matcher(urlPath == null ? "" : urlPath);
+            while (matcher.find()) {
+                names.add(matcher.group(1));
+            }
+            return java.util.Collections.unmodifiableSet(names);
+        }
+
+        /** The site of a step whose job declares no input (the tests' shorthand). */
+        static Site step(String app, String jobId, String stepId) {
             return new Site(app, "job '" + bounded(jobId) + "' step '" + bounded(stepId) + "'",
                     Surface.JOB, Set.of(), false, true);
+        }
+
+        /** The site of a job's step: the job's declared inputs are its {@code params.*}. */
+        public static Site step(String app, io.tesseraql.yaml.model.JobDefinition job,
+                String stepId) {
+            return new Site(app, "job '" + bounded(job.id()) + "' step '" + bounded(stepId) + "'",
+                    Surface.JOB, job.input().keySet(), false, true);
         }
 
         public static Site job(String app, String jobId) {
@@ -230,6 +253,10 @@ public final class ExportDeclarations {
             return out;
         }
         formatName(site, spec.format(), out);
+        // The download name's placeholders against what this site resolves
+        // (docs/route-filename-placeholders.md decision 5); independent of the format.
+        out.addAll(FilenameTemplates.violations(site, "export.filename", spec.filename(),
+                Set.of()));
         boolean declaredFormat = spec.format() != null && !spec.format().isBlank();
         if (!declaredFormat && (site.job() || spec.format() != null)) {
             // A step without format:, or a blank format: anywhere, is refused here — lint and
@@ -467,8 +494,8 @@ public final class ExportDeclarations {
         Path directory = job.source() == null ? null : job.source().getParent();
         for (PipelineStep step : job.definition().pipeline()) {
             if (step.export() != null) {
-                require(violations(Site.step(app, jobId, step.id()), step.export(), appHome,
-                        directory), warn);
+                require(violations(Site.step(app, job.definition(), step.id()), step.export(),
+                        appHome, directory), warn);
             }
         }
         if (job.definition().fileImport() != null) {
@@ -489,7 +516,7 @@ public final class ExportDeclarations {
         for (PipelineStep step : job.definition().pipeline()) {
             if (step.export() != null) {
                 codecs.require(step.export().format(),
-                        Site.step(app, jobId, step.id()).prefix("export.format"));
+                        Site.step(app, job.definition(), step.id()).prefix("export.format"));
             }
         }
         ImportSpec poll = job.definition().fileImport();

@@ -75,7 +75,7 @@ final class ExportRules {
         // The values the block carries, judged by the predicate the boot refusal shares
         // (docs/export-declarations.md decision 1).
         report(context, job.source(), "export:", ExportDeclarations.violations(
-                ExportDeclarations.Site.step(appName(config), job.definition().id(), step.id()),
+                ExportDeclarations.Site.step(appName(config), job.definition(), step.id()),
                 export, context.appHome(), job.source().getParent()), source, findings);
         lintExportRowCap(export, "Step '" + step.id() + "': ", source, findings);
         lintExportFilename(export, "Step '" + step.id() + "': ", source, findings);
@@ -105,7 +105,7 @@ final class ExportRules {
         if (spec == null) {
             if ("file-export".equals(definition.recipe())) {
                 findings.add(new LintFinding(INCOMPLETE_EXPORT, ERROR, source,
-                        ExportDeclarations.missingBlock(routeSite(config, definition))));
+                        ExportDeclarations.missingBlock(routeSite(config, route))));
             }
             return;
         }
@@ -116,14 +116,15 @@ final class ExportRules {
                             + " add template:, or drop startCell: for a plain grid"));
         }
         report(context, route.source(), "export:",
-                ExportDeclarations.violations(routeSite(config, definition), spec,
+                ExportDeclarations.violations(routeSite(config, route), spec,
                         context.appHome(), route.source().getParent()),
                 source, findings);
     }
 
-    /** The route's declaration site: its inputs and whether a principal can be bound. */
-    static ExportDeclarations.Site routeSite(AppConfig config, RouteDefinition definition) {
-        return ExportDeclarations.Site.route(appName(config), definition);
+    /** The route's declaration site: its inputs, path parameters and whether a principal can be bound. */
+    static ExportDeclarations.Site routeSite(AppConfig config, RouteFile route) {
+        return ExportDeclarations.Site.route(appName(config), route.definition(),
+                route.urlPath());
     }
 
     /** The tolerant read of the app name — the name rule owns its refusal. */

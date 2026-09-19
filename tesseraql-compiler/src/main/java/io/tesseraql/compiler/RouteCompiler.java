@@ -506,11 +506,12 @@ public final class RouteCompiler {
 
     private void buildRoute(RuntimeContext context, Path appHome, RouteFile routeFile) {
         RouteDefinition definition = routeFile.definition();
-        requireRecipeShape(definition, io.tesseraql.yaml.app.RecipeShape.Surface.ROUTE);
+        requireRecipeShape(definition, io.tesseraql.yaml.app.RecipeShape.Surface.ROUTE,
+                routeFile.urlPath());
         requireRouteFiles(definition, routeFile.source().getParent(),
                 io.tesseraql.yaml.app.RecipeShape.Surface.ROUTE);
         requireRequestSources(definition, io.tesseraql.yaml.app.RecipeShape.Surface.ROUTE);
-        requireResponseLiterals(definition);
+        requireResponseLiterals(definition, routeFile.urlPath());
         requireRotationHonoured(definition);
         requireLockHonoured(definition, null);
         refuseWriteKeysOnSources(definition);
@@ -757,9 +758,10 @@ public final class RouteCompiler {
      * is the linter's, so the two altitudes cannot disagree about a document.
      */
     private void requireRecipeShape(RouteDefinition definition,
-            io.tesseraql.yaml.app.RecipeShape.Surface surface) {
+            io.tesseraql.yaml.app.RecipeShape.Surface surface, String urlPath) {
         io.tesseraql.yaml.app.ExportDeclarations.require(
-                io.tesseraql.yaml.app.RecipeShape.violations(appName, definition, surface),
+                io.tesseraql.yaml.app.RecipeShape.violations(appName, definition, surface,
+                        urlPath),
                 LOG::warn);
     }
 
@@ -807,11 +809,13 @@ public final class RouteCompiler {
      * (docs/audit-low-leads.md EH-06): a file response's {@code charset=} the body is not
      * written in — the text is UTF-8 wherever it is encoded — and a redirect location with
      * whitespace at either end, which the base-path join leaves alone when it does not start
-     * with {@code /}. The predicate is the linter's, so the two altitudes cannot disagree.
+     * with {@code /}; and a download name's placeholder the request cannot resolve
+     * (docs/route-filename-placeholders.md decision 5). The predicate is the linter's, so the
+     * two altitudes cannot disagree.
      */
-    private void requireResponseLiterals(RouteDefinition definition) {
+    private void requireResponseLiterals(RouteDefinition definition, String urlPath) {
         io.tesseraql.yaml.app.ExportDeclarations.require(
-                io.tesseraql.yaml.app.ResponseLiterals.violations(appName, definition),
+                io.tesseraql.yaml.app.ResponseLiterals.violations(appName, definition, urlPath),
                 LOG::warn);
     }
 
@@ -1477,11 +1481,11 @@ public final class RouteCompiler {
      */
     private void buildQueueConsume(RouteFile routeFile) {
         RouteDefinition definition = routeFile.definition();
-        requireRecipeShape(definition, io.tesseraql.yaml.app.RecipeShape.Surface.CONSUMER);
+        requireRecipeShape(definition, io.tesseraql.yaml.app.RecipeShape.Surface.CONSUMER, null);
         requireRouteFiles(definition, routeFile.source().getParent(),
                 io.tesseraql.yaml.app.RecipeShape.Surface.CONSUMER);
         requireRequestSources(definition, io.tesseraql.yaml.app.RecipeShape.Surface.CONSUMER);
-        requireResponseLiterals(definition);
+        requireResponseLiterals(definition, null);
         requireLockHonoured(definition, "a queue consumer");
         refuseWriteKeysOnSources(definition);
         requireDeclaredKinds(definition);
@@ -1540,7 +1544,7 @@ public final class RouteCompiler {
         // the same predicate the linter reports from (docs/export-declarations.md decision 1);
         // an after: hook on this recipe is one of its arms now, where it used to be this
         // builder's own code and lint-silent (docs/audit-low-leads.md XD-07d).
-        requireValidExport(definition, spec, routeDir);
+        requireValidExport(routeFile, spec, routeDir);
         String format = spec != null && spec.format() != null ? spec.format() : "csv";
         io.tesseraql.core.files.FileCodec codec = requireCodec(definition, format,
                 "export.format");
@@ -1606,7 +1610,8 @@ public final class RouteCompiler {
         // same predicate as the export block (docs/export-declarations.md decision 1).
         io.tesseraql.yaml.app.ExportDeclarations.require(
                 io.tesseraql.yaml.app.ExportDeclarations.violations(
-                        io.tesseraql.yaml.app.ExportDeclarations.Site.route(appName, definition),
+                        io.tesseraql.yaml.app.ExportDeclarations.Site.route(appName, definition,
+                                routeFile.urlPath()),
                         spec),
                 LOG::warn);
         // An unset import format: is csv, as the export's is; and the codec is looked up here,
@@ -1725,11 +1730,11 @@ public final class RouteCompiler {
             throw new TqlException(io.tesseraql.yaml.app.ExportDeclarations.INCOMPLETE,
                     io.tesseraql.yaml.app.ExportDeclarations.missingBlock(
                             io.tesseraql.yaml.app.ExportDeclarations.Site.route(appName,
-                                    definition)));
+                                    definition, routeFile.urlPath())));
         }
         // The declaration's values (docs/export-declarations.md decision 1): the after:
         // without its statement and the cell reference used to escape raw from below.
-        requireValidExport(definition, spec, routeDir);
+        requireValidExport(routeFile, spec, routeDir);
         // A route's unset format: is csv (as query-export says); it used to reach the
         // processor as the literal "null" and fail the first POST as a format no codec serves.
         String format = spec.format() == null || spec.format().isBlank() ? "csv" : spec.format();
@@ -1792,11 +1797,12 @@ public final class RouteCompiler {
      * refusal keeps its own code and names the app, the route, the key and the bounded value;
      * an inert key is said out loud and served without (decision 2).
      */
-    private void requireValidExport(RouteDefinition definition,
+    private void requireValidExport(RouteFile routeFile,
             io.tesseraql.yaml.model.ExportSpec spec, Path routeDir) {
         io.tesseraql.yaml.app.ExportDeclarations.require(
                 io.tesseraql.yaml.app.ExportDeclarations.violations(
-                        io.tesseraql.yaml.app.ExportDeclarations.Site.route(appName, definition),
+                        io.tesseraql.yaml.app.ExportDeclarations.Site.route(appName,
+                                routeFile.definition(), routeFile.urlPath()),
                         spec, compiledAppHome, routeDir),
                 LOG::warn);
     }
@@ -1832,7 +1838,7 @@ public final class RouteCompiler {
     private io.tesseraql.core.files.FileCodec requireCodec(RouteDefinition definition,
             String format, String key) {
         return codecs.require(format, io.tesseraql.yaml.app.ExportDeclarations.Site
-                .route(appName, definition).prefix(key));
+                .route(appName, definition, null).prefix(key));
     }
 
     /**
@@ -2195,11 +2201,11 @@ public final class RouteCompiler {
      */
     private void buildMcpTool(ToolFile toolFile) {
         RouteDefinition definition = toolFile.definition();
-        requireRecipeShape(definition, io.tesseraql.yaml.app.RecipeShape.Surface.TOOL);
+        requireRecipeShape(definition, io.tesseraql.yaml.app.RecipeShape.Surface.TOOL, null);
         requireRouteFiles(definition, toolFile.source().getParent(),
                 io.tesseraql.yaml.app.RecipeShape.Surface.TOOL);
         requireRequestSources(definition, io.tesseraql.yaml.app.RecipeShape.Surface.TOOL);
-        requireResponseLiterals(definition);
+        requireResponseLiterals(definition, null);
         requireLockHonoured(definition, "an MCP tool");
         refuseWriteKeysOnSources(definition);
         requireDeclaredKinds(definition);

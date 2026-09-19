@@ -80,9 +80,9 @@ final class ConsumerRules implements LintRule {
         // Each binding's arm, from the predicate the compiler refuses from
         // (docs/audit-low-leads.md slice 8).
         RecipeShapeRules.report(context, config, consumer.source(), definition,
-                io.tesseraql.yaml.app.RecipeShape.Surface.CONSUMER, source, findings);
-        ResponseLiteralRules.report(context, config, consumer.source(), definition, source,
-                findings);
+                io.tesseraql.yaml.app.RecipeShape.Surface.CONSUMER, null, source, findings);
+        ResponseLiteralRules.report(context, config, consumer.source(), definition, null,
+                source, findings);
         RequestSourceRules.report(context, config, consumer.source(), definition,
                 io.tesseraql.yaml.app.RecipeShape.Surface.CONSUMER, source, findings);
         DocumentRules.lintStepGuards(context, consumer.source(), definition, source, findings);

@@ -65,6 +65,7 @@ public class SqlStep implements Step {
     private final int maxRows;
     private final int queryTimeoutSeconds;
     private final String onOverflow;
+    /** The download name as declared — a template of {@link io.tesseraql.core.files.FilenamePlaceholders}. */
     private final String filename;
 
     /**
@@ -223,6 +224,7 @@ public class SqlStep implements Step {
      * by the compiled route, so synchronous exports share the file-export machinery. The spool is
      * deleted when the exchange completes.
      */
+    @SuppressWarnings("unchecked")
     private void export(Exchange exchange, DataSource dataSource,
             io.tesseraql.core.sql.SqlStatement statements, BoundSql bound,
             SqlSource.Statement statement) {
@@ -234,6 +236,12 @@ public class SqlStep implements Step {
                     "query-export requires the compiled export binding (codec and write spec)");
         }
         TempStore tempStore = tempStore(exchange);
+        // The download name is fixed here, once, against the request the binder assembled
+        // (docs/route-filename-placeholders.md decision 1): the same resolved name feeds the
+        // split writer's entry names and the disposition below, so the two never disagree.
+        String filename = io.tesseraql.core.files.FilenamePlaceholders.resolve(this.filename,
+                new io.tesseraql.core.expr.EvaluationContext(exchange.getProperty(
+                        TesseraqlProperties.CONTEXT, Map.of(), Map.class)));
         // The named results outlive the codec's write and nothing else.
         List<SpooledRows> spools = new java.util.ArrayList<>();
         SpoolRef ref;
@@ -368,9 +376,9 @@ public class SqlStep implements Step {
                 split
                         ? io.tesseraql.core.files.SplitExport.BUNDLE_CONTENT_TYPE
                         : codec.contentType());
-        // The filename is route-author data (export.filename / the route id), but it is the one
-        // Content-Disposition writer that sanitized nothing — a quote or control character in a
-        // route file reached the wire verbatim.
+        // The filename is route-author data (export.filename / the route id) with the request's
+        // values folded in, but it is the one Content-Disposition writer that sanitized nothing
+        // — a quote or control character in a route file reached the wire verbatim.
         exchange.response().header("Content-Disposition",
                 io.tesseraql.core.http.ContentDisposition.attachment(split
                         ? io.tesseraql.core.files.SplitExport.zipName(filename)

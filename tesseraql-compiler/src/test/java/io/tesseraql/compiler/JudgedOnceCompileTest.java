@@ -104,6 +104,62 @@ class JudgedOnceCompileTest {
                 .hasMessageContaining("the body is written as UTF-8");
     }
 
+    /**
+     * docs/route-filename-placeholders.md decision 5: a download name's placeholder the request
+     * cannot resolve, on the export block and on the file response; the resolvable spellings
+     * compile (the route lives at {@code /items}, so {@code path.*} has no parameter to name).
+     */
+    @Test
+    void anUnresolvableFilenamePlaceholderIsRefusedAtCompile(@TempDir Path dir) throws Exception {
+        assertThatThrownBy(() -> compile(dir, "query-export", "public", """
+                input:
+                  month:
+                    type: string
+                export:
+                  format: csv
+                  filename: "items-{params.month}-{now}.csv"
+                sources:
+                  main:
+                    sql:
+                      file: list.sql
+                """))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("TQL-YAML-1076")
+                .hasMessageContaining("route 'items.route' export.filename")
+                .hasMessageContaining("{now}")
+                .hasMessageContaining("names no request root");
+        assertThatThrownBy(() -> compile(dir.resolve("file"), "page", "public", """
+                response:
+                  file:
+                    template: receipt.txt
+                    contentType: text/plain
+                    filename: "items-{path.id}.txt"
+                sources:
+                  main:
+                    sql:
+                      file: list.sql
+                """))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("TQL-YAML-1076")
+                .hasMessageContaining("route 'items.route' response.file.filename")
+                .hasMessageContaining("{path.id}")
+                .hasMessageContaining("path parameter the route's URL does not declare");
+        assertThat(compile(dir.resolve("clean"), "page", "public", """
+                input:
+                  month:
+                    type: string
+                response:
+                  file:
+                    template: receipt.txt
+                    contentType: text/plain
+                    filename: "items-{params.month}-{main.rowCount}.txt"
+                sources:
+                  main:
+                    sql:
+                      file: list.sql
+                """)).containsKey("items.route");
+    }
+
     /** EH-06: whitespace at either end of a redirect location. */
     @Test
     void whitespaceOnARedirectLocationIsRefusedAtCompile(@TempDir Path dir) throws Exception {

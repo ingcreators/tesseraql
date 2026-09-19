@@ -426,33 +426,14 @@ final class StepContext {
     }
 
     /**
-     * Resolves {@code {dotted.path}} placeholders in an export filename against the job
-     * context ({@code batch.businessDate} being the one that matters); an unresolved
-     * placeholder renders empty rather than failing the step.
+     * Resolves {@code {dotted.path}} placeholders in an export or delivered filename against
+     * the job context ({@code batch.businessDate} being the one that matters) — the resolver a
+     * route's download name goes through too (docs/route-filename-placeholders.md decision 2),
+     * so a value folds the same way on both altitudes and an absent one renders {@code _}.
      */
     String interpolate(String template) {
-        if (template == null || !template.contains("{")) {
-            return template;
-        }
-        EvaluationContext evaluation = new EvaluationContext(context());
-        // The grammar is the lint's (FilenamePlaceholders): a spelling this does not resolve
-        // is one the lint refuses, so nothing is delivered with its braces on.
-        java.util.regex.Matcher matcher = io.tesseraql.yaml.app.FilenamePlaceholders.RESOLVED
-                .matcher(template);
-        StringBuilder out = new StringBuilder();
-        while (matcher.find()) {
-            if (io.tesseraql.core.files.SplitExport.KEY.equals(matcher.group())) {
-                // {key} is the split export's placeholder, replaced once per group when the
-                // bundle is written; the job context never owns it, so it passes through.
-                matcher.appendReplacement(out,
-                        java.util.regex.Matcher.quoteReplacement(matcher.group()));
-                continue;
-            }
-            Object value = evaluation.resolve(Arrays.asList(matcher.group(1).split("\\.")));
-            matcher.appendReplacement(out, java.util.regex.Matcher
-                    .quoteReplacement(value == null ? "" : String.valueOf(value)));
-        }
-        return matcher.appendTail(out).toString();
+        return io.tesseraql.core.files.FilenamePlaceholders.resolve(template,
+                new EvaluationContext(context()));
     }
 
     static String read(Path path) {

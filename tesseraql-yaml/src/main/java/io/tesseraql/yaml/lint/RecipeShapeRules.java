@@ -23,10 +23,10 @@ final class RecipeShapeRules {
     }
 
     static void report(LintContext context, AppConfig config, Path document,
-            RouteDefinition definition, RecipeShape.Surface surface, String source,
-            List<LintFinding> findings) {
+            RouteDefinition definition, RecipeShape.Surface surface, String urlPath,
+            String source, List<LintFinding> findings) {
         for (ExportDeclarations.Violation violation : RecipeShape.violations(
-                ExportRules.appName(config), definition, surface)) {
+                ExportRules.appName(config), definition, surface, urlPath)) {
             findings.add(new LintFinding(violation.code().toString(), ERROR, source,
                     violation.message(), line(context, document, violation.key()), null));
         }

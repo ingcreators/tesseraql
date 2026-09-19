@@ -174,6 +174,48 @@ class FileTransferIntegrationTest {
         assertThat(zipEntries(file.body())).containsExactly("orders-a.csv", "orders-b.csv");
     }
 
+    /**
+     * A route's download name resolves {@code {dotted.path}} against the request
+     * (docs/route-filename-placeholders.md decisions 1 and 4): the value is folded to a
+     * filename component ({@code 2026/09} is {@code 2026_09}), the HEAD says what the GET says,
+     * an absent value is {@code _}, and on a file-export the transfer row records the resolved
+     * name so the status face, the HEAD and the GET agree without a second resolution. Red on
+     * a runtime that writes the declared name as given.
+     */
+    @Test
+    void aDownloadNameCarriesTheRequestsValueFolded() throws Exception {
+        String path = "/api/events/download-named?month=2026%2F09";
+        HttpResponse<String> file = get(path);
+        assertThat(file.statusCode()).isEqualTo(200);
+        assertThat(file.headers().firstValue("content-disposition").orElse(""))
+                .isEqualTo("attachment; filename=\"events-2026_09.csv\"");
+        assertThat(file.body()).startsWith("name,held_on,fee");
+        HttpResponse<byte[]> head = sendBytes("HEAD", path);
+        assertThat(head.statusCode()).isEqualTo(200);
+        assertThat(head.headers().firstValue("content-disposition").orElse(""))
+                .isEqualTo("attachment; filename=\"events-2026_09.csv\"");
+        assertThat(head.body()).isEmpty();
+        assertThat(get("/api/events/download-named").headers()
+                .firstValue("content-disposition").orElse(""))
+                .as("an absent value is an underscore, never a dangling separator")
+                .isEqualTo("attachment; filename=\"events-_.csv\"");
+
+        String transferId = startTransfer("/api/orders/export-named-split?month=2026%2F09", "");
+        String statusPath = "/api/orders/export-named-split/" + transferId;
+        JsonNode status = awaitTerminal(statusPath);
+        assertThat(status.get("status").asText()).isEqualTo("COMPLETED");
+        assertThat(status.get("filename").asText()).isEqualTo("orders-2026_09.zip");
+        HttpResponse<byte[]> bundleHead = sendBytes("HEAD", statusPath + "/file");
+        assertThat(bundleHead.headers().firstValue("content-disposition").orElse(""))
+                .contains("filename=\"orders-2026_09.zip\"");
+        HttpResponse<byte[]> bundle = getBytes(statusPath + "/file");
+        assertThat(bundle.statusCode()).isEqualTo(200);
+        assertThat(bundle.headers().firstValue("content-disposition").orElse(""))
+                .contains("filename=\"orders-2026_09.zip\"");
+        assertThat(zipEntries(bundle.body()))
+                .containsExactly("orders-2026_09-a.csv", "orders-2026_09-b.csv");
+    }
+
     @Test
     void anExportNamedZipKeepsItsCodecsType() throws Exception {
         // The type follows the codec that wrote the bytes, the name follows the author - never
@@ -687,7 +729,56 @@ class FileTransferIntegrationTest {
         writeSplitExportRoute(home);
         writeNamedZipRoute(home);
         writeBlankSplitRoute(home);
+        writeRequestNamedRoutes(home);
         return home;
+    }
+
+    /**
+     * A download name that carries a request value (docs/route-filename-placeholders.md
+     * decision 1): a synchronous export named for its {@code month} input, and a split
+     * file-export whose stem carries it beside {@code {key}}.
+     */
+    private static void writeRequestNamedRoutes(Path home) throws IOException {
+        Path download = home.resolve("web/api/events/download-named");
+        Files.createDirectories(download);
+        Files.writeString(download.resolve("get.yml"), """
+                version: tesseraql/v1
+                id: events.downloadNamed
+                kind: route
+                recipe: query-export
+                input:
+                  month: { type: string, required: false }
+                sources:
+                  main:
+                    sql:
+                      file: select-events.sql
+                export:
+                  format: csv
+                  filename: "events-{params.month}.csv"
+                """);
+        Files.writeString(download.resolve("select-events.sql"),
+                "select name, held_on, fee from events order by name\n;\n");
+        Path split = home.resolve("web/api/orders/export-named-split");
+        Files.createDirectories(split);
+        Files.writeString(split.resolve("post.yml"), """
+                version: tesseraql/v1
+                id: orders.exportNamedSplit
+                kind: route
+                recipe: file-export
+                input:
+                  month: { type: string, required: false }
+                export:
+                  format: csv
+                  filename: "orders-{params.month}-{key}.csv"
+                  splitBy: grp
+                sources:
+                  main:
+                    sql:
+                      file: select-groups.sql
+                """);
+        Files.writeString(split.resolve("select-groups.sql"),
+                "select order_no, grp from (values ('s-1', 'a'), ('s-2', 'b'))"
+                        + " as t(order_no, grp) order by grp, order_no\n;\n");
     }
 
     /** A split export over two groups: the transfer is the bundle, named and typed as one. */

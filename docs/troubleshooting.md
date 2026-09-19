@@ -187,6 +187,19 @@ off the value (the join applies it only to a value starting with `/`), so the br
 resolves the redirect relative to the current page, outside the application. Quote the
 literal without the space (`TQL-YAML-1074`). Both are lint errors and boot refusals.
 
+### `TQL-YAML-1076` — a filename placeholder the site cannot resolve
+
+A download or delivered name is a template — `orders-{params.month}.csv` on a route,
+`report-{batch.businessDate}.csv` on a job step — and a placeholder that would not resolve
+renders `_` (or, outside the `{dotted.path}` grammar, stays in the name braces on). The
+linter and the boot name the placeholder and why. A spelling with a hyphen or a call
+(`{batch.business-date}`, `{now()}`) is outside the grammar. A root the site does not carry:
+a route resolves `params`, `query`, `path`, `body`, `tenant`, `request`, `flags`,
+`preference` and, when authenticated, `principal`; a job step resolves `params`, `steps`,
+`batch`, `tenant`. A `params.` or `query.` name is not declared under `input:`, or a `path.`
+name is not in the route's URL. Declare the input, spell the path parameter as the URL does, or drop the placeholder.
+`{key}` is the split export's and is judged by `TQL-YAML-1041`.
+
 ### `TQL-YAML-1412` — a policy rule names two conditions
 
 An `anyOf` rule is one condition: `role:`, `permission:` or `claim:`. A rule naming two —

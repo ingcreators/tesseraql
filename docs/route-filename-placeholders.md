@@ -1,13 +1,16 @@
 # A download's name is a template on both altitudes: `{dotted.path}` in a route's `filename:` resolves against the request
 
-> **Status: designed 2026-09-19.** The direction was decided by the user the same day —
-> docs/audit-low-leads.md DN-03d left "the lint companion" as a design call between refusing a
-> placeholder on a route's `filename:` (A) and resolving it (B); **B was chosen.** One
-> implementation slice, on the user's call.
+> **Status: designed 2026-09-19 (#1399); S1 shipped the same day.** The direction was decided
+> by the user — docs/audit-low-leads.md DN-03d left "the lint companion" as a design call
+> between refusing a placeholder on a route's `filename:` (A) and resolving it (B); **B was
+> chosen.** One implementation slice.
 >
 > **S1** — one resolver in core for the three route sites and the job step; the fold every
 > value goes through; the roots each site resolves, judged by one predicate at lint and at
-> build; the Studio data export names its table: *open*.
+> build; the Studio data export names its table: **shipped, #1400** (every decision as
+> recommended; the nine variants of `scratchpad/variant_s1.py` each red on exactly the guard
+> the table below names; `StepContextInterpolateTest`'s empty-value row flipped to `_` by
+> decision 4).
 
 A route declares the name a download is offered under in three places: `export.filename` on a
 `query-export` or `file-export` route, `response.stream.filename` on the streaming spelling of

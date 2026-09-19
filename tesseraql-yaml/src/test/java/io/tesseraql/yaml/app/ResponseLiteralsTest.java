@@ -24,7 +24,7 @@ class ResponseLiteralsTest {
                 "page", Map.of(), null, null, null, null, null, Map.of(), Map.of(), null, null,
                 null, null, null, null, null, null, null, response, null, null, null, null,
                 null, null);
-        return ResponseLiterals.violations("t", route);
+        return ResponseLiterals.violations("t", route, "/items/{id}/print");
     }
 
     private static ResponseSpec file(String contentType) {

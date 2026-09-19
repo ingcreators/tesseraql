@@ -15,7 +15,8 @@ import java.util.Map;
 /**
  * Renders a template-generated file response (design ch. 6.4): non-HTML templates render in
  * Thymeleaf TEXT mode ({@code [(${value})]} interpolation, {@code [# th:if]} blocks); the text is
- * served with the configured content type, as an attachment download when a filename is set. This
+ * served with the configured content type, as an attachment download when a filename is set — the
+ * name resolving {@code {dotted.path}} placeholders against the request like an export's. This
  * is the general text-generation primitive for business apps (config files, fixed-format exports,
  * receipts) alongside the SQL-driven CSV export.
  */
@@ -46,8 +47,12 @@ public final class FileResponseRenderer implements Step {
         exchange.response().status(response.effectiveStatus());
         exchange.response().header(Headers.CONTENT_TYPE, response.effectiveContentType());
         if (response.filename() != null && !response.filename().isBlank()) {
+            // The declared name is a template over the same context the model reads
+            // (docs/route-filename-placeholders.md decision 1): user-{path.id}.pdf.
             exchange.response().header("Content-Disposition",
-                    io.tesseraql.core.http.ContentDisposition.attachment(response.filename()));
+                    io.tesseraql.core.http.ContentDisposition.attachment(
+                            io.tesseraql.core.files.FilenamePlaceholders.resolve(
+                                    response.filename(), evaluation)));
         }
         exchange.setBody(Templates.render(appHome, templateName, model));
     }

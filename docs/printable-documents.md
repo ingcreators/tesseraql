@@ -40,7 +40,10 @@ export:
 
 Without a `template:` the built-in grid lays the rows out as a plain A4 table with repeating
 column headers and `Page n / total` numbering — useful for ad-hoc listings. With a template,
-the document is fully app-designed.
+the document is fully app-designed. The `filename:` is a template over the request like every
+export's ([file transfers](file-transfers.md)): a detail route under `/orders/{id}/print`
+names its document `order-{path.id}.pdf`, and a `response.file:` page's `filename:` resolves
+the same way.
 
 `file-export` works the same way for asynchronous extraction (`{path}/{transferId}/file`
 downloads the finished document), including `after:` follow-up statements.

@@ -3099,6 +3099,10 @@ class StudioIntegrationTest {
 
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.headers().firstValue("Content-Type").orElse("")).contains("text/csv");
+        // The browsed table names the download (docs/route-filename-placeholders.md decision
+        // 6): every table's file used to be offered as data.csv.
+        assertThat(response.headers().firstValue("Content-Disposition").orElse(""))
+                .isEqualTo("attachment; filename=\"tql_users.csv\"");
         // RFC-4180 CSV and nothing but the CSV: byte 0 is the first header cell of
         // `select * from tql_users`, the seeded row opens the second record, and the last
         // bytes are the final record's CRLF. Three substring checks were green on the
@@ -3134,6 +3138,10 @@ class StudioIntegrationTest {
 
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body()).isEqualTo("# No such table: nope\r\n");
+        // The refused name still names the note's file - folded, so a value the browser was
+        // never asked for cannot steer the save.
+        assertThat(response.headers().firstValue("Content-Disposition").orElse(""))
+                .isEqualTo("attachment; filename=\"nope.csv\"");
     }
 
     @Test
