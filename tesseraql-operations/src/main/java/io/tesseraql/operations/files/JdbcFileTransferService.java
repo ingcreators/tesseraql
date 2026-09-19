@@ -777,6 +777,23 @@ public final class JdbcFileTransferService implements FileTransferService {
 
     @Override
     public Optional<Download> download(String transferId) {
+        return open(transferId, true);
+    }
+
+    @Override
+    public Optional<Download> inspect(String transferId) {
+        return open(transferId, false);
+    }
+
+    /**
+     * The download's one path, with the claim switchable: a GET opens the bytes and claims, a
+     * HEAD opens the bytes for their name, type and length and claims nothing
+     * (docs/audit-low-leads.md slice 22, EH-07). A HEAD used to run the whole of
+     * {@link #download}: the request the server knows in advance will deliver no byte was
+     * recorded as the download and fired the follow-up whose documented meaning is "the bytes
+     * were fetched".
+     */
+    private Optional<Download> open(String transferId, boolean claim) {
         TransferRow transfer = findTransfer(transferId).orElse(null);
         if (transfer == null || !"EXPORT".equals(transfer.direction())
                 || transfer.spoolUri() == null
@@ -812,18 +829,66 @@ public final class JdbcFileTransferService implements FileTransferService {
         // The first-download claim, and the after-download SQL it gates, follow the open: a
         // request whose bytes could not be opened has delivered nothing and must not be recorded
         // as if it had.
-        try {
-            if (claimFirstDownload(transferId)
-                    && AFTER_DOWNLOAD.equals(transfer.afterTiming())
-                    && transfer.afterSqlFile() != null) {
-                runAfterSql(Path.of(transfer.afterSqlFile()), transfer.params(),
-                        transfer.tenantId());
+        if (claim) {
+            try {
+                claimAndFollowUp(transferId, transfer);
+            } catch (RuntimeException ex) {
+                closeQuietly(content);
+                throw ex;
             }
-        } catch (RuntimeException ex) {
-            closeQuietly(content);
-            throw ex;
         }
         return Optional.of(new Download(transfer.filename(), contentType, content));
+    }
+
+    /**
+     * The first-download claim and the {@code download}-timed follow-up it gates, committed
+     * together (the audit's F57, docs/audit-low-leads.md slice 22): the claim used to commit on
+     * its own auto-commit connection before the statement ran on a second, so a statement that
+     * failed answered 500 and left {@code downloaded_at} set — the transfer read as downloaded,
+     * the statement never ran again, and the rows it would have marked were re-extracted by the
+     * next export. Now a failure anywhere rolls the claim back and the next fetch tries again;
+     * the compare-and-set on {@code downloaded_at is null} still elects the one call that runs
+     * the statement, and a call that lost the race leaves the row as it found it.
+     *
+     * <p>Under a per-tenant pool the statement runs on the tenant's connection and the claim on
+     * {@code main}, where the transfer table lives — two connections, which cannot commit as
+     * one. The order is the statement first, then the claim, so a failure between the two leaves
+     * a statement that ran and a claim not recorded, and the next fetch runs the statement again:
+     * the same shape the extraction's own bookkeeping accepts, named at WARNING when it happens.
+     */
+    private void claimAndFollowUp(String transferId, TransferRow transfer) {
+        boolean followUp = AFTER_DOWNLOAD.equals(transfer.afterTiming())
+                && transfer.afterSqlFile() != null;
+        // The tenant's pool is resolved before the claim, so a tenant that no longer resolves
+        // refuses without spending it.
+        DataSource pool = followUp ? poolOf(transfer.tenantId()) : dataSource;
+        boolean[] statementCommitted = {false};
+        try (Connection record = dataSource.getConnection()) {
+            Transactions.run(record, "first download of " + transferId, main -> {
+                if (!claimFirstDownload(main, transferId) || !followUp) {
+                    return;
+                }
+                BoundSql statement = SqlRenderer.render(parse(Path.of(transfer.afterSqlFile())),
+                        transfer.params());
+                if (pool == dataSource) {
+                    executeUpdate(main, statement);
+                    return;
+                }
+                try (Connection work = pool.getConnection()) {
+                    Transactions.run(work, "download follow-up of " + transferId,
+                            tenant -> executeUpdate(tenant, statement));
+                    statementCommitted[0] = true;
+                }
+            });
+        } catch (SQLException ex) {
+            if (statementCommitted[0]) {
+                LOG.warn("Transfer {} ran its download follow-up on the tenant pool but the"
+                        + " first-download claim could not be recorded on main; the next fetch"
+                        + " runs the statement again", transferId, ex);
+            }
+            throw new TqlException(TRANSFER_ERROR,
+                    "Post-download statement failed: " + ex.getMessage(), ex);
+        }
     }
 
     private static void closeQuietly(java.io.InputStream content) {
@@ -1787,15 +1852,6 @@ public final class JdbcFileTransferService implements FileTransferService {
         }
     }
 
-    private void runAfterSql(Path afterSqlFile, Map<String, Object> params, String tenantId) {
-        try (Connection connection = poolOf(tenantId).getConnection()) {
-            executeUpdate(connection, SqlRenderer.render(parse(afterSqlFile), params));
-        } catch (SQLException ex) {
-            throw new TqlException(TRANSFER_ERROR,
-                    "Post-download statement failed: " + ex.getMessage(), ex);
-        }
-    }
-
     private int executeUpdate(Connection connection, BoundSql bound) throws SQLException {
         try (PreparedStatement statement = prepare(connection, bound)) {
             return statement.executeUpdate();
@@ -2078,19 +2134,19 @@ public final class JdbcFileTransferService implements FileTransferService {
         statement.setString(3, transferId);
     }
 
-    /** Atomically marks the first download; true only for the winning call. */
-    private boolean claimFirstDownload(String transferId) {
-        try (Connection connection = dataSource.getConnection();
-                PreparedStatement statement = connection.prepareStatement(
-                        "update tql_file_transfer set downloaded_at = ?"
-                                + " where transfer_id = ? and downloaded_at is null")) {
+    /**
+     * Marks the first download on the caller's connection — inside the caller's transaction, so
+     * the mark and what it gates commit or roll back together; true only for the winning call.
+     */
+    private boolean claimFirstDownload(Connection connection, String transferId)
+            throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement(
+                "update tql_file_transfer set downloaded_at = ?"
+                        + " where transfer_id = ? and downloaded_at is null")) {
             applyTimeout(statement);
             statement.setTimestamp(1, Timestamp.from(Instant.now()));
             statement.setString(2, transferId);
             return statement.executeUpdate() == 1;
-        } catch (SQLException ex) {
-            throw new TqlException(TRANSFER_ERROR,
-                    "Failed to mark download: " + ex.getMessage(), ex);
         }
     }
 

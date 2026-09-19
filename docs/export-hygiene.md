@@ -188,7 +188,9 @@ Measured (RUN, `m-drain-spool-leak.md` §2, `a-drain-spool-leak.md` §2-4, `s-fi
 - **`download()` opens the bytes first and claims second.** The first-download claim and the
   after-download SQL follow a successful `openInput`; a claim that throws closes the stream it
   would have abandoned. A download that cannot open its bytes still answers 500 — what it says is
-  P3's and P8's.
+  P3's and P8's. *Since `docs/audit-low-leads.md` slice 22 the claim and the statement are one
+  transaction (F57's other half) and a HEAD reads through `inspect()`, which opens and claims
+  nothing.*
 - **`TempStores`** (tesseraql-runtime): the one reading of `tesseraql.temp.store`, lifted from
   `TesseraqlRuntime`'s boot; `TesseraqlRuntime` and `JobCommand.wire` both build their store
   through it. `TempStores.scratch` is the shared node-local scratch directory, which the runtime

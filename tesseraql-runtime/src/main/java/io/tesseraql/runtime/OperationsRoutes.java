@@ -702,7 +702,8 @@ final class OperationsRoutes {
      * transfers outside the caller's {@code tql.ops.view.<name>} scope read the same 404; a
      * transfer that is not a completed export is a 409 ({@code TQL-LD-2823}, the route
      * download's refusal); a completed export whose bytes this node cannot open is the
-     * service's own 410, the same on both faces.
+     * service's own 410, the same on both faces. A HEAD reads the GET's headers and takes no
+     * first-download claim, as on the route face (docs/edge-hygiene.md E4).
      */
     private void transferFile(Exchange exchange) throws java.io.IOException {
         String id = exchange.request().param("id");
@@ -711,7 +712,10 @@ final class OperationsRoutes {
         if (status == null || !viewScope(exchange).test(status.appName())) {
             throw OpsActions.notFound("Transfer '" + id + "'");
         }
-        io.tesseraql.core.files.FileTransferService.Download download = transfers.download(id)
+        boolean head = "HEAD".equals(exchange.request().method());
+        io.tesseraql.core.files.FileTransferService.Download download = (head
+                ? transfers.inspect(id)
+                : transfers.download(id))
                 .orElse(null);
         if (download == null) {
             // TQL-LD-2823 (409): the transfer exists but has no downloadable file yet — the

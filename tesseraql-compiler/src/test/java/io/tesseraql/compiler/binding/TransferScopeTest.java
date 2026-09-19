@@ -17,9 +17,9 @@ import org.junit.jupiter.api.Test;
 
 /**
  * A route sees its own transfers and nothing else (docs/edge-hygiene.md E0). The route half is
- * proven end to end by {@code TransferRouteScopeIntegrationTest}; the application half is
- * here, because one runtime hosts one application and no integration test can start a second
- * one with a route of the same id against the same table.
+ * proven end to end by {@code TransferRouteScopeIntegrationTest}, the application half by
+ * {@code TransferApplicationScopeIntegrationTest} (two runtimes, two names, one database); the
+ * three terms are pinned here on a proxy-backed service, where each is one row.
  *
  * <p>And the tenant half (docs/audit-low-leads.md G31): a transfer recorded under a tenant is
  * its own only for a request resolved to that tenant.

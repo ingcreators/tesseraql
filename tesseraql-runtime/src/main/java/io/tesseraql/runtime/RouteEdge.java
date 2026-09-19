@@ -215,9 +215,9 @@ final class RouteEdge {
                 .order(AFTER_THE_GATE + specificity(mount.path()));
         if (method == HttpMethod.GET) {
             // A HEAD is a GET without the body (RFC 9110 §9.3.2; docs/edge-hygiene.md E4): the
-            // same route answers both, the pipeline runs as it does for the GET, and the
-            // transport withholds the content - Vert.x's response drops the body of a HEAD in
-            // end, write and sendFile and keeps the headers, Content-Length included. The
+            // same route answers both, the pipeline runs as it does for the GET, and the edge
+            // withholds the content (HeadRequests) - the transport does not: over HTTP/2 Vert.x
+            // sends a HEAD's body, over HTTP/1.1 it drops the body and claims no length. The
             // router used to match the file's method alone, so every GET route, asset and
             // health probe answered a HEAD with 405 - on every leg, the gateway's included.
             route.method(HttpMethod.HEAD);

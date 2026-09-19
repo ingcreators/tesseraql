@@ -386,8 +386,19 @@ public interface FileTransferService {
     int expireTransfersOlderThan(java.time.Instant cutoff);
 
     /**
-     * Opens the generated file once the export completed (empty when unknown or not ready). The
-     * first successful download triggers the {@code download}-timed follow-up statement.
+     * Opens the generated file once the export completed (empty when unknown or not ready) and
+     * takes the first-download claim: the first call that opened the bytes records the transfer
+     * as downloaded and runs the {@code download}-timed follow-up statement, in one transaction
+     * — a follow-up that fails releases the claim, so the next fetch tries again.
      */
     Optional<Download> download(String transferId);
+
+    /**
+     * Opens the generated file exactly as {@link #download} would — the same refusals, the same
+     * name, type and length — without taking the claim or running the follow-up. What a HEAD of
+     * the download reads (docs/edge-hygiene.md E4): a request that by definition delivers no
+     * byte must not be recorded as the download, so the GET's headers come from here and the
+     * claim waits for a GET.
+     */
+    Optional<Download> inspect(String transferId);
 }

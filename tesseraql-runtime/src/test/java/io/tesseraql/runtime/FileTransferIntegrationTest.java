@@ -252,6 +252,94 @@ class FileTransferIntegrationTest {
         assertThat(after.get("downloaded").asBoolean()).isTrue();
     }
 
+    /**
+     * A HEAD of the file is the GET's status and headers and none of its meaning
+     * (docs/edge-hygiene.md E4; docs/audit-low-leads.md slice 22, EH-07): the first-download
+     * claim and the {@code download}-timed follow-up say "the bytes were fetched", and a HEAD
+     * fetches none by definition. It used to run the whole download — the transfer read as
+     * downloaded and the follow-up ran, for a request that delivered nothing — so the GET that
+     * followed streamed the file and ran nothing. The wire was right all along; the store is
+     * where this row is red.
+     */
+    @Test
+    void aHeadOfTheFileTakesNeitherTheClaimNorTheFollowUp() throws Exception {
+        String transferId = startTransfer("/api/orders/export-head", "");
+        String path = "/api/orders/export-head/" + transferId;
+        assertThat(awaitTerminal(path).get("status").asText()).isEqualTo("COMPLETED");
+
+        HttpResponse<byte[]> head = sendBytes("HEAD", path + "/file");
+        assertThat(head.statusCode()).isEqualTo(200);
+        assertThat(head.headers().firstValue("content-type").orElse("")).startsWith("text/csv");
+        assertThat(head.headers().firstValue("content-disposition").orElse(""))
+                .contains("filename=\"orders.csv\"");
+        assertThat(head.body()).isEmpty();
+        // The store, not the wire: nothing was fetched, so nothing is recorded or run.
+        assertThat(MAPPER.readTree(get(path).body()).get("downloaded").asBoolean())
+                .as("downloaded after a HEAD").isFalse();
+        assertThat(count("select count(*) from head_log")).as("follow-up rows after a HEAD")
+                .isZero();
+
+        HttpResponse<byte[]> file = getBytes(path + "/file");
+        assertThat(file.statusCode()).isEqualTo(200);
+        assertThat(new String(file.body(), StandardCharsets.UTF_8)).startsWith("order_no");
+        // The HEAD claimed the GET's length: the spool measures itself (E4's filed half).
+        assertThat(head.headers().firstValue("content-length"))
+                .hasValue(String.valueOf(file.body().length));
+        assertThat(MAPPER.readTree(get(path).body()).get("downloaded").asBoolean()).isTrue();
+        assertThat(count("select count(*) from head_log")).isEqualTo(1);
+
+        // A HEAD after the GET reads the same headers and changes nothing further.
+        assertThat(sendBytes("HEAD", path + "/file").statusCode()).isEqualTo(200);
+        assertThat(count("select count(*) from head_log")).isEqualTo(1);
+    }
+
+    /**
+     * The claim and the follow-up commit together (the audit's F57; docs/audit-low-leads.md
+     * slice 22): a follow-up that fails leaves the transfer undownloaded, and the next fetch runs
+     * it again. The claim used to commit on its own connection before the statement ran on a
+     * second — the fetch answered 500, the file was never served, the transfer read as
+     * downloaded, and the statement never ran on any later fetch. The statement collides with a
+     * seeded primary key on the FIRST fetch of a fresh transfer; a collision on a second fetch
+     * never reaches the statement and proves nothing.
+     */
+    @Test
+    void aFailedDownloadFollowUpLeavesTheClaimUnspent() throws Exception {
+        execute("insert into download_log (id) values (1)");
+        String transferId = startTransfer("/api/orders/export-fragile", "");
+        String path = "/api/orders/export-fragile/" + transferId;
+        assertThat(awaitTerminal(path).get("status").asText()).isEqualTo("COMPLETED");
+
+        HttpResponse<String> failed = get(path + "/file");
+        assertThat(failed.statusCode()).as("the fetch whose follow-up failed: %s", failed.body())
+                .isNotEqualTo(200);
+        assertThat(failed.body()).doesNotContain("order_no");
+        assertThat(MAPPER.readTree(get(path).body()).get("downloaded").asBoolean())
+                .as("downloaded after the failed follow-up").isFalse();
+        assertThat(count("select count(*) from download_log")).isEqualTo(1);
+
+        execute("delete from download_log where id = 1");
+        HttpResponse<String> served = get(path + "/file");
+        assertThat(served.statusCode()).as(served.body()).isEqualTo(200);
+        assertThat(served.body()).startsWith("order_no");
+        assertThat(MAPPER.readTree(get(path).body()).get("downloaded").asBoolean()).isTrue();
+        // The follow-up ran once, on the first fetch that succeeded.
+        assertThat(count("select count(*) from download_log")).isEqualTo(1);
+    }
+
+    private static HttpResponse<byte[]> sendBytes(String method, String path) throws Exception {
+        return HTTP.send(HttpRequest.newBuilder(
+                URI.create("http://localhost:" + runtime.port() + path))
+                .method(method, HttpRequest.BodyPublishers.noBody()).build(),
+                HttpResponse.BodyHandlers.ofByteArray());
+    }
+
+    private static void execute(String sql) throws Exception {
+        try (Connection connection = connect();
+                Statement statement = connection.createStatement()) {
+            statement.execute(sql);
+        }
+    }
+
     @Test
     void multipartFormDataUploadImportsTheFilePart() throws Exception {
         String boundary = "tql-test-boundary";
@@ -577,6 +665,8 @@ class FileTransferIntegrationTest {
                 create table events (name varchar(100) primary key,
                                      held_on date not null,
                                      fee numeric(12, 2) not null);
+                create table head_log (id serial primary key);
+                create table download_log (id integer primary key);
                 """);
 
         writeImportRoute(home, "web/api/items/import", "items.import", "rollback");
@@ -586,6 +676,13 @@ class FileTransferIntegrationTest {
                 "where not download_only");
         writeExportRoute(home, "web/api/orders/export-on-download", "orders.exportOnDownload",
                 "download", "where download_only");
+        // Each download-timed row below owns a route and a log table: the claim is one-shot per
+        // transfer, so a shared route or a shared counter lets a sibling's GET make a HEAD row
+        // green by accident (docs/audit-low-leads.md slice 22).
+        writeLoggingExportRoute(home, "web/api/orders/export-head", "orders.exportHead",
+                "insert into head_log (id) values (default)");
+        writeLoggingExportRoute(home, "web/api/orders/export-fragile", "orders.exportFragile",
+                "insert into download_log (id) values (1)");
         writeTypedRoutes(home);
         writeSplitExportRoute(home);
         writeNamedZipRoute(home);
@@ -935,6 +1032,33 @@ class FileTransferIntegrationTest {
         Files.writeString(route.resolve("mark-extracted.sql"),
                 "update orders set extracted = true where not extracted and "
                         + scope.substring("where ".length()) + "\n;\n");
+    }
+
+    /** A csv export whose {@code download}-timed follow-up is one statement over a log table. */
+    private static void writeLoggingExportRoute(Path home, String dir, String id, String sql)
+            throws IOException {
+        Path route = home.resolve(dir);
+        Files.createDirectories(route);
+        Files.writeString(route.resolve("post.yml"), """
+                version: tesseraql/v1
+                id: %s
+                kind: route
+                recipe: file-export
+                export:
+                  format: csv
+                  filename: orders.csv
+                  after:
+                    timing: download
+                    sql:
+                      file: log-download.sql
+                sources:
+                  main:
+                    sql:
+                      file: select-orders.sql
+                """.formatted(id));
+        Files.writeString(route.resolve("select-orders.sql"),
+                "select order_no from orders order by order_no\n;\n");
+        Files.writeString(route.resolve("log-download.sql"), sql + "\n;\n");
     }
 
     private static void deleteRecursively(Path root) throws IOException {

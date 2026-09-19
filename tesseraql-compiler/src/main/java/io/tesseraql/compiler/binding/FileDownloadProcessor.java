@@ -13,7 +13,9 @@ import io.tesseraql.pipeline.TesseraqlProperties;
  * Streams a completed export's file (design ch. 28). Unknown transfers are 404, exports that are
  * still running (or failed, or stopped) are 409, a completed export whose bytes this node cannot
  * open is 410 (the service's own refusal); the first successful fetch triggers a
- * {@code download}-timed follow-up statement.
+ * {@code download}-timed follow-up statement. A HEAD (docs/edge-hygiene.md E4) answers the
+ * GET's status and headers and takes nothing: the claim and the follow-up mean "the bytes were
+ * fetched", and a HEAD is the one request that fetches none by definition.
  */
 public final class FileDownloadProcessor implements Step {
 
@@ -38,7 +40,10 @@ public final class FileDownloadProcessor implements Step {
         if (TransferScope.own(transfers, transferId, appName, routeId, exchange).isEmpty()) {
             throw new TqlException(UNKNOWN, "Unknown transfer: " + transferId);
         }
-        FileTransferService.Download download = transfers.download(transferId)
+        boolean head = "HEAD".equals(exchange.request().method());
+        FileTransferService.Download download = (head
+                ? transfers.inspect(transferId)
+                : transfers.download(transferId))
                 .orElseThrow(() -> new TqlException(NOT_READY,
                         "Transfer " + transferId + " has no downloadable file (not an export,"
                                 + " still running, stopped, or failed)"));

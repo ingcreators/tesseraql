@@ -370,8 +370,11 @@ The `after:` follow-up statement runs once, at one of two timings:
 
 - `extract` (default) — in the same transaction as the extraction query. Reliable: the rows are
   marked exactly when they are extracted, so a re-run cannot extract them twice.
-- `download` — once, on the first successful file fetch. Later fetches stream the file again
-  without re-running it. Use this when "handed over" means "actually downloaded".
+- `download` — once, with the first-download claim. The claim is taken when a GET opens the
+  file, before any byte is sent; a HEAD never takes it; the statement and the claim commit
+  together, so a statement that fails leaves the transfer undownloaded and the next GET tries
+  again. Later fetches stream the file without re-running it. Use this when "handed over" means
+  "a client fetched the file" — a GET that was cut off after the first byte counts.
 
 ## Asynchronous import: file-import
 
