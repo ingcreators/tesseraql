@@ -331,6 +331,98 @@ class JxlsFileCodecTest {
         }
     }
 
+    /**
+     * A jxls report writes a time of day as the day fraction the grid and placement modes write
+     * (docs/audit-low-leads.md XD-02 R7). jxls-poi stamps {@code LocalDate.now()} onto a
+     * {@code LocalTime}, so the cell used to carry the run date: {@code 46280.9375} on one day,
+     * {@code 46281.9375} the next - and a date-time where the other modes write a time. The
+     * same for a {@code first} the template reads, and for the rows of a group.
+     */
+    @Test
+    void aJxlsReportWritesATimeOfDayAsADayFractionNotTodaysDate() throws Exception {
+        Path template = writeTimeReportTemplate();
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("name", "late");
+        row.put("starts_at", java.time.LocalTime.of(22, 30));
+        row.put("opens_at", java.time.OffsetTime.of(22, 30, 0, 0,
+                java.time.ZoneOffset.ofHours(-5)));
+        row.put("legacy_at", java.sql.Time.valueOf("22:30:00"));
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        codec.write(out, new FileWriteSpec(List.of(), null, template, null),
+                repeatable(List.of(row)));
+
+        try (XSSFWorkbook workbook = new XSSFWorkbook(
+                new ByteArrayInputStream(out.toByteArray()))) {
+            Row written = workbook.getSheetAt(0).getRow(1);
+            assertThat(written.getCell(0).getStringCellValue()).isEqualTo("late");
+            for (int col = 1; col <= 3; col++) {
+                assertThat(written.getCell(col).getNumericCellValue())
+                        .as("column " + col).isEqualTo(TWENTY_TWO_THIRTY);
+            }
+            // The first row a header cell reads is the same row.
+            assertThat(workbook.getSheetAt(0).getRow(0).getCell(1).getNumericCellValue())
+                    .isEqualTo(TWENTY_TWO_THIRTY);
+        }
+    }
+
+    /**
+     * A grid column declared {@code type: date} defaults to a date cell format, as csv and pdf
+     * print a date (docs/audit-low-leads.md XD-02 R3); a datetime keeps the date-time default.
+     */
+    @Test
+    void aGridDateColumnDefaultsToADateFormatNotADateTime() throws Exception {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("shipped_on", java.time.LocalDate.of(2026, 1, 15));
+        row.put("shipped_at", java.time.LocalDateTime.of(2026, 1, 15, 22, 30));
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        codec.write(out, new FileWriteSpec(List.of(
+                new ColumnMapping("shipped_on", null, null, "date", null),
+                new ColumnMapping("shipped_at", null, null, "datetime", null)),
+                null, null, null, null, "UTC"), streaming(List.of(row)));
+
+        try (XSSFWorkbook workbook = new XSSFWorkbook(
+                new ByteArrayInputStream(out.toByteArray()))) {
+            Row written = workbook.getSheetAt(0).getRow(1);
+            assertThat(written.getCell(0).getCellStyle().getDataFormatString())
+                    .isEqualTo("yyyy-mm-dd");
+            assertThat(written.getCell(1).getCellStyle().getDataFormatString())
+                    .isEqualTo("yyyy-mm-dd hh:mm");
+        }
+    }
+
+    /**
+     * A binary column is the Base64 text every other surface writes, on the grid and in a
+     * placement (docs/audit-low-leads.md XD-01 R1) - not the JVM's identity string, which
+     * changed with every run.
+     */
+    @Test
+    void aBinaryColumnIsBase64OnTheGridAndInAPlacement() throws Exception {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("name", "blob");
+        row.put("bytes", new byte[]{1, 2, 3});
+        ByteArrayOutputStream grid = new ByteArrayOutputStream();
+        codec.write(grid, new FileWriteSpec(List.of(ColumnMapping.of("name"),
+                ColumnMapping.of("bytes")), null, null, null, null, "UTC"),
+                streaming(List.of(row)));
+        try (XSSFWorkbook workbook = new XSSFWorkbook(
+                new ByteArrayInputStream(grid.toByteArray()))) {
+            assertThat(workbook.getSheetAt(0).getRow(1).getCell(1).getStringCellValue())
+                    .isEqualTo("AQID");
+        }
+
+        Path template = writePlacementTemplate();
+        ByteArrayOutputStream placed = new ByteArrayOutputStream();
+        codec.write(placed, new FileWriteSpec(List.of(
+                new ColumnMapping("name", null, ColumnMapping.parseColumn("B")),
+                new ColumnMapping("bytes", null, ColumnMapping.parseColumn("D"))),
+                null, template, CellRef.parse("B5")), repeatable(List.of(row)));
+        try (XSSFWorkbook workbook = new XSSFWorkbook(
+                new ByteArrayInputStream(placed.toByteArray()))) {
+            assertThat(workbook.getSheetAt(0).getRow(4).getCell(3).getStringCellValue())
+                    .isEqualTo("AQID");
+        }
+    }
+
     @Test
     void aPlacementWritesASqlTimeAsATimeCell() throws Exception {
         Path template = writePlacementTemplate();
@@ -568,6 +660,29 @@ class JxlsFileCodecTest {
             Row totals = sheet.createRow(totalsRow);
             totals.createCell(1).setCellValue("Total");
             totals.createCell(3).setCellFormula("SUM(D5:D" + totalsRow + ")");
+            try (OutputStream out = Files.newOutputStream(template)) {
+                workbook.write(out);
+            }
+        }
+        return template;
+    }
+
+    /** A report over one row of time-of-day cells, with a header cell reading {@code first}. */
+    private Path writeTimeReportTemplate() throws Exception {
+        Path template = dir.resolve("times.xlsx");
+        try (XSSFWorkbook workbook = new XSSFWorkbook()) {
+            Sheet sheet = workbook.createSheet("times");
+            Row title = sheet.createRow(0);
+            title.createCell(0).setCellValue("Shifts");
+            title.createCell(1).setCellValue("${main.first.starts_at}");
+            Row each = sheet.createRow(1);
+            each.createCell(0).setCellValue("${r.name}");
+            each.createCell(1).setCellValue("${r.starts_at}");
+            each.createCell(2).setCellValue("${r.opens_at}");
+            each.createCell(3).setCellValue("${r.legacy_at}");
+            comment(sheet, title.getCell(0), "jx:area(lastCell=\"D2\")");
+            comment(sheet, each.getCell(0),
+                    "jx:each(items=\"main.rows\" var=\"r\" lastCell=\"D2\")");
             try (OutputStream out = Files.newOutputStream(template)) {
                 workbook.write(out);
             }

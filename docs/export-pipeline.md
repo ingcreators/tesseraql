@@ -76,7 +76,7 @@ without one is a **jxls report**, no template at all is a **grid**.
 | start | A1 | `startCell` |
 | columns | declared order, contiguous | `column:` per column, gaps allowed |
 | styles | `format:` only | the `startCell` row's styles, `format:` overriding |
-| date default | `yyyy-mm-dd hh:mm` applied | whatever the template's style says |
+| date default | `yyyy-mm-dd hh:mm` applied (`yyyy-mm-dd` on a `type: date` column) | whatever the template's style says |
 
 Two things about that inference are not safe:
 

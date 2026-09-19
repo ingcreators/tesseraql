@@ -1649,6 +1649,28 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void renderEndpointWithLiveDataRunsTheRowStagesTheRouteRuns() throws Exception {
+        // The live rows pass the served route's row stages (docs/audit-low-leads.md TS-04):
+        // each source's result: declaration — by type, by type + format, and through a domain
+        // the loader resolves — then the enrichments, a sql: reference against the sandbox and
+        // a source: reference against the sibling read. Before this the preview ran the SQL
+        // alone: payload was a string, ordered_on kept its slashes, no partner_name, no rate.
+        String body = MAPPER.writeValueAsString(Map.of("sampleModel", "{}", "live", "true"));
+        HttpResponse<String> response = post(
+                "/_tesseraql/studio/render?path=" + enc("web/api/stages/get.yml"), body, true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        JsonNode render = MAPPER.readTree(response.body());
+        assertThat(render.get("ok").asBoolean()).as(render.toString()).isTrue();
+        String output = render.get("output").asText();
+        assertThat(output).contains("\"sku\" : \"A-1\"")
+                .contains("\"ordered_on\" : \"2026-01-15\"")
+                .contains("\"shipped_on\" : \"2026-01-20\"")
+                .contains("\"partner_name\" : \"Acme\"")
+                .contains("\"rate\" : 12.5");
+    }
+
+    @Test
     void runTestsRunsJobHttpCallCase() throws Exception {
         // The directory-sync job is covered by one http-call case (pure: it plans the outbound step
         // and applies the egress allow-list without a network call).
@@ -4202,6 +4224,56 @@ class StudioIntegrationTest {
         Files.writeString(target.resolve("web/api/multi/main.sql"), "select 'main-live' as tag\n");
         Files.writeString(target.resolve("web/api/multi/active.sql"),
                 "select 'query-live' as tag\n");
+        // The row stages a served route runs after its reads (docs/audit-low-leads.md TS-04):
+        // a result: declaration by type, by type + format, and through a domain alone; a
+        // sql: enrichment against the sandbox and a source: enrichment against a sibling.
+        Files.createDirectories(target.resolve("web/api/stages"));
+        Files.writeString(target.resolve("web/api/stages/get.yml"), """
+                version: tesseraql/v1
+                id: stages.report
+                kind: route
+                recipe: query-json
+
+                security:
+                  auth: bearer
+                  policy: users.read
+
+                sources:
+                  main:
+                    sql:
+                      file: main.sql
+                    result:
+                      payload: { type: json }
+                      ordered_on: { type: date, format: yyyy/MM/dd }
+                      shipped_on: { domain: stages.shipped_on }
+                    enrich:
+                      partner:
+                        on: { partner_code: code }
+                        sql: { file: partners.sql }
+                        merge: [partner_name]
+                      rate:
+                        on: { partner_code: code }
+                        source: rates
+                        merge: [rate]
+                  rates:
+                    sql:
+                      file: rates.sql
+                response:
+                  json:
+                    status: 200
+                    body:
+                      main: main.rows
+                """);
+        Files.writeString(target.resolve("web/api/stages/main.sql"),
+                "select 'P1' as partner_code, '{\"sku\":\"A-1\"}' as payload,"
+                        + " '2026/01/15' as ordered_on, '2026/01/20' as shipped_on\n");
+        Files.writeString(target.resolve("web/api/stages/partners.sql"), """
+                select code, name as partner_name
+                  from (values ('P1', 'Acme'), ('P2', 'Globex')) as p(code, name)
+                 where code in /* keys */('P1')
+                """);
+        Files.writeString(target.resolve("web/api/stages/rates.sql"),
+                "select 'P1' as code, 12.5 as rate\n");
         // A table-backed decision over `shipping_fee_rules` (seeded live in seedScaffoldTable and
         // introspected by the schema.json overlay above): the data browser badges each mapped
         // column's role and the docs table page chips the table as backing the decision.
@@ -4257,6 +4329,9 @@ class StudioIntegrationTest {
                   formed.q:
                     type: string
                     maxLength: 40
+                  stages.shipped_on:
+                    type: date
+                    format: yyyy/MM/dd
                 """);
         return target;
     }

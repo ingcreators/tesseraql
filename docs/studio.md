@@ -50,7 +50,7 @@ What the workshop *can* do — as opposed to who may act — stays configuration
 | `tesseraql.studio.dataBrowser.enabled` | Opt-in. Off by default. |
 | `tesseraql.studio.dataBrowser.edit.enabled` | Row editing inside the data browser. |
 | `tesseraql.studio.scaffold.enabled` | The scaffolding screens. |
-| `tesseraql.studio.testRunner.enabled` | Running suites from the browser. |
+| `tesseraql.studio.testRunner.enabled` | Running suites from the browser, and the route preview's **Use live data**: the route's SQL sources run against the dev datasource, sandboxed and rolled back, and their rows pass the route's own `result:` and `enrich:` stages (an `http:` source or reference is not called). |
 | `tesseraql.studio.confirmApply` | Require a reviewed diff before every apply. |
 
 The retired `tesseraql.studio.readOnly` master switch and `tesseraql.studio.editRoles`

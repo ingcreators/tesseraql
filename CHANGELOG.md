@@ -72,6 +72,22 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **Studio's live preview runs the route's row stages.** **Use live data** used to run the
+  route's SQL and hand the template the raw rows: a `result:` declaration was never applied
+  (a text column declared `type: json` stayed a string, so the served page rendered
+  `row.payload.sku` and the preview reported the template broken) and no `enrich:` ran. The
+  live rows now pass each source's `result:` — its `domain:` resolved as the loader resolves
+  it — and then every `enrich:` in authored order: a `sql:` reference against the sandbox, a
+  `source:` reference against the results read. An `http:` reference is not called, as an
+  `http:` source is not previewed; the sandbox makes no outbound call. Each source runs once
+  and is published under its own name only: the preview ran `main` twice and kept publishing
+  it under the `sql` key the unified source model retired
+  (`docs/audit-low-leads.md` slice 18: TS-04, unfiled 38).
+- **`groupBy:` on a `pdf` export is an inert key.** Only a workbook report template reads the
+  groups; a print template's model carries the rows, so `${groups}` in it was null and
+  rendered as nothing, at 200, with lint and boot silent. The build now reports it
+  (`TQL-YAML-1005`, an error for the linter and a warning at boot, like every inert key);
+  group in the query, or write one document per group with `splitBy:` (XD-02 R5).
 - **`TQL-FIELD-4622` is deleted: no export renders a catalog name.** The rule refused a
   `csv` or `pdf` export that declared no `locale:` in an app whose catalogs carry
   per-language names, on the 0.14.0 premise that an export's code names answer in the
@@ -341,6 +357,23 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A mis-grouped number is refused, not read a hundredfold.** `DecimalFormat`'s lenient parse
+  accepts the grouping separator at any position, so `1234,50` under `#,##0.00` — on a
+  `result:` entry or an import column with a `format:` — was `123450`, in every locale, with
+  no error. Strict parsing is asked for when the text carries the locale's grouping separator;
+  the ungrouped `1234.50` the same pattern always accepted still parses (unfiled 15).
+- **A binary column is written as Base64.** A `bytea`/`BLOB` column reached csv, the
+  workbook grid and the PDF grid as the JVM's identity string (`[B@5ba88be8`), different on
+  every run. It is Base64 now on every text surface — the text a JSON body already carries
+  (XD-01 R1).
+- **A jxls report writes a time of day as a time.** jxls-poi stamps the run date onto a
+  `LocalTime` before it writes the cell, so a report with a time column carried the day it
+  ran in every such cell — a different workbook each day — where the grid and placement modes
+  write the day fraction. Report mode receives that fraction too, on the rows, on `first`, and
+  on each group's rows (XD-02 R7).
+- **A workbook grid's `type: date` column defaults to a date format.** It took the datetime
+  default (`yyyy-mm-dd hh:mm`, showing `2026-01-15 00:00`); it is `yyyy-mm-dd` now, as csv
+  and pdf print a date (XD-02 R3).
 - **A code catalog that has never loaded no longer takes every route of the app down.** One
   `table:` catalog on a table missing from this environment answered 404 `TQL-APP-4206` on
   every route — JSON reads, commands, exports, MCP tools, pages that never rendered its

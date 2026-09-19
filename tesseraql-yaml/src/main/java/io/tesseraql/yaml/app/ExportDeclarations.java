@@ -302,6 +302,15 @@ public final class ExportDeclarations {
                             + "' is a workbook or print option - csv output writes rows and"
                             + " reads no template"));
         }
+        if (pdf && template && spec.groupBy() != null && !spec.groupBy().isBlank()) {
+            // Only the jxls report mode reads the groups; a print template's model carries
+            // the rows, so `groups` in it is null and Thymeleaf renders nothing for it, at 200
+            // (docs/audit-low-leads.md XD-02 R5). Without a template the groups lint says so.
+            out.add(new Violation(INAPPLICABLE, Kind.INERT, "export.groupBy",
+                    site.prefix("export.groupBy") + "groupBy: is a workbook report option - a"
+                            + " print template reads the rows, never groups; group in the"
+                            + " query, or write one document per group with splitBy:"));
+        }
         if (excel && spec.locale() != null && !spec.locale().isBlank()) {
             out.add(new Violation(INAPPLICABLE, Kind.INERT, "export.locale",
                     site.prefix("export.locale") + "'" + bounded(spec.locale())

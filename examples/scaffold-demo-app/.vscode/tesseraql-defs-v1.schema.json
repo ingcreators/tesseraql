@@ -156,7 +156,7 @@
           },
           "groupBy": {
             "type": "string",
-            "description": "A column the rows are read as ordered groups by, each exposed to the template as a `key` and its own `rows`. The rows must be ordered by it (TQL-LD-2851)."
+            "description": "A column the rows are read as ordered groups by, each exposed to a workbook report template (jxls) as a `key` and its own `rows`. The rows must be ordered by it (TQL-LD-2851). A print (pdf) template reads no groups: group in the query, or write one document per group with `splitBy:` (TQL-YAML-1005)."
           },
           "splitBy": {
             "type": "string",

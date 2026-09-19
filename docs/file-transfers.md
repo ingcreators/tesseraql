@@ -97,7 +97,7 @@ export:
   sheet: Orders               # workbook formats: the sheet to write
   startCell: B5               # workbook placement mode: where data rows start
   maxRows: 5000               # formats that hold every row: the ceiling (see below)
-  groupBy: department         # template reads the rows as groups (see below)
+  groupBy: department         # a workbook report template reads the rows as groups (see below)
   splitBy: customer_id        # one document per value, delivered as one ZIP named for the stem (see below)
   after:                      # file-export only: the follow-up statement
     timing: extract           # extract (default) | download
@@ -138,8 +138,12 @@ sources:
   sees it. A column with neither is written as one text per kind on `csv` and `pdf`: a wall
   clock as stored (`2026-01-15 22:30:00.123456`), an instant in the export's zone, a date as
   `2026-01-15`, a time as `22:30:00`, a time with zone as `22:30:00+09:00`. The Excel grid and
-  placement modes type every temporal cell. A jxls report (`template:` without `startCell:`)
-  hands the template the raw values and reads none of these keys.
+  placement modes type every temporal cell; on the grid a `type: date` column takes the date
+  cell format (`yyyy-mm-dd`) by default and a `datetime` one `yyyy-mm-dd hh:mm`. A jxls
+  report (`template:` without `startCell:`) hands the template the raw values and reads none
+  of these keys — except that a time of day reaches it as the day fraction the grid writes,
+  so a report's time cells never carry the day the report ran. A binary column (`bytea`,
+  `BLOB`) is written as Base64 on every text surface, the same text a JSON body carries.
 - `domain:` says `type:` and `format:` once: `{ name: held_on, domain: held_date }` takes them
   from the app-level field domain ([field-domains.md](field-domains.md)) — the same domain the
   request's `input:` binds and a `result:` entry reads back — and the column's own `type:` or
@@ -151,7 +155,10 @@ sources:
   alone, typed or not. A `timestamptz`, `datetimeoffset` or `TIMESTAMP WITH TIME ZONE` is an
   instant: `timezone:` presents it in that zone (the platform's when none is declared). A
   time-of-day column has no date to shift and keeps its wall clock; a time with zone keeps its
-  offset as text and its wall clock in a workbook cell.
+  offset as text and its wall clock in a workbook cell. MySQL's `TIME` is a signed duration
+  that may exceed a day: a value outside `00:00:00`–`23:59:59` is refused by Connector/J when
+  read (the export fails with the driver's text) and wrapped modulo a day by MariaDB's driver —
+  neither is a time of day, so select such a column as text (`time_format`) instead.
 - `locale:` and `timezone:` drive those patterns, and reach only a typed or formatted column —
   and, on a `pdf` export with a `template:`, `locale:` also sets the locale the template renders
   in (its `#numbers` and `#dates` utilities, `${#locale}`, and `#{…}` message expressions). A
@@ -264,14 +271,17 @@ extraction and lets a second sheet run unbounded bounds nothing. A streaming for
 accumulates, so a ceiling there would exist only to be raised. An uncapped buffering export is a
 build warning (`TQL-LD-5310`).
 
-**`groupBy:`** lets a template read the rows as ordered groups, each with its `key` and its own
-`rows` — one group is held at a time, so a grouped report is not a materialized one. A jxls
-report can put each group on its own sheet with `multisheet`:
+**`groupBy:`** lets a workbook report template read the rows as ordered groups, each with its
+`key` and its own `rows` — one group is held at a time, so a grouped report is not a
+materialized one. A jxls report can put each group on its own sheet with `multisheet`:
 
 ```
 jx:each(items="groups" var="g" multisheet="groupKeys" lastCell="A3")
 jx:each(items="g.rows" var="r" lastCell="A3")
 ```
+
+A print (pdf) template reads no groups — its model carries the rows — so `groupBy:` on a pdf
+export is an inert key the build reports (`TQL-YAML-1005`); group in the query, or split.
 
 **`splitBy:`** goes further and writes one *document* per group, delivered as a single ZIP. This
 is what a printable document does instead of streaming: page numbers stay per document, a

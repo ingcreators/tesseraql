@@ -147,6 +147,16 @@ and is being adopted (see E below).
        results keyed by model name; `StudioTestService.liveRows` runs the main query + each named
        query. Command `steps` (writes) remain a later extension. (Run tests already covered every
        binding via `CrossReferenceIndex.bindings`.)
+     - **The row stages, too** — *done 2026-09-19* (`docs/audit-low-leads.md` slice 18, TS-04):
+       the live rows pass what the served route runs after its reads — each source's `result:`
+       declaration (its `domain:` resolved as the loader resolves it, through
+       `ManifestLoader.resolveSharedDefinitions` on the parsed draft) and every `enrich:` in
+       authored order through the same `KeyedReference`, a `sql:` reference against the sandbox
+       and a `source:` reference against the results read. An `http:` reference is not called,
+       as an `http:` source is not previewed: the sandbox makes no outbound call. Each source
+       runs once and is published under its own name only — the retired `sql` key, which the
+       preview kept publishing after decision 10 retired it, is gone. Command `steps` still are
+       not previewed.
 
    Ties to milestone M7 ("schema → verified CRUD in ten minutes").
 

@@ -475,8 +475,9 @@ public final class JxlsFileCodec implements FileCodec {
         // other declared sources go in under their own names (docs/export-pipeline.md, dec. 2),
         // and the rows the codec writes are the document's `main` source, addressed by the one
         // envelope every surface uses (docs/unified-sources.md decision 10).
-        Map<String, Object> context = new LinkedHashMap<>(model.values());
-        context.put(SUBJECT, model.subject());
+        Map<String, Object> context = new LinkedHashMap<>();
+        model.values().forEach((name, value) -> context.put(name, resultWithTimeSerials(value)));
+        context.put(SUBJECT, resultWithTimeSerials(model.subject()));
         org.jxls.builder.JxlsStreaming streaming = org.jxls.builder.JxlsStreaming.STREAMING_ON;
         if (spec.groupBy() != null && !spec.groupBy().isBlank()) {
             // Grouping is the framework's, not the template's: jxls's own groupBy materializes
@@ -484,7 +485,11 @@ public final class JxlsFileCodec implements FileCodec {
             // multisheet report written against it would buffer every row again. A template that
             // walks `groups` and each group's `rows` calls neither (decision 3).
             io.tesseraql.core.files.ExportGroups groups = model.groupedBy(spec.groupBy());
-            context.put("groups", groups);
+            List<io.tesseraql.core.files.ExportGroups.Group> serialGroups = new ArrayList<>();
+            groups.forEach(group -> serialGroups.add(
+                    new io.tesseraql.core.files.ExportGroups.Group(group.key(),
+                            rowsWithTimeSerials(group.rows()))));
+            context.put("groups", serialGroups);
             List<String> sheetNames = groups.keys().stream().map(String::valueOf).toList();
             context.put("groupKeys", sheetNames);
             // Only the generated sheets stream. Streaming every sheet includes the template's
@@ -519,6 +524,64 @@ public final class JxlsFileCodec implements FileCodec {
                     + " characters; shorten the value in the query, or export it as csv",
                     refused);
         }
+    }
+
+    /**
+     * A result as report mode hands it to jxls: its rows and its {@code first} with every time
+     * of day as the day fraction the grid and placement modes write. jxls-poi stamps
+     * {@code LocalDate.now()} onto a {@code LocalTime} before it writes the cell, so a report
+     * with a time column carried the RUN date in every such cell - a different workbook every
+     * day, and a date-time where the other two modes write a time (docs/audit-low-leads.md
+     * XD-02 R7). Anything that is not a result passes through.
+     */
+    @SuppressWarnings("unchecked")
+    private static Object resultWithTimeSerials(Object value) {
+        if (!(value instanceof Map<?, ?> result)
+                || !(result.get("rows") instanceof Iterable<?> rows)) {
+            return value;
+        }
+        Map<String, Object> serial = new LinkedHashMap<>((Map<String, Object>) result);
+        serial.put("rows", rowsWithTimeSerials((Iterable<Map<String, Object>>) rows));
+        if (result.get("first") instanceof Map<?, ?> first) {
+            serial.put("first", rowWithTimeSerials((Map<String, Object>) first));
+        }
+        return serial;
+    }
+
+    /** The rows lazily, so a re-readable spool stays one the template may walk again. */
+    private static Iterable<Map<String, Object>> rowsWithTimeSerials(
+            Iterable<Map<String, Object>> rows) {
+        return () -> {
+            java.util.Iterator<Map<String, Object>> underlying = rows.iterator();
+            return new java.util.Iterator<>() {
+                @Override
+                public boolean hasNext() {
+                    return underlying.hasNext();
+                }
+
+                @Override
+                public Map<String, Object> next() {
+                    return rowWithTimeSerials(underlying.next());
+                }
+            };
+        };
+    }
+
+    /** One row: a copy with each time of day as its serial, or the row itself when it has none. */
+    private static Map<String, Object> rowWithTimeSerials(Map<String, Object> row) {
+        Map<String, Object> serial = null;
+        for (Map.Entry<String, Object> cell : row.entrySet()) {
+            java.time.LocalTime time = io.tesseraql.core.files.ColumnValues
+                    .toLocalTime(cell.getValue());
+            if (time == null) {
+                continue;
+            }
+            if (serial == null) {
+                serial = new LinkedHashMap<>(row);
+            }
+            serial.put(cell.getKey(), dayFraction(time));
+        }
+        return serial == null ? row : serial;
     }
 
     /**
@@ -586,10 +649,13 @@ public final class JxlsFileCodec implements FileCodec {
                 zone);
         if (temporal != null) {
             sheet.value(rowIndex, colIndex, temporal.toLocalDateTime());
-            // A date cell without a format renders as a raw serial number; default sensibly.
+            // A date cell without a format renders as a raw serial number; default sensibly -
+            // and a column declared `type: date` defaults to a date, as csv and pdf print it,
+            // not to the date-time the workbook showed as `2026-01-15 00:00`
+            // (docs/audit-low-leads.md XD-02 R3).
             sheet.style(rowIndex, colIndex)
                     .format(format == null || format.isBlank()
-                            ? "yyyy-mm-dd hh:mm"
+                            ? "date".equals(column.type()) ? "yyyy-mm-dd" : "yyyy-mm-dd hh:mm"
                             : format)
                     .set();
             return;
@@ -604,6 +670,9 @@ public final class JxlsFileCodec implements FileCodec {
                 }
             }
             case Boolean bool -> sheet.value(rowIndex, colIndex, bool);
+            // A binary column as the text every other surface writes (XD-01 R1).
+            case byte[] bytes -> sheet.value(rowIndex, colIndex,
+                    io.tesseraql.core.files.ColumnValues.binaryText(bytes));
             default -> {
                 String text = String.valueOf(value);
                 // The header occupies row 0, so the sheet row index is the data row number.
@@ -634,6 +703,8 @@ public final class JxlsFileCodec implements FileCodec {
             case null -> cell.setBlank();
             case Number number -> cell.setCellValue(number.doubleValue());
             case Boolean bool -> cell.setCellValue(bool);
+            case byte[] bytes -> cell.setCellValue(
+                    io.tesseraql.core.files.ColumnValues.binaryText(bytes));
             default -> cell.setCellValue(String.valueOf(value));
         }
     }

@@ -44,6 +44,42 @@ class ColumnValuesTest {
                 .isEqualTo(new BigDecimal("1234.56"));
     }
 
+    /**
+     * A grouped pattern refuses a mis-grouped number instead of reading it a hundredfold
+     * (docs/audit-low-leads.md unfiled 15): {@code DecimalFormat}'s lenient parse accepts the
+     * grouping separator at any position, so {@code '1234,50'} under {@code #,##0.00} was
+     * {@code 123450} - in every locale, the mirror mistake included. The ungrouped form the
+     * same pattern always accepted still parses.
+     */
+    @Test
+    void aMisgroupedNumberIsRefusedNotReadAHundredfold() {
+        ColumnMapping fee = new ColumnMapping("fee", null, null, "number", "#,##0.00");
+        for (String misgrouped : new String[]{"1234,50", "12,34.50", "1,2,3,4.50"}) {
+            assertThatThrownBy(() -> ColumnValues.parse(fee, misgrouped, Locale.ROOT))
+                    .as(misgrouped)
+                    .isInstanceOf(ColumnValueException.class)
+                    .hasMessageContaining("fee");
+        }
+        assertThatThrownBy(() -> ColumnValues.parse(fee, "1.234.50", Locale.GERMANY))
+                .isInstanceOf(ColumnValueException.class);
+        assertThat(ColumnValues.parse(fee, "1,234.50", Locale.ROOT))
+                .isEqualTo(new BigDecimal("1234.50"));
+        assertThat(ColumnValues.parse(fee, "1234.50", Locale.ROOT))
+                .isEqualTo(new BigDecimal("1234.50"));
+    }
+
+    /**
+     * A binary column renders as Base64 - the JSON path's spelling of the same bytes - on every
+     * text surface, not as the JVM's identity string (docs/audit-low-leads.md XD-01 R1).
+     */
+    @Test
+    void aBinaryValueRendersAsBase64() {
+        ColumnMapping plain = new ColumnMapping("blob", null, null, null, null);
+        assertThat(ColumnValues.format(plain, new byte[]{1, 2, 3}, Locale.US, UTC))
+                .isEqualTo("AQID");
+        assertThat(ColumnValues.format(plain, new byte[0], Locale.US, UTC)).isEqualTo("");
+    }
+
     @Test
     void badValuesFailWithTheColumnAndPattern() {
         ColumnMapping date = new ColumnMapping("heldOn", null, null, "date", "yyyy/MM/dd");

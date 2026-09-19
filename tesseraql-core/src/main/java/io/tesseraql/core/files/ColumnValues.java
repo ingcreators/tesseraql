@@ -104,6 +104,15 @@ public final class ColumnValues {
         DecimalFormat format = new DecimalFormat(column.format(),
                 DecimalFormatSymbols.getInstance(locale));
         format.setParseBigDecimal(true);
+        // A lenient parse accepts the grouping separator at any position, so '1234,50' under
+        // #,##0.00 read as 123450 - a hundred times the value, with no error, in every locale
+        // (docs/audit-low-leads.md unfiled 15). Strict parsing refuses the mis-grouped text,
+        // but it also refuses the ungrouped '1234.50' the same pattern must keep accepting, so
+        // it is asked for only when the text carries the locale's grouping separator.
+        if (format.isGroupingUsed() && text.indexOf(
+                format.getDecimalFormatSymbols().getGroupingSeparator()) >= 0) {
+            format.setStrict(true);
+        }
         ParsePosition position = new ParsePosition(0);
         Object parsed = format.parse(text, position);
         if (parsed == null || position.getIndex() != text.length()) {
@@ -121,6 +130,9 @@ public final class ColumnValues {
         Object value = io.tesseraql.core.dialect.JdbcValues.normalize(raw);
         if (value == null) {
             return null;
+        }
+        if (value instanceof byte[] bytes) {
+            return binaryText(bytes);
         }
         if (column.format() != null && value instanceof Number number) {
             return new DecimalFormat(column.format(),
@@ -145,6 +157,17 @@ public final class ColumnValues {
         // ISO `T…Z`, Oracle's object hash, for the same declared column.
         String canonical = io.tesseraql.core.dialect.TemporalText.sql(value, zone);
         return canonical != null ? canonical : value;
+    }
+
+    /**
+     * A binary column's text: Base64, the one form a {@code byte[]} already takes on the JSON
+     * path (docs/temporal-semantics.md decision 7), so a document and a response body spell the
+     * same bytes the same way. It used to be the JVM's identity string - {@code [B@1a2b3c4d},
+     * different on every run - on csv, the workbook grid and the PDF grid alike
+     * (docs/audit-low-leads.md XD-01 R1).
+     */
+    public static String binaryText(byte[] bytes) {
+        return java.util.Base64.getEncoder().encodeToString(bytes);
     }
 
     private static boolean isTemporalType(ColumnMapping column) {

@@ -317,13 +317,20 @@ final class PreviewRenderer {
         String text = content != null ? content : source.apply(relativePath);
         RouteDefinition definition;
         try {
-            definition = parser.parseRoute(text, relativePath);
+            // The draft's text, then the shared definitions the loader would have resolved
+            // over it (docs/audit-low-leads.md TS-04): a result: entry declared through a
+            // domain: alone arrives with its type, so the live rows read it as the served
+            // route does; an unknown domain is the same refusal the load gives.
+            definition = new io.tesseraql.yaml.manifest.ManifestLoader().resolveSharedDefinitions(
+                    appHome.get(), resolve.apply(relativePath),
+                    parser.parseRoute(text, relativePath), functions);
         } catch (RuntimeException ex) {
             return RenderResult.invalid("route", StudioService.rootMessage(ex));
         }
         Map<String, Object> context;
         try {
-            // A mutable copy: live rows are injected as the `sql` key before model resolution.
+            // A mutable copy: live rows are injected under their source names before model
+            // resolution.
             context = new LinkedHashMap<>(parseSample(relativePath, sampleModel));
         } catch (RuntimeException ex) {
             return RenderResult.invalid("sample", "Sample data: " + StudioService.rootMessage(ex));
@@ -333,7 +340,7 @@ final class PreviewRenderer {
                 Map<String, Object> live = liveRows.rowsFor(definition,
                         resolve.apply(relativePath).getParent(), context);
                 if (live != null) {
-                    // Each entry is a model key: the main `sql` plus every named query by its name.
+                    // Each entry is a model key: every source by its name, main included.
                     live.forEach(context::put);
                 }
             } catch (RuntimeException ex) {

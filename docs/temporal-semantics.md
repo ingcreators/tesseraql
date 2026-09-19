@@ -486,10 +486,23 @@ boot (`type: ''`), and `ResultDomainResolutionTest` 3/3 red. Fix — 7/7, and th
 
 - `locale:` on a read declaration (a European `1.234,50`): the pattern parses in the root
   locale; the export side has `locale:`, and unifying the vocabularies is decision 22's later
-  slice.
+  slice. *Shipped as F-A (decision 23, #1332): a `result:` entry's `locale:`.*
 - The constraint keys on a `result:` entry directly (`maxLength: 5` on a read) are accepted
   and not applied — documented (decision 18), not linted; a lint would be one more arm of
-  `TQL-YAML-1064`.
+  `TQL-YAML-1064`. *Became decision 24 (F-B): refused on the entry, merged from the domain by
+  the read keys alone.*
+- A grouped number pattern read a mis-grouped number a hundredfold (`'1234,50'` under
+  `#,##0.00` was `123450`, in every locale): `DecimalFormat`'s lenient parse accepts the
+  grouping separator anywhere. *Fixed 2026-09-19 (`docs/audit-low-leads.md` slice 18, unfiled
+  15): strict parsing when the text carries the locale's grouping separator, the ungrouped
+  form still accepted.*
+- `time` in the `type:` vocabulary — the question 5a raised and the scope-out below pointed
+  at a home that closed without it. Two halves, both open by decision: a time stored as text
+  cannot be declared on read (`RESULT_KINDS` has no `time`); a date-bearing `format:` on a
+  native time column fails at the first cell, coded (`TQL-LD-2802` on a route, `2810` on a
+  job) and silent in a workbook (`1899/12/31 22:30`). Deciding it costs `time` on the three
+  vocabularies, a `patternProblem` arm tried against `LocalTime.MIDNIGHT`, two schema copies and
+  the reference pages; marginal until a user asks for a time stored as text.
 - A `result:` on a job step's own `sql:` arm is an unknown key (`TQL-YAML-1043`, the step's
   creator does not read it); on a chunk reader or writer it is the lint error above and no boot
   refusal, since a job's chunk compiles at run time. *Fixed 2026-09-16 (`docs/audit-low-leads.md`
@@ -498,7 +511,13 @@ boot (`type: ''`), and `ResultDomainResolutionTest` 3/3 red. Fix — 7/7, and th
   — the 0.17.0 release note's "and a boot refusal" is true now. The measured consequence was a
   writer navigating `row.note.sku` on the un-parsed text and writing NULL under COMPLETED.*
 - A route's `result:` does not reach a `lookup:` that borrows its SQL, a Studio data browse, or
-  the suite runner's own reads — the readers outside a route's pipeline.
+  the suite runner's own reads — the readers outside a route's pipeline. *Measured 2026-09-15
+  (`docs/audit-low-leads.md` TS-04): the three named readers are recorded limitations or not
+  readers of a route — a `lookup:` reads identifier columns by design (decision 20), a browse
+  reads a table, the suite runner's `sql` case reads a file. The reader that did hold the
+  route's `Binding` and applied none of its row stages was the Studio live preview; fixed
+  2026-09-19 (slice 18): it applies each source's `result:` with its domains resolved, then
+  the `enrich:` entries.*
 
 ## T3 follow-ups — the three filed items, designed 2026-09-14
 
@@ -632,8 +651,8 @@ refused for an integer column).
   (decision 12 documents, does not add a key).
 - Excel's own rendering of a date cell in the viewer's locale → the Excel codec line.
 - `time` in the `type:` vocabulary (slice 5's "5a's own vocabulary question") → not taken up
-  in T3, whose kinds are json/date/datetime/number; a `time` stored as text is filed with the
-  `locale:` question above.
+  in T3, whose kinds are json/date/datetime/number; filed on its own bullet under "Filed, not
+  fixed" above (the `locale:` question this used to point at closed as F-A without it).
 
 ## The audit records, amended by this design
 
