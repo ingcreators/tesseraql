@@ -244,7 +244,7 @@ A statement run once after the extraction, typically to mark the extracted rows.
 
 | Property | Type | Description |
 | --- | --- | --- |
-| `timing` | string | `extract` (default) runs the statement in the extraction's transaction, so rows are marked exactly when they are extracted; `download` runs it once on the first successful file fetch. A job's export step supports `extract` only (TQL-YAML-1041). |
+| `timing` | string | `extract` (default) runs the statement in the extraction's transaction, so rows are marked exactly when they are extracted; `download` runs it once, with the first-download claim: the claim is taken when a GET opens the file (a HEAD never takes it) and commits with the statement, so a statement that fails leaves the transfer undownloaded and the next GET tries again. A job's export step supports `extract` only (TQL-YAML-1041). |
 | `sql` | [sqlArm](#sqlarm) | The follow-up statement, written as a source's `sql:` arm is — `file:`, `params:`, and the rest of the arm's keys. |
 
 ### webhook
@@ -502,7 +502,7 @@ A statement run once after the extraction, typically to mark the extracted rows.
 
 | Property | Type | Description |
 | --- | --- | --- |
-| `timing` | string | `extract` (default) runs the statement in the extraction's transaction, so rows are marked exactly when they are extracted; `download` runs it once on the first successful file fetch. A job's export step supports `extract` only (TQL-YAML-1041). |
+| `timing` | string | `extract` (default) runs the statement in the extraction's transaction, so rows are marked exactly when they are extracted; `download` runs it once, with the first-download claim: the claim is taken when a GET opens the file (a HEAD never takes it) and commits with the statement, so a statement that fails leaves the transfer undownloaded and the next GET tries again. A job's export step supports `extract` only (TQL-YAML-1041). |
 | `sql` | [sqlArm](#sqlarm) | The follow-up statement, written as a source's `sql:` arm is — `file:`, `params:`, and the rest of the arm's keys. |
 
 ### import

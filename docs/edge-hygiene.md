@@ -189,7 +189,11 @@ green (`fix-green.log`, `unit-green.log`).
   design; untouched.
 - A stack whose members share one database with the same route id in two applications was
   exposed the same way across applications; the application half of the rule closes it, proven
-  by the unit test only — no harness boots two members against one table.
+  by the unit test only. *Proven end to end since `docs/audit-low-leads.md` slice 22 (EH-03):
+  `TransferApplicationScopeIntegrationTest` boots two runtimes named `shop` and `warehouse` on
+  one PostgreSQL with the same public export route — the two-runtime shape the shared-session
+  test has always used; "no harness boots two members against one table" was an inventory of
+  tests, not an impossibility.*
 
 ---
 
@@ -428,13 +432,23 @@ the protected-page row (401 where the GET gives 302). Fix — 6/6 and the differ
 - A caller that relied on 405 to detect "not a GET route" — nothing can have.
 - A HEAD now runs the route's pipeline: a monitor that HEADs an expensive page once a second
   costs what a GET does. It always did on every other server.
+- One GET pipeline's SQL means "the bytes were fetched": the download's `after: timing:
+  download`. Running it for a HEAD spent the first-download claim and fired the follow-up for a
+  request that delivered nothing (`docs/audit-low-leads.md` EH-07, found after this shipped).
+  *Closed in slice 22: the download processors read the method and a HEAD goes through
+  `FileTransferService.inspect()` — the GET's refusals, name, type and length, no claim.*
 
 ### Filed, not fixed
 
 - A HEAD of a download (`…/file`) goes through `RouteEdge.stream`, which ends a HEAD with the
-  headers and no length claimed; the transfer flow itself is not run here.
+  headers and no length claimed; the transfer flow itself is not run here. *Run in
+  `docs/audit-low-leads.md` (EH-07) and fixed in slice 22 — see "What this breaks"; the length
+  is claimed since slice 9 (`SizedBody`).*
 - Vert.x 5.1.7 sends the body of a HEAD over HTTP/2 — worth an upstream issue; the edge no
-  longer depends on the answer.
+  longer depends on the answer. *Reproduced on 5.1.8 as well, on a bare server
+  (`docs/audit-low-leads.md` EH-08). Decided 2026-09-19: no upstream report — the edge
+  withholds the body itself (`HeadRequests`) and would keep doing so whatever the transport did,
+  since HTTP/1.1 claims no length for a HEAD either; the item closes as measured, not filed.*
 
 ---
 

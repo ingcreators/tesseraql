@@ -8,6 +8,12 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **The application half of the transfer scope has an integration guard.**
+  `TransferApplicationScopeIntegrationTest` boots two runtimes named `shop` and `warehouse` on
+  one PostgreSQL with the same public export route, and proves a transfer started under one
+  answers 404 `TQL-LD-2822` — the unknown-id answer, byte for byte — to the other's status,
+  file and cancel. The property held; the belief that no harness could boot the shape did not
+  (`docs/audit-low-leads.md` slice 22, EH-03).
 - **The editor follows a bindable path.** `users: main.rows` under `model:`,
   `created: steps.main.affectedRows` under `body:`, a `payload:` entry, a step's `params:`
   entry, a `location: /items/{steps.record.keys.id}` placeholder, a job enrichment's
@@ -395,6 +401,22 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A HEAD of a download takes neither the first-download claim nor the follow-up.** Since
+  every GET mount answered HEAD (0.18.0, unreleased), a HEAD of `…/file` — a link checker, a
+  monitor, `curl -I` — ran the whole download: the transfer read as `downloaded: true` and the
+  `after: timing: download` statement fired for a request that delivered no byte, so the GET
+  that followed streamed the file and ran nothing. The route face and the operations console
+  read the method now and answer a HEAD through `FileTransferService.inspect()` — the GET's
+  refusals, name, type and `Content-Length`, no claim (`docs/audit-low-leads.md` slice 22,
+  EH-07).
+- **The first-download claim and its follow-up commit together.** The claim committed on its
+  own connection before the `download`-timed statement ran on a second, so a statement that
+  failed answered 500, left the transfer downloaded and never ran again — the rows it would
+  have marked were re-extracted by the next export (the audit's F57; only the open-before-claim
+  half had shipped). One transaction now: a failure anywhere releases the claim and the next
+  GET tries again. Under a per-tenant pool the statement commits on the tenant's connection
+  before the claim on `main`, and the one gap left — a statement that ran and a claim that did
+  not record — is named at WARNING and runs the statement again on the next fetch.
 - **A job step's `enrich: source:` must name an earlier step that holds rows.** `steps.<id>`
   on a reading step's or a chunk reader's enrichment used to pass lint whatever it named — a
   step that does not exist, a later one, a write, a spool, a route-style bare name — and fail

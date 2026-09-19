@@ -132,7 +132,7 @@
                   "extract",
                   "download"
                 ],
-                "description": "`extract` (default) runs the statement in the extraction's transaction, so rows are marked exactly when they are extracted; `download` runs it once on the first successful file fetch. A job's export step supports `extract` only (TQL-YAML-1041)."
+                "description": "`extract` (default) runs the statement in the extraction's transaction, so rows are marked exactly when they are extracted; `download` runs it once, with the first-download claim: the claim is taken when a GET opens the file (a HEAD never takes it) and commits with the statement, so a statement that fails leaves the transfer undownloaded and the next GET tries again. A job's export step supports `extract` only (TQL-YAML-1041)."
               },
               "sql": {
                 "$ref": "#/$defs/sqlArm",

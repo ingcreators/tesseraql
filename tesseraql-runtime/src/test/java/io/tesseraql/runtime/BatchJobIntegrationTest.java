@@ -284,6 +284,21 @@ class BatchJobIntegrationTest {
         // The transfer row is keyed by the job#step route id.
         String transferId = transferIdOf("user.exportReport#extract");
 
+        // A HEAD of the file reads the GET's headers and takes no first-download claim
+        // (docs/edge-hygiene.md E4; docs/audit-low-leads.md slice 22): the ops face used to run
+        // the whole download for it, as the route face did.
+        io.tesseraql.core.files.FileTransferService transfers = runtime.context().lookup(
+                io.tesseraql.pipeline.TesseraqlProperties.FILE_TRANSFER_BEAN,
+                io.tesseraql.core.files.FileTransferService.class);
+        HttpResponse<String> head = send("HEAD",
+                "/_tesseraql/ops/batch/transfers/" + transferId + "/file", token, null);
+        assertThat(head.statusCode()).isEqualTo(200);
+        assertThat(head.headers().firstValue("Content-Disposition").orElse(""))
+                .contains("users-2026-03-31.csv");
+        assertThat(head.body()).isEmpty();
+        assertThat(transfers.status(transferId).orElseThrow().downloaded())
+                .as("downloaded after a HEAD").isFalse();
+
         // The produced file downloads through the ops API face, named by the business date
         // the filename interpolated.
         HttpResponse<String> file = send("GET",
@@ -292,6 +307,7 @@ class BatchJobIntegrationTest {
         assertThat(file.headers().firstValue("Content-Disposition").orElse(""))
                 .contains("users-2026-03-31.csv");
         assertThat(file.body()).startsWith("Name,Status").contains("sato");
+        assertThat(transfers.status(transferId).orElseThrow().downloaded()).isTrue();
 
         // Unknown ids read exactly like out-of-scope ones.
         assertThat(send("GET", "/_tesseraql/ops/batch/transfers/no-such/file", token, null)
@@ -971,6 +987,8 @@ class BatchJobIntegrationTest {
         if ("POST".equals(method)) {
             request.header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(body == null ? "{}" : body));
+        } else if ("HEAD".equals(method)) {
+            request.method("HEAD", HttpRequest.BodyPublishers.noBody());
         } else {
             request.GET();
         }
