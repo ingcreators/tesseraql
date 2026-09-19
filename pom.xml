@@ -106,7 +106,7 @@
       through camel-platform-http-vertx; that component left the build, and this moved to 5 the
       same day because nothing was holding it back any more.
     -->
-    <vertx.version>5.1.7</vertx.version>
+    <vertx.version>5.1.8</vertx.version>
     <!--
       The SFTP client the poll connector drives directly (docs/camel-removal.md slice 1). It was
       on the classpath all along, under camel-ftp, which is exactly why it is declared here:
@@ -141,7 +141,7 @@
          regressing). -->
     <ftpserver.version>1.2.1</ftpserver.version>
     <maven.api.version>3.9.16</maven.api.version>
-    <maven.plugin.tools.version>3.15.2</maven.plugin.tools.version>
+    <maven.plugin.tools.version>3.16.0</maven.plugin.tools.version>
     <junit.version>6.1.3</junit.version>
     <assertj.version>3.27.7</assertj.version>
     <commons-io.version>2.22.0</commons-io.version>
@@ -155,16 +155,16 @@
     <hypermedia-editor-kit.version>0.2.0</hypermedia-editor-kit.version>
     <observablehq-plot.version>0.6.10</observablehq-plot.version>
     <webjars-locator.version>1.1.4</webjars-locator.version>
-    <flyway.version>13.5.0</flyway.version>
+    <flyway.version>13.6.0</flyway.version>
     <commons-csv.version>1.14.1</commons-csv.version>
     <jxls.version>3.1.0</jxls.version>
     <fastexcel.version>0.20.2</fastexcel.version>
-    <openhtmltopdf.version>1.1.73</openhtmltopdf.version>
+    <openhtmltopdf.version>1.1.85</openhtmltopdf.version>
     <pdfbox.version>3.0.8</pdfbox.version>
     <awssdk.version>2.51.4</awssdk.version>
     <s3mock.version>4.12.4</s3mock.version>
     <ojdbc.version>23.26.3.0.0</ojdbc.version>
-    <mssql-jdbc.version>13.4.0.jre11</mssql-jdbc.version>
+    <mssql-jdbc.version>13.6.0.jre11</mssql-jdbc.version>
     <!-- DuckDB analytics engine (docs/duckdb.md): MIT licensed, module-channel only — the jar
          bundles per-platform native libraries and never ships in the CLI fat jar. -->
     <duckdb.version>1.3.1.0</duckdb.version>
