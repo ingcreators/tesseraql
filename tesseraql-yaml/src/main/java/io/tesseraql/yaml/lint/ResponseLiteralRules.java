@@ -21,9 +21,10 @@ final class ResponseLiteralRules {
     }
 
     static void report(LintContext context, AppConfig config, Path document,
-            RouteDefinition definition, String source, List<LintFinding> findings) {
+            RouteDefinition definition, String urlPath, String source,
+            List<LintFinding> findings) {
         for (ExportDeclarations.Violation violation : ResponseLiterals.violations(
-                ExportRules.appName(config), definition)) {
+                ExportRules.appName(config), definition, urlPath)) {
             String token = violation.key().substring(violation.key().lastIndexOf('.') + 1) + ":";
             findings.add(new LintFinding(violation.code().toString(), ERROR, source,
                     violation.message(), context.lineWithin(document, "response:", token),

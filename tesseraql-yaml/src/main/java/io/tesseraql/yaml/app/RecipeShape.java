@@ -86,17 +86,17 @@ public final class RecipeShape {
      * wrong way.
      */
     public static List<Violation> violations(String app, RouteDefinition definition,
-            Surface surface) {
+            Surface surface, String urlPath) {
         List<Violation> out = new ArrayList<>();
         String subject = surface.noun + " '" + ExportDeclarations.bounded(definition.id()) + "'";
         String recipe = definition.recipe();
         if (surface == Surface.ROUTE) {
             responseArm(app, subject, definition, out);
             if ("file-import".equals(recipe)) {
-                importPieces(Site.route(app, definition), definition, out);
+                importPieces(Site.route(app, definition, urlPath), definition, out);
             }
             if (EXPORT_RECIPES.contains(recipe)) {
-                exportRows(Site.route(app, definition), definition, out);
+                exportRows(Site.route(app, definition, urlPath), definition, out);
             }
         }
         definition.sources().forEach((name, binding) -> bindingArm(app, subject,

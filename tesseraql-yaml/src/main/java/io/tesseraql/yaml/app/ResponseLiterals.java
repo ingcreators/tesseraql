@@ -49,8 +49,13 @@ public final class ResponseLiterals {
     private ResponseLiterals() {
     }
 
-    /** Every response literal of the document the edge would not honour as written. */
-    public static List<Violation> violations(String app, RouteDefinition definition) {
+    /**
+     * Every response literal of the document the edge would not honour as written, and every
+     * download-name placeholder the request cannot resolve ({@link FilenameTemplates});
+     * {@code urlPath} is the route's URL template (a consumer's or a tool's is {@code null}).
+     */
+    public static List<Violation> violations(String app, RouteDefinition definition,
+            String urlPath) {
         List<Violation> out = new ArrayList<>();
         ResponseSpec response = definition.response();
         if (response == null) {
@@ -58,7 +63,12 @@ public final class ResponseLiterals {
         }
         String head = "app '" + ExportDeclarations.bounded(app) + "': route '"
                 + ExportDeclarations.bounded(definition.id()) + "' ";
+        ExportDeclarations.Site site = ExportDeclarations.Site.route(app, definition, urlPath);
         if (response.file() != null) {
+            // A file response renders after the route's sources ran, so their names resolve
+            // too (docs/route-filename-placeholders.md decision 3).
+            out.addAll(FilenameTemplates.violations(site, "response.file.filename",
+                    response.file().filename(), definition.sources().keySet()));
             String charset = declaredCharset(response.file().contentType());
             if (charset != null && !UTF_8.contains(charset.toLowerCase(Locale.ROOT))) {
                 out.add(new Violation(CHARSET_NOT_WRITTEN, Kind.INVALID,
@@ -68,6 +78,10 @@ public final class ResponseLiterals {
                                 + ", and the body is written as UTF-8 - declare charset=utf-8"
                                 + " or omit the parameter"));
             }
+        }
+        if (response.stream() != null) {
+            out.addAll(FilenameTemplates.violations(site, "response.stream.filename",
+                    response.stream().filename(), java.util.Set.of()));
         }
         if (response.redirect() != null) {
             String location = response.redirect().location();

@@ -94,7 +94,7 @@
           },
           "filename": {
             "type": "string",
-            "description": "The download filename, defaulting to the document id plus the format's extension. On a route it is a literal name except `{key}`, which a `splitBy:` export must carry; on a job's export step `{dotted.path}` also interpolates a step-context value (`{batch.businessDate}`)."
+            "description": "The download filename, defaulting to the document id plus the format's extension. `{dotted.path}` placeholders resolve against the request on a route (`{params.month}`, `{path.id}`) and against the step context on a job's export step (`{batch.businessDate}`), each value folded to a filename component; a placeholder the site cannot resolve is refused (TQL-YAML-1076). `{key}` is the split export's, which a `splitBy:` export must carry."
           },
           "template": {
             "type": "string",

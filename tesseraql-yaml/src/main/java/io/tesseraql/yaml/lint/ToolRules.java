@@ -67,8 +67,8 @@ final class ToolRules implements LintRule {
         // Each binding's arm, from the predicate the compiler refuses from: a tool's sources
         // and steps resolve exactly as a route's do (docs/audit-low-leads.md slice 8).
         RecipeShapeRules.report(context, config, tool.source(), definition,
-                io.tesseraql.yaml.app.RecipeShape.Surface.TOOL, source, findings);
-        ResponseLiteralRules.report(context, config, tool.source(), definition, source,
+                io.tesseraql.yaml.app.RecipeShape.Surface.TOOL, null, source, findings);
+        ResponseLiteralRules.report(context, config, tool.source(), definition, null, source,
                 findings);
         RequestSourceRules.report(context, config, tool.source(), definition,
                 io.tesseraql.yaml.app.RecipeShape.Surface.TOOL, source, findings);

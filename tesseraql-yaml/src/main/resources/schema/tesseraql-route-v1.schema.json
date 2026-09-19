@@ -528,7 +528,7 @@
           "properties": {
             "filename": {
               "type": "string",
-              "description": "The download filename offered to the client, a literal — it is not evaluated."
+              "description": "The download filename offered to the client; `{dotted.path}` placeholders resolve against the request (`{params.month}`, `{path.id}`), each value folded to a filename component (TQL-YAML-1076 when one cannot resolve)."
             }
           },
           "additionalProperties": true,
@@ -574,7 +574,7 @@
             },
             "filename": {
               "type": "string",
-              "description": "The download filename offered to the client, a literal — it is not evaluated."
+              "description": "The download filename offered to the client; `{dotted.path}` placeholders resolve against the request (`{params.month}`, `{path.id}`), each value folded to a filename component (TQL-YAML-1076 when one cannot resolve)."
             },
             "model": {
               "type": "object",

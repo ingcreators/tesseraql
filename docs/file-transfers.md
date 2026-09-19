@@ -77,6 +77,17 @@ filename. A filename outside US-ASCII is sent in RFC 6266's `filename*` form bes
 `filename` gets an ASCII one. The whole `export:` block is optional — without it you get CSV,
 every query column, column names as headers, and `<route id>.csv` as the filename.
 
+The filename is a template over the request: `orders-{params.month}.csv` downloads as
+`orders-2026-09.csv` for `?month=2026-09`, `order-{path.id}.pdf` names the order a detail
+route prints. A placeholder is a dotted path over the request's roots: `params`, `query`,
+`path`, `body`, `tenant`, `request`, `flags`, `preference`, and `principal` on an authenticated
+route. Each value is folded to a filename component before it names the file (`2026/09`
+becomes `2026_09`, an absent value `_`), so a request can name the download and never steer
+where it is saved. A placeholder the request cannot resolve — an undeclared input, a path
+parameter the URL does not carry, a spelling outside the grammar — is refused at lint and at
+boot (`TQL-YAML-1076`). A `file-export` fixes the name when the transfer starts, so its status,
+the `HEAD` and the download all report the same one.
+
 Every recipe reads the same way: `export:` says how rows are written and never what to read, so
 the extraction is a source like any other. An `export.after` block on `query-export` is
 refused at lint and at boot (`TQL-YAML-1041`) — follow-up statements need `file-export`.
@@ -122,7 +133,8 @@ sources:
   a blank `format:` is refused everywhere, at lint and at boot, and so is a format no codec in
   the application's set serves — lint warns (`TQL-YAML-1408`), boot refuses (`TQL-LD-2801`)
   naming the route or the step, on every recipe alike. A `filename:` that carries
-  `{key}` without `splitBy:` is refused too (the placeholder would be delivered literally), and a
+  `{key}` without `splitBy:` is refused too (the placeholder would be delivered literally), as is
+  a `{dotted.path}` placeholder the request cannot resolve (`TQL-YAML-1076`), and a
   filename whose extension is not the format's draws a lint warning (`TQL-YAML-1045`) — the file
   is served and recorded as its format whatever it is called.
 - `columns:` selects and orders the exported columns; omit it to export every query column with

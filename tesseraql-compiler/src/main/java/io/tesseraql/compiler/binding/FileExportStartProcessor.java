@@ -82,9 +82,14 @@ public final class FileExportStartProcessor implements Step {
                 Map.of(), Map.class);
         java.util.List<io.tesseraql.core.files.ExportQuery> resolvedQueries = queries.stream()
                 .map(query -> query.resolved(context)).toList();
+        // The download name is fixed here, before the transfer row is written, so the status
+        // JSON, the HEAD, the GET and the download all say the name this request asked for and
+        // nothing resolves it a second time (docs/route-filename-placeholders.md decision 1).
+        String resolvedFilename = io.tesseraql.core.files.FilenamePlaceholders.resolve(filename,
+                new io.tesseraql.core.expr.EvaluationContext(context));
         String transferId = transfers.startExport(new FileTransferService.ExportRequest(
                 routeId, appName, format, formatted,
-                filename, querySqlFile, Map.copyOf(params), afterTiming, afterSqlFile,
+                resolvedFilename, querySqlFile, Map.copyOf(params), afterTiming, afterSqlFile,
                 rowCap, resolvedQueries, ExportSources.values(exchange, httpSources),
                 ExportEnrichment.enricher(exchange, enrichments),
                 ExportEnrichment.window(enrichments))

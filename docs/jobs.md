@@ -493,7 +493,10 @@ pipeline:
   `duckdb` datasource this is the analytics report in one step — `report.sql` reads
   Parquet, lake tables, or an attach, and the codec writes CSV, Excel, or PDF.
 - **`filename:` interpolates `{dotted.path}` context values** — `{batch.businessDate}`
-  being the one that matters. `{key}` is not a context value: on a `splitBy:` step it passes
+  being the one that matters — with the resolver a route's download name goes through: each
+  value is folded to a filename component (a separator becomes `_`), an absent value renders
+  `_`, and a placeholder the step context cannot resolve is refused at lint and at boot
+  (`TQL-YAML-1076`). `{key}` is not a context value: on a `splitBy:` step it passes
   through to the bundle, where each group's document replaces it, and the transfer is recorded
   under the bundle's name (`orders-{batch.businessDate}-{key}.csv` → `orders-2026-03-31.zip`),
   which is what `steps.<id>.filename` then carries. `template:` resolves beside the job file; `locale:` and

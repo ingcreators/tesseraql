@@ -309,7 +309,7 @@ class ExportDeclarationsTest {
     void aSourcedInputsDefaultIsJudgedAsTheAuthorsLiteral() {
         Site defaulted = new Site("t", "route 'items.dump'", Surface.QUERY_EXPORT,
                 Set.of("tz", "lang", "n"), true, true,
-                Map.of("tz", "Asia/Tokio", "lang", "ja_JP", "n", 5));
+                Map.of("tz", "Asia/Tokio", "lang", "ja_JP", "n", 5), Set.of());
         assertThat(refusals(defaulted, export("csv", null, "query.tz"))).singleElement()
                 .satisfies(violation -> {
                     assertThat(violation.code().toString()).isEqualTo("TQL-YAML-1063");
@@ -326,7 +326,7 @@ class ExportDeclarationsTest {
         // A default that is a zone, no default at all, and a nested body path (the Site
         // carries top-level defaults only) stay quiet.
         Site good = new Site("t", "route 'items.dump'", Surface.QUERY_EXPORT,
-                Set.of("tz", "report"), true, true, Map.of("tz", "Asia/Tokyo"));
+                Set.of("tz", "report"), true, true, Map.of("tz", "Asia/Tokyo"), Set.of());
         assertThat(refusals(good, export("csv", null, "query.tz"))).isEmpty();
         assertThat(refusals(ROUTE, export("csv", null, "query.tz"))).isEmpty();
         assertThat(refusals(good, export("csv", null, "body.report.tz"))).isEmpty();

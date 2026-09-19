@@ -20,11 +20,13 @@ final class PushStepRules {
 
     /**
      * The delivered name's placeholders against what the job context can resolve
-     * (docs/export-hygiene.md P7, item 12). A push delivers exactly one file — for a split step,
-     * the bundle — so {@code {key}} never resolves and was delivered literally; a root the context
-     * does not carry, or a {@code params.<name>} the job never declared, rendered silently empty
-     * ({@code delivered-.zip}). {@code {steps.<id>.filename}} is the spelling for the produced
-     * file's own name.
+     * (docs/export-hygiene.md P7, item 12), classified by the one class every filename site
+     * judges from ({@link io.tesseraql.yaml.app.FilenameTemplates}, so a root means the same
+     * here as on an export step's {@code filename:}). A push delivers exactly one file — for a
+     * split step, the bundle — so {@code {key}} never resolves and was delivered literally; a
+     * root the context does not carry, or a {@code params.<name>} the job never declared,
+     * renders {@code _}. {@code {steps.<id>.filename}} is the spelling for the produced file's
+     * own name.
      */
     private static void lintDeliveredName(io.tesseraql.yaml.manifest.JobFile job,
             io.tesseraql.yaml.model.PipelineStep step, String as, String source,
@@ -32,47 +34,31 @@ final class PushStepRules {
         if (as == null || as.isBlank()) {
             return;
         }
-        java.util.regex.Matcher placeholder = io.tesseraql.yaml.app.FilenamePlaceholders.WRITTEN
-                .matcher(as);
-        while (placeholder.find()) {
-            String path = placeholder.group(1);
-            if (!io.tesseraql.yaml.app.FilenamePlaceholders.resolves(path)) {
+        io.tesseraql.yaml.app.ExportDeclarations.Site site = io.tesseraql.yaml.app.ExportDeclarations.Site
+                .step("", job.definition(), step.id());
+        for (io.tesseraql.yaml.app.FilenameTemplates.Finding finding : io.tesseraql.yaml.app.FilenameTemplates
+                .classify(as, site, java.util.Set.of())) {
+            String path = finding.path();
+            String sentence = switch (finding.problem()) {
                 // The runtime's grammar is letters, digits, _ and . — anything else stays in
                 // the delivered name literally, braces included.
-                findings.add(new LintFinding(INCOMPLETE_PUSH_STEP, ERROR, source, "Step '"
-                        + step.id() + "': push as: placeholder {" + path + "} is not a dotted"
-                        + " path of letters, digits, _ and . - the runtime resolves no other"
-                        + " spelling and delivers it literally"));
-                continue;
-            }
-            if (io.tesseraql.core.files.SplitExport.KEY.equals("{" + path + "}")) {
-                findings.add(new LintFinding(INCOMPLETE_PUSH_STEP, ERROR, source, "Step '"
-                        + step.id() + "': push as: carries {key}, which a push never resolves -"
-                        + " a push delivers one file (for a split step, the bundle); use"
-                        + " {steps.<id>.filename} for the produced file's name, or drop as:"));
-                continue;
-            }
-            String root = path.contains(".") ? path.substring(0, path.indexOf('.')) : path;
-            if (!CONTEXT_ROOTS.contains(root)) {
-                findings.add(new LintFinding(INCOMPLETE_PUSH_STEP, ERROR, source, "Step '"
-                        + step.id() + "': push as: placeholder {" + path + "} names no job"
-                        + " context root (params, steps, batch, tenant) - it would render empty"));
-            } else if ("params".equals(root) && job != null) {
-                String name = path.contains(".") ? path.substring(path.indexOf('.') + 1) : "";
-                String parameter = name.contains(".") ? name.substring(0, name.indexOf('.')) : name;
-                if (!job.definition().input().containsKey(parameter)) {
-                    findings.add(new LintFinding(INCOMPLETE_PUSH_STEP, ERROR, source, "Step '"
-                            + step.id() + "': push as: placeholder {" + path + "} names a"
-                            + " parameter the job does not declare under input: - it would render"
-                            + " empty"));
-                }
-            }
+                case MALFORMED -> "placeholder {" + path + "} is not a dotted path of letters,"
+                        + " digits, _ and . - the runtime resolves no other spelling and"
+                        + " delivers it literally";
+                case KEY -> "carries {key}, which a push never resolves - a push delivers one"
+                        + " file (for a split step, the bundle); use {steps.<id>.filename} for"
+                        + " the produced file's name, or drop as:";
+                case UNKNOWN_ROOT -> "placeholder {" + path + "} names no job context root"
+                        + " (params, steps, batch, tenant) - it would render _";
+                case UNDECLARED_INPUT -> "placeholder {" + path + "} names a parameter the job"
+                        + " does not declare under input: - it would render _";
+                case UNKNOWN_PATH_PARAMETER -> throw new IllegalStateException(
+                        "path is not a job root");
+            };
+            findings.add(new LintFinding(INCOMPLETE_PUSH_STEP, ERROR, source, "Step '"
+                    + step.id() + "': push as: " + sentence));
         }
     }
-
-    /** The roots a job's step context resolves ({@code StepContext.interpolate}). */
-    private static final java.util.Set<String> CONTEXT_ROOTS = java.util.Set.of("params", "steps",
-            "batch", "tenant");
 
     /**
      * Statically checks a push step (docs/analytics-experience.md): the transfer reference and

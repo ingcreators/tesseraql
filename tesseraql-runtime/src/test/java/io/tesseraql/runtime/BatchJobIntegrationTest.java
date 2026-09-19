@@ -314,6 +314,27 @@ class BatchJobIntegrationTest {
                 .statusCode()).isEqualTo(404);
     }
 
+    /**
+     * The job's filename resolver is the route's (docs/route-filename-placeholders.md decision
+     * 4): a parameter value is folded to a filename component and an absent optional parameter
+     * renders {@code _}, where it used to render nothing ({@code report-.csv}).
+     */
+    @Test
+    void anExportStepsNameFoldsItsParameterAndMarksAnAbsentOne() throws Exception {
+        assertThat(runtime.runJob("user.exportRegional", Map.of()).status())
+                .isEqualTo(JobStatus.COMPLETED);
+        io.tesseraql.core.files.FileTransferService transfers = runtime.context().lookup(
+                io.tesseraql.pipeline.TesseraqlProperties.FILE_TRANSFER_BEAN,
+                io.tesseraql.core.files.FileTransferService.class);
+        assertThat(transfers.status(transferIdOf("user.exportRegional#extract")).orElseThrow()
+                .filename()).isEqualTo("report-_.csv");
+
+        assertThat(runtime.runJob("user.exportRegional", Map.of("region", "east/west")).status())
+                .isEqualTo(JobStatus.COMPLETED);
+        assertThat(transfers.status(transferIdOf("user.exportRegional#extract")).orElseThrow()
+                .filename()).isEqualTo("report-east_west.csv");
+    }
+
     @Test
     void aSplitExportStepBundlesOneDocumentPerGroup() throws Exception {
         String token = token(List.of("BATCH_OPERATOR"));
@@ -1133,6 +1154,29 @@ class BatchJobIntegrationTest {
         Files.writeString(target.resolve("batch/report/stamp-transfer.sql"),
                 "update users set status = 'ROWS-' || cast(/* exported */ 0 as varchar)"
                         + " where name = 'pending-user'\n");
+
+        // An export step whose name carries an optional job parameter
+        // (docs/route-filename-placeholders.md decision 4): the value is folded, an absent one
+        // renders _ where it rendered nothing.
+        Files.createDirectories(target.resolve("batch/regional"));
+        Files.writeString(target.resolve("batch/regional/job.yml"), """
+                version: tesseraql/v1
+                id: user.exportRegional
+                kind: job
+                recipe: batch-pipeline
+                input:
+                  region: { type: string, required: false }
+                pipeline:
+                  - id: extract
+                    export:
+                      format: csv
+                      filename: "report-{params.region}.csv"
+                    sql:
+                      file: report.sql
+                      mode: query
+                """);
+        Files.writeString(target.resolve("batch/regional/report.sql"),
+                "select name, status from users order by name\n");
 
         // A split export step (docs/export-pipeline.md decision 12 on a job): {key} must reach
         // SplitExport, the produced transfer is the bundle named for the stem, and the step

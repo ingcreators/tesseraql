@@ -8,6 +8,20 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **A route's download name resolves `{dotted.path}` placeholders.** `export.filename`,
+  `response.stream.filename` and `response.file.filename` are templates over the request —
+  `orders-{params.month}.csv`, `order-{path.id}.pdf` — resolved the way a job's export step
+  has resolved `{batch.businessDate}`, by one resolver in core (`FilenamePlaceholders`). Each
+  value is folded to a filename component (NFC; separators, quotes and controls to `_`; a
+  hundred graphemes; an absent value `_`) before the `Content-Disposition` writer sees the
+  name, and `{key}` stays the split export's. A `file-export` fixes the name when the transfer
+  starts, so the status face, the `HEAD` and the download agree. A placeholder the site cannot
+  resolve — a spelling outside the grammar, a root the request or the job context does not
+  carry, an input not declared under `input:`, a path parameter the URL does not declare — is
+  `TQL-YAML-1076` at lint and at build, from one classification (`FilenameTemplates`) the
+  export block, the file and stream responses and a push step's `as:` all judge from. The
+  Studio data browser's export downloads as `<table>.csv`, not `data.csv`
+  (`docs/route-filename-placeholders.md`).
 - **The application half of the transfer scope has an integration guard.**
   `TransferApplicationScopeIntegrationTest` boots two runtimes named `shop` and `warehouse` on
   one PostgreSQL with the same public export route, and proves a transfer started under one
@@ -97,6 +111,12 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **A job's filename value is folded, and an absent one is `_`.** An export step's
+  `filename:` and a push step's `as:` resolve through the route's resolver now: a value
+  carrying a separator is folded to a filename component where the push used to refuse the
+  whole delivery, and an absent value renders `_` where it rendered nothing
+  (`delivered-.zip`). `{batch.businessDate}` is unchanged by the fold.
+  `io.tesseraql.yaml.app.FilenamePlaceholders` is `io.tesseraql.core.files.FilenamePlaceholders`.
 - **A view's sources are judged once, on both altitudes.** `TQL-VIEW-3308` — a view names a
   source the route does not declare — is one predicate (`ViewSources`) the lint and the
   compiler both ask, over the `response.html.view` document, every `views:` part, and the
