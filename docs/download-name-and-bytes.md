@@ -387,7 +387,11 @@ requests editing one file safe; nothing is edited in parallel. The exact lines a
   guard here reaches it, the CHANGELOG says "declared download filenames". Injection is filed; the
   C0 hang closes with decision 13.
 - The mail leg (`MailNotifier` → jakarta.mail writes `filename*` with the JVM's default MIME
-  charset): file-only; the HTTP encoder has no charset to disagree with.
+  charset): file-only; the HTTP encoder has no charset to disagree with. *Closed by
+  [audit-low-leads.md](audit-low-leads.md) slice 20 (DN-06d): the part carries two explicit
+  headers, the disposition written by this record's own helper — ASCII fallback, UTF-8
+  ext-value, controls folded — and an explicit `Content-Type` so jakarta.mail decorates
+  nothing in the JVM charset behind it.*
 - `StackRelay:509` (the gateway's own header writer) and a Unicode application name at the
   gateway: the router slice, after 4b.
 - The `HX-Trigger` toast escape (`ResponseHeaders.java:34`): not ridden (D2) — a JSON-escaping

@@ -34,7 +34,10 @@ without an addressee is meaningless, so a missing one is a **lint error**, not a
 surprise. The resolved recipient rides the outbox envelope (an optional field; envelopes
 without it decode with it absent), and `NotificationSink` has an `inbox` case beside
 mail and webhook that renders the `title`/`body` templates against the payload (the mail
-channel's inline-template mechanism) and inserts into the managed table.
+channel's inline-template mechanism) and inserts into the managed table. The render is
+locale-less and reads English — a title is stored once and read by every reader of the bell,
+so the delivering host's own locale never enters it — and `[(#{key})]` resolves against the
+app's message catalog as it does in a mail body.
 
 ## The store
 
@@ -63,6 +66,11 @@ create table if not exists tql_user_notification (
   pattern; unread messages stay.
 - The table lives outside the Flyway component set (the `tql_user_preference` pattern):
   `ensureSchema` is its only owner, so the schema never has two competing owners.
+- **A title holds 500 characters, a body 2,000, on every vendor.** The notifier truncates to
+  those counts before it delivers; Oracle's variant declares the title in `CHAR` semantics and
+  the body as a `CLOB`, since `varchar2` counts bytes by default and a CJK title within 500
+  characters was refused (`ORA-12899`) and the notification dead-lettered. An Oracle table
+  created before 0.18.0 keeps its byte-counted columns; `ensureSchema` does not alter it.
 - The store binds only when an inbox channel is declared — no channel, no table, no bell.
 
 ## The surface

@@ -81,9 +81,10 @@ serving an untranslated locale.
 ```
 
 A missing key renders as the standard `??key_locale??` marker so gaps stay visible (lint
-reports them at build time, below). Locale-less renders — mail bodies, generated file
-responses, a print template whose export declares no `locale:` — read the English/default
-texts; a print template follows its export's `locale:` when one is declared.
+reports them at build time, below). Locale-less renders — mail bodies and subjects, inbox
+titles and bodies, generated file responses, a print template whose export declares no
+`locale:` — read the English/default texts, never the server's own locale; a print template
+follows its export's `locale:` when one is declared.
 
 ## Localized errors
 

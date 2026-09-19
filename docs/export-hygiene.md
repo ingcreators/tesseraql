@@ -740,7 +740,10 @@ or documented template moves. A template error's code changes from 2802 (route) 
   request-sourced declaration falls to the same default (`literal()` first — `localeOr` would take
   the expression for a tag). The source rung itself stays unresolved in the preview.*
 - `InboxNotifier.java:33`'s bare `Context` (JVM default) and `MailNotifier.java:109,152`'s ROOT
-  subject render — the notifications line.
+  subject render — the notifications line. *Closed by docs/audit-low-leads.md slice 20 (XH-20):
+  `Locale.ENGLISH` at the three sites, decision 6's rule for print templates applied to the
+  notifiers; one correction to this record — on the inline string engines a `#{key}` under ROOT
+  never threw, it rendered the `??key_??` marker (both engines now carry the message catalog).*
 
 ---
 

@@ -176,7 +176,9 @@ setting; the attachment is buffered for the send, which is exactly what the cap 
 The body renders the channel's `template` with the standard engine and the standard trust
 model: the template is app-authored and confined to the app home — it is never taken from
 the payload. `.html` templates send `text/html`, everything else `text/plain`. The `subject`
-is an inline TEXT template. Both render against the same model:
+is an inline TEXT template. Both render against the same model, in the same locale (English,
+the locale-less render of [internationalization.md](internationalization.md)), and both
+resolve `#{key}` against the app's message catalog:
 
 ```text
 Hello [(${payload.givenName})],

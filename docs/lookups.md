@@ -338,7 +338,7 @@ request in the log.
 | HTTP route (HTML/JSON) | the request's resolved locale |
 | Export | none: no export surface renders a catalog name (as built, 2026-09-19). An export writes the code; a name in a document comes through `enrich:` (13b) or a named query. Its `locale:` is the formatting locale ([file-transfers.md](file-transfers.md)) |
 | Batch job | declared by the job; there is no request |
-| Mail | the recipient's language |
+| Mail | English (locale-less, like the body — [html-email.md](html-email.md)); the recipient's language is a decision not yet taken |
 
 A surface with no declared locale must not fall through to the JVM default. "The report came
 out in English because the server's locale was" is the characteristic failure of this feature

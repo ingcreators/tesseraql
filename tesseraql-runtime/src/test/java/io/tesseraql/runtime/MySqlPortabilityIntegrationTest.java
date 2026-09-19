@@ -143,6 +143,21 @@ class MySqlPortabilityIntegrationTest {
     }
 
     @Test
+    void theInboxHoldsAFullTitleAndBodyOnThisDialect() throws Exception {
+        DialectRuntimeChecks.inboxRoundTrip(mysqlDataSource());
+    }
+
+    @Test
+    void theRouteAuditSchemaAppliesOnThisDialect() throws Exception {
+        DialectRuntimeChecks.routeAuditRoundTrip(mysqlDataSource());
+    }
+
+    @Test
+    void aCredentialTokenRoundTripsOnThisDialect() throws Exception {
+        DialectRuntimeChecks.credentialTokenRoundTrip(mysqlDataSource());
+    }
+
+    @Test
     void documentSequencesSeedAndAllocateOnThisDialect() throws Exception {
         DialectRuntimeChecks.documentSequenceRoundTrip(mysqlDataSource());
     }

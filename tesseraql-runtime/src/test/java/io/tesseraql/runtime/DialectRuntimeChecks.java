@@ -398,6 +398,70 @@ final class DialectRuntimeChecks {
         assertThat(recoveryRows(dataSource, subject)).as("removed with the enrollment").isZero();
     }
 
+    /**
+     * The per-user inbox holds the title and body the notifier keeps within 500 and 2,000
+     * characters, on this vendor's DDL (docs/audit-low-leads.md unfiled 56): Oracle's
+     * {@code varchar2(500)} counted BYTES under the default length semantics, so a
+     * 167-character CJK title the notifier had kept "within 500" was {@code ORA-12899} at the
+     * store and the notification dead-lettered instead of truncating. Its own check because
+     * the table is created outside Flyway by {@code JdbcInboxStore.ensureSchema}, which no
+     * other dialect test applies.
+     */
+    static void inboxRoundTrip(javax.sql.DataSource dataSource) {
+        io.tesseraql.operations.inbox.JdbcInboxStore store = new io.tesseraql.operations.inbox.JdbcInboxStore(
+                dataSource, java.time.Duration.ofDays(30));
+        store.ensureSchema();
+        store.ensureSchema();
+        String subject = "dialect-inbox-" + java.util.UUID.randomUUID();
+        String title = "\u58f2\u4e0a\u5831\u544a\u66f8".repeat(100); // 500 characters, 1,500 bytes
+        String body = "\u660e\u7d30\u306e\u78ba\u8a8d".repeat(400); // 2,000 characters
+        // The tenant is named: the untenanted sentinel is the empty string, which Oracle
+        // stores as NULL into a `not null` column - ORA-01400 on every untenanted delivery
+        // (filed, docs/audit-low-leads.md unfiled 76; the totp store's twin is unfiled under
+        // slice 4).
+        store.deliver("evt-" + subject, "t1", subject, "bell", "reports.ready", title, body);
+        var recent = store.recent("t1", subject, 10);
+        assertThat(recent).hasSize(1);
+        assertThat(recent.get(0).title()).isEqualTo(title);
+        assertThat(recent.get(0).body()).isEqualTo(body);
+    }
+
+    /**
+     * The opt-in route audit's schema applies and takes a row on this vendor. Its own check
+     * because the table is created outside Flyway by {@code JdbcRouteAuditStore.ensureSchema}
+     * only when {@code tesseraql.audit.routes.enabled} is set, which no dialect test's app
+     * sets: the common script's {@code create index if not exists} is a syntax error on
+     * MySQL 8, so enabling the audit failed the boot there (docs/audit-low-leads.md unfiled
+     * 77, found by the inbox check beside it).
+     */
+    static void routeAuditRoundTrip(javax.sql.DataSource dataSource) {
+        io.tesseraql.operations.audit.JdbcRouteAuditStore store = new io.tesseraql.operations.audit.JdbcRouteAuditStore(
+                dataSource);
+        store.ensureSchema();
+        store.ensureSchema();
+        String app = "dialect-audit-" + java.util.UUID.randomUUID();
+        store.record(new io.tesseraql.core.audit.RouteAuditSink.RouteAuditEvent(app,
+                "orders.list", "GET", "/orders", "sato", null, null, 200, 12L, "{}", null,
+                java.time.Instant.now()));
+        assertThat(store.recent(10, app::equals)).hasSize(1);
+    }
+
+    /**
+     * The one-time credential tokens' schema applies and a token round-trips on this vendor
+     * (the same {@code create index if not exists} class as the route audit's, unfiled 77).
+     */
+    static void credentialTokenRoundTrip(javax.sql.DataSource dataSource) {
+        io.tesseraql.operations.credential.JdbcCredentialTokenStore store = new io.tesseraql.operations.credential.JdbcCredentialTokenStore(
+                dataSource);
+        store.ensureSchema();
+        store.ensureSchema();
+        String login = "dialect-token-" + java.util.UUID.randomUUID();
+        String token = store.issue(login, "reset", java.time.Duration.ofMinutes(10))
+                .orElseThrow();
+        assertThat(store.consume(token, "reset")).contains(login);
+        assertThat(store.consume(token, "reset")).as("single use").isEmpty();
+    }
+
     private static int recoveryRows(javax.sql.DataSource dataSource, String subject)
             throws Exception {
         try (java.sql.Connection connection = dataSource.getConnection();

@@ -19,8 +19,6 @@ import java.util.Map;
 import java.util.Properties;
 import org.thymeleaf.TemplateEngine;
 import org.thymeleaf.context.Context;
-import org.thymeleaf.templatemode.TemplateMode;
-import org.thymeleaf.templateresolver.StringTemplateResolver;
 
 /**
  * Delivers a notification as SMTP mail (roadmap Phase 20) over plain jakarta.mail — the same
@@ -51,8 +49,6 @@ public final class MailNotifier {
 
     private static final long DEFAULT_MAX_ATTACHMENT_BYTES = 10L * 1024 * 1024;
 
-    private static final TemplateEngine INLINE = inlineEngine();
-
     /**
      * Opens an attached transfer's produced file — the runtime wires the transfer service's
      * {@code download()}; this module stays free of the operations stack.
@@ -65,6 +61,8 @@ public final class MailNotifier {
 
     private final Path appHome;
     private final AttachmentSource attachments;
+    /** The subject's inline engine, with the app's message catalog (unfiled 54). */
+    private final TemplateEngine inline;
 
     public MailNotifier(Path appHome) {
         this(appHome, null);
@@ -73,6 +71,7 @@ public final class MailNotifier {
     public MailNotifier(Path appHome, AttachmentSource attachments) {
         this.appHome = appHome.toAbsolutePath().normalize();
         this.attachments = attachments;
+        this.inline = Templates.inlineEngine(this.appHome);
     }
 
     public void send(NotificationChannels.Channel channel, NotifyEvents.Envelope envelope,
@@ -104,9 +103,12 @@ public final class MailNotifier {
         String body = Templates.render(appHome,
                 appHome.relativize(resolved).toString().replace('\\', '/'), model);
         // The subject is itself an inline TEXT template, so it reads raw: its [(${...})]
-        // interpolation must not be mistaken for a config placeholder.
-        String subject = INLINE.process(channel.raw("subject").orElse(envelope.source()),
-                new Context(java.util.Locale.ROOT, model));
+        // interpolation must not be mistaken for a config placeholder. It renders in the
+        // locale the body renders in (Templates.render's ENGLISH), not ROOT: one mail, one
+        // locale — under ROOT a template-created date abbreviated its day and month names
+        // while the body spelled them out (docs/audit-low-leads.md XH-20).
+        String subject = inline.process(channel.raw("subject").orElse(envelope.source()),
+                new Context(java.util.Locale.ENGLISH, model));
 
         Object payloadTo = envelope.payload().get("to");
         String to = payloadTo != null ? String.valueOf(payloadTo) : channel.require("to");
@@ -148,8 +150,8 @@ public final class MailNotifier {
      */
     public void sendTest(NotificationChannels.Channel channel, Map<String, Object> model,
             String body, boolean html, String to) {
-        String subject = INLINE.process(channel.raw("subject").orElse("Test mail"),
-                new Context(java.util.Locale.ROOT, model));
+        String subject = inline.process(channel.raw("subject").orElse("Test mail"),
+                new Context(java.util.Locale.ENGLISH, model));
         String transport = channel.setting("transport").orElse("smtp");
         if (!"smtp".equals(transport) && !"smtps".equals(transport)) {
             throw new TqlException(MAIL_CHANNEL, "Mail channel '" + channel.name()
@@ -230,12 +232,22 @@ public final class MailNotifier {
         jakarta.mail.internet.MimeBodyPart text = new jakarta.mail.internet.MimeBodyPart();
         text.setContent(body, bodyType);
         jakarta.mail.internet.MimeBodyPart file = new jakarta.mail.internet.MimeBodyPart();
+        String contentType = download.contentType() == null
+                ? "application/octet-stream"
+                : download.contentType();
         file.setDataHandler(new jakarta.activation.DataHandler(
-                new jakarta.mail.util.ByteArrayDataSource(bytes,
-                        download.contentType() == null
-                                ? "application/octet-stream"
-                                : download.contentType())));
-        file.setFileName(download.filename());
+                new jakarta.mail.util.ByteArrayDataSource(bytes, contentType)));
+        // The name as two explicit headers, never setFileName (docs/audit-low-leads.md
+        // DN-06d, unfiled 53): jakarta.mail encodes a name in the JVM's default charset
+        // (`file.encoding`, ISO-8859-1 under -Dfile.encoding=COMPAT), so 売上.csv reached a
+        // recipient as ??.csv, wrote no ASCII fallback, and passed a CR LF through into the
+        // part's header block. The one Content-Disposition writer every download uses writes
+        // the ASCII fallback beside a UTF-8 ext-value with the controls folded; an explicit
+        // Content-Type keeps jakarta.mail from decorating it with a `name` parameter in the
+        // JVM charset behind our back.
+        file.setHeader("Content-Type", contentType);
+        file.setHeader("Content-Disposition",
+                io.tesseraql.core.http.ContentDisposition.attachment(download.filename()));
         jakarta.mail.Multipart multipart = new jakarta.mail.internet.MimeMultipart();
         multipart.addBodyPart(text);
         multipart.addBodyPart(file);
@@ -266,15 +278,4 @@ public final class MailNotifier {
         }
     }
 
-    private static TemplateEngine inlineEngine() {
-        StringTemplateResolver resolver = new StringTemplateResolver();
-        resolver.setTemplateMode(TemplateMode.TEXT);
-        TemplateEngine engine = new TemplateEngine();
-        // Shared framework templates use @{/x}; Thymeleaf's own builder refuses a
-        // context-relative link outside a web context, so every engine needs this one
-        // (docs/base-path.md).
-        engine.setLinkBuilder(new io.tesseraql.yaml.template.BasePathLinkBuilder());
-        engine.setTemplateResolver(resolver);
-        return engine;
-    }
 }
