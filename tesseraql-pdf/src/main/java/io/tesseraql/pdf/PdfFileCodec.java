@@ -28,8 +28,9 @@ import java.util.stream.Collectors;
  * The optional printable-documents codec (roadmap Phase 21): {@code format: pdf} on
  * {@code query-export}/{@code file-export}. An export with a template renders it through the
  * standard template engine - an app-authored XHTML file with page-oriented CSS, colocated with
- * the route - against {@code rows} (values formatted per the column mappings), {@code columns},
- * and {@code fontFamilies}; without a template the built-in grid lays the rows out as a plain
+ * the route - against {@code main} ({@code rows} formatted per the column mappings, and
+ * {@code rowCount}), {@code columns}, {@code fontFamilies} and the export's other declared
+ * sources under their own names; without a template the built-in grid lays the rows out as a plain
  * table. Fonts under the app home's {@code fonts/} directory embed automatically, CJK included,
  * and the output is normalized to be byte-identical for identical data (design ch. 48).
  *

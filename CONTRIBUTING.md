@@ -10,7 +10,7 @@ Use the Dev Container.
 
 ## Before pushing
 
-`mvn verify` is the Java half of what CI gates on. Two more jobs run outside Maven, and a
+`./mvnw verify` is the Java half of what CI gates on. Two more jobs run outside Maven, and a
 docs-only or extension-only change passes `verify` and fails them:
 
 - `cd docs-site && pnpm run build` — the navigation manifest (every `docs/*.md` mapped or

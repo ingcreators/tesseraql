@@ -259,7 +259,8 @@ jobs:
             echo "the shared archive was refused at run time" >&2; exit 1; }
 
   # The documentation site (docs/docs-site.md): the same build command Cloudflare
-  # Workers Builds runs, so green CI implies a clean deploy. This is also where the
+  # Workers Builds runs, so green CI implies a clean build (the deploy step, wrangler,
+  # runs only in Cloudflare's build and never here). This is also where the
   # sync's completeness guard and the links validator gate PRs: a new docs/*.md that
   # is neither mapped nor excluded, or a broken internal link, fails here.
   docs-site:

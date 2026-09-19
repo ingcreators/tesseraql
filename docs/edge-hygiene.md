@@ -303,7 +303,8 @@ differentials, which is the proof that the POST half stays mounted (`v-none.log`
 ### What was wrong
 
 Three writers put `security.responseHeaders` values on the wire without the compiled routes'
-edge: `AssetRoutes.headers`, `SseRoutes`' opening frame and the MCP `HttpTransport`. The values
+edge: `AssetRoutes.headers`, `SseRoutes`' opening frame and the MCP `HttpTransport` — as measured;
+the MCP transport turned out to write literals and the challenge only, so two writers. The values
 are the author's configuration, resolved by `ResponseHeaderDefaults.from` with no character
 check, so a control character there reached the transport — where 4b measured what that does:
 a hung connection on a buffered response. The routes' own `headers:` literals were judged only

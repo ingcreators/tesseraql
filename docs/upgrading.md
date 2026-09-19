@@ -32,9 +32,10 @@ anything.
 
 ## Upgrading the CLI
 
-There is no self-update command yet — you replace the installation the same way you made
-it:
+There is no self-update command — you upgrade the installation the same way you made it:
 
+- **Homebrew**: `brew upgrade tesseraql` (the tap's formula is bumped by every release).
+- **Scoop**: `scoop update tesseraql` (the bucket's manifest likewise).
 - **Distribution archive**: download the new `tesseraql-cli-<version>-dist.zip` (or
   `.tar.gz`), unpack it, and point your `PATH` at the new `bin/`.
 - **App image**: download and replace the jpackage image for your OS.

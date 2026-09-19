@@ -145,8 +145,11 @@ Two execution strategies, defaulted by source:
 | HTTP | `perRow` | distinct keys |
 
 HTTP defaults to `perRow` because a partner API is usually `GET /customers/{code}`; a source
-that accepts a key list may declare `batch`. Request-scoped memoization applies to both, and is
-what makes the same master used by two enrichments on one route cost one lookup.
+that accepts a key list may declare `batch`. There is no request-scoped memoization: each
+`enrich:` block fetches its own reference, so the same master used by two enrichments on one
+route costs two lookups (`KeyedReference.enrich` holds no state between blocks). The cache
+lands with the cross-request one deferred to Phase 32 above — this sentence used to claim the
+request-scoped half as built (`docs/audit-low-leads.md` F122).
 
 Cross-request TTL caching is the same machinery Phase 32 owes and lands with it, not before —
 see decision 12 for the key.
@@ -706,7 +709,8 @@ join, the same answer enrichment gives.
    shared code. Settles `merge:`'s semantics (many-to-one, collision is an error) before
    anything depends on them, and already answers "the master is small, fetch it whole".
 2. **`enrich:` on read routes, SQL source, batched.** Key extraction, distinct, `batchSize`
-   splitting, `maxKeys`, tuple matching, `merge:`/`as:`, request-scoped memoization,
+   splitting, `maxKeys`, tuple matching, `merge:`/`as:` (not request-scoped memoization —
+   never built; one fetch per `enrich:` block),
    `into:` targeting `sql` or a named query.
 
    Slice 1 settled a boundary this depends on: `nest:` composes the *response body*, so

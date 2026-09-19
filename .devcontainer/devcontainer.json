@@ -40,6 +40,7 @@
         "java.format.settings.url": "config/eclipse-formatter.xml",
         "java.format.settings.profile": "TesseraQL",
         "java.completion.importOrder": ["#"],
+        // Why disabled: .vscode/settings.json, which this block mirrors key for key.
         "java.compile.nullAnalysis.mode": "disabled",
         "[java]": {
           "editor.codeActionsOnSave": {

@@ -71,9 +71,10 @@ to size the work.
 
 ## Decisions
 
-**Sections carry reader intent, not feature taxonomy.** The current six sections name
+**Sections carry reader intent, not feature taxonomy.** The six sections of the time named
 parts of the framework. The replacement names what a reader is trying to do, which is the
-only axis on which a newcomer can choose. Seven sections:
+only axis on which a newcomer can choose. The sections as designed (the live list, ten today
+with Platform services and Security & identity kept, is `SECTIONS` in `docs-site/nav.mjs`):
 
 | Section | Holds |
 | --- | --- |

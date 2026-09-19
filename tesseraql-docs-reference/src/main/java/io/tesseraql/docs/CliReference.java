@@ -19,7 +19,45 @@ import picocli.CommandLine.Model.PositionalParamSpec;
  */
 final class CliReference {
 
+    /**
+     * The subcommands that share an engine with a {@code tesseraql:} Maven goal, in the order the
+     * page names them — the parity the distribution record states as goal → verb
+     * (docs/app-developer-distribution.md): every goal whose engine is a reusable library is a
+     * subcommand. The page used to claim the converse, "every subcommand has a matching goal",
+     * which thirteen of twenty-five subcommands falsified (docs/audit-low-leads.md F116).
+     * {@code CliMavenParityLedgerTest} derives this list from the plugin's {@code @Mojo} names.
+     */
+    static final List<String> MAVEN_GOAL_VERBS = List.of("lint", "test", "coverage", "generate",
+            "schema", "migrate", "identity-schema", "package", "release-diff", "governance",
+            "admission", "verify");
+
+    /** The goals whose name is not the verb's: goal → subcommand. */
+    static final java.util.Map<String, String> GOAL_VERBS = java.util.Map.of(
+            "package-app", "package",
+            "verify-evidence", "verify",
+            // The report goal is the test verb's --report flag.
+            "report", "test");
+
+    /** The one goal with no subcommand: CI produces the release evidence; the CLI verifies it. */
+    static final java.util.Set<String> CI_ONLY_GOALS = java.util.Set.of("release-evidence");
+
     private CliReference() {
+    }
+
+    /** The parity sentence, spelled from the list the ledger test pins. */
+    static String parityParagraph() {
+        StringBuilder verbs = new StringBuilder();
+        for (int i = 0; i < MAVEN_GOAL_VERBS.size(); i++) {
+            if (i > 0) {
+                verbs.append(i == MAVEN_GOAL_VERBS.size() - 1 ? " and " : ", ");
+            }
+            verbs.append('`').append(MAVEN_GOAL_VERBS.get(i)).append('`');
+        }
+        return "The build gates — " + verbs + " — call the same engine as the matching "
+                + "`tesseraql:` Maven goal (`tesseraql:package-app` for `package`, "
+                + "`tesseraql:verify-evidence` for `verify`, `tesseraql:report` for "
+                + "`test --report`), so a CLI loop and a CI pipeline do the same work. Every other "
+                + "subcommand is the CLI's alone, and `tesseraql:release-evidence` is CI's alone.\n";
     }
 
     /** Renders the whole page from the root command's model. */
@@ -32,8 +70,7 @@ final class CliReference {
                         + "not exist. `tesseraql <command> --help` prints the same content at "
                         + "the terminal.\n\n")
                 .append("Most commands take `--app <dir>`, the application home they act on. "
-                        + "Every subcommand calls the same engine as the matching Maven goal, "
-                        + "so a CLI loop and a CI pipeline do the same work.\n");
+                        + parityParagraph());
 
         List<CommandSpec> commands = subcommands(root);
         List<String> toc = new ArrayList<>();

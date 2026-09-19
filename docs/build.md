@@ -37,8 +37,9 @@ The IDE runs a second analysis on top of that one. The VS Code Java extension re
 JDT problems, and its `resource` category - a closeable no `close()` reaches - is one `javac`
 does not have, so `@SuppressWarnings("resource")` speaks to the IDE alone. Reach for it, with
 a comment, wherever the closeable is handed to an owner that outlives the declaring method: a
-Camel context that adopts a service, a `@Container` field, a `stop()` or an `end()` that
-releases what no `close()` ever will. The problems panel is expected to stay empty, which is
+service the runtime holds and closes with itself (`FilePushService` in `TesseraqlRuntime`), a
+`@Container` field, a `stop()` or an `end()` that releases what no `close()` ever will. The
+problems panel is expected to stay empty, which is
 what makes a finding in it worth acting on.
 
 ## Unused-declaration gate

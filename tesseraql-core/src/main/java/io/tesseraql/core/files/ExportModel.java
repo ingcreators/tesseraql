@@ -94,8 +94,8 @@ public final class ExportModel {
 
     /**
      * The extraction as a template sees it (docs/export-pipeline.md, decision 14): {@code rows}
-     * and {@code rowCount}, under the key {@code sql}, exactly as a route publishes its default
-     * result and exactly as a named query publishes its own. The only difference left between the
+     * and {@code rowCount}, under the key {@code main} ({@link #SUBJECT}), exactly as a route
+     * publishes its default result and exactly as a named query publishes its own. The only difference left between the
      * extraction and a named query is the one that is real — which result the export is about.
      *
      * <p>The count is answerable because a template mode is a buffering mode: its rows are
