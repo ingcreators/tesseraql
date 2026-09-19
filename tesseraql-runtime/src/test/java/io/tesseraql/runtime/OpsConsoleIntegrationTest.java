@@ -38,6 +38,18 @@ class OpsConsoleIntegrationTest {
     static TesseraqlRuntime runtime;
     static Path appHome;
 
+    /**
+     * Pinned to HTTP/1.1 on purpose. {@code overviewUsesSelfHostedHtmxForPolling} fetches the
+     * 51 KB {@code htmx.min.js} — more than one HTTP/2 frame — and the JDK client's cleartext
+     * h2c path loses frame sync on that body once in a few hundred CI runs: it reads the body
+     * as a frame header and reports a frame type that does not exist ({@code Frame type(46)}
+     * or {@code (101)}, four times since 2026-09-03, once on main). The protocol is not what
+     * this suite is about, so it does not negotiate one; the h2c path keeps its coverage in
+     * the edge suites.
+     */
+    private static final HttpClient CLIENT = HttpClient.newBuilder()
+            .version(HttpClient.Version.HTTP_1_1).build();
+
     // An authenticated session with no ops atoms at all: an empty switcher, 404 member pages.
     static String adminCookie;
     static String adminCsrf;
@@ -96,7 +108,7 @@ class OpsConsoleIntegrationTest {
                 URI.create("http://localhost:" + runtime.port()
                         + "/_tesseraql/ops/console/user-admin"))
                 .header("Cookie", scopedCookie).header("Accept-Language", "ja, en;q=0.5").build();
-        HttpResponse<String> page = HttpClient.newHttpClient().send(request,
+        HttpResponse<String> page = CLIENT.send(request,
                 HttpResponse.BodyHandlers.ofString());
 
         assertThat(page.statusCode()).isEqualTo(200);
@@ -204,6 +216,9 @@ class OpsConsoleIntegrationTest {
         assertThat(htmx.headers().firstValue("content-type"))
                 .hasValueSatisfying(value -> assertThat(value).contains("text/javascript"));
         assertThat(htmx.body()).contains("htmx");
+        // The asset that lost frame sync four times came back over the pinned protocol — the
+        // default client would have upgraded this cleartext request to HTTP/2.
+        assertThat(htmx.version()).isEqualTo(HttpClient.Version.HTTP_1_1);
 
         assertThat(page.body())
                 .contains("/assets/vendor/hypermedia-components__core/dist/hc.min.css");
@@ -514,7 +529,7 @@ class OpsConsoleIntegrationTest {
         HttpRequest.Builder request = HttpRequest.newBuilder(
                 URI.create("http://localhost:" + runtime.port() + path))
                 .header("Cookie", cookie);
-        return HttpClient.newHttpClient().send(request.build(),
+        return CLIENT.send(request.build(),
                 HttpResponse.BodyHandlers.ofString());
     }
 
@@ -529,14 +544,14 @@ class OpsConsoleIntegrationTest {
         if (csrf != null) {
             request.header("X-CSRF-Token", csrf);
         }
-        return HttpClient.newHttpClient().send(request.build(),
+        return CLIENT.send(request.build(),
                 HttpResponse.BodyHandlers.ofString());
     }
 
     private static HttpResponse<String> get(String path) throws Exception {
         HttpRequest.Builder request = HttpRequest.newBuilder(
                 URI.create("http://localhost:" + runtime.port() + path));
-        return HttpClient.newHttpClient().send(request.build(),
+        return CLIENT.send(request.build(),
                 HttpResponse.BodyHandlers.ofString());
     }
 

@@ -35,6 +35,15 @@ class DeclarativeViewIntegrationTest {
     static TesseraqlRuntime runtime;
     static Path appHome;
 
+    /**
+     * Pinned to HTTP/1.1 on purpose. The dashboard test fetches the 190 KB Plot bundle — many
+     * HTTP/2 frames — and the JDK client's cleartext h2c path loses frame sync on such a body
+     * once in a few hundred runs (the {@code OpsConsoleIntegrationTest} sighting, four times
+     * since 2026-09-03, on a 51 KB asset). The protocol is not what this suite is about.
+     */
+    private static final HttpClient CLIENT = HttpClient.newBuilder()
+            .version(HttpClient.Version.HTTP_1_1).build();
+
     @BeforeAll
     static void start() throws Exception {
         appHome = prepareAppHome();
@@ -69,7 +78,7 @@ class DeclarativeViewIntegrationTest {
 
     @Test
     void anHxRequestGetsTheBareRegionFromTheSameUrl() throws Exception {
-        HttpResponse<String> response = HttpClient.newHttpClient().send(
+        HttpResponse<String> response = CLIENT.send(
                 HttpRequest.newBuilder(URI.create(
                         "http://localhost:" + runtime.port() + "/board"))
                         .header("HX-Request", "true")
@@ -205,7 +214,7 @@ class DeclarativeViewIntegrationTest {
     }
 
     private static HttpResponse<String> postForm(String path, String form) throws Exception {
-        return HttpClient.newHttpClient().send(
+        return CLIENT.send(
                 HttpRequest.newBuilder(URI.create("http://localhost:" + runtime.port() + path))
                         .header("Content-Type", "application/x-www-form-urlencoded")
                         .POST(HttpRequest.BodyPublishers.ofString(form))
@@ -214,7 +223,7 @@ class DeclarativeViewIntegrationTest {
     }
 
     private static HttpResponse<String> get(String path) throws Exception {
-        return HttpClient.newHttpClient().send(
+        return CLIENT.send(
                 HttpRequest.newBuilder(URI.create("http://localhost:" + runtime.port() + path))
                         .build(),
                 HttpResponse.BodyHandlers.ofString());
