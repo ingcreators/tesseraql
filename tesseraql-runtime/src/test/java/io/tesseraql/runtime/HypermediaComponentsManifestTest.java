@@ -139,6 +139,82 @@ class HypermediaComponentsManifestTest {
                 .isEmpty();
     }
 
+    /**
+     * Every {@code data-tql-*} attribute the bootstrap reads is recorded in a document — the
+     * htmx contract ({@code docs/hypermedia-ui.md}) or an upstream brief
+     * ({@code docs/hc-briefs.md}) — so a hand-rolled behaviour is either contract or a named
+     * stand-in awaiting the kit, never glue nobody wrote down (AGENTS.md rule 11;
+     * docs/audit-low-leads.md slice 23, F102). Three were: the dialog opener the route compiler
+     * emits on every list page's Filters button, submit-on-change and the save hotkey.
+     */
+    @Test
+    void everyBootstrapAttributeIsRecordedInTheDocs() throws Exception {
+        String bootstrap = new String(HypermediaComponentsManifestTest.class.getClassLoader()
+                .getResourceAsStream("tesseraql/assets/tesseraql.js").readAllBytes(),
+                StandardCharsets.UTF_8);
+        String docs = java.nio.file.Files.readString(
+                java.nio.file.Path.of("..", "docs", "hypermedia-ui.md"), StandardCharsets.UTF_8)
+                + java.nio.file.Files.readString(
+                        java.nio.file.Path.of("..", "docs", "hc-briefs.md"),
+                        StandardCharsets.UTF_8);
+        // The attributes inside selector strings — what the bootstrap reads from the page.
+        java.util.Set<String> read = new java.util.TreeSet<>();
+        java.util.regex.Matcher selectors = java.util.regex.Pattern
+                .compile("\"[^\"]*?(data-tql-[a-z-]+)[^\"]*?\"").matcher(bootstrap);
+        while (selectors.find()) {
+            read.add(selectors.group(1));
+        }
+        assertThat(read).as("tesseraql.js reads data-tql-* attributes").isNotEmpty();
+        List<String> unrecorded = read.stream().filter(name -> !docs.contains(name)).toList();
+        assertThat(unrecorded)
+                .as("data-tql-* attributes the bootstrap reads that no document records")
+                .isEmpty();
+    }
+
+    /**
+     * The fill chain's rules in {@code tesseraql.css} and the classes the list page carries are
+     * one list (docs/audit-low-leads.md slice 23, unfiled 25): a rule for a class no element
+     * carries fills nothing, and a class no rule chains is the silent break the bulk-action form
+     * was. The path itself — every wrapper on it a link — is the compiler test's.
+     */
+    @Test
+    void theFillChainsRulesNameTheClassesTheListPageCarries() throws Exception {
+        String css = stripComments(new String(HypermediaComponentsManifestTest.class
+                .getClassLoader().getResourceAsStream("tesseraql/assets/tesseraql.css")
+                .readAllBytes(), StandardCharsets.UTF_8));
+        String page = new String(HypermediaComponentsManifestTest.class.getClassLoader()
+                .getResourceAsStream("tesseraql/templates/tql/view/list.html").readAllBytes(),
+                StandardCharsets.UTF_8);
+        // The chain is the one media block that holds .tql-page-fill; the rules outside it
+        // (the status line's colour, the print sheet) are not links.
+        int fill = css.indexOf(".tql-page-fill{");
+        assertThat(fill).as(".tql-page-fill rule in tesseraql.css").isNotNegative();
+        int blockStart = css.lastIndexOf("@media", fill);
+        int blockEnd = css.indexOf("\n}", fill);
+        String block = css.substring(blockStart, blockEnd);
+        java.util.Set<String> chained = new java.util.TreeSet<>();
+        java.util.regex.Matcher rules = java.util.regex.Pattern
+                .compile("\\.(tql-[a-z_-]+)\\{").matcher(block);
+        while (rules.find()) {
+            chained.add(rules.group(1));
+        }
+        java.util.Set<String> carried = new java.util.TreeSet<>();
+        java.util.regex.Matcher classes = java.util.regex.Pattern
+                .compile("class=\"([^\"]*)\"").matcher(page);
+        while (classes.find()) {
+            for (String name : classes.group(1).split("\\s+")) {
+                if (name.startsWith("tql-page-fill") || (name.startsWith("tql-list-page")
+                        && !name.equals("tql-list-page__status"))) {
+                    carried.add(name);
+                }
+            }
+        }
+        assertThat(chained).as("the classes tesseraql.css chains")
+                .containsExactly("tql-list-page", "tql-list-page__form", "tql-list-page__grid",
+                        "tql-list-page__region", "tql-page-fill");
+        assertThat(carried).as("the chain classes list.html carries").isEqualTo(chained);
+    }
+
     private static String stripComments(String css) {
         return css.replaceAll("(?s)/\\*.*?\\*/", "");
     }

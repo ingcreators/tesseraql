@@ -138,6 +138,53 @@ class MultiAppGatewayIntegrationTest {
         }
     }
 
+    /**
+     * A member listens on loopback and nowhere else (docs/audit-low-leads.md slice 23, unfiled
+     * 70): the gateway is what the network reaches, and it dials its members over loopback; a
+     * member bound to every interface on a random port answered the network past the gateway's
+     * trusted-proxy and header-stripping rules. Proven by connecting: the member's port accepts
+     * from loopback and refuses from a non-loopback address of this host, while the gateway's
+     * port accepts from both.
+     */
+    @Test
+    void aMemberListensOnLoopbackOnly() throws Exception {
+        java.net.InetAddress external = nonLoopbackAddress();
+        org.junit.jupiter.api.Assumptions.assumeTrue(external != null,
+                "this host has a non-loopback IPv4 address");
+        int member = gateway.host().port("shop-a");
+        assertThat(accepts(java.net.InetAddress.getByName(HostContext.MEMBER_BIND_ADDRESS),
+                member)).as("the member on loopback").isTrue();
+        assertThat(accepts(external, member))
+                .as("the member on %s — reachable past the gateway", external).isFalse();
+        assertThat(accepts(external, gateway.port())).as("the gateway on %s", external)
+                .isTrue();
+    }
+
+    private static boolean accepts(java.net.InetAddress address, int port) {
+        try (java.net.Socket socket = new java.net.Socket()) {
+            socket.connect(new java.net.InetSocketAddress(address, port), 2_000);
+            return true;
+        } catch (IOException refused) {
+            return false;
+        }
+    }
+
+    private static java.net.InetAddress nonLoopbackAddress() throws java.net.SocketException {
+        for (java.net.NetworkInterface iface : java.util.Collections
+                .list(java.net.NetworkInterface.getNetworkInterfaces())) {
+            if (!iface.isUp() || iface.isLoopback()) {
+                continue;
+            }
+            for (java.net.InetAddress address : java.util.Collections
+                    .list(iface.getInetAddresses())) {
+                if (address instanceof java.net.Inet4Address && !address.isLoopbackAddress()) {
+                    return address;
+                }
+            }
+        }
+        return null;
+    }
+
     /** A name the stack does not hold is refused with the members that would have worked. */
     @Test
     void narrowingToAnUnknownNameListsTheMembers() {

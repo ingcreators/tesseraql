@@ -72,6 +72,32 @@ public final class PercentEncoding {
     }
 
     /**
+     * {@code path} with every percent-escape's hex digits upper-cased, which is how the framework
+     * spells them: a browser sends them upper-case, a hand-written client may not — .NET's
+     * {@code UrlEncode} emits lower-case — and RFC 3986 makes the two the same octet. For
+     * comparison only: a URI forwarded or echoed stays exactly as the client sent it. The gateway
+     * folds before it matches a member's prefix; {@link BasePaths#relative} folds before it
+     * strips the base, one hop later on the same request (docs/audit-low-leads.md DN-01c).
+     */
+    public static String upperHex(String path) {
+        int percent = path.indexOf('%');
+        if (percent < 0) {
+            return path;
+        }
+        StringBuilder folded = new StringBuilder(path.length());
+        for (int i = 0; i < path.length(); i++) {
+            char c = path.charAt(i);
+            folded.append(c);
+            if (c == '%' && i + 2 < path.length()) {
+                folded.append(Character.toUpperCase(path.charAt(i + 1)))
+                        .append(Character.toUpperCase(path.charAt(i + 2)));
+                i += 2;
+            }
+        }
+        return folded.toString();
+    }
+
+    /**
      * Whether a response header's value is a URI-reference the client navigates to — the
      * headers {@link #uriLiteral} exists for. One predicate shared by the compiler, which encodes
      * a declared one, and the HTTP edge, which refuses one that reaches it un-encoded, so the two

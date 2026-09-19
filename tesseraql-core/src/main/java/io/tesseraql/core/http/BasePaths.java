@@ -87,19 +87,32 @@ public final class BasePaths {
         // A URL read back off the request is wire text, so the base it carries is the base's
         // wire spelling (docs/router-unicode-names.md R1): under /受注 a _return of
         // /%E5%8F%97%E6%B3%A8/things kept its prefix here, and the redirect helper joined a
-        // second one. ASCII is its own wire form, so the two spellings coincide there.
-        String stripped = strip(PercentEncoding.uriLiteral(base), url);
+        // second one. ASCII is its own wire form, so the two spellings coincide there. The
+        // wire spelling is compared with its hex folded to upper case, as the gateway compares a
+        // member's prefix: a link written by a client that spells %e5 kept its prefix here too
+        // (docs/audit-low-leads.md DN-01c). The remainder is cut from the URL as sent.
+        String stripped = strip(PercentEncoding.uriLiteral(base), url,
+                PercentEncoding.upperHex(url));
         return stripped != null
                 ? stripped
                 : java.util.Objects.requireNonNullElse(
-                        strip(base, url), url);
+                        strip(base, url, url), url);
     }
 
-    /** {@code url} without {@code prefix}, or null when the prefix does not address it. */
-    private static String strip(String prefix, String url) {
-        if (url.equals(prefix)) {
+    /**
+     * {@code url} without {@code prefix}, or null when the prefix does not address it;
+     * {@code comparable} is the spelling the prefix is matched against, {@code url} the text the
+     * remainder is cut from. The bare base followed by a query is the base's root page with that
+     * query — a list entered at {@code /shop?page=2} — not a stranger's path
+     * (docs/audit-low-leads.md unfiled 69).
+     */
+    private static String strip(String prefix, String url, String comparable) {
+        if (comparable.equals(prefix)) {
             return "/";
         }
-        return url.startsWith(prefix + "/") ? url.substring(prefix.length()) : null;
+        if (comparable.startsWith(prefix + "/")) {
+            return url.substring(prefix.length());
+        }
+        return comparable.startsWith(prefix + "?") ? "/" + url.substring(prefix.length()) : null;
     }
 }

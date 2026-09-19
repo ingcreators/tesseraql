@@ -171,7 +171,8 @@ final class OpsShellProviders {
                     } catch (TqlException ex) {
                         throw OpsActions.notFound("Application '" + member + "'");
                     }
-                    String url = "http://localhost:" + port + basePaths.getOrDefault(member, "")
+                    String url = "http://" + HostContext.MEMBER_BIND_ADDRESS + ":" + port
+                            + basePaths.getOrDefault(member, "")
                             + "/_tesseraql/ops/data/" + op.dataPath(params);
                     if ("GET".equals(op.method)) {
                         String query = queryString(op, params);
@@ -214,7 +215,8 @@ final class OpsShellProviders {
                     } catch (TqlException ex) {
                         throw OpsActions.notFound("Application '" + member + "'");
                     }
-                    return "http://localhost:" + port + basePaths.getOrDefault(member, "")
+                    return "http://" + HostContext.MEMBER_BIND_ADDRESS + ":" + port
+                            + basePaths.getOrDefault(member, "")
                             + "/_tesseraql/ops/console/transfers/" + encode(id) + "/file";
                 }
             };

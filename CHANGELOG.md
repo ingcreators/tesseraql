@@ -401,6 +401,41 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A desktop list page keeps its chrome in place again.** The bulk-action `<form>` the list
+  view gained in 0.15.0 sat between the page and the grid region with no rule in the fill
+  chain, so on desktop the region grew to its rows, the page scrolled and the title, search
+  bar and pager scrolled away — the opposite of what the page promises — on every list over a
+  viewport, with every markup test green. The form is a link of the chain now
+  (`tql-list-page__form`); the chain's comment states the real constraint (the kit's `.hc-fill`
+  is unconditional, this frame fills on desktop only, so the chain restates it under the
+  breakpoint — and every wrapper must be a link); a compiler test walks the rendered path and a
+  runtime test holds the CSS and the markup to one list (`docs/audit-low-leads.md` slice 23,
+  unfiled 25, F103).
+- **The filter dialog names itself.** The list view's filter `<dialog>` carried no
+  `aria-labelledby`, so its accessible name was empty where every sibling dialog says its title;
+  it points at its title now (F100). The Studio command palette stays the kit's own recipe.
+- **A `location: back` under a base path lands where the user was.** `BasePaths.relative`
+  compared a `_return` written by a client that spells its percent-escapes in lower case against
+  the upper-case wire form and kept the prefix, so the redirect joined the base twice
+  (`/受注/受注/things`); and it never stripped the bare base ahead of a query, so a list entered
+  at `/shop?page=2` sent `location: back` to `/shop/shop?page=2`. Both compare as the gateway
+  does — hex folded, the bare base with a query being the root page with that query — and the
+  fold lives in `PercentEncoding.upperHex`, one copy for the gateway and the base-path helper
+  (DN-01c, unfiled 69).
+- **A stack member listens on loopback only.** A hosted runtime bound every interface on a
+  random port while the gateway reached it over loopback, so a member answered the network past
+  the gateway's `--trusted-proxies` and header stripping. A hosted runtime binds
+  `127.0.0.1` and the host dials the same literal (never `localhost`, which a resolver may
+  answer with `::1`); the standalone runtime keeps every interface, being what an ingress
+  reaches. `MultiAppGatewayIntegrationTest` connects to a member from a non-loopback address and
+  is refused (unfiled 70).
+- **Three bootstrap behaviours have their upstream briefs.** `data-tql-open-dialog` (emitted
+  by the route compiler on every list page's Filters button, so markup contract, not Studio
+  glue), `data-tql-submit-on-change` and the collapsed-rail `.hc-item` centering are briefs
+  13-15 in `docs/hc-briefs.md`, each naming the stand-in to retire; the save hotkey is
+  recorded as app policy. `HypermediaComponentsManifestTest` holds every `data-tql-*` the
+  bootstrap reads to a document (F102). The six standalone pages keep their inline frame by
+  decision (F101).
 - **The CLI reference states the Maven parity the right way round.** The generated page and
   the getting-started page claimed every subcommand has a matching Maven goal; thirteen of
   twenty-five do not. Both now name the twelve build gates that share an engine with a

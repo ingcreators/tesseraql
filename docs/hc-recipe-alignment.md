@@ -68,6 +68,13 @@ opposite of the contract's.
 **network-retry** (#1083) and **idempotency-key** (#1084–#1087,
 [idempotency-key.md](idempotency-key.md)) are done and not re-argued here.
 
+**dialog labelling.** The kit's dialog contract offers two labels: `aria-labelledby` on the
+dialog, or the title placed before the first focusable so it is read on open. The filter dialog
+(`tql/view/list.html`) takes the first since docs/audit-low-leads.md slice 23 (F100); the Studio
+command palette (`hc-command-dialog`, `tql/shell.html`) is the kit's recipe verbatim — an unnamed
+dialog over a labelled combobox — and a "name every dialog" sweep must exempt it or brief
+upstream, not patch it here (rule 11).
+
 ## result-cap — adopt, recommended first
 
 The contract: bound what one search may return via cap+1 detection; over the cap is
@@ -242,7 +249,7 @@ job, and the row records why.
 | datagrid-pager | Aligned (list-surface slice 1) | the in-place pager |
 | datagrid-sort | Aligned (list-surface slice 6, hc-briefs) | `type: sort` |
 | data-region | Aligned (live regions, `refreshOn:`) | [hypermedia-ui.md](hypermedia-ui.md) |
-| datagrid-filter | Deviation — chips + dialog, recorded below | `filters:` |
+| datagrid-filter | Deviation — chips + dialog, recorded below; the dialog names itself (`aria-labelledby`), the kit's first labelling option | `filters:` |
 | saved-views | Deviation — stateless presets, recorded below | `presets:` |
 | filter-popover | Deviation — rides the `filters:` dialog | `filters:` |
 | datagrid-columns | Defer — first column-chooser demand | grid page |

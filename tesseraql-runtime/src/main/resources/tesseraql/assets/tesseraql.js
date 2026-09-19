@@ -163,6 +163,8 @@ document.addEventListener("hc:sessionrenewed", (event) => {
 // Save hotkey (docs/studio-ux-refresh.md slice 5): Ctrl/Cmd+S submits the page's save form —
 // the one marked data-tql-hotkey-save (the Studio source editor) — instead of the browser's
 // save-page dialog. Declarative and page-scoped: pages without the attribute keep the default.
+// App policy, not a kit gap: recorded as such in hc-briefs.md (Notes), where the three
+// behaviours below are briefed.
 document.addEventListener("keydown", (event) => {
     if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === "s") {
         const form = document.querySelector("form[data-tql-hotkey-save]");
@@ -179,7 +181,8 @@ document.addEventListener("keydown", (event) => {
 
 // Submit-on-change (slice 6): a control marked data-tql-submit-on-change submits its form when
 // flipped — the Studio flags page's hc-switch toggles post through their plain form this way.
-// Declarative; without JavaScript the switch simply does not auto-submit.
+// Declarative; without JavaScript the switch simply does not auto-submit. A stand-in for the
+// kit behaviour briefed as hc-briefs.md brief 15; retire it when data-hc-submit-on-change ships.
 document.addEventListener("change", (event) => {
     if (event.target instanceof Element
             && event.target.matches("[data-tql-submit-on-change]")
@@ -189,9 +192,12 @@ document.addEventListener("change", (event) => {
 });
 
 // Command palette glue (docs/studio-ux-refresh.md slice 7). Two small declarative pieces the
-// kit deliberately leaves to the app:
+// kit does not carry today:
 // 1. A visible opener — native <dialog> has no declarative opener, and installCommand only
 //    wires the ⌘K hotkey; data-tql-open-dialog="<selector>" opens the named dialog modally.
+//    Emitted by the route compiler too (tql/view/list.html: the Filters button and every
+//    applied chip), so it is markup contract, not Studio glue; briefed as hc-briefs.md brief
+//    14, and retiring it when the kit ships an opener is a recorded markup change.
 // 2. Navigation — installCommand dispatches hc:commandselect and never touches the network;
 //    palette item values here are same-app URLs, so selection navigates.
 document.addEventListener("click", (event) => {
