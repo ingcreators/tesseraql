@@ -359,8 +359,9 @@ final class StackRelay {
             return false;
         }
         String base = member.basePath() == null ? "" : wirePrefix(member);
-        return mountedAt(upperHex(rawPath), base + "/_tesseraql/events")
-                || mountedAt(upperHex(rawPath), base + "/_tesseraql/ui/copilot/stream");
+        String path = io.tesseraql.core.http.PercentEncoding.upperHex(rawPath);
+        return mountedAt(path, base + "/_tesseraql/events")
+                || mountedAt(path, base + "/_tesseraql/ui/copilot/stream");
     }
 
     /** Exact, or exact with one trailing slash: the member routes both to the same handler. */
@@ -417,7 +418,7 @@ final class StackRelay {
     private String appAddressedBy(String rawPath) {
         String best = null;
         String bestPrefix = null;
-        String path = upperHex(rawPath);
+        String path = io.tesseraql.core.http.PercentEncoding.upperHex(rawPath);
         for (String name : memberNames) {
             InstalledApp entry = entryOf.apply(name);
             if (entry == null) {
@@ -457,30 +458,6 @@ final class StackRelay {
      */
     private static String wirePrefix(InstalledApp member) {
         return io.tesseraql.core.http.PercentEncoding.uriLiteral(member.basePath());
-    }
-
-    /**
-     * The path with every percent-escape's hex digits upper-cased, which is how the framework
-     * spells them: a browser sends them upper-case, a hand-written client may not, and RFC 3986
-     * makes the two the same octet. Used for comparison only — the URI forwarded to a member
-     * stays exactly as the client sent it.
-     */
-    static String upperHex(String path) {
-        int percent = path.indexOf('%');
-        if (percent < 0) {
-            return path;
-        }
-        StringBuilder folded = new StringBuilder(path.length());
-        for (int i = 0; i < path.length(); i++) {
-            char c = path.charAt(i);
-            folded.append(c);
-            if (c == '%' && i + 2 < path.length()) {
-                folded.append(Character.toUpperCase(path.charAt(i + 1)))
-                        .append(Character.toUpperCase(path.charAt(i + 2)));
-                i += 2;
-            }
-        }
-        return folded.toString();
     }
 
     /** Whether {@code prefix} addresses {@code path}: equal, or followed by a segment boundary. */
@@ -704,7 +681,8 @@ final class StackRelay {
             if (prefix != null) {
                 String uri = proxied.getURI();
                 int query = uri.indexOf('?');
-                String path = upperHex(query < 0 ? uri : uri.substring(0, query));
+                String path = io.tesseraql.core.http.PercentEncoding.upperHex(
+                        query < 0 ? uri : uri.substring(0, query));
                 String marker = prefix + "/_as/";
                 if (path.startsWith(marker)) {
                     String remainder = path.substring(marker.length());
@@ -740,7 +718,8 @@ final class StackRelay {
             context.set(TARGET, target);
             return context.client()
                     .request(new RequestOptions()
-                            .setServer(SocketAddress.inetSocketAddress(target, "localhost")))
+                            .setServer(SocketAddress.inetSocketAddress(target,
+                                    HostContext.MEMBER_BIND_ADDRESS)))
                     .andThen(connected -> {
                         if (connected.succeeded()) {
                             context.set(CONNECTED, Boolean.TRUE);

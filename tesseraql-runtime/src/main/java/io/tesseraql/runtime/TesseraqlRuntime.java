@@ -1395,7 +1395,13 @@ public final class TesseraqlRuntime implements AutoCloseable {
             AppMigrations.migrate(
                     io.tesseraql.yaml.migration.SchemaHistoryName.of(manifest.config()),
                     appHome, manifest.config(), dataSource, tenantDataSources, dataSources::get);
-            TesseraqlHttpServer httpServer = new TesseraqlHttpServer(context, "0.0.0.0", port,
+            // A hosted runtime — a stack member or the surface — is reached by its host over
+            // loopback and by nothing else, so it binds loopback: bound to every interface on a
+            // random port, a member answered the network past the gateway's trusted-proxy and
+            // header-stripping rules (docs/audit-low-leads.md unfiled 70). The standalone
+            // runtime keeps every interface: it is what an ingress reaches.
+            TesseraqlHttpServer httpServer = new TesseraqlHttpServer(context,
+                    hostContext == null ? "0.0.0.0" : HostContext.MEMBER_BIND_ADDRESS, port,
                     sharedTransport, standaloneTransportOptions,
                     new HttpEdgeSettings(maxBodyBytes(manifest.config()),
                             tempScratch.resolve("uploads"),

@@ -113,6 +113,10 @@ Each slice is one PR, independently shippable, full verify before push.
 
 ## Non-goals
 
+- The six standalone pages (login, invite, reset, reset confirm, OAuth consent, account
+  connections) keep their inline frame (`max-width` + `margin: 4rem auto`): the kit's
+  `.hc-container` has no vertical offset and no token feeds its width, so the swap would keep
+  the inline style and change no pixel (docs/audit-low-leads.md F101, decision 9).
 - No information-architecture changes: the consoles' pages, routes, and navigation stay.
 - No command palette outside Studio (revisit on demand).
 - No pagination for audit/outbox/transfers beyond today's caps.

@@ -22,6 +22,25 @@ class BasePathsTest {
         // ASCII is its own wire form; a stranger's prefix stays.
         assertThat(BasePaths.relative("/shop", "/shop/things")).isEqualTo("/things");
         assertThat(BasePaths.relative("/受注", "/shop/things")).isEqualTo("/shop/things");
+        // A client that spells its escapes in lower or mixed case sends the same octets
+        // (docs/audit-low-leads.md DN-01c): the prefix strips, the tail keeps its spelling.
+        assertThat(BasePaths.relative("/受注", "/%e5%8f%97%e6%b3%a8/things?x=%e5"))
+                .isEqualTo("/things?x=%e5");
+        assertThat(BasePaths.relative("/受注", "/%E5%8f%97%E6%b3%a8")).isEqualTo("/");
+    }
+
+    /**
+     * The bare base followed by a query is the base's root page with that query — a list page
+     * entered at {@code /shop?page=2} carries {@code _return=/shop?page=2}, and a
+     * {@code location: back} used to join the base onto it again (docs/audit-low-leads.md
+     * unfiled 69).
+     */
+    @Test
+    void relativeStripsTheBareBaseAheadOfAQuery() {
+        assertThat(BasePaths.relative("/shop", "/shop?page=2")).isEqualTo("/?page=2");
+        assertThat(BasePaths.relative("/受注", "/%E5%8F%97%E6%B3%A8?page=2")).isEqualTo("/?page=2");
+        // A longer name that merely starts with the base is still a stranger.
+        assertThat(BasePaths.relative("/shop", "/shopping?page=2")).isEqualTo("/shopping?page=2");
     }
 
     @Test

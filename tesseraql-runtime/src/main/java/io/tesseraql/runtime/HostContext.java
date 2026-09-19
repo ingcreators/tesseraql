@@ -97,6 +97,15 @@ public record HostContext(String basePath, String cookiePath, String externalOri
         io.vertx.core.Vertx vertx) {
 
     /**
+     * The one address a hosted runtime listens on and its host dials: loopback, spelled as the
+     * literal so the two sides cannot disagree the way {@code localhost} lets them (a resolver may
+     * answer it with {@code ::1}). A member bound to every interface on a random port was
+     * reachable from the network past the gateway's {@code --trusted-proxies} and header
+     * stripping (docs/audit-low-leads.md unfiled 70).
+     */
+    public static final String MEMBER_BIND_ADDRESS = "127.0.0.1";
+
+    /**
      * The host's live member-origin lookup: which internal port answers for a member's stable or
      * canary slot right now. Reads the host's live slot state per call, so a shell that resolved
      * a port yesterday cannot delegate to a retired runtime today.

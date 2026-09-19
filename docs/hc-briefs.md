@@ -572,8 +572,73 @@ properties resolve, while the token build runs at build time and already bakes c
 per theme. The build can therefore bake a theme-following visited color that no consumer can
 write by hand.
 
+## Brief 13 — collapsed-rail item centering under `[data-sidebar-collapsed]`
+
+*Not filed upstream yet. Stand-in to retire: `tesseraql.css`, the
+`.hc-shell[data-sidebar-collapsed] .hc-item` rule (docs/audit-low-leads.md F102).*
+
+### Problem
+
+The shell's collapsed rail (`data-sidebar-collapsed`) narrows the grid column and hides
+`.hc-shell__label`, but leaves `.hc-item` laid out for a label: the glyph stays left-aligned in a
+rail that now has room for one glyph, with the item's inline padding intact. Every consumer that
+adopts the rail centers the glyph itself — a rule over an `hc-*` internal, which TesseraQL's own
+rule 11 forbids and which an `@layer hc.*` rail rule could silently outrank or be outranked by
+(the app sheet is unlayered).
+
+### Proposed
+
+Under `[data-sidebar-collapsed]` at the desktop breakpoint, `.hc-item` centers its content and
+drops its inline padding, and any `.hc-nav__group`-style caption the consumer places between
+items is visually hidden — the same recipe the kit applies to `.hc-shell__label`. Then the
+collapsed rail is complete without a consumer rule.
+
+## Brief 14 — a declarative dialog opener (`data-hc-open-dialog`)
+
+*Not filed upstream yet. Stand-in to retire: `tesseraql.js`'s `[data-tql-open-dialog]` click
+listener. Emitted by the route compiler in `tql/view/list.html` (the Filters button and each
+applied filter chip) and by the Studio shell's command-palette trigger, so its retirement is a
+recorded markup-contract change (docs/audit-low-leads.md F102).*
+
+### Problem
+
+A native `<dialog>` has no declarative opener: `showModal()` is script-only. `installCommand`
+wires the ⌘K hotkey for the command palette and `installRemoteDialog` opens a dialog it fetches,
+but a dialog already in the page — a filter form, a palette a mouse user needs a button for — has
+no kit way to be opened from a button. Every consumer writes the same three-line listener.
+
+### Proposed
+
+`data-hc-open-dialog="<selector>"` on a button: on activation, `showModal()` the matched
+`<dialog>` (or `show()` under a `data-hc-open-dialog-mode="inline"` variant), returning focus to
+the opener on close as `installRemoteDialog` does. Auto-installed by the bundle; scriptless
+fallback is the dialog's own `open` attribute where a consumer wants one.
+
+## Brief 15 — submit-on-change (`data-hc-submit-on-change`)
+
+*Not filed upstream yet. Stand-in to retire: `tesseraql.js`'s `[data-tql-submit-on-change]`
+change listener (the Studio flags page's `hc-switch` toggles) (docs/audit-low-leads.md F102).*
+
+### Problem
+
+A switch or select that IS the action — a feature flag, a per-user preference — wants to post
+its form when it changes, without a Save button. `mutating-form` covers the submit; nothing
+covers the trigger, so consumers write a `change` listener calling `form.requestSubmit()`, and
+each reinvents whether an `hx-*` form is exempt.
+
+### Proposed
+
+`data-hc-submit-on-change` on a control: on `change`, `requestSubmit()` its form, exempting a
+form that htmx already drives on change (`hx-trigger="change"`), the same verb exemption the
+confirm behaviour carries. Without JavaScript the control simply does not auto-submit, which is
+the honest degradation.
+
 ## Notes
 
+- The Studio source editor's Ctrl/Cmd+S (`data-tql-hotkey-save` in `tesseraql.js`) is **app
+  policy, not a kit gap** — which form a page's save hotkey submits is the page's decision — so
+  it is recorded here rather than briefed. The other three stand-ins the same review found are
+  briefs 13-15.
 - Two adjacent gaps were found to be **already shipped** in hc 0.1.5 and have been adopted, not
   briefed: `hc-spinner` and `hc-breadcrumb` (Track I1). They were CSS-only components, easy to miss
   by searching the behaviors bundle alone.

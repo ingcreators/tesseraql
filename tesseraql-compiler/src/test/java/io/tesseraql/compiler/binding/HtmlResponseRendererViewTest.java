@@ -671,11 +671,93 @@ class HtmlResponseRendererViewTest {
         assertThat(html).contains("hc-filterbar__chip").contains(">OPEN<");
         assertThat(html).contains("hc-filterbar__remove").contains("href=\"/items\"");
         assertThat(html).contains("hc-dialog").contains("name=\"quantity\"").contains(">Qty<");
+        // The dialog names itself (docs/audit-low-leads.md slice 23, F100): the kit's contract
+        // accepts a title before the first focusable, and the sibling dialogs all say it
+        // explicitly; an unnamed dialog role is what the accessibility tree reported.
+        assertThat(html).contains("aria-labelledby=\"page-filters-title\"")
+                .contains("id=\"page-filters-title\"");
         // The enum input renders a select whose first option is the empty "any" choice.
         assertThat(html).contains("hc-select")
                 .containsSubsequence("name=\"status\"", "<option value=\"\">",
                         "<option value=\"OPEN\"");
         assertThat(html).contains("name=\"status\" value=\"OPEN\"");
+    }
+
+    /**
+     * Every element between the list page and its datagrid is a link of the fill chain
+     * (docs/list-surface.md decision 1; docs/audit-low-leads.md slice 23, unfiled 25). The chain
+     * is a set of descendant rules in {@code tesseraql.css}, so a wrapper inserted without a
+     * class silently breaks it: the bulk-action {@code <form>} did exactly that — the region grew
+     * to its rows, the page scrolled and the chrome scrolled away on every desktop list over a
+     * viewport, with every markup test green. No browser harness exists here, so the guard is on
+     * the markup path: the classes the CSS chains, on every ancestor down to the grid.
+     */
+    @Test
+    void everyWrapperBetweenTheListPageAndTheDatagridIsALinkOfTheFillChain(@TempDir Path dir)
+            throws Exception {
+        HtmlResponseRenderer renderer = renderer(dir, """
+                version: tesseraql/v1
+                kind: view
+                recipe: list
+                filters: [status]
+                """, actionRoute());
+        Exchange exchange = new Exchange(Beans.NONE);
+        exchange.setProperty(TesseraqlProperties.CONTEXT, Map.of(
+                "main", Map.of("rows", List.of(Map.of("id", 1, "name", "Bolt")))));
+        exchange.request().uri("/items");
+        renderer.process(exchange);
+        String html = exchange.getBody(String.class);
+
+        List<String> chain = List.of("tql-list-page", "tql-list-page__form",
+                "tql-list-page__region", "tql-list-page__grid");
+        List<String> ancestors = ancestorClassesOf(html, "hc-datagrid", "tql-list-page");
+        assertThat(ancestors).as("the class attributes on the path from .tql-list-page to the grid")
+                .isNotEmpty()
+                .allSatisfy(classes -> assertThat(classes.split("\\s+"))
+                        .as("a wrapper on the fill chain: class=\"%s\"", classes)
+                        .anyMatch(chain::contains));
+        // That the CSS chains exactly these classes is HypermediaComponentsManifestTest's
+        // assertion (tesseraql-runtime owns the stylesheet).
+    }
+
+    /**
+     * The {@code class} attribute of every open element enclosing the first element carrying
+     * {@code target}, from {@code root} (exclusive) down, by a tag walk over the rendered
+     * markup — the templates emit well-formed HTML, and the void elements need no close.
+     */
+    private static List<String> ancestorClassesOf(String html, String target, String root) {
+        java.util.Set<String> voids = java.util.Set.of("input", "br", "hr", "img", "meta",
+                "link", "col", "wbr", "source", "area", "base", "embed", "param", "track");
+        java.util.regex.Matcher tags = java.util.regex.Pattern
+                .compile("<(/?)([a-zA-Z][a-zA-Z0-9-]*)([^>]*)>").matcher(html);
+        java.util.Deque<String[]> open = new java.util.ArrayDeque<>();
+        while (tags.find()) {
+            String name = tags.group(2).toLowerCase(java.util.Locale.ROOT);
+            if (!tags.group(1).isEmpty()) {
+                while (!open.isEmpty() && !open.pop()[0].equals(name)) {
+                    // an unclosed inline element above the closer: popped with it
+                }
+                continue;
+            }
+            if (voids.contains(name) || tags.group(3).endsWith("/")) {
+                continue;
+            }
+            java.util.regex.Matcher classAttr = java.util.regex.Pattern
+                    .compile("\\sclass=\"([^\"]*)\"").matcher(tags.group(3));
+            String classes = classAttr.find() ? classAttr.group(1) : "";
+            if (java.util.Arrays.asList(classes.split("\\s+")).contains(target)) {
+                List<String> path = new java.util.ArrayList<>();
+                for (String[] element : open) {
+                    if (java.util.Arrays.asList(element[1].split("\\s+")).contains(root)) {
+                        break;
+                    }
+                    path.add(element[1]);
+                }
+                return path;
+            }
+            open.push(new String[]{name, classes});
+        }
+        return List.of();
     }
 
     @Test

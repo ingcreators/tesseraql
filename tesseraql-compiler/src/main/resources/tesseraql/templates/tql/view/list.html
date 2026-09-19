@@ -65,8 +65,11 @@
   <!-- One form wraps the selection bar and the grid (the datagrid-bulk-actions recipe):
        the checked rows' ids travel by native form serialization, each action button posts
        to its own route (formaction), and the no-JS submit answers post/redirect/get with
-       `location: back` landing on this list. Without actions the form is inert chrome. -->
-  <form method="post">
+       `location: back` landing on this list. Without actions the form is inert chrome. It
+       sits between the page and the grid region, so it carries the fill chain's class: a
+       wrapper without one grows to its content, the page scrolls and the chrome scrolls away
+       (the kit's .hc-fill warning; tesseraql.css). -->
+  <form method="post" class="tql-list-page__form">
   <input type="hidden" name="_csrf"
          th:if="${_csrf != null && (v.actions != null or v.snapshot != null)}"
          th:value="${_csrf}">
@@ -177,10 +180,12 @@
   <!-- The filter dialog (docs/list-surface.md decision 6): one GET form of the declared
        filter inputs — applying navigates like any other search, so the result is a
        bookmarkable URL and page resets to 1. Cancel closes via the native dialog method. -->
-  <dialog class="hc-dialog" th:id="|${v.id}-filters|" th:if="${v.filterFields != null}">
+  <dialog class="hc-dialog" th:id="|${v.id}-filters|" th:if="${v.filterFields != null}"
+          th:attr="aria-labelledby=|${v.id}-filters-title|">
     <form method="get" th:action="${v.path}">
       <div class="hc-dialog__header">
-        <h2 class="hc-dialog__title" th:text="#{tql.view.filters}">Filters</h2>
+        <h2 class="hc-dialog__title" th:id="|${v.id}-filters-title|"
+            th:text="#{tql.view.filters}">Filters</h2>
       </div>
       <div class="hc-dialog__body hc-stack">
         <input type="hidden" name="sort" th:if="${v.sort != ''}" th:value="${v.sort}">

@@ -491,8 +491,8 @@ public final class MultiAppHost implements AutoCloseable, StackReconciler.HostOp
      * normally the one — then the replace fails as a no-op.
      */
     private void awaitReady(InstalledApp entry, TesseraqlRuntime runtime) {
-        String url = "http://localhost:" + runtime.port() + entry.basePath()
-                + "/_tesseraql/health/ready";
+        String url = "http://" + HostContext.MEMBER_BIND_ADDRESS + ":" + runtime.port()
+                + entry.basePath() + "/_tesseraql/health/ready";
         String lastAnswer = "no answer";
         for (int attempt = 0; attempt < READY_ATTEMPTS; attempt++) {
             try {
