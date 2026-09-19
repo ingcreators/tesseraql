@@ -7,7 +7,7 @@
 >
 > **S1** — one resolver in core for the three route sites and the job step; the fold every
 > value goes through; the roots each site resolves, judged by one predicate at lint and at
-> build; the Studio data export names its table: **shipped, #S1_PR** (every decision as
+> build; the Studio data export names its table: **shipped, #1400** (every decision as
 > recommended; the nine variants of `scratchpad/variant_s1.py` each red on exactly the guard
 > the table below names; `StepContextInterpolateTest`'s empty-value row flipped to `_` by
 > decision 4).
