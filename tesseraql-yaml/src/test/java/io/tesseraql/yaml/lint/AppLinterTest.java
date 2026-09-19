@@ -1600,6 +1600,110 @@ class AppLinterTest {
                         && f.message().contains("ghost.sql"));
     }
 
+    /**
+     * A step's {@code enrich: source:} composes a sibling by its context path,
+     * {@code steps.<id>}, which the runtime resolves against the steps already run — so a
+     * step that does not exist, a later one, a write, or a route-style bare name each fail at
+     * fire time ({@code TQL-ROUTE-3114}) and used to pass lint in silence
+     * (docs/audit-low-leads.md slice 21, unfiled 41). The same code a route's sibling
+     * reference gets ({@code TQL-YAML-1046}); a chunk reader's references are judged alike.
+     */
+    @Test
+    void aStepsEnrichSourceNamesAnEarlierStepThatHoldsRows(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), """
+                tesseraql:
+                  app:
+                    name: t
+                """);
+        Files.createDirectories(dir.resolve("batch/sync"));
+        Files.writeString(dir.resolve("batch/sync/partners.sql"),
+                "select code, name from partners\n");
+        Files.writeString(dir.resolve("batch/sync/orders.sql"),
+                "select id, code from orders order by id\n");
+        Files.writeString(dir.resolve("batch/sync/close.sql"), "update orders set closed = 1\n");
+        Files.writeString(dir.resolve("batch/sync/touch.sql"),
+                "update orders set seen = 1 where id = /* row.id */ 0\n");
+        Files.writeString(dir.resolve("batch/sync/job.yml"), """
+                version: tesseraql/v1
+                id: orders.sync
+                kind: job
+                recipe: batch-pipeline
+                pipeline:
+                  - id: partner
+                    sql:
+                      file: partners.sql
+                      mode: query
+                  - id: close
+                    sql:
+                      file: close.sql
+                      mode: update
+                  - id: orders
+                    sql:
+                      file: orders.sql
+                      mode: query
+                    enrich:
+                      partnerName:
+                        source: steps.partner
+                        on: { code: code }
+                        merge: [name]
+                      ghost:
+                        source: steps.nope
+                        on: { code: code }
+                        merge: [name]
+                      tooEarly:
+                        source: steps.later
+                        on: { code: code }
+                        merge: [name]
+                      wrote:
+                        source: steps.close
+                        on: { code: code }
+                        merge: [name]
+                      bare:
+                        source: partner
+                        on: { code: code }
+                        merge: [name]
+                  - id: later
+                    sql:
+                      file: partners.sql
+                      mode: query
+                  - id: load
+                    chunk:
+                      reader: { sql: { file: orders.sql } }
+                      writer: { sql: { file: touch.sql } }
+                      key: id
+                      enrich:
+                        partnerName:
+                          source: steps.partner
+                          on: { code: code }
+                          merge: [name]
+                        ghost:
+                          source: steps.missing
+                          on: { code: code }
+                          merge: [name]
+                """);
+
+        List<LintFinding> findings = new AppLinter().lint(dir);
+
+        List<String> sibling = findings.stream()
+                .filter(f -> f.code().equals("TQL-YAML-1046") && f.isError())
+                .map(LintFinding::message)
+                .toList();
+        assertThat(sibling).as("an earlier reading step composes; every other spelling is refused")
+                .noneMatch(m -> m.contains("'partnerName'"))
+                .anyMatch(m -> m.contains("'orders'") && m.contains("'ghost'")
+                        && m.contains("not an earlier step"))
+                .anyMatch(m -> m.contains("'orders'") && m.contains("'tooEarly'")
+                        && m.contains("not an earlier step"))
+                .anyMatch(m -> m.contains("'orders'") && m.contains("'wrote'")
+                        && m.contains("holds no rows"))
+                .anyMatch(m -> m.contains("'orders'") && m.contains("'bare'")
+                        && m.contains("steps.<id>"))
+                .anyMatch(m -> m.contains("'load'") && m.contains("'ghost'")
+                        && m.contains("not an earlier step"));
+        assertThat(sibling).hasSize(5);
+    }
+
     @Test
     void anHttpArmsModesAreTheOnesACallHas(@TempDir Path dir) throws Exception {
         Files.createDirectories(dir.resolve("config"));

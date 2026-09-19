@@ -18,7 +18,12 @@ import java.util.List;
  */
 final class EnrichRules {
 
-    private static final String INVALID_ENRICH_REFERENCE = "TQL-YAML-1046";
+    /**
+     * TQL-YAML-1046: an enrich: entry's reference is not exactly one sibling source, SQL file
+     * or HTTP call — on a route a sibling is another source of the document, on a job step
+     * ({@link StepRules}) an earlier step that holds rows, named steps.&lt;id&gt;.
+     */
+    static final String INVALID_ENRICH_REFERENCE = "TQL-YAML-1046";
 
     private static final String INVALID_ENRICH_JOIN = "TQL-YAML-1047";
 

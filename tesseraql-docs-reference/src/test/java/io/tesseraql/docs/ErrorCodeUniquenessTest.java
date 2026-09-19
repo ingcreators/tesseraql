@@ -132,8 +132,8 @@ class ErrorCodeUniquenessTest {
             Map.entry("VIEW-3304", "a fields: entry the action route does not declare"),
             Map.entry("VIEW-3305", "an unknown widget name"),
             Map.entry("VIEW-3306", "an unknown slot name for the view kind"),
-            Map.entry("VIEW-3308", "a children: entry naming a source the route does not"
-                    + " declare"),
+            // VIEW-3308 left this list with docs/audit-low-leads.md slice 21: the lint and the
+            // compiler raise it from the one ViewSources constant, so it is held once.
             Map.entry("VIEW-3317", "response.html.shell must be auto, always, or never"),
             Map.entry("VIEW-3318", "an embedded view that embeds further"),
             Map.entry("YAML-1007", "a message catalog file is malformed"),

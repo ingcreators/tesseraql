@@ -125,6 +125,8 @@ final class ChunkRules {
                             + " cannot skip; drop batch:, or drop onError: skip"));
         }
         chunk.enrich().forEach((name, enrich) -> {
+            // A reader's reference composes a sibling by the same path a reading step's does.
+            StepRules.lintSiblingReference(job, step, name, enrich, source, findings);
             if (enrich.sql() == null || enrich.sql().file() == null
                     || enrich.sql().file().isBlank()) {
                 return;

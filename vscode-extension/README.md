@@ -28,8 +28,11 @@ never disagree with the build.
   declares, nothing more. Flow-map fields
   (`salary: { domain: salary, policy: hr.write }`) complete too. A view's `source:`
   — the document's, a panel's, a child's — completes with, and jumps to, the named
-  sources of every route that binds the view (`sources.<name>:` in the route file);
-  an `enrich:` entry's `source:` resolves against its own route.
+  sources of every route that binds or embeds the view (`sources.<name>:` in the route
+  file); an `enrich:` entry's `source:` resolves against its own route. A bindable path
+  (`users: main.rows`, `created: steps.main.affectedRows`, `/items/{steps.record.keys.id}`)
+  jumps by its root: to the route's `sources.<name>:` line, or to the `- id:` item of the
+  document's own `steps:`/`pipeline:`; `steps.` completes with the steps declared above.
 - **View-composition intelligence.** View ids complete at every reference position —
   `response.html.view:`, `views:` on template routes (flow list and block sequence),
   and `view:` on dashboard panels and detail children — from the app's `*.view.yml`
@@ -64,8 +67,8 @@ extension. This extension complements it; it does not replace it.
 
 - The `tesseraql` CLI, 0.5.0 or later (`lint --format json`). Shared-definition
   completion (`domain:`/`use:`) and the explorer's route annotations need the 0.8+
-  `symbols` document, and named-source navigation (`source:`) the 0.18+ one; on an
-  older CLI they simply stay absent. Set
+  `symbols` document, and named-source and bindable-path navigation (`source:`,
+  `main.rows`) the 0.18+ one; on an older CLI they simply stay absent. Set
   **`tesseraql.cliPath`** if it is not on `PATH` — point it at the project's own CLI
   so editor findings always match the build.
 

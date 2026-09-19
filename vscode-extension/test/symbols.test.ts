@@ -3,11 +3,15 @@ import { test } from 'node:test';
 import {
   completionKindAt,
   parseAppSymbols,
+  pathCompletionAt,
+  pathReferenceAt,
   routeDescription,
   routesBinding,
   sourceCompletionAt,
   sourceDetail,
   sourceReferenceAt,
+  stepLineOf,
+  stepsDeclaredAbove,
   symbolReferenceAt,
   SymbolsContractError,
 } from '../src/core/symbols';
@@ -27,11 +31,11 @@ test('parses the symbols document', () => {
   assert.deepEqual(symbols.rules, [{ name: 'editableStatus', source: 'rules/inventory.yml', line: 7 }]);
   assert.deepEqual(symbols.decisions,
       [{ name: 'approvalRoute', source: 'decisions/approval.yml', line: 4 }]);
-  // A pre-0.18 CLI carries no sources or view bindings: they degrade to empty, not to a
-  // contract error, so every other intelligence keeps working.
+  // A pre-0.18 CLI carries no sources, view bindings or embeds: they degrade to empty, not
+  // to a contract error, so every other intelligence keeps working.
   assert.deepEqual(symbols.routes,
       [{ id: 'app.home', source: 'web/get.yml', method: 'GET', path: '/', recipe: 'query-html',
-        sources: [], view: null, views: [] }]);
+        sources: [], view: null, views: [], embeds: [] }]);
 });
 
 test('skipped documents are read from the broken array', () => {
@@ -137,21 +141,21 @@ test('a route without a source is a contract error, missing identity parts are n
       { policies: [], messages: [], routes: [{ source: 'batch/nightly.yml', id: null }] }));
   assert.deepEqual(symbols.routes,
       [{ id: null, source: 'batch/nightly.yml', method: null, path: null, recipe: null,
-        sources: [], view: null, views: [] }]);
+        sources: [], view: null, views: [], embeds: [] }]);
 });
 
 test('a route describes itself from whichever identity parts it has', () => {
   assert.equal(routeDescription(
       { id: 'users.list', source: 'web/api/users/get.yml', method: 'GET', path: '/api/users', recipe: 'query-json',
-        sources: [], view: null, views: [] }),
+        sources: [], view: null, views: [], embeds: [] }),
       'GET /api/users · query-json');
   assert.equal(routeDescription(
       { id: 'nightly', source: 'batch/nightly.yml', method: null, path: null, recipe: 'sql-batch',
-        sources: [], view: null, views: [] }),
+        sources: [], view: null, views: [], embeds: [] }),
       'sql-batch');
   assert.equal(routeDescription(
       { id: null, source: 'web/get.yml', method: null, path: null, recipe: null,
-        sources: [], view: null, views: [] }),
+        sources: [], view: null, views: [], embeds: [] }),
       undefined);
 });
 
@@ -215,7 +219,7 @@ const DASHBOARD_ROUTE = {
     { name: 'ordersByState', line: 14, arm: 'sql', file: 'orders-by-state.sql' },
     { name: 'directory', line: 17, arm: 'service', file: null },
   ],
-  view: 'procurement.dashboard.view', views: [],
+  view: 'procurement.dashboard.view', views: [], embeds: [],
 };
 
 test('parses each route\'s named sources and the views it binds', () => {
@@ -224,7 +228,8 @@ test('parses each route\'s named sources and the views it binds', () => {
     routes: [
       DASHBOARD_ROUTE,
       { id: 'report', source: 'web/report/get.yml', method: 'GET', path: '/report',
-        recipe: 'query-html', sources: [], view: null, views: ['procurement.dashboard.view'] },
+        recipe: 'query-html', sources: [], view: null, views: ['procurement.dashboard.view'],
+        embeds: ['procurement.recent.view'] },
       // A flow-form sources: block yields no line; a malformed entry is dropped, not fatal.
       { id: 'flow', source: 'web/flow/get.yml', method: 'GET', path: '/flow', recipe: 'query-json',
         sources: [{ name: 'main', line: null, arm: 'sql', file: 'x.sql' }, { line: 3 }],
@@ -233,8 +238,11 @@ test('parses each route\'s named sources and the views it binds', () => {
   }));
   assert.deepEqual(symbols.routes[0], DASHBOARD_ROUTE);
   assert.deepEqual(symbols.routes[1].views, ['procurement.dashboard.view']);
+  assert.deepEqual(symbols.routes[1].embeds, ['procurement.recent.view']);
   assert.deepEqual(symbols.routes[2].sources,
       [{ name: 'main', line: null, arm: 'sql', file: 'x.sql' }]);
+  // A CLI that binds views but carries no embeds yet: the array degrades to empty.
+  assert.deepEqual(symbols.routes[2].embeds, []);
 });
 
 test('a view is bound by the routes that name it through view: or views:', () => {
@@ -250,6 +258,30 @@ test('a view is bound by the routes that name it through view: or views:', () =>
   assert.deepEqual(routesBinding(symbols, 'procurement.dashboard.view').map((route) => route.id),
       ['procurement.dashboard', 'report']);
   assert.deepEqual(routesBinding(symbols, 'unbound.view'), []);
+});
+
+test('an embedded view is bound by every route hosting it, once per route', () => {
+  // docs/view-composition.md wave 2b: an embedded view reads the HOST route's sources, so
+  // its source: resolves through the hosts — which the contract names (docs/audit-low-leads.md
+  // slice 21), because a view: scalar in a route is a binding, not an embedding.
+  const symbols = parseAppSymbols(JSON.stringify({
+    policies: [], messages: [],
+    routes: [
+      { id: 'host', source: 'web/host/get.yml', sources: [{ name: 'byStatus', line: 12 }],
+        view: 'demo.host.view', views: [], embeds: ['demo.embedded.view'] },
+      { id: 'report', source: 'web/report/get.yml', sources: [], view: null,
+        views: ['demo.report.view'], embeds: ['demo.embedded.view'] },
+      // Bound directly AND embedded through its own bound document: one location, not two.
+      { id: 'both', source: 'web/both/get.yml', sources: [], view: 'demo.embedded.view',
+        views: [], embeds: ['demo.embedded.view'] },
+      { id: 'unrelated', source: 'web/other/get.yml', sources: [], view: 'other.view',
+        views: [], embeds: [] },
+    ],
+  }));
+  assert.deepEqual(routesBinding(symbols, 'demo.embedded.view').map((route) => route.id),
+      ['host', 'report', 'both']);
+  // The host's own document is bound by the host alone; embedding is not reflexive.
+  assert.deepEqual(routesBinding(symbols, 'demo.host.view').map((route) => route.id), ['host']);
 });
 
 test('a source completion says its arm, its file and its route', () => {
@@ -322,4 +354,133 @@ test('source: completes in a view document and under an enrich: entry', () => {
   const enriched = ['    enrich:', '      customer:'];
   assert.equal(sourceCompletionAt('get.yml', '        source: cu', 18, enriched), true);
   assert.equal(sourceCompletionAt('get.yml', '        source: cu', 18, ['      params:']), false);
+});
+
+// --- Bindable paths (docs/editor-named-sources.md mechanism 3, docs/audit-low-leads.md slice 21) ---
+
+test('a bindable path is detected by its value shape at every position that carries one', () => {
+  // response.html.model, response.json.body, a notify payload, a step's params, a redirect
+  // location placeholder — one shape, no key list.
+  const model = '      users: main.rows';
+  assert.deepEqual(pathReferenceAt(model, model.indexOf('main') + 1),
+      { root: 'main', step: null, start: 13, end: 22 });
+  // Anywhere on the path resolves — the segments belong to the root.
+  assert.equal(pathReferenceAt(model, model.indexOf('rows') + 2)?.root, 'main');
+  assert.equal(pathReferenceAt(model, 5), undefined);
+  assert.deepEqual(pathReferenceAt('      count: ordersByState.rowCount', 20),
+      { root: 'ordersByState', step: null, start: 13, end: 35 });
+  const body = '      created: steps.main.affectedRows';
+  assert.deepEqual(pathReferenceAt(body, 20),
+      { root: 'steps', step: 'main', start: 15, end: 38 });
+  const params = '        requisitionId: steps.header.keys.id';
+  assert.equal(pathReferenceAt(params, 30)?.step, 'header');
+  const location = '    location: /items/{steps.record.keys.id}';
+  assert.deepEqual(pathReferenceAt(location, location.indexOf('record')),
+      { root: 'steps', step: 'record', start: 22, end: 42 });
+  // A flow-map payload, and a value trailed by a comment.
+  const payload = '    payload: { order: steps.header.keys.id, total: main.first.total }';
+  assert.equal(pathReferenceAt(payload, payload.indexOf('header'))?.step, 'header');
+  assert.equal(pathReferenceAt(payload, payload.indexOf('first'))?.root, 'main');
+  assert.equal(pathReferenceAt('        total: steps.headcount.body.total   # parsed', 22)?.step,
+      'headcount');
+  // The EN-02 positions: a job enrich source:, a chunk reader spool:, attach:, a push file:.
+  assert.equal(pathReferenceAt('        source: steps.partner.rows', 26)?.step, 'partner');
+  assert.equal(pathReferenceAt('      reader: { spool: steps.extract.spool }', 30)?.step,
+      'extract');
+  assert.equal(pathReferenceAt('      attach: steps.report.transferId', 20)?.step, 'report');
+  assert.equal(pathReferenceAt('      file: steps.report.transferId', 20)?.step, 'report');
+  // A quoted path, and a Unicode source name.
+  assert.equal(pathReferenceAt('      data: "main.rows"', 16)?.root, 'main');
+  assert.equal(pathReferenceAt('      注文: 受注一覧.rows', 10)?.root, '受注一覧');
+});
+
+test('a dotted value that is not a path is not a reference', () => {
+  // A file, wherever it sits — the document link owns it.
+  assert.equal(pathReferenceAt('      file: orders.sql', 16), undefined);
+  assert.equal(pathReferenceAt('    template: report.html', 18), undefined);
+  // Another detector's dotted reference: a message key, a policy, a view id, an id.
+  assert.equal(pathReferenceAt('  message: procurement.rules.linesRequired', 20), undefined);
+  assert.equal(pathReferenceAt('  policy: app.read', 12), undefined);
+  assert.equal(pathReferenceAt('    view: procurement.dashboard.view', 18), undefined);
+  assert.equal(pathReferenceAt('id: demo.dashboard', 6), undefined);
+  assert.equal(pathReferenceAt('  - id: demo.step', 12), undefined);
+  // An expression, a URL, a bare name, a comment.
+  assert.equal(pathReferenceAt('      - when: main.rowCount == 0', 18), undefined);
+  assert.equal(pathReferenceAt('      url: https://api.partner.example/v1', 20), undefined);
+  assert.equal(pathReferenceAt('      data: main', 14), undefined);
+  assert.equal(pathReferenceAt('      # totals: main.rows', 20), undefined);
+  // A dotted KEY is not a value.
+  assert.equal(pathReferenceAt('    app.read:', 6), undefined);
+});
+
+const COMMAND_ROUTE = [
+  'version: tesseraql/v1',
+  'id: demo.create',
+  'kind: route',
+  'recipe: command-json',
+  'steps:',
+  '  - id: header',
+  '    sql:',
+  '      file: create.sql',
+  '      keys: [id]',
+  '  - { id: lines, sql: { file: create-lines.sql } }',
+  '  # a comment between items',
+  '',
+  '  - id: create',
+  '    sql:',
+  '      file: audit.sql',
+  'response:',
+  '  json:',
+  '    body:',
+  '      id: steps.header.keys.id',
+];
+
+test('steps.<id> resolves to the step item of the document\'s own steps: or pipeline: sequence', () => {
+  assert.equal(stepLineOf(COMMAND_ROUTE, 'header'), 5);
+  // A flow-form item, and an item after a comment and a blank line.
+  assert.equal(stepLineOf(COMMAND_ROUTE, 'lines'), 9);
+  assert.equal(stepLineOf(COMMAND_ROUTE, 'create'), 12);
+  assert.equal(stepLineOf(COMMAND_ROUTE, 'ghost'), undefined);
+  // The discriminator: the document's own top-level id: never resolves, even when a step
+  // shares its last segment — `id: demo.create` is not `- id: create`.
+  assert.equal(stepLineOf(COMMAND_ROUTE, 'demo.create'), undefined);
+  // A job's pipeline: spells the same sequence.
+  const job = ['id: nightly', 'kind: job', 'pipeline:', '  - id: extract', '    sql:',
+    '      mode: query-spool', '  - id: load', '    chunk:',
+    '      reader: { spool: steps.extract.spool }'];
+  assert.equal(stepLineOf(job, 'extract'), 3);
+  assert.equal(stepLineOf(job, 'load'), 6);
+  // An id: item of another sequence (a view's fields:) is not a step.
+  const view = ['kind: view', 'fields:', '  - id: sku', 'steps:', '  - id: main'];
+  assert.equal(stepLineOf(view, 'sku'), undefined);
+  assert.equal(stepLineOf(view, 'main'), 4);
+});
+
+test('the steps declared above a line are the ones a reference there may name', () => {
+  assert.deepEqual(stepsDeclaredAbove(COMMAND_ROUTE, COMMAND_ROUTE.length),
+      ['header', 'lines', 'create']);
+  // In a pipeline, a step sees only the earlier ones.
+  assert.deepEqual(stepsDeclaredAbove(COMMAND_ROUTE, 12), ['header', 'lines']);
+  assert.deepEqual(stepsDeclaredAbove(COMMAND_ROUTE, 4), []);
+});
+
+test('a path completes: steps.<id> anywhere a scalar is typed, a root under the path blocks', () => {
+  // After `steps.` the declared step ids, at any scalar position.
+  assert.deepEqual(pathCompletionAt('      created: steps.', 21, []), { kind: 'step' });
+  assert.deepEqual(pathCompletionAt('      file: steps.rep', 21, []), { kind: 'step' });
+  assert.deepEqual(pathCompletionAt('      reader: { spool: steps.', 29, []), { kind: 'step' });
+  // A root under model:/body:/payload:/params: — block form and the flow map on the key's line.
+  assert.deepEqual(pathCompletionAt('      users: ma', 15, ['response:', '  html:', '    model:']),
+      { kind: 'root' });
+  assert.deepEqual(pathCompletionAt('      users: ', 13, ['    model:']), { kind: 'root' });
+  assert.deepEqual(pathCompletionAt('    body: { data: ma', 20, []), { kind: 'root' });
+  assert.deepEqual(pathCompletionAt('        requisitionId: st', 25, ['      params:']),
+      { kind: 'root' });
+  // Elsewhere a bare word is not asking for a root: a recipe, an id, a panel column, a title.
+  assert.equal(pathCompletionAt('recipe: qu', 10, []), undefined);
+  assert.equal(pathCompletionAt('  - id: ma', 10, ['steps:']), undefined);
+  assert.equal(pathCompletionAt('      column: to', 16, ['panels:']), undefined);
+  assert.equal(pathCompletionAt('      title: ma', 15, ['    model:']), undefined);
+  // Past the root, only steps. completes — a source's segments are the SQL's columns.
+  assert.equal(pathCompletionAt('      users: main.ro', 20, ['    model:']), undefined);
 });

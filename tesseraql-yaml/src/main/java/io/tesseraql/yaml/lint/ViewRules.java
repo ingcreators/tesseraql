@@ -22,8 +22,6 @@ final class ViewRules implements LintRule {
 
     private static final String INVALID_VIEW_BINDING = "TQL-VIEW-3302";
 
-    private static final String VIEW_SOURCE_NOT_A_ROUTE_SOURCE = "TQL-VIEW-3308";
-
     private static final String VIEW_INPUT_NOT_DECLARED = "TQL-VIEW-3309";
 
     private static final String SORTABLE_WITHOUT_SORT_INPUTS = "TQL-VIEW-3310";
@@ -76,9 +74,11 @@ final class ViewRules implements LintRule {
      * ({@code TQL-VIEW-3304}) with known widgets ({@code TQL-VIEW-3305}), slot names and
      * references ({@code TQL-VIEW-3306}/{@code 3302}), and {@code refreshOn:} wiring. Per
      * referencing route: the id resolves in the registry and is not combined with
-     * {@code template:} ({@code TQL-VIEW-3302}), and source/search/sort wiring
-     * ({@code TQL-VIEW-3308/3309/3310}). An app's {@code templates/tql/view/*.html} pattern
-     * override carries the expected fragment signature ({@code TQL-VIEW-3307}, warning).
+     * {@code template:} ({@code TQL-VIEW-3302}), every source the bound documents read — the
+     * {@code view:} document, each {@code views:} part, and what they embed — is one the route
+     * declares ({@code TQL-VIEW-3308}), and search/sort wiring ({@code TQL-VIEW-3309/3310}). An
+     * app's {@code templates/tql/view/*.html} pattern override carries the expected fragment
+     * signature ({@code TQL-VIEW-3307}, warning).
      */
     void lintViews(Path appHome, AppManifest manifest, List<LintFinding> findings) {
         lintViewDocuments(appHome, manifest, findings);
@@ -104,10 +104,16 @@ final class ViewRules implements LintRule {
                                 + " view: route embeds through its own document instead"));
             }
             for (String bound : html.views()) {
-                if (manifest.viewById(bound) == null) {
+                io.tesseraql.yaml.manifest.ViewFile part = manifest.viewById(bound);
+                if (part == null) {
                     findings.add(new LintFinding(INVALID_VIEW_BINDING, ERROR, routeSource,
                             "views: " + bound + " does not resolve to a view document id"));
+                    continue;
                 }
+                // A composed part reads the template route's sources exactly as a view: does
+                // (RouteCompiler binds it with the same route) — the same judgement, then.
+                lintViewSources(manifest, route.definition(), part.spec(), routeSource,
+                        findings);
             }
             if (html.view() == null) {
                 continue;
@@ -126,25 +132,7 @@ final class ViewRules implements LintRule {
                 continue;
             }
             io.tesseraql.yaml.view.ViewSpec spec = viewFile.spec();
-            for (io.tesseraql.yaml.view.ViewSpec.Child child : spec.children()) {
-                if (!declaresViewSource(route.definition(), child.source())) {
-                    findings.add(new LintFinding(VIEW_SOURCE_NOT_A_ROUTE_SOURCE, ERROR, source,
-                            "view " + spec.id() + ": children source " + child.source()
-                                    + " is not a source of the route"
-                                    + " (a sources: entry, or main)"));
-                }
-            }
-            for (io.tesseraql.yaml.view.ViewSpec.Panel panel : spec.panels()) {
-                String panelSource = panel.source() == null || panel.source().isBlank()
-                        ? RouteDefinition.MAIN
-                        : panel.source();
-                if (!declaresViewSource(route.definition(), panelSource)) {
-                    findings.add(new LintFinding(VIEW_SOURCE_NOT_A_ROUTE_SOURCE, ERROR, source,
-                            "view " + spec.id() + ": panel source " + panelSource
-                                    + " is not a source of the route"
-                                    + " (a sources: entry, or main)"));
-                }
-            }
+            lintViewSources(manifest, route.definition(), spec, source, findings);
             if (io.tesseraql.yaml.view.ViewSpec.LIST.equals(spec.view())) {
                 var inputs = route.definition().input();
                 var pagination = route.definition().pagination();
@@ -356,16 +344,23 @@ final class ViewRules implements LintRule {
     }
 
     /**
-     * A child/panel {@code source:} must name one of the route's {@code sources:}, or
-     * {@code main} (TQL-VIEW-3308) — whatever arm a source declares, it publishes the
-     * {@code {rows}} shape the view model reads.
+     * Every {@code source:} a bound document reads — its own, a child's, a panel's, and those
+     * of the documents it embeds — must be {@code main} or one of the route's {@code sources:}
+     * (TQL-VIEW-3308). The judgement is {@link io.tesseraql.yaml.view.ViewSources}', the one
+     * the compiler binds with, so the lint cannot pass a view the boot refuses; an embedded id
+     * that does not resolve is the per-document pass's finding, not a source here.
      */
-    private static boolean declaresViewSource(RouteDefinition definition, String source) {
-        if (RouteDefinition.MAIN.equals(source)) {
-            return true;
+    private static void lintViewSources(AppManifest manifest, RouteDefinition definition,
+            io.tesseraql.yaml.view.ViewSpec spec, String source, List<LintFinding> findings) {
+        for (io.tesseraql.yaml.view.ViewSources.Undeclared undeclared : io.tesseraql.yaml.view.ViewSources
+                .undeclared(spec, definition, id -> {
+                    io.tesseraql.yaml.manifest.ViewFile embedded = manifest.viewById(id);
+                    return embedded == null ? null : embedded.spec();
+                })) {
+            findings.add(new LintFinding(
+                    io.tesseraql.yaml.view.ViewSources.UNDECLARED.toString(), ERROR, source,
+                    undeclared.message()));
         }
-        var sources = definition.sources();
-        return sources != null && sources.containsKey(source);
     }
 
     /** A form view's action route exists, declares inputs, and covers every fields: entry. */

@@ -61,7 +61,7 @@ id: items.list
 kind: view
 recipe: list
 title: view.items.title
-source: sql                   # model key carrying rows (default: sql)
+source: main                  # model key carrying rows (default: main)
 columns:                      # optional — omit to render the query's own columns
   - name: name
     link: /items/{id}
@@ -364,8 +364,10 @@ one-shot import (no `review:`) is refused at build time: there is no report for 
 
 `recipe: detail` renders a labelled value list over one row, and composes its route's
 named queries as child lists: a `children:` entry names a source that must be one of
-the route's `sources:` (`TQL-VIEW-3308`). A detail offers the same `header`/`footer`
-slots as a list.
+the route's `sources:` (`TQL-VIEW-3308`) — as must the document's own `source:`, and every
+source of a view the document embeds. Lint and build make that one judgement, over the
+`view:` document, each `views:` part, and what they embed. A detail offers the same
+`header`/`footer` slots as a list.
 
 ### Workflow transitions: `workflow:`
 
@@ -404,7 +406,7 @@ the one entry type the two composition vocabularies were missing:
 ```yaml
 # dashboard — a panel that is a view
 panels:
-  - { type: stat, source: sql, column: total }
+  - { type: stat, source: main, column: total }
   - { type: view, view: requests.recent }        # embedded list view
 
 # detail — children reference views; inline columns stay as the shorthand
@@ -462,7 +464,7 @@ kind: view
 recipe: dashboard
 title: Inventory dashboard
 panels:
-  - { type: stat, source: sql, column: products, label: Products }
+  - { type: stat, source: main, column: products, label: Products }
   - type: chart
     chart: bar-grouped
     source: byCategory          # one of the route's named queries
@@ -489,7 +491,7 @@ shorthand — across the source's rows:
 The chart scripts — the self-hosted Observable Plot bundle and the framework's
 `charts.js` bootstrap — load only on pages where a chart panel renders; the CSP stays
 `default-src 'self'`. Chart vocabulary violations are `TQL-VIEW-3313`. Panel sources
-validate like children: a panel's `source:` must be `sql` or one of the route's named
+validate like children: a panel's `source:` must be `main` or one of the route's named
 `sources:` entries, whatever arm each names ([`http:` included](connectors.md#http-sources-on-query-routes))
 (`TQL-VIEW-3308`). Dashboards eject like any other view, with the pinning
 preconditions the ladder describes (L3): chart panels need explicit `x:` and
@@ -667,7 +669,7 @@ Lint family **`TQL-VIEW-33xx`**:
 | 3305 | unknown widget name |
 | 3306 | unknown slot name for the view kind |
 | 3307 | an L2 override file lacks the expected `th:fragment` signature |
-| 3308 | a `children:` or `panels:` entry names a source the route's `sources:` do not declare |
+| 3308 | the document's own `source:`, a `children:` or `panels:` entry, or a source of an embedded view names one the route's `sources:` do not declare (lint and build, for the `view:` document and every `views:` part alike) |
 | 3309 | `search:` names an input the route does not declare |
 | 3310 | sortable columns without the route declaring the `sort`/`dir` inputs its SQL applies |
 | 3313 | chart-panel vocabulary: unknown `chart:`, `y:` and `series:` together (or neither), `mark:` outside `chart: combo`, a malformed `xType:`/`height:`, or chart keys on a non-chart panel |

@@ -56,10 +56,12 @@ single referent:
    (block or flow-map spelling). The view is bound by the route's `response.html.view`, or
    listed in a template route's `response.html.views`. This is the reference the lint judges.
 2. **The route's own `enrich:`** — `source:` is a context path; a bare identifier names one of
-   the route's sources, `steps.<id>` names a command step.
+   the route's sources. (`steps.<id>` is the *job* spelling — a pipeline step's `enrich:`
+   composes an earlier step — and a route's `enrich:` cannot carry it: `TQL-YAML-1046`.)
 3. **Bindable paths** — `response.html.model` (`users: main.rows`), `response.json.body`,
    `notifications[].payload`: a path whose *first segment* may be a source name. A path, not a
-   reference; out of scope here and filed.
+   reference; filed here, resolved by docs/audit-low-leads.md slice 21 (a value-shape
+   detector, `pathReferenceAt`).
 4. **Templates** — `${ordersByState.rows}` in Thymeleaf HTML and the export templates. Not YAML;
    filed with the "embedded-SQL analysis" line that stays under "Not currently supported".
 
@@ -89,8 +91,10 @@ Each was recommended, and the user decided every one as recommended (2026-09-15)
    through `enrich:` before reaching column 0, and whose value is a bare identifier (no `.`).
    *Not a reference, by construction:* a `source:` under `params:` (row 2's two shipped lines),
    `lookup.source` (a URL, and the value carries `/`), `decisions` `source:` (a block, not a
-   scalar), `steps.<id>` (a step, not a source — filed), and any `source:` in a document that is
-   neither a view nor a route (a job's pipeline `enrich:` reads steps, not sources).
+   scalar), `steps.<id>` (a step, not a source — filed; since slice 21 of
+   docs/audit-low-leads.md a bindable path, resolved to the step's `- id:` line), and any
+   `source:` in a document that is neither a view nor a route (a job's pipeline `enrich:`
+   reads steps, not sources).
 3. **The definition target is the `sources.<name>:` key line of the binding route document.**
    Not the SQL file: "from a value to the line that declares it" is the rule every other kind
    follows, and the `file:` on the next line is already a document link (one more click). A
@@ -103,7 +107,9 @@ Each was recommended, and the user decided every one as recommended (2026-09-15)
    from the contract (decision 1); the current document's id comes from `viewIdInfoOf`, which
    the view intelligence already computes. An embedded view (a panel's or child's `view:`) is
    read against the *embedding* route's sources at runtime, and is not resolved here: it needs
-   the embedding view's panels parsed, which nothing in the extension does. Filed.
+   the embedding view's panels parsed, which nothing in the extension does. Filed. *Resolved
+   by docs/audit-low-leads.md slice 21 on the contract side: each route carries `embeds`, the
+   views its bound documents embed, and `routesBinding` counts a host as a binding route.*
 5. **Completion at every position of decision 2** offers the union of the binding routes'
    declared source names (in a route document, the route's own), one item per name, its detail
    `<arm> · <file> · <route source>` (`sql · orders-by-state.sql · web/dashboard/get.yml`),
@@ -165,14 +171,26 @@ at all). No route, view or lint behaviour changes.
 - **Bindable paths** (`response.html.model`, `response.json.body`, `payload:`): a path whose
   first segment is a source name or `steps.<id>`. A path resolver is a different detector (the
   first segment, then `rows`/`first`/`rowCount`/a column) and would also serve `steps.<id>`.
+  *Fixed in docs/audit-low-leads.md slice 21: `pathReferenceAt` detects by the value's shape
+  (one dotted path as the whole scalar, or a `{…}` placeholder), whatever the key — `params:`
+  and `location:` carry the same class.*
 - **`steps.<id>` in `enrich: source:`, `spool:`, `attach:`, `file:`** — a step reference, the
   same shape as a source reference, declared in the same document (`steps[].id`). The contract
-  does not carry step ids.
+  does not carry step ids. *Fixed in slice 21 without a contract change: the referent is in the
+  same document, so the extension scans the `steps:`/`pipeline:` sequence for the `- id:` item.
+  The `enrich: source:` position exists only on a job's pipeline step — a route's `enrich:`
+  cannot name a step (`TQL-YAML-1046`), which this record's mechanism list used to describe.*
 - **Embedded views**: a panel's or child's `view:` reads the embedding route's sources; the
   extension would need to invert the embedding, which means parsing panels and children.
+  *Fixed in slice 21 on the contract side (`routes[].embeds`) — the manifest knows the hosts;
+  an extension-side scan would take a route's own `view:` binding for an embedding.*
 - **The contract still does not carry views** (`views.ts` scans); this record adds the *binding*
-  to routes, not the registry. A `views` array in the contract would retire the scan.
+  to routes, not the registry. A `views` array in the contract would retire the scan. *Measured
+  in docs/audit-low-leads.md (EN-04): not worth doing — the scan survives a duplicate view id
+  (TQL-VIEW-3315 empties the contract's manifest arrays), so it must stay whatever is added.*
 - **A flow-form `sources: { main: … }` yields no line** (`dottedKeyLines` reads block keys); the
   editor lands on line 1 of the route document. Every other kind has the same fallback.
+  *Measured (EN-05): a multi-line flow map resolves by indentation; only a name that does not
+  start its own line misses. Not worth doing.*
 - **Templates** (`${name.rows}` in HTML, jxls and PDF templates) stay with embedded-SQL analysis
   under "Not currently supported".

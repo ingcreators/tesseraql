@@ -226,8 +226,13 @@ final class SymbolsCommand implements Callable<Integer> {
      * The mounted routes, each with the named sources it declares (docs/unified-sources.md) in
      * authored order and the view documents it binds — so a view's {@code source:} can be
      * navigated to the {@code sources.<name>:} line of the route that binds the view
-     * (docs/editor-named-sources.md). A source's line comes from the same indentation walk that
-     * positions message keys; a flow-form {@code sources: { … }} yields none.
+     * (docs/editor-named-sources.md). The bound documents' embedded views ({@code type: view}
+     * panels, {@code view:} children — docs/view-composition.md) ride along as {@code embeds}:
+     * an embedded view reads the <em>host</em> route's sources, and the manifest is what knows
+     * which routes host it — an editor that guessed from a {@code view:} scalar would take a
+     * route's own binding for an embedding. A source's line comes from the same indentation
+     * walk that positions message keys; a name that does not start its own line (a one-line
+     * flow map, a single-quoted key) yields none.
      */
     private static void routes(ArrayNode into, AppManifest manifest, Path home)
             throws IOException {
@@ -259,12 +264,49 @@ final class SymbolsCommand implements Callable<Integer> {
                     : definition.response().html();
             entry.put("view", html == null ? null : html.view());
             ArrayNode views = entry.putArray("views");
+            ArrayNode embeds = entry.putArray("embeds");
             if (html != null) {
                 for (String bound : html.views()) {
                     views.add(bound);
                 }
+                for (String embedded : embeddedViews(manifest, html)) {
+                    embeds.add(embedded);
+                }
             }
         }
+    }
+
+    /**
+     * The ids the route's bound documents embed — the {@code view:} document's and each
+     * {@code views:} part's {@code type: view} panels and {@code view:} children — in authored
+     * order, once each. A bound id the registry does not hold is the lint's finding and embeds
+     * nothing here.
+     */
+    private static List<String> embeddedViews(AppManifest manifest,
+            io.tesseraql.yaml.model.ResponseSpec.HtmlResponse html) {
+        List<String> bound = new ArrayList<>();
+        if (html.view() != null) {
+            bound.add(html.view());
+        }
+        bound.addAll(html.views());
+        java.util.LinkedHashSet<String> embedded = new java.util.LinkedHashSet<>();
+        for (String id : bound) {
+            io.tesseraql.yaml.manifest.ViewFile view = manifest.viewById(id);
+            if (view == null) {
+                continue;
+            }
+            for (io.tesseraql.yaml.view.ViewSpec.Child child : view.spec().children()) {
+                if (child.view() != null) {
+                    embedded.add(child.view());
+                }
+            }
+            for (io.tesseraql.yaml.view.ViewSpec.Panel panel : view.spec().panels()) {
+                if (panel.view() != null) {
+                    embedded.add(panel.view());
+                }
+            }
+        }
+        return List.copyOf(embedded);
     }
 
     /** The one mechanism a source declares, by the arm it carries. */

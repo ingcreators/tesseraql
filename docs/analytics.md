@@ -105,7 +105,7 @@ version: tesseraql/v1
 kind: view
 recipe: dashboard
 panels:
-  - { type: stat, source: sql, column: products, label: Products }
+  - { type: stat, source: main, column: products, label: Products }
   - type: chart
     chart: bar-grouped
     source: byCategory           # main: live stock vs reorder floor

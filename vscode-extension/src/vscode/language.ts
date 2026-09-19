@@ -8,10 +8,14 @@ import {
   RouteSymbol,
   completionKindAt,
   parseAppSymbols,
+  pathCompletionAt,
+  pathReferenceAt,
   routesBinding,
   sourceCompletionAt,
   sourceDetail,
   sourceReferenceAt,
+  stepLineOf,
+  stepsDeclaredAbove,
   symbolReferenceAt,
 } from '../core/symbols';
 import { viewIdInfoOf } from '../core/views';
@@ -22,7 +26,9 @@ import { viewIdInfoOf } from '../core/views';
  * `tesseraql symbols` contract — the editor knows exactly what the framework
  * declares, nothing more. A named source (docs/editor-named-sources.md) is the one
  * kind declared in a route and referenced from a document that does not name it: a
- * view's `source:` resolves through the routes that bind the view.
+ * view's `source:` resolves through the routes that bind the view. A bindable path
+ * (`users: main.rows`, `created: steps.main.affectedRows`) resolves by its root: a
+ * source of the document's own route, or a step the document declares.
  */
 function poolFor(symbols: AppSymbols,
     kind: 'policy' | 'message' | 'maybe-message' | 'domain' | 'shared' | 'decision'
@@ -211,7 +217,7 @@ export class SymbolDefinitionProvider implements vscode.DefinitionProvider {
     const reference = sourceReferenceAt(document.uri.fsPath, lineText, position.character,
         linesAbove(document, position.line));
     if (reference === undefined) {
-      return undefined;
+      return this.pathDefinition(home, symbols, document, position, lineText);
     }
     const locations: vscode.Location[] = [];
     for (const route of sourceScope(home, symbols, document)) {
@@ -224,6 +230,42 @@ export class SymbolDefinitionProvider implements vscode.DefinitionProvider {
     }
     return locations.length === 0 ? undefined : locations;
   }
+
+  /**
+   * A bindable path → what its root names: `steps.<id>…` → the `- id: <id>` line of the
+   * document's own `steps:`/`pipeline:` sequence (docs/audit-low-leads.md slice 21); any
+   * other root → the `sources.<root>:` line of the document's route. A root that is neither
+   * resolves nothing — `params`, `path`, `batch` and the other ambient roots are the
+   * framework's, declared nowhere in the app.
+   */
+  private pathDefinition(home: string, symbols: AppSymbols, document: vscode.TextDocument,
+      position: vscode.Position, lineText: string): vscode.Location[] | undefined {
+    const reference = pathReferenceAt(lineText, position.character);
+    if (reference === undefined) {
+      return undefined;
+    }
+    if (reference.step !== null) {
+      const line = stepLineOf(allLines(document), reference.step);
+      return line === undefined
+          ? undefined
+          : [new vscode.Location(document.uri, new vscode.Position(line, 0))];
+    }
+    const locations: vscode.Location[] = [];
+    for (const route of sourceScope(home, symbols, document)) {
+      const source = route.sources.find((candidate) => candidate.name === reference.root);
+      if (source !== undefined) {
+        locations.push(new vscode.Location(
+            vscode.Uri.file(path.join(home, ...route.source.split('/'))),
+            new vscode.Position((source.line ?? 1) - 1, 0)));
+      }
+    }
+    return locations.length === 0 ? undefined : locations;
+  }
+}
+
+/** Every line of the document — the step scan reads the whole sequence. */
+function allLines(document: vscode.TextDocument): string[] {
+  return linesAbove(document, document.lineCount);
 }
 
 export class SymbolCompletionProvider implements vscode.CompletionItemProvider {
@@ -264,7 +306,7 @@ export class SymbolCompletionProvider implements vscode.CompletionItemProvider {
       position: vscode.Position, lineText: string): vscode.CompletionItem[] | undefined {
     if (!sourceCompletionAt(document.uri.fsPath, lineText, position.character,
         linesAbove(document, position.line))) {
-      return undefined;
+      return this.pathCompletions(home, symbols, document, position, lineText);
     }
     const items = new Map<string, vscode.CompletionItem>();
     for (const route of sourceScope(home, symbols, document)) {
@@ -278,5 +320,44 @@ export class SymbolCompletionProvider implements vscode.CompletionItemProvider {
       }
     }
     return [...items.values()];
+  }
+
+  /**
+   * A bindable path being typed: after `steps.`, the steps declared above the cursor (in a
+   * job's pipeline the earlier ones, which is all a reference may name); at a root under
+   * `model:`/`body:`/`payload:`/`params:`, the route's declared sources and — when the
+   * document declares steps — `steps`.
+   */
+  private pathCompletions(home: string, symbols: AppSymbols, document: vscode.TextDocument,
+      position: vscode.Position, lineText: string): vscode.CompletionItem[] | undefined {
+    const above = linesAbove(document, position.line);
+    const context = pathCompletionAt(lineText, position.character, above);
+    if (context === undefined) {
+      return undefined;
+    }
+    if (context.kind === 'step') {
+      return stepsDeclaredAbove(above, above.length).map((id) => {
+        const item = new vscode.CompletionItem(id, vscode.CompletionItemKind.Reference);
+        item.detail = 'step';
+        return item;
+      });
+    }
+    const items = new Map<string, vscode.CompletionItem>();
+    for (const route of sourceScope(home, symbols, document)) {
+      for (const source of route.sources) {
+        if (items.has(source.name)) {
+          continue;
+        }
+        const item = new vscode.CompletionItem(source.name, vscode.CompletionItemKind.Value);
+        item.detail = sourceDetail(source, route);
+        items.set(source.name, item);
+      }
+    }
+    if (stepsDeclaredAbove(allLines(document), document.lineCount).length > 0) {
+      const item = new vscode.CompletionItem('steps', vscode.CompletionItemKind.Module);
+      item.detail = 'the step results, steps.<id>';
+      items.set('steps', item);
+    }
+    return items.size === 0 ? undefined : [...items.values()];
   }
 }

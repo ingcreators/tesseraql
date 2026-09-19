@@ -246,10 +246,11 @@ is fixed — `export:`, `import:`, `outbox:`, `errors:` — as well as the docum
 
 ### `TQL-VIEW-3304` / `3308` / `3309` — a view names something the route does not declare
 
-A view's `fields:`, `children:`, and `search:` are checked against the route it belongs to.
-Usually the input exists under a different name: the column name is the name everywhere, so
-check the DDL rather than guessing a camel-case variant
-([identifiers.md](identifiers.md)).
+A view's `fields:`, `source:`, `children:`, `panels:` and `search:` are checked against
+the route it belongs to — for an embedded view, the route hosting it. Usually the input
+exists under a different name: the column name is the name everywhere, so check the DDL
+rather than guessing a camel-case variant ([identifiers.md](identifiers.md)). A source name
+must be `main` or a `sources:` key of that route; `sql`, the pre-0.14 spelling, is neither.
 
 ### `TQL-SEC-4031` — 403 on a route that should be open
 

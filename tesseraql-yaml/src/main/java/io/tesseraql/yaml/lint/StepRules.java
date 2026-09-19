@@ -31,11 +31,7 @@ final class StepRules {
         if (step.sql() == null || step.sql().enrich().isEmpty()) {
             return;
         }
-        String mode = step.sql().effectiveMode();
-        boolean reads = step.sql().declaresHttp()
-                ? !"query-spool".equals(mode)
-                : step.sql().isSql() && "query".equals(mode);
-        if (!reads) {
+        if (!holdsRows(step)) {
             findings.add(new LintFinding(LintCodes.STEP_WORK_SHAPE, ERROR, source,
                     "Step '" + step.id()
                             + "' declares enrich: but holds no rows - only a step that reads (mode:"
@@ -44,6 +40,7 @@ final class StepRules {
             return;
         }
         step.sql().enrich().forEach((name, enrich) -> {
+            lintSiblingReference(job, step, name, enrich, source, findings);
             if (enrich.sql() == null || enrich.sql().file() == null
                     || enrich.sql().file().isBlank()) {
                 return;
@@ -57,6 +54,66 @@ final class StepRules {
                                 + enrich.sql().file()));
             }
         });
+    }
+
+    /**
+     * Whether a step publishes {@code rows} — a {@code sql:} read ({@code mode: query}) or an
+     * {@code http:} call that holds its rows rather than spooling them. The one answer for
+     * "may this step fold a reference in" and "may a reference name this step".
+     */
+    static boolean holdsRows(io.tesseraql.yaml.model.PipelineStep step) {
+        if (step.sql() == null) {
+            return false;
+        }
+        String mode = step.sql().effectiveMode();
+        return step.sql().declaresHttp()
+                ? !"query-spool".equals(mode)
+                : step.sql().isSql() && "query".equals(mode);
+    }
+
+    /**
+     * A step's {@code enrich:} entry that composes a sibling ({@code source:}) names it by its
+     * context path, {@code steps.<id>} (docs/jobs.md "Enriching a step's rows") — and the
+     * runtime resolves that path only against the steps already run, requiring a result with
+     * {@code rows}. So the reference must name an <em>earlier</em> step that holds rows
+     * ({@code TQL-YAML-1046}, the code a route's sibling reference gets from
+     * {@link EnrichRules}); a route-style bare name, a later step, a write or a spool would
+     * each fail at fire time with the runtime's no-sibling refusal, having passed lint in
+     * silence.
+     */
+    static void lintSiblingReference(io.tesseraql.yaml.manifest.JobFile job,
+            io.tesseraql.yaml.model.PipelineStep step, String name,
+            io.tesseraql.yaml.model.EnrichSpec enrich, String source, List<LintFinding> findings) {
+        if (!enrich.composesSource()) {
+            return;
+        }
+        String[] path = enrich.source().split("\\.");
+        if (path.length != 2 || !"steps".equals(path[0]) || path[1].isBlank()) {
+            findings.add(new LintFinding(EnrichRules.INVALID_ENRICH_REFERENCE, ERROR, source,
+                    "Step '" + step.id() + "': enrich '" + name + "': source: '"
+                            + enrich.source() + "' must name an earlier step's result"
+                            + " (steps.<id>) - a job's results sit under steps"));
+            return;
+        }
+        String referenced = path[1];
+        for (io.tesseraql.yaml.model.PipelineStep earlier : job.definition().pipeline()) {
+            if (earlier.id().equals(step.id())) {
+                break;
+            }
+            if (!earlier.id().equals(referenced)) {
+                continue;
+            }
+            if (!holdsRows(earlier)) {
+                findings.add(new LintFinding(EnrichRules.INVALID_ENRICH_REFERENCE, ERROR, source,
+                        "Step '" + step.id() + "': enrich '" + name + "': step '" + referenced
+                                + "' holds no rows - only a step that reads (mode: query, or an"
+                                + " http: call) publishes a result a reference can compose"));
+            }
+            return;
+        }
+        findings.add(new LintFinding(EnrichRules.INVALID_ENRICH_REFERENCE, ERROR, source,
+                "Step '" + step.id() + "': enrich '" + name + "': source: names '" + referenced
+                        + "', which is not an earlier step"));
     }
 
     /**
