@@ -246,8 +246,10 @@ uniform call shape for any key arity:
 ```
 
 A declarative view's `columns: [{ name: 取引区分, domain: 取引区分 }]` is sugar that expands to
-exactly that call, so ejection emits it verbatim. Export and mail templates read the same
-context. `codes` joins `v` and `views` as a reserved model name (`TQL-VIEW-3319`'s family), and
+exactly that call, so ejection emits it verbatim. An ejected template reads the same context;
+an export or a mail template does not — no codec and no notifier receives `codes`, and a name
+in a document comes through `enrich:` or a named query the export declares (13b). `codes`
+joins `v` and `views` as a reserved model name (`TQL-VIEW-3319`'s family), and
 it is exposed to templates as a plain map-like object — jxls's JEXL does not read record
 accessors, which the export campaign already learned the hard way.
 
@@ -334,7 +336,7 @@ request in the log.
 | Surface | Locale |
 | --- | --- |
 | HTTP route (HTML/JSON) | the request's resolved locale |
-| Export | the export's declared `locale:` on `csv` and `pdf` (a literal, or a request source the route binds — see [file-transfers.md](file-transfers.md)); a workbook reads none |
+| Export | none: no export surface renders a catalog name (as built, 2026-09-19). An export writes the code; a name in a document comes through `enrich:` (13b) or a named query. Its `locale:` is the formatting locale ([file-transfers.md](file-transfers.md)) |
 | Batch job | declared by the job; there is no request |
 | Mail | the recipient's language |
 
@@ -351,13 +353,14 @@ Studio message editor already serves, and adds no per-language table.
 
 **When each part of this decision lands.** The language dimension itself is a property of the
 catalog and ships with it. The per-surface locale rule travels with each surface, because a
-refusal cannot be written against a surface that cannot yet render a code. Export's arrived
-with slice 13a: an export's `codes` answer in the export's declared `locale:` rather than in the
-requesting browser's, since otherwise one document carries names in the reader's language and
-its numbers and dates in the export's — a mismatch nobody declared. And a `csv` or `pdf` export
-in an app whose catalogs carry per-language names must declare that locale (`TQL-FIELD-4622`),
-because an export has no request to negotiate one from; a workbook never reads one and is not
-asked. Mail follows with the mail slice. What ships with the language
+refusal cannot be written against a surface that cannot yet render a code. Export's never
+arrived, and the rule written for it is withdrawn (2026-09-19,
+[audit-low-leads.md](audit-low-leads.md) XD-04a/b/c): both export chains publish the declared
+source names only, so `codes` never reached an export template, and `TQL-FIELD-4622` refused a
+`csv`/`pdf` export of a multilingual app for a locale no name would ever answer in. The rule is
+deleted, and the dead `CatalogBinder(fixedLocale)` step on the two export routes with it — a
+name in a document is 13b's `enrich:` or a named query, and an export's `locale:` formats its
+numbers and dates. Mail follows with the mail slice. What ships with the language
 dimension is the rule for the surface that does have it (the request's resolved locale) and a
 build-time warning for the configuration that makes the whole dimension unreachable: a
 `language:` column in an app whose `tesseraql.i18n.locales` holds a single tag
@@ -450,6 +453,17 @@ for yet reads as never loaded, which is the state worth seeing — a status page
 the cache by being opened would hide exactly the case an operator is looking for. And a catalog
 serving a previous load while its refresh keeps failing carries both facts at once, because
 either alone reads as healthy.
+
+**A catalog that has never loaded (as built 2026-09-19,
+[audit-low-leads.md](audit-low-leads.md) unfiled 19).** The store resolves a catalog on the
+read that asks for it: `codes` is published to every route, but a route that reads no catalog
+loads none. So a table missing on one environment fails the screens that render its codes —
+`TQL-APP-4206`, answered 500 because the fault is the server's, not the caller's — and nothing
+else. The failure is held for the stamp interval, one failed query per interval rather than one
+per request, with a WARNING naming the catalog and its tables; the operations row carries the
+error against a never-loaded hold, and an invalidation, the ops refresh or the interval's end
+tries again. Before this, one never-loaded catalog answered 404 on every route of the app,
+re-ran the failing query per request and logged nothing at the default level.
 
 ### 15. One outbound call, one vocabulary
 
@@ -746,7 +760,7 @@ join, the same answer enrichment gives.
    names in the translation workflow the Studio message editor already serves and add no
    per-language table: the load says which codes exist, and one row becomes one entry per
    supported locale. Decision 12's per-surface locale rule ships with each surface as it gains
-   `codes` (slice 13 for export, and mail), because a refusal cannot be written against a
+   `codes` (mail; export never did — 13a), because a refusal cannot be written against a
    surface that cannot render a code.
 12a. **`invalidates:` on a command.** The declaration, the post-commit placement it shares with
    `emit:`, the store dropping every catalog that reads the named table, the two ways the
@@ -765,11 +779,12 @@ join, the same answer enrichment gives.
 
 **Wave 3 — the remaining surfaces**
 
-13a. **Export's locale.** The export's `codes` answer in the export's declared locale, and a
-   `csv` or `pdf` export that cannot name one in an app with per-language names is refused
-   (`TQL-FIELD-4622`) — decision 12's rule for the first surface that can render a code
-   without a request behind it. A workbook never reads `locale:`, so an `excel` export is not
-   asked ([file-transfers.md](file-transfers.md)).
+13a. **Export's locale.** Shipped in 0.14.0 as `TQL-FIELD-4622` on the premise that an export
+   renders a code; none does (the export chains publish declared source names only), so the
+   rule refused every `csv`/`pdf` export of a multilingual app for a locale nothing would
+   answer in. Deleted 2026-09-19 with the dead `CatalogBinder(fixedLocale)` step
+   ([audit-low-leads.md](audit-low-leads.md) XD-04a/b/c); decision 12's table says what an
+   export's `locale:` is ([file-transfers.md](file-transfers.md)).
 13b. **`enrich:` on an export.** The enrichment wraps the row *iterator*, which turned out to
    make the repeatable and streaming cases one case rather than two: a streaming codec reads
    through it and sees a sliding window, a buffering codec spools what comes out, and a
@@ -845,7 +860,7 @@ Proposed; exact numbers are reserved against `ErrorIndex` when each slice lands.
 | `TQL-SEC-4142` | error | a cached child query reads `/*%scope … */` or ambient `principal.*` without those in the cache key |
 | `TQL-SQL-2114` | runtime | an enrichment exceeded `maxKeys:` |
 | `TQL-ROUTE-3113` | runtime | `merge:` found more than one row for a key (**taken, slice 1**) |
-| `TQL-APP-4206` | runtime | a catalog refresh failed; the previous data is still serving |
+| `TQL-APP-4206` | runtime | a catalog could not be loaded and has never loaded: its readers answer 500 until it does (a failed refresh keeps the previous data and is reported, not raised) |
 
 ## Risks
 

@@ -9,11 +9,12 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 /**
- * An export answers in its own locale (docs/lookups.md, decision 12). A request negotiates one;
- * an export has none to negotiate — it is generated for a file, often on a schedule, and read by
- * someone who never made the request. So when the app's catalogs carry per-language names, an
- * export that declares no locale is refused at build rather than answering in whichever language
- * the server happened to start in.
+ * An export renders no catalog name (docs/lookups.md, decision 12 as built): both export
+ * chains publish the declared source names only, so a {@code csv} or {@code pdf} export in an
+ * app whose catalogs carry per-language names is not asked for a locale a name would answer
+ * in. The rule that asked ({@code TQL-FIELD-4622}, 0.14.0 to 0.17.0) drew an ERROR — a failed
+ * default lint gate — for a capability no export had; an export's {@code locale:} formats its
+ * numbers and dates, and the export-declaration rules judge it.
  */
 class AppLinterCatalogLocaleTest {
 
@@ -55,49 +56,48 @@ class AppLinterCatalogLocaleTest {
     }
 
     @Test
-    void anExportWithNoLocaleIsRefusedWhenNamesArePerLanguage(@TempDir Path dir)
+    void anExportWithNoLocaleLintsCleanWhenNamesArePerLanguage(@TempDir Path dir)
             throws Exception {
+        // The multilingual app with an un-localed csv export: the shape the retired rule
+        // refused. No error of any code — the gate is errors-only, so a finding of another
+        // severity here would not fail it, but none is expected either.
         List<LintFinding> findings = new AppLinter()
                 .lint(app(dir, "    language: 言語コード", "  columns:\n    - name: id"));
-        assertThat(findings).extracting(LintFinding::code).contains("TQL-FIELD-4622");
+        assertThat(findings).filteredOn(LintFinding::isError).isEmpty();
+        assertThat(findings).extracting(LintFinding::code).doesNotContain("TQL-FIELD-4622");
     }
 
     @Test
-    void declaringTheExportsLocaleSatisfiesIt(@TempDir Path dir) throws Exception {
+    void aDeclaredLocaleIsJudgedAsAFormattingDeclarationOnly(@TempDir Path dir)
+            throws Exception {
+        // locale: on untyped csv columns reaches nothing (docs/export-declarations.md): the
+        // export-declaration advisory says so, and no catalog rule has an opinion.
         List<LintFinding> findings = new AppLinter()
                 .lint(app(dir, "    language: 言語コード",
                         "  locale: en\n  columns:\n    - name: id"));
-        assertThat(findings).extracting(LintFinding::code).doesNotContain("TQL-FIELD-4622");
+        assertThat(findings).extracting(LintFinding::code).contains("TQL-YAML-1005")
+                .doesNotContain("TQL-FIELD-4622");
+        assertThat(findings).filteredOn(LintFinding::isError).isEmpty();
     }
 
     @Test
-    void aSingleLanguageAppIsNotAskedToDeclareOne(@TempDir Path dir) throws Exception {
-        // One answer whatever the locale: demanding a declaration here would be ceremony.
-        List<LintFinding> findings = new AppLinter()
-                .lint(app(dir, "    order: 表示順", "  columns:\n    - name: id"));
-        assertThat(findings).extracting(LintFinding::code).doesNotContain("TQL-FIELD-4622");
-    }
-
-    @Test
-    void aWorkbookExportIsNotAskedForALocaleItNeverReads(@TempDir Path dir) throws Exception {
-        // docs/export-declarations.md decision 6 refuses locale: on excel (TQL-YAML-1005), so
-        // demanding one here would leave an excel export in a multilingual app with no clean
-        // state; the case-folded spelling must not slip past the narrowing either.
+    void aWorkbookExportIsJudgedByTheExportDeclarationRulesAlone(@TempDir Path dir)
+            throws Exception {
+        // docs/export-declarations.md decision 6 refuses locale: on excel (TQL-YAML-1005); the
+        // case-folded spelling is a format the codec set does not name (TQL-YAML-1063).
         Path app = app(dir, "    language: 言語コード", "  columns:\n    - name: id");
         Path route = app.resolve("web/items/get.yml");
         Files.writeString(route, Files.readString(route).replace("format: csv", "format: excel"));
-        assertThat(new AppLinter().lint(app)).extracting(LintFinding::code)
-                .doesNotContain("TQL-FIELD-4622");
+        assertThat(new AppLinter().lint(app)).filteredOn(LintFinding::isError).isEmpty();
 
         Files.writeString(route, Files.readString(route).replace("format: excel", "format: Excel"));
         assertThat(new AppLinter().lint(app)).extracting(LintFinding::code)
-                .doesNotContain("TQL-FIELD-4622").contains("TQL-YAML-1063");
+                .contains("TQL-YAML-1063").doesNotContain("TQL-FIELD-4622");
 
-        // And with the locale the page used to demand: the one inert finding, no 4622 either.
         Files.writeString(route, Files.readString(route).replace("format: Excel",
                 "format: excel\n  locale: en"));
         List<LintFinding> declared = new AppLinter().lint(app);
-        assertThat(declared).extracting(LintFinding::code).doesNotContain("TQL-FIELD-4622",
-                "TQL-YAML-1063").contains("TQL-YAML-1005");
+        assertThat(declared).extracting(LintFinding::code).contains("TQL-YAML-1005")
+                .doesNotContain("TQL-FIELD-4622", "TQL-YAML-1063");
     }
 }

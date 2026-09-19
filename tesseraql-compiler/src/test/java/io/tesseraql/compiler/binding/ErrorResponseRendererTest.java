@@ -24,6 +24,18 @@ class ErrorResponseRendererTest {
     }
 
     @Test
+    void aCatalogThatNeverLoadedIsTheServersFault() {
+        // A table missing on this environment or a datasource down at first touch is nothing
+        // the caller can correct: 500, not the APP domain's default 404, which read as "no
+        // such route" on every screen that rendered a code (docs/audit-low-leads.md unfiled
+        // 19). The domain's other refusals keep their default.
+        assertThat(ErrorResponseRenderer.httpStatus(new TqlErrorCode(TqlDomain.APP, 4206)))
+                .isEqualTo(500);
+        assertThat(ErrorResponseRenderer.httpStatus(new TqlErrorCode(TqlDomain.APP, 4207)))
+                .isEqualTo(404);
+    }
+
+    @Test
     void rendersClientSafeDetailsInTheErrorBody() throws Exception {
         Exchange exchange = exchangeWith(TqlException
                 .builder(new TqlErrorCode(TqlDomain.SQL, 4090))

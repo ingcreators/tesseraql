@@ -209,6 +209,22 @@ class ExportDeclarationCompileTest {
     }
 
     @Test
+    void anExportPipelineCarriesNoCatalogStep(@TempDir Path dir) throws Exception {
+        // Nothing downstream of an export reads `codes` — both chains hand the codec the
+        // declared source names only — so the binder that published them (with the export's
+        // own locale, 0.14.0 to 0.17.0) was a step whose output nothing read. Both recipes,
+        // with and without a declared locale (docs/lookups.md decision 12 as built).
+        for (String recipe : List.of("query-export", "file-export")) {
+            for (String export : List.of("export:\n  format: csv\n",
+                    "export:\n  format: csv\n  locale: en\n")) {
+                List<String> steps = compile(dir, recipe, export, "").get("items.dump");
+                assertThat(steps).as(recipe + " with " + export.strip())
+                        .doesNotContain("CatalogBinder").contains("RequestBinder");
+            }
+        }
+    }
+
+    @Test
     void anInertKeyWarnsAtBootAndTheRouteStillCompiles(@TempDir Path dir) throws Exception {
         // Decision 2: the linter refuses bom: on a workbook; the runtime serves without it, so
         // boot says so on one line naming the route and the key, and continues. file-export

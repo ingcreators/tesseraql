@@ -44,7 +44,11 @@ public final class Templates {
     public static String render(Path templateRoot, String templateName, Map<String, Object> model,
             java.util.Locale locale) {
         Path root = templateRoot.toAbsolutePath().normalize();
-        return engineFor(root).process(templateName, context(root, locale, model));
+        try {
+            return engineFor(root).process(templateName, context(root, locale, model));
+        } catch (RuntimeException ex) {
+            throw coded(ex);
+        }
     }
 
     /**
@@ -57,10 +61,34 @@ public final class Templates {
     public static String render(Path templateRoot, String templateName, Map<String, Object> model,
             java.util.Locale locale, String selector) {
         Path root = templateRoot.toAbsolutePath().normalize();
-        return engineFor(root).process(
-                new org.thymeleaf.TemplateSpec(templateName, java.util.Set.of(selector),
-                        (TemplateMode) null, null),
-                context(root, locale, model));
+        try {
+            return engineFor(root).process(
+                    new org.thymeleaf.TemplateSpec(templateName, java.util.Set.of(selector),
+                            (TemplateMode) null, null),
+                    context(root, locale, model));
+        } catch (RuntimeException ex) {
+            throw coded(ex);
+        }
+    }
+
+    /**
+     * A coded refusal raised while the template resolved a value keeps its code.
+     *
+     * <p>The engine wraps whatever a model object throws in its own processing exception, so
+     * a refusal a request would otherwise answer with its number — a code catalog that has
+     * never loaded, resolved on the read that asks for it (docs/lookups.md, decision 14 as
+     * built) — would answer an uncoded 500 from a hand-written template and a coded one from
+     * a declarative view. The engine's own failures (a template that is not there, a
+     * malformed expression) carry no code and pass through as they are.
+     */
+    private static RuntimeException coded(RuntimeException ex) {
+        for (Throwable cause = ex.getCause(); cause != null
+                && cause != ex; cause = cause.getCause()) {
+            if (cause instanceof io.tesseraql.core.error.TqlException refusal) {
+                return refusal;
+            }
+        }
+        return ex;
     }
 
     /** The render's context: the model, the locale, and the app catalog read once for it. */

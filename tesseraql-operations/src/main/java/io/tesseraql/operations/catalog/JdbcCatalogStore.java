@@ -36,16 +36,27 @@ import javax.sql.DataSource;
  * <li><b>A miss is not an answer.</b> {@link #reload} exists for the validation path, which
  * must re-read the source before rejecting a code that may simply be newer than the hold.</li>
  * </ol>
+ *
+ * <p>And one about the load that never succeeded (decision 14 as built,
+ * docs/audit-low-leads.md unfiled 19): a catalog is loaded on the read that asks for it, so a
+ * route that reads none loads none, and a table missing on one environment fails the screens
+ * that render its codes rather than every request of the app. The failure is held for the
+ * stamp interval — one failed query per interval, not one per request — and reported on the
+ * operations row against a never-loaded hold.
  */
 public final class JdbcCatalogStore implements CatalogStore {
 
-    /** TQL-APP-4206: a catalog refresh failed; the previous load is still serving. */
-    private static final TqlErrorCode REFRESH_FAILED = new TqlErrorCode(TqlDomain.APP, 4206);
+    /**
+     * TQL-APP-4206: a catalog could not be loaded and has never loaded; the screens that read
+     * it answer 500 until it does.
+     */
+    static final TqlErrorCode NEVER_LOADED = new TqlErrorCode(TqlDomain.APP, 4206);
 
     private static final System.Logger LOG = System.getLogger(JdbcCatalogStore.class.getName());
 
     /**
-     * One held catalog, when it was loaded, and the per-language views taken off it.
+     * One held catalog, when it was loaded, and the per-language views taken off it — or, with
+     * no catalog, the refusal a load that never succeeded left behind and when it was tried.
      *
      * <p>The views are memoized rather than rebuilt: a load's languages are fixed until the
      * next one, and a page resolving twenty coded columns should cost twenty map lookups.
@@ -55,6 +66,15 @@ public final class JdbcCatalogStore implements CatalogStore {
 
         Held(CodeCatalog catalog, long loadedAt, long stampAtLoad) {
             this(catalog, loadedAt, new ConcurrentHashMap<>(), null, stampAtLoad);
+        }
+
+        /** A load that never succeeded: nothing to serve, the failure to report. */
+        static Held refused(String error, long triedAt, long stampAtTry) {
+            return new Held(null, triedAt, Map.of(), error, stampAtTry);
+        }
+
+        boolean loaded() {
+            return catalog != null;
         }
 
         CodeCatalog view(String tag, String defaultTag) {
@@ -101,15 +121,67 @@ public final class JdbcCatalogStore implements CatalogStore {
     /** How often a runtime re-reads the version table: often enough to feel immediate. */
     private static final long STAMP_INTERVAL_MILLIS = 5_000L;
 
+    /**
+     * How long a load that never succeeded is held before it is tried again: the stamp's own
+     * interval, so a broken catalog costs one failed query per interval rather than one per
+     * request, and comes back within it once its table exists — or at once through an
+     * invalidation or the operations refresh, which drop the hold like any other.
+     */
+    private static final long REFUSAL_HOLD_MILLIS = STAMP_INTERVAL_MILLIS;
+
     @Override
     public Map<String, CodeCatalog> catalogs(String tag) {
-        Map<String, CodeCatalog> current = new LinkedHashMap<>();
-        // The narrowing is memoized per language on the held load: a page showing twenty coded
-        // columns must not rebuild twenty catalogs to render, and the languages a load carries
-        // are fixed until the next one.
-        specs.keySet().forEach(name -> current.put(name,
-                held(name).view(tag, i18n.defaultTag())));
-        return current;
+        return new Resolved(tag);
+    }
+
+    /**
+     * The catalogs a request reads, resolved on the read (decision 14 as built).
+     *
+     * <p>A route that never asks for a catalog never loads one, and a catalog that cannot load
+     * fails the read that asked for it rather than the request that did not. What a read
+     * resolves is memoized for the request, and the narrowing is memoized per language on the
+     * held load: a page showing twenty coded columns must not rebuild twenty catalogs to
+     * render, and the languages a load carries are fixed until the next one. Iterating the map
+     * resolves every catalog, which is what iterating it means.
+     */
+    private final class Resolved extends java.util.AbstractMap<String, CodeCatalog> {
+
+        private final String tag;
+        private final Map<String, CodeCatalog> memo = new ConcurrentHashMap<>();
+
+        Resolved(String tag) {
+            this.tag = tag;
+        }
+
+        @Override
+        public CodeCatalog get(Object key) {
+            if (!(key instanceof String name) || !specs.containsKey(name)) {
+                return null;
+            }
+            return memo.computeIfAbsent(name, n -> held(n).view(tag, i18n.defaultTag()));
+        }
+
+        @Override
+        public boolean containsKey(Object key) {
+            return specs.containsKey(key);
+        }
+
+        @Override
+        public int size() {
+            return specs.size();
+        }
+
+        @Override
+        public java.util.Set<String> keySet() {
+            return specs.keySet();
+        }
+
+        @Override
+        public java.util.Set<Map.Entry<String, CodeCatalog>> entrySet() {
+            Map<String, CodeCatalog> all = new LinkedHashMap<>();
+            specs.keySet().forEach(name -> all.put(name, get(name)));
+            return java.util.Collections.unmodifiableMap(all).entrySet();
+        }
     }
 
     @Override
@@ -279,10 +351,13 @@ public final class JdbcCatalogStore implements CatalogStore {
         java.util.List<CatalogStore.Status> statuses = new ArrayList<>();
         specs.forEach((name, spec) -> {
             Held current = held.get(name);
+            // A load that never succeeded reads as never loaded AND carries its error: the
+            // JSON code a screen answers must not be the operator's only signal.
+            boolean loaded = current != null && current.loaded();
             statuses.add(new CatalogStore.Status(name, spec.sourceTables(),
-                    current == null ? -1 : current.catalog().size(),
-                    current == null ? List.of() : languages(current.catalog()),
-                    current == null ? null : current.loadedAt(),
+                    loaded ? current.catalog().size() : -1,
+                    loaded ? languages(current.catalog()) : List.of(),
+                    loaded ? current.loadedAt() : null,
                     current == null ? null : current.lastError()));
         });
         return statuses;
@@ -302,13 +377,13 @@ public final class JdbcCatalogStore implements CatalogStore {
     private Held held(String name) {
         Held current = held.get(name);
         if (current != null && !isStale(name, current)) {
-            return current;
+            return serving(name, current);
         }
         // One load per catalog: a stale entry must not send every in-flight request at once.
         synchronized (loadLocks.computeIfAbsent(name, ignored -> new Object())) {
             Held rechecked = held.get(name);
             if (rechecked != null && !isStale(name, rechecked)) {
-                return rechecked;
+                return serving(name, rechecked);
             }
             try {
                 Held loaded = new Held(load(name, specs.get(name)), clock.getAsLong(),
@@ -316,7 +391,7 @@ public final class JdbcCatalogStore implements CatalogStore {
                 held.put(name, loaded);
                 return loaded;
             } catch (SQLException | RuntimeException ex) {
-                if (rechecked != null) {
+                if (rechecked != null && rechecked.loaded()) {
                     // Serving yesterday's names beats serving none; the failure is loud, and a
                     // hold that keeps failing is what an operator needs to see, not a blank page.
                     // The previous load's language views ride along, so the retry costs nothing.
@@ -330,15 +405,39 @@ public final class JdbcCatalogStore implements CatalogStore {
                     held.put(name, renewed);
                     return renewed;
                 }
-                throw new TqlException(REFRESH_FAILED, "Catalog '" + name
-                        + "' could not be loaded and has never loaded: " + ex.getMessage(), ex);
+                // Never loaded: the refusal is held like a load would be, so the failing query
+                // runs once per interval and not once per request; said once here, with the
+                // tables an operator would look for, and again on the ops row.
+                String error = String.valueOf(ex.getMessage());
+                LOG.log(System.Logger.Level.WARNING, "Catalog '" + name + "' (" + String.join(
+                        ", ", specs.get(name).sourceTables()) + ") could not be loaded and has"
+                        + " never loaded; its readers are refused until the next attempt in "
+                        + REFUSAL_HOLD_MILLIS / 1000 + " s", ex);
+                held.put(name, Held.refused(error, clock.getAsLong(),
+                        stampOf(specs.get(name))));
+                throw neverLoaded(name, error, ex);
             }
         }
     }
 
+    /** A held load serves; a held refusal refuses again, without asking the database. */
+    private static Held serving(String name, Held current) {
+        if (!current.loaded()) {
+            throw neverLoaded(name, current.lastError(), null);
+        }
+        return current;
+    }
+
+    private static TqlException neverLoaded(String name, String error, Throwable cause) {
+        return new TqlException(NEVER_LOADED, "Catalog '" + name
+                + "' could not be loaded and has never loaded: " + error, cause);
+    }
+
     private boolean isStale(String name, Held current) {
         CatalogSpec spec = specs.get(name);
-        Duration ttl = Durations.parse(spec.effectiveTtl());
+        Duration ttl = current.loaded()
+                ? Durations.parse(spec.effectiveTtl())
+                : Duration.ofMillis(REFUSAL_HOLD_MILLIS);
         if (clock.getAsLong() - current.loadedAt() >= ttl.toMillis()) {
             return true;
         }

@@ -253,6 +253,55 @@ class CodeCatalogIntegrationTest {
                 .isEqualTo(404);
     }
 
+    /**
+     * A catalog that has never loaded fails the screens that render its codes, and only those
+     * (docs/lookups.md, decision 14 as built). Before the store resolved on read, one table
+     * missing on one environment answered 404 {@code TQL-APP-4206} on every route of the app.
+     */
+    @Test
+    void aCatalogThatCannotLoadFailsOnlyTheScreensThatReadIt() throws Exception {
+        // A template over the healthy catalogs, and a command validating against one, serve
+        // (the command's refusal is the healthy catalog's verdict on a code it does not hold).
+        assertThat(get("/受注").body()).contains("J-1001").contains("現金");
+        HttpResponse<String> refused = post("/api/受注", "{\"取引区分\":\"Z\"}");
+        assertThat(refused.statusCode()).isEqualTo(400);
+        assertThat(refused.body()).contains("取引区分");
+
+        // The list whose column names the broken catalog's domain is refused, coded, as the
+        // server's fault — not the domain's 404, which read as "no such route".
+        HttpResponse<String> list = get("/壊れた一覧");
+        assertThat(list.statusCode()).isEqualTo(500);
+        assertThat(list.body()).contains("TQL-APP-4206");
+        // So is the hand-written template that resolves through it.
+        HttpResponse<String> page = get("/壊れた");
+        assertThat(page.statusCode()).isEqualTo(500);
+        assertThat(page.body()).contains("TQL-APP-4206");
+
+        // The operations row carries the failure against a never-loaded hold: the screen's
+        // code is not the operator's only signal.
+        var rows = io.tesseraql.yaml.JsonMappers.constrained()
+                .readTree(ops("GET", "/_tesseraql/ops/catalogs").body());
+        var broken = java.util.stream.StreamSupport.stream(rows.spliterator(), false)
+                .filter(row -> "壊れた".equals(row.path("name").asText())).findFirst().orElseThrow();
+        assertThat(broken.path("loaded").asBoolean()).isFalse();
+        assertThat(broken.path("loadedAt").isNull()).isTrue();
+        assertThat(broken.path("lastError").asText()).contains("存在しないマスタ");
+        // And the healthy ones read as before.
+        assertThat(get("/受注一覧").body()).contains("<span>現金</span>");
+    }
+
+    /**
+     * An export writes the code: no export surface renders a catalog name, whatever language
+     * the request negotiated (docs/lookups.md, decision 12 as built). The fixture #742 wrote
+     * for the opposite claim was never requested; it is now, for this one.
+     */
+    @Test
+    void anExportWritesTheCodeNotTheName() throws Exception {
+        HttpResponse<String> csv = get("/受注/レポート", "ja");
+        assertThat(csv.statusCode()).isEqualTo(200);
+        assertThat(csv.body()).contains("J-1001,1").doesNotContain("現金").doesNotContain("Cash");
+    }
+
     /** The version stamp is what carries an invalidation to a runtime that did not serve it. */
     @Test
     void aWriteRaisesTheVersionOfTheTableItTouched() throws Exception {
@@ -394,6 +443,10 @@ class CodeCatalogIntegrationTest {
                     key: 優先度
                     label: { message: "code.優先度.{key}" }
                     order: 表示順
+                  壊れた:
+                    table: 存在しないマスタ
+                    key: c
+                    label: n
                 """);
         Files.writeString(target.resolve("catalogs/通貨.sql"), """
                 select m.通貨コード, n.言語コード, n.名称, m.有効フラグ
@@ -442,6 +495,9 @@ class CodeCatalogIntegrationTest {
                     type: string
                     maxLength: 2
                     codes: 取引区分
+                  壊れた区分:
+                    type: string
+                    codes: 壊れた
                 """);
         Path create = target.resolve("web/api/受注");
         Files.createDirectories(create);
@@ -544,8 +600,9 @@ class CodeCatalogIntegrationTest {
                         domain: 取引区分
                 """);
 
-        // An export renders through a template like any other surface, and answers in ITS
-        // locale rather than the requesting browser's (docs/lookups.md, decision 12).
+        // An export writes the code, whatever language the request negotiated: no export
+        // surface renders a catalog name (docs/lookups.md, decision 12 as built) — a name in
+        // a document comes through enrich: or a named query.
         Path report = target.resolve("web/受注/レポート");
         Files.createDirectories(report);
         Files.writeString(report.resolve("rows.sql"),
@@ -562,11 +619,54 @@ class CodeCatalogIntegrationTest {
                       file: rows.sql
                 export:
                   format: csv
-                  locale: en
                   filename: orders.csv
                   columns:
                     - name: 受注番号
                     - name: 取引区分
+                """);
+
+        // The two readers of the catalog that cannot load: a declarative list naming its
+        // domain, and a hand-written template resolving through it.
+        Path brokenList = target.resolve("web/壊れた一覧");
+        Files.createDirectories(brokenList);
+        Files.writeString(brokenList.resolve("orders.sql"),
+                "select 受注番号, 取引区分 from 受注 order by 受注番号\n");
+        Files.writeString(brokenList.resolve("get.yml"), """
+                version: tesseraql/v1
+                id: 壊れた.grid
+                kind: route
+                recipe: query-html
+                security: { auth: public }
+                sources:
+                  main:
+                    sql:
+                      file: orders.sql
+                response:
+                  html:
+                    view: 壊れた.grid.view
+                """);
+        Files.writeString(brokenList.resolve("page.view.yml"), """
+                version: tesseraql/v1
+                id: 壊れた.grid.view
+                kind: view
+                recipe: list
+                title: 壊れた一覧
+                columns:
+                  - name: 受注番号
+                  - name: 取引区分
+                    domain: 壊れた区分
+                """);
+        Path brokenPage = target.resolve("web/壊れた");
+        Files.createDirectories(brokenPage);
+        Files.writeString(brokenPage.resolve("get.yml"), """
+                version: tesseraql/v1
+                id: 壊れた.page
+                kind: route
+                recipe: page
+                security: { auth: public }
+                response:
+                  html:
+                    template: broken.html
                 """);
 
         // The maintenance screen (docs/lookups.md, decision 13): the write names the TABLE it
@@ -625,6 +725,12 @@ class CodeCatalogIntegrationTest {
                 """);
 
         Files.createDirectories(target.resolve("templates"));
+        Files.writeString(target.resolve("templates/broken.html"), """
+                <!doctype html>
+                <html xmlns:th="http://www.thymeleaf.org">
+                <body><p th:text="${codes.壊れた.of('1')}">name</p></body>
+                </html>
+                """);
         Files.writeString(target.resolve("templates/orders.html"), """
                 <!doctype html>
                 <html xmlns:th="http://www.thymeleaf.org">

@@ -5,19 +5,19 @@ import static io.tesseraql.yaml.lint.LintFinding.Severity.WARNING;
 
 import io.tesseraql.yaml.config.AppConfig;
 import io.tesseraql.yaml.manifest.AppManifest;
-import io.tesseraql.yaml.manifest.RouteFile;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
 /**
- * Code catalogs, their language columns, and export locales.
+ * Code catalogs and their language columns.
  *
- * <p>Extracted verbatim from {@code AppLinter} (docs/lint-restructure.md decision 1).
+ * <p>Extracted verbatim from {@code AppLinter} (docs/lint-restructure.md decision 1). The
+ * export-locale rule that lived here until 0.18.0 guarded a capability no export has — the
+ * export chains publish declared source names only, so a catalog never reaches an export
+ * template — and is deleted (docs/lookups.md, decision 12 as built).
  */
 final class CatalogLocaleRules implements LintRule {
-
-    private static final String EXPORT_WITHOUT_LOCALE = "TQL-FIELD-4622";
 
     private static final String CATALOG_FILE_OUTSIDE_CATALOGS = "TQL-FIELD-4621";
 
@@ -29,43 +29,6 @@ final class CatalogLocaleRules implements LintRule {
         Path appHome = context.appHome();
         lintCatalogLanguages(appHome, manifest.config(), findings);
         lintCatalogFiles(appHome, findings);
-        lintExportLocale(appHome, manifest, findings);
-    }
-
-    /**
-     * An export that can render a code but cannot name a locale (docs/lookups.md, decision 12).
-     *
-     * <p>The per-surface locale table exists because "the report came out in English because
-     * the server's locale was" is this feature's characteristic failure. A request negotiates
-     * its locale; an export does not have one to negotiate — it is generated for a file, often
-     * on a schedule, and read by someone who never made the request. So the export declares its
-     * locale, and an app whose catalogs carry more than one language must not leave that
-     * declaration to a default.
-     *
-     * <p>Scoped to apps with a multilingual catalog: a single-language app has one answer
-     * whatever the locale, and demanding a declaration there would be ceremony.
-     */
-    void lintExportLocale(Path appHome, AppManifest manifest, List<LintFinding> findings) {
-        boolean multilingual = io.tesseraql.yaml.catalog.Catalogs.load(appHome).all().values()
-                .stream().anyMatch(spec -> spec.language() != null && !spec.language().isBlank());
-        if (!multilingual
-                || manifest.config().getString("tesseraql.files.locale").isPresent()) {
-            return;
-        }
-        for (RouteFile route : manifest.routes()) {
-            io.tesseraql.yaml.model.ExportSpec spec = route.definition().fileExport();
-            // A workbook never reads locale: (docs/export-declarations.md decision 6 refuses
-            // it there), so asking for one would set two errors against each other.
-            if (spec == null || "excel".equalsIgnoreCase(spec.format())
-                    || (spec.locale() != null && !spec.locale().isBlank())) {
-                continue;
-            }
-            findings.add(new LintFinding(EXPORT_WITHOUT_LOCALE, ERROR, route.source().toString(),
-                    "Export '" + route.definition().id() + "' declares no locale:, and the app"
-                            + " has catalogs with per-language names — declare the export's"
-                            + " locale: or tesseraql.files.locale; an export has no request to"
-                            + " negotiate one from"));
-        }
     }
 
     /**

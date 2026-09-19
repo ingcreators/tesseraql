@@ -723,6 +723,12 @@ public final class ErrorResponseRenderer implements Step {
                 case 4001 -> 400;
                 case 4031 -> 403;
                 case 4041 -> 400; // invalid or integrity-failed package — the caller's bytes
+                // A code catalog that could not be loaded and has never loaded: a table
+                // missing on this environment, a datasource down at first touch — the
+                // server's fault wearing a refusal number, not something the caller can
+                // correct. Before this arm it answered the domain's 404 (docs/audit-low-leads.md
+                // unfiled 19).
+                case 4206 -> 500;
                 default -> 404;
             };
             // The deploy endpoint's refusals (docs/stack-shells.md, the deploy surface): a
