@@ -314,6 +314,130 @@ class AppLinterViewTest {
         assertThat(viewCodes(new AppLinter().lint(dir))).contains("TQL-VIEW-3308");
     }
 
+    /**
+     * The document's own {@code source:} is a reference like a child's or a panel's — a typo
+     * there used to be judged by nothing and rendered an empty page, COMPLETED
+     * (docs/audit-low-leads.md slice 21, unfiled 22).
+     */
+    @Test
+    void aViewsOwnSourceTheRouteDoesNotDeclareIsAnError(@TempDir Path dir) throws Exception {
+        writeApp(dir, """
+                version: tesseraql/v1
+                kind: view
+                recipe: list
+                source: typo
+                """);
+        assertThat(new AppLinter().lint(dir))
+                .filteredOn(f -> f.code().equals("TQL-VIEW-3308"))
+                .singleElement()
+                .matches(f -> f.message().contains("view items: source typo"));
+    }
+
+    /**
+     * An embedded view reads the host route's sources (docs/view-composition.md wave 2b), and
+     * the build judges them there — the lint used to judge the {@code view:} document alone,
+     * so a wrong panel source inside an embedded document was the boot's refusal with no lint
+     * finding before it (docs/audit-low-leads.md slice 21, unfiled 21).
+     */
+    @Test
+    void anEmbeddedViewsSourceIsJudgedAgainstTheHostRoute(@TempDir Path dir) throws Exception {
+        writeApp(dir, """
+                version: tesseraql/v1
+                kind: view
+                recipe: dashboard
+                panels:
+                  - { type: view, view: items.recent }
+                """);
+        Files.writeString(dir.resolve("web/items/recent.view.yml"), """
+                version: tesseraql/v1
+                id: items.recent
+                kind: view
+                recipe: dashboard
+                panels:
+                  - { type: stat, source: ghost, column: n }
+                """);
+        assertThat(new AppLinter().lint(dir))
+                .filteredOn(f -> f.code().equals("TQL-VIEW-3308"))
+                .singleElement()
+                .matches(f -> f.message().contains("view items.recent: panel source ghost")
+                        && f.source().equals("web/items/get.yml"));
+    }
+
+    /**
+     * The host entry's {@code source:} is what the embedded model reads through, so it stands
+     * in for the embedded document's own: an embedded document naming a source only its hosts
+     * know is clean when every host overrides it, and the override is the name judged.
+     */
+    @Test
+    void aHostEntrysSourceOverrideStandsInForTheEmbeddedDocumentsOwn(@TempDir Path dir)
+            throws Exception {
+        writeApp(dir, """
+                version: tesseraql/v1
+                kind: view
+                recipe: dashboard
+                panels:
+                  - { type: view, view: items.recent, source: main }
+                """);
+        Files.writeString(dir.resolve("web/items/recent.view.yml"), """
+                version: tesseraql/v1
+                id: items.recent
+                kind: view
+                recipe: list
+                source: whateverTheHostSays
+                """);
+        assertThat(viewCodes(new AppLinter().lint(dir))).isEmpty();
+
+        // Without the override the embedded document's own name is the one judged.
+        Files.writeString(dir.resolve("web/items/items.view.yml"), """
+                version: tesseraql/v1
+                kind: view
+                recipe: dashboard
+                panels:
+                  - { type: view, view: items.recent }
+                """);
+        assertThat(new AppLinter().lint(dir))
+                .filteredOn(f -> f.code().equals("TQL-VIEW-3308"))
+                .singleElement()
+                .matches(
+                        f -> f.message().contains("view items.recent: source whateverTheHostSays"));
+    }
+
+    /**
+     * A {@code views:} part reads the template route's sources exactly as a {@code view:}
+     * document does (RouteCompiler binds both with the route), so it is judged alike — the
+     * lint used to resolve the id and stop.
+     */
+    @Test
+    void aViewsBoundPartsSourceIsJudgedAgainstTheTemplateRoute(@TempDir Path dir)
+            throws Exception {
+        Files.createDirectories(dir.resolve("web/report"));
+        Files.createDirectories(dir.resolve("templates"));
+        Files.writeString(dir.resolve("templates/report.html"), "<div>report</div>\n");
+        Files.writeString(dir.resolve("web/report/get.yml"), """
+                version: tesseraql/v1
+                id: report.page
+                kind: route
+                recipe: query-html
+                response:
+                  html:
+                    template: report.html
+                    views: [report.part]
+                """);
+        Files.writeString(dir.resolve("web/report/part.view.yml"), """
+                version: tesseraql/v1
+                id: report.part
+                kind: view
+                recipe: dashboard
+                panels:
+                  - { type: stat, source: ghost, column: n }
+                """);
+        assertThat(new AppLinter().lint(dir))
+                .filteredOn(f -> f.code().equals("TQL-VIEW-3308"))
+                .singleElement()
+                .matches(f -> f.message().contains("view report.part: panel source ghost")
+                        && f.source().equals("web/report/get.yml"));
+    }
+
     @Test
     void aColumnDomainReferenceIsCheckedPerDocument(@TempDir Path dir) throws Exception {
         // docs/view-composition.md wave 3a: explicit read-side domain links must resolve.

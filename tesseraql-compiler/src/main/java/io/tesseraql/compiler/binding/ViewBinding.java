@@ -36,8 +36,6 @@ public final class ViewBinding {
     static final TqlErrorCode UNKNOWN_ACTION = new TqlErrorCode(TqlDomain.VIEW, 3303);
     /** TQL-VIEW-3306: unknown slot name for the view kind (customization ladder L1). */
     static final TqlErrorCode UNKNOWN_SLOT = new TqlErrorCode(TqlDomain.VIEW, 3306);
-    /** TQL-VIEW-3308: a children: entry names a source the route does not declare. */
-    static final TqlErrorCode UNKNOWN_SOURCE = new TqlErrorCode(TqlDomain.VIEW, 3308);
     /** TQL-VIEW-3318: an embedded view embeds further — embedding depth is 1. */
     static final TqlErrorCode EMBED_DEPTH = new TqlErrorCode(TqlDomain.VIEW, 3318);
     /** TQL-VIEW-3322: a declared list key: column is null, absent or empty in a result row. */
@@ -154,6 +152,18 @@ public final class ViewBinding {
     public static ViewBinding of(Path appHome, String viewRef, RouteDefinition route,
             Function<String, RouteDefinition> postRouteByPath, Function<String, Path> viewById,
             io.tesseraql.core.files.FileCodecs codecs) {
+        return bind(appHome, viewRef, route, postRouteByPath, viewById, codecs, true);
+    }
+
+    /**
+     * {@link #of} with the source judgement switchable: a host document is judged once, with
+     * everything it embeds ({@code judgeSources}); the embedded binding built under it is not
+     * judged again, or its own {@code source:} would be held to the route where the host entry's
+     * override is what the model reads.
+     */
+    private static ViewBinding bind(Path appHome, String viewRef, RouteDefinition route,
+            Function<String, RouteDefinition> postRouteByPath, Function<String, Path> viewById,
+            io.tesseraql.core.files.FileCodecs codecs, boolean judgeSources) {
         Path home = appHome.toAbsolutePath().normalize();
         Path file = viewById.apply(viewRef);
         if (file == null) {
@@ -163,6 +173,18 @@ public final class ViewBinding {
         }
         Path viewDir = file.getParent();
         ViewSpec spec = ViewSpec.parse(file);
+        if (judgeSources) {
+            // Every source the document and its embeds read is one the route declares
+            // (TQL-VIEW-3308) — the judgement the lint makes, so a view the lint passed binds.
+            // An embedded id that does not resolve is embed()'s refusal below, not a source.
+            io.tesseraql.yaml.view.ViewSources.undeclared(spec, route, id -> {
+                Path embeddedFile = viewById.apply(id);
+                return embeddedFile == null ? null : ViewSpec.parse(embeddedFile);
+            }).stream().findFirst().ifPresent(undeclared -> {
+                throw new TqlException(io.tesseraql.yaml.view.ViewSources.UNDECLARED,
+                        undeclared.message());
+            });
+        }
         List<ViewFields.FieldDef> fields = ViewSpec.FORM.equals(spec.view())
                 ? formFields(viewRef, spec, postRouteByPath)
                 : List.of();
@@ -274,8 +296,9 @@ public final class ViewBinding {
     }
 
     /**
-     * The detail view's {@code children:} entries that embed a view, by index — and, along the
-     * way, the guard that every child reading data names a source the route declares.
+     * The detail view's {@code children:} entries that embed a view, by index. Which sources
+     * the children read is judged before this, with the document's every other name
+     * ({@link io.tesseraql.yaml.view.ViewSources}).
      */
     private static Map<Integer, Embed> childEmbeds(Path home, String viewRef, ViewSpec spec,
             RouteDefinition route, Function<String, RouteDefinition> postRouteByPath,
@@ -286,20 +309,12 @@ public final class ViewBinding {
             if (child.view() != null) {
                 childEmbeds.put(index, embed(home, viewRef, child.view(), child.source(),
                         route, postRouteByPath, viewById, codecs));
-                if (child.source() == null) {
-                    continue;
-                }
-            }
-            if (!declaresSource(route, child.source())) {
-                throw new TqlException(UNKNOWN_SOURCE, "View " + viewRef + ": children source "
-                        + child.source() + " is not a source of the route"
-                        + " (a sources: entry, or main)");
             }
         }
         return childEmbeds;
     }
 
-    /** The same for a dashboard's {@code panels:}: the embedding ones, and the source guard. */
+    /** The same for a dashboard's {@code panels:}: the embedding ones. */
     private static Map<Integer, Embed> panelEmbeds(Path home, String viewRef, ViewSpec spec,
             RouteDefinition route, Function<String, RouteDefinition> postRouteByPath,
             Function<String, Path> viewById, io.tesseraql.core.files.FileCodecs codecs) {
@@ -309,15 +324,6 @@ public final class ViewBinding {
             if (panel.view() != null) {
                 panelEmbeds.put(index, embed(home, viewRef, panel.view(), panel.source(),
                         route, postRouteByPath, viewById, codecs));
-                if (panel.source() == null) {
-                    continue;
-                }
-            }
-            String panelSource = panelSource(panel);
-            if (!declaresSource(route, panelSource)) {
-                throw new TqlException(UNKNOWN_SOURCE, "View " + viewRef + ": panel source "
-                        + panelSource + " is not a source of the route"
-                        + " (a sources: entry, or main)");
             }
         }
         return panelEmbeds;
@@ -391,8 +397,8 @@ public final class ViewBinding {
     /**
      * Resolves one embedded view (docs/view-composition.md wave 2b): the id must be in the
      * registry, the document must not itself embed (depth is 1, TQL-VIEW-3318 — the guard that
-     * also makes self-embedding impossible), and its sources validate against the HOST route —
-     * the route stays the sole data owner.
+     * also makes self-embedding impossible), and its sources were validated against the HOST
+     * route with the host's own — the route stays the sole data owner.
      */
     private static Embed embed(Path home, String hostRef, String embeddedId,
             String sourceOverride, RouteDefinition route,
@@ -410,7 +416,9 @@ public final class ViewBinding {
             throw new TqlException(EMBED_DEPTH, "View " + hostRef + ": embedded view "
                     + embeddedId + " embeds views itself — embedding depth is 1");
         }
-        return new Embed(of(home, embeddedId, route, postRouteByPath, viewById, codecs),
+        // The host judged this document's sources with its own (the override in the
+        // document's stead), so the embedded binding is built, not judged again.
+        return new Embed(bind(home, embeddedId, route, postRouteByPath, viewById, codecs, false),
                 sourceOverride);
     }
 
@@ -456,16 +464,6 @@ public final class ViewBinding {
         Map<String, Object> remapped = new LinkedHashMap<>(context);
         remapped.put(embed.binding().spec.source(), context.get(embed.sourceOverride()));
         return remapped;
-    }
-
-    /**
-     * A child/panel {@code source:} must be {@code main} or one of the route's other
-     * {@code sources:} entries (TQL-VIEW-3308) — every source publishes the {@code {rows}}
-     * shape the model assembly reads.
-     */
-    private static boolean declaresSource(RouteDefinition route, String source) {
-        return io.tesseraql.yaml.model.RouteDefinition.MAIN.equals(source)
-                || (route != null && route.sources().containsKey(source));
     }
 
     /** The template name the renderer feeds to the engine (pattern or per-view retarget). */

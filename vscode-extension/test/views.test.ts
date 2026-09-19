@@ -30,11 +30,17 @@ test('the id is the explicit top-level id:, else the filename stem', () => {
   assert.equal(viewIdOf('requests.recent.view.yml', 'kind: view\nrecipe: list\n'), 'requests.recent');
   // A nested id (a field, a panel) is not the document id.
   assert.equal(viewIdOf('items.view.yml', 'fields:\n  - id: sku\n'), 'items');
+  // A UTF-8 byte-order mark before a line-1 id: — what a BOM-writing editor saves, what the
+  // loader's parser skips — is not part of the key (docs/audit-low-leads.md slice 21).
+  assert.deepEqual(viewIdInfoOf('bom.view.yml', '\uFEFFid: demo.bomId\nkind: view\n'),
+      { id: 'demo.bomId', idLine: 0 });
 });
 
 test('scanning finds view documents under web/ and templates/, first id wins', () => {
   const home = tempApp();
   writeView(home, 'web/requests/recent.view.yml', 'kind: view\nid: requests.recent\n');
+  // Saved with a BOM: the registry reads the explicit id, not the file name.
+  writeView(home, 'web/bom/bom.view.yml', '\uFEFFid: demo.bomId\nkind: view\n');
   writeView(home, 'web/items/items.view.yml', 'kind: view\nrecipe: list\n');
   writeView(home, 'templates/shared.view.yml', 'kind: view\nrecipe: detail\n');
   // A duplicate id is the build's finding (TQL-VIEW-3315); completion offers it once.
@@ -43,7 +49,7 @@ test('scanning finds view documents under web/ and templates/, first id wins', (
   writeView(home, 'db/stray.view.yml', 'kind: view\nid: stray\n');
   const views = scanViewDocuments(home);
   assert.deepEqual(views.map((view) => view.id).sort(),
-      ['items', 'requests.recent', 'shared']);
+      ['demo.bomId', 'items', 'requests.recent', 'shared']);
   assert.deepEqual(views.find((view) => view.id === 'requests.recent'),
       { id: 'requests.recent', idLine: 1, source: 'web/requests/recent.view.yml' });
 });

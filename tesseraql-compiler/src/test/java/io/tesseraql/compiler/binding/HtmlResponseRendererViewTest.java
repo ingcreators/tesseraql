@@ -224,6 +224,82 @@ class HtmlResponseRendererViewTest {
         assertThat(html).contains("History").contains(">created<");
     }
 
+    /**
+     * The document's own {@code source:} is judged like a panel's (docs/audit-low-leads.md
+     * slice 21, unfiled 22): a typo used to bind, read an empty result and render an empty page.
+     */
+    @Test
+    void aViewsOwnSourceTheRouteDoesNotDeclareFailsTheBuild(@TempDir Path dir)
+            throws Exception {
+        Files.writeString(dir.resolve("page.view.yml"), """
+                version: tesseraql/v1
+                kind: view
+                recipe: list
+                source: typo
+                """);
+        RouteDefinition route = MAPPER.convertValue(Map.of(
+                "id", "items", "kind", "route", "recipe", "query-html",
+                "sources", Map.of("main", Map.of("sql", Map.of("file", "items.sql")))),
+                RouteDefinition.class);
+        assertThatThrownBy(() -> ViewBinding.of(dir, "page", route, path -> null, registry(dir),
+                CODECS))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("TQL-VIEW-3308")
+                .hasMessageContaining("view page: source typo");
+    }
+
+    /**
+     * An embedded document's own {@code source:} is held to the host route unless the host
+     * entry overrides it — then the override is the name that must be declared, and the
+     * embedded document's own may be anything its hosts remap.
+     */
+    @Test
+    void anEmbeddedViewsOwnSourceIsJudgedAgainstTheHostUnlessOverridden(@TempDir Path dir)
+            throws Exception {
+        Files.writeString(dir.resolve("inner.view.yml"), """
+                version: tesseraql/v1
+                kind: view
+                recipe: list
+                source: inner
+                """);
+        Files.writeString(dir.resolve("page.view.yml"), """
+                version: tesseraql/v1
+                kind: view
+                recipe: dashboard
+                panels:
+                  - { type: view, view: inner }
+                """);
+        RouteDefinition route = MAPPER.convertValue(Map.of(
+                "id", "board", "kind", "route", "recipe", "query-html",
+                "sources", Map.of("recent", Map.of("sql", Map.of("file", "recent.sql")))),
+                RouteDefinition.class);
+        assertThatThrownBy(() -> ViewBinding.of(dir, "page", route, path -> null, registry(dir),
+                CODECS))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("view inner: source inner");
+
+        Files.writeString(dir.resolve("page.view.yml"), """
+                version: tesseraql/v1
+                kind: view
+                recipe: dashboard
+                panels:
+                  - { type: view, view: inner, source: recent }
+                """);
+        assertThat(ViewBinding.of(dir, "page", route, path -> null, registry(dir), CODECS))
+                .isNotNull();
+        Files.writeString(dir.resolve("page.view.yml"), """
+                version: tesseraql/v1
+                kind: view
+                recipe: dashboard
+                panels:
+                  - { type: view, view: inner, source: ghost }
+                """);
+        assertThatThrownBy(() -> ViewBinding.of(dir, "page", route, path -> null, registry(dir),
+                CODECS))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("view page: panel source ghost");
+    }
+
     @Test
     void embeddingDepthIsOne(@TempDir Path dir) throws Exception {
         Files.writeString(dir.resolve("inner.view.yml"),

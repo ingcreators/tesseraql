@@ -148,7 +148,7 @@ they were missing:
 ```yaml
 # dashboard — a panel that is a view
 panels:
-  - { type: stat, source: sql, column: total }
+  - { type: stat, source: main, column: total }
   - { type: view, view: requests.recent }        # embedded list view
 
 # detail — children reference views; inline columns stay as the shorthand
@@ -159,7 +159,9 @@ children:
 
 - **The route remains the sole data owner.** An embedded view reads the *host route's*
   context through its `source:`; there is no per-view query execution. Source
-  validation (3308) runs against the hosting route.
+  validation (3308) runs against the hosting route — in lint as at build, over the
+  embedded document's own `source:` (unless the host entry overrides it), its children
+  and its panels.
 - **Embedding depth is 1.** An embedded view that itself declares `children:` with view
   references or `type: view` panels is a build error. This keeps the model assembly,
   ejection, and the reader's mental model flat.

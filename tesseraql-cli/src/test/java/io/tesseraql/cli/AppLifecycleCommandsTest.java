@@ -353,6 +353,16 @@ class AppLifecycleCommandsTest {
                     title: By status
                     x: label
                     y: value
+                  - { type: view, view: demo.recent.view }
+                """);
+        // An embedded view (docs/view-composition.md wave 2b) reads the HOST route's sources;
+        // the contract names the hosts, because a `view:` scalar in a route is a binding and an
+        // editor-side guess would take one for the other (docs/audit-low-leads.md slice 21).
+        Files.writeString(app.resolve("web/dashboard/recent.view.yml"), """
+                version: tesseraql/v1
+                id: demo.recent.view
+                kind: view
+                recipe: list
                 """);
         Files.createDirectories(app.resolve("web/report"));
         Files.createDirectories(app.resolve("templates"));
@@ -378,6 +388,8 @@ class AppLifecycleCommandsTest {
         JsonNode dashboard = routeNamed(document, "demo.dashboard");
         assertThat(dashboard.get("view").asText()).isEqualTo("demo.dashboard.view");
         assertThat(dashboard.get("views")).isEmpty();
+        assertThat(dashboard.get("embeds")).as("the views the bound document embeds")
+                .extracting(JsonNode::asText).containsExactly("demo.recent.view");
         JsonNode sources = dashboard.get("sources");
         assertThat(sources).as("the declared sources, in authored order")
                 .extracting(source -> source.get("name").asText())
@@ -395,6 +407,9 @@ class AppLifecycleCommandsTest {
         assertThat(report.get("view").isNull()).isTrue();
         assertThat(report.get("views")).extracting(JsonNode::asText)
                 .containsExactly("demo.dashboard.view");
+        // A views: part embeds too — the template route hosts what its parts embed.
+        assertThat(report.get("embeds")).extracting(JsonNode::asText)
+                .containsExactly("demo.recent.view");
     }
 
     private static JsonNode routeNamed(JsonNode document, String id) {

@@ -321,6 +321,9 @@ the root and are named directly. Only a step that reads has rows to fold into: `
 write, on a sequence allocation, or on a `query-spool` extract is a build error, and a chunk
 step declares its `enrich:` on the reader, where it runs per window. A sibling that spooled
 publishes no rows by design; load it into a table with a `chunk:` step and reference that.
+The reference itself is checked the same way (`TQL-YAML-1046`): `steps.<id>` must name an
+**earlier** step that holds rows — a step that does not exist, a later one, a write, a spool,
+or a route-style bare name each used to pass lint and fail at fire time.
 
 ## The chunk step
 
@@ -802,6 +805,7 @@ Lint checks jobs statically:
 | Non-allow-listed poll or HTTP egress | `TQL-SEC-4070`, `TQL-SEC-4080` |
 | Calendar qualifiers that would fail open at fire time | `TQL-BATCH-4201`–`4203` |
 | A chunk step whose restart contract is broken or unstated | `TQL-BATCH-4206`–`4208` |
+| An `enrich: source:` on a step or a chunk reader that does not name an earlier rows-holding step as `steps.<id>` | `TQL-YAML-1046` |
 
 ## Related pages
 

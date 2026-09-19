@@ -32,10 +32,16 @@ export function viewIdOf(fileName: string, content: string): string {
   return viewIdInfoOf(fileName, content).id;
 }
 
-/** {@link viewIdOf} plus the 0-based line the id was declared on (0 when derived). */
+/**
+ * {@link viewIdOf} plus the 0-based line the id was declared on (0 when derived). The
+ * content may come from disk (the registry scan) or from the editor: a file saved with a
+ * UTF-8 byte-order mark starts with U+FEFF on disk, which the loader's parser skips and
+ * VS Code strips before `getText()` — so the scan strips it too, or a line-1 `id:` in such
+ * a document is missed and the scan derives the file name where the loader reads the id.
+ */
 export function viewIdInfoOf(fileName: string, content: string):
     { id: string; idLine: number } {
-  const lines = content.split('\n');
+  const lines = content.replace(/^\uFEFF/u, '').split('\n');
   for (let index = 0; index < lines.length; index++) {
     const match = /^id:\s*(["']?)([^\s#"']+)\1\s*(?:#.*)?$/u.exec(lines[index]);
     if (match !== null) {

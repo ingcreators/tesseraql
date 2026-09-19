@@ -33,9 +33,11 @@ export interface SourceSymbol {
 
 /**
  * A mounted route as the manifest resolves it: the file plus its served identity, the
- * named sources it declares in authored order, and the view documents it binds — the
- * one `response.html.view` names and the ones a template route's `views:` composes
- * (docs/editor-named-sources.md). All three are empty on a pre-0.18 CLI.
+ * named sources it declares in authored order, the view documents it binds — the one
+ * `response.html.view` names and the ones a template route's `views:` composes
+ * (docs/editor-named-sources.md) — and the views those documents embed, which read this
+ * route's sources too (docs/view-composition.md). All four are empty on a pre-0.18 CLI
+ * (`embeds` on one before the embeds rode along).
  */
 export interface RouteSymbol {
   id: string | null;
@@ -46,6 +48,7 @@ export interface RouteSymbol {
   sources: SourceSymbol[];
   view: string | null;
   views: string[];
+  embeds: string[];
 }
 
 /** A declared batch job: its file plus the one-line trigger story. */
@@ -193,6 +196,7 @@ function optionalRoutes(value: unknown): RouteSymbol[] {
       sources: optionalSources(route.sources),
       view: stringOrNull(route.view),
       views: stringList(route.views),
+      embeds: stringList(route.embeds),
     };
   });
 }
@@ -216,13 +220,16 @@ function optionalSources(value: unknown): SourceSymbol[] {
 }
 
 /**
- * The routes that bind a view document — through `response.html.view` or a template
- * route's `views:` — which is where the view's `source:` values are declared. The lint
- * (TQL-VIEW-3308) judges a view against the same routes.
+ * The routes that bind a view document — through `response.html.view`, a template
+ * route's `views:`, or by embedding it from a document they bind — which is where the
+ * view's `source:` values are declared. The lint (TQL-VIEW-3308) judges a view against
+ * the same routes: an embedded view reads the host route's sources, so each host is one
+ * location. A route appears once however many ways it binds the view.
  */
 export function routesBinding(symbols: AppSymbols, viewId: string): RouteSymbol[] {
   return symbols.routes.filter(
-      (route) => route.view === viewId || route.views.includes(viewId));
+      (route) => route.view === viewId || route.views.includes(viewId)
+          || route.embeds.includes(viewId));
 }
 
 /** The completion detail of a declared source: `sql · orders-by-state.sql · web/…/get.yml`. */
@@ -287,6 +294,173 @@ export function sourceCompletionAt(fileName: string, lineText: string, character
 
 function isViewDocument(fileName: string): boolean {
   return fileName.endsWith(VIEW_SUFFIX);
+}
+
+/**
+ * A bindable path under the cursor (docs/editor-named-sources.md, mechanism 3): a scalar
+ * whose value is one dotted path — `users: main.rows`, `created: steps.main.affectedRows`,
+ * `file: steps.report.transferId` — or a `{path}` placeholder inside one, as in
+ * `location: /items/{steps.record.keys.id}`. The root is what the path is rooted in: a
+ * source name the route declares, or `steps`, whose second segment names a step of the
+ * same document.
+ */
+export interface PathReference {
+  root: string;
+  /** The step id a `steps.<id>…` path names; null for a source-rooted path. */
+  step: string | null;
+  /** 0-based columns of the whole path. */
+  start: number;
+  end: number;
+}
+
+/** Each segment of a path is an identifier run, Unicode like a source name. */
+const PATH_SEGMENT = '[\\p{L}\\p{N}_-]+';
+
+/** Every dotted run on a line — the candidates, before their position is read. */
+const PATH_TOKEN = new RegExp(
+    `(?<![\\p{L}\\p{N}_.\\-/])(${PATH_SEGMENT})((?:\\.${PATH_SEGMENT})+)(?![\\p{L}\\p{N}_.\\-/])`,
+    'gu');
+
+/** The text before a token when the token is a scalar's whole value: `key:` (block or flow). */
+const SCALAR_VALUE_BEFORE =
+    /(?:^|[{,])\s*(?:-\s+)?["']?([^\s:#"'{}\[\],]+)["']?:\s*["']?$/u;
+
+/** The text after a token when the token ends the scalar: nothing, a flow separator, a comment. */
+const SCALAR_VALUE_AFTER = /^["']?\s*(?:$|[,}]|#)/u;
+
+/**
+ * Keys whose dotted values are something else: another detector's reference (a message key,
+ * a policy, a view id …) or a name that is never a path (a document or step id, a file). A
+ * value with a file extension is a file wherever it sits.
+ */
+const NOT_A_PATH_KEY = new Set([
+  'id', 'name', 'kind', 'recipe', 'version', 'view', 'views', 'template', 'policy', 'message',
+  'title', 'label', 'domain', 'use', 'decision', 'workflow', 'calendar', 'after', 'codes',
+  'url', 'path', 'datasource', 'format', 'transport', 'type', 'widget', 'shell', 'select',
+  'column', 'x', 'y', 'when', 'rule', 'field', 'code', 'locale', 'zone', 'filename',
+]);
+
+const FILE_EXTENSION = /\.(sql|ya?ml|html?|jxls|xlsx|csv|pdf|json|txt|md|tpl)$/iu;
+
+/**
+ * The bindable path the cursor sits on, by the value's shape alone: no key list decides
+ * (`model:`, `body:`, `payload:`, `params:`, `location:`, a push step's `file:`, a notify's
+ * `attach:`, a chunk reader's `spool:` all carry one), only whether the line's value is a
+ * dotted path — the whole scalar, or a `{…}` placeholder. Whether the root means anything is
+ * the resolver's question: a declared source, or `steps` with a step the document declares.
+ */
+export function pathReferenceAt(lineText: string, character: number): PathReference | undefined {
+  for (const match of lineText.matchAll(PATH_TOKEN)) {
+    const start = match.index;
+    const end = start + match[0].length;
+    if (character < start || character > end) {
+      continue;
+    }
+    if (FILE_EXTENSION.test(match[0])) {
+      return undefined;
+    }
+    const before = lineText.slice(0, start);
+    const after = lineText.slice(end);
+    const placeholder = before.endsWith('{') && after.startsWith('}');
+    const scalar = SCALAR_VALUE_BEFORE.exec(before);
+    if (!placeholder) {
+      if (scalar === null || !SCALAR_VALUE_AFTER.test(after) || NOT_A_PATH_KEY.has(scalar[1])) {
+        return undefined;
+      }
+    }
+    if (before.includes('#') && /(^|\s)#/.test(before)) {
+      return undefined;
+    }
+    const segments = match[2].slice(1).split('.');
+    return {
+      root: match[1],
+      step: match[1] === 'steps' ? segments[0] : null,
+      start,
+      end,
+    };
+  }
+  return undefined;
+}
+
+/**
+ * The 0-based line declaring step `id` in a document: the `- id: <id>` item (block form) or
+ * the `- { id: <id>, … }` item (flow form) of a top-level `steps:` (a route) or `pipeline:` (a
+ * job) sequence — never a nested `id:` (a field's, a view's) and never the document's own
+ * top-level `id:`. The first declaration wins, as the runtime's id-keyed results do.
+ */
+export function stepLineOf(lines: readonly string[], id: string): number | undefined {
+  for (let index = 0; index < lines.length; index++) {
+    const line = lines[index];
+    const item = /^(\s*)-\s+(?:\{\s*)?id:\s*["']?([\p{L}\p{N}_.-]+)["']?\s*(?:[,}]|#|$)/u
+        .exec(line);
+    if (item === null || item[2] !== id) {
+      continue;
+    }
+    const parent = ancestorKeys(line, lines.slice(0, index), 1);
+    if (parent.length === 1 && (parent[0] === 'steps' || parent[0] === 'pipeline')) {
+      return index;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * The step ids declared above `line` — in a job's pipeline the earlier steps, the only ones
+ * a reference can name; in a route's response block every step, all of which ran.
+ */
+export function stepsDeclaredAbove(lines: readonly string[], line: number): string[] {
+  const ids: string[] = [];
+  for (let index = 0; index < line && index < lines.length; index++) {
+    const item = /^(\s*)-\s+(?:\{\s*)?id:\s*["']?([\p{L}\p{N}_.-]+)["']?\s*(?:[,}]|#|$)/u
+        .exec(lines[index]);
+    if (item === null || ids.includes(item[2])) {
+      continue;
+    }
+    const parent = ancestorKeys(lines[index], lines.slice(0, index), 1);
+    if (parent.length === 1 && (parent[0] === 'steps' || parent[0] === 'pipeline')) {
+      ids.push(item[2]);
+    }
+  }
+  return ids;
+}
+
+/** The blocks whose entries are bindable paths, so a root completes there and nowhere else. */
+const PATH_BLOCKS = new Set(['model', 'body', 'payload', 'params']);
+
+export type PathCompletionContext =
+  /** After `steps.` at a scalar position: the declared step ids. */
+  | { kind: 'step' }
+  /** A scalar under model:/body:/payload:/params:: the route's sources and `steps`. */
+  | { kind: 'root' };
+
+/**
+ * The completion context of a cursor typing a bindable path. `steps.` completes to the
+ * declared step ids wherever a scalar value is being typed (a push `file:`, an `attach:`, a
+ * reader `spool:`, a body field). A bare root completes only inside the blocks whose entries
+ * are paths — `model:`, `body:`, `payload:`, `params:` (block form, or a flow map on the key's
+ * own line) — because every other `key: ` in a document is not asking for one.
+ */
+export function pathCompletionAt(lineText: string, character: number,
+    linesAbove: readonly string[]): PathCompletionContext | undefined {
+  const head = lineText.slice(0, character);
+  const value = /(?:^|[{,])\s*(?:-\s+)?["']?([^\s:#"'{}\[\],]+)["']?:\s*["']?([\p{L}\p{N}_.-]*)$/u
+      .exec(head);
+  if (value === null || NOT_A_PATH_KEY.has(value[1])) {
+    return undefined;
+  }
+  const typed = value[2];
+  if (/^steps\.[\p{L}\p{N}_-]*$/u.test(typed)) {
+    return { kind: 'step' };
+  }
+  if (typed.includes('.')) {
+    return undefined;
+  }
+  const flowBlock = /^\s*(?:-\s+)?(\w+):\s*\{/u.exec(head);
+  if (flowBlock !== null && PATH_BLOCKS.has(flowBlock[1])) {
+    return { kind: 'root' };
+  }
+  const ancestors = ancestorKeys(lineText, linesAbove, 1);
+  return ancestors.length === 1 && PATH_BLOCKS.has(ancestors[0]) ? { kind: 'root' } : undefined;
 }
 
 /**

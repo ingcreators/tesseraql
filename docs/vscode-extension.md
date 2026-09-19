@@ -110,7 +110,8 @@ contract (see below), per app home and refreshed on save, and adds:
 | `calendar:` | the business-day calendars under `calendars/` |
 | `codes:` | the code catalogs under `catalogs/` |
 | `after:` | the declared batch jobs, each completion carrying its one-line trigger story |
-| `source:` | in a `*.view.yml`, the named sources declared by the routes that bind the view (through `response.html.view` or a template route's `views:`); under an `enrich:` entry of a route, the route's own — each item saying its arm, its file and its route |
+| `source:` | in a `*.view.yml`, the named sources declared by the routes that bind the view (through `response.html.view`, a template route's `views:`, or by embedding it from a document they bind); under an `enrich:` entry of a route, the route's own — each item saying its arm, its file and its route |
+| a bindable path | under `model:`, `body:`, `payload:` and `params:`, the route's declared sources and `steps` as the roots a path may start from; after `steps.` anywhere a scalar is typed — a push step's `file:`, an `attach:`, a chunk reader's `spool:`, a job enrichment's `source:` — the steps declared above the cursor |
 
 A mistyped `calendar:` fails open at fire time, so the editor is where it gets caught.
 
@@ -128,15 +129,25 @@ A mistyped `calendar:` fails open at fire time, so the editor is where it gets c
 - `source:` → the `sources.<name>:` line of the route that declares it. A view's
   `source:` (the document's own, a panel's, a child's — block form or inside a flow map)
   resolves through every route that binds the view, one location per route, so a view two
-  routes share shows both. A route's `enrich:` `source:` resolves against the route itself
-  when it is a bare name; `steps.<id>` names a step and stays a literal, as does a `source`
-  under `params:`. The SQL file is one more click, through the `file:` link on the next line.
+  routes share shows both; an embedded view resolves through every route hosting it, since
+  it reads the host route's sources. A route's `enrich:` `source:` resolves against the
+  route itself when it is a bare name; a `source` under `params:` is a bind name, not a
+  reference. The SQL file is one more click, through the `file:` link on the next line.
+- A bindable path → what its root names. `users: main.rows` under `model:`,
+  `data: main.rows` under `body:`, a `payload:` entry, a step's `params:` entry, a
+  `location: /items/{steps.record.keys.id}` placeholder: a scalar whose value is one
+  dotted path is a path, whatever its key. A source-name root → the `sources.<name>:`
+  line of the document's route. `steps.<id>` → the `- id: <id>` item of the document's own
+  `steps:` (a route) or `pipeline:` (a job) sequence. The same rule navigates a job
+  enrichment's `source: steps.<id>`, a chunk reader's `spool:`, a notify's `attach:` and a
+  push step's `file:`. The framework's ambient roots (`params`, `path`, `batch`, …) are
+  declared nowhere in the app and resolve nothing.
 
 Unknown references stay lint findings — the providers navigate, they do not judge.
 A pre-shared-definitions CLI simply omits the `domains`/`rules`/`decisions` arrays
 (a pre-0.10 CLI the `workflows`/`calendars`/`jobs` arrays, a pre-0.18 CLI a route's
-`sources`/`view`/`views`), and the extension degrades those features to empty rather
-than rejecting the document.
+`sources`/`view`/`views`/`embeds`), and the extension degrades those features to empty
+rather than rejecting the document.
 
 ## Test Explorer and SQL coverage
 
@@ -270,17 +281,18 @@ the opt-in regression gate, 2 when nothing ran) are identical in both formats.
 Prints what the framework declares:
 
 ```json
-{"policies": [{"name": "...", "source": "...", "line": 1}], "messages": [{"key": "...", "source": "...", "line": 1}], "domains": [{"name": "...", "source": "...", "line": 1}], "rules": [{"name": "...", "source": "...", "line": 1}], "decisions": [{"name": "...", "source": "...", "line": 1}], "calendars": [{"name": "...", "source": "...", "line": 1}], "catalogs": [{"name": "...", "source": "...", "line": 1}], "routes": [{"id": "...", "source": "...", "method": "...", "path": "...", "recipe": "...", "sources": [{"name": "...", "line": 1, "arm": "sql", "file": "..."}], "view": "...", "views": ["..."]}], "workflows": [{"id": "...", "source": "...", "line": 1, "transitions": ["..."], "dispatches": ["..."]}], "jobs": [{"id": "...", "source": "...", "line": 1, "trigger": "..."}], "broken": [{"source": "...", "error": "..."}]}
+{"policies": [{"name": "...", "source": "...", "line": 1}], "messages": [{"key": "...", "source": "...", "line": 1}], "domains": [{"name": "...", "source": "...", "line": 1}], "rules": [{"name": "...", "source": "...", "line": 1}], "decisions": [{"name": "...", "source": "...", "line": 1}], "calendars": [{"name": "...", "source": "...", "line": 1}], "catalogs": [{"name": "...", "source": "...", "line": 1}], "routes": [{"id": "...", "source": "...", "method": "...", "path": "...", "recipe": "...", "sources": [{"name": "...", "line": 1, "arm": "sql", "file": "..."}], "view": "...", "views": ["..."], "embeds": ["..."]}], "workflows": [{"id": "...", "source": "...", "line": 1, "transitions": ["..."], "dispatches": ["..."]}], "jobs": [{"id": "...", "source": "...", "line": 1, "trigger": "..."}], "broken": [{"source": "...", "error": "..."}]}
 ```
 
 Everything in it is sorted and deterministic. Policies come from the app config, and message
 keys from the default-locale catalog, as flattened dotted keys with their source lines.
 Domains, rules, calendars, and catalogs come from the shared-definition documents under
 `domains/`, `rules/`, `calendars/`, and `catalogs/`, each name paired with the file
-declaring it. Routes (each with the named sources it declares in authored order — name,
-`sources.<name>:` line, arm, and the sql arm's file — and the view documents it binds through
-`response.html.view` and `views:`), workflows (each with its transition and dispatch ids), and
-jobs (each with its one-line trigger story) come from the manifest.
+declaring it. Routes, workflows (each with its transition and dispatch ids), and jobs (each
+with its one-line trigger story) come from the manifest. A route carries the named sources it
+declares in authored order — name, `sources.<name>:` line, arm, and the sql arm's file — the
+view documents it binds through `response.html.view` and `views:`, and the views those
+documents embed, which read the route's sources too.
 
 A document that does not parse is **skipped, not fatal**: it is listed in `broken`
 (with the parser's message) and on stderr, and everything else still prints. Editor
@@ -329,8 +341,8 @@ repository.
   and is not wired up.
 - **Embedded-SQL analysis** against the introspected catalog, and the template side of
   a named source — `${ordersByState.rows}` in HTML, jxls and PDF templates. The YAML side
-  (a view's or an enrichment's `source:`) navigates and completes; a bindable path such as
-  `model: { users: main.rows }` does not.
+  (a view's or an enrichment's `source:`, a bindable path such as
+  `model: { users: main.rows }`) navigates and completes; the template side does not.
 
 ## Design notes
 

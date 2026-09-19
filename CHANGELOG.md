@@ -8,6 +8,25 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **The editor follows a bindable path.** `users: main.rows` under `model:`,
+  `created: steps.main.affectedRows` under `body:`, a `payload:` entry, a step's `params:`
+  entry, a `location: /items/{steps.record.keys.id}` placeholder, a job enrichment's
+  `source: steps.<id>`, a chunk reader's `spool:`, a notify's `attach:`, a push step's
+  `file:` — any scalar whose value is one dotted path — navigates by its root in the VS Code
+  extension (0.3.18): a source name to the route's `sources.<name>:` line, `steps.<id>` to the
+  `- id:` item of the document's own `steps:` or `pipeline:` sequence. The detector reads the
+  value's shape, not a key list, so the positions the filing did not name (`params:`,
+  `location:`) work alike; nothing changes in the `symbols` contract for it, because a step is
+  declared in the document that names it. `steps.` completes with the steps declared above the
+  cursor; under `model:`/`body:`/`payload:`/`params:` a root completes with the route's sources
+  and `steps` (`docs/audit-low-leads.md` slice 21, EN-01/EN-02).
+- **An embedded view's `source:` navigates through the routes hosting it.** `tesseraql
+  symbols` carries, per route, `embeds` — the views its bound documents embed through
+  `type: view` panels and `view:` children — and the extension counts a host as a binding
+  route, because an embedded view reads the *host* route's sources. Contract-side by design: a
+  `view:` scalar in a route is a binding, and an editor-side scan of view documents would take
+  one for the other. A 0.17.0 CLI omits the property and the extension stays silent (EN-03).
+
 - `TQL-LD-2868` (410): a completed export whose produced file this node cannot open — a
   node-local `file` temp store behind a stack, an externally emptied spool directory — on the
   route's `/file` and the operations console alike. It used to escape as an unchecked I/O error
@@ -72,6 +91,18 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **A view's sources are judged once, on both altitudes.** `TQL-VIEW-3308` — a view names a
+  source the route does not declare — is one predicate (`ViewSources`) the lint and the
+  compiler both ask, over the `response.html.view` document, every `views:` part, and the
+  documents they embed: the document's own `source:`, each child's, each panel's, and an
+  embedded document's own unless the host entry overrides it, in which case the override is
+  the name judged. The lint used to judge the `view:` document's children and panels alone —
+  an embedded view's or a `views:` part's wrong source was the boot's refusal with no finding
+  before it — and neither altitude judged the document's own `source:`, so a typo there bound,
+  read an empty result, and rendered an empty page, COMPLETED. The site pages that spelled the
+  primary source `source: sql` (the pre-0.14 name; the lint and build refuse it) now spell
+  `main`, and a ledger test in `tesseraql-docs-reference` keeps them so (`docs/audit-low-leads.md`
+  slice 21, unfiled 21-23).
 - **The Oracle inbox table declares its title in characters and its body as a CLOB.**
   `tql_user_notification.title` is `varchar2(500 char)` and `body` a `clob`: under Oracle's
   default BYTE semantics a 167-character CJK title the notifier had kept "within 500" was
@@ -364,6 +395,16 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A job step's `enrich: source:` must name an earlier step that holds rows.** `steps.<id>`
+  on a reading step's or a chunk reader's enrichment used to pass lint whatever it named — a
+  step that does not exist, a later one, a write, a spool, a route-style bare name — and fail
+  at fire time with `TQL-ROUTE-3114`. Lint refuses each now with `TQL-YAML-1046`, the code a
+  route's sibling reference has always had (`docs/audit-low-leads.md` slice 21, unfiled 41).
+- **The extension's view registry reads a BOM-prefixed `id:`.** A `*.view.yml` saved with a
+  UTF-8 byte-order mark and its `id:` on line 1 was registered by the loader under its explicit
+  id and by the extension's scan under its file name, so `view:` navigation and completion
+  disagreed with the build for that document. The scan strips the mark, as the parser and VS
+  Code's own text model do (unfiled 42).
 - **A notification renders in English, whatever the server's locale.** An inbox title and
   body rendered through a bare Thymeleaf context — the delivering JVM's default locale, frozen
   into a stored title every reader of the bell sees (`1.234,50 de_DE` on a German host) — and a
