@@ -574,8 +574,9 @@ write by hand.
 
 ## Brief 13 — collapsed-rail item centering under `[data-sidebar-collapsed]`
 
-*Not filed upstream yet. Stand-in to retire: `tesseraql.css`, the
-`.hc-shell[data-sidebar-collapsed] .hc-item` rule (docs/audit-low-leads.md F102).*
+*Filed: [ingcreators/hypermedia-components#612](https://github.com/ingcreators/hypermedia-components/issues/612)
+(found 2026-09-19, audit-low-leads slice 23b — docs/audit-low-leads.md F102).
+Stand-in to retire: `tesseraql.css`, the `.hc-shell[data-sidebar-collapsed] .hc-item` rule.*
 
 ### Problem
 
@@ -595,10 +596,12 @@ collapsed rail is complete without a consumer rule.
 
 ## Brief 14 — a declarative dialog opener (`data-hc-open-dialog`)
 
-*Not filed upstream yet. Stand-in to retire: `tesseraql.js`'s `[data-tql-open-dialog]` click
-listener. Emitted by the route compiler in `tql/view/list.html` (the Filters button and each
-applied filter chip) and by the Studio shell's command-palette trigger, so its retirement is a
-recorded markup-contract change (docs/audit-low-leads.md F102).*
+*Filed: [ingcreators/hypermedia-components#613](https://github.com/ingcreators/hypermedia-components/issues/613)
+(found 2026-09-19, audit-low-leads slice 23b — docs/audit-low-leads.md F102).
+Stand-in to retire: `tesseraql.js`'s `[data-tql-open-dialog]` click listener. Emitted by the
+route compiler in `tql/view/list.html` (the Filters button and each applied filter chip) and by
+the Studio shell's command-palette trigger, so its retirement is a recorded markup-contract
+change.*
 
 ### Problem
 
@@ -616,8 +619,10 @@ fallback is the dialog's own `open` attribute where a consumer wants one.
 
 ## Brief 15 — submit-on-change (`data-hc-submit-on-change`)
 
-*Not filed upstream yet. Stand-in to retire: `tesseraql.js`'s `[data-tql-submit-on-change]`
-change listener (the Studio flags page's `hc-switch` toggles) (docs/audit-low-leads.md F102).*
+*Filed: [ingcreators/hypermedia-components#614](https://github.com/ingcreators/hypermedia-components/issues/614)
+(found 2026-09-19, audit-low-leads slice 23b — docs/audit-low-leads.md F102).
+Stand-in to retire: `tesseraql.js`'s `[data-tql-submit-on-change]` change listener (the Studio
+flags page's `hc-switch` toggles).*
 
 ### Problem
 
