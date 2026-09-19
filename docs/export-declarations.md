@@ -272,7 +272,8 @@ with JSON. The design's "no guard can pin it" was wrong.
 renders `25569.9375` under `General` before and after; a NULL renders blank — it never asks
 `toZoned`); `microsoft.sql.DateTimeOffset`, `oracle.sql.*`; the drivers' own range behaviour (MySQL
 Connector/J refuses a TIME outside a day at `getObject`; MariaDB wraps modulo a day and the fix
-renders the wrapped value at 200). 5-0 adds no code, message key, schema field or 4xx; it removes
+renders the wrapped value at 200 — *documented as such on `file-transfers.md` by
+`audit-low-leads.md` slice 18, XD-01 R2: select such a column as text*). 5-0 adds no code, message key, schema field or 4xx; it removes
 three failure shapes (500 on six route shapes, FAILED rowCount 0 on file-export, `TQL-LD-2810 …
 null` on a job step — all RUN on HEAD in the IT).
 
@@ -1465,15 +1466,17 @@ Every unfiled defect the measurement found, routed elsewhere with its destinatio
   the test must fail a BUFFERED codec during its drain and count `tql_temp_spool` rows under
   `temp.store: db`) — fixed by `export-hygiene.md` P2, at `drain` and in the two service arms, never
   in `ExportWrite.write`; the Excel `format:` string written verbatim as the cell format and `type: date`
-  getting the datetime default cell format; `sheet:` name sanitising; `groupBy` with a pdf template
-  silently `GROUPS=null`; the PDF template's `Locale.ROOT` context (`PdfTemplates.java:33,38`); the
+  getting the datetime default cell format (*the default half fixed by `audit-low-leads.md` slice
+  18, XD-02 R3: `yyyy-mm-dd` on a declared date*); `sheet:` name sanitising; `groupBy` with a pdf template
+  silently `GROUPS=null` (*fixed by slice 18, R5: an inert key, `TQL-YAML-1005`*); the PDF template's `Locale.ROOT` context (`PdfTemplates.java:33,38`); the
   `TQL-LD-2856` missing-template code never naming the file (its live half fixed by
   `export-hygiene.md` P4); the `'null'` format text (fixed by its P7 — the predicate refuses the
   step); the zero-row
   0-byte csv (#24); the 32,768-char cell trio (#22); `TQL-LD-2801`'s hard-coded excel hint; the
   5311/5312 wrong-reason lints; the caller's principal in `params_json`; "make the jxls report mode
   honour the zone" (hand jxls a `LocalDateTime` in the declared zone — after the temporal decision);
-  jxls report mode's `25569.9375` for a `java.sql.Time`; the `TQL-LD-2802` message naming the format
+  jxls report mode's `25569.9375` for a `java.sql.Time` (*after T1 it was the RUN date's serial for a
+  `LocalTime`; fixed by slice 18, R7: report mode receives the day fraction the grid writes*); the `TQL-LD-2802` message naming the format
   and file, not the column; a codec `UncheckedIOException` raised OUTSIDE the write keeping
   `TQL-SQL-2500`; the ZIP host byte, the surrogate split in `SplitExport.safe`, the masked 2857, the
   two-part extension in `zipName` (`orders-{key}.tar.gz`) — the bundle half of these is fixed by

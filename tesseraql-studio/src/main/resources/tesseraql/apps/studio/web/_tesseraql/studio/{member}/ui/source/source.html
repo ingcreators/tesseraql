@@ -78,7 +78,7 @@
         </div>
         <label class="hc-field" th:if="${src.isRoute and src.testRunnerEnabled}">
           <input type="checkbox" id="render-live" name="live" value="true">
-          Use live data &mdash; run the route's SQL against the dev datasource (sandboxed)
+          Use live data &mdash; run the route's SQL sources and their result:/enrich: stages against the dev datasource (sandboxed; no outbound calls)
         </label>
         <label class="hc-field">
           <input type="checkbox" id="render-scripts" name="scripts" value="true">

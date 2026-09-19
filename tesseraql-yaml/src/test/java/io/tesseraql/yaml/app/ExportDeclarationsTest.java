@@ -453,6 +453,32 @@ class ExportDeclarationsTest {
         assertThat(violations.get(1).message()).contains("drives nothing in a workbook");
     }
 
+    /**
+     * {@code groupBy:} on a print template is an inert key (docs/audit-low-leads.md XD-02 R5):
+     * only the jxls report mode reads the groups, a pdf template's model carries the rows, so
+     * {@code groups} in it was null and rendered as nothing, at 200, with lint and boot silent
+     * (the groups lint speaks only when there is no template). The workbook report keeps it.
+     */
+    @Test
+    void groupByOnAPrintTemplateIsInertAndOnAWorkbookReportIsRead(@TempDir Path dir)
+            throws Exception {
+        Files.writeString(dir.resolve("print.html"), "<html/>");
+        Files.writeString(dir.resolve("report.xlsx"), "x");
+        ExportSpec print = new ExportSpec("pdf", null, "print.html", null, null, List.of(),
+                null, null, null, null, null, "department", null, null);
+        ExportSpec report = new ExportSpec("excel", null, "report.xlsx", null, null, List.of(),
+                null, null, null, null, null, "department", null, null);
+
+        assertThat(ExportDeclarations.violations(ROUTE, print, dir, dir)).singleElement()
+                .satisfies(violation -> {
+                    assertThat(violation.kind()).isEqualTo(Kind.INERT);
+                    assertThat(violation.key()).isEqualTo("export.groupBy");
+                    assertThat(violation.code().toString()).isEqualTo("TQL-YAML-1005");
+                    assertThat(violation.message()).contains("print template reads the rows");
+                });
+        assertThat(ExportDeclarations.violations(ROUTE, report, dir, dir)).isEmpty();
+    }
+
     @Test
     void aTemplateOnCsvIsInertAndItsExistenceIsNotJudged(@TempDir Path dir) {
         ExportSpec csv = new ExportSpec("csv", null, "missing.xlsx", "S1", "B2", List.of(),

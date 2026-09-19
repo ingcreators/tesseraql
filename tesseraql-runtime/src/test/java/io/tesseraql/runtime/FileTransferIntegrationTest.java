@@ -313,6 +313,29 @@ class FileTransferIntegrationTest {
     }
 
     /**
+     * A mis-grouped number is refused, not written a hundredfold (docs/audit-low-leads.md
+     * unfiled 15): under the German pattern {@code 1.234.50} has no decimal separator, and the
+     * lenient parse read it as 123450. The row is reported by its number and the column's
+     * name, and nothing is written.
+     */
+    @Test
+    void aMisgroupedNumberIsRefusedOnImportNotWrittenAHundredfold() throws Exception {
+        String transferId = startTransfer("/api/events/import",
+                "name,held_on,fee\nmisgrouped,2026/06/13,\"1.234.50\"\n");
+        JsonNode status = awaitTerminal("/api/events/import/" + transferId);
+        assertThat(status.get("status").asText()).as(status.toString()).isEqualTo("FAILED");
+        assertThat(status.get("errors").get(0).get("row").asLong()).isEqualTo(1);
+        assertThat(status.get("errors").get(0).toString()).contains("fee");
+        try (Connection connection = connect();
+                Statement statement = connection.createStatement();
+                ResultSet rs = statement.executeQuery(
+                        "select count(*) from events where name = 'misgrouped'")) {
+            assertThat(rs.next()).isTrue();
+            assertThat(rs.getLong(1)).isZero();
+        }
+    }
+
+    /**
      * Columns typed through their domains parse exactly as the spelled-out ones do
      * (docs/temporal-semantics.md decision 25): the domain alone carries the type and the
      * pattern. Before, the reference was an unknown key and the text was bound as a string,

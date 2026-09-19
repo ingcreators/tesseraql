@@ -543,6 +543,22 @@ public final class ManifestLoader {
     }
 
     /**
+     * The shared-definition layers over one document parsed outside a load — the Studio
+     * preview, which parses a draft's text (docs/audit-low-leads.md TS-04). The preview then
+     * sees what the loader would have loaded: a {@code result:} entry's {@code domain:}
+     * resolved to its type and format, a {@code use:} to its rules, a decision alias to its
+     * table. An unknown reference fails exactly as the load would.
+     */
+    public RouteDefinition resolveSharedDefinitions(Path appHome, Path source,
+            RouteDefinition def, ExpressionFunctions functions) {
+        Path home = appHome.toAbsolutePath().normalize();
+        return resolveSharedDefinitions(io.tesseraql.yaml.domain.FieldDomains.load(home),
+                io.tesseraql.yaml.rules.ValidationRuleSets.load(home, parser, functions),
+                io.tesseraql.yaml.decision.DecisionSets.load(home, parser), source, def,
+                functions);
+    }
+
+    /**
      * Field-domain references plus shared validation rules plus decision-table references for
      * one document (docs/field-domains.md, docs/validation-rule-sets.md,
      * docs/decision-tables.md), so the binder, linter, OpenAPI, coverage, and the MCP schema

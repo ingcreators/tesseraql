@@ -264,15 +264,24 @@ final class StudioTestService {
     }
 
     /**
-     * Executes a route's read queries against the sandbox and returns their results keyed by model
-     * name for the rendered preview (Studio backlog A1 "real bound params"; multi-binding): the main
-     * {@code sql} under {@code sql}, plus every named {@code query} under its own name — matching how
-     * the runtime keys each result. A {@link StudioService.RowSource}. Each query's binds resolve
-     * from the render context, which accretes earlier results in authored order (so a later query may
-     * read an earlier one); the same {@link SandboxDataSource} guards apply (timeout, row cap,
-     * rollback). Returns null — keeping the hand-authored sample — when no binding is a runnable read
-     * query (a service/contract/sequence binding, a non-{@code query} mode, or no SQL file). Command
+     * Executes a route's read sources against the sandbox and returns their results keyed by
+     * source name for the rendered preview (Studio backlog A1 "real bound params";
+     * multi-binding): every SQL {@code query} source under its own name, {@code main} included —
+     * matching how the runtime keys each result (docs/unified-sources.md decision 10; the retired
+     * {@code sql} key is published no more, and {@code main} runs once). A
+     * {@link StudioService.RowSource}. Each query's binds resolve from the render context, which
+     * accretes earlier results in authored order (so a later query may read an earlier one); the
+     * same {@link SandboxDataSource} guards apply (timeout, row cap, rollback). Returns null —
+     * keeping the hand-authored sample — when no binding is a runnable read query (a
+     * service/contract/sequence binding, a non-{@code query} mode, or no SQL file). Command
      * {@code steps} (writes) are not previewed live.
+     *
+     * <p>The rows then pass the row stages the served route runs after its reads
+     * (docs/audit-low-leads.md TS-04): each source's {@code result:} declaration right after
+     * its read, then every {@code enrich:} in authored order — a {@code sql:} reference against
+     * the sandbox, a {@code source:} reference against the results already read. An
+     * {@code http:} reference is not called, as an {@code http:} source is not previewed: the
+     * sandbox makes no outbound call.
      */
     Map<String, Object> liveRows(RouteDefinition route, Path routeDir,
             Map<String, Object> context) {
@@ -280,11 +289,97 @@ final class StudioTestService {
         // A working context the named queries resolve their binds against, accreting earlier results
         // in authored order — mirroring how the runtime publishes each result under its own key.
         Map<String, Object> working = new LinkedHashMap<>(context);
-        runInto(results, working, "sql", route.main(), routeDir);
-        for (Map.Entry<String, Binding> query : route.sources().entrySet()) {
-            runInto(results, working, query.getKey(), query.getValue(), routeDir);
+        for (Map.Entry<String, Binding> source : route.sources().entrySet()) {
+            runInto(results, working, route.id(), source.getKey(), source.getValue(), routeDir);
         }
-        return results.isEmpty() ? null : results;
+        if (results.isEmpty()) {
+            return null;
+        }
+        enrich(route, routeDir, results, working);
+        return results;
+    }
+
+    /**
+     * The enrichment stage over the results this preview read, in authored order, through the
+     * one keyed-reference algorithm the served route runs (docs/lookups.md, decision 3). A
+     * source the preview did not read is not enriched: its rows are the sample's.
+     */
+    private void enrich(RouteDefinition route, Path routeDir, Map<String, Object> results,
+            Map<String, Object> working) {
+        route.sources().forEach((into, binding) -> binding.enrich().forEach((name, spec) -> {
+            if (spec.http() != null || !(results.get(into) instanceof Map<?, ?> target)
+                    || !(target.get("rows") instanceof List<?> rows)) {
+                return;
+            }
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> enriched = enrich(reference(route, routeDir, name, spec),
+                    working, (List<Map<String, Object>>) rows);
+            @SuppressWarnings("unchecked")
+            Map<String, Object> result = new LinkedHashMap<>((Map<String, Object>) target);
+            result.put("rows", enriched);
+            results.put(into, result);
+            working.put(into, result);
+        }));
+    }
+
+    private List<Map<String, Object>> enrich(io.tesseraql.yaml.enrich.KeyedReference reference,
+            Map<String, Object> working, List<Map<String, Object>> rows) {
+        try {
+            return reference.enrich(sandboxEnvironment(), working, rows);
+        } catch (SQLException ex) {
+            throw new IllegalStateException("Live enrichment failed: " + ex.getMessage(), ex);
+        }
+    }
+
+    /** One {@code enrich:} entry as the served route would run it, its SQL read now. */
+    private io.tesseraql.yaml.enrich.KeyedReference reference(RouteDefinition route,
+            Path routeDir, String name, io.tesseraql.yaml.model.EnrichSpec spec) {
+        List<io.tesseraql.core.sql.SqlNode> nodes = List.of();
+        String sourcePath = null;
+        if (spec.sql() != null) {
+            Path file = io.tesseraql.core.dialect.DialectSqlResolver.resolve(
+                    io.tesseraql.core.files.ConfinedPath.under(appHome)
+                            .confine(routeDir.resolve(spec.sql().file()))
+                            .orElseThrow(() -> new IllegalArgumentException(
+                                    "SQL file escapes app home: " + spec.sql().file())),
+                    dialect);
+            nodes = Sql2WayParser.parse(read(file), functions);
+            sourcePath = file.toString();
+        }
+        return new io.tesseraql.yaml.enrich.KeyedReference(name, spec, nodes, sourcePath,
+                route.effectiveDatasource(), dialect,
+                new io.tesseraql.yaml.enrich.KeyedReference.Bounds(queryTimeoutSeconds, maxRows),
+                io.tesseraql.yaml.http.HttpRows::of);
+    }
+
+    /**
+     * What a reference needs, answered by the sandbox: its connections (auto-rollback, capped,
+     * timed out — the preview's contract), no data scope (the main query renders under none
+     * either), no outbound gateway (an {@code http:} reference is never built here), and no
+     * meter for a degraded enrichment — the reference's own log line is the signal.
+     */
+    private io.tesseraql.yaml.enrich.KeyedReference.Environment sandboxEnvironment() {
+        return new io.tesseraql.yaml.enrich.KeyedReference.Environment() {
+            @Override
+            public Connection connection(String datasource) throws SQLException {
+                return sandbox("main").getConnection();
+            }
+
+            @Override
+            public io.tesseraql.core.sql.ScopeResolver scopeResolver() {
+                return io.tesseraql.core.sql.ScopeResolver.UNSUPPORTED;
+            }
+
+            @Override
+            public io.tesseraql.yaml.http.OutboundGateway gateway() {
+                return null;
+            }
+
+            @Override
+            public void degraded(String enrichment) {
+                // The preview has no meter; KeyedReference has already logged the degrade.
+            }
+        };
     }
 
     /**
@@ -303,14 +398,26 @@ final class StudioTestService {
         }
     }
 
-    /** Runs one read binding and, on success, records its {@code {rows,rowCount}} under {@code key}. */
-    private void runInto(Map<String, Object> results, Map<String, Object> working, String key,
-            Binding binding, Path routeDir) {
+    /**
+     * Runs one read binding and, on success, records its {@code {rows,rowCount}} under
+     * {@code key} — with the binding's {@code result:} declaration applied to the rows first,
+     * the one application the served route's source processor runs
+     * (docs/temporal-semantics.md T3).
+     */
+    private void runInto(Map<String, Object> results, Map<String, Object> working,
+            String routeId, String key, Binding binding, Path routeDir) {
         Map<String, Object> result = runQuery(binding, routeDir, working);
-        if (result != null) {
-            results.put(key, result);
-            working.put(key, result);
+        if (result == null) {
+            return;
         }
+        if (!binding.result().isEmpty()) {
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> rows = (List<Map<String, Object>>) result.get("rows");
+            result.put("rows", io.tesseraql.compiler.binding.ResultDeclarationProcessor
+                    .apply(routeId, key, binding.result(), rows));
+        }
+        results.put(key, result);
+        working.put(key, result);
     }
 
     /**
