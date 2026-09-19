@@ -347,4 +347,7 @@ export const EXCLUDED = [
   // The audit's 17 low leads and the 68 "Filed, not fixed" bullets of seven records, atomized and
   // measured against current main, plus the completeness critic's first run — 2026-09-15.
   'audit-low-leads.md',
+  // A download's name is a template on both altitudes: a route's filename: resolves {dotted.path}
+  // against the request, each value folded like a split key, judged once at lint and build - designed 2026-09-19.
+  'route-filename-placeholders.md',
 ];
