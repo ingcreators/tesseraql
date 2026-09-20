@@ -4,7 +4,31 @@ All notable changes to TesseraQL are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/).
 
-## Unreleased
+## 0.18.0 - 2026-09-20
+
+This release is about what an audit leaves behind. The whole-repository audit's low leads —
+seventeen filed leads and sixty-eight "filed, not fixed" bullets from seven earlier records,
+each re-measured against `main` before anything was touched — were worked through in
+twenty-three slices, and the fixes share one shape: a declaration is judged once, on both
+altitudes, so what lint refuses the boot refuses with the same code and sentence, and what the
+boot used to refuse silently the lint now reports — a document's files fenced by the
+application home, a route the compiler could not build, an export's every piece, a view's
+sources, a filename's placeholders. Beneath that shape sit the repairs the measurement found: a
+workflow app boots on Oracle and SQL Server again and its approval tasks exist; file transfers
+run on the tenant's pool and a transfer's subtree is the tenant's; the deadline sweeper resolves
+for the task it is told about; a HEAD of a download claims nothing and the first-download claim
+commits with its follow-up; the MCP transport judges the caller before the message; a confirmed
+two-factor enrollment cannot be restarted without the password and an invitation dies with
+Disable; a decision table's `> n` is an open end; a stack member listens on loopback only; the
+Studio data browser reads one schema and writes one row. A download's name is a template over
+the request (`orders-{params.month}.csv`), the editor follows a bindable path and navigates a
+view's `source:` to the route that declares it, and Studio's previews render what the route
+renders. **Includes pre-1.0 breaking changes** — a request header no longer feeds a declared
+input and the binder's precedence is path, query, body; the expression language's escapes and
+comparisons; the coverage gate's population and exit code; `RouteTestRunner` and
+`TQL-FIELD-4622` deleted; three error codes renumbered; a job's filename value folded and
+`FilenamePlaceholders` moved to core; a misspelt tenancy mode refused — each recorded in its
+entry.
 
 ### Added
 
@@ -47,7 +71,7 @@ All notable changes to TesseraQL are documented here. The format follows
   `view:` scalar in a route is a binding, and an editor-side scan of view documents would take
   one for the other. A 0.17.0 CLI omits the property and the extension stays silent (EN-03).
 
-- `TQL-LD-2868` (410): a completed export whose produced file this node cannot open — a
+- **A completed export whose file this node cannot open is a 410.** `TQL-LD-2868` — a
   node-local `file` temp store behind a stack, an externally emptied spool directory — on the
   route's `/file` and the operations console alike. It used to escape as an unchecked I/O error
   and answer 500 `TQL-ROUTE-5000` (docs/audit-low-leads.md slice 15).
@@ -471,9 +495,11 @@ All notable changes to TesseraQL are documented here. The format follows
 - **Three descriptions promised what the code does not do.** The `lookups` record claimed
   request-scoped enrichment memoization — never built; one fetch per `enrich:` block. The
   shared `export.filename` schema description said `{dotted.path}` interpolates — true on a
-  job step, false on a route, where the name is literal except `{key}` — and
-  `response.file/stream.filename` claimed "a bindable path"; both now say what each arm does,
-  and the reference regenerated. The printable-documents page and two Javadocs named the pdf
+  job step, false on a route at the time, where the name was literal except `{key}` — and
+  `response.file/stream.filename` claimed "a bindable path"; both were corrected to say what
+  each arm did, and then, later in this release, the route learned the placeholder (Added,
+  above), so the three descriptions now describe one behaviour and the reference regenerated
+  twice. The printable-documents page and two Javadocs named the pdf
   template's model key `rows`; the key is `main`, and a template written to `rows` rendered an
   empty document without a line logged — a `PdfFileCodecTest` row now pins the model's keys
   (F122, DN-03d, unfiled 24, 30, 46).
@@ -486,7 +512,7 @@ All notable changes to TesseraQL are documented here. The format follows
   build" where CI never runs the deploy tool. Two ledger tests hold the setup files
   Camel-free and the worker config's `$schema` resolvable (F94, F95, unfiled 65, 66).
 - **A HEAD of a download takes neither the first-download claim nor the follow-up.** Since
-  every GET mount answered HEAD (0.18.0, unreleased), a HEAD of `…/file` — a link checker, a
+  every GET mount answered HEAD (0.17.0), a HEAD of `…/file` — a link checker, a
   monitor, `curl -I` — ran the whole download: the transfer read as `downloaded: true` and the
   `after: timing: download` statement fired for a request that delivered no byte, so the GET
   that followed streamed the file and ran nothing. The route face and the operations console
@@ -1019,8 +1045,8 @@ All notable changes to TesseraQL are documented here. The format follows
   `docs/audit-low-leads.md`, slice 2a (G32).
 - **Workflow reminders keep their `recipient:` and reach the inbox.** Both reminder enqueues —
   the transition's `assigned` and the sweeper's `escalated` — built the envelope through the
-  recipient-less overload the other notify paths left behind when the addressed envelope arrived (Phase 49), and `WorkflowRules` never
-  linted a reminder. A declared `recipient:` was parsed and ignored, an inbox reminder
+  recipient-less overload the other notify paths left behind when the addressed envelope
+  arrived (Phase 49), and `WorkflowRules` never linted a reminder. A declared `recipient:` was parsed and ignored, an inbox reminder
   dead-lettered on every attempt ("carries no recipient"), the assignee's per-channel opt-out was
   never consulted, and an undeclared channel or a malformed `when:` linted clean. Reminders now
   carry the resolved recipient and the tenant (the acting principal's on the route, the task's on
