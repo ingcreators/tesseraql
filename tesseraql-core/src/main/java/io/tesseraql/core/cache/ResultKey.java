@@ -58,6 +58,35 @@ public final class ResultKey {
         return Optional.of(key.toString());
     }
 
+    /**
+     * The key of one reference key's rows (docs/caching.md decision 9): the connector, the
+     * tenant, the reference's identity — its statement or its call, as the enrichment states
+     * it — and the key tuple's components, each rendered as a bind is. Empty when a component
+     * has no canonical text, which the caller counts as a bypass.
+     *
+     * @param datasource  the connector name, or {@code http} for a reference that is a call
+     * @param tenantId    the resolved tenant id, or {@code null} for none
+     * @param referenceId what identifies the reference across requests: the resolved SQL file
+     *                    with its dialect, or the call's method and url template
+     * @param keyValues   the key's raw components, in {@code on:} order
+     */
+    public static Optional<String> ofKey(String datasource, String tenantId, String referenceId,
+            List<Object> keyValues) {
+        StringBuilder key = new StringBuilder();
+        field(key, datasource == null ? "main" : datasource);
+        field(key, tenantId == null ? "" : tenantId);
+        field(key, referenceId == null ? "" : referenceId);
+        field(key, Integer.toString(keyValues.size()));
+        for (Object value : keyValues) {
+            String rendered = render(value);
+            if (rendered == null) {
+                return Optional.empty();
+            }
+            field(key, rendered);
+        }
+        return Optional.of(key.toString());
+    }
+
     /** One length-prefixed field: {@code <length>:<text>;}. */
     private static void field(StringBuilder key, String text) {
         key.append(text.length()).append(':').append(text).append(';');

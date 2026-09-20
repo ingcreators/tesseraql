@@ -153,6 +153,16 @@ hundred-row page over sixty distinct partners costs one round trip.
   (`TQL-SQL-2114`) rather than quietly issuing an unbounded number of round trips.
 - The reference SQL must bind `keys`, or the build fails (`TQL-YAML-1048`) — a query that
   ignores them returns the right answer while reading the whole table once per batch.
+- **One lookup per distinct key per request.** Every `enrich:` block of a request shares one
+  memo: a detail page whose `main` and `history` both name the partner master fetches each
+  partner once, and a block asking a different key set fetches only what earlier blocks did
+  not. An absent key is remembered too.
+- **`cache: {maxAge, tables}` holds each key's rows across requests**, the same hold a source
+  uses ([Holding a result](#holding-a-result)), keyed by the reference, the tenant and the
+  key — so a common partner is a hit whatever the surrounding key set. A `sql:` reference
+  names the tables a command's `invalidates:` drops it by; an `http:` reference takes
+  `maxAge` alone, because nothing stamps a partner system; a `source:` reference fetches
+  nothing and holds nothing (`TQL-YAML-1077`).
 
 A **composite key** takes one `on:` entry per column. The keys then arrive as rows named by
 the *reference's* columns, so the file reads in its own vocabulary:

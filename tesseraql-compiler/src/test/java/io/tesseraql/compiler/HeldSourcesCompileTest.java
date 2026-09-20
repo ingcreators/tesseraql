@@ -54,6 +54,66 @@ class HeldSourcesCompileTest {
         }
     }
 
+    /** docs/caching.md decision 9: a reference's hold rides its processor; a sibling's is refused. */
+    @Test
+    void aHeldReferenceCompilesToItsProcessorAndASiblingsIsRefused(@TempDir Path dir)
+            throws Exception {
+        try (RuntimeContext context = compile(dir, "query-json", """
+                sources:
+                  main:
+                    sql:
+                      file: list.sql
+                    enrich:
+                      partner:
+                        on: { id: code }
+                        sql:
+                          file: partners.sql
+                        merge: [name]
+                        cache:
+                          maxAge: 2m
+                          tables: [partners]
+                response:
+                  json:
+                    body:
+                      rows: main.rows
+                """)) {
+            List<io.tesseraql.compiler.binding.EnrichProcessor> processors = CompiledPipelines
+                    .steps(context, "items.route",
+                            io.tesseraql.compiler.binding.EnrichProcessor.class);
+            assertThat(processors).hasSize(1);
+            assertThat(processors.get(0).hold()).satisfies(spec -> {
+                assertThat(spec.owner()).isEqualTo("items.route");
+                assertThat(spec.source()).isEqualTo("main.enrich.partner");
+                assertThat(spec.maxAgeMillis()).isEqualTo(120_000L);
+                assertThat(spec.tables()).containsExactly("partners");
+            });
+        }
+        assertThatThrownBy(() -> compile(dir.resolve("sibling"), "query-json", """
+                sources:
+                  other:
+                    sql:
+                      file: list.sql
+                  main:
+                    sql:
+                      file: list.sql
+                    enrich:
+                      nested:
+                        on: { id: id }
+                        source: other
+                        as: lines
+                        cache:
+                          maxAge: 30s
+                response:
+                  json:
+                    body:
+                      rows: main.rows
+                """))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("TQL-YAML-1077")
+                .hasMessageContaining("sources.main.enrich.nested.cache")
+                .hasMessageContaining("sibling source");
+    }
+
     @Test
     void aHoldOnATransactionalRouteIsRefusedAtCompile(@TempDir Path dir) {
         assertThatThrownBy(() -> compile(dir, "command-json", """
@@ -180,6 +240,8 @@ class HeldSourcesCompileTest {
                         """.formatted(recipe, body));
         Files.writeString(route.resolve("list.sql"), "select id, note from items\n");
         Files.writeString(route.resolve("write.sql"), "update items set n = 1 where id = 1\n");
+        Files.writeString(route.resolve("partners.sql"),
+                "select code, name from partners where code in /* keys */(1)\n");
         AppManifest manifest = new ManifestLoader().load(dir);
         RuntimeContext context = new RuntimeContext();
         try {

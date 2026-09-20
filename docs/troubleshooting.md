@@ -211,8 +211,10 @@ writes. A `contract:`, `service:`, `http:` or `spool:` arm: no statement text to
 `mode: update` or `call`. A `maxAge:` that is missing, not a duration or not positive. A
 `tables:` that is missing, empty or carrying a blank name. Move the hold to a
 `sql: { file: … }` source in mode `query` of a `query-json`, `query-html` or `page` route,
-and declare both keys. The route-level `cache:` block is the HTTP one and is judged by
-`TQL-YAML-1025`.
+and declare both keys. On an `enrich:` entry the same code refuses a hold over a `source:`
+reference, which fetches nothing, and `tables:` on an `http:` reference, which nothing stamps
+— an `http:` reference takes `maxAge:` alone. The route-level `cache:` block is the HTTP one
+and is judged by `TQL-YAML-1025`.
 
 ### `TQL-YAML-1412` — a policy rule names two conditions
 

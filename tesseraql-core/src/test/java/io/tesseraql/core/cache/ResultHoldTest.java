@@ -323,6 +323,35 @@ class ResultHoldTest {
         assertThat(never.maxAgeMillis()).isEqualTo(60_000L);
     }
 
+    /** docs/caching.md decision 9: a per-key entry obeys the same age, stamp, bound and copy. */
+    @Test
+    void aPerKeyEntryIsPeekedAndStoredUnderTheSameRules() {
+        ResultHold hold = hold();
+        assertThat(hold.peek("k1", ORDERS)).isEmpty();
+        hold.store("k1", ORDERS, rows("a"), hold.versionOf(ORDERS));
+        ResultHold.Rows peeked = hold.peek("k1", ORDERS).orElseThrow();
+        peeked.rows().get(0).put("note", "poisoned");
+        assertThat(hold.peek("k1", ORDERS).orElseThrow().rows().get(0).get("note"))
+                .as("a hit is a copy").isEqualTo("a");
+        // The table moved after the load: the entry is behind its stamp.
+        stamps.bump(List.of("orders"));
+        assertThat(hold.peek("k1", ORDERS)).isEmpty();
+        // A version read before a write and stored after it: already behind, never served.
+        long before = hold.versionOf(ORDERS);
+        stamps.bump(List.of("orders"));
+        hold.store("k2", ORDERS, rows("b"), before);
+        assertThat(hold.peek("k2", ORDERS)).isEmpty();
+        // Oversize is executed, not held; a null key bypasses and stores nothing.
+        hold.store("k3", ORDERS, rows("1", "2", "3", "4", "5", "6"), hold.versionOf(ORDERS));
+        assertThat(hold.peek("k3", ORDERS)).isEmpty();
+        assertThat(hold.peek(null, ORDERS)).isEmpty();
+        hold.store(null, ORDERS, rows("x"), 0L);
+        assertThat(hold.size()).isZero();
+        assertThat(meter.count("tesseraql.cache.hits")).isEqualTo(2);
+        assertThat(meter.reasons("tesseraql.cache.bypasses")).containsExactly("oversize",
+                "binds");
+    }
+
     /** docs/caching.md decision 5: one call drops both holds, then raises the stamp. */
     @Test
     void anInvalidationDropsTheCatalogsAndTheHoldThenRaisesTheStamp() {
@@ -366,11 +395,17 @@ class ResultHoldTest {
     }
 
     @Test
-    void aSpecRequiresAPositiveAgeAndAtLeastOneTable() {
+    void aSpecRequiresAPositiveAgeAndMayNameNoTable() {
         assertThatThrownBy(() -> new HoldSpec("r", "s", "main", 0L, List.of("t")))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> new HoldSpec("r", "s", "main", 1L, List.of()))
-                .isInstanceOf(IllegalArgumentException.class);
+        // An HTTP reference's hold names no table (docs/caching.md decision 9): nothing stamps
+        // a partner system, so it expires on its age alone and no invalidation drops it.
+        HoldSpec http = new HoldSpec("r", "s", "http", 1L, List.of());
+        assertThat(http.tables()).isEmpty();
+        ResultHold hold = hold();
+        hold.read("k1", http, () -> rows("a"));
+        hold.invalidate(List.of("orders"));
+        assertThat(hold.size()).isEqualTo(1);
         assertThat(new HoldSpec("r", "s", null, 1L, List.of("t")).datasource()).isEqualTo("main");
     }
 

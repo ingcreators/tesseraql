@@ -192,6 +192,65 @@ public final class ResultHold {
         }
     }
 
+    /**
+     * The version the tables of {@code spec} stand at now — what an entry stored after a fetch
+     * records as its {@code stampAtLoad}, read before the fetch so a write racing it is not
+     * missed (docs/caching.md decision 9: the enrichment reads several keys, fetches the
+     * misses in one statement, then stores each).
+     */
+    public long versionOf(HoldSpec spec) {
+        return stamps.versionOf(spec.tables());
+    }
+
+    /**
+     * The rows held under {@code key} when the entry is fresh — a copy, counted as a hit — or
+     * empty, counted as a miss (or as a bypass for a {@code null} key). The per-key half of
+     * {@link #read}: an enrichment asks for each of its keys, fetches the misses together and
+     * {@link #store stores} them, because the statement that answers a key set is one
+     * statement, not one per key.
+     */
+    public java.util.Optional<Rows> peek(String key, HoldSpec spec) {
+        declare(spec);
+        if (!enabled) {
+            count(spec, counted -> counted.bypasses);
+            meter.counter("tesseraql.cache.bypasses").increment(attributes(spec, Bypass.DISABLED));
+            return java.util.Optional.empty();
+        }
+        if (key == null) {
+            count(spec, counted -> counted.bypasses);
+            meter.counter("tesseraql.cache.bypasses").increment(attributes(spec, Bypass.BINDS));
+            return java.util.Optional.empty();
+        }
+        Held fresh = fresh(key);
+        if (fresh != null) {
+            return java.util.Optional.of(hit(spec, fresh));
+        }
+        count(spec, counted -> counted.misses);
+        meter.counter("tesseraql.cache.misses").increment(attributes(spec));
+        return java.util.Optional.empty();
+    }
+
+    /**
+     * Holds {@code rows} under {@code key}, loaded when the tables stood at {@code stampAtLoad}
+     * ({@link #versionOf}); a {@code null} key or a disabled hold stores nothing, a result
+     * larger than the hold admits is counted as a bypass and not held. The rows are held as
+     * given and never handed out, so the caller must not keep mutating them.
+     */
+    public void store(String key, HoldSpec spec, Rows rows, long stampAtLoad) {
+        if (!enabled || key == null) {
+            return;
+        }
+        if (rows.rows().size() > maxEntryRows) {
+            count(spec, counted -> counted.bypasses);
+            meter.counter("tesseraql.cache.bypasses").increment(attributes(spec, Bypass.OVERSIZE));
+            return;
+        }
+        // Held as a copy: the caller's list is composed into rows a template may still touch.
+        synchronized (entries) {
+            entries.put(key, new Held(spec, copy(rows), clock.getAsLong(), stampAtLoad));
+        }
+    }
+
     /** Drops every entry whose declaration reads one of {@code tables}; this node only. */
     public void invalidate(Collection<String> tables) {
         if (tables == null || tables.isEmpty()) {

@@ -412,8 +412,9 @@ declaration, unchanged — reaches those holds through the same per-table versio
 key is the pool, the tenant, the statement and every bind. Three slices, the user naming each:
 the hold on a route's sources (**S1 shipped 2026-09-20, #1404**: `cache: {maxAge, tables}`
 on a source, `TQL-YAML-1077`, the shared `TableVersions`, the ops surface, the inventory
-dashboard as the first consumer), the enrichment memo and hold, the writers that are not
-command routes.
+dashboard as the first consumer), the enrichment memo and hold (**S2 shipped 2026-09-20,
+#1405**: one memo per request shared by every `enrich:` block, `cache:` on an `enrich:` entry
+per key), the writers that are not command routes.
 
 ### Phase 33 — deployment and operations maturity
 

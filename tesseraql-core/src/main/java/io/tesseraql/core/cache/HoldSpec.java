@@ -14,7 +14,9 @@ import java.util.List;
  *                     the key, because two connectors may serve the same statement text
  * @param maxAgeMillis how long an entry serves before the statement runs again; positive
  * @param tables       the tables the statement reads — what a writer's {@code invalidates:}
- *                     names to drop the entries; never empty (decision 2)
+ *                     names to drop the entries. A source's hold always names some (decision
+ *                     2, judged by the declaration); an HTTP reference's hold names none
+ *                     (decision 9: nothing stamps a partner system) and expires on its age alone
  */
 public record HoldSpec(String owner, String source, String datasource, long maxAgeMillis,
         List<String> tables) {
@@ -23,10 +25,7 @@ public record HoldSpec(String owner, String source, String datasource, long maxA
         if (maxAgeMillis <= 0) {
             throw new IllegalArgumentException("maxAgeMillis must be positive");
         }
-        tables = List.copyOf(tables);
-        if (tables.isEmpty()) {
-            throw new IllegalArgumentException("tables must name at least one table");
-        }
+        tables = tables == null ? List.of() : List.copyOf(tables);
         datasource = datasource == null || datasource.isBlank() ? "main" : datasource;
     }
 

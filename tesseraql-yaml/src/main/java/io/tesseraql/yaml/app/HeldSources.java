@@ -8,6 +8,7 @@ import io.tesseraql.yaml.app.ExportDeclarations.Kind;
 import io.tesseraql.yaml.app.ExportDeclarations.Violation;
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.model.Binding;
+import io.tesseraql.yaml.model.EnrichSpec;
 import io.tesseraql.yaml.model.ResultCacheSpec;
 import io.tesseraql.yaml.model.RouteDefinition;
 import java.util.ArrayList;
@@ -33,10 +34,12 @@ import java.util.Set;
 public final class HeldSources {
 
     /**
-     * TQL-YAML-1077: a source's {@code cache:} where nothing can be held — a transactional or
-     * streaming surface, a step, a contract, service, HTTP or spool arm, a mode other than
-     * query, a missing, unparseable or non-positive {@code maxAge}, a missing or blank
-     * {@code tables:} entry. The hold would serve nothing, or serve a write its own request
+     * TQL-YAML-1077: a source's or a reference's {@code cache:} where nothing can be held — a
+     * transactional or streaming surface, a step, a contract, service, HTTP or spool arm, a
+     * mode other than query, a missing, unparseable or non-positive {@code maxAge}, a missing
+     * or blank {@code tables:} entry; on an {@code enrich:} entry, a sibling {@code source:}
+     * reference (it fetches nothing) or {@code tables:} on an {@code http:} reference (nothing
+     * stamps a partner system). The hold would serve nothing, or serve a write its own request
      * made; the linter and the build name the source and the reason.
      */
     public static final TqlErrorCode NOTHING_TO_HOLD = new TqlErrorCode(TqlDomain.YAML, 1077);
@@ -66,28 +69,76 @@ public final class HeldSources {
                 + "'";
         String surfaceRefusal = surfaceRefusal(definition, surface);
         definition.sources().forEach((name, binding) -> {
-            if (binding.cache() == null) {
-                return;
+            if (binding.cache() != null) {
+                String key = "sources." + name + ".cache";
+                String head = prefix(app, subject, key);
+                if (surfaceRefusal != null) {
+                    out.add(new Violation(NOTHING_TO_HOLD, Kind.INVALID, key,
+                            head + surfaceRefusal));
+                } else {
+                    declaration(head, key, binding, out);
+                }
             }
-            String key = "sources." + name + ".cache";
-            String head = prefix(app, subject, key);
-            if (surfaceRefusal != null) {
-                out.add(new Violation(NOTHING_TO_HOLD, Kind.INVALID, key,
-                        head + surfaceRefusal));
-                return;
-            }
-            declaration(head, key, binding, out);
+            // A reference's hold (decision 9) rides the surface's answer, then its own arms.
+            binding.enrich().forEach((enrichName, enrich) -> {
+                if (enrich.cache() == null) {
+                    return;
+                }
+                String key = "sources." + name + ".enrich." + enrichName + ".cache";
+                String head = prefix(app, subject, key);
+                if (surfaceRefusal != null) {
+                    out.add(new Violation(NOTHING_TO_HOLD, Kind.INVALID, key,
+                            head + surfaceRefusal));
+                } else {
+                    reference(head, key, enrich, out);
+                }
+            });
         });
+        String stepRefusal = "holds nothing on a step - a step runs inside the command's"
+                + " transaction and reads the write; a hold is legal on the sources of a"
+                + " query-json, query-html or page route";
         definition.steps().forEach((name, binding) -> {
             if (binding.cache() != null) {
                 String key = "steps." + name + ".cache";
-                out.add(new Violation(NOTHING_TO_HOLD, Kind.INVALID, key, prefix(app, subject,
-                        key) + "holds nothing on a step - a step runs inside the command's"
-                        + " transaction and reads the write; a hold is legal on the sources"
-                        + " of a query-json, query-html or page route"));
+                out.add(new Violation(NOTHING_TO_HOLD, Kind.INVALID, key,
+                        prefix(app, subject, key) + stepRefusal));
             }
+            binding.enrich().forEach((enrichName, enrich) -> {
+                if (enrich.cache() != null) {
+                    String key = "steps." + name + ".enrich." + enrichName + ".cache";
+                    out.add(new Violation(NOTHING_TO_HOLD, Kind.INVALID, key,
+                            prefix(app, subject, key) + stepRefusal));
+                }
+            });
         });
         return out;
+    }
+
+    /**
+     * A reference's own arms (decision 9): a sibling source fetches nothing and holds nothing;
+     * a {@code sql:} reference names its tables like a source; an {@code http:} reference takes
+     * {@code maxAge} alone, because nothing stamps a partner system.
+     */
+    private static void reference(String head, String key, EnrichSpec enrich,
+            List<Violation> out) {
+        if (enrich.composesSource()) {
+            out.add(new Violation(NOTHING_TO_HOLD, Kind.INVALID, key, head
+                    + "holds nothing over a sibling source (source: "
+                    + ExportDeclarations.bounded(enrich.source()) + ") - it fetches nothing;"
+                    + " a hold is legal on a sql: or http: reference"));
+            return;
+        }
+        ResultCacheSpec cache = enrich.cache();
+        age(head, key, cache, out);
+        if (enrich.sql() == null) {
+            if (!cache.tables().isEmpty()) {
+                out.add(new Violation(NOTHING_TO_HOLD, Kind.INVALID, key, head
+                        + "an http: reference takes maxAge: alone - nothing stamps a partner"
+                        + " system, so tables: names nothing that could drop the hold"));
+            }
+            return;
+        }
+        tables(head, key, cache, out);
     }
 
     /** Why this surface admits no hold at all, or {@code null} when it does. */
@@ -134,7 +185,13 @@ public final class HeldSources {
                     + "holds a query's rows - mode: " + binding.effectiveMode()
                     + " produces none to hold"));
         }
-        ResultCacheSpec cache = binding.cache();
+        age(head, key, binding.cache(), out);
+        tables(head, key, binding.cache(), out);
+    }
+
+    /** {@code maxAge:} present, a duration, and positive. */
+    private static void age(String head, String key, ResultCacheSpec cache,
+            List<Violation> out) {
         if (cache.maxAge() == null || cache.maxAge().isBlank()) {
             out.add(new Violation(NOTHING_TO_HOLD, Kind.INVALID, key, head
                     + "declares no maxAge: - nothing is held unless the source says for how"
@@ -152,6 +209,11 @@ public final class HeldSources {
                         + "' is not a duration (30s, 5m, 1h)"));
             }
         }
+    }
+
+    /** {@code tables:} present and every name written. */
+    private static void tables(String head, String key, ResultCacheSpec cache,
+            List<Violation> out) {
         if (cache.tables().isEmpty()) {
             out.add(new Violation(NOTHING_TO_HOLD, Kind.INVALID, key, head
                     + "declares no tables: - a writer's invalidates: names them, and a hold"
@@ -206,7 +268,10 @@ public final class HeldSources {
         return tables;
     }
 
-    /** The tables {@code definition}'s held sources read, in declaration order. */
+    /**
+     * The tables {@code definition}'s held sources and held references read, in declaration
+     * order.
+     */
     public static Set<String> tables(RouteDefinition definition) {
         Set<String> tables = new LinkedHashSet<>();
         for (Binding binding : definition.sources().values()) {
@@ -215,18 +280,49 @@ public final class HeldSources {
                         .filter(table -> table != null && !table.isBlank())
                         .forEach(tables::add);
             }
+            for (EnrichSpec enrich : binding.enrich().values()) {
+                if (enrich.cache() != null) {
+                    enrich.cache().tables().stream()
+                            .filter(table -> table != null && !table.isBlank())
+                            .forEach(tables::add);
+                }
+            }
         }
         return tables;
     }
 
-    /** Whether any source of the application declares a hold. */
+    /** Whether any source or reference of the application declares a hold. */
     public static boolean any(AppManifest manifest) {
         return manifest.routes().stream().anyMatch(route -> any(route.definition().sources()))
                 || manifest.tools().stream().anyMatch(tool -> any(tool.definition().sources()));
     }
 
     private static boolean any(Map<String, Binding> sources) {
-        return sources.values().stream().anyMatch(binding -> binding.cache() != null);
+        return sources.values().stream().anyMatch(binding -> binding.cache() != null
+                || binding.enrich().values().stream().anyMatch(enrich -> enrich.cache() != null));
+    }
+
+    /**
+     * What a judged reference's {@code cache:} compiles to (decision 9), or {@code null} for a
+     * reference fetched every request or a sibling source. An {@code http:} reference's hold
+     * names no table and lives on the {@code http} connector: nothing stamps a partner system,
+     * and its keys never share a row set with a statement's.
+     *
+     * @param owner      the route or tool id
+     * @param source     the source the enrichment folds into
+     * @param enrichName the enrichment's name
+     * @param enrich     the reference
+     * @param datasource the connector a {@code sql:} reference runs on, before tenant routing
+     */
+    public static HoldSpec enrichSpec(String owner, String source, String enrichName,
+            EnrichSpec enrich, String datasource) {
+        ResultCacheSpec cache = enrich.cache();
+        if (cache == null || enrich.composesSource()) {
+            return null;
+        }
+        boolean http = enrich.sql() == null;
+        return new HoldSpec(owner, source + ".enrich." + enrichName, http ? "http" : datasource,
+                Durations.toMillis(cache.maxAge()), http ? List.of() : cache.tables());
     }
 
     /**

@@ -268,6 +268,13 @@ public final class TesseraqlProperties {
     /** The one gateway every outbound HTTP call leaves through (docs/lookups.md, decision 15). */
     public static final String OUTBOUND_GATEWAY_BEAN = "tesseraqlOutboundGateway";
 
+    /**
+     * The request's enrichment memo (docs/caching.md decision 8): what every {@code enrich:}
+     * block of one request has already fetched, per reference and per key, so two blocks over
+     * one master cost one lookup per distinct key. Created by the first block, gone with the
+     * exchange.
+     */
+    public static final String ENRICH_MEMO = "TesseraqlEnrichMemo";
     /** Registry bean name for the app's loaded code catalogs (docs/lookups.md, decision 8). */
     public static final String CATALOG_STORE_BEAN = "tesseraqlCatalogStore";
     /**

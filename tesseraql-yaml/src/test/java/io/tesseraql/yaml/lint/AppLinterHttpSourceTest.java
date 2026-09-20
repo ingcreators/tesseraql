@@ -137,6 +137,30 @@ class AppLinterHttpSourceTest {
         assertThat(new AppLinter().lint(dir)).noneMatch(LintFinding::isError);
     }
 
+    /**
+     * A perRow reference keys its url (docs/lookups.md decision 21); the brace made
+     * {@code URI.create} throw and the rule read that as "not absolute", so every keyed url
+     * was refused (caching S2). The host is still judged: a denied one stays denied.
+     */
+    @Test
+    void aKeyedReferenceUrlIsAbsoluteAndItsHostIsStillJudged(@TempDir Path dir)
+            throws Exception {
+        String keyed = "  keyed:\n                    sql:\n                      file: orders.sql\n"
+                + "                    enrich:\n                      partner:\n"
+                + "                        on: { id: code }\n                        http:\n"
+                + "                          url: https://%s/partners/{key.code}\n"
+                + "                        merge: [name]";
+        writeApp(dir, "query-json", "fx.example.com", keyed.formatted("fx.example.com"));
+        assertThat(new AppLinter().lint(dir))
+                .noneMatch(f -> "TQL-SEC-4071".equals(f.code()))
+                .noneMatch(f -> "TQL-SEC-4070".equals(f.code()));
+        writeApp(dir.resolve("denied"), "query-json", "fx.example.com",
+                keyed.formatted("other.example.com"));
+        assertThat(new AppLinter().lint(dir.resolve("denied")))
+                .noneMatch(f -> "TQL-SEC-4071".equals(f.code()))
+                .anyMatch(f -> "TQL-SEC-4070".equals(f.code()));
+    }
+
     @Test
     void aDeniedHostIsAnError(@TempDir Path dir) throws Exception {
         writeApp(dir, "query-json", "other.example.com", "");

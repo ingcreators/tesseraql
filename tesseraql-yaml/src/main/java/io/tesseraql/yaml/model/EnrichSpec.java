@@ -41,16 +41,28 @@ import java.util.Map;
  * @param merge     copy these columns of the single matching row onto each parent (many-to-one)
  * @param batchSize distinct keys per statement; defaulted from the dialect and the key arity
  * @param maxKeys   the ceiling on distinct keys, beyond which the enrichment fails
+ * @param cache     how long each key's rows are held across requests (docs/caching.md decision
+ *                  9), or {@code null} for a reference fetched every request. A {@code sql:}
+ *                  reference names the tables a writer's {@code invalidates:} drops it by; an
+ *                  {@code http:} reference takes {@code maxAge} alone; a {@code source:}
+ *                  reference fetches nothing and holds nothing ({@code TQL-YAML-1077})
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record EnrichSpec(Map<String, String> on, Binding.SqlArm sql,
         HttpSourceSpec http, String source, String mode, String as, List<String> merge,
-        Integer batchSize, Integer maxKeys) {
+        Integer batchSize, Integer maxKeys, ResultCacheSpec cache) {
+
+    /** The shape before a reference could be held across requests. */
+    public EnrichSpec(Map<String, String> on, Binding.SqlArm sql, HttpSourceSpec http,
+            String source, String mode, String as, List<String> merge, Integer batchSize,
+            Integer maxKeys) {
+        this(on, sql, http, source, mode, as, merge, batchSize, maxKeys, null);
+    }
 
     /** The shape before a sibling source could be the reference. */
     public EnrichSpec(Map<String, String> on, Binding.SqlArm sql, HttpSourceSpec http,
             String mode, String as, List<String> merge, Integer batchSize, Integer maxKeys) {
-        this(on, sql, http, null, mode, as, merge, batchSize, maxKeys);
+        this(on, sql, http, null, mode, as, merge, batchSize, maxKeys, null);
     }
 
     /** One request for the whole key set. */

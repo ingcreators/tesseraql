@@ -147,11 +147,12 @@ Two execution strategies, defaulted by source:
 | HTTP | `perRow` | distinct keys |
 
 HTTP defaults to `perRow` because a partner API is usually `GET /customers/{code}`; a source
-that accepts a key list may declare `batch`. There is no request-scoped memoization: each
-`enrich:` block fetches its own reference, so the same master used by two enrichments on one
-route costs two lookups (`KeyedReference.enrich` holds no state between blocks). The cache
-lands with the cross-request one deferred to Phase 32 above — this sentence used to claim the
-request-scoped half as built (`docs/audit-low-leads.md` F122).
+that accepts a key list may declare `batch`. Request-scoped memoization is per key, not per
+block (shipped 2026-09-20, [caching.md](caching.md) S2, after this sentence had claimed it as
+built for a year — `docs/audit-low-leads.md` F122): every `enrich:` block of a request shares
+one memo, so the same master used by two enrichments on one route costs one lookup per
+distinct key, and a block asking a different key set fetches only what earlier blocks did
+not.
 
 Cross-request TTL caching is the same machinery Phase 32 owes and lands with it, not before —
 see decision 12 for the key. Both halves are designed in [caching.md](caching.md) (decisions 8
@@ -714,7 +715,8 @@ join, the same answer enrichment gives.
    anything depends on them, and already answers "the master is small, fetch it whole".
 2. **`enrich:` on read routes, SQL source, batched.** Key extraction, distinct, `batchSize`
    splitting, `maxKeys`, tuple matching, `merge:`/`as:` (not request-scoped memoization —
-   never built; one fetch per `enrich:` block),
+   never built here; one fetch per `enrich:` block until [caching.md](caching.md) S2 made the
+   memo per key on the exchange, 2026-09-20),
    `into:` targeting `sql` or a named query.
 
    Slice 1 settled a boundary this depends on: `nest:` composes the *response body*, so

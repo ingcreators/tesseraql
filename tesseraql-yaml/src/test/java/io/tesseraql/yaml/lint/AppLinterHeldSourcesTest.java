@@ -20,6 +20,10 @@ class AppLinterHeldSourcesTest {
             tesseraql:
               app:
                 name: t
+              http:
+                outbound:
+                  allowedHosts:
+                    - partners.test
             """;
 
     private static void writeRoute(Path dir, String name, String recipe, String body)
@@ -29,6 +33,8 @@ class AppLinterHeldSourcesTest {
         Path route = Files.createDirectories(dir.resolve("web/" + name));
         Files.writeString(route.resolve("orders.sql"), "select 1 as id\n");
         Files.writeString(route.resolve("write.sql"), "update orders set n = 1\n");
+        Files.writeString(route.resolve("partners.sql"),
+                "select code, name from partners where code in /* keys */(1)\n");
         Files.writeString(route.resolve(recipe.startsWith("command") ? "post.yml" : "get.yml"),
                 """
                         version: tesseraql/v1
@@ -234,6 +240,77 @@ class AppLinterHeldSourcesTest {
                     "no catalog and no held source reads",
                     "catalogs and held sources read orders");
         });
+    }
+
+    /** docs/caching.md decision 9: a reference's hold, judged per arm. */
+    @Test
+    void aReferencesHoldIsLegalOnAFetchAndRefusedOnASiblingOrWithTablesOnHttp(
+            @TempDir Path dir) throws Exception {
+        writeRoute(dir, "orders", "query-json", """
+                sources:
+                  main:
+                    sql:
+                      file: orders.sql
+                    enrich:
+                      partner:
+                        on: { id: code }
+                        sql:
+                          file: partners.sql
+                        merge: [name]
+                        cache:
+                          maxAge: 30s
+                          tables: [partners]
+                      remote:
+                        on: { id: code }
+                        http:
+                          url: http://partners.test/partners/{key.code}
+                        merge: [name]
+                        cache:
+                          maxAge: 30s
+                response:
+                  json:
+                    body:
+                      rows: main.rows
+                """);
+        List<LintFinding> findings = new AppLinter().lint(dir);
+        assertThat(findings).noneMatch(LintFinding::isError);
+        assertThat(findings).noneMatch(f -> "TQL-YAML-1043".equals(f.code()));
+
+        writeRoute(dir.resolve("refused"), "orders", "query-json", """
+                sources:
+                  other:
+                    sql:
+                      file: orders.sql
+                  main:
+                    sql:
+                      file: orders.sql
+                    enrich:
+                      nested:
+                        on: { id: id }
+                        source: other
+                        as: lines
+                        cache:
+                          maxAge: 30s
+                      remote:
+                        on: { id: code }
+                        http:
+                          url: http://partners.test/partners/{key.code}
+                        merge: [name]
+                        cache:
+                          maxAge: 30s
+                          tables: [partners]
+                response:
+                  json:
+                    body:
+                      rows: main.rows
+                """);
+        List<LintFinding> refused = held(new AppLinter().lint(dir.resolve("refused")));
+        assertThat(refused).extracting(LintFinding::message)
+                .anySatisfy(m -> assertThat(m).contains("sources.main.enrich.nested.cache:",
+                        "holds nothing over a sibling source (source: other)"))
+                .anySatisfy(m -> assertThat(m).contains("sources.main.enrich.remote.cache:",
+                        "an http: reference takes maxAge: alone"));
+        assertThat(refused).hasSize(2);
     }
 
     @Test

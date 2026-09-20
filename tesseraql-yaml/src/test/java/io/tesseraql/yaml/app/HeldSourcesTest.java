@@ -6,8 +6,12 @@ import io.tesseraql.core.cache.HoldSpec;
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.ManifestLoader;
 import io.tesseraql.yaml.model.Binding;
+import io.tesseraql.yaml.model.EnrichSpec;
+import io.tesseraql.yaml.model.ResultCacheSpec;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -27,6 +31,8 @@ class HeldSourcesTest {
                 """);
         Path orders = Files.createDirectories(dir.resolve("web/orders"));
         Files.writeString(orders.resolve("orders.sql"), "select 1 as id\n");
+        Files.writeString(orders.resolve("partners.sql"),
+                "select code, name from partners where code in /* keys */(1)\n");
         Files.writeString(orders.resolve("get.yml"), """
                 version: tesseraql/v1
                 id: orders.list
@@ -51,6 +57,15 @@ class HeldSourcesTest {
                   plain:
                     sql:
                       file: orders.sql
+                    enrich:
+                      partner:
+                        on: { id: code }
+                        sql:
+                          file: partners.sql
+                        merge: [name]
+                        cache:
+                          maxAge: 1m
+                          tables: [partners]
                 response:
                   json:
                     body:
@@ -59,15 +74,48 @@ class HeldSourcesTest {
         return new ManifestLoader().load(dir);
     }
 
+    /** docs/caching.md decision 9: a reference's hold, per arm. */
+    @Test
+    void aReferencesHoldCompilesPerArm() {
+        Map<String, String> on = Map.of("partner_code", "code");
+        ResultCacheSpec cache = new ResultCacheSpec("2m", List.of("partners"));
+        EnrichSpec sql = new EnrichSpec(on, Binding.SqlArm.of("partners.sql"), null, null,
+                null, null, List.of("name"), null, null, cache);
+        HoldSpec spec = HeldSources.enrichSpec("orders.list", "main", "partner", sql, "crm");
+        assertThat(spec.owner()).isEqualTo("orders.list");
+        assertThat(spec.source()).isEqualTo("main.enrich.partner");
+        assertThat(spec.datasource()).isEqualTo("crm");
+        assertThat(spec.maxAgeMillis()).isEqualTo(120_000L);
+        assertThat(spec.tables()).containsExactly("partners");
+
+        io.tesseraql.yaml.model.HttpCallSpec call = new io.tesseraql.yaml.model.HttpCallSpec(
+                "GET", "http://p/{key.code}", null, null, null, null, null, null, null, null);
+        EnrichSpec http = new EnrichSpec(on, null, new io.tesseraql.yaml.model.HttpSourceSpec(
+                call, null, null, null, null), null, null, null, List.of("name"), null, null,
+                new ResultCacheSpec("30s", List.of()));
+        HoldSpec held = HeldSources.enrichSpec("orders.list", "main", "partner", http, "main");
+        assertThat(held.datasource()).as("nothing stamps a partner system").isEqualTo("http");
+        assertThat(held.tables()).isEmpty();
+
+        EnrichSpec sibling = new EnrichSpec(on, null, null, "partners", null, "lines", null,
+                null, null, cache);
+        assertThat(HeldSources.enrichSpec("orders.list", "main", "partner", sibling, "main"))
+                .isNull();
+        assertThat(HeldSources.enrichSpec("orders.list", "main", "partner",
+                new EnrichSpec(on, Binding.SqlArm.of("partners.sql"), null, null, null, null,
+                        List.of("name"), null, null),
+                "main")).isNull();
+    }
+
     @Test
     void theHeldTablesAreEveryHeldSourcesInDeclarationOrder(@TempDir Path dir)
             throws Exception {
         AppManifest manifest = app(dir);
         assertThat(HeldSources.tables(manifest)).containsExactly("orders", "customers",
-                "regions");
+                "regions", "partners");
         assertThat(HeldSources.any(manifest)).isTrue();
         assertThat(HeldSources.tables(manifest.routes().get(0).definition()))
-                .containsExactly("orders", "customers", "regions");
+                .containsExactly("orders", "customers", "regions", "partners");
     }
 
     @Test
