@@ -93,6 +93,8 @@ final class ToolRules implements LintRule {
         DocumentRules.lintValidation(context, tool.source(), definition, source, findings);
         LiveViewRules.lintEmit(definition, source, findings);
         DocumentRules.lintInvalidates(context, definition, source, findings);
+        HeldSourceRules.report(context, config, tool.source(), definition,
+                io.tesseraql.yaml.app.RecipeShape.Surface.TOOL, source, findings);
         // emit: is a command-json route key. A tool may legally carry that recipe, so the route
         // check would pass it while the compiled tool pipeline broadcasts nothing — say so.
         if (!definition.emit().isEmpty()) {

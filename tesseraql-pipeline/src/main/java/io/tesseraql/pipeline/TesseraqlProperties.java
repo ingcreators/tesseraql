@@ -270,6 +270,22 @@ public final class TesseraqlProperties {
 
     /** Registry bean name for the app's loaded code catalogs (docs/lookups.md, decision 8). */
     public static final String CATALOG_STORE_BEAN = "tesseraqlCatalogStore";
+    /**
+     * Registry bean name for the runtime's held-result store (docs/caching.md decision 4),
+     * bound when the application declares a held source; a {@code SqlStep} carrying a
+     * {@code HoldSpec} reads through it and executes directly when it is absent.
+     */
+    public static final String RESULT_HOLD_BEAN = "tesseraqlResultHold";
+    /**
+     * Registry bean name for the per-table version stamps the catalogs and the hold read
+     * (docs/caching.md decision 5) — the operations surface reports them.
+     */
+    public static final String TABLE_STAMPS_BEAN = "tesseraqlTableStamps";
+    /**
+     * Registry bean name for what a command's {@code invalidates:} reaches (docs/caching.md
+     * decision 5): the catalog holds, the result hold and the stamps, in that order.
+     */
+    public static final String INVALIDATIONS_BEAN = "tesseraqlInvalidations";
 
     /** The reserved context key the code catalogs are published under. */
     public static final String CODES = "codes";

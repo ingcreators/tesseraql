@@ -40,6 +40,7 @@ final class LintContext {
     private final Path appHome;
     private final List<LintFinding> findings;
     private final Set<String> catalogTables;
+    private final Set<String> heldTables;
     private final ExpressionFunctions functions;
     private final io.tesseraql.core.files.FileCodecs codecs;
     private final io.tesseraql.yaml.SimpleYamlParser parser = new io.tesseraql.yaml.SimpleYamlParser();
@@ -50,12 +51,15 @@ final class LintContext {
             .empty();
 
     LintContext(Path appHome, List<LintFinding> findings, Set<String> catalogTables,
-            ExpressionFunctions functions, io.tesseraql.core.files.FileCodecs codecs) {
+            Set<String> heldTables, ExpressionFunctions functions,
+            io.tesseraql.core.files.FileCodecs codecs) {
         this.appHome = appHome;
         this.findings = findings;
         // Not Set.copyOf: the declaration order feeds finding messages, and copyOf randomizes it.
         this.catalogTables = java.util.Collections
                 .unmodifiableSet(new java.util.LinkedHashSet<>(catalogTables));
+        this.heldTables = java.util.Collections
+                .unmodifiableSet(new java.util.LinkedHashSet<>(heldTables));
         this.functions = functions;
         this.codecs = codecs;
     }
@@ -157,6 +161,14 @@ final class LintContext {
      */
     Set<String> catalogTables() {
         return catalogTables;
+    }
+
+    /**
+     * The tables the app's held sources read (docs/caching.md decision 5): with the catalog
+     * tables, what a command's {@code invalidates:} may name and drop something by naming.
+     */
+    Set<String> heldTables() {
+        return heldTables;
     }
 
     /**

@@ -404,6 +404,57 @@ cache:
 - `cache:` is a **query-recipe** key (`query-json`, `query-html`, `page`): a command's
   response must never come from a cache. Streaming responses (`query-export`) are not hashed.
 
+## Holding a result
+
+The HTTP block describes the response to the client; the statement still runs on every
+request, the `304` included. A source can ask the runtime to **hold the rows its statement
+produced** instead, for a declared time, until a write says they changed:
+
+```yaml
+sources:
+  byCategory:
+    sql:
+      file: by-category.sql
+    cache:
+      maxAge: 30s                      # required: how long the rows serve before the statement runs again
+      tables: [products, categories]   # required: what a writer's invalidates: names
+```
+
+```yaml
+# products/adjust/post.yml — the write that changes those rows
+steps:
+  - id: main
+    sql: { file: adjust.sql, mode: update }
+invalidates: [products]
+```
+
+- **What is held is the rows, never the response.** The hold sits below every renderer:
+  masking, shell negotiation, declared kinds and enrichments still run per request, on a
+  copy of the held rows. A `page:` route holds each page and its count under their own keys.
+- **The key is the pool, the tenant, the statement and every bind.** A shared-schema
+  tenant's `tenant.id` bind, a `/*%scope … */` predicate and an ambient `principal.*` value
+  are all part of the statement the key is made of, so no request reads another's rows. A
+  bind with no canonical text (a byte array) makes that request execute, counted as a bypass.
+- **`invalidates:` is the same declaration a code catalog uses.** Naming the table drops the
+  held rows on the node that served the write at once, and on every other node within a few
+  seconds through the same per-table version row ([code-catalogs.md](code-catalogs.md),
+  "Keeping a catalog fresh"). Underneath sits `maxAge`: a write nothing declares — another
+  system's, a job's — shows when the hold expires.
+- **Where it is legal**: a `sql: { file: … }` source in mode `query` of a `query-json`,
+  `query-html` or `page` route, or of an MCP tool that only reads. A command's steps and
+  sources, a webhook or queue consumer, an export, a `contract:`, `service:` or `http:` arm
+  hold nothing and are refused at lint and boot (`TQL-YAML-1077`), as is a missing
+  `maxAge:` or `tables:`.
+- **Bounded and observable.** `tesseraql.cache.maxEntries` (1000) and
+  `tesseraql.cache.maxEntryRows` (1000; a larger result executes and is not held) bound the
+  hold; `tesseraql.cache.enabled: false` makes every declaration execute, counted.
+  `GET /_tesseraql/ops/cache` reports each held source's hits, misses, bypasses and entries
+  and the version rows; `POST /_tesseraql/ops/cache/invalidate?tables=products` drops by
+  table on every node. The counters `tesseraql.cache.hits`, `.misses`, `.bypasses`,
+  `.invalidations` and `.evictions` carry the route and the source.
+- A live region (`refreshOn:`) over a held source refreshes to the hold unless the emitting
+  command also names the tables in `invalidates:`.
+
 ## Next
 
 - [declarative-views.md](declarative-views.md) — shaping an HTML response instead.

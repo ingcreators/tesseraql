@@ -410,8 +410,10 @@ remaining half is designed in [caching.md](caching.md)** (2026-09-20): a source 
 long its rows are held and which tables they read, a command's `invalidates:` — the catalog's
 declaration, unchanged — reaches those holds through the same per-table version stamps, and the
 key is the pool, the tenant, the statement and every bind. Three slices, the user naming each:
-the hold on a route's sources, the enrichment memo and hold, the writers that are not command
-routes.
+the hold on a route's sources (**S1 shipped 2026-09-20, #1404**: `cache: {maxAge, tables}`
+on a source, `TQL-YAML-1077`, the shared `TableVersions`, the ops surface, the inventory
+dashboard as the first consumer), the enrichment memo and hold, the writers that are not
+command routes.
 
 ### Phase 33 — deployment and operations maturity
 

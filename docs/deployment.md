@@ -414,6 +414,17 @@ it is down each node serves the declared rate, so a cluster of N nodes serves N 
 claim that never returns at all leaves its node on the per-node budget until it ends, and is
 reported at `ERROR` naming that consequence.
 
+**Held results are per node; their invalidation crosses nodes through a version row.** A
+source's `cache: {maxAge, tables}` ([response-shaping.md](response-shaping.md#holding-a-result))
+holds its statement's rows in the node's own memory, bounded by `tesseraql.cache.maxEntries`
+and `tesseraql.cache.maxEntryRows`. A command's `invalidates:` drops them on the node that
+served the write at once and raises a per-table version in `tql_catalog_version` on the main
+database — the row the code catalogs already read. Every other node re-reads that row at most
+once every five seconds, so a peer serves the old rows for at most that long after a write it
+did not see. Underneath sits `maxAge`: a write nothing declares shows when the hold expires.
+`tesseraql.cache.enabled: false` makes every declaration execute, for the incident where a
+hold misbehaves; `POST /_tesseraql/ops/cache/invalidate?tables=…` drops by table cluster-wide.
+
 **Shared export files.** Spooled exports (`query-export`, `query-spool`, batch intermediate
 results) default to the producing node's local disk — fine for one node, but a download can
 then only be served where it was made. Pick the store per deployment:

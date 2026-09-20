@@ -1,13 +1,25 @@
 # A read declares how long its rows are held, a write declares what it made stale: the result hold, its keys and its invalidation
 
-> **Status: designed 2026-09-20. No slice started; the user names each one.** Phase 32 of
-> `docs/roadmap.md` owes "declared invalidation keys (a command declares which query caches it
-> invalidates), and an opt-in result cache with TTL. Tenancy-safe keys; correctness over hit
-> rate." The first half — `Cache-Control`, a strong `ETag`, `304`, htmx-aware — shipped in
-> 0.6.0 (#360, #637). This record measures what stands and decides the second half in three
-> slices: **S1** the hold on a route's sources and the reach of `invalidates:`; **S2** the
-> enrichment memo (`docs/audit-low-leads.md` F122, code M) and the enrichment's hold; **S3**
-> the writers that are not command routes.
+> **Status: designed 2026-09-20 (#1403); S1 shipped the same day (#1404); the user names
+> the next slice.** Phase 32 of `docs/roadmap.md` owes "declared invalidation keys (a command
+> declares which query caches it invalidates), and an opt-in result cache with TTL.
+> Tenancy-safe keys; correctness over hit rate." The first half — `Cache-Control`, a strong
+> `ETag`, `304`, htmx-aware — shipped in 0.6.0 (#360, #637). This record measures what stands
+> and decides the second half in three slices: **S1** the hold on a route's sources and the
+> reach of `invalidates:`; **S2** the enrichment memo (`docs/audit-low-leads.md` F122, code M)
+> and the enrichment's hold; **S3** the writers that are not command routes.
+>
+> **S1** — `ResultHold`, `ResultKey`, `HoldSpec`, `TableStamps` and `Invalidations` in core;
+> `TableVersions` extracted from `JdbcCatalogStore`; `cache: {maxAge, tables}` on a source,
+> judged once by `TQL-YAML-1077` (`HeldSources`); `TQL-FIELD-4620` widened; the two ops
+> endpoints; the counters; the reload's clear; the inventory dashboard as the first consumer:
+> **shipped, #1404** (every decision as recommended). Two things S1 found: the catalog stamp
+> reader had never read the version row (`now - Long.MIN_VALUE` overflows; decision 5's
+> "within 5 s elsewhere" was true of nothing before this slice — fixed in `TableVersions`,
+> pinned by `TableVersionsTest` and the peer-runtime row of `ResultHoldIntegrationTest`), and
+> the test runner and Studio's previews never run the compiled `SqlStep` (the runner has no
+> runtime, the preview renders through `SqlRenderer` directly), so decision 6's
+> "boot with `enabled: false`" needed no code — the key stays as the operator's switch.
 
 A query route can tell a browser how long to keep its response and answer a revalidation with
 `304`. It cannot tell the runtime to keep the rows: every request renders from a statement

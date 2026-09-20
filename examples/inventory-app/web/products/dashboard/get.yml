@@ -11,12 +11,22 @@ sources:
     sql:
       file: totals.sql
       mode: query
+  # Held for half a minute (docs/response-shaping.md "Holding a result"): the rows these two
+  # statements produce are kept per tenant and per bind, and products.create / products.adjust
+  # declare `invalidates: [products]`, so an adjustment shows on the next reload while an
+  # unchanged shelf costs no statement.
   byCategory:
     sql:
       file: by-category.sql
+    cache:
+      maxAge: 30s
+      tables: [products]
   lowStock:
     sql:
       file: low-stock.sql
+    cache:
+      maxAge: 30s
+      tables: [products]
   # Supplier price drops, read straight off the CSV files by the analytics engine
   # (docs/duckdb.md) — one response composing the live database and the file drop.
   supplierPrices:

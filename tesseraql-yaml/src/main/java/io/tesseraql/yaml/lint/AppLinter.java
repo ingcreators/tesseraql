@@ -176,7 +176,7 @@ public final class AppLinter {
                         .flatMap(spec -> spec.sourceTables().stream())
                         .collect(java.util.stream.Collectors
                                 .toCollection(java.util.LinkedHashSet::new)),
-                functions, codecs);
+                io.tesseraql.yaml.app.HeldSources.tables(manifest), functions, codecs);
         for (LintRule rule : rules()) {
             rule.lint(context, manifest, findings);
         }

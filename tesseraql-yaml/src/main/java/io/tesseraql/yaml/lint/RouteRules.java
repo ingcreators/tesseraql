@@ -155,6 +155,8 @@ final class RouteRules implements LintRule {
         DocumentRules.lintValidation(context, route.source(), definition, source, findings);
         LiveViewRules.lintEmit(definition, source, findings);
         DocumentRules.lintInvalidates(context, definition, source, findings);
+        HeldSourceRules.report(context, config, route.source(), definition,
+                io.tesseraql.yaml.app.RecipeShape.Surface.ROUTE, source, findings);
         HttpSourceRules.lintHttpSources(config, definition, source, findings);
         EnrichRules.lintEnrich(context, config, route.source(), definition, source, findings);
         RateLimitRules.lintRateLimitScope(definition, source, findings);

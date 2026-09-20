@@ -69,6 +69,95 @@ final class OperationsRoutes {
         return row;
     }
 
+    /**
+     * The held sources as JSON (docs/caching.md decision 7): the hold's bounds and counters
+     * per declared source, and the version rows the stamp last read. Reports the hold; it
+     * never takes one, so a source nothing has asked for yet shows zero entries and zero
+     * misses, which is the truth an operator needs.
+     */
+    private static Map<String, Object> cacheStatus(io.tesseraql.pipeline.Exchange exchange) {
+        io.tesseraql.core.cache.ResultHold hold = exchange.beans().lookup(
+                io.tesseraql.pipeline.TesseraqlProperties.RESULT_HOLD_BEAN,
+                io.tesseraql.core.cache.ResultHold.class);
+        io.tesseraql.operations.catalog.TableVersions versions = exchange.beans().lookup(
+                io.tesseraql.pipeline.TesseraqlProperties.TABLE_STAMPS_BEAN,
+                io.tesseraql.operations.catalog.TableVersions.class);
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("enabled", hold != null && hold.enabled());
+        out.put("entries", hold == null ? 0 : hold.size());
+        out.put("maxEntries", hold == null ? null : hold.maxEntries());
+        out.put("maxEntryRows", hold == null ? null : hold.maxEntryRows());
+        out.put("evictions", hold == null ? 0L : hold.evictions());
+        out.put("sources", hold == null
+                ? List.of()
+                : hold.status().stream().map(OperationsRoutes::sourceStatusMap).toList());
+        out.put("stamps", versions == null
+                ? List.of()
+                : versions.status().stream().map(OperationsRoutes::stampMap).toList());
+        return out;
+    }
+
+    private static Map<String, Object> sourceStatusMap(
+            io.tesseraql.core.cache.ResultHold.SourceStatus status) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("route", status.owner());
+        row.put("source", status.source());
+        row.put("datasource", status.datasource());
+        row.put("maxAgeMillis", status.maxAgeMillis());
+        row.put("tables", status.tables());
+        row.put("entries", status.entries());
+        row.put("hits", status.hits());
+        row.put("misses", status.misses());
+        row.put("bypasses", status.bypasses());
+        row.put("invalidations", status.invalidations());
+        return row;
+    }
+
+    private static Map<String, Object> stampMap(
+            io.tesseraql.operations.catalog.TableVersions.Stamp stamp) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("table", stamp.table());
+        row.put("version", stamp.version());
+        row.put("updatedAt", stamp.updatedAt() == 0L
+                ? null
+                : java.time.Instant.ofEpochMilli(stamp.updatedAt()).toString());
+        return row;
+    }
+
+    /**
+     * {@code POST /_tesseraql/ops/cache/invalidate?tables=a,b}: drops the catalog holds and
+     * the held results over the named tables on this node and raises their versions, so every
+     * other node follows within the stamp interval — an operator's answer when a source
+     * changed somewhere the app could not see. Acting on the application, like the catalog
+     * refresh: {@code tql.ops.run.<thisApp>}, and a table no catalog and no held source reads
+     * is the 404 an unknown resource gives.
+     */
+    private Object invalidateCache(io.tesseraql.pipeline.Exchange exchange) {
+        io.tesseraql.core.cache.Invalidations invalidations = exchange.beans().lookup(
+                io.tesseraql.pipeline.TesseraqlProperties.INVALIDATIONS_BEAN,
+                io.tesseraql.core.cache.Invalidations.class);
+        io.tesseraql.operations.catalog.TableVersions versions = exchange.beans().lookup(
+                io.tesseraql.pipeline.TesseraqlProperties.TABLE_STAMPS_BEAN,
+                io.tesseraql.operations.catalog.TableVersions.class);
+        String declared = exchange.request().param("tables");
+        List<String> tables = declared == null
+                ? List.of()
+                : java.util.Arrays.stream(declared.split(","))
+                        .map(String::trim).filter(table -> !table.isEmpty()).toList();
+        if (invalidations == null || versions == null || tables.isEmpty()
+                || !runScope(exchange).test(actions.mainApp())
+                || !versions.stampedTables().containsAll(tables)) {
+            throw OpsActions.notFound(tables.isEmpty()
+                    ? "Table"
+                    : "Table" + (tables.size() == 1 ? " '" + tables.get(0) + "'" : "s " + tables));
+        }
+        invalidations.invalidate(tables);
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("invalidated", tables);
+        out.put("stamps", versions.status().stream().map(OperationsRoutes::stampMap).toList());
+        return out;
+    }
+
     private final ObjectMapper mapper = io.tesseraql.yaml.JsonMappers.constrained();
     /** The shared find/scope/act cores both the JSON API and the console providers call. */
     private final OpsActions actions;
@@ -157,6 +246,12 @@ final class OperationsRoutes {
         HttpMounts.of(context).mount("GET", "/_tesseraql/ops/catalogs", "ops.catalogs");
         HttpMounts.of(context).mount("POST", "/_tesseraql/ops/catalogs/{name}/refresh",
                 "ops.catalogs.refresh");
+        // What the held sources hold, and a manual drop (docs/caching.md decision 7). Looked
+        // up per request like the catalogs: an app that holds no source answers
+        // enabled: false and an empty list, and the endpoints do not depend on start-up order.
+        HttpMounts.of(context).mount("GET", "/_tesseraql/ops/cache", "ops.cache");
+        HttpMounts.of(context).mount("POST", "/_tesseraql/ops/cache/invalidate",
+                "ops.cache.invalidate");
         // The outbox delivery log and dead-letter redelivery (roadmap Phase 20).
         HttpMounts.of(context).mount("GET", "/_tesseraql/ops/outbox", "ops.outbox");
         HttpMounts.of(context).mount("POST", "/_tesseraql/ops/outbox/{id}/redeliver",
@@ -324,6 +419,14 @@ final class OperationsRoutes {
                             .map(OperationsRoutes::catalogStatusMap).findFirst()
                             .orElseThrow();
                 }));
+
+        pipelines.pipeline("ops.cache")
+                .process(VIEW).process(requireAnyOpsView())
+                .process(jsonProcessor(OperationsRoutes::cacheStatus));
+
+        pipelines.pipeline("ops.cache.invalidate")
+                .process(VIEW)
+                .process(jsonProcessor(this::invalidateCache));
 
         pipelines.pipeline("ops.outbox")
                 .process(VIEW).process(requireAnyOpsView())

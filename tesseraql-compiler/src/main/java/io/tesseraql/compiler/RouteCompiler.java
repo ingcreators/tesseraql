@@ -512,6 +512,7 @@ public final class RouteCompiler {
                 io.tesseraql.yaml.app.RecipeShape.Surface.ROUTE);
         requireRequestSources(definition, io.tesseraql.yaml.app.RecipeShape.Surface.ROUTE);
         requireResponseLiterals(definition, routeFile.urlPath());
+        requireHeldSources(definition, io.tesseraql.yaml.app.RecipeShape.Surface.ROUTE);
         requireRotationHonoured(definition);
         requireLockHonoured(definition, null);
         refuseWriteKeysOnSources(definition);
@@ -819,6 +820,20 @@ public final class RouteCompiler {
                 LOG::warn);
     }
 
+    /**
+     * Where a source's {@code cache:} can hold anything, refused before any step is built
+     * (docs/caching.md decision 6): a read surface, a {@code sql:} file arm in mode query, a
+     * positive {@code maxAge}, the tables the statement reads. The predicate is the linter's,
+     * so the two altitudes cannot disagree — and the step below is built from the same
+     * declaration only once it passed.
+     */
+    private void requireHeldSources(RouteDefinition definition,
+            io.tesseraql.yaml.app.RecipeShape.Surface surface) {
+        io.tesseraql.yaml.app.ExportDeclarations.require(
+                io.tesseraql.yaml.app.HeldSources.violations(appName, definition, surface),
+                LOG::warn);
+    }
+
     /** The terminal renderer: a redirect when declared, otherwise the JSON response. */
     private io.tesseraql.pipeline.Step responseRenderer(RouteDefinition definition) {
         if (definition.response() != null && definition.response().redirect() != null) {
@@ -899,7 +914,7 @@ public final class RouteCompiler {
                     definition.emit()));
         }
         if (!definition.invalidates().isEmpty()) {
-            step = step.process(new io.tesseraql.compiler.binding.CatalogInvalidateProcessor(
+            step = step.process(new io.tesseraql.compiler.binding.InvalidationProcessor(
                     definition.invalidates()));
         }
         // Named queries still run after the command (outside its transaction), in authored order.
@@ -1486,6 +1501,7 @@ public final class RouteCompiler {
                 io.tesseraql.yaml.app.RecipeShape.Surface.CONSUMER);
         requireRequestSources(definition, io.tesseraql.yaml.app.RecipeShape.Surface.CONSUMER);
         requireResponseLiterals(definition, null);
+        requireHeldSources(definition, io.tesseraql.yaml.app.RecipeShape.Surface.CONSUMER);
         requireLockHonoured(definition, "a queue consumer");
         refuseWriteKeysOnSources(definition);
         requireDeclaredKinds(definition);
@@ -1576,7 +1592,8 @@ public final class RouteCompiler {
                         datasourceDialect(exportDatasource)),
                 "query-export", "main",
                 effectiveMaxRows(definition.main()), effectiveTimeoutSeconds(definition.main()),
-                effectiveOnOverflow(definition.main()), exportFilename(definition, codec));
+                effectiveOnOverflow(definition.main()), exportFilename(definition, codec),
+                null);
 
         PipelineBuilder route = pipelines.pipeline(routeId);
         applyCommonGovernance(route, routeFile);
@@ -2112,7 +2129,7 @@ public final class RouteCompiler {
                         name, binding.http()))
                 : step.process(new io.tesseraql.compiler.binding.NamedQueryBinder(binding))
                         .process(execution(dir, binding, name, datasource,
-                                "document '" + id + "'"));
+                                "document '" + id + "'", id));
         return declaredKinds(acquired, dir.getFileName().toString(), name, binding);
     }
 
@@ -2206,6 +2223,7 @@ public final class RouteCompiler {
                 io.tesseraql.yaml.app.RecipeShape.Surface.TOOL);
         requireRequestSources(definition, io.tesseraql.yaml.app.RecipeShape.Surface.TOOL);
         requireResponseLiterals(definition, null);
+        requireHeldSources(definition, io.tesseraql.yaml.app.RecipeShape.Surface.TOOL);
         requireLockHonoured(definition, "an MCP tool");
         refuseWriteKeysOnSources(definition);
         requireDeclaredKinds(definition);
@@ -2238,7 +2256,7 @@ public final class RouteCompiler {
                     definition.emit()));
         }
         if (!definition.invalidates().isEmpty()) {
-            step = step.process(new io.tesseraql.compiler.binding.CatalogInvalidateProcessor(
+            step = step.process(new io.tesseraql.compiler.binding.InvalidationProcessor(
                     definition.invalidates()));
         }
         // The read pipeline already mounted every source above; only a transactional tool still
@@ -2413,17 +2431,18 @@ public final class RouteCompiler {
             io.tesseraql.yaml.model.Binding binding, String resultKey) {
         return execution(routeFile.source().getParent(), binding, resultKey,
                 routeFile.definition().effectiveDatasource(),
-                "route '" + routeFile.definition().id() + "'");
+                "route '" + routeFile.definition().id() + "'", routeFile.definition().id());
     }
 
     /** As {@link #executionUri(RouteFile, io.tesseraql.yaml.model.Binding, String)}, resolving
      * SQL files relative to {@code sourceDir} (shared by routes and MCP tools). The binding's own
      * {@code datasource:} wins over {@code routeDatasource}, the route-level connector (roadmap
      * Phase 53); the baked dialect follows the connector the SQL actually runs on.
-     * {@code subject} names the document in the one refusal raised here. */
+     * {@code subject} names the document in the one refusal raised here; {@code owner} is its
+     * id, which a held source's counters and operations row carry. */
     private io.tesseraql.pipeline.Step execution(Path sourceDir,
             io.tesseraql.yaml.model.Binding binding, String resultKey, String routeDatasource,
-            String subject) {
+            String subject, String owner) {
         if (binding.isService()) {
             return new io.tesseraql.pipeline.service.ServiceStep("call", binding.service(),
                     resultKey);
@@ -2437,7 +2456,7 @@ public final class RouteCompiler {
             return new io.tesseraql.pipeline.sql.SqlStep(
                     new io.tesseraql.pipeline.iam.ContractSqlSource(binding.contract()),
                     binding.effectiveMode(), resultKey, effectiveMaxRows(binding),
-                    effectiveTimeoutSeconds(binding), effectiveOnOverflow(binding), null);
+                    effectiveTimeoutSeconds(binding), effectiveOnOverflow(binding), null, null);
         }
         String datasource = bindingDatasource(binding, routeDatasource);
         // The dialect is the load-bearing setting: the source resolves foo.<dialect>.sql
@@ -2451,11 +2470,15 @@ public final class RouteCompiler {
         // by the application home on the same call (docs/audit-low-leads.md slice 14).
         Path sqlPath = sqlFile(sourceDir, binding.file(), dialect, subject,
                 (resultKey.startsWith("steps.") ? resultKey : "sources." + resultKey) + ".file");
+        // The source's hold, from the declaration requireHeldSources already judged
+        // (docs/caching.md decision 2): the step reads through the runtime's hold when the
+        // spec is present and executes directly when it is null.
         return new io.tesseraql.pipeline.sql.SqlStep(
                 new io.tesseraql.pipeline.sql.FileSqlSource(sqlPath.toString(), datasource,
                         dialect),
                 binding.effectiveMode(), resultKey, effectiveMaxRows(binding),
-                effectiveTimeoutSeconds(binding), effectiveOnOverflow(binding), null);
+                effectiveTimeoutSeconds(binding), effectiveOnOverflow(binding), null,
+                io.tesseraql.yaml.app.HeldSources.spec(owner, resultKey, binding, datasource));
     }
 
     /** The connector a binding runs on: its own {@code datasource:} when declared, else the route's. */

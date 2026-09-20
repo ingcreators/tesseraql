@@ -74,13 +74,18 @@ import java.util.Map;
  *                 so once. Sparse: an undeclared column passes through in the kind the
  *                 database gave it. Beside the arms like {@code enrich:}, because it is about
  *                 the rows whatever fetched them
+ * @param cache    how long this source's rows are held and which tables they read
+ *                 (docs/caching.md decision 2), or {@code null} for a source never held. A
+ *                 read source of a query route or a read tool only; judged once, at lint and
+ *                 at build, by {@code TQL-YAML-1077}. Beside the arms for the same reason
+ *                 {@code result:} is: the hold is about the rows whatever fetched them
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record Binding(String file, String contract, String mode, Map<String, String> params,
         String service, HttpSourceSpec http, Materialize materialize, String sequence,
         java.util.List<String> keys, Expect expect, Integer timeoutSeconds, String datasource,
         String spool, String when, Map<String, EnrichSpec> enrich, Map<String, String> out,
-        Map<String, InputField> result) {
+        Map<String, InputField> result, ResultCacheSpec cache) {
 
     public Binding {
         params = params == null ? Map.of() : OrderedCopies.map(params);
@@ -96,13 +101,23 @@ public record Binding(String file, String contract, String mode, Map<String, Str
                 : java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(result));
     }
 
+    /** The shape before a source could declare a hold over its rows. */
+    public Binding(String file, String contract, String mode, Map<String, String> params,
+            String service, HttpSourceSpec http, Materialize materialize, String sequence,
+            java.util.List<String> keys, Expect expect, Integer timeoutSeconds, String datasource,
+            String spool, String when, Map<String, EnrichSpec> enrich, Map<String, String> out,
+            Map<String, InputField> result) {
+        this(file, contract, mode, params, service, http, materialize, sequence, keys, expect,
+                timeoutSeconds, datasource, spool, when, enrich, out, result, null);
+    }
+
     /** The shape before a binding could declare the kinds of its result columns. */
     public Binding(String file, String contract, String mode, Map<String, String> params,
             String service, HttpSourceSpec http, Materialize materialize, String sequence,
             java.util.List<String> keys, Expect expect, Integer timeoutSeconds, String datasource,
             String spool, String when, Map<String, EnrichSpec> enrich, Map<String, String> out) {
         this(file, contract, mode, params, service, http, materialize, sequence, keys, expect,
-                timeoutSeconds, datasource, spool, when, enrich, out, null);
+                timeoutSeconds, datasource, spool, when, enrich, out, null, null);
     }
 
     /** The shape before a call step could declare OUT parameters. */
@@ -121,7 +136,8 @@ public record Binding(String file, String contract, String mode, Map<String, Str
      */
     public Binding withResult(Map<String, InputField> resolved) {
         return new Binding(file, contract, mode, params, service, http, materialize, sequence,
-                keys, expect, timeoutSeconds, datasource, spool, when, enrich, out, resolved);
+                keys, expect, timeoutSeconds, datasource, spool, when, enrich, out, resolved,
+                cache);
     }
 
     /** The shape before an enrichment could nest under the source it transforms. */
@@ -152,7 +168,8 @@ public record Binding(String file, String contract, String mode, Map<String, Str
             @com.fasterxml.jackson.annotation.JsonProperty("spool") String spool,
             @com.fasterxml.jackson.annotation.JsonProperty("when") String when,
             @com.fasterxml.jackson.annotation.JsonProperty("enrich") Map<String, EnrichSpec> enrich,
-            @com.fasterxml.jackson.annotation.JsonProperty("result") Map<String, InputField> result) {
+            @com.fasterxml.jackson.annotation.JsonProperty("result") Map<String, InputField> result,
+            @com.fasterxml.jackson.annotation.JsonProperty("cache") ResultCacheSpec cache) {
         return new Binding(
                 sql == null ? null : sql.file(),
                 contract == null ? null : contract.name(),
@@ -177,7 +194,8 @@ public record Binding(String file, String contract, String mode, Map<String, Str
                 when,
                 enrich,
                 sql == null ? null : sql.out(),
-                result);
+                result,
+                cache);
     }
 
     /**

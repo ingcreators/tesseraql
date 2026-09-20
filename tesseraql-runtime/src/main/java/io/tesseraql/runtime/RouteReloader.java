@@ -359,6 +359,17 @@ public final class RouteReloader {
         if (edge != null) {
             edge.refreshAll();
         }
+        // A rebuilt route drops the held results (docs/caching.md decision 11): a changed
+        // statement is a new key anyway, but a changed tables: must not leave entries filed
+        // under the old declaration. Local only — a deploy replaces every node's runtime.
+        if (!changes.isEmpty() || !removed.isEmpty() || rebuildAll) {
+            io.tesseraql.core.cache.ResultHold hold = context.lookup(
+                    io.tesseraql.pipeline.TesseraqlProperties.RESULT_HOLD_BEAN,
+                    io.tesseraql.core.cache.ResultHold.class);
+            if (hold != null) {
+                hold.clear();
+            }
+        }
         // The reload's scope includes the shared definitions Studio's memoized lookups read
         // (decisions/ for the data browser's column contracts), so a reload is their epoch —
         // the workshop extension's listeners drop those caches and refresh the explorer here.

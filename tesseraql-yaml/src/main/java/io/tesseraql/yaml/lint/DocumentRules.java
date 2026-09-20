@@ -74,13 +74,14 @@ final class DocumentRules {
             "webhook", "queue-consume");
 
     /**
-     * {@code invalidates:} lints (docs/lookups.md, decision 13).
+     * {@code invalidates:} lints (docs/lookups.md decision 13, docs/caching.md decision 5).
      *
-     * <p>The declaration names source tables, and dropping a catalog is what a maintenance
-     * screen's write is for. Two ways it silently does nothing: on a recipe that never commits
-     * (there is no write to invalidate after), and naming a table no catalog reads — a typo in
-     * a verbatim identifier looks exactly like a correct declaration, and the symptom is a
-     * screen showing yesterday's names with nothing to explain it.
+     * <p>The declaration names source tables, and dropping a catalog or a held result is what
+     * a maintenance screen's write is for. Two ways it silently does nothing: on a recipe that
+     * never commits (there is no write to invalidate after), and naming a table no catalog and
+     * no held source reads — a typo in a verbatim identifier looks exactly like a correct
+     * declaration, and the symptom is a screen showing yesterday's names with nothing to
+     * explain it.
      *
      * <p>The unread-table case is a warning, not an error: a table may feed a catalog in
      * another environment's configuration, and the cost of an unnecessary invalidation is a
@@ -95,22 +96,23 @@ final class DocumentRules {
             findings.add(new LintFinding(INVALID_INVALIDATES, ERROR, source,
                     "invalidates: is only supported on command-json routes, not '"
                             + definition.recipe() + "' — there is no commit to invalidate"
-                            + " catalogs after"));
+                            + " catalogs or held results after"));
             return;
         }
-        Set<String> catalogTables = context.catalogTables();
+        Set<String> read = new java.util.LinkedHashSet<>(context.catalogTables());
+        read.addAll(context.heldTables());
         for (String table : definition.invalidates()) {
             if (table == null || table.isBlank()) {
                 findings.add(new LintFinding(INVALID_INVALIDATES, ERROR, source,
                         "invalidates: carries an empty table name"));
-            } else if (!catalogTables.contains(table)) {
+            } else if (!read.contains(table)) {
                 findings.add(new LintFinding(INVALID_INVALIDATES, WARNING, source,
-                        "invalidates: names table '" + table + "', which no catalog reads —"
-                                + " the declaration drops nothing"
-                                + (catalogTables.isEmpty()
-                                        ? " (the app declares no catalogs)"
-                                        : " (catalogs read " + String.join(", ", catalogTables)
-                                                + ")")));
+                        "invalidates: names table '" + table + "', which no catalog and no"
+                                + " held source reads — the declaration drops nothing"
+                                + (read.isEmpty()
+                                        ? " (the app declares no catalogs and holds no source)"
+                                        : " (catalogs and held sources read "
+                                                + String.join(", ", read) + ")")));
             }
         }
     }
