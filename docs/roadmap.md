@@ -428,6 +428,19 @@ through the Phase 20 channels.
 **Milestone M10** — two-node HA on Kubernetes: rolling deploys without dropped requests,
 exactly-once scheduled firings, shared sessions, alerts delivered.
 
+**Designed in [deployment-maturity.md](deployment-maturity.md)** (2026-09-20). Most of the
+drain and every shared-state arbitration the milestone needs already stand, each with an
+integration test; what the record measured as missing or defective is the shape around them —
+no published runtime image, a container health check that cannot pass, a baked image that
+refuses an application declaring a module, every platform's default stop grace shorter than
+the drain bound, an origin readiness that never consults a member, a member readiness that
+answers `DOWN` to any prober slower than three seconds, and an alert sweep that pages once per
+node. Five slices, the user naming each: **S1** the official
+`tesseraql-host` image and a stop that ends on every platform; **S2** the capacity signals on
+the scrape, cluster-wide alert deduplication and four new alert conditions; **S3**
+`tesseraql bench` and the capacity guide; **S4** the Helm chart, the rendered manifests and
+the Kubernetes page; **S5** the M10 proof on a two-replica kind cluster in CI.
+
 ## Horizon 6 — the 1.0 contract (0.8.x → 1.0)
 
 ### Phase 34 — compatibility contract

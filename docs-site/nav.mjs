@@ -258,6 +258,9 @@ export const EXCLUDED = [
   'studio-shell.md',
   // What the classpath carries, what the module channel carries, and how it travels, 2026-08-20.
   'module-channel.md',
+  // Deployment and operations maturity: the official image, the drain on every platform, the
+  // probes, the Helm chart, tesseraql bench, the capacity guide, alert routing (Phase 33), 2026-09-20.
+  'deployment-maturity.md',
   // The rest of the role model: history, SoD, elevation, review, requests, 2026-08-20.
   'access-governance.md',
   // Worker pool, connection pool, edge admission, one Vert.x per host, 2026-08-20.

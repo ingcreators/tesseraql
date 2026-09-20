@@ -633,7 +633,7 @@ final class ErrorIndex {
             "export-declarations.md", "export-hygiene.md", "edge-hygiene.md",
             "temporal-semantics.md", "router-unicode-names.md", "codec-discovery.md",
             "editor-named-sources.md", "audit-low-leads.md", "route-filename-placeholders.md",
-            "caching.md");
+            "caching.md", "deployment-maturity.md");
 
     /** Whether {@code name} is an internal planning document; shared with the config index. */
     static boolean isInternalDoc(String name) {
