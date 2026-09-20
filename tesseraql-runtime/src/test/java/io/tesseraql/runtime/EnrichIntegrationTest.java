@@ -30,6 +30,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 class EnrichIntegrationTest {
 
     @Container
+    @SuppressWarnings("resource") // lifecycle is managed by the @Container extension
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine")
             // Every statement is a line in the container log, so "fetched once" is a count of
             // executions and their binds, not an inference (docs/caching.md decision 8).

@@ -46,6 +46,7 @@ class BatchJobIntegrationTest {
     // Every executed statement is a line in the container log, so "how many times did the
     // master run" is a count, not an inference (the window-memo row below).
     @Container
+    @SuppressWarnings("resource") // lifecycle is managed by the @Container extension
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine")
             .withCommand("postgres", "-c", "log_statement=all");
 
