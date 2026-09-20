@@ -18,6 +18,16 @@ class KeyedUrlsTest {
                 .isEqualTo("https://crm/partners/B1/suppliers/S1");
     }
 
+    /** A keyed url is not a URI until a key fills it; the lint parses the stand-in instead. */
+    @Test
+    void aStandInMakesAKeyedUrlParseable() {
+        String keyed = "https://crm/partners/{key.buyer}/suppliers/{key.supplier}?x={key.x}";
+        assertThat(KeyedUrls.standIn(keyed)).isEqualTo("https://crm/partners/_/suppliers/_?x=_");
+        assertThat(java.net.URI.create(KeyedUrls.standIn(keyed)).getHost()).isEqualTo("crm");
+        assertThat(KeyedUrls.standIn("https://crm/partners")).isEqualTo("https://crm/partners");
+        assertThat(KeyedUrls.standIn(null)).isNull();
+    }
+
     @Test
     void aSlashInAKeyCannotReachAnotherResource() {
         // URLEncoder would pass '/' through, which is the whole point of encoding here.

@@ -171,6 +171,34 @@
         "description": "query-export / file-export output: format (csv, excel, pdf), filename, columns with headers and format patterns, locale/timezone. It says how the rows are written and never what to read - the rows come from sources.main on a route, or the step's own arm in a pipeline. Documented in file-transfers.md."
       }
     },
+    "hold": {
+      "type": "object",
+      "properties": {
+        "maxAge": {
+          "type": "string",
+          "description": "How long the rows are held before the source is asked again: a positive duration such as `30s` or `5m`. Required — nothing is held unless the declaration says for how long."
+        },
+        "tables": {
+          "description": "The tables the statement reads, as a writer would name them — what a command's `invalidates:` names to drop this hold on every node. Required on a statement (a hold no write can reach is the defect the declaration exists to prevent); refused on an `http:` reference, which nothing stamps. A string or a list.",
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
+        }
+      },
+      "required": [
+        "maxAge"
+      ],
+      "additionalProperties": false,
+      "description": "A hold over fetched rows (docs/caching.md): how long they serve before the source is asked again, and which tables a writer's `invalidates:` drops them by. One shape for a source's statement and for an enrichment's reference."
+    },
     "enrichment": {
       "type": "object",
       "properties": {
@@ -221,6 +249,10 @@
           "type": "integer",
           "minimum": 1,
           "description": "The ceiling on distinct keys collected for one enrichment, past which the reference is refused rather than read unboundedly."
+        },
+        "cache": {
+          "$ref": "#/$defs/hold",
+          "description": "Hold each key's rows across requests (docs/caching.md): a partner looked up once serves every later request for `maxAge`, keyed by the reference, the tenant and the key, whatever the surrounding key set. A `sql:` reference names the `tables` a command's `invalidates:` drops it by; an `http:` reference takes `maxAge` alone (nothing stamps a partner system); a `source:` reference fetches nothing and holds nothing. Within one request every block already shares one memo, hold or no hold. Refused where nothing can be held (TQL-YAML-1077)."
         }
       },
       "additionalProperties": false,
@@ -1119,33 +1151,8 @@
           "description": "The columns whose text this binding parses into a declared kind, each name to a field: `type: json` for a jsonb, json or text column an expression, a template or a response should navigate rather than receive as one string; `type: date`, `datetime` or `number` with a `format:` for a value a legacy column stores as text (`20240103`, `1,234.50`); or a `domain:` that says so once. Sparse — an undeclared column keeps the kind the database gave it. A parsed value renders exactly as a native column of that kind does, so a date stored as text and a date column are the same case on every surface; a value that cannot be parsed fails the read with TQL-SQL-2503, naming the column and the row. Applies where a binding publishes rows: a route source or a command step in mode query. Documented in response-shaping.md."
         },
         "cache": {
-          "type": "object",
-          "properties": {
-            "maxAge": {
-              "type": "string",
-              "description": "How long the rows this statement produced are held before it runs again: a positive duration such as `30s` or `5m`. Required — nothing is held unless the source says for how long."
-            },
-            "tables": {
-              "description": "The tables the statement reads, as a writer would name them — what a command's `invalidates:` names to drop this hold on every node. Required: a hold no write can reach is the defect the declaration exists to prevent. A string or a list.",
-              "oneOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
-                }
-              ]
-            }
-          },
-          "required": [
-            "maxAge",
-            "tables"
-          ],
-          "additionalProperties": false,
-          "description": "Hold the rows this source's statement produced (docs/caching.md): the runtime keeps them for `maxAge`, keyed by the connector, the tenant, the statement and every bind, and drops them when a command's `invalidates:` names one of `tables` — on this node at once, on the others within the stamp interval. The rows, never the response: masking, shell negotiation and declared kinds still run per request. Legal on a `sql: { file: … }` source in mode query of a query-json, query-html or page route or of an MCP tool that only reads; anywhere else it holds nothing and is refused at lint and boot (TQL-YAML-1077). The route-level `cache:` block is the HTTP one and is unchanged."
+          "$ref": "#/$defs/hold",
+          "description": "Hold the rows this source's statement produced (docs/caching.md): the runtime keeps them for `maxAge`, keyed by the connector, the tenant, the statement and every bind, and drops them when a command's `invalidates:` names one of `tables` — on this node at once, on the others within the stamp interval. The rows, never the response: masking, shell negotiation and declared kinds still run per request. Both keys are required. Legal on a `sql: { file: … }` source in mode query of a query-json, query-html or page route or of an MCP tool that only reads; anywhere else it holds nothing and is refused at lint and boot (TQL-YAML-1077). The route-level `cache:` block is the HTTP one and is unchanged."
         }
       },
       "additionalProperties": true,

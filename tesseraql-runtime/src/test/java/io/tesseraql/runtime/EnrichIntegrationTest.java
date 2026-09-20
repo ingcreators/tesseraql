@@ -30,7 +30,10 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 class EnrichIntegrationTest {
 
     @Container
-    static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
+    static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine")
+            // Every statement is a line in the container log, so "fetched once" is a count of
+            // executions and their binds, not an inference (docs/caching.md decision 8).
+            .withCommand("postgres", "-c", "log_statement=all");
 
     static final ObjectMapper MAPPER = new ObjectMapper();
 
@@ -208,6 +211,95 @@ class EnrichIntegrationTest {
         assertThat(seenRequests.stream().filter(r -> r.startsWith("POST /search"))).hasSize(1);
     }
 
+    /**
+     * docs/caching.md decision 8 (docs/audit-low-leads.md F122): the detail page's {@code main}
+     * and {@code history} both name the partner master. Its blocks ask {P1} and {P1, P2}, so
+     * the second still runs one statement — for P2 — but P1 is bound by one execution per
+     * request, not two: the memo removes the repeated key, and the count of executions that
+     * bind {@code 'P1'} is the proof.
+     */
+    @Test
+    void twoBlocksOverOneMasterFetchEachKeyOnce() throws Exception {
+        Thread.sleep(400);
+        int statementsBefore = logged("from partners");
+        int p1Before = logged("parameters: $1 = 'P1'");
+        JsonNode body = MAPPER.readTree(get("/api/orders/1").body());
+        assertThat(body.get("order").get(0).get("partner_name").asText()).isEqualTo("Acme");
+        assertThat(body.get("history").get(1).get("partner_name").asText()).isEqualTo("Globex");
+        Thread.sleep(400);
+        assertThat(logged("from partners") - statementsBefore)
+                .as("two blocks, two key sets, two statements").isEqualTo(2);
+        assertThat(logged("parameters: $1 = 'P1'") - p1Before)
+                .as("P1 is fetched by the first block and remembered by the second").isEqualTo(1);
+    }
+
+    /** Two perRow blocks over one API: one call per distinct key for the request, not per block. */
+    @Test
+    void twoHttpBlocksOverOneMasterCallOncePerDistinctKey() throws Exception {
+        seenRequests.clear();
+        JsonNode rows = MAPPER.readTree(get("/api/orders/via-http-twice").body()).get("rows");
+        assertThat(rows).hasSize(4);
+        assertThat(rows.get(0).get("first").get(0).get("name").asText()).isEqualTo("http-P1");
+        assertThat(rows.get(0).get("second").get(0).get("name").asText()).isEqualTo("http-P1");
+        assertThat(seenRequests.stream().filter(r -> r.startsWith("/partners/")))
+                .as("three distinct keys, three calls, two blocks").hasSize(3);
+    }
+
+    /** docs/caching.md decision 9: a held SQL reference serves across requests until its table is named. */
+    @Test
+    void aHeldReferenceServesAcrossRequestsUntilItsTableIsNamed() throws Exception {
+        Thread.sleep(400);
+        int before = logged("from partners");
+        assertThat(MAPPER.readTree(get("/api/orders/held").body()).get("rows").get(0)
+                .get("partner_name").asText()).isEqualTo("Acme");
+        assertThat(MAPPER.readTree(get("/api/orders/held").body()).get("rows").get(0)
+                .get("partner_name").asText()).isEqualTo("Acme");
+        Thread.sleep(400);
+        assertThat(logged("from partners") - before).as("two requests, one fetch").isEqualTo(1);
+
+        // The write names the table: every held partner drops, and the next request refetches.
+        HttpResponse<String> renamed = post("/api/partners/rename",
+                "{\"code\":\"P1\",\"name\":\"Acme Holdings\"}");
+        assertThat(renamed.statusCode()).isEqualTo(200);
+        assertThat(MAPPER.readTree(get("/api/orders/held").body()).get("rows").get(0)
+                .get("partner_name").asText()).isEqualTo("Acme Holdings");
+        Thread.sleep(400);
+        assertThat(logged("from partners") - before).isEqualTo(2);
+        // Restore the name for the rows that read it.
+        post("/api/partners/rename", "{\"code\":\"P1\",\"name\":\"Acme\"}");
+    }
+
+    /** A held perRow HTTP reference calls once per key across requests, on its age alone. */
+    @Test
+    void aHeldHttpReferenceCallsOncePerKeyAcrossRequests() throws Exception {
+        seenRequests.clear();
+        assertThat(MAPPER.readTree(get("/api/orders/via-http-held").body()).get("rows").get(0)
+                .get("name").asText()).isEqualTo("http-P1");
+        assertThat(MAPPER.readTree(get("/api/orders/via-http-held").body()).get("rows").get(0)
+                .get("name").asText()).isEqualTo("http-P1");
+        assertThat(seenRequests.stream().filter(r -> r.startsWith("/partners/")))
+                .as("three distinct keys, three calls, two requests").hasSize(3);
+    }
+
+    /** How many times {@code fragment} occurs in PostgreSQL's statement log so far. */
+    private static int logged(String fragment) {
+        java.util.regex.Matcher matcher = java.util.regex.Pattern
+                .compile(java.util.regex.Pattern.quote(fragment)).matcher(POSTGRES.getLogs());
+        int n = 0;
+        while (matcher.find()) {
+            n++;
+        }
+        return n;
+    }
+
+    private static HttpResponse<String> post(String path, String body) throws Exception {
+        return HttpClient.newHttpClient().send(HttpRequest.newBuilder(
+                URI.create("http://localhost:" + runtime.port() + path))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(body)).build(),
+                HttpResponse.BodyHandlers.ofString());
+    }
+
     /** onError: empty degrades the whole enrichment, never a subset of the rows. */
     @Test
     void aDeadReferenceLeavesEveryRowUnenriched() throws Exception {
@@ -346,6 +438,12 @@ class EnrichIntegrationTest {
                     sql:
                       file: order.sql
                       params: { id: path.id }
+                    enrich:
+                      orderPartner:
+                        on: { partner_code: code }
+                        sql:
+                          file: partners.sql
+                        merge: [partner_name]
                   history:
                     sql:
                       file: history.sql
@@ -366,6 +464,44 @@ class EnrichIntegrationTest {
 
         writeVariant(target, "batched", "batchSize: 1");
         writeVariant(target, "capped", "maxKeys: 1");
+        // A held reference (docs/caching.md decision 9) and the write that names its table.
+        writeVariant(target, "held", "cache:\n                          maxAge: 30s\n"
+                + "                          tables: [partners]");
+        Path rename = target.resolve("web/api/partners/rename");
+        Files.createDirectories(rename);
+        Files.writeString(rename.resolve("rename.sql"),
+                "update partners set name = /* name */'x' where code = /* code */'P1'\n");
+        Files.writeString(rename.resolve("post.yml"), """
+                version: tesseraql/v1
+                id: partners.rename
+                kind: route
+                recipe: command-json
+                input:
+                  code: { type: string, required: true }
+                  name: { type: string, required: true }
+                steps:
+                  - id: main
+                    sql:
+                      file: rename.sql
+                      mode: update
+                      params:
+                        code: params.code
+                        name: params.name
+                invalidates: [partners]
+                response:
+                  json:
+                    status: 200
+                    body:
+                      renamed: steps.main.affectedRows
+                """);
+        // Two perRow blocks over one partner API (decision 8), and one held across requests.
+        writeTwoHttpBlocks(target, upstreamPort);
+        writeHttpVariant(target, "via-http-held", """
+                http:
+                          url: http://localhost:%d/partners/{key.code}
+                        merge: [name]
+                        cache:
+                          maxAge: 30s""".formatted(upstreamPort), "name");
         writeHttpVariant(target, "via-http", """
                 http:
                           url: http://localhost:%d/partners/{key.code}
@@ -386,6 +522,40 @@ class EnrichIntegrationTest {
                           onError: empty
                         merge: [name]""", "name");
         return target;
+    }
+
+    /** Two perRow blocks over the one partner API, under one source (docs/caching.md decision 8). */
+    private static void writeTwoHttpBlocks(Path target, int upstreamPort) throws IOException {
+        Path dir = target.resolve("web/api/orders/via-http-twice");
+        Files.createDirectories(dir);
+        Files.writeString(dir.resolve("orders.sql"),
+                "select id, partner_code from orders order by id\n");
+        Files.writeString(dir.resolve("get.yml"), """
+                version: tesseraql/v1
+                id: orders.via.http.twice
+                kind: route
+                recipe: query-json
+                sources:
+                  main:
+                    sql:
+                      file: orders.sql
+                    enrich:
+                      first:
+                        on: { partner_code: code }
+                        http:
+                          url: http://localhost:%d/partners/{key.code}
+                        as: first
+                      second:
+                        on: { partner_code: code }
+                        http:
+                          url: http://localhost:%d/partners/{key.code}
+                        as: second
+                response:
+                  json:
+                    status: 200
+                    body:
+                      rows: main.rows
+                """.formatted(upstreamPort, upstreamPort));
     }
 
     /** The orders list enriched over HTTP; {@code reference} is the whole difference. */

@@ -34,6 +34,16 @@ public final class KeyedUrls {
     }
 
     /**
+     * The url with every {@code {key.<column>}} placeholder stood in for by {@code _}, so a
+     * static check can parse it as a URI: a brace is not a URI character, and a keyed url is
+     * not a URI until a key fills it. The host and the scheme — what the lint judges — are the
+     * same either way.
+     */
+    public static String standIn(String url) {
+        return url == null ? null : PLACEHOLDER.matcher(url).replaceAll("_");
+    }
+
+    /**
      * {@code url} with every {@code {key.<name>}} replaced by that key column's encoded value.
      * A placeholder naming a column the key does not carry resolves to the empty string, which
      * a keyed URL's own lint (the reference must use its keys) is what prevents.

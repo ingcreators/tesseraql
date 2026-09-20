@@ -87,6 +87,41 @@ public final class KeyedReference {
         default io.tesseraql.core.sql.SqlStatement statements() {
             return io.tesseraql.core.sql.SqlStatement.onCallerConnections();
         }
+
+        /**
+         * The request's memo of what its enrichments already fetched (docs/caching.md decision
+         * 8), or {@code null} for a surface with no request — a job step, whose window is its
+         * own. A route's every {@code enrich:} block answers with the one memo of its exchange,
+         * so two blocks over one master cost one lookup per distinct key.
+         */
+        default ReferenceMemo memo() {
+            return null;
+        }
+
+        /**
+         * The cross-request hold this reference's rows go into when it declares {@code cache:}
+         * (decision 9), or {@code null} when it declares none or the surface binds no hold.
+         */
+        default Hold hold() {
+            return null;
+        }
+    }
+
+    /**
+     * The per-key half of the runtime's result hold, as a reference sees it (docs/caching.md
+     * decision 9): a key's rows are held under the reference's identity, the tenant and the
+     * key, so a common partner is a hit across requests whatever the surrounding key set.
+     */
+    public interface Hold {
+
+        /** The version the reference's tables stand at — read before a fetch, stored with it. */
+        long version();
+
+        /** The rows held for {@code key} (its raw components, in {@code on:} order), or {@code null}. */
+        List<Map<String, Object>> peek(List<Object> key);
+
+        /** Holds what {@code key} answered with — possibly nothing — as of {@code version}. */
+        void store(List<Object> key, List<Map<String, Object>> rows, long version);
     }
 
     /**
@@ -151,6 +186,24 @@ public final class KeyedReference {
     /** Keys per statement — also the window a streaming surface enriches at a time. */
     public int batchSize() {
         return batchSize;
+    }
+
+    /**
+     * What identifies this reference across blocks and requests (docs/caching.md decisions 8
+     * and 9): the resolved statement with its dialect on its connector for a {@code sql:}
+     * reference, the call's method and url template for an {@code http:} one. A sibling source
+     * fetches nothing and is neither remembered nor held.
+     */
+    public String identity() {
+        if (spec.sql() != null) {
+            return "sql:" + datasource + ":" + dialect + ":"
+                    + (sourcePath == null ? name : sourcePath);
+        }
+        if (spec.http() != null && spec.http().call() != null) {
+            HttpCallSpec call = spec.http().call();
+            return "http:" + call.method() + " " + call.url();
+        }
+        return "source:" + spec.source();
     }
 
     /**
@@ -219,16 +272,11 @@ public final class KeyedReference {
                     .build();
         }
 
-        List<List<Object>> keys = List.copyOf(distinct.values());
         Map<Object, List<Map<String, Object>>> reference;
         try {
-            if (spec.composesSource()) {
-                reference = fromSibling(context, matchColumns);
-            } else if (spec.sql() != null) {
-                reference = fetchSql(environment, context, keys, matchColumns);
-            } else {
-                reference = fetchHttp(environment, context, keys, matchColumns);
-            }
+            reference = spec.composesSource()
+                    ? fromSibling(context, matchColumns)
+                    : fetchRemembering(environment, context, distinct, matchColumns);
         } catch (RuntimeException ex) {
             // Degrading means no key is merged, never the batches that happened to succeed: a
             // list where some rows carry a name and some do not reads as a data problem and
@@ -282,6 +330,62 @@ public final class KeyedReference {
             Map<String, Object> row = (Map<String, Object>) raw;
             reference.computeIfAbsent(JoinKeys.of(row, matchColumns),
                     ignored -> new ArrayList<>()).add(row);
+        }
+        return reference;
+    }
+
+    /**
+     * The reference for {@code distinct} keys: the request's memo first, then the cross-request
+     * hold, then the source for what neither had — every miss in one fetch — remembering what
+     * each key answered with, an absent key included, so neither block nor request asks twice
+     * (docs/caching.md decisions 8 and 9). A surface without a memo or a hold fetches every
+     * key, as before.
+     */
+    private Map<Object, List<Map<String, Object>>> fetchRemembering(Environment environment,
+            Map<String, Object> context, Map<Object, List<Object>> distinct,
+            List<String> matchColumns) throws SQLException {
+        String identity = identity();
+        ReferenceMemo memo = environment.memo();
+        Hold hold = environment.hold();
+        Map<Object, List<Map<String, Object>>> reference = new LinkedHashMap<>();
+        Map<Object, List<Object>> misses = new LinkedHashMap<>();
+        for (Map.Entry<Object, List<Object>> key : distinct.entrySet()) {
+            List<Map<String, Object>> remembered = memo == null
+                    ? null
+                    : memo.get(identity, key.getKey());
+            if (remembered != null) {
+                reference.put(key.getKey(), remembered);
+                continue;
+            }
+            List<Map<String, Object>> held = hold == null ? null : hold.peek(key.getValue());
+            if (held != null) {
+                reference.put(key.getKey(), held);
+                if (memo != null) {
+                    memo.put(identity, key.getKey(), held);
+                }
+                continue;
+            }
+            misses.put(key.getKey(), key.getValue());
+        }
+        if (misses.isEmpty()) {
+            return reference;
+        }
+        // The tables' version before the fetch, so a write racing it is not recorded as
+        // already seen.
+        long version = hold == null ? 0L : hold.version();
+        List<List<Object>> keys = List.copyOf(misses.values());
+        Map<Object, List<Map<String, Object>>> fetched = spec.sql() != null
+                ? fetchSql(environment, context, keys, matchColumns)
+                : fetchHttp(environment, context, keys, matchColumns);
+        for (Map.Entry<Object, List<Object>> miss : misses.entrySet()) {
+            List<Map<String, Object>> rows = fetched.getOrDefault(miss.getKey(), List.of());
+            reference.put(miss.getKey(), rows);
+            if (memo != null) {
+                memo.put(identity, miss.getKey(), rows);
+            }
+            if (hold != null) {
+                hold.store(miss.getValue(), rows, version);
+            }
         }
         return reference;
     }

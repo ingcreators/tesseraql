@@ -8,6 +8,18 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Two enrichments over one master cost one lookup per key, and a reference can be held.**
+  Every `enrich:` block of a request shares one memo, per reference and per key: a detail
+  page whose `main` and `history` both name the partner master fetches each partner once, a
+  block asking a different key set fetches only what earlier blocks did not, and an absent
+  key is remembered too — `docs/lookups.md` decision 3 had claimed this since 0.14.0
+  (`docs/audit-low-leads.md` F122, code M). `cache: {maxAge, tables}` on an `enrich:` entry
+  holds each key's rows across requests in the same hold a source uses, keyed by the
+  reference, the tenant and the key, so a common partner is a hit whatever the surrounding
+  key set; a `sql:` reference names the tables a command's `invalidates:` drops it by, an
+  `http:` reference takes `maxAge` alone (`TQL-YAML-1077` refuses `tables:` there, and any
+  hold over a `source:` reference, which fetches nothing). Record: `docs/caching.md` (S2).
+
 - **A source declares how long its rows are held, and a command's `invalidates:` drops
   them.** `cache: {maxAge, tables}` on a `sources:` entry of a `query-json`, `query-html` or
   `page` route (or a read MCP tool) keeps the rows its statement produced in one bounded,
@@ -41,6 +53,13 @@ All notable changes to TesseraQL are documented here. The format follows
   that rebuilds a route drops the hold. Pre-1.0 internal.
 
 ### Fixed
+
+- **Lint refused every keyed reference url.** A `perRow` enrichment's `url: …/partners/{key.code}`
+  is the documented shape, and `TQL-SEC-4071` ("needs an absolute http or https url") fired on
+  every one of them: the rule parsed the url with `URI.create`, a brace is not a URI character,
+  and the exception read as "not absolute". The placeholder is stood in for before the parse
+  now. Found by the first lint test to write a keyed reference url (caching S2); the runtime
+  never minded, so the gallery's own examples had been linting red only where nobody looked.
 
 - **The catalog version row was never read.** The reader's "read at most once per interval"
   check subtracted `Long.MIN_VALUE` from the clock, which overflows to a negative number and

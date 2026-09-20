@@ -1,7 +1,7 @@
 # A read declares how long its rows are held, a write declares what it made stale: the result hold, its keys and its invalidation
 
-> **Status: designed 2026-09-20 (#1403); S1 shipped the same day (#1404); the user names
-> the next slice.** Phase 32 of `docs/roadmap.md` owes "declared invalidation keys (a command
+> **Status: designed 2026-09-20 (#1403); S1 (#1404) and S2 (#1405) shipped the same day; S3
+> is the user's call.** Phase 32 of `docs/roadmap.md` owes "declared invalidation keys (a command
 > declares which query caches it invalidates), and an opt-in result cache with TTL.
 > Tenancy-safe keys; correctness over hit rate." The first half — `Cache-Control`, a strong
 > `ETag`, `304`, htmx-aware — shipped in 0.6.0 (#360, #637). This record measures what stands
@@ -20,6 +20,21 @@
 > the test runner and Studio's previews never run the compiled `SqlStep` (the runner has no
 > runtime, the preview renders through `SqlRenderer` directly), so decision 6's
 > "boot with `enabled: false`" needed no code — the key stays as the operator's switch.
+>
+> **S2** — the request memo (`ReferenceMemo` on the exchange, per reference identity and per
+> key, shared by every `enrich:` block; `KeyedReference` asks the memo, then the hold, then
+> fetches every miss in one statement and remembers each key, an absent one included);
+> `cache:` on an `enrich:` entry through the same `ResultHold` per key (`peek`/`store`, the
+> tables' version read before the fetch); `TQL-YAML-1077`'s two enrichment arms; the shared
+> `hold` schema definition: **shipped, #1405** (every decision as recommended). One measured
+> correction to decision 8's arithmetic: the F122 fixture's blocks ask {P1} and {P1, P2}, so
+> the second block still runs one statement — for P2 alone. What the memo removes is the
+> repeated key, not the statement: P1 is bound by one `partners.sql` execution per request
+> now, not two, and a block whose keys are all already known runs none. The IT counts the
+> executions that bind `'P1'`. One defect found on the way: `TQL-SEC-4071` refused every
+> `perRow` url with a `{key.<column>}` placeholder (`URI.create` throws on a brace, which read
+> as "not absolute") — the first lint test to write a keyed reference url was this slice's;
+> fixed in `HttpSourceRules` with the placeholder stood in for before the parse.
 
 A query route can tell a browser how long to keep its response and answer a revalidation with
 `304`. It cannot tell the runtime to keep the rows: every request renders from a statement

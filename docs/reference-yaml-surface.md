@@ -121,7 +121,7 @@ Transactional outbox event recorded with the command and delivered at-least-once
 | `when` | string | Guard expression on a step: a falsy guard skips it, recording `steps.<id>.skipped` instead of a result. A guard is about whether the step runs at all, not a question for the mechanism, so it sits beside the arm. The declared branch point for decision.* outputs (docs decision-tables). |
 | `enrich` | map of [enrichment](#enrichment) | Keyed references folded into this binding's rows before anything reads them (docs/lookups.md), keyed by enrichment name and applied in authored order. An enrichment nests under the source it transforms, so any arm's rows can be enriched. Each entry names one reference — sql: (fetch by key), http: (call by key), or source: (a result already in the context, joined without a fetch, named by its context path: a route source by name, a job step as steps.&lt;id&gt;) — plus the on: join and one of as:/merge:. Only a binding that holds rows can carry one: a write publishes affectedRows, and a query-spool extract never held its rows. |
 | `result` | map of [resultField](#resultfield) | The columns whose text this binding parses into a declared kind, each name to a field: `type: json` for a jsonb, json or text column an expression, a template or a response should navigate rather than receive as one string; `type: date`, `datetime` or `number` with a `format:` for a value a legacy column stores as text (`20240103`, `1,234.50`); or a `domain:` that says so once. Sparse — an undeclared column keeps the kind the database gave it. A parsed value renders exactly as a native column of that kind does, so a date stored as text and a date column are the same case on every surface; a value that cannot be parsed fails the read with TQL-SQL-2503, naming the column and the row. Applies where a binding publishes rows: a route source or a command step in mode query. Documented in response-shaping.md. |
-| `cache` | [object](#stepscache) | Hold the rows this source's statement produced (docs/caching.md): the runtime keeps them for `maxAge`, keyed by the connector, the tenant, the statement and every bind, and drops them when a command's `invalidates:` names one of `tables` — on this node at once, on the others within the stamp interval. The rows, never the response: masking, shell negotiation and declared kinds still run per request. Legal on a `sql: { file: … }` source in mode query of a query-json, query-html or page route or of an MCP tool that only reads; anywhere else it holds nothing and is refused at lint and boot (TQL-YAML-1077). The route-level `cache:` block is the HTTP one and is unchanged. |
+| `cache` | [hold](#hold) | Hold the rows this source's statement produced (docs/caching.md): the runtime keeps them for `maxAge`, keyed by the connector, the tenant, the statement and every bind, and drops them when a command's `invalidates:` names one of `tables` — on this node at once, on the others within the stamp interval. The rows, never the response: masking, shell negotiation and declared kinds still run per request. Both keys are required. Legal on a `sql: { file: … }` source in mode query of a query-json, query-html or page route or of an MCP tool that only reads; anywhere else it holds nothing and is refused at lint and boot (TQL-YAML-1077). The route-level `cache:` block is the HTTP one and is unchanged. |
 | `id` \* | string | The step's name: what later steps and the response bind against (`steps.<id>`). |
 
 #### steps.contract
@@ -163,15 +163,6 @@ The service arm: a runtime provider answering rows from process state. It takes 
 | --- | --- | --- |
 | `name` | string | The named runtime service provider to call instead of running SQL (docs/extending.md): non-SQL runtime state (lanes, traces, file trees, …) read as rows. |
 | `params` | map of string | Each argument name to the bindable path supplying its value, such as `path.id`, `params.unit` or `principal.claim.tenant_id` — or `header.<Name>`, a request header read from the wire (first value, name matched without regard to case), never overridden by a query parameter or a body field of that name. A header is a provider's argument only: on a statement's `params:` it is refused (TQL-YAML-1069). |
-
-#### steps.cache
-
-Hold the rows this source's statement produced (docs/caching.md): the runtime keeps them for `maxAge`, keyed by the connector, the tenant, the statement and every bind, and drops them when a command's `invalidates:` names one of `tables` — on this node at once, on the others within the stamp interval. The rows, never the response: masking, shell negotiation and declared kinds still run per request. Legal on a `sql: { file: … }` source in mode query of a query-json, query-html or page route or of an MCP tool that only reads; anywhere else it holds nothing and is refused at lint and boot (TQL-YAML-1077). The route-level `cache:` block is the HTTP one and is unchanged.
-
-| Property | Type | Description |
-| --- | --- | --- |
-| `maxAge` \* | string | How long the rows this statement produced are held before it runs again: a positive duration such as `30s` or `5m`. Required — nothing is held unless the source says for how long. |
-| `tables` \* | any | The tables the statement reads, as a writer would name them — what a command's `invalidates:` names to drop this hold on every node. Required: a hold no write can reach is the defect the declaration exists to prevent. A string or a list. |
 
 ### validate
 
@@ -698,6 +689,15 @@ The app-owned table carrying the rows (exactly one of rows:/source:): business u
 
 ## Shared definitions
 
+### hold
+
+A hold over fetched rows (docs/caching.md): how long they serve before the source is asked again, and which tables a writer's `invalidates:` drops them by. One shape for a source's statement and for an enrichment's reference.
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `maxAge` \* | string | How long the rows are held before the source is asked again: a positive duration such as `30s` or `5m`. Required — nothing is held unless the declaration says for how long. |
+| `tables` | any | The tables the statement reads, as a writer would name them — what a command's `invalidates:` names to drop this hold on every node. Required on a statement (a hold no write can reach is the defect the declaration exists to prevent); refused on an `http:` reference, which nothing stamps. A string or a list. |
+
 ### enrichment
 
 One keyed reference folded into a binding's rows: where the keys are (`on:`), what answers them (`sql:`, `http:` or `source:` — exactly one), and how the answer lands (`as:` or `merge:`). Documented in lookups.md.
@@ -713,6 +713,7 @@ One keyed reference folded into a binding's rows: where the keys are (`on:`), wh
 | `merge` | array of string | Copy these columns of the matched row onto each row instead of attaching a list. Exactly one of `as:` or `merge:` (TQL-YAML-1047). |
 | `batchSize` | integer ≥ 1 | How many distinct keys one fetch carries. |
 | `maxKeys` | integer ≥ 1 | The ceiling on distinct keys collected for one enrichment, past which the reference is refused rather than read unboundedly. |
+| `cache` | [hold](#hold) | Hold each key's rows across requests (docs/caching.md): a partner looked up once serves every later request for `maxAge`, keyed by the reference, the tenant and the key, whatever the surrounding key set. A `sql:` reference names the `tables` a command's `invalidates:` drops it by; an `http:` reference takes `maxAge` alone (nothing stamps a partner system); a `source:` reference fetches nothing and holds nothing. Within one request every block already shares one memo, hold or no hold. Refused where nothing can be held (TQL-YAML-1077). |
 
 ### notification
 
@@ -984,7 +985,7 @@ One acquisition or one statement. Exactly one mechanism arm names the means — 
 | `when` | string | Guard expression on a step: a falsy guard skips it, recording `steps.<id>.skipped` instead of a result. A guard is about whether the step runs at all, not a question for the mechanism, so it sits beside the arm. The declared branch point for decision.* outputs (docs decision-tables). |
 | `enrich` | map of [enrichment](#enrichment) | Keyed references folded into this binding's rows before anything reads them (docs/lookups.md), keyed by enrichment name and applied in authored order. An enrichment nests under the source it transforms, so any arm's rows can be enriched. Each entry names one reference — sql: (fetch by key), http: (call by key), or source: (a result already in the context, joined without a fetch, named by its context path: a route source by name, a job step as steps.&lt;id&gt;) — plus the on: join and one of as:/merge:. Only a binding that holds rows can carry one: a write publishes affectedRows, and a query-spool extract never held its rows. |
 | `result` | map of [resultField](#resultfield) | The columns whose text this binding parses into a declared kind, each name to a field: `type: json` for a jsonb, json or text column an expression, a template or a response should navigate rather than receive as one string; `type: date`, `datetime` or `number` with a `format:` for a value a legacy column stores as text (`20240103`, `1,234.50`); or a `domain:` that says so once. Sparse — an undeclared column keeps the kind the database gave it. A parsed value renders exactly as a native column of that kind does, so a date stored as text and a date column are the same case on every surface; a value that cannot be parsed fails the read with TQL-SQL-2503, naming the column and the row. Applies where a binding publishes rows: a route source or a command step in mode query. Documented in response-shaping.md. |
-| `cache` | [object](#bindingcache) | Hold the rows this source's statement produced (docs/caching.md): the runtime keeps them for `maxAge`, keyed by the connector, the tenant, the statement and every bind, and drops them when a command's `invalidates:` names one of `tables` — on this node at once, on the others within the stamp interval. The rows, never the response: masking, shell negotiation and declared kinds still run per request. Legal on a `sql: { file: … }` source in mode query of a query-json, query-html or page route or of an MCP tool that only reads; anywhere else it holds nothing and is refused at lint and boot (TQL-YAML-1077). The route-level `cache:` block is the HTTP one and is unchanged. |
+| `cache` | [hold](#hold) | Hold the rows this source's statement produced (docs/caching.md): the runtime keeps them for `maxAge`, keyed by the connector, the tenant, the statement and every bind, and drops them when a command's `invalidates:` names one of `tables` — on this node at once, on the others within the stamp interval. The rows, never the response: masking, shell negotiation and declared kinds still run per request. Both keys are required. Legal on a `sql: { file: … }` source in mode query of a query-json, query-html or page route or of an MCP tool that only reads; anywhere else it holds nothing and is refused at lint and boot (TQL-YAML-1077). The route-level `cache:` block is the HTTP one and is unchanged. |
 
 #### binding.contract
 
@@ -1025,15 +1026,6 @@ The service arm: a runtime provider answering rows from process state. It takes 
 | --- | --- | --- |
 | `name` | string | The named runtime service provider to call instead of running SQL (docs/extending.md): non-SQL runtime state (lanes, traces, file trees, …) read as rows. |
 | `params` | map of string | Each argument name to the bindable path supplying its value, such as `path.id`, `params.unit` or `principal.claim.tenant_id` — or `header.<Name>`, a request header read from the wire (first value, name matched without regard to case), never overridden by a query parameter or a body field of that name. A header is a provider's argument only: on a statement's `params:` it is refused (TQL-YAML-1069). |
-
-#### binding.cache
-
-Hold the rows this source's statement produced (docs/caching.md): the runtime keeps them for `maxAge`, keyed by the connector, the tenant, the statement and every bind, and drops them when a command's `invalidates:` names one of `tables` — on this node at once, on the others within the stamp interval. The rows, never the response: masking, shell negotiation and declared kinds still run per request. Legal on a `sql: { file: … }` source in mode query of a query-json, query-html or page route or of an MCP tool that only reads; anywhere else it holds nothing and is refused at lint and boot (TQL-YAML-1077). The route-level `cache:` block is the HTTP one and is unchanged.
-
-| Property | Type | Description |
-| --- | --- | --- |
-| `maxAge` \* | string | How long the rows this statement produced are held before it runs again: a positive duration such as `30s` or `5m`. Required — nothing is held unless the source says for how long. |
-| `tables` \* | any | The tables the statement reads, as a writer would name them — what a command's `invalidates:` names to drop this hold on every node. Required: a hold no write can reach is the defect the declaration exists to prevent. A string or a list. |
 
 ### resultField
 

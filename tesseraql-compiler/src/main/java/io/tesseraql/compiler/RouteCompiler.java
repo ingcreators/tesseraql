@@ -2181,7 +2181,9 @@ public final class RouteCompiler {
                 // processor looks up per request. Neither needs anything compiled here.
                 processors.add(new io.tesseraql.compiler.binding.EnrichProcessor(
                         into, name, spec, java.util.List.of(), null, null, null,
-                        commandBounds()));
+                        commandBounds(),
+                        io.tesseraql.yaml.app.HeldSources.enrichSpec(definition.id(), into,
+                                name, spec, null)));
                 return;
             }
             String datasource = bindingDatasource(io.tesseraql.yaml.model.Binding.sql(spec.sql()),
@@ -2192,9 +2194,13 @@ public final class RouteCompiler {
                             "route '" + definition.id() + "'",
                             "sources." + into + ".enrich." + name + ".sql.file"),
                     dialect);
+            // The reference's hold, from the declaration requireHeldSources already judged
+            // (docs/caching.md decision 9); null for a reference fetched every request.
             processors.add(new io.tesseraql.compiler.binding.EnrichProcessor(
                     into, name, spec, parseSql(file), file.toString(), datasource, dialect,
-                    commandBounds()));
+                    commandBounds(),
+                    io.tesseraql.yaml.app.HeldSources.enrichSpec(definition.id(), into, name,
+                            spec, datasource)));
         }));
         return processors;
     }

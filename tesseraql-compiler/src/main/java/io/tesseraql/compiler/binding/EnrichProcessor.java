@@ -41,17 +41,29 @@ public final class EnrichProcessor implements Step {
     private final String into;
     private final String name;
     private final KeyedReference reference;
+    /**
+     * The reference's {@code cache:} (docs/caching.md decision 9), or {@code null} for one
+     * fetched every request; each key's rows go into the runtime's hold under the reference's
+     * identity, the tenant and the key.
+     */
+    private final io.tesseraql.core.cache.HoldSpec hold;
 
     public EnrichProcessor(String into, String name, EnrichSpec spec, List<SqlNode> nodes,
             String sourcePath, String datasource, String dialect,
-            ExecutionBounds bounds) {
+            ExecutionBounds bounds, io.tesseraql.core.cache.HoldSpec hold) {
         this.into = into;
         this.name = name;
+        this.hold = hold;
         this.reference = new KeyedReference(name, spec, nodes, sourcePath, datasource, dialect,
                 bounds == null
                         ? KeyedReference.Bounds.none()
                         : new KeyedReference.Bounds(bounds.timeoutSeconds(), bounds.maxRows()),
                 HttpSourceProcessor::rowsOf);
+    }
+
+    /** The reference's hold declaration, or {@code null}; the compiler's tests read it back. */
+    public io.tesseraql.core.cache.HoldSpec hold() {
+        return hold;
     }
 
     @Override
@@ -122,6 +134,65 @@ public final class EnrichProcessor implements Step {
                 return resolver != null
                         ? resolver
                         : io.tesseraql.core.sql.ScopeResolver.UNSUPPORTED;
+            }
+
+            @Override
+            public io.tesseraql.yaml.enrich.ReferenceMemo memo() {
+                // One memo per exchange, made by the first block that asks and read by every
+                // later one (docs/caching.md decision 8) — which is what makes two blocks
+                // over one master cost one lookup per distinct key.
+                io.tesseraql.yaml.enrich.ReferenceMemo memo = exchange.getProperty(
+                        TesseraqlProperties.ENRICH_MEMO,
+                        io.tesseraql.yaml.enrich.ReferenceMemo.class);
+                if (memo == null) {
+                    memo = new io.tesseraql.yaml.enrich.ReferenceMemo();
+                    exchange.setProperty(TesseraqlProperties.ENRICH_MEMO, memo);
+                }
+                return memo;
+            }
+
+            @Override
+            public KeyedReference.Hold hold() {
+                if (hold == null) {
+                    return null;
+                }
+                io.tesseraql.core.cache.ResultHold bean = exchange.beans().lookup(
+                        TesseraqlProperties.RESULT_HOLD_BEAN,
+                        io.tesseraql.core.cache.ResultHold.class);
+                if (bean == null) {
+                    return null;
+                }
+                // The key is the connector, the tenant, the reference's identity and the key
+                // tuple (decision 9): a tenant's partner is never another tenant's, and a
+                // component with no canonical text bypasses, counted.
+                String tenant = exchange.getProperty(
+                        TesseraqlProperties.TENANT) instanceof io.tesseraql.core.tenant.TenantContext resolved
+                                ? resolved.id()
+                                : null;
+                String identity = reference.identity();
+                return new KeyedReference.Hold() {
+                    @Override
+                    public long version() {
+                        return bean.versionOf(hold);
+                    }
+
+                    @Override
+                    public List<Map<String, Object>> peek(List<Object> key) {
+                        return bean.peek(io.tesseraql.core.cache.ResultKey.ofKey(
+                                hold.datasource(), tenant, identity, key).orElse(null), hold)
+                                .map(io.tesseraql.core.cache.ResultHold.Rows::rows)
+                                .orElse(null);
+                    }
+
+                    @Override
+                    public void store(List<Object> key, List<Map<String, Object>> rows,
+                            long version) {
+                        bean.store(io.tesseraql.core.cache.ResultKey.ofKey(hold.datasource(),
+                                tenant, identity, key).orElse(null), hold,
+                                new io.tesseraql.core.cache.ResultHold.Rows(rows, false),
+                                version);
+                    }
+                };
             }
 
             @Override

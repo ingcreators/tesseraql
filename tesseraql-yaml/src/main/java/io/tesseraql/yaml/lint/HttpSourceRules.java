@@ -121,7 +121,13 @@ final class HttpSourceRules {
         String scheme = null;
         if (resolved != null) {
             try {
-                java.net.URI uri = java.net.URI.create(resolved);
+                // A perRow reference keys its url — `/partners/{key.code}` (docs/lookups.md
+                // decision 21) — and a brace is not a URI character, so the placeholder is
+                // stood in for before the parse. It used to make URI.create throw, which read
+                // as "not absolute": every keyed reference url was refused by this rule
+                // (docs/caching.md S2 found it with the first lint test to write one).
+                java.net.URI uri = java.net.URI.create(
+                        io.tesseraql.yaml.enrich.KeyedUrls.standIn(resolved));
                 host = uri.getHost();
                 scheme = uri.getScheme();
             } catch (RuntimeException ex) {
