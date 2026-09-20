@@ -43,6 +43,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 class InventoryAnalyticsIntegrationTest {
 
     @Container
+    @SuppressWarnings("resource") // lifecycle is managed by the @Container extension
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine")
             // Every statement is a line in the container log, so "a held source ran nothing"
             // is a count, not an inference (docs/caching.md decision 12).

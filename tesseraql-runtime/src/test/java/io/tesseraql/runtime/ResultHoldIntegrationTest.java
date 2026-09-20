@@ -33,6 +33,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 class ResultHoldIntegrationTest {
 
     @Container
+    @SuppressWarnings("resource") // lifecycle is managed by the @Container extension
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine")
             .withCommand("postgres", "-c", "log_statement=all");
 
