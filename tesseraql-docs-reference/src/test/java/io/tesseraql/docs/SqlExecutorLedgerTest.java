@@ -59,6 +59,11 @@ class SqlExecutorLedgerTest {
             // framework store like its Jdbc siblings, not a route executor.
             "tesseraql-operations/src/main/java/io/tesseraql/operations/bulk/JdbcBulkReportStore.java",
             "tesseraql-operations/src/main/java/io/tesseraql/operations/catalog/JdbcCatalogStore.java",
+            // The per-table version stamp's reader and writer (docs/caching.md decision 5),
+            // moved out of JdbcCatalogStore so the catalog store and the result hold share
+            // one: three fixed statements over the framework's own row set, never
+            // application SQL, and never a per-request cost.
+            "tesseraql-operations/src/main/java/io/tesseraql/operations/catalog/TableVersions.java",
             "tesseraql-operations/src/main/java/io/tesseraql/operations/credential/JdbcCredentialTokenStore.java",
             "tesseraql-operations/src/main/java/io/tesseraql/operations/credential/JdbcTotpStore.java",
             "tesseraql-operations/src/main/java/io/tesseraql/operations/files/JdbcFileTransferService.java",

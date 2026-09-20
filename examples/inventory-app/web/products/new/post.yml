@@ -24,6 +24,8 @@ steps:
         category: params.category
         stock: params.stock
         reorder_level: params.reorder_level
+# The dashboard holds its stock rows (products/dashboard/get.yml); a new product drops them.
+invalidates: [products]
 response:
   json:
     status: 201

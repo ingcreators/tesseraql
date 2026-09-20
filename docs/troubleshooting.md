@@ -200,6 +200,20 @@ a route resolves `params`, `query`, `path`, `body`, `tenant`, `request`, `flags`
 name is not in the route's URL. Declare the input, spell the path parameter as the URL does, or drop the placeholder.
 `{key}` is the split export's and is judged by `TQL-YAML-1041`.
 
+### `TQL-YAML-1077` — a source's `cache:` where nothing can be held
+
+A source's `cache: {maxAge, tables}` asks the runtime to hold the rows its statement produced
+([response-shaping.md](response-shaping.md#holding-a-result)). The linter and the boot name
+the source and why nothing can be held there. A `command-json`, `webhook`, `queue-consume` or
+`file-import` route, or a step: a hold inside or after the write is a stale read of it. A
+`query-export` or `file-export`: the statement streams and is never held. An MCP tool that
+writes. A `contract:`, `service:`, `http:` or `spool:` arm: no statement text to key. A
+`mode: update` or `call`. A `maxAge:` that is missing, not a duration or not positive. A
+`tables:` that is missing, empty or carrying a blank name. Move the hold to a
+`sql: { file: … }` source in mode `query` of a `query-json`, `query-html` or `page` route,
+and declare both keys. The route-level `cache:` block is the HTTP one and is judged by
+`TQL-YAML-1025`.
+
 ### `TQL-YAML-1412` — a policy rule names two conditions
 
 An `anyOf` rule is one condition: `role:`, `permission:` or `claim:`. A rule naming two —

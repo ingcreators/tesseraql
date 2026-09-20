@@ -4,6 +4,51 @@ All notable changes to TesseraQL are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Added
+
+- **A source declares how long its rows are held, and a command's `invalidates:` drops
+  them.** `cache: {maxAge, tables}` on a `sources:` entry of a `query-json`, `query-html` or
+  `page` route (or a read MCP tool) keeps the rows its statement produced in one bounded,
+  per-runtime hold — keyed by the connector, the tenant, the statement, the row bound, the
+  rendered SQL and every bind, so a shared-schema tenant's bind, a `/*%scope … */` predicate
+  and an ambient `principal.*` value each key their own entry — and serves a copy without a
+  statement until `maxAge` elapses or a command's `invalidates:` names one of `tables`. The
+  rows, never the response: masking, shell negotiation and declared kinds still run per
+  request, and the HTTP `cache:` block is unchanged (a `304` over a held source now costs no
+  statement either). Both keys are required (`TQL-YAML-1077` at lint and boot, the same
+  predicate on both altitudes, also for a step, a transactional or streaming surface and a
+  non-statement arm). Single-flight per key, a result larger than
+  `tesseraql.cache.maxEntryRows` (1000) or with an unkeyable bind executes and is counted as a
+  bypass, `tesseraql.cache.maxEntries` (1000) evicts least-recently-used,
+  `tesseraql.cache.enabled: false` makes every declaration execute. Counters
+  `tesseraql.cache.hits|misses|bypasses|invalidations|evictions`; `GET /_tesseraql/ops/cache`
+  and `POST /_tesseraql/ops/cache/invalidate?tables=…` report and drop the hold with the
+  catalog endpoints' shape and grants. The inventory gallery's stock dashboard holds its shelf
+  queries and its adjust and create commands declare `invalidates: [products]` — the first
+  `invalidates:` in the gallery. Record: `docs/caching.md` (S1), the remaining half of
+  Phase 32.
+
+### Changed
+
+- **`invalidates:` reaches held sources through the catalog's table stamps.** The per-table
+  version row (`tql_catalog_version`, its name kept) is raised for a catalog's tables and a
+  held source's alike, by one `Invalidations` bean the command processor calls after the
+  commit (`CatalogInvalidateProcessor` is `InvalidationProcessor`); the reader and writer moved
+  out of `JdbcCatalogStore` into `TableVersions`, shared by the catalog store and the hold.
+  `TQL-FIELD-4620`'s warning widens: a table "no catalog and no held source reads". A reload
+  that rebuilds a route drops the hold. Pre-1.0 internal.
+
+### Fixed
+
+- **The catalog version row was never read.** The reader's "read at most once per interval"
+  check subtracted `Long.MIN_VALUE` from the clock, which overflows to a negative number and
+  read as "read a moment ago", so no runtime ever loaded the row set and a peer node's
+  `invalidates:` reached nothing until the catalog's own TTL (an hour by default). The shared
+  reader tests "never read" by identity; `TableVersionsTest` pins the first read and the
+  interval, and `ResultHoldIntegrationTest` proves a second runtime follows a write within it.
+
 ## 0.18.0 - 2026-09-20
 
 This release is about what an audit leaves behind. The whole-repository audit's low leads —

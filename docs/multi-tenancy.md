@@ -145,6 +145,14 @@ is the tenant identifier, and `tenant.attributes.<name>` exposes any additional 
 On [per-tenant jobs](jobs.md#per-tenant-jobs) the same `tenant.id` bind is available even though
 there is no request.
 
+A source that holds its rows ([response-shaping.md](response-shaping.md#holding-a-result))
+keys them by the connector, the resolved tenant and every bind: in shared schema the
+`tenant.id` bind is part of the key, in a per-tenant mode the tenant's pool is, so one
+tenant's hold is never another's rows. A statement that binds no tenant returns the same rows
+for every tenant held or not — the case `TQL-TENANT-3001` warns about. The per-table version a
+write raises is per table, not per tenant: a tenant's `invalidates:` drops every tenant's hold
+of that table, which is over-invalidation and correct.
+
 ### Lint and errors
 
 | Code | Meaning |

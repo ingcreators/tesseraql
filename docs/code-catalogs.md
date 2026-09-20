@@ -206,7 +206,10 @@ declaration itself for a table a catalog reads.
 
 **Other runtimes learn from a version row.** The write also raises a per-table version,
 and every runtime re-reads that table on a short interval — one small query for all
-catalogs at once.
+catalogs at once. A source that holds its rows
+([response-shaping.md](response-shaping.md#holding-a-result), `cache: {maxAge, tables}`)
+reads the same row: one `invalidates:` drops the catalogs and the held results that read
+the table, on this node at once and on the others within the interval.
 
 **An operator can look and refresh.** `GET /_tesseraql/ops/catalogs` reports what each
 catalog holds, when it last loaded, and the message of its last failed refresh. A
@@ -257,7 +260,7 @@ Both resolve composite keys, and both read the same at the call site.
 | `TQL-FIELD-4617` | a catalog name is declared twice |
 | `TQL-FIELD-4618` | a catalog names something that is not a legal identifier |
 | `TQL-FIELD-4619` | per-language names in an app that negotiates one locale |
-| `TQL-FIELD-4620` | `invalidates:` that drops nothing, or on a recipe with no commit |
+| `TQL-FIELD-4620` | `invalidates:` on a recipe with no commit, or naming a table no catalog and no held source reads |
 | `TQL-FIELD-4621` | a contradictory source, or a `file:` that is not there |
 | `TQL-APP-4206` | a catalog could not be loaded and has never loaded; its readers answer 500 until it does |
 | `TQL-APP-4207` | catalogs declared alongside per-tenant datasources |

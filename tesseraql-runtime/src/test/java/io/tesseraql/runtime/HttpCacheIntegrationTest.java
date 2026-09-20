@@ -19,13 +19,16 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 /**
  * Declarative HTTP caching end to end (docs/response-shaping.md, "HTTP caching"): a query
  * route's {@code cache:} block stamps {@code Cache-Control}, hashes the rendered body into a
- * strong {@code ETag}, and answers a matching conditional GET with {@code 304} and no body.
+ * strong {@code ETag}, and answers a matching conditional GET with {@code 304} and no body —
+ * and, over a held source (docs/caching.md decision 1), the revalidation costs no statement.
+ * PostgreSQL logs every statement so the count is measured, not inferred.
  */
 @Testcontainers
 class HttpCacheIntegrationTest {
 
     @Container
-    static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
+    static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine")
+            .withCommand("postgres", "-c", "log_statement=all");
 
     static TesseraqlRuntime runtime;
     static Path appHome;
@@ -83,6 +86,49 @@ class HttpCacheIntegrationTest {
         assertThat(changed.headers().firstValue("ETag").orElseThrow()).isNotEqualTo(etag);
     }
 
+    /**
+     * The HTTP block alone computes the {@code 304} after the render, so the statement still
+     * ran (docs/caching.md row 2 of what was measured); over a held source the revalidation
+     * and the plain repeat both run nothing.
+     */
+    @Test
+    void aRevalidationOverAHeldSourceCostsNoStatement() throws Exception {
+        HttpResponse<String> first = get("/orders/held", null);
+        assertThat(first.statusCode()).isEqualTo(200);
+        String etag = first.headers().firstValue("ETag").orElseThrow();
+        Thread.sleep(400);
+        int before = heldStatements();
+        assertThat(get("/orders/held", etag).statusCode()).isEqualTo(304);
+        assertThat(get("/orders/held", null).statusCode()).isEqualTo(200);
+        Thread.sleep(400);
+        assertThat(heldStatements() - before).as("a 304 and a 200 over the hold ran nothing")
+                .isZero();
+        // The unheld twin runs its statement for the revalidation, as it always did.
+        int plainBefore = plainStatements();
+        assertThat(get("/orders", first.headers().firstValue("ETag").orElseThrow())
+                .statusCode()).isIn(200, 304);
+        Thread.sleep(400);
+        assertThat(plainStatements() - plainBefore).isEqualTo(1);
+    }
+
+    private static int heldStatements() {
+        return count("'held' as kind");
+    }
+
+    private static int plainStatements() {
+        return count("'plain' as kind");
+    }
+
+    private static int count(String fragment) {
+        java.util.regex.Matcher matcher = java.util.regex.Pattern
+                .compile(java.util.regex.Pattern.quote(fragment)).matcher(POSTGRES.getLogs());
+        int n = 0;
+        while (matcher.find()) {
+            n++;
+        }
+        return n;
+    }
+
     private static HttpResponse<String> get(String path, String ifNoneMatch) throws Exception {
         HttpRequest.Builder request = HttpRequest.newBuilder(
                 URI.create("http://localhost:" + runtime.port() + path));
@@ -112,10 +158,13 @@ class HttpCacheIntegrationTest {
                 POSTGRES.getPassword()));
         Path orders = target.resolve("web/orders");
         Files.createDirectories(orders);
+        // The literal marks the statement in the container log; PostgreSQL logs it as sent,
+        // continuation lines tab-indented, so the marker is a one-line fragment.
         Files.writeString(orders.resolve("orders.sql"), """
                 select
                   o.id,
-                  o.status
+                  o.status,
+                  'plain' as kind
                 from
                   orders o
                 order by
@@ -136,6 +185,41 @@ class HttpCacheIntegrationTest {
                   main:
                     sql:
                       file: orders.sql
+                response:
+                  json:
+                    status: 200
+                    body:
+                      rows: main.rows
+                """);
+        Path held = target.resolve("web/orders/held");
+        Files.createDirectories(held);
+        Files.writeString(held.resolve("orders.sql"), """
+                select
+                  o.id,
+                  o.status,
+                  'held' as kind
+                from
+                  orders o
+                order by
+                  o.id
+                """);
+        Files.writeString(held.resolve("get.yml"), """
+                version: tesseraql/v1
+                id: orders.held
+                kind: route
+                recipe: query-json
+                security:
+                  auth: public
+                cache:
+                  maxAge: 30s
+                  visibility: public
+                sources:
+                  main:
+                    sql:
+                      file: orders.sql
+                    cache:
+                      maxAge: 30s
+                      tables: [orders]
                 response:
                   json:
                     status: 200

@@ -1,5 +1,8 @@
 package io.tesseraql.pipeline.sql;
 
+import io.tesseraql.core.cache.HoldSpec;
+import io.tesseraql.core.cache.ResultHold;
+import io.tesseraql.core.cache.ResultKey;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
@@ -67,6 +70,12 @@ public class SqlStep implements Step {
     private final String onOverflow;
     /** The download name as declared — a template of {@link io.tesseraql.core.files.FilenamePlaceholders}. */
     private final String filename;
+    /**
+     * The source's {@code cache:} declaration (docs/caching.md decision 2), or {@code null}
+     * for a source whose rows are never held. A held read goes through the runtime's
+     * {@link ResultHold} when one is bound, and executes directly when none is.
+     */
+    private final HoldSpec hold;
 
     /**
      * One SQL execution, over whatever {@code source} says the statement is.
@@ -77,7 +86,7 @@ public class SqlStep implements Step {
      * statement comes from; everything here applies to it whatever the answer.
      */
     public SqlStep(SqlSource source, String mode, String resultKey, int maxRows,
-            int queryTimeoutSeconds, String onOverflow, String filename) {
+            int queryTimeoutSeconds, String onOverflow, String filename, HoldSpec hold) {
         this.source = source;
         this.mode = mode == null ? "query" : mode;
         this.resultKey = resultKey == null ? "main" : resultKey;
@@ -85,6 +94,12 @@ public class SqlStep implements Step {
         this.queryTimeoutSeconds = queryTimeoutSeconds;
         this.onOverflow = onOverflow == null ? "fail" : onOverflow;
         this.filename = filename == null ? "export.csv" : filename;
+        this.hold = hold;
+    }
+
+    /** The source's hold declaration, or {@code null}; the compiler's tests read it back. */
+    public HoldSpec hold() {
+        return hold;
     }
 
     /**
@@ -139,6 +154,15 @@ public class SqlStep implements Step {
                 TesseraqlProperties.CONTEXT, Map.class);
         long startNanos = System.nanoTime();
         long startedAt = System.currentTimeMillis();
+        // A held source reads through the runtime's hold (docs/caching.md decision 1): the
+        // rows a statement produced, below every renderer, keyed by the pool, the tenant, the
+        // statement and every bind. A query only — an update has nothing to hold — and only
+        // when the runtime bound a hold; a hand-built context executes as before.
+        ResultHold holdBean = hold == null || !"query".equals(mode)
+                ? null
+                : exchange.beans().lookup(TesseraqlProperties.RESULT_HOLD_BEAN,
+                        ResultHold.class);
+        boolean[] executed = {holdBean == null};
         // Declarative pagination (roadmap Phase 41): the main query of a page:-declaring
         // route executes with the dialect's clause appended (one extra row answers hasNext),
         // and the `page` context entry carries the metadata renderers and views read.
@@ -148,7 +172,9 @@ public class SqlStep implements Step {
                 && MAIN.equals(resultKey);
         Map<String, Object> result;
         if (paged) {
-            result = executeQuery(statements, paginated(bound, page, statement), statement);
+            BoundSql pageBound = paginated(bound, page, statement);
+            result = read(exchange, holdBean, statement, pageBound, executed,
+                    () -> executeQuery(statements, pageBound, statement));
             List<Map<String, Object>> rows = (List<Map<String, Object>>) result.get("rows");
             boolean hasNext = rows.size() > page.size();
             if (hasNext) {
@@ -177,7 +203,11 @@ public class SqlStep implements Step {
                 }
             }
             if (page.count()) {
-                long total = countAll(statements, bound, statement);
+                // The count is its own statement with its own key: the counting text over
+                // the same binds.
+                BoundSql counting = counting(bound);
+                long total = total(read(exchange, holdBean, statement, counting, executed,
+                        () -> countAll(statements, counting, statement)));
                 info.put("totalRows", total);
                 info.put("totalPages", Math.max(1,
                         (total + page.size() - 1) / page.size()));
@@ -188,15 +218,26 @@ public class SqlStep implements Step {
         } else {
             result = "update".equals(mode)
                     ? executeUpdate(statements, bound, statement)
-                    : executeQuery(statements, bound, statement);
+                    : read(exchange, holdBean, statement, bound, executed,
+                            () -> executeQuery(statements, bound, statement));
         }
 
         String countKey = "update".equals(mode) ? "affectedRows" : "rowCount";
         Object count = result.get(countKey);
         long durationMs = (System.nanoTime() - startNanos) / 1_000_000L;
         long rows = count instanceof Number number ? number.longValue() : 0L;
-        slowSqlLog(exchange).record(new io.tesseraql.core.diag.SqlExecution(
-                statement.id(), mode, durationMs, rows, startedAt));
+        if (executed[0]) {
+            // A hit executed nothing, so the slow-SQL log has nothing to record.
+            slowSqlLog(exchange).record(new io.tesseraql.core.diag.SqlExecution(
+                    statement.id(), mode, durationMs, rows, startedAt));
+        }
+        if (holdBean != null) {
+            io.tesseraql.core.telemetry.Span routeSpan = exchange.getProperty(
+                    TesseraqlProperties.ROUTE_SPAN, io.tesseraql.core.telemetry.Span.class);
+            if (routeSpan != null) {
+                routeSpan.attribute("cache." + resultKey, executed[0] ? "miss" : "hit");
+            }
+        }
         if (context != null) {
             io.tesseraql.pipeline.ContextResults.put(context, resultKey, result);
         }
@@ -486,20 +527,86 @@ public class SqlStep implements Step {
         return trimmed.endsWith(";") ? trimmed.substring(0, trimmed.length() - 1) : trimmed;
     }
 
-    /** The total row count: the rendered query wrapped in {@code select count(*)}. */
-    private long countAll(io.tesseraql.core.sql.SqlStatement statements, BoundSql bound,
-            SqlSource.Statement statement) {
-        BoundSql counting = new BoundSql(
+    /** The rendered query wrapped in {@code select count(*)}, over the same binds. */
+    private static BoundSql counting(BoundSql bound) {
+        return new BoundSql(
                 "select count(*) as tql_total from (\n" + stripTerminator(bound.sql())
                         + "\n) tql_count",
                 bound.parameters(), bound.sourceMap(), bound.coverageTrace(), bound.variant());
+    }
+
+    /**
+     * The total row count as a one-row result ({@code tql_total}), so it goes through the
+     * hold like any other statement's rows.
+     */
+    private Map<String, Object> countAll(io.tesseraql.core.sql.SqlStatement statements,
+            BoundSql counting, SqlSource.Statement statement) {
         try {
             Object total = statements.read(statement.id(), counting,
                     (resultSet, span) -> resultSet.next() ? resultSet.getObject(1) : 0L);
-            return total instanceof Number number ? number.longValue() : 0L;
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("tql_total", total instanceof Number number ? number.longValue() : 0L);
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("rows", new java.util.ArrayList<>(List.of(row)));
+            result.put("rowCount", 1);
+            return result;
         } catch (java.sql.SQLException ex) {
             throw executionError(ex, statement);
         }
+    }
+
+    /** The count out of {@link #countAll}'s one-row result. */
+    @SuppressWarnings("unchecked")
+    private static long total(Map<String, Object> counted) {
+        List<Map<String, Object>> rows = (List<Map<String, Object>>) counted.get("rows");
+        Object total = rows.isEmpty() ? null : rows.get(0).get("tql_total");
+        return total instanceof Number number ? number.longValue() : 0L;
+    }
+
+    /**
+     * One statement's rows, through the hold when the source declares one and the runtime
+     * bound one (docs/caching.md decisions 3 and 4): the key is the connector, the tenant,
+     * the statement, the row bound, the rendered text and every bind; a bind with no
+     * canonical text bypasses, counted. {@code executed[0]} is set when the statement ran, so
+     * the caller logs an execution only when there was one.
+     */
+    private Map<String, Object> read(Exchange exchange, ResultHold holdBean,
+            SqlSource.Statement statement, BoundSql bound, boolean[] executed,
+            java.util.function.Supplier<Map<String, Object>> execute) {
+        if (holdBean == null) {
+            return execute.get();
+        }
+        String key = ResultKey.of(hold.datasource(), tenantId(exchange), statement.id(),
+                maxRows, onOverflow, bound).orElse(null);
+        ResultHold.Rows rows = holdBean.read(key, hold, () -> {
+            executed[0] = true;
+            return toRows(execute.get());
+        });
+        return fromRows(rows);
+    }
+
+    /** The resolved tenant's id, or {@code null} for an untenanted request. */
+    private static String tenantId(Exchange exchange) {
+        return exchange.getProperty(
+                TesseraqlProperties.TENANT) instanceof io.tesseraql.core.tenant.TenantContext tenant
+                        ? tenant.id()
+                        : null;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static ResultHold.Rows toRows(Map<String, Object> result) {
+        return new ResultHold.Rows((List<Map<String, Object>>) result.get("rows"),
+                Boolean.TRUE.equals(result.get("truncated")));
+    }
+
+    private static Map<String, Object> fromRows(ResultHold.Rows rows) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("rows", rows.rows());
+        result.put("rowCount", rows.rows().size());
+        if (rows.truncated()) {
+            result.put("truncated", true);
+        }
+        return result;
     }
 
     private Map<String, Object> executeQuery(io.tesseraql.core.sql.SqlStatement statements,

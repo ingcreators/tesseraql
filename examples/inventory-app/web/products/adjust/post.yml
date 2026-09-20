@@ -31,6 +31,9 @@ steps:
       params:
         sku: params.sku
         delta: params.delta
+# The dashboard holds its stock rows (products/dashboard/get.yml); naming the table drops them
+# on this node at once and on every other node within the stamp interval.
+invalidates: [products]
 response:
   json:
     status: 200

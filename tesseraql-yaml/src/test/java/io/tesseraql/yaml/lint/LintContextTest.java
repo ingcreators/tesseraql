@@ -28,7 +28,7 @@ class LintContextTest {
         Assumptions.assumeFalse(Files.isReadable(sql));
         try {
             List<LintFinding> findings = new ArrayList<>();
-            LintContext context = new LintContext(dir, findings, Set.of(),
+            LintContext context = new LintContext(dir, findings, Set.of(), Set.of(),
                     io.tesseraql.core.expr.ExpressionFunctions.processDefault(),
                     io.tesseraql.core.files.FileCodecs.of());
 
@@ -53,7 +53,7 @@ class LintContextTest {
         Path sql = dir.resolve("query.sql");
         Files.writeString(sql, "select 1 where id = /* body.id */1\n");
         List<LintFinding> findings = new ArrayList<>();
-        LintContext context = new LintContext(dir, findings, Set.of(),
+        LintContext context = new LintContext(dir, findings, Set.of(), Set.of(),
                 io.tesseraql.core.expr.ExpressionFunctions.processDefault(),
                 io.tesseraql.core.files.FileCodecs.of());
 
@@ -70,7 +70,7 @@ class LintContextTest {
         Path yml = dir.resolve("broken.yml");
         Files.writeString(yml, "a: [unclosed\n");
         List<LintFinding> findings = new ArrayList<>();
-        LintContext context = new LintContext(dir, findings, Set.of(),
+        LintContext context = new LintContext(dir, findings, Set.of(), Set.of(),
                 io.tesseraql.core.expr.ExpressionFunctions.processDefault(),
                 io.tesseraql.core.files.FileCodecs.of());
 
@@ -89,7 +89,7 @@ class LintContextTest {
         Path directive = dir.resolve("directive.sql");
         Files.writeString(directive, "select 1\nwhere 1 = 1\n/*%if q > */ and x = 1 /*%end*/\n");
         List<LintFinding> findings = new ArrayList<>();
-        LintContext context = new LintContext(dir, findings, Set.of(),
+        LintContext context = new LintContext(dir, findings, Set.of(), Set.of(),
                 io.tesseraql.core.expr.ExpressionFunctions.processDefault(),
                 io.tesseraql.core.files.FileCodecs.of());
 

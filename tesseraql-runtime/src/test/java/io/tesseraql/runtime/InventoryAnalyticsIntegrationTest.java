@@ -43,7 +43,10 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 class InventoryAnalyticsIntegrationTest {
 
     @Container
-    static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
+    static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine")
+            // Every statement is a line in the container log, so "a held source ran nothing"
+            // is a count, not an inference (docs/caching.md decision 12).
+            .withCommand("postgres", "-c", "log_statement=all");
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final String JWT_SECRET = "dev-only-secret-change-me-in-production";
@@ -96,6 +99,34 @@ class InventoryAnalyticsIntegrationTest {
             assertThat(rs.next()).isFalse();
         }
 
+        // The stock dashboard holds its two shelf queries (docs/caching.md decision 12): a
+        // second render runs no statement, and an adjustment — products.adjust declares
+        // invalidates: [products] — shows on the very next render, not after the hold's age.
+        // After the pricing job, because the dashboard's lake panels read the history it lands.
+        String reader = jwt("user-a", "INV_READ");
+        String writer = jwt("user-a", "INV_WRITE");
+        String board = get("/products/dashboard", Map.of("Authorization", "Bearer " + reader))
+                .body();
+        assertThat(board).contains("MS-230").doesNotContain("KB-101");
+        get("/products/dashboard", Map.of("Authorization", "Bearer " + reader));
+        Thread.sleep(400);
+        assertThat(lowStockStatements()).as("two renders, one statement").isEqualTo(1);
+        HttpResponse<String> adjusted = HttpClient.newHttpClient().send(
+                HttpRequest.newBuilder(URI.create("http://localhost:" + runtime.port()
+                        + "/products/adjust"))
+                        .header("Authorization", "Bearer " + writer)
+                        .header("Content-Type", "application/json")
+                        .POST(HttpRequest.BodyPublishers.ofString(
+                                "{\"sku\":\"KB-101\",\"delta\":-35}"))
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertThat(adjusted.statusCode()).isEqualTo(200);
+        assertThat(get("/products/dashboard", Map.of("Authorization", "Bearer " + reader))
+                .body()).as("the adjusted keyboard is below its reorder level now")
+                .contains("KB-101");
+        Thread.sleep(400);
+        assertThat(lowStockStatements()).isEqualTo(2);
+
         // A Parquet report uploaded through the app's own attachment route (the blob store
         // write path) is queryable back through ${dataset.*} — by its owner only.
         String uploader = jwt("user-a", "INV_READ", "INV_WRITE");
@@ -113,6 +144,29 @@ class InventoryAnalyticsIntegrationTest {
 
         assertThat(get("/api/report?id=" + datasetId,
                 Map.of("Authorization", "Bearer " + other)).statusCode()).isEqualTo(500);
+    }
+
+    /** Rewrites a shipped route's {@code security: policy:} block to bearer with that policy. */
+    private static void bearer(Path route, String policy) throws IOException {
+        String shipped = Files.readString(route);
+        String block = "security:\n  policy: " + policy;
+        if (!shipped.contains(block)) {
+            throw new AssertionError(route + " no longer declares '" + block + "'");
+        }
+        Files.writeString(route, shipped.replace(block,
+                "security:\n  auth: bearer\n  policy: " + policy));
+    }
+
+    /** How many times PostgreSQL logged the dashboard's low-stock statement. */
+    private static int lowStockStatements() {
+        java.util.regex.Matcher matcher = java.util.regex.Pattern
+                .compile(java.util.regex.Pattern.quote("where stock <= reorder_level"))
+                .matcher(POSTGRES.getLogs());
+        int n = 0;
+        while (matcher.find()) {
+            n++;
+        }
+        return n;
     }
 
     private HttpResponse<String> get(String path, Map<String, String> headers) throws Exception {
@@ -145,6 +199,12 @@ class InventoryAnalyticsIntegrationTest {
         Path home = Files.createTempDirectory("tesseraql-inventory-m23");
         Path gallery = Path.of("..", "examples", "inventory-app").toAbsolutePath().normalize();
         copyRecursively(gallery, home);
+        // The gallery serves its pages to browser sessions (security.defaults: /** is
+        // browser); this fixture speaks bearer, so the two routes the held-dashboard row
+        // exercises take an explicit bearer auth in the copy. Their declarations — the
+        // cache: block and the invalidates: — are the shipped ones, untouched.
+        bearer(home.resolve("web/products/dashboard/get.yml"), "inv.read");
+        bearer(home.resolve("web/products/adjust/post.yml"), "inv.write");
 
         Files.writeString(home.resolve("config/application.yml"), """
                 server:

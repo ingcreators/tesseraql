@@ -44,7 +44,7 @@ class JdbcCatalogStoreTest {
                 "healthy", spec("code_master"),
                 "broken", spec(REFUSED_TABLE)),
                 name -> jdbc.dataSource(), "postgresql", null, I18nSettings.defaults(),
-                clock::get);
+                io.tesseraql.core.cache.TableStamps.NONE, clock::get);
     }
 
     @Test

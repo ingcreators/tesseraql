@@ -158,9 +158,28 @@ record RuntimePools(Map<String, HikariDataSource> dataSources, HikariDataSource 
             }
 
             // Code catalogs (docs/lookups.md, decision 8): small, nearly static tables of codes and
-            // names, loaded whole and resolved from memory wherever a code is rendered.
+            // names, loaded whole and resolved from memory wherever a code is rendered — and the
+            // held sources (docs/caching.md): a statement's rows kept for a declared time. Both
+            // read one per-table version stamp on the main connector (decision 5), so a command's
+            // invalidates: drops either on every node with one row raised.
             io.tesseraql.yaml.catalog.Catalogs codeCatalogs = io.tesseraql.yaml.catalog.Catalogs
                     .load(appHome);
+            java.util.Set<String> heldTables = io.tesseraql.yaml.app.HeldSources.tables(manifest);
+            java.util.Set<String> stampedTables = new java.util.LinkedHashSet<>();
+            codeCatalogs.all().values()
+                    .forEach(spec -> stampedTables.addAll(spec.sourceTables()));
+            stampedTables.addAll(heldTables);
+            io.tesseraql.operations.catalog.TableVersions versions = new io.tesseraql.operations.catalog.TableVersions(
+                    dataSources::get, stampedTables, System::currentTimeMillis);
+            io.tesseraql.core.catalog.CatalogStore catalogStore = null;
+            io.tesseraql.core.cache.ResultHold resultHold = null;
+            if (!codeCatalogs.isEmpty() || !heldTables.isEmpty()) {
+                // The version table carries an invalidation to the runtimes that did not serve the
+                // command; failing to create it disables the stamp, never the catalogs or the
+                // holds.
+                versions.ensureSchema();
+                context.bind(TesseraqlProperties.TABLE_STAMPS_BEAN, versions);
+            }
             if (!codeCatalogs.isEmpty()) {
                 if (!tenantDataSources.isEmpty()) {
                     // A held catalog is app-wide; serving one tenant's codes to another is a data
@@ -172,15 +191,36 @@ record RuntimePools(Map<String, HikariDataSource> dataSources, HikariDataSource 
                             "catalogs/ and per-tenant datasources are declared together; a catalog is"
                                     + " held app-wide and is not yet keyed by tenant");
                 }
-                io.tesseraql.operations.catalog.JdbcCatalogStore catalogStore = new io.tesseraql.operations.catalog.JdbcCatalogStore(
+                catalogStore = new io.tesseraql.operations.catalog.JdbcCatalogStore(
                         codeCatalogs.all(),
                         dataSources::get, TesseraqlRuntime.datasourceDialect(manifest.config()),
                         manifest.appHome(), io.tesseraql.yaml.i18n.I18nSettings
-                                .from(manifest.config(), manifest.appHome()));
-                // The version table carries an invalidation to the runtimes that did not serve the
-                // command; failing to create it disables the stamp, never the catalogs.
-                catalogStore.ensureSchema();
+                                .from(manifest.config(), manifest.appHome()),
+                        versions);
                 context.bind(TesseraqlProperties.CATALOG_STORE_BEAN, catalogStore);
+            }
+            if (!heldTables.isEmpty()) {
+                // One hold per runtime (docs/caching.md decision 4): bounded by entries and by
+                // rows per entry, keyed per tenant, reading the shared stamp. Disabled by
+                // tesseraql.cache.enabled: false, the operator's one key when a hold misbehaves
+                // — every declaration then executes and is counted as a bypass.
+                boolean enabled = manifest.config().getBoolean("tesseraql.cache.enabled", true);
+                int maxEntries = manifest.config().getString("tesseraql.cache.maxEntries")
+                        .map(Integer::parseInt).orElse(1000);
+                int maxEntryRows = manifest.config().getString("tesseraql.cache.maxEntryRows")
+                        .map(Integer::parseInt).orElse(1000);
+                resultHold = new io.tesseraql.core.cache.ResultHold(maxEntries, maxEntryRows,
+                        enabled, versions, effectiveMeter, System::currentTimeMillis);
+                context.bind(TesseraqlProperties.RESULT_HOLD_BEAN, resultHold);
+                if (!enabled) {
+                    LOG.info("tesseraql.cache.enabled is false: every held source executes its"
+                            + " statement (counted as a bypass)");
+                }
+            }
+            if (catalogStore != null || resultHold != null) {
+                context.bind(TesseraqlProperties.INVALIDATIONS_BEAN,
+                        io.tesseraql.core.cache.Invalidations.of(catalogStore, resultHold,
+                                versions));
             }
             return new RuntimePools(dataSources, dataSource, frameworkDataSource,
                     aggregatingMeter, effectiveTracer, effectiveMeter, otelSdk, lanes,

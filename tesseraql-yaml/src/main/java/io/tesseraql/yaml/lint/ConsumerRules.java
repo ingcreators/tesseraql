@@ -101,6 +101,8 @@ final class ConsumerRules implements LintRule {
         DocumentRules.lintValidation(context, consumer.source(), definition, source, findings);
         LiveViewRules.lintEmit(definition, source, findings);
         DocumentRules.lintInvalidates(context, definition, source, findings);
+        HeldSourceRules.report(context, config, consumer.source(), definition,
+                io.tesseraql.yaml.app.RecipeShape.Surface.CONSUMER, source, findings);
         MessagingRules.lintPublish(config, definition, source, findings);
         MessagingRules.lintNotify(config, definition, source, findings, context.functions());
         DocumentRules.lintDatasource(context, config, consumer.source(), definition, source,
