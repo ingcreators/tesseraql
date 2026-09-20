@@ -45,13 +45,15 @@ public final class FileImportProcessor implements Step {
     private final Step html;
     /** The route's {@code emit:} topics, announced when the import's transaction commits. */
     private final java.util.List<String> emit;
+    /** The route's {@code invalidates:} tables, dropped when the import's transaction commits. */
+    private final java.util.List<String> invalidates;
 
     public FileImportProcessor(String routeId, String urlPath, String appName, String format,
             FileReadSpec readSpec, FormatDeclaration localeDeclaration, Path rowSqlFile,
             String onError,
             boolean review, Map<String, io.tesseraql.yaml.model.InputField> input) {
         this(routeId, urlPath, appName, format, readSpec, localeDeclaration, rowSqlFile, onError,
-                review, input, null, java.util.List.of());
+                review, input, null, java.util.List.of(), java.util.List.of());
     }
 
     /** The shape before an import announced its own completion. */
@@ -60,20 +62,33 @@ public final class FileImportProcessor implements Step {
             String onError,
             boolean review, Map<String, io.tesseraql.yaml.model.InputField> input, Step html) {
         this(routeId, urlPath, appName, format, readSpec, localeDeclaration, rowSqlFile, onError,
-                review, input, html, java.util.List.of());
+                review, input, html, java.util.List.of(), java.util.List.of());
     }
 
-    /**
-     * @param html the compiled {@code response.html:} page (docs/csv-import.md decision 7), or
-     *             null for the JSON-only shape — the declaration used to compile and be dropped
-     */
+    /** The shape before an import could name the tables its commit makes stale. */
     public FileImportProcessor(String routeId, String urlPath, String appName, String format,
             FileReadSpec readSpec, FormatDeclaration localeDeclaration, Path rowSqlFile,
             String onError,
             boolean review, Map<String, io.tesseraql.yaml.model.InputField> input, Step html,
             java.util.List<String> emit) {
+        this(routeId, urlPath, appName, format, readSpec, localeDeclaration, rowSqlFile, onError,
+                review, input, html, emit, java.util.List.of());
+    }
+
+    /**
+     * @param html the compiled {@code response.html:} page (docs/csv-import.md decision 7), or
+     *             null for the JSON-only shape — the declaration used to compile and be dropped
+     * @param invalidates the route's {@code invalidates:} (docs/caching.md), applied when the
+     *             import's transaction commits, the placement {@code emit} has
+     */
+    public FileImportProcessor(String routeId, String urlPath, String appName, String format,
+            FileReadSpec readSpec, FormatDeclaration localeDeclaration, Path rowSqlFile,
+            String onError,
+            boolean review, Map<String, io.tesseraql.yaml.model.InputField> input, Step html,
+            java.util.List<String> emit, java.util.List<String> invalidates) {
         this.html = html;
         this.emit = java.util.List.copyOf(emit);
+        this.invalidates = java.util.List.copyOf(invalidates);
         this.routeId = routeId;
         this.urlPath = urlPath;
         this.appName = appName;
@@ -112,6 +127,7 @@ public final class FileImportProcessor implements Step {
                     // the background thread, not when this response goes out
                     // (docs/csv-import.md decision 6).
                     .announcing(emit, ImportTopics.tenant(exchange))
+                    .invalidating(invalidates)
                     // And the pool its row statement runs on: the tenant's in a per-tenant
                     // mode, resolved here so an unknown tenant is refused before any row
                     // (docs/multi-tenancy.md).

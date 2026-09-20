@@ -41,18 +41,30 @@ public final class ImportCommitProcessor implements Step {
     private final String defaultLocaleTag;
     /** The route's {@code emit:} topics, announced when the import's transaction commits. */
     private final java.util.List<String> emit;
+    /** The route's {@code invalidates:} tables, dropped when the import's transaction commits. */
+    private final java.util.List<String> invalidates;
 
     /** The shape before the confirm leg had a page to answer. */
     public ImportCommitProcessor(String routeId, String urlPath, String appName, String format,
             FileReadSpec readSpec, Path rowSqlFile, String onError) {
         this(routeId, urlPath, appName, format, readSpec, rowSqlFile, onError, null, "en",
-                java.util.List.of());
+                java.util.List.of(), java.util.List.of());
+    }
+
+    /** The shape before a confirmed import could name the tables its commit makes stale. */
+    public ImportCommitProcessor(String routeId, String urlPath, String appName, String format,
+            FileReadSpec readSpec, Path rowSqlFile, String onError, Path appHome,
+            String defaultLocaleTag, java.util.List<String> emit) {
+        this(routeId, urlPath, appName, format, readSpec, rowSqlFile, onError, appHome,
+                defaultLocaleTag, emit, java.util.List.of());
     }
 
     public ImportCommitProcessor(String routeId, String urlPath, String appName, String format,
             FileReadSpec readSpec, Path rowSqlFile, String onError, Path appHome,
-            String defaultLocaleTag, java.util.List<String> emit) {
+            String defaultLocaleTag, java.util.List<String> emit,
+            java.util.List<String> invalidates) {
         this.emit = java.util.List.copyOf(emit);
+        this.invalidates = java.util.List.copyOf(invalidates);
         this.appHome = appHome;
         this.defaultLocaleTag = defaultLocaleTag;
         this.routeId = routeId;
@@ -95,6 +107,7 @@ public final class ImportCommitProcessor implements Step {
                     new FileTransferService.ImportRequest(routeId, appName, format, readSpec,
                             rowSqlFile, onError, null)
                             .announcing(emit, ImportTopics.tenant(exchange))
+                            .invalidating(invalidates)
                             .on(TransferPools.of(exchange)));
         } catch (TqlException refusal) {
             // A refusal that declared human-safe text is one the confirming caller is meant to

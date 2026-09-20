@@ -29,20 +29,29 @@ sources:
       tables: [products]
   # Supplier price drops, read straight off the CSV files by the analytics engine
   # (docs/duckdb.md) — one response composing the live database and the file drop.
+  # Not held: the drop is a file another system replaces, and nothing declares that write.
   supplierPrices:
     sql:
       file: supplier-prices.sql
       datasource: analytics
   # The lake's history (docs/duckdb.md "Lake tables"): every pricing run appended a
-  # snapshot; the trend and the snapshot list read them beside the live tables.
+  # snapshot; the trend and the snapshot list read them beside the live tables. Held like
+  # the shelf queries — the pricing jobs declare `invalidates: [price_history]`, so a run's
+  # snapshot shows on the next render (docs/jobs.md "What a run made stale").
   priceTrend:
     sql:
       file: price-trend.sql
       datasource: analytics
+    cache:
+      maxAge: 30s
+      tables: [price_history]
   lakeSnapshots:
     sql:
       file: lake-snapshots.sql
       datasource: analytics
+    cache:
+      maxAge: 30s
+      tables: [price_history]
 response:
   html:
     status: 200

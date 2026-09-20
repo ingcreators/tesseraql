@@ -105,6 +105,11 @@ and skipped (acknowledged without writing a row). Combined with at-least-once de
 processing **effectively exactly-once per business key** — so a consumer's SQL should be an
 idempotent upsert.
 
+A consumer that projects into a table a code catalog or a held source reads declares
+`invalidates:` like a command ([code-catalogs.md](code-catalogs.md)). It runs after the
+consumer's transaction commits; a deduplicated redelivery, which writes nothing, drops
+nothing.
+
 ### Projecting into another database
 
 A consumer may run its apply transaction on a named connector — the blessed

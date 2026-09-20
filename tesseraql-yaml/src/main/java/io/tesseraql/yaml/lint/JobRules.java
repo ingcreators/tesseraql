@@ -84,6 +84,10 @@ final class JobRules implements LintRule {
                             + " and a job has no one to confirm it"));
         }
         OverlapSlaRules.lintOverlapAndSla(job, source, findings);
+        // A job's invalidates: (docs/caching.md) — the same names a command declares, judged the
+        // same way: a table nothing reads drops nothing, and is a warning here as it is there.
+        DocumentRules.lintInvalidatedTables(context, job.definition().invalidates(), source,
+                findings);
         for (io.tesseraql.yaml.model.PipelineStep step : job.definition().pipeline()) {
             // The axes (docs/unified-sources.md decision 12): the binding arm reads or writes,
             // an output block says what to do with a result, chunk: processes. A step declares

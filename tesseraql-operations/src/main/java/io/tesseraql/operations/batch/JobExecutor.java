@@ -95,6 +95,7 @@ public final class JobExecutor {
             .none();
     private FilePusher filePusher;
     private io.tesseraql.core.telemetry.Meter meter = io.tesseraql.core.telemetry.NoopMeter.INSTANCE;
+    private java.util.function.Supplier<io.tesseraql.core.cache.Invalidations> invalidations;
 
     /**
      * Delivers a produced file to a {@code push:} step's target
@@ -261,6 +262,18 @@ public final class JobExecutor {
     }
 
     /**
+     * What a job's {@code invalidates:} reaches (docs/caching.md): the runtime's catalogs, its
+     * hold and the table stamps every other node reads. A supplier, because the bean is bound
+     * by the boot that also builds this executor, and absent when the application declares
+     * neither a catalog nor a held source — a CLI run supplies the stamps alone.
+     */
+    public JobExecutor invalidations(
+            java.util.function.Supplier<io.tesseraql.core.cache.Invalidations> invalidations) {
+        this.invalidations = invalidations;
+        return this;
+    }
+
+    /**
      * Wires the preference store recipient-aware {@code notify:} steps consult (roadmap
      * Phase 48). Optional — without it every notification enqueues, as before.
      */
@@ -366,6 +379,7 @@ public final class JobExecutor {
         }
         io.tesseraql.core.telemetry.SpanContext jobContext = jobSpan.context();
         ExecutionHeartbeats.Pulse pulse = heartbeats.start(executionId);
+        int committedSteps = 0;
         try {
             boolean stopped = false;
             for (PipelineStep step : job.effectiveSteps()) {
@@ -381,8 +395,12 @@ public final class JobExecutor {
                     stepResults.put(step.id(), Map.of("skipped", true));
                     continue;
                 }
-                if (runStepTracked(jobFile, step, dataSource, context, stepResults, executionId,
-                        appName, jobContext)) {
+                boolean stoppedHere = runStepTracked(jobFile, step, dataSource, context,
+                        stepResults, executionId, appName, jobContext);
+                // Counted whether it finished or stopped: a stopped chunk stopped on a
+                // committed checkpoint, and a step that threw never reaches this line.
+                committedSteps++;
+                if (stoppedHere) {
                     stopped = true;
                     break;
                 }
@@ -408,12 +426,36 @@ public final class JobExecutor {
                     ex);
             notifyFailure(job.id(), executionId, appName, ex.getMessage());
         } finally {
+            invalidateAfterRun(job, committedSteps);
             ownedExecutions.remove(executionId);
             drainRequested.remove(executionId);
             pulse.close();
             jobSpan.end();
         }
         return metered(repository.findExecution(executionId).orElseThrow());
+    }
+
+    /**
+     * The job's {@code invalidates:}, after the run (docs/caching.md). A job is not one
+     * transaction — each step commits on its own (docs/jobs.md "Transactions") — so the
+     * declaration fires once the run has ended, whatever its status, provided a step committed:
+     * a run that failed on its first step, or was skipped, wrote nothing and drops nothing. A
+     * failure here is logged and is never the run's; the invalidation is a hint under the
+     * hold's expiry.
+     */
+    private void invalidateAfterRun(JobDefinition job, int committedSteps) {
+        if (committedSteps == 0 || job.invalidates().isEmpty() || invalidations == null) {
+            return;
+        }
+        try {
+            io.tesseraql.core.cache.Invalidations target = invalidations.get();
+            if (target != null) {
+                target.invalidate(job.invalidates());
+            }
+        } catch (RuntimeException ex) {
+            LOG.warn("Job {} ran; its invalidates: {} was not applied: {}", job.id(),
+                    job.invalidates(), ex.getMessage());
+        }
     }
 
     /**

@@ -313,6 +313,110 @@ class AppLinterHeldSourcesTest {
         assertThat(refused).hasSize(2);
     }
 
+    /**
+     * docs/caching.md: every writer with a commit may invalidate — a queue consumer and a file
+     * import beside the command, and a job after its run — each judged by the one table arm;
+     * a read route still cannot, because nothing commits after it.
+     */
+    @Test
+    void everyWriterWithACommitMayInvalidateAndAReadMayNot(@TempDir Path dir) throws Exception {
+        writeRoute(dir, "orders", "query-json", """
+                sources:
+                  main:
+                    sql:
+                      file: orders.sql
+                    cache:
+                      maxAge: 30s
+                      tables: [orders]
+                response:
+                  json:
+                    body:
+                      rows: main.rows
+                """);
+        Path consume = Files.createDirectories(dir.resolve("consume/orders"));
+        Files.writeString(consume.resolve("write.sql"), "update orders set n = 1\n");
+        Files.writeString(consume.resolve("project.yml"), """
+                version: tesseraql/v1
+                id: orders.project
+                kind: route
+                recipe: queue-consume
+                consume:
+                  channel: events
+                  topic: orders.created
+                steps:
+                  - id: main
+                    sql:
+                      file: write.sql
+                      mode: update
+                invalidates: [orders]
+                """);
+        Path upload = Files.createDirectories(dir.resolve("web/orders/upload"));
+        Files.writeString(upload.resolve("write.sql"), "update orders set n = 1\n");
+        Files.writeString(upload.resolve("post.yml"), """
+                version: tesseraql/v1
+                id: orders.upload
+                kind: route
+                recipe: file-import
+                security:
+                  auth: public
+                import:
+                  format: csv
+                  columns:
+                    - n
+                steps:
+                  - id: row
+                    sql:
+                      file: write.sql
+                invalidates: [orders]
+                """);
+        Path job = Files.createDirectories(dir.resolve("batch/nightly"));
+        Files.writeString(job.resolve("write.sql"), "update orders set n = 1\n");
+        Files.writeString(job.resolve("job.yml"), """
+                version: tesseraql/v1
+                id: orders.nightly
+                kind: job
+                recipe: batch-pipeline
+                pipeline:
+                  - id: main
+                    sql:
+                      file: write.sql
+                      mode: update
+                invalidates: [orders, customers]
+                """);
+        Path read = Files.createDirectories(dir.resolve("web/orders/stale"));
+        Files.writeString(read.resolve("orders.sql"), "select 1 as id\n");
+        Files.writeString(read.resolve("get.yml"), """
+                version: tesseraql/v1
+                id: orders.stale
+                kind: route
+                recipe: query-json
+                security:
+                  auth: public
+                sources:
+                  main:
+                    sql:
+                      file: orders.sql
+                invalidates: [orders]
+                response:
+                  json:
+                    body:
+                      rows: main.rows
+                """);
+        List<LintFinding> findings = new AppLinter().lint(dir).stream()
+                .filter(f -> "TQL-FIELD-4620".equals(f.code())).toList();
+        // The consumer, the import and the job's held table: nothing to say. Two findings:
+        // the job's unheld table (a warning, as a command's is) and the read (an error).
+        assertThat(findings).hasSize(2);
+        assertThat(findings).filteredOn(LintFinding::isError).singleElement().satisfies(f -> {
+            assertThat(f.source()).isEqualTo("web/orders/stale/get.yml");
+            assertThat(f.message()).contains("a recipe that commits", "'query-json'");
+        });
+        assertThat(findings).filteredOn(f -> !f.isError()).singleElement().satisfies(f -> {
+            assertThat(f.source()).isEqualTo("batch/nightly/job.yml");
+            assertThat(f.message()).contains("'customers'", "no catalog and no held source reads");
+        });
+    }
+
     @Test
     void aReadToolMayHoldAndAWritingToolMayNot(@TempDir Path dir) throws Exception {
         Files.createDirectories(dir.resolve("config"));

@@ -28,6 +28,10 @@ import java.util.Map;
  *                 (docs/batch-platform.md track E): {@code skip} (the default) records a
  *                 SKIPPED execution naming the running one, {@code concurrent} runs anyway
  * @param sla      the deadline expectations a periodic check alerts on (alert-only)
+ * @param invalidates the tables this job's steps write that a code catalog or a held source
+ *                 reads (docs/caching.md): dropped after the run, once at least one step
+ *                 committed — a job is not one transaction — and, on a poll-triggered
+ *                 {@code file-import} job, when each import's transaction commits
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record JobDefinition(
@@ -42,13 +46,24 @@ public record JobDefinition(
         boolean perTenant,
         @com.fasterxml.jackson.annotation.JsonProperty("import") ImportSpec fileImport,
         String overlap,
-        SlaSpec sla) {
+        SlaSpec sla,
+        @com.fasterxml.jackson.annotation.JsonFormat(with = com.fasterxml.jackson.annotation.JsonFormat.Feature.ACCEPT_SINGLE_VALUE_AS_ARRAY) List<String> invalidates) {
 
     public JobDefinition {
         // Insertion-ordered: a job's params form renders and its binder reports in the
         // order the fields were declared (docs/deterministic-output.md).
         input = input == null ? Map.of() : OrderedCopies.map(input);
         pipeline = pipeline == null ? List.of() : List.copyOf(pipeline);
+        invalidates = invalidates == null ? List.of() : List.copyOf(invalidates);
+    }
+
+    /** The shape before a job could name what its run made stale (docs/caching.md). */
+    public JobDefinition(String version, String id, String kind, String recipe, String datasource,
+            TriggerSpec trigger, Map<String, InputField> input,
+            List<PipelineStep> pipeline, boolean perTenant, ImportSpec fileImport,
+            String overlap, SlaSpec sla) {
+        this(version, id, kind, recipe, datasource, trigger, input, pipeline, perTenant,
+                fileImport, overlap, sla, null);
     }
 
     /** Convenience constructor without overlap/SLA declarations (the pre-track-E shape). */

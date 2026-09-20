@@ -4,6 +4,11 @@ kind: job
 recipe: batch-pipeline
 datasource: analytics
 
+# The dashboard holds its lake panels (web/products/dashboard/get.yml) and this run
+# appends the snapshot they read: naming the lake table drops those holds once the run
+# ends, so the next render shows this run's snapshot (docs/jobs.md "What a run made stale").
+invalidates: [price_history]
+
 trigger:
   schedule:
     cron: "0 0 4 * * ?"

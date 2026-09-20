@@ -4,6 +4,10 @@ kind: job
 recipe: batch-pipeline
 datasource: analytics
 
+# Expiring snapshots changes the list the dashboard holds (docs/jobs.md "What a run made
+# stale").
+invalidates: [price_history]
+
 trigger:
   schedule:
     cron: "0 30 4 * * ?"

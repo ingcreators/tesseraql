@@ -35,12 +35,15 @@ final class PollImportProcessor implements Step {
     private final Path rowSqlFile;
     private final String onError;
     private final io.tesseraql.opsui.PollSourceStatus status;
+    /** The job's {@code invalidates:} (docs/caching.md), applied when each import commits. */
+    private final java.util.List<String> invalidates;
 
     /** How often the poll thread re-reads the transfer's status while it runs. */
     private static final long POLL_INTERVAL_MILLIS = 100;
 
     PollImportProcessor(String jobId, String appName, String format, FileReadSpec readSpec,
-            Path rowSqlFile, String onError, io.tesseraql.opsui.PollSourceStatus status) {
+            Path rowSqlFile, String onError, io.tesseraql.opsui.PollSourceStatus status,
+            java.util.List<String> invalidates) {
         this.jobId = jobId;
         this.appName = appName;
         this.format = format;
@@ -48,6 +51,7 @@ final class PollImportProcessor implements Step {
         this.rowSqlFile = rowSqlFile;
         this.onError = onError;
         this.status = status;
+        this.invalidates = java.util.List.copyOf(invalidates);
     }
 
     @Override
@@ -68,7 +72,8 @@ final class PollImportProcessor implements Step {
             // startImport spools the stream off-heap before returning, so a large file never
             // materializes in memory and the consumer can safely move it afterwards.
             String transferId = transfers.startImport(new FileTransferService.ImportRequest(
-                    jobId, appName, format, readSpec, rowSqlFile, onError), content);
+                    jobId, appName, format, readSpec, rowSqlFile, onError)
+                    .invalidating(invalidates), content);
             awaitImport(transfers, transferId, fileName);
             LOG.log(System.Logger.Level.INFO,
                     "Polled file {0} ingested for job {1} as transfer {2}",

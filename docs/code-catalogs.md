@@ -204,6 +204,11 @@ row is written. Over-invalidating costs nothing here: a catalog is small enough 
 whole, so reloading all twenty is twenty small queries. `scaffold crud` writes the
 declaration itself for a table a catalog reads.
 
+The same key sits on every writer with a commit: a `webhook`, a `queue-consume` route, a
+`file-import` route (applied when the import's transaction commits, which is after its
+response) and a job, after its run ([jobs.md](jobs.md#what-a-run-made-stale)). A recipe
+with no commit — a read — cannot declare it (`TQL-FIELD-4620`).
+
 **Other runtimes learn from a version row.** The write also raises a per-table version,
 and every runtime re-reads that table on a short interval — one small query for all
 catalogs at once. A source that holds its rows

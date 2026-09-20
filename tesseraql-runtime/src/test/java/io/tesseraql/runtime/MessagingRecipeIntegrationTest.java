@@ -65,6 +65,12 @@ class MessagingRecipeIntegrationTest {
 
     @Test
     void aPublishedEventIsConsumedAndProjectedThroughPgNotify() throws Exception {
+        // The projection's reader holds its rows (docs/caching.md): read once before the event,
+        // so the hold exists for the consumer's invalidates: to drop.
+        HttpResponse<String> unprojected = projections();
+        assertThat(unprojected.statusCode()).as(unprojected.body()).isEqualTo(200);
+        assertThat(unprojected.body()).doesNotContain("O-1");
+
         byte[] body = "{\"orderId\":\"O-1\",\"total\":1250}".getBytes(StandardCharsets.UTF_8);
         assertThat(post(body).statusCode()).isEqualTo(202);
 
@@ -75,6 +81,22 @@ class MessagingRecipeIntegrationTest {
 
         // Exactly one projection row — the idempotency key deduplicates any redelivery.
         assertThat(projectionCount()).isEqualTo(1);
+
+        // The consumer declares invalidates: [order_projection], so the held read shows the
+        // row as soon as the consumer's transaction committed — its hold is five minutes,
+        // so a read that still answered nothing within the wait would be the hold, not the
+        // relay.
+        assertThat(await(() -> projections().body().contains("O-1") ? 1 : null))
+                .as("the consumer's commit dropped the held projection read; last answer: "
+                        + projections().body())
+                .isEqualTo(1);
+    }
+
+    /** The held read over the projection table: a plain GET, its rows as JSON text. */
+    private static HttpResponse<String> projections() throws Exception {
+        return CLIENT.send(HttpRequest.newBuilder(
+                URI.create("http://localhost:" + port + "/api/projections")).build(),
+                HttpResponse.BodyHandlers.ofString());
     }
 
     private static HttpResponse<String> post(byte[] body) throws Exception {
@@ -235,10 +257,37 @@ class MessagingRecipeIntegrationTest {
                       params:
                         orderId: body.orderId
                         total: body.total
+                invalidates: [order_projection]
                 """);
         Files.writeString(consumeDir.resolve("project-order.sql"),
                 "insert into order_projection (id, total)"
                         + " values (/* orderId */ 'x', /* total */ 0)\n");
+
+        // A held read over the projection (docs/caching.md): the consumer's invalidates: is
+        // what lets it see a projected row before its five-minute age.
+        Path readDir = target.resolve("web/api/projections");
+        Files.createDirectories(readDir);
+        Files.writeString(readDir.resolve("get.yml"), """
+                version: tesseraql/v1
+                id: orders.projections
+                kind: route
+                recipe: query-json
+                security:
+                  auth: public
+                sources:
+                  main:
+                    sql:
+                      file: projections.sql
+                    cache:
+                      maxAge: 5m
+                      tables: [order_projection]
+                response:
+                  json:
+                    body:
+                      rows: main.rows
+                """);
+        Files.writeString(readDir.resolve("projections.sql"),
+                "select id, total from order_projection order by id\n");
         return target;
     }
 

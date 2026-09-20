@@ -522,7 +522,12 @@ arrives over the existing event stream. An import is a write, so it emits on com
 like any other, and a products list watching that topic refreshes when the import's
 transaction commits — which is *better* than the header, because the refresh reaches
 every open page rather than only the tab that pressed the button. The toast rides
-the done card. The substitution is recorded as a deviation below.
+the done card. The substitution is recorded as a deviation below. `invalidates:` rides
+the same placement (docs/caching.md, S3): the catalogs and the held results that read
+the imported table drop when the import's transaction commits, on a direct upload and
+on a reviewed one's confirm alike — the confirm's frozen copy of the request used to
+drop its topics, its tenant and its pool, so a reviewed import announced nothing on
+commit; it carries them now.
 
 **Without JavaScript every leg still works.** The upload form posts natively and the
 server answers the full report page. The confirm form posts natively and answers

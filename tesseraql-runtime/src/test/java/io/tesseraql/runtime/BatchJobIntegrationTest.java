@@ -43,8 +43,11 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 @Testcontainers
 class BatchJobIntegrationTest {
 
+    // Every executed statement is a line in the container log, so "how many times did the
+    // master run" is a count, not an inference (the window-memo row below).
     @Container
-    static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
+    static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine")
+            .withCommand("postgres", "-c", "log_statement=all");
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
@@ -531,6 +534,37 @@ class BatchJobIntegrationTest {
         assertThat(labelOf("d03")).isEqualTo("first");
         // K9 is in no master row: the column is null, and the row is still written.
         assertThat(labelOf("d04")).isNull();
+    }
+
+    /**
+     * docs/caching.md decision 8 on the third surface: two enrichments over one master cost
+     * one lookup per distinct key of a window. Four rows in windows of two — {K1, K2}, then
+     * {K1, K9} — so the first block runs one statement per window and the second, asking the
+     * same keys of the window's memo, runs none: two statements, where four would mean the
+     * window kept no memo (and the absent K9 is remembered, not asked for twice).
+     */
+    @Test
+    void twoEnrichmentsOverOneMasterCostOneLookupPerKeyPerWindow() throws Exception {
+        int before = statements("'twice' as via");
+        JobExecution execution = runtime.runJob("user.chunkEnrichedTwice", Map.of());
+        assertThat(execution.status()).isEqualTo(JobStatus.COMPLETED);
+        assertThat(rowsOf("select count(*) from chunk_results_t where label is not null"))
+                .isEqualTo(3);
+        assertThat(statements("'twice' as via") - before)
+                .as("two windows, one master statement each").isEqualTo(2);
+    }
+
+    /** How many statements carrying {@code marker} PostgreSQL logged (log_statement=all). */
+    private static int statements(String marker) throws InterruptedException {
+        // The server writes the log after the statement; a short wait makes the count whole.
+        Thread.sleep(400);
+        java.util.regex.Matcher matcher = java.util.regex.Pattern
+                .compile(java.util.regex.Pattern.quote(marker)).matcher(POSTGRES.getLogs());
+        int n = 0;
+        while (matcher.find()) {
+            n++;
+        }
+        return n;
     }
 
     private static String labelOf(String key) throws Exception {
@@ -1354,6 +1388,47 @@ class BatchJobIntegrationTest {
                           batchSize: 2
                           merge: [label]
                 """);
+        // Two enrichments over one master (docs/caching.md decision 8, the window's memo):
+        // the same reader, the same master twice, one merging and one attaching.
+        Files.writeString(target.resolve("batch/chunk/enriched-twice.yml"), """
+                version: tesseraql/v1
+                id: user.chunkEnrichedTwice
+                kind: job
+                recipe: batch-pipeline
+                pipeline:
+                  - id: load
+                    chunk:
+                      reader:
+                        sql:
+                          file: reader-d.sql
+                      writer:
+                        sql:
+                          file: writer-t.sql
+                      key: item_key
+                      commitEvery: 10
+                      enrich:
+                        kind:
+                          on: { kind: code }
+                          sql:
+                            file: kinds-twice.sql
+                          batchSize: 2
+                          merge: [label]
+                        kindAgain:
+                          on: { kind: code }
+                          sql:
+                            file: kinds-twice.sql
+                          batchSize: 2
+                          as: again
+                """);
+        Files.writeString(target.resolve("batch/chunk/kinds-twice.sql"), """
+                select code, label, 'twice' as via
+                from chunk_kinds
+                where code in /* keys */('K1', 'K2')
+                """);
+        Files.writeString(target.resolve("batch/chunk/writer-t.sql"), """
+                insert into chunk_results_t (item_key, label)
+                values (/* row.item_key */ 'x01', /* row.label */ 'x')
+                """);
         Files.writeString(target.resolve("batch/chunk/reader-d.sql"), """
                 select item_key, kind
                 from chunk_items_d
@@ -1501,6 +1576,8 @@ class BatchJobIntegrationTest {
                 .append("create table chunk_kinds"
                         + " (code varchar(8) primary key, label varchar(32) not null);\n")
                 .append("create table chunk_results_d (item_key varchar(32) primary key,"
+                        + " label varchar(32));\n")
+                .append("create table chunk_results_t (item_key varchar(32) primary key,"
                         + " label varchar(32));\n")
                 .append("insert into chunk_kinds values ('K1', 'first'), ('K2', 'second');\n");
         for (int i = 1; i <= 4; i++) {

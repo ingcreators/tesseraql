@@ -1034,6 +1034,10 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     // the moment it has something to announce.
                     .topicBus(() -> context.lookup(TesseraqlProperties.TOPIC_BUS_BEAN,
                             io.tesseraql.core.events.TopicBus.class))
+                    // And what a committed import's invalidates: reaches (docs/caching.md):
+                    // bound with the pools, absent when nothing is held or catalogued.
+                    .invalidations(() -> context.lookup(TesseraqlProperties.INVALIDATIONS_BEAN,
+                            io.tesseraql.core.cache.Invalidations.class))
                     // The tenant pools, for the after: statement a first download fires on a
                     // later request than the export's (docs/multi-tenancy.md): the resolver
                     // is bound only in a per-tenant mode, and refuses an unknown tenant.
@@ -1151,6 +1155,10 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     // Every finished run counts on the exposition (docs/jobs.md "Observing
                     // runs"): tesseraql.job.runs by job/app/status + a duration histogram.
                     .meter(effectiveMeter)
+                    // A job's invalidates: after its run (docs/caching.md), through the same
+                    // bean a command's reaches.
+                    .invalidations(() -> context.lookup(TesseraqlProperties.INVALIDATIONS_BEAN,
+                            io.tesseraql.core.cache.Invalidations.class))
                     // The same bound routes and commands run under: a batch statement held a pooled
                     // connection for as long as the driver would let it, which on a job is the
                     // longest anything goes unnoticed — nobody is waiting for the response.

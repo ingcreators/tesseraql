@@ -226,6 +226,20 @@
         }
       },
       "additionalProperties": true
+    },
+    "invalidates": {
+      "description": "Table(s) this job's steps write that a code catalog or a held source (a source's `cache:`) reads: the catalogs and the held results reading them are dropped once the run ends, provided at least one step committed - a job is not one transaction - and, on a poll-triggered file-import job, when each import's transaction commits. Named by table, as a command's invalidates: is; a table nothing reads lints as TQL-FIELD-4620. Documented in jobs.md and code-catalogs.md.",
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      ]
     }
   },
   "additionalProperties": true

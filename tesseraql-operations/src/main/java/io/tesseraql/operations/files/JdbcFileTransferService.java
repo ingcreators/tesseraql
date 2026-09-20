@@ -127,6 +127,7 @@ public final class JdbcFileTransferService implements FileTransferService {
     private long reviewTtlMillis = DEFAULT_REVIEW_TTL_MILLIS;
     private io.tesseraql.core.telemetry.Tracer tracer = io.tesseraql.core.telemetry.NoopTracer.INSTANCE;
     private java.util.function.Supplier<io.tesseraql.core.events.TopicBus> topicBus;
+    private java.util.function.Supplier<io.tesseraql.core.cache.Invalidations> invalidations;
     /**
      * The tenant's pool by id, for the {@code after:} statement a first download fires on a
      * later request than the export's (docs/multi-tenancy.md); {@code null} until a per-tenant
@@ -306,6 +307,18 @@ public final class JdbcFileTransferService implements FileTransferService {
     public JdbcFileTransferService topicBus(
             java.util.function.Supplier<io.tesseraql.core.events.TopicBus> topicBus) {
         this.topicBus = topicBus;
+        return this;
+    }
+
+    /**
+     * What a finished import's {@code invalidates:} reaches (docs/caching.md): the runtime's
+     * catalogs, its hold and the table stamps every other node reads. A supplier for the same
+     * reason the bus is one — bound later in the boot than this service, and only when the
+     * application declares a catalog or a held source.
+     */
+    public JdbcFileTransferService invalidations(
+            java.util.function.Supplier<io.tesseraql.core.cache.Invalidations> invalidations) {
+        this.invalidations = invalidations;
         return this;
     }
 
@@ -1153,6 +1166,7 @@ public final class JdbcFileTransferService implements FileTransferService {
                 // changed, so nothing is announced.
                 if (!rollbackAll) {
                     emit(request);
+                    invalidate(request);
                 }
             } catch (Throwable failure) {
                 // The bracket had no catch at all, so ANY failure — not only an Error — reached
@@ -1250,6 +1264,30 @@ public final class JdbcFileTransferService implements FileTransferService {
         }
         for (String topic : request.emit()) {
             bus.emit(request.tenantId(), topic);
+        }
+    }
+
+    /**
+     * Drops what a committed import made stale (docs/caching.md): the same placement as the
+     * announcement, for the same reason — a rolled-back import changed nothing. The
+     * invalidation is a hint under the hold's expiry, so a failure here is logged and is never
+     * the import's; the rows are committed by now.
+     */
+    private void invalidate(ImportRequest request) {
+        if (request.invalidates().isEmpty()) {
+            return;
+        }
+        io.tesseraql.core.cache.Invalidations target = invalidations == null
+                ? null
+                : invalidations.get();
+        if (target == null) {
+            return;
+        }
+        try {
+            target.invalidate(request.invalidates());
+        } catch (RuntimeException ex) {
+            LOG.warn("Import {} committed; its invalidates: {} was not applied: {}",
+                    request.routeId(), request.invalidates(), ex.getMessage());
         }
     }
 
@@ -1408,11 +1446,17 @@ public final class JdbcFileTransferService implements FileTransferService {
         FileCodec codec = codecs.require(request.format());
         // The route supplies what it declares - the per-row statement, the failure policy - and
         // the batch supplies the read spec, so the commit parses exactly what the review parsed
-        // even though the locale expression would resolve against a different request.
+        // even though the locale expression would resolve against a different request. What
+        // the confirming request attached rides along: the copy used to drop its topics, its
+        // tenant and its pool, so a reviewed import announced nothing on commit and ran on the
+        // main pool whatever tenant confirmed it.
         ImportRequest frozen = new ImportRequest(request.routeId(), request.appName(),
                 request.format(), readSpec(batch.readSpecJson(), request.readSpec()),
                 request.rowSqlFile(), request.onError(),
-                contract(batch.contractJson(), request.contract()));
+                contract(batch.contractJson(), request.contract()))
+                .announcing(request.emit(), request.tenantId())
+                .invalidating(request.invalidates())
+                .on(request.pool());
         String transferId = launchImport(frozen, codec, upload, batch.rejected(),
                 batch.rowCount());
         linkTransfer(batchId, transferId);
