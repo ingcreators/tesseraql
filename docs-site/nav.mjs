@@ -350,4 +350,7 @@ export const EXCLUDED = [
   // A download's name is a template on both altitudes: a route's filename: resolves {dotted.path}
   // against the request, each value folded like a split key, judged once at lint and build - designed 2026-09-19.
   'route-filename-placeholders.md',
+  // Phase 32's remaining half: a source declares how long its rows are held, a command's
+  // invalidates: reaches the hold through the catalog's table stamps - designed 2026-09-20.
+  'caching.md',
 ];

@@ -72,7 +72,9 @@ loudly (`TQL-LD-2856`).
 
 **Phase 32's remaining half is this feature's cache.** The roadmap's caching phase still owes
 "declared invalidation keys (a command declares which query caches it invalidates), and an
-opt-in result cache with TTL. Tenancy-safe keys; correctness over hit rate."
+opt-in result cache with TTL. Tenancy-safe keys; correctness over hit rate." Designed
+2026-09-20 in [caching.md](caching.md): one hold in core keyed by pool, tenant, statement and
+binds, invalidated through the table stamps decision 13 built.
 
 ## The three cases this has to answer
 
@@ -152,7 +154,9 @@ lands with the cross-request one deferred to Phase 32 above — this sentence us
 request-scoped half as built (`docs/audit-low-leads.md` F122).
 
 Cross-request TTL caching is the same machinery Phase 32 owes and lands with it, not before —
-see decision 12 for the key.
+see decision 12 for the key. Both halves are designed in [caching.md](caching.md) (decisions 8
+and 9, its S2): the request-scoped memo is per key on the exchange, and an `enrich:` entry's
+`cache:` puts each key's rows into the same runtime hold a source uses.
 
 Rejected: per-row execution with a cache as the primary mechanism. It optimizes repetition and
 leaves fan-out untouched, and it makes the round-trip count depend on the data rather than on
@@ -847,6 +851,8 @@ The chunk's own rules:
   lines, and their shipments still has no expression.
 - **A second cache implementation.** The cross-request TTL cache is Phase 32's, with Phase 32's
   tenancy-safe keys; this document contributes the requirement, not a parallel mechanism.
+  [caching.md](caching.md) (2026-09-20) is that design: the stamp reader this feature built
+  moves out of `JdbcCatalogStore` into a component the catalog store and the result hold share.
 
 ## Error codes
 
@@ -861,7 +867,7 @@ Proposed; exact numbers are reserved against `ErrorIndex` when each slice lands.
 | `TQL-YAML-1049` | error | `from:` names an undeclared catalog |
 | `TQL-FIELD-4614` | error | `domains.codes:` references a composite-key catalog |
 | `TQL-FIELD-4615` | error | a catalog declares `language:` without `label:` |
-| `TQL-SEC-4142` | error | a cached child query reads `/*%scope … */` or ambient `principal.*` without those in the cache key |
+| `TQL-SEC-4142` | — | reserved here for a cached child query reading `/*%scope … */` or ambient `principal.*` without those in the cache key; **withdrawn** by [caching.md](caching.md) decision 3 — the key carries the rendered text and every effective bind, so the case cannot arise; the number stays unassigned |
 | `TQL-SQL-2114` | runtime | an enrichment exceeded `maxKeys:` |
 | `TQL-ROUTE-3113` | runtime | `merge:` found more than one row for a key (**taken, slice 1**) |
 | `TQL-APP-4206` | runtime | a catalog could not be loaded and has never loaded: its readers answer 500 until it does (a failed refresh keeps the previous data and is reported, not raised) |
@@ -873,6 +879,9 @@ predicate or an ambient `principal.*` bind, cached under a key of only the busin
 across tenants and roles. The key is the composition of datasource, source path,
 `BoundSql.variant`, every effective bind, and the tenant; the alternative is refusing to cache
 such a query. `TQL-SEC-4142` exists so the choice is made at build time rather than discovered.
+*As decided ([caching.md](caching.md) decision 3, 2026-09-20): the key is the pool, the tenant,
+the statement, the rendered text and every bind, so the choice is made by construction and the
+code is not assigned.*
 
 **Enrichment can hide an N+1 rather than remove one.** Round trips per request must be visible
 — batch count and distinct key count on the trace and in metrics — or a page that quietly makes

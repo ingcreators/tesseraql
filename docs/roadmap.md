@@ -403,6 +403,16 @@ ETag/`Cache-Control` with 304 handling for `query-json`/`query-html` (htmx-aware
 invalidation keys (a command declares which query caches it invalidates), and an opt-in
 result cache with TTL. Tenancy-safe keys; correctness over hit rate.
 
+**The first half shipped in 0.6.0** (#360): the route-level `cache:` block — `Cache-Control`
+from `maxAge`/`visibility`/`staleWhileRevalidate`, a strong content `ETag`, `304` on a matching
+`If-None-Match`, stateless by design; `Vary: HX-Request` rides shell negotiation (#637). **The
+remaining half is designed in [caching.md](caching.md)** (2026-09-20): a source declares how
+long its rows are held and which tables they read, a command's `invalidates:` — the catalog's
+declaration, unchanged — reaches those holds through the same per-table version stamps, and the
+key is the pool, the tenant, the statement and every bind. Three slices, the user naming each:
+the hold on a route's sources, the enrichment memo and hold, the writers that are not command
+routes.
+
 ### Phase 33 — deployment and operations maturity
 
 Kubernetes manifests and a Helm chart (probes, graceful drain of lanes and in-flight jobs,
