@@ -1,7 +1,7 @@
 # A read declares how long its rows are held, a write declares what it made stale: the result hold, its keys and its invalidation
 
-> **Status: designed 2026-09-20 (#1403); S1 (#1404) and S2 (#1405) shipped the same day; S3
-> is the user's call.** Phase 32 of `docs/roadmap.md` owes "declared invalidation keys (a command
+> **Status: designed 2026-09-20 (#1403); S1 (#1404), S2 (#1405) and S3 (#1406) shipped the
+> same day — Phase 32 is complete.** Phase 32 of `docs/roadmap.md` owes "declared invalidation keys (a command
 > declares which query caches it invalidates), and an opt-in result cache with TTL.
 > Tenancy-safe keys; correctness over hit rate." The first half — `Cache-Control`, a strong
 > `ETag`, `304`, htmx-aware — shipped in 0.6.0 (#360, #637). This record measures what stands
@@ -35,6 +35,23 @@
 > `perRow` url with a `{key.<column>}` placeholder (`URI.create` throws on a brace, which read
 > as "not absolute") — the first lint test to write a keyed reference url was this slice's;
 > fixed in `HttpSourceRules` with the placeholder stood in for before the parse.
+>
+> **S3** — `invalidates:` on every writer with a commit: the `queue-consume` route (the
+> compiler had mounted nothing after its command), the `file-import` route on the direct
+> upload and on the reviewed confirm (the request carries the tables as it carries the
+> topics; the transfer service applies them where it emits), a poll-triggered import job, and
+> a job definition (after the run, provided a step committed — `JobDefinition.invalidates`,
+> the job schema, `JobRules` through the shared table arm; `tesseraql job run` raises the
+> version rows through a `TableVersions` over the app's declared set, so the served nodes
+> follow a CLI run); the lint's recipe arm is the four committing recipes; the chunk window's
+> memo (`StepContext.enrichWindow` builds one `ReferenceMemo` per window); the dashboard's
+> lake panels held by `price_history` and the two pricing jobs declaring it: **shipped,
+> #1406**. One defect found on the way: the reviewed import's confirm froze a copy of the
+> request that dropped its `emit:` topics, its tenant and its pool — a reviewed import
+> announced nothing on commit and ran on the main pool whatever tenant confirmed it
+> (`JdbcFileTransferService.commitImport`; the copy carries them now, and the reviewed row of
+> `ResultHoldIntegrationTest` is the first guard to reach the commit leg with anything
+> attached).
 
 A query route can tell a browser how long to keep its response and answer a revalidation with
 `304`. It cannot tell the runtime to keep the rows: every request renders from a statement
@@ -383,12 +400,23 @@ sentence and the hold), the `lookups.md` decision 3 and F122 rows, CHANGELOG.
 | `EnrichIntegrationTest` (+3 rows) | the F122 fixture: one `partners.sql` statement per request; `seenRequests` across two HTTP blocks; a held reference across requests is a hit per key with a fresh key set | `no-memo`, `hold-by-batch` |
 | `AppLinterHeldSourcesTest` (+2) | `cache:` on `from:` refused; `tables:` on `http:` refused | — |
 
-### S3 — the other writers (if named)
+### S3 — the other writers
 
 `invalidates:` on a job definition (the pricing run that appends the lake), on a `file-import`
 (the placement `emit:` already has at the import's commit) and on a `queue-consume`; the lake
-reads of the dashboard held. Each mounts the same `InvalidationProcessor` after its commit. The
-chunk reader's enrichment memo per chunk rides along if the slice is named.
+reads of the dashboard held. The consumer mounts the same `InvalidationProcessor` after its
+command; the import carries the tables on its request and the transfer service applies them
+beside the announcement; the job executor applies them once the run has ended and a step
+committed. The chunk reader's enrichment memo per window rides along.
+
+| Guard | Proves | Red on the variant |
+| --- | --- | --- |
+| `AppLinterHeldSourcesTest` (+1) | a consumer, a file import and a job naming a held table lint clean; a job naming an unheld one warns; a read route still errors, with the committing recipes named | `lint-command-only` |
+| `SchemaSyncTest` (unchanged) | the job schema documents `invalidates` | — |
+| `ResultHoldIntegrationTest` (+2 rows) | a direct import's commit drops the hold (one statement after the 202 completes); a reviewed import parks without dropping and its confirm drops | `import-never-invalidates`, `frozen-copy-drops` |
+| `MessagingRecipeIntegrationTest` (+1 assertion) | a held read over the projection sees the consumer's row within the wait, under a five-minute hold | `consumer-mounts-nothing` |
+| `InventoryAnalyticsIntegrationTest` (+1 row) | one more pricing run, one more lake version on the very next render | `job-never-invalidates`, `no-invalidates-in-job` |
+| `BatchJobIntegrationTest` (+1 row; `log_statement=all`) | two enrichments over one master: one master statement per window, two for four rows | `no-window-memo` |
 
 ## Docs and CHANGELOG
 
@@ -408,5 +436,5 @@ by this record (decision 3, the non-goal, the `4142` row) and again by S2 (F122'
 | Code | Severity | Meaning |
 | --- | --- | --- |
 | `TQL-YAML-1077` | error, lint and build | `cache:` where nothing can be held: a transactional or streaming surface, a non-statement arm, `mode: update`/`call`, a missing, unparseable or non-positive `maxAge`, a missing or blank `tables:`; S2 adds `cache:` on `from:` and `tables:` on `http:` |
-| `TQL-FIELD-4620` | error / warning (widened) | `invalidates:` on a recipe with no commit; a table no catalog **and no held source** reads |
+| `TQL-FIELD-4620` | error / warning (widened) | `invalidates:` on a recipe with no commit (S3: a command, a webhook, a consumer and a file import commit; a job always does); a table no catalog **and no held source** reads |
 | `TQL-SEC-4142` | — | reserved by `lookups.md`; withdrawn by decision 3, unassigned |

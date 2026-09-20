@@ -74,6 +74,14 @@ final class DocumentRules {
             "webhook", "queue-consume");
 
     /**
+     * The route recipes with a commit for {@code invalidates:} to run after (docs/caching.md):
+     * the three transactional ones, and the file import, whose transaction commits on the run
+     * rather than the request — the placement its {@code emit:} already has.
+     */
+    static final Set<String> INVALIDATING_RECIPES = Set.of("command-json", "webhook",
+            "queue-consume", "file-import");
+
+    /**
      * {@code invalidates:} lints (docs/lookups.md decision 13, docs/caching.md decision 5).
      *
      * <p>The declaration names source tables, and dropping a catalog or a held result is what
@@ -92,16 +100,30 @@ final class DocumentRules {
         if (definition.invalidates().isEmpty()) {
             return;
         }
-        if (!"command-json".equals(definition.recipe())) {
+        if (!INVALIDATING_RECIPES.contains(definition.recipe())) {
             findings.add(new LintFinding(INVALID_INVALIDATES, ERROR, source,
-                    "invalidates: is only supported on command-json routes, not '"
+                    "invalidates: is only supported on a recipe that commits (command-json,"
+                            + " webhook, queue-consume, file-import), not '"
                             + definition.recipe() + "' — there is no commit to invalidate"
                             + " catalogs or held results after"));
             return;
         }
+        lintInvalidatedTables(context, definition.invalidates(), source, findings);
+    }
+
+    /**
+     * The table arm alone, for a job (docs/caching.md): every job recipe commits — a step on
+     * its own connection, a polled import at its transaction — so a job has no recipe arm,
+     * only the names it invalidates by.
+     */
+    static void lintInvalidatedTables(LintContext context, List<String> tables, String source,
+            List<LintFinding> findings) {
+        if (tables.isEmpty()) {
+            return;
+        }
         Set<String> read = new java.util.LinkedHashSet<>(context.catalogTables());
         read.addAll(context.heldTables());
-        for (String table : definition.invalidates()) {
+        for (String table : tables) {
             if (table == null || table.isBlank()) {
                 findings.add(new LintFinding(INVALID_INVALIDATES, ERROR, source,
                         "invalidates: carries an empty table name"));

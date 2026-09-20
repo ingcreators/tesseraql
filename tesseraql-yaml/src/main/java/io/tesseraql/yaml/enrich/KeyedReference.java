@@ -89,10 +89,10 @@ public final class KeyedReference {
         }
 
         /**
-         * The request's memo of what its enrichments already fetched (docs/caching.md decision
-         * 8), or {@code null} for a surface with no request — a job step, whose window is its
-         * own. A route's every {@code enrich:} block answers with the one memo of its exchange,
-         * so two blocks over one master cost one lookup per distinct key.
+         * The memo of what this surface's enrichments already fetched (docs/caching.md decision
+         * 8), or {@code null} for a surface that keeps none. A route's every {@code enrich:}
+         * block answers with the one memo of its exchange, and a job step's with one per window
+         * of rows, so two blocks over one master cost one lookup per distinct key.
          */
         default ReferenceMemo memo() {
             return null;

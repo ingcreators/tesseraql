@@ -223,6 +223,57 @@ class ResultHoldIntegrationTest {
         assertThat(statements(marker)).isEqualTo(2);
     }
 
+    /**
+     * The writers that are not commands (docs/caching.md): a file import names the table, and
+     * the hold drops when the import's transaction commits — on the run, after the 202.
+     */
+    @Test
+    void aFileImportDropsTheHoldWhenItsTransactionCommits() throws Exception {
+        String marker = "hold-import";
+        get(runtime, "/items?tag=" + marker, "alpha");
+        get(runtime, "/items?tag=" + marker, "alpha");
+        assertThat(statements(marker)).isEqualTo(1);
+
+        HttpResponse<String> accepted = upload(runtime, "/items/import",
+                "note,stock\nalpha-imported,3\n");
+        assertThat(accepted.statusCode()).as(accepted.body()).isEqualTo(202);
+        JsonNode done = awaitTerminal(runtime, "/items/import/"
+                + MAPPER.readTree(accepted.body()).get("transferId").asText());
+        assertThat(done.get("status").asText()).as(done.toString()).isEqualTo("COMPLETED");
+        assertThat(get(runtime, "/items?tag=" + marker, "alpha").body())
+                .contains("alpha-imported");
+        assertThat(statements(marker)).isEqualTo(2);
+    }
+
+    /**
+     * A reviewed import's confirm carries the declaration through the parked batch: the
+     * upload parks and writes nothing (the hold stands), the commit writes and drops it.
+     */
+    @Test
+    void aReviewedImportsCommitDropsTheHoldToo() throws Exception {
+        String marker = "hold-reviewed";
+        get(runtime, "/items?tag=" + marker, "alpha");
+        assertThat(statements(marker)).isEqualTo(1);
+
+        HttpResponse<String> parked = upload(runtime, "/items/reviewed",
+                "note,stock\nalpha-reviewed,4\n");
+        assertThat(parked.statusCode()).as(parked.body()).isEqualTo(200);
+        String token = MAPPER.readTree(parked.body()).get("token").asText();
+        assertThat(get(runtime, "/items?tag=" + marker, "alpha").body())
+                .doesNotContain("alpha-reviewed");
+        assertThat(statements(marker)).as("parked: nothing written, nothing dropped")
+                .isEqualTo(1);
+
+        HttpResponse<String> committed = commit(runtime, "/items/reviewed", token);
+        assertThat(committed.statusCode()).as(committed.body()).isEqualTo(202);
+        JsonNode done = awaitTerminal(runtime, "/items/reviewed/"
+                + MAPPER.readTree(committed.body()).get("transferId").asText());
+        assertThat(done.get("status").asText()).as(done.toString()).isEqualTo("COMPLETED");
+        assertThat(get(runtime, "/items?tag=" + marker, "alpha").body())
+                .contains("alpha-reviewed");
+        assertThat(statements(marker)).isEqualTo(2);
+    }
+
     /** A source with no cache: runs its statement every time, hold or no hold. */
     @Test
     void aPlainSourceStillRunsEveryTime() throws Exception {
@@ -270,6 +321,51 @@ class ResultHoldIntegrationTest {
                 .header("X-Tenant-Id", tenant)
                 .POST(HttpRequest.BodyPublishers.ofString(body)).build(),
                 HttpResponse.BodyHandlers.ofString());
+    }
+
+    /** A raw CSV upload to a file-import route, as tenant alpha and the ops principal. */
+    private static HttpResponse<String> upload(TesseraqlRuntime target, String path, String csv)
+            throws Exception {
+        return HttpClient.newHttpClient().send(HttpRequest.newBuilder(
+                URI.create("http://localhost:" + target.port() + path))
+                .header("Content-Type", "text/csv")
+                .header("Authorization", "Bearer " + opsToken())
+                .header("X-Tenant-Id", "alpha")
+                .POST(HttpRequest.BodyPublishers.ofString(csv)).build(),
+                HttpResponse.BodyHandlers.ofString());
+    }
+
+    /** The confirm leg of a reviewed import: an empty POST to the batch's commit address. */
+    private static HttpResponse<String> commit(TesseraqlRuntime target, String path, String token)
+            throws Exception {
+        return HttpClient.newHttpClient().send(HttpRequest.newBuilder(
+                URI.create("http://localhost:" + target.port() + path + "/" + token + "/commit"))
+                .header("Authorization", "Bearer " + opsToken())
+                .header("X-Tenant-Id", "alpha")
+                .POST(HttpRequest.BodyPublishers.noBody()).build(),
+                HttpResponse.BodyHandlers.ofString());
+    }
+
+    /** Polls a transfer's status until it leaves RUNNING: the import runs on its own thread. */
+    private static JsonNode awaitTerminal(TesseraqlRuntime target, String statusPath)
+            throws Exception {
+        long deadline = System.currentTimeMillis() + 20_000;
+        while (true) {
+            HttpResponse<String> polled = HttpClient.newHttpClient().send(HttpRequest.newBuilder(
+                    URI.create("http://localhost:" + target.port() + statusPath))
+                    .header("Authorization", "Bearer " + opsToken())
+                    .header("X-Tenant-Id", "alpha").build(),
+                    HttpResponse.BodyHandlers.ofString());
+            assertThat(polled.statusCode()).as(polled.body()).isEqualTo(200);
+            JsonNode status = MAPPER.readTree(polled.body());
+            String value = status.path("status").asText();
+            if (!"RUNNING".equals(value) && !"STARTED".equals(value)) {
+                return status;
+            }
+            assertThat(System.currentTimeMillis()).as("the import finishes: " + status)
+                    .isLessThan(deadline);
+            Thread.sleep(100);
+        }
     }
 
     /** An authenticated ops call: bearer principal holding the ops grants. */
@@ -445,6 +541,34 @@ class ResultHoldIntegrationTest {
                     body:
                       adjusted: steps.main.affectedRows
                 """);
+        // The writers that are not commands (docs/caching.md): a direct file import and a
+        // reviewed one, both naming the table the held read reads. A reviewed import belongs
+        // to the principal who uploaded it (TQL-ROUTE-3118), so that route authenticates.
+        String importRow = "insert into items (tenant_id, note, stock) values ('alpha',"
+                + " /* note */'x', cast(/* stock */'1' as integer))\n";
+        for (String shape : new String[]{"import", "reviewed"}) {
+            Path dir = Files.createDirectories(target.resolve("web/items/" + shape));
+            Files.writeString(dir.resolve("import-row.sql"), importRow);
+            Files.writeString(dir.resolve("post.yml"), """
+                    version: tesseraql/v1
+                    id: items.%s
+                    kind: route
+                    recipe: file-import
+                    security:
+                      auth: %s
+                    import:
+                      format: csv
+                      columns:
+                        - note
+                        - { name: stock, type: number }
+                    %ssteps:
+                      - id: row
+                        sql:
+                          file: import-row.sql
+                    invalidates: [items]
+                    """.formatted(shape, "reviewed".equals(shape) ? "bearer" : "public",
+                    "reviewed".equals(shape) ? "  review: required\n" : ""));
+        }
         return target;
     }
 

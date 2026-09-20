@@ -414,7 +414,9 @@ the hold on a route's sources (**S1 shipped 2026-09-20, #1404**: `cache: {maxAge
 on a source, `TQL-YAML-1077`, the shared `TableVersions`, the ops surface, the inventory
 dashboard as the first consumer), the enrichment memo and hold (**S2 shipped 2026-09-20,
 #1405**: one memo per request shared by every `enrich:` block, `cache:` on an `enrich:` entry
-per key), the writers that are not command routes.
+per key), the writers that are not command routes (**S3 shipped 2026-09-20, #1406**:
+`invalidates:` on a queue consumer, a file import at its commit, and a job after its run;
+the chunk window's memo). **Phase 32 is complete.**
 
 ### Phase 33 — deployment and operations maturity
 

@@ -8,6 +8,21 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Every writer with a commit declares what it made stale.** `invalidates:` — the
+  declaration a command and an MCP tool already carry — is legal on a `webhook`, a
+  `queue-consume` route (which mounted nothing after its command) and a `file-import` route,
+  where it is applied when the import's transaction commits, after the `202`, on a direct
+  upload and on a reviewed one's confirm alike; and on a job (`invalidates:` at the root of a
+  job definition, poll-triggered import jobs included), applied once the run has ended and at
+  least one step committed, because a job is not one transaction. `tesseraql job run` raises
+  the same per-table version rows, so the served runtimes drop their catalogs and held results
+  after a run from an external scheduler. `TQL-FIELD-4620`'s recipe arm names the four
+  committing recipes; a job has only the table arm. A chunk reader's window, and a step's
+  rows, share one enrichment memo the way a request's blocks do: two enrichments over one
+  master cost one master statement per window. The inventory gallery's dashboard holds its
+  two lake panels by `price_history`, which its two pricing jobs declare. Record:
+  `docs/caching.md` (S3) — Phase 32 of the roadmap is complete.
+
 - **Two enrichments over one master cost one lookup per key, and a reference can be held.**
   Every `enrich:` block of a request shares one memo, per reference and per key: a detail
   page whose `main` and `history` both name the partner master fetches each partner once, a
@@ -53,6 +68,14 @@ All notable changes to TesseraQL are documented here. The format follows
   that rebuilds a route drops the hold. Pre-1.0 internal.
 
 ### Fixed
+
+- **A reviewed import's confirm dropped what the request attached.** The commit leg froze a
+  copy of the confirming request that kept the row statement and the parked read spec but
+  not its `emit:` topics, its tenant or its pool: a reviewed import announced nothing when
+  its transaction committed (a grid watching the topic never refreshed), and in a per-tenant
+  mode it ran on the main pool whatever tenant confirmed it. The copy carries them now,
+  with the new `invalidates:`; found by the first guard to reach the confirm leg with
+  anything attached (caching S3).
 
 - **Lint refused every keyed reference url.** A `perRow` enrichment's `url: …/partners/{key.code}`
   is the documented shape, and `TQL-SEC-4071` ("needs an absolute http or https url") fired on

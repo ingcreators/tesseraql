@@ -1541,6 +1541,13 @@ public final class RouteCompiler {
         // main - only where the SQL commits moves.
         route.process(commandProcessor(routeId, definition,
                 routeFile.source().getParent(), null));
+        // The consumer's invalidates: (docs/caching.md), placed as the command's is — after the
+        // processor whose transaction commits, so a rollback bypasses it, as does a
+        // deduplicated redelivery, which stops before the command and wrote nothing.
+        if (!definition.invalidates().isEmpty()) {
+            route.process(new io.tesseraql.compiler.binding.InvalidationProcessor(
+                    definition.invalidates()));
+        }
     }
 
     /**
@@ -1684,8 +1691,9 @@ public final class RouteCompiler {
                 // The topics travel with the request because the run outlives it: an import
                 // announces itself when its transaction commits, not when the response goes
                 // out (docs/csv-import.md decision 6). `emit:` on a file recipe used to compile
-                // and do nothing at all.
-                page, definition.emit()));
+                // and do nothing at all. The tables it invalidates ride the same way
+                // (docs/caching.md): dropped at the commit, which is after the response.
+                page, definition.emit(), definition.invalidates()));
         mountTransferStatus(context, appHome, routeFile, routeId);
         if (spec.reviewRequired()) {
             mountImportCommit(context, appHome, routeFile, routeId, appName, spec, format,
@@ -1729,7 +1737,7 @@ public final class RouteCompiler {
         route.process(new io.tesseraql.compiler.binding.ImportCommitProcessor(
                 routeId, routeFile.urlPath(), appName, format, spec.toReadSpec(),
                 rowSql, spec.effectiveOnError(), appHome, i18n.defaultTag(),
-                routeFile.definition().emit()));
+                routeFile.definition().emit(), routeFile.definition().invalidates()));
     }
 
     /**

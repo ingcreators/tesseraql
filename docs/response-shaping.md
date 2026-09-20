@@ -160,7 +160,7 @@ hundred-row page over sixty distinct partners costs one round trip.
 - **`cache: {maxAge, tables}` holds each key's rows across requests**, the same hold a source
   uses ([Holding a result](#holding-a-result)), keyed by the reference, the tenant and the
   key — so a common partner is a hit whatever the surrounding key set. A `sql:` reference
-  names the tables a command's `invalidates:` drops it by; an `http:` reference takes
+  names the tables a writer's `invalidates:` drops it by; an `http:` reference takes
   `maxAge` alone, because nothing stamps a partner system; a `source:` reference fetches
   nothing and holds nothing (`TQL-YAML-1077`).
 
@@ -448,8 +448,11 @@ invalidates: [products]
 - **`invalidates:` is the same declaration a code catalog uses.** Naming the table drops the
   held rows on the node that served the write at once, and on every other node within a few
   seconds through the same per-table version row ([code-catalogs.md](code-catalogs.md),
-  "Keeping a catalog fresh"). Underneath sits `maxAge`: a write nothing declares — another
-  system's, a job's — shows when the hold expires.
+  "Keeping a catalog fresh"). Every writer with a commit declares it: a command, a webhook,
+  a queue consumer, a `file-import` route (dropped when the import's transaction commits,
+  after the response) and a job (after its run — [jobs.md](jobs.md#what-a-run-made-stale)).
+  Underneath sits `maxAge`: a write nothing declares — another system's — shows when the
+  hold expires.
 - **Where it is legal**: a `sql: { file: … }` source in mode `query` of a `query-json`,
   `query-html` or `page` route, or of an MCP tool that only reads. A command's steps and
   sources, a webhook or queue consumer, an export, a `contract:`, `service:` or `http:` arm

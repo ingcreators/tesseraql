@@ -118,7 +118,8 @@ final class PollSources {
         io.tesseraql.core.files.FileReadSpec readSpec = importSpec.toReadSpec()
                 .withLocale(fileDefaults.localeOr(importSpec.locale()));
         PollImportProcessor importer = new PollImportProcessor(jobId, owner,
-                importSpec.format(), readSpec, rowSqlFile, importSpec.effectiveOnError(), status);
+                importSpec.format(), readSpec, rowSqlFile, importSpec.effectiveOnError(), status,
+                job.definition().invalidates());
         // Started and stopped with the context, the same lifecycle a consumer had
         // (docs/camel-removal.md slice 1). The loop reports itself as polling when it starts.
         PollLoop loop = new PollLoop(jobId, transport, sourceFor(jobId, poll), importer,

@@ -127,6 +127,25 @@ class InventoryAnalyticsIntegrationTest {
         Thread.sleep(400);
         assertThat(lowStockStatements()).isEqualTo(2);
 
+        // The lake panels are held too, and the pricing job declares
+        // invalidates: [price_history] (docs/caching.md): the snapshot list a render shows
+        // is the latest run's, not the hold's — one more run, one more version on the very
+        // next render, well inside the hold's half minute. The hold is asserted first: a
+        // version that rose because the panel was never held would prove nothing.
+        long versionBefore = latestLakeVersion(
+                get("/products/dashboard", Map.of("Authorization", "Bearer " + reader)).body());
+        io.tesseraql.core.cache.ResultHold hold = runtime.context().lookup(
+                io.tesseraql.pipeline.TesseraqlProperties.RESULT_HOLD_BEAN,
+                io.tesseraql.core.cache.ResultHold.class);
+        assertThat(hold.status()).as("the snapshot panel is held, and the renders hit it")
+                .anyMatch(s -> "lakeSnapshots".equals(s.source()) && s.hits() >= 1);
+        assertThat(runtime.runJob("pricing.loadSummary", Map.of()).status().name())
+                .isEqualTo("COMPLETED");
+        long versionAfter = latestLakeVersion(
+                get("/products/dashboard", Map.of("Authorization", "Bearer " + reader)).body());
+        assertThat(versionAfter).as("the run's snapshot shows on the next render")
+                .isGreaterThan(versionBefore);
+
         // A Parquet report uploaded through the app's own attachment route (the blob store
         // write path) is queryable back through ${dataset.*} — by its owner only.
         String uploader = jwt("user-a", "INV_READ", "INV_WRITE");
@@ -155,6 +174,17 @@ class InventoryAnalyticsIntegrationTest {
         }
         Files.writeString(route, shipped.replace(block,
                 "security:\n  auth: bearer\n  policy: " + policy));
+    }
+
+    /** The newest lake snapshot id the dashboard's snapshot table shows (newest first). */
+    private static long latestLakeVersion(String board) {
+        int panel = board.indexOf("Lake snapshots");
+        assertThat(panel).as("the snapshot panel renders").isPositive();
+        // A cell's text sits in a span (tql/view/table.html).
+        java.util.regex.Matcher cell = java.util.regex.Pattern
+                .compile("<td[^>]*>\\s*<span>(\\d+)</span>").matcher(board.substring(panel));
+        assertThat(cell.find()).as("a snapshot row under the panel title").isTrue();
+        return Long.parseLong(cell.group(1));
     }
 
     /** How many times PostgreSQL logged the dashboard's low-stock statement. */

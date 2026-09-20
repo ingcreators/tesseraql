@@ -473,10 +473,28 @@ final class JobCommand implements Callable<Integer> {
         @SuppressWarnings("resource") // owned for the life of the process, which ends here
         io.tesseraql.runtime.FilePushService filePush = new io.tesseraql.runtime.FilePushService(
                 io.tesseraql.yaml.connectors.FileConnectors.push(manifest.config()), app);
+        // A CLI-run job's invalidates: reaches the served runtimes (docs/caching.md): this
+        // process holds nothing and catalogues nothing, but raising the per-table version rows
+        // makes every node drop its catalogs and held results within the stamp interval — the
+        // same rows `host` raises, over the same declared set. Nothing declared, nothing raised.
+        java.util.Set<String> stamped = new java.util.LinkedHashSet<>(
+                io.tesseraql.yaml.app.HeldSources.tables(manifest));
+        io.tesseraql.yaml.catalog.Catalogs.load(app).all().values()
+                .forEach(spec -> stamped.addAll(spec.sourceTables()));
+        io.tesseraql.core.cache.Invalidations invalidations;
+        if (stamped.isEmpty()) {
+            invalidations = null;
+        } else {
+            io.tesseraql.operations.catalog.TableVersions versions = new io.tesseraql.operations.catalog.TableVersions(
+                    name -> main, stamped, System::currentTimeMillis);
+            versions.ensureSchema();
+            invalidations = io.tesseraql.core.cache.Invalidations.of(null, null, versions);
+        }
         JobExecutor executor = new JobExecutor(repository, tempStore, heartbeats,
                 io.tesseraql.core.diag.NoopSqlExecutionLog.INSTANCE,
                 io.tesseraql.core.telemetry.NoopTracer.INSTANCE,
                 io.tesseraql.core.expr.ExpressionFunctions.processDefault())
+                .invalidations(() -> invalidations)
                 .sqlTimeoutSeconds(
                         io.tesseraql.yaml.config.SqlDefaults.timeoutSeconds(manifest.config()))
                 // The same bounds the served runtime gives its executor. Without this the

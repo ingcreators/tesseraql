@@ -325,6 +325,10 @@ The reference itself is checked the same way (`TQL-YAML-1046`): `steps.<id>` mus
 **earlier** step that holds rows — a step that does not exist, a later one, a write, a spool,
 or a route-style bare name each used to pass lint and fail at fire time.
 
+Two enrichments over one master cost one lookup per distinct key: a step's rows, and each
+window of a chunk reader's, share one memo the way a request's `enrich:` blocks do
+([response-shaping.md](response-shaping.md#fetching-a-reference-by-key)).
+
 ## The chunk step
 
 A per-row rewrite too large for one transaction — revalue a million orders, anonymize
@@ -582,6 +586,31 @@ statements guarded by the state they change. This is the deliberate opposite of 
 `command-json` route, whose steps share a single all-or-nothing transaction — see
 [transactional writes](transactional-writes.md). Work that must be atomic with a business
 write belongs in a command; a job is for work that can be resumed.
+
+## What a run made stale
+
+A job that writes a table a code catalog or a held source reads
+([code-catalogs.md](code-catalogs.md), [response-shaping.md](response-shaping.md#holding-a-result))
+names it, the way a command does:
+
+```yaml
+id: pricing.loadSummary
+kind: job
+recipe: batch-pipeline
+invalidates: [price_history]     # the dashboard holds its lake panels by this table
+pipeline:
+  - id: appendHistory
+    sql: { file: append-price-history.sql, mode: update }
+```
+
+Because a job is not one transaction, the drop comes once the run has ended — completed,
+stopped or failed — provided at least one step committed; a run that failed on its first
+step, or was skipped, wrote nothing and drops nothing. It reaches the node that ran the job
+at once and every other node within a few seconds, through the same per-table version row
+a command raises. A poll-triggered `file-import` job drops when each import's transaction
+commits. A run from `tesseraql job run` raises the version rows too, so the served runtimes
+follow it. Naming a table nothing reads is a warning (`TQL-FIELD-4620`): the declaration
+would drop nothing.
 
 ## Per-tenant jobs
 

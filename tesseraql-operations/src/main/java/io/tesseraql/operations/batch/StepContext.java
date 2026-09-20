@@ -370,9 +370,13 @@ final class StepContext {
             return window;
         }
         List<Map<String, Object>> rows = window;
+        // One memo per window (docs/caching.md decision 8): two enrichments over one master
+        // cost one lookup per distinct key of the window, as a request's blocks do. It dies
+        // with the window, whose keys are its own — a step's rows are one window.
+        io.tesseraql.yaml.enrich.ReferenceMemo memo = new io.tesseraql.yaml.enrich.ReferenceMemo();
         for (io.tesseraql.yaml.enrich.KeyedReference reference : enrichments) {
             try {
-                rows = reference.enrich(chunkEnvironment(dataSource), context(), rows);
+                rows = reference.enrich(chunkEnvironment(dataSource, memo), context(), rows);
             } catch (SQLException ex) {
                 throw TqlException.builder(STEP_ERROR)
                         .message("Step '" + step().id() + "': enrich '" + reference.name()
@@ -384,10 +388,18 @@ final class StepContext {
         return rows;
     }
 
-    /** What a reference needs here: the step's connection, no scope, the job pipeline's client. */
+    /**
+     * What a reference needs here: the step's connection, no scope, the job pipeline's client,
+     * and the window's memo.
+     */
     private io.tesseraql.yaml.enrich.KeyedReference.Environment chunkEnvironment(
-            javax.sql.DataSource dataSource) {
+            javax.sql.DataSource dataSource, io.tesseraql.yaml.enrich.ReferenceMemo memo) {
         return new io.tesseraql.yaml.enrich.KeyedReference.Environment() {
+            @Override
+            public io.tesseraql.yaml.enrich.ReferenceMemo memo() {
+                return memo;
+            }
+
             @Override
             public java.sql.Connection connection(String datasource) throws SQLException {
                 // A job runs on one connector; a reference naming another would need a second

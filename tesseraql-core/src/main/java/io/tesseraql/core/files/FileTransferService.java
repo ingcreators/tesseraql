@@ -30,10 +30,13 @@ public interface FileTransferService {
      * @param contract what each row must satisfy beyond parsing (docs/csv-import.md decision 3),
      *                 frozen — including the code sets a {@code codes:} column was resolved
      *                 against — so a reviewed import's two passes cannot disagree
+     * @param invalidates the tables the route's {@code invalidates:} names (docs/caching.md):
+     *                 dropped from the catalogs and the hold when the import's transaction
+     *                 commits, never on a rollback
      */
     record ImportRequest(String routeId, String appName, String format, FileReadSpec readSpec,
             Path rowSqlFile, String onError, RowContract contract, List<String> emit,
-            String tenantId, TransferPool pool) {
+            List<String> invalidates, String tenantId, TransferPool pool) {
 
         /** The shape before an import could hold its rows to a contract. */
         public ImportRequest(String routeId, String appName, String format, FileReadSpec readSpec,
@@ -45,25 +48,36 @@ public interface FileTransferService {
         public ImportRequest(String routeId, String appName, String format, FileReadSpec readSpec,
                 Path rowSqlFile, String onError, RowContract contract) {
             this(routeId, appName, format, readSpec, rowSqlFile, onError, contract, List.of(),
-                    null, null);
+                    List.of(), null, null);
         }
 
         public ImportRequest {
             contract = contract == null ? RowContract.none() : contract;
             emit = emit == null ? List.of() : List.copyOf(emit);
+            invalidates = invalidates == null ? List.of() : List.copyOf(invalidates);
             pool = pool == null ? TransferPool.MAIN : pool;
         }
 
         /** This request with the route's live-view topics and the caller's tenant attached. */
         public ImportRequest announcing(List<String> topics, String tenant) {
             return new ImportRequest(routeId, appName, format, readSpec, rowSqlFile, onError,
-                    contract, topics, tenant, pool);
+                    contract, topics, invalidates, tenant, pool);
+        }
+
+        /**
+         * This request with the tables its commit makes stale attached (docs/caching.md): the
+         * code catalogs and the held results that read them are dropped when the import's
+         * transaction commits — the placement {@code emit:} has, for the same reason.
+         */
+        public ImportRequest invalidating(List<String> tables) {
+            return new ImportRequest(routeId, appName, format, readSpec, rowSqlFile, onError,
+                    contract, emit, tables, tenantId, pool);
         }
 
         /** This request with the pool its row statement runs on (docs/multi-tenancy.md). */
         public ImportRequest on(TransferPool pool) {
             return new ImportRequest(routeId, appName, format, readSpec, rowSqlFile, onError,
-                    contract, emit, tenantId, pool);
+                    contract, emit, invalidates, tenantId, pool);
         }
     }
 
