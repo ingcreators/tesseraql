@@ -571,6 +571,7 @@ declare; a test holds that.
 ## Next
 
 - [capacity.md](capacity.md) — sizing a node: the arithmetic, the signals, `tesseraql bench`.
+- [kubernetes.md](kubernetes.md) — the chart, the manifests, the probes and the drain on a cluster.
 - [promotion.md](promotion.md) — moving a change between environments.
 - [upgrading.md](upgrading.md) — moving to a new framework release.
 - [reference-config.md](reference-config.md) — every configuration key, with what reads it.

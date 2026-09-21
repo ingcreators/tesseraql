@@ -1,0 +1,53 @@
+{{- if .Values.migrations.hook }}
+{{- range .Values.migrations.members }}
+---
+# One Job per member, before the install or upgrade proceeds: `migrate apply` against the
+# member's own configuration, so a failed migration fails `helm upgrade` with its message.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "tesseraql.fullname" $ }}-migrate-{{ . }}
+  labels:
+    {{- include "tesseraql.labels" $ | nindent 4 }}
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "0"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        {{- include "tesseraql.selectorLabels" $ | nindent 8 }}
+        app.kubernetes.io/component: migrate
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ include "tesseraql.serviceAccountName" $ }}
+      {{- with $.Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml $.Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: migrate
+          image: {{ include "tesseraql.image" $ | quote }}
+          imagePullPolicy: {{ $.Values.image.pullPolicy }}
+          args: ["migrate", "apply", "--app", {{ printf "/stack/%s" . | quote }}]
+          env:
+            {{- include "tesseraql.env" $ | nindent 12 }}
+          {{- with include "tesseraql.envFrom" $ }}
+          {{- . | nindent 10 }}
+          {{- end }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          {{- with include "tesseraql.volumeMounts" $ }}
+          {{- . | nindent 10 }}
+          {{- end }}
+      {{- with include "tesseraql.volumes" $ }}
+      {{- . | nindent 6 }}
+      {{- end }}
+{{- end }}
+{{- end }}

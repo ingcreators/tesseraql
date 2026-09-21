@@ -128,6 +128,7 @@ what makes them one stack is **the install root they read**. There are two suppo
 | --- | --- |
 | **Baked image** | The install root is inside the image. Deploying is building a new image and rolling the nodes — your orchestrator's job, and it already does it well. |
 | **Shared install root** | Every node mounts one directory (NFS, SMB, a shared volume). A deploy writes there once — `tesseraql deploy`, or the ops console's deploy page — and every node's reconciler converges to it. |
+| **Kubernetes** | The baked image as a Deployment: the chart or the rendered manifests, two replicas, the probes and the drain sized to the runtime ([kubernetes](kubernetes.md)). A deploy is a new image and a rolling update. |
 
 A host reconciles on two signals: the filesystem watch, and a **sweep** every
 `stack.reconcile.interval` (default 15 seconds, `0` disables it). The sweep is what makes the

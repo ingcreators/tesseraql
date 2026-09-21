@@ -1,0 +1,138 @@
+# A TesseraQL stack on Kubernetes (docs/kubernetes.md). Every value here is documented on that
+# page; the comments say what a value bounds and why the default is what it is.
+
+image:
+  # The deployment's derived image (deploy/Dockerfile): the official runtime image with your
+  # packages unpacked under /stack. Required. The runtime image alone hosts no application, so
+  # the chart has no useful default and refuses to render without one.
+  repository: ""
+  # Defaults to the chart's appVersion; pin your own image's tag here.
+  tag: ""
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+
+nameOverride: ""
+fullnameOverride: ""
+
+# Two, and a PodDisruptionBudget of one, is the smallest shape that rolls without a gap.
+replicaCount: 2
+
+# The stack's own settings (docs/hosting.md, "The stack's own settings"), written to
+# /stack/tesseraql-stack.yml over the baked directory: the framework datasource every member's
+# sign-in rides, the external origin, the root redirect. ${VAR} and ${secret.…} resolve in it.
+# A change rolls the pods (a subPath mount never sees a ConfigMap update).
+stackFile: ""
+
+# Environment for the ${VAR:default} placeholders the members' configuration declares.
+env: []
+envFrom:
+  # Secrets whose keys become environment variables, for ${secret.env.NAME}.
+  secretRefs: []
+
+# A Secret mounted as files, one per key, for ${secret.file.NAME}: the mount is where the
+# runtime looks by default, and TESSERAQL_SECRETS_DIR is set to it.
+secretsMount:
+  secretName: ""
+  mountPath: /run/secrets
+
+# The drain bound the members declare — tesseraql.shutdown.timeout, 45s by default. The grace
+# period is this plus 15 s for the close that follows the drain, and TESSERAQL_SHUTDOWN_TIMEOUT
+# carries the same number to a member that declares
+# `tesseraql.shutdown.timeout: ${TESSERAQL_SHUTDOWN_TIMEOUT:45s}`. Under steady traffic a
+# stop takes the whole bound; a rolling update takes up to this per pod.
+shutdownTimeoutSeconds: 45
+# false is an unbounded drain, and no grace period can cover one; the chart refuses to render it.
+forceOnTimeout: true
+
+# Where spools live: db, so an export one replica produced is served by any other. Carried as
+# TESSERAQL_TEMP_STORE to a member that declares `tesseraql.temp.store: ${TESSERAQL_TEMP_STORE:file}`.
+tempStore: db
+
+# The heap as a share of the container's limit; the image sets no -Xmx on purpose.
+javaToolOptions: "-XX:MaxRAMPercentage=75.0"
+
+# TESSERAQL_ENV: the configuration profile every member selects (config/env/<profile>.yml).
+profile: ""
+
+service:
+  type: ClusterIP
+  port: 8080
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: stack.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+# From the measured node: 308 MiB resident at idle with the JVM's default ceiling, and the heap
+# share above (docs/capacity.md, "From one node to replicas").
+resources:
+  requests:
+    cpu: 500m
+    memory: 768Mi
+  limits:
+    memory: 1Gi
+
+# Liveness on /_tesseraql/health/live (the process answers; it never touches a dependency),
+# readiness on /_tesseraql/health/ready (the stack's roll-up over its members: 503 while
+# draining, 503 when every member is down). Each probe is answered from the held roll-up and
+# starts the refresh behind it, so a cadence costs no probe. The startup budget is
+# period × failureThreshold: 60 s against a measured boot of about three seconds; a stack with
+# many migrations raises failureThreshold.
+probes:
+  startup:
+    periodSeconds: 2
+    failureThreshold: 30
+  liveness:
+    periodSeconds: 10
+    failureThreshold: 3
+  readiness:
+    periodSeconds: 5
+    failureThreshold: 2
+    successThreshold: 1
+
+# Rendered when replicaCount is above one: a drain never takes the last pod.
+pdb:
+  enabled: true
+  minAvailable: 1
+
+# Off by default: the honest signal for a runtime is its in-flight count, which needs a custom
+# metrics adapter; CPU is what every cluster has.
+hpa:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 4
+  targetCPUUtilizationPercentage: 70
+
+# Off by default: the runtime migrates each member at boot. On, a pre-install/pre-upgrade Job
+# runs `migrate apply` for each member named here, so a failed migration fails `helm upgrade`
+# with its message instead of crash-looping a pod with the message in its log.
+migrations:
+  hook: false
+  members: []
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+# The official image runs as its `tesseraql` user, uid 999; a derived image that changes the user
+# changes these.
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 999
+  runAsGroup: 999
+  seccompProfile:
+    type: RuntimeDefault
+
+podAnnotations: {}
+podLabels: {}
+nodeSelector: {}
+tolerations: []
+# Empty renders a preferred anti-affinity across nodes; set to replace it.
+affinity: {}

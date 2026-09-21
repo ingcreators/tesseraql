@@ -1,0 +1,96 @@
+name: Kubernetes
+
+# The chart is the source and deploy/kubernetes/ its rendering (docs/deployment-maturity.md
+# decision 6): on a pull request that touches either, lint the chart, prove the committed
+# rendering is the chart's, validate it against the Kubernetes schema, and read the render's
+# arithmetic — the grace is the drain bound plus the margin, an unbounded drain does not render,
+# the stack file and the secrets land where the runtime reads them. Container-free and cheap.
+on:
+  pull_request:
+    paths:
+      - 'deploy/helm/**'
+      - 'deploy/kubernetes/**'
+      - '.github/workflows/kubernetes.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'deploy/helm/**'
+      - 'deploy/kubernetes/**'
+      - '.github/workflows/kubernetes.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kubernetes-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  chart:
+    name: Chart lint, render and schema
+    timeout-minutes: 15
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # The runner ships helm (docs/deployment-maturity.md row 23); kubeconform is fetched
+      # against its release checksum.
+      - name: Install kubeconform
+        run: |
+          curl -sSLO https://github.com/yannh/kubeconform/releases/download/v0.8.0/kubeconform-linux-amd64.tar.gz
+          echo "9bc2bffbf71f261128533edaf912153948b7ff238f9a531ae6d34466ec287883  kubeconform-linux-amd64.tar.gz" | sha256sum -c -
+          tar -xzf kubeconform-linux-amd64.tar.gz
+          sudo install -m 0755 kubeconform /usr/local/bin/kubeconform
+          helm version --short
+          kubeconform -v
+
+      - name: Lint the chart
+        run: helm lint deploy/helm/tesseraql --set image.repository=ghcr.io/example/orders-stack
+
+      # The committed manifests are the chart's rendering with the example image, byte for byte
+      # (AGENTS.md rule 1: generated files are not edited). The command is the one that
+      # regenerates them.
+      - name: The committed manifests are the chart's rendering
+        run: |
+          helm template tesseraql deploy/helm/tesseraql \
+            --set image.repository=ghcr.io/example/orders-stack --set image.tag=1.0.0 > rendered.yaml
+          diff -u deploy/kubernetes/tesseraql.yaml rendered.yaml || {
+            echo "deploy/kubernetes/tesseraql.yaml is not the chart's rendering; regenerate it with the helm template command above" >&2
+            exit 1
+          }
+
+      - name: Validate the rendering against the Kubernetes schema
+        run: kubeconform -strict -summary -kubernetes-version 1.31.0 -schema-location default deploy/kubernetes/tesseraql.yaml
+
+      # The render's arithmetic (decision 4): the grace is the declared bound plus fifteen seconds,
+      # and forceOnTimeout: false — an unbounded drain no grace can cover — fails the render
+      # with its sentence rather than shipping a contradiction.
+      - name: The grace is the bound plus the margin, and an unbounded drain does not render
+        run: |
+          bound=$(sed -n 's/^shutdownTimeoutSeconds: *\([0-9]*\).*/\1/p' deploy/helm/tesseraql/values.yaml)
+          grace=$(sed -n 's/^ *terminationGracePeriodSeconds: *\([0-9]*\).*/\1/p' deploy/kubernetes/tesseraql.yaml)
+          [ -n "$bound" ] && [ -n "$grace" ] || { echo "the bound or the grace was not found" >&2; exit 1; }
+          [ "$grace" = "$((bound + 15))" ] || { echo "the grace $grace is not the bound $bound plus 15" >&2; exit 1; }
+          if helm template tesseraql deploy/helm/tesseraql --set image.repository=x --set forceOnTimeout=false > /dev/null 2> refused.log; then
+            echo "forceOnTimeout: false rendered; it must be refused" >&2
+            exit 1
+          fi
+          grep -q "unbounded drain" refused.log
+
+      # The optional pieces render where the runtime reads them: the stack file as a subPath over
+      # the baked /stack, the secrets at /run/secrets, one migration Job per named member.
+      - name: The stack file, the secrets and the migration hook land where the runtime reads them
+        run: |
+          helm template tesseraql deploy/helm/tesseraql --set image.repository=x \
+            --set stackFile='externalOrigin: https://apps.example.com' \
+            --set secretsMount.secretName=stack-secrets \
+            --set migrations.hook=true --set 'migrations.members={orders}' > full.yaml
+          grep -q 'subPath: tesseraql-stack.yml' full.yaml
+          grep -q 'mountPath: /stack/tesseraql-stack.yml' full.yaml
+          grep -q 'mountPath: /run/secrets' full.yaml
+          grep -q 'name: TESSERAQL_SECRETS_DIR' full.yaml
+          grep -q -- '"migrate", "apply", "--app", "/stack/orders"' full.yaml
+          kubeconform -strict -summary -kubernetes-version 1.31.0 -schema-location default full.yaml

@@ -1,6 +1,6 @@
 # A stack on Kubernetes: the image, the drain, the probes, the chart, the harness and the alerts
 
-> **Status: designed 2026-09-20 (#1408); S1 shipped 2026-09-20 (#1409); S2 shipped 2026-09-21 (#1410); S3 shipped 2026-09-21 (#1411).** Phase 33 of `docs/roadmap.md` owes
+> **Status: designed 2026-09-20 (#1408); S1 shipped 2026-09-20 (#1409); S2 shipped 2026-09-21 (#1410); S3 shipped 2026-09-21 (#1411); S4 shipped 2026-09-21 (#1412).** Phase 33 of `docs/roadmap.md` owes
 > "Kubernetes manifests and a Helm chart (probes, graceful drain of lanes and in-flight jobs,
 > rolling-deploy guidance on top of reload safety), official container images, a
 > `tesseraql bench` load harness for routes, a capacity/tuning guide, and alert routing through
@@ -69,6 +69,30 @@
 > `maxInFlight` 4: eight workers see 4293 and two do not, and the scrape's counter moved by the
 > same count), `AppLinterBenchTest` (6), `OptionSetShapeTest` and `DocumentedCommandLineTest`
 > unchanged and green with the verb on the roster.
+>
+> **S4** — `deploy/helm/tesseraql/` (Chart.yaml with a placeholder version the release
+> overrides, values.yaml, `_helpers.tpl` sharing the env, the mounts and the volumes between the
+> Deployment and the migration hook, deployment, service, ingress, configmap, serviceaccount,
+> pdb, hpa, migrate-job, NOTES.txt); `deploy/kubernetes/tesseraql.yaml` rendered with the example
+> image `ghcr.io/example/orders-stack:1.0.0`; `.github/workflows/kubernetes.yml` (lint, the
+> rendering diffed, kubeconform strict against 1.31.0, the grace arithmetic, the refused
+> `forceOnTimeout: false`, the stack file / secrets / hook placement) on pull requests touching
+> `deploy/helm/**` or `deploy/kubernetes/**`; the `chart` job in `release.yml` (`helm package
+> --version` from the tag, `helm push` to `oci://ghcr.io/<owner>/charts`, `packages: write`,
+> republish on dispatch; `WorkflowLedgerTest` counts `helm push` as a push); `NodeIdentity`
+> reads `TESSERAQL_NODE_ID` when nothing is configured, so the pod's name is the node's without
+> a configuration line; `docs/kubernetes.md` published; `hosting.md`'s topology row; CHANGELOG.
+> Two deviations from the text above: the chart hands `tesseraql.shutdown.timeout` and
+> `tesseraql.temp.store` to the members as environment variables the members' configuration
+> declares placeholders for (`${TESSERAQL_SHUTDOWN_TIMEOUT:45s}`, `${TESSERAQL_TEMP_STORE:file}`),
+> because the stack file carries the stack's settings and not a member's, and a chart that
+> rewrote a member's configuration would own what the member owns; and no
+> `helm.sh/chart` or `app.kubernetes.io/version` label, so the committed rendering does not
+> change with every release. Guards: `KubernetesChartLedgerTest` (the grace = bound + 15, no
+> preStop, surge one / never below, the PDB, the anti-affinity, the pod's name, the probe paths
+> and numbers equal to values.yaml and the 60 s startup budget, the example image, the
+> placeholder version and the release's `--version`, every top-level value named on the page),
+> `NodeIdentityTest`, `WorkflowLedgerTest` (+1 rule), the `kubernetes.yml` job itself.
 
 The runtime already stops the way an orchestrator wants: SIGTERM flips readiness to 503, keeps
 serving, asks every run and every stream to stop, waits for what is in flight under a declared

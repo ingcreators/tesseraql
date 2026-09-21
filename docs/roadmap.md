@@ -447,7 +447,9 @@ deduplication and four new alert conditions (**S2 shipped 2026-09-21, #1410**:
 the Prometheus rules file and the dashboard's Capacity row); `tesseraql bench` and the
 capacity guide (**S3 shipped 2026-09-21, #1411**: the twenty-sixth developer verb, `kind: bench`
 scenarios with their lint arms and editor schema, `--expect` → exit 3, `docs/capacity.md`);
-**S4** the Helm chart, the rendered manifests and
+the Helm chart, the rendered manifests and the Kubernetes page (**S4 shipped 2026-09-21,
+#1412**: `deploy/helm/tesseraql/`, `deploy/kubernetes/` rendered and drift-checked by the
+`kubernetes.yml` workflow, the chart published from every tag, `docs/kubernetes.md`); **S4** the Helm chart, the rendered manifests and
 the Kubernetes page; **S5** the M10 proof on a two-replica kind cluster in CI.
 
 ## Horizon 6 — the 1.0 contract (0.8.x → 1.0)
