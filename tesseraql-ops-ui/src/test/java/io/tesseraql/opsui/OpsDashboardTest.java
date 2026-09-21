@@ -391,4 +391,108 @@ class OpsDashboardTest {
         assertThat(report.details().get("datasources"))
                 .isEqualTo(java.util.Map.of("probe", false));
     }
+
+    /**
+     * The four silences of docs/deployment-maturity.md decision 9. Readiness: the alert reads
+     * the fresh probe inside a roll-up and the held roll-up outside one, so a roll-up never
+     * reports DOWN on its predecessor's account.
+     */
+    @Test
+    void readinessDownRaisesAlertFromTheFreshProbeAndFromTheHeldRollUp() {
+        OpsDashboard dashboard = new OpsDashboard(null, null, null, new RingTracer(4), 200L)
+                .datasourceProbe(() -> Map.of("main", false));
+        assertThat(dashboard.alerts()).as("nothing held yet, nothing claimed").isEmpty();
+
+        OpsDashboard.HealthReport report = dashboard.health();
+
+        assertThat(report.status()).isEqualTo("DOWN");
+        @SuppressWarnings("unchecked")
+        List<OpsDashboard.Alert> inRollUp = (List<OpsDashboard.Alert>) report.details()
+                .get("alerts");
+        assertThat(inRollUp).extracting(OpsDashboard.Alert::code).contains("TQL-OPS-9010");
+        assertThat(dashboard.alerts()).filteredOn(alert -> alert.code().equals("TQL-OPS-9010"))
+                .singleElement().satisfies(alert -> assertThat(alert.message())
+                        .contains("main").contains("stopped routing"));
+
+        OpsDashboard healthy = new OpsDashboard(null, null, null, new RingTracer(4), 200L)
+                .datasourceProbe(() -> Map.of("main", true));
+        assertThat(healthy.health().status()).isEqualTo("UP");
+        assertThat(healthy.alerts()).isEmpty();
+    }
+
+    /** 9011 needs borrowers waiting at every sample across the interval; one sample is a burst. */
+    @Test
+    void poolSaturationAlertsAcrossAnIntervalNotOnASample() {
+        java.util.concurrent.atomic.AtomicLong clock = new java.util.concurrent.atomic.AtomicLong(
+                1_000_000L);
+        java.util.concurrent.atomic.AtomicInteger awaiting = new java.util.concurrent.atomic.AtomicInteger(
+                3);
+        OpsDashboard dashboard = new OpsDashboard(null, null, null, new RingTracer(4), 200L)
+                .clock(clock::get)
+                .alertInterval(java.time.Duration.ofSeconds(60))
+                .poolStats(() -> Map.of("main", Map.of("awaiting", awaiting.get())));
+
+        assertThat(codes(dashboard)).as("the first sample opens the spell")
+                .doesNotContain("TQL-OPS-9011");
+        clock.addAndGet(59_999);
+        assertThat(codes(dashboard)).as("one millisecond short").doesNotContain("TQL-OPS-9011");
+        clock.addAndGet(1);
+        assertThat(codes(dashboard)).as("waiting at every sample for a whole interval")
+                .contains("TQL-OPS-9011");
+        assertThat(dashboard.alerts()).filteredOn(alert -> alert.code().equals("TQL-OPS-9011"))
+                .singleElement().satisfies(alert -> assertThat(alert.message())
+                        .contains("'main'").contains("3 thread(s)").contains("PT1M"));
+
+        awaiting.set(0);
+        assertThat(codes(dashboard)).as("clears at once").doesNotContain("TQL-OPS-9011");
+        awaiting.set(1);
+        clock.addAndGet(60_000);
+        assertThat(codes(dashboard)).as("a new spell starts its own interval")
+                .doesNotContain("TQL-OPS-9011");
+    }
+
+    /** 9012 is the refusal count's rate over a closed window; a sample inside one says nothing. */
+    @Test
+    void refusalRateAlertsOverAClosedWindow() {
+        java.util.concurrent.atomic.AtomicLong clock = new java.util.concurrent.atomic.AtomicLong();
+        java.util.concurrent.atomic.AtomicLong refused = new java.util.concurrent.atomic.AtomicLong();
+        OpsDashboard dashboard = new OpsDashboard(null, null, null, new RingTracer(4), 200L,
+                new OpsDashboard.AlertThresholds(5.0, 20.0, 10.0, 1.0))
+                .clock(clock::get)
+                .alertInterval(java.time.Duration.ofSeconds(60))
+                .refusals(refused::get);
+
+        assertThat(codes(dashboard)).as("the window opens").doesNotContain("TQL-OPS-9012");
+        refused.set(120);
+        clock.set(30_000);
+        assertThat(codes(dashboard)).as("a burst inside the window is not a verdict")
+                .doesNotContain("TQL-OPS-9012");
+        clock.set(60_000);
+        assertThat(codes(dashboard)).as("120 refusals over 60 s: two a second")
+                .contains("TQL-OPS-9012");
+        assertThat(dashboard.alerts()).filteredOn(alert -> alert.code().equals("TQL-OPS-9012"))
+                .singleElement().satisfies(alert -> assertThat(alert.message())
+                        .contains("2.0 request(s)/s").contains("PT1M").contains("threshold 1.0/s"));
+        clock.set(90_000);
+        assertThat(codes(dashboard)).as("the verdict holds through the next window")
+                .contains("TQL-OPS-9012");
+        clock.set(120_000);
+        assertThat(codes(dashboard)).as("a quiet window clears it").doesNotContain("TQL-OPS-9012");
+    }
+
+    @Test
+    void aStopThatCutRequestsRaisesAlert() {
+        OpsDashboard dashboard = new OpsDashboard(null, null, null, new RingTracer(4), 200L);
+        assertThat(codes(dashboard)).doesNotContain("TQL-OPS-9013");
+
+        dashboard.stopCut(3, java.time.Duration.ofSeconds(45));
+
+        assertThat(dashboard.alerts()).filteredOn(alert -> alert.code().equals("TQL-OPS-9013"))
+                .singleElement().satisfies(alert -> assertThat(alert.message())
+                        .contains("PT45S").contains("3 request(s)"));
+    }
+
+    private static List<String> codes(OpsDashboard dashboard) {
+        return dashboard.alerts().stream().map(OpsDashboard.Alert::code).toList();
+    }
 }

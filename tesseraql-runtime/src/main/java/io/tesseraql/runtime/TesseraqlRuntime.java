@@ -95,6 +95,9 @@ public final class TesseraqlRuntime implements AutoCloseable {
     private final AutoCloseable otelSdk;
     private final io.tesseraql.opsui.OpsDashboard opsDashboard;
     private final ReadinessMemo readiness;
+    private final EdgeMetrics edgeMetrics;
+    /** The alert notifier, or {@code null} when no alerts channel is configured. */
+    private final AlertNotifySweep alertSweep;
     private final io.tesseraql.core.outbox.OutboxEventSink outboxSink;
     private final AppModules appModules;
     /**
@@ -117,6 +120,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
             TenantDataSources tenantDataSources, io.tesseraql.yaml.config.AppConfig config,
             AutoCloseable pinningSource, AutoCloseable otelSdk,
             io.tesseraql.opsui.OpsDashboard opsDashboard, ReadinessMemo readiness,
+            EdgeMetrics edgeMetrics, AlertNotifySweep alertSweep,
             io.tesseraql.core.outbox.OutboxEventSink outboxSink, AppModules appModules) {
         this.runtimeContext = runtimeContext;
         this.dataSources = dataSources;
@@ -136,6 +140,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
         this.otelSdk = otelSdk;
         this.opsDashboard = opsDashboard;
         this.readiness = readiness;
+        this.edgeMetrics = edgeMetrics;
+        this.alertSweep = alertSweep;
         this.outboxSink = outboxSink;
         this.appModules = appModules;
     }
@@ -151,6 +157,27 @@ public final class TesseraqlRuntime implements AutoCloseable {
      */
     ReadinessMemo readiness() {
         return readiness;
+    }
+
+    /** This runtime's edge signals: the gate's in-flight counts, its refusals, its lanes. */
+    EdgeMetrics edgeMetrics() {
+        return edgeMetrics;
+    }
+
+    /**
+     * A stop cut {@code requests} at {@code bound} — this runtime's own drain, or the stack's
+     * front (docs/deployment-maturity.md decision 9): recorded on the dashboard and paged now,
+     * while the outbox's pool is still open, so a surviving node delivers {@code TQL-OPS-9013}.
+     */
+    void stopCut(int requests, java.time.Duration bound) {
+        opsDashboard.stopCut(requests, bound);
+        if (alertSweep != null) {
+            try {
+                alertSweep.sweep();
+            } catch (RuntimeException ex) {
+                LOG.warn("The stop's cut could not be paged: {}", ex.getMessage());
+            }
+        }
     }
 
     /** Starts the runtime against {@code appHome}, using the configured {@code server.port}. */
@@ -271,7 +298,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
      * dependency and this is not a reason to give it one: the ops module declares the shape it
      * wants and the runtime, which already owns the pools, fills it in.
      */
-    private static Map<String, Map<String, Integer>> poolStats(
+    static Map<String, Map<String, Integer>> poolStats(
             Map<String, HikariDataSource> dataSources) {
         Map<String, Map<String, Integer>> stats = new LinkedHashMap<>();
         dataSources.forEach((name, dataSource) -> {
@@ -838,9 +865,9 @@ public final class TesseraqlRuntime implements AutoCloseable {
             // A run is stamped with the node that owns it (docs/audit-hardening.md Decision 6). The
             // default is derived from host and pid so two replicas of one image are distinguishable
             // without anybody configuring anything.
-            JobRepository jobRepository = new JobRepository(dataSource,
-                    io.tesseraql.operations.batch.NodeIdentity.resolve(manifest.config()
-                            .getString("tesseraql.batch.nodeId").orElse(null)));
+            String nodeId = io.tesseraql.operations.batch.NodeIdentity.resolve(manifest.config()
+                    .getString("tesseraql.batch.nodeId").orElse(null));
+            JobRepository jobRepository = new JobRepository(dataSource, nodeId);
             jobRepository.ensureSchema();
             JdbcIdempotencyStore idempotencyStore = new JdbcIdempotencyStore(dataSource);
             idempotencyStore.ensureSchema();
@@ -1400,10 +1427,14 @@ public final class TesseraqlRuntime implements AutoCloseable {
             // is wrapped in a composite, and reading past it left the console's trace pages empty
             // in exactly the deployments that had the most telemetry (docs/audit-hardening.md
             // Decision 7).
+            // The alert sweep's period is also the window the capacity alerts are judged over.
+            long alertPeriod = io.tesseraql.core.util.Durations.toMillis(manifest.config()
+                    .getString("tesseraql.notifications.alerts.checkInterval").orElse("60s"));
             io.tesseraql.opsui.OpsDashboard opsDashboard = OpsDashboards.assemble(manifest.config(),
                     jobRepository, lanes, slowSqlLog, effectiveTracer,
                     pinningMonitor, outboxStore, eventChannelStore,
-                    pollSourceStatus, calendarStatus, dataSource, dataSources);
+                    pollSourceStatus, calendarStatus, dataSource, dataSources, aggregatingMeter,
+                    alertPeriod);
             // One memo per runtime: the member's own readiness path and the origin's roll-up
             // read the same state and keep it fresh (docs/deployment-maturity.md decision 3).
             ReadinessMemo readiness = ReadinessMemo.over(opsDashboard);
@@ -1615,13 +1646,17 @@ public final class TesseraqlRuntime implements AutoCloseable {
             jobs.keySet().forEach(id -> ownedJobs.put(id, jobOwners.getOrDefault(id, appName)));
             // The Prometheus scrape endpoint is opt-in and bearer-gated by default; a
             // cluster-internal scraper may opt out of auth explicitly (roadmap Phase 45).
+            // The edge's capacity signals (docs/deployment-maturity.md decision 7); the gate joins
+            // once the router exists, the gateway's share once a host wires it.
+            EdgeMetrics edgeMetrics = new EdgeMetrics(effectiveMeter, lanes);
             OperationsRoutes.MetricsSettings metricsSettings = new OperationsRoutes.MetricsSettings(
                     manifest.config().getString("tesseraql.metrics.enabled")
                             .map(Boolean::parseBoolean).orElse(false),
                     manifest.config().getString("tesseraql.metrics.unauthenticated")
                             .map(Boolean::parseBoolean).orElse(false),
                     aggregatingMeter, pollSourceStatus,
-                    new io.tesseraql.opsui.RuntimeMetrics(() -> poolStats(dataSources)));
+                    new io.tesseraql.opsui.RuntimeMetrics(() -> poolStats(dataSources)),
+                    edgeMetrics);
             Map<String, io.tesseraql.yaml.model.JobDefinition> jobDefinitions = new LinkedHashMap<>();
             jobs.forEach((id, jobFile) -> jobDefinitions.put(id, jobFile.definition()));
             // What this runtime serves: the host app plus anything mounted into it. The ops
@@ -2034,13 +2069,15 @@ public final class TesseraqlRuntime implements AutoCloseable {
                         outboxMaxAttempts(manifest.config()))
                         .schedule(Schedules.of(context));
             }
+            AlertNotifySweep alertSweep = null;
             if (alertChannel != null) {
                 // Threshold-breach alerts from the dashboard notify through the same channel
-                // (roadmap Phase 20).
-                long alertPeriod = io.tesseraql.core.util.Durations.toMillis(manifest.config()
-                        .getString("tesseraql.notifications.alerts.checkInterval").orElse("60s"));
-                new AlertNotifySweep(opsDashboard, outboxStore,
-                        alertChannel, alertPeriod, appName).schedule(Schedules.of(context));
+                // (roadmap Phase 20); database-wide conditions are claimed cluster-wide and
+                // every payload names the node (docs/deployment-maturity.md decision 9).
+                alertSweep = new AlertNotifySweep(opsDashboard, outboxStore::insert,
+                        alertChannel, alertPeriod, appName,
+                        AlertNotifySweep.claims(jobRepository), nodeId);
+                alertSweep.schedule(Schedules.of(context));
             }
             // The drain is configured rather than inherited (docs/audit-hardening.md Decision 6).
             // Nothing referenced ShutdownStrategy anywhere, so Camel's 45-second default with
@@ -2069,8 +2106,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
             // The runtime-wide in-flight bound (docs/http-threading.md decision 3). Installed here
             // because the platform router does not exist until the HTTP server service has
             // started, and ordered ahead of every route registered before it.
-            HttpAdmission.install(context, maxInFlight(manifest.config()),
-                    maxEventStreams(manifest.config()));
+            edgeMetrics.admission(HttpAdmission.install(context, maxInFlight(manifest.config()),
+                    maxEventStreams(manifest.config()), effectiveMeter));
             // The over-limit refusal must not leave a mid-upload client wedged
             // (docs/http-edge.md; the body limit trips while the client is still writing).
             HttpBodyLimit.install(context, maxBodyBytes(manifest.config()));
@@ -2080,7 +2117,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
             return new TesseraqlRuntime(context, dataSources, boundPort, jobRepository, jobExecutor,
                     outboxStore, jobs, jobOwners, appName, hostedApps, lanes, tenantDataSources,
                     manifest.config(), pinningSource, otelSdk, opsDashboard, readiness,
-                    outboxSink, modules);
+                    edgeMetrics, alertSweep, outboxSink, modules);
         } catch (Exception | Error ex) {
             // A failed boot releases what it took (docs/audit-hardening.md Decision 5). Closing
             // the TesseraQL objects is not enough: everything registered through addService above
@@ -2559,7 +2596,13 @@ public final class TesseraqlRuntime implements AutoCloseable {
         Long declaredBound = runtimeContext.lookup(SHUTDOWN_TIMEOUT_BEAN, Long.class);
         long bound = declaredBound == null ? 45_000L : declaredBound;
         if (edge != null) {
-            closeQuietly(() -> edge.drain(bound));
+            closeQuietly(() -> {
+                if (!edge.drain(bound)) {
+                    // Before the pools close: the one page a cut stop can still send rides the
+                    // outbox, and a surviving node delivers it (decision 9 of the record).
+                    stopCut(edge.inFlight(), java.time.Duration.ofMillis(bound));
+                }
+            });
         }
         try {
             runtimeContext.close();

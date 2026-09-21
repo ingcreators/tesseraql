@@ -68,6 +68,32 @@ public final class OpsDashboard {
     private java.util.function.Supplier<Map<String, Boolean>> datasourceProbe;
     private PollSourceStatus pollSources;
     private CalendarStatus calendars;
+    /** Per-pool borrow-queue depth, read where the runtime owns the pools (TQL-OPS-9011). */
+    private java.util.function.Supplier<Map<String, Map<String, Integer>>> poolStats;
+    /** The lifetime admission-refusal count, read from the meter (TQL-OPS-9012). */
+    private java.util.function.LongSupplier refusals;
+    /**
+     * The alert sweep's interval: the window 9011 and 9012 are judged over
+     * (docs/deployment-maturity.md decision 9). A pool with borrowers waiting at one sample is a
+     * burst; one with borrowers waiting at every sample across a whole interval is the
+     * constraint. A refusal is a slowdown; a refusal rate sustained over the interval is the
+     * runtime at capacity.
+     */
+    private volatile long alertIntervalMillis = 60_000L;
+    /** The clock the interval rules read; injectable so a test can move it. */
+    private volatile java.util.function.LongSupplier clock = System::currentTimeMillis;
+    /** When each pool was first seen with borrowers waiting; forgotten when none wait. */
+    private final Map<String, Long> awaitingSince = new java.util.concurrent.ConcurrentHashMap<>();
+    /** The refusal-rate window: the count and moment it opened, and the rate the last one closed at. */
+    private RefusalWindow refusalWindow;
+    /** A stop that cut requests at its bound, once one happened (TQL-OPS-9013). */
+    private volatile StopCut stopCut;
+
+    private record RefusalWindow(long count, long openedAtMillis, double ratePerSecond) {
+    }
+
+    private record StopCut(int requests, java.time.Duration bound) {
+    }
 
     public OpsDashboard(JobRepository jobs, ExecutionLanes lanes, SqlExecutionLog slowSql,
             TraceLog traces, long slowSpanThresholdMs) {
@@ -146,6 +172,43 @@ public final class OpsDashboard {
     public OpsDashboard calendars(CalendarStatus calendars) {
         this.calendars = calendars;
         return this;
+    }
+
+    /** Wires the pools' borrow-queue depth, so a saturated pool raises {@code TQL-OPS-9011}. */
+    public OpsDashboard poolStats(
+            java.util.function.Supplier<Map<String, Map<String, Integer>>> stats) {
+        this.poolStats = stats;
+        return this;
+    }
+
+    /** Wires the admission-refusal count, so a sustained refusal rate raises {@code TQL-OPS-9012}. */
+    public OpsDashboard refusals(java.util.function.LongSupplier refusals) {
+        this.refusals = refusals;
+        return this;
+    }
+
+    /** The interval 9011 and 9012 are judged over; the runtime binds the alert sweep's period. */
+    public OpsDashboard alertInterval(java.time.Duration interval) {
+        if (interval != null && !interval.isNegative() && !interval.isZero()) {
+            this.alertIntervalMillis = interval.toMillis();
+        }
+        return this;
+    }
+
+    /** The clock the interval rules read (milliseconds); a test moves it instead of sleeping. */
+    public OpsDashboard clock(java.util.function.LongSupplier clock) {
+        this.clock = clock;
+        return this;
+    }
+
+    /**
+     * Records that a stop reached its drain bound with requests still in flight and cut them
+     * ({@code TQL-OPS-9013}): the runtime's own drain or the stack's front. Raised once and kept,
+     * because the process is on its way out and the sweep that reads it runs one last time before
+     * the pools close.
+     */
+    public void stopCut(int requests, java.time.Duration bound) {
+        this.stopCut = new StopCut(requests, bound);
     }
 
     /**
@@ -269,7 +332,9 @@ public final class OpsDashboard {
         boolean down = datasources.containsValue(Boolean.FALSE);
         List<Alert> alerts;
         try {
-            alerts = alerts();
+            // The fresh probe's verdict, not the memo's: a roll-up that read its own predecessor
+            // would report DOWN for one TTL after the datasource came back.
+            alerts = alerts(down ? failing(datasources) : null);
         } catch (RuntimeException ex) {
             // A contributor that cannot reach its store is itself a DOWN signal: the health
             // endpoint must answer a clean DOWN during an outage, never crash into a 500.
@@ -306,6 +371,44 @@ public final class OpsDashboard {
      * when the trace error rate over the retained window reaches the configured threshold.
      */
     public List<Alert> alerts() {
+        // What the readiness probe last answered: the same signal an orchestrator sheds on,
+        // so a member that has stopped receiving traffic also reaches a human
+        // (docs/deployment-maturity.md decision 9).
+        String readinessDown = heldHealth()
+                .filter(held -> "DOWN".equals(held.report().status()))
+                .map(held -> failingFrom(held.report().details()))
+                .orElse(null);
+        return alerts(readinessDown);
+    }
+
+    /** The datasources a probe found down, as the 9010 message names them. */
+    private static String failing(Map<String, Boolean> datasources) {
+        List<String> names = new java.util.ArrayList<>();
+        datasources.forEach((name, valid) -> {
+            if (!Boolean.TRUE.equals(valid)) {
+                names.add(name);
+            }
+        });
+        return names.isEmpty()
+                ? "a contributor failed"
+                : "datasource(s) " + String.join(", ", names);
+    }
+
+    /** The same, read back from a held report's details. */
+    @SuppressWarnings("unchecked")
+    private static String failingFrom(Map<String, Object> details) {
+        Object datasources = details.get("datasources");
+        if (datasources instanceof Map<?, ?> probed) {
+            return failing((Map<String, Boolean>) probed);
+        }
+        return "a contributor failed";
+    }
+
+    /**
+     * The alerts, given what readiness says: {@code readinessDown} names what is down, or is
+     * {@code null} when readiness is not {@code DOWN}.
+     */
+    private List<Alert> alerts(String readinessDown) {
         TraceMetrics metrics = traceMetrics();
         List<Alert> alerts = new java.util.ArrayList<>();
         if (metrics.traces() > 0 && metrics.traceErrorRate() >= thresholds.errorRatePercent()) {
@@ -382,7 +485,81 @@ public final class OpsDashboard {
                                 + thresholds.batchFailureRatePercent() + "% threshold"));
             }
         }
+        // The four silences of docs/deployment-maturity.md decision 9: a readiness the probe
+        // sheds on, a pool that is the constraint, a runtime refusing at capacity, and a stop
+        // that cut what it was serving.
+        if (readinessDown != null) {
+            alerts.add(new Alert("TQL-OPS-9010", "warning",
+                    "Readiness is DOWN (" + readinessDown + "); the orchestrator has stopped"
+                            + " routing traffic here until it recovers"));
+        }
+        if (poolStats != null) {
+            long now = clock.getAsLong();
+            Map<String, Map<String, Integer>> pools = poolStats.get();
+            for (Map.Entry<String, Map<String, Integer>> pool : pools.entrySet()) {
+                int awaiting = pool.getValue().getOrDefault("awaiting", 0);
+                if (awaiting <= 0) {
+                    awaitingSince.remove(pool.getKey());
+                    continue;
+                }
+                long since = awaitingSince.computeIfAbsent(pool.getKey(), name -> now);
+                if (now - since >= alertIntervalMillis) {
+                    alerts.add(new Alert("TQL-OPS-9011", "warning",
+                            "Pool '" + pool.getKey() + "' has had " + awaiting
+                                    + " thread(s) waiting for a connection at every sample across"
+                                    + " the last "
+                                    + java.time.Duration.ofMillis(alertIntervalMillis)
+                                    + ": the pool, not the database, is the constraint; raise"
+                                    + " maximumPoolSize with workerThreads"));
+                }
+            }
+            awaitingSince.keySet().retainAll(pools.keySet());
+        }
+        if (refusals != null) {
+            double rate = refusalRate(clock.getAsLong());
+            if (rate >= thresholds.refusalsPerSecond()) {
+                alerts.add(new Alert("TQL-OPS-9012", "warning",
+                        "Admission refused " + tenths(rate) + " request(s)/s over the last "
+                                + java.time.Duration.ofMillis(alertIntervalMillis)
+                                + " (threshold " + tenths(thresholds.refusalsPerSecond())
+                                + "/s): the runtime is at capacity (TQL-RATE-4293, 4295); raise"
+                                + " workerThreads and maxInFlight, or add a replica"));
+            }
+        }
+        StopCut cut = stopCut;
+        if (cut != null) {
+            alerts.add(new Alert("TQL-OPS-9013", "warning",
+                    "A stop reached its drain bound " + cut.bound() + " with " + cut.requests()
+                            + " request(s) still in flight and cut them; raise"
+                            + " tesseraql.shutdown.timeout and the platform's grace period"
+                            + " together"));
+        }
         return alerts;
+    }
+
+    /** A rate to one decimal place, spelled the same on every locale. */
+    private static String tenths(double value) {
+        return String.valueOf(Math.round(value * 10.0) / 10.0);
+    }
+
+    /**
+     * The refusal rate over the last closed window: the count grows between windows, a window
+     * closes once the interval has elapsed since it opened, and the rate it closed at holds until
+     * the next one closes — so the verdict is over an interval, never a sample.
+     */
+    private synchronized double refusalRate(long now) {
+        long count = refusals.getAsLong();
+        if (refusalWindow == null) {
+            refusalWindow = new RefusalWindow(count, now, 0.0);
+            return 0.0;
+        }
+        long elapsed = now - refusalWindow.openedAtMillis();
+        if (elapsed < alertIntervalMillis) {
+            return refusalWindow.ratePerSecond();
+        }
+        double rate = elapsed <= 0 ? 0.0 : (count - refusalWindow.count()) * 1000.0 / elapsed;
+        refusalWindow = new RefusalWindow(count, now, rate);
+        return rate;
     }
 
     /**
@@ -567,12 +744,22 @@ public final class OpsDashboard {
     public record Alert(String code, String severity, String message) {
     }
 
-    /** Warning thresholds (percent) for the operational alerts (design ch. 26.11). */
+    /**
+     * Warning thresholds for the operational alerts (design ch. 26.11): three rates in percent,
+     * and the admission-refusal rate in refusals per second over the alert interval
+     * (docs/deployment-maturity.md decision 9).
+     */
     public record AlertThresholds(double errorRatePercent, double slowRatePercent,
-            double batchFailureRatePercent) {
+            double batchFailureRatePercent, double refusalsPerSecond) {
+
+        /** The three percent thresholds, with the refusal-rate default of one per second. */
+        public AlertThresholds(double errorRatePercent, double slowRatePercent,
+                double batchFailureRatePercent) {
+            this(errorRatePercent, slowRatePercent, batchFailureRatePercent, 1.0);
+        }
 
         public static AlertThresholds defaults() {
-            return new AlertThresholds(5.0, 20.0, 10.0);
+            return new AlertThresholds(5.0, 20.0, 10.0, 1.0);
         }
     }
 

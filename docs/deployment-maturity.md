@@ -1,6 +1,6 @@
 # A stack on Kubernetes: the image, the drain, the probes, the chart, the harness and the alerts
 
-> **Status: designed 2026-09-20 (#1408); S1 shipped 2026-09-20 (#1409).** Phase 33 of `docs/roadmap.md` owes
+> **Status: designed 2026-09-20 (#1408); S1 shipped 2026-09-20 (#1409); S2 shipped 2026-09-21 (#1410).** Phase 33 of `docs/roadmap.md` owes
 > "Kubernetes manifests and a Helm chart (probes, graceful drain of lanes and in-flight jobs,
 > rolling-deploy guidance on top of reload safety), official container images, a
 > `tesseraql bench` load harness for routes, a capacity/tuning guide, and alert routing through
@@ -29,6 +29,25 @@
 > `ReadinessMemoTest`, `StackReadinessTest`, `StackRelayTest` (two rows),
 > `StackReadinessIntegrationTest`, `HealthProbeIntegrationTest` (the ten-second row),
 > `WorkflowLedgerTest` (`--push` counts as a push), and the `deploy-image` job itself.
+>
+> **S2** — `EdgeMetrics` (the in-flight gauge by kind, the refusal counter by code through the
+> meter, the lane gauges), counted at `HttpAdmission` and, for the front's `4294`/`4296`, by
+> `StackRelay` through the host on the member the refusal was for; `OpsDashboard` gains 9010
+> (from the held readiness, or the fresh probe inside a roll-up), 9011 (borrowers waiting at
+> every sample across the alert interval), 9012 (the refusal count's rate over a closed
+> interval window) and 9013 (`stopCut`, recorded by the runtime's drain or the stack's front and
+> paged by one immediate sweep before the pools close); `AlertNotifySweep` claims database-wide
+> codes through `tql_job_claim` with `(<app>:alert:<code>, epoch)`, names `node` and `scope`,
+> and emits `ops.alertCleared`; `deploy/prometheus/tesseraql-alerts.yml`, the dashboard's
+> Capacity row, `notifications.md`, `deployment.md`, the reference. Three deviations from the
+> text below: the gateway's families render on each member's scrape rather than on a scrape of
+> their own, because the origin has none and a refusal at the front is that member's capacity;
+> the rules file carries the conditions a scrape can express — 9011, 9012, a rejecting lane, a
+> scrape that vanished — while 9010 and 9013 are events rather than levels and reach an
+> operator through the channel; and a lost claim is retried every tick rather than remembered,
+> so the seven-day prune re-pages a condition that outlived the node that paged it. Guards:
+> `AlertNotifySweepTest`, `OpsDashboardTest` (+4), `HttpAdmissionIntegrationTest` (+1),
+> `MetricsEndpointIntegrationTest` (+1), `StackRelayTest` (+1), `PrometheusRulesLedgerTest`.
 
 The runtime already stops the way an orchestrator wants: SIGTERM flips readiness to 503, keeps
 serving, asks every run and every stream to stop, waits for what is in flight under a declared

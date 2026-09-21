@@ -70,14 +70,32 @@ final class HttpAdmission {
     private final java.util.Set<String> streamMounts;
     private final AtomicLong refused = new AtomicLong();
     private final AtomicLong streamsRefused = new AtomicLong();
+    private final int maxInFlight;
+    private final int maxEventStreams;
+    /** Where a refusal is counted by code, for the scrape (docs/deployment-maturity.md decision 7). */
+    private final io.tesseraql.core.telemetry.Meter meter;
 
     private HttpAdmission(int maxInFlight, int maxEventStreams, String healthPrefix,
-            String assetPrefix, java.util.Set<String> streamMounts) {
+            String assetPrefix, java.util.Set<String> streamMounts,
+            io.tesseraql.core.telemetry.Meter meter) {
         this.permits = new Semaphore(maxInFlight);
         this.streamPermits = new Semaphore(maxEventStreams);
+        this.maxInFlight = maxInFlight;
+        this.maxEventStreams = maxEventStreams;
         this.healthPrefix = healthPrefix;
         this.assetPrefix = assetPrefix;
         this.streamMounts = streamMounts;
+        this.meter = meter;
+    }
+
+    /** Requests holding a permit right now, against {@code maxInFlight}. */
+    int inFlight() {
+        return maxInFlight - permits.availablePermits();
+    }
+
+    /** Event streams holding a permit right now, against {@code maxEventStreams}. */
+    int streamsInFlight() {
+        return maxEventStreams - streamPermits.availablePermits();
     }
 
     /**
@@ -92,16 +110,18 @@ final class HttpAdmission {
      * reads the decoded path once. Registering ahead of it would charge a permit against the
      * percent-encoded spelling and again against the decoded one.
      */
-    static void install(RuntimeContext runtimeContext, int maxInFlight, int maxEventStreams) {
+    static HttpAdmission install(RuntimeContext runtimeContext, int maxInFlight,
+            int maxEventStreams, io.tesseraql.core.telemetry.Meter meter) {
         io.vertx.ext.web.Router router = HttpEdgeBeans.router(runtimeContext);
         HttpAdmission gate = new HttpAdmission(maxInFlight, maxEventStreams,
                 io.tesseraql.pipeline.BasePath.of(runtimeContext.beans())
                         + "/_tesseraql/health",
                 AssetRoutes.mountOf(runtimeContext),
-                SseRoutes.mounts(runtimeContext));
+                SseRoutes.mounts(runtimeContext), meter);
         router.route().order(BEFORE_EVERY_ROUTE).handler(gate::admit);
         LOG.debug("HTTP admission installed: {} requests in flight, {} event streams",
                 maxInFlight, maxEventStreams);
+        return gate;
     }
 
     private void admit(io.vertx.ext.web.RoutingContext ctx) {
@@ -202,6 +222,10 @@ final class HttpAdmission {
                     stream ? "tesseraql.http.maxEventStreams" : "tesseraql.http.maxInFlight");
         }
         TqlErrorCode code = stream ? STREAMS_AT_CAPACITY : AT_CAPACITY;
+        // On the scrape as well as in the log (docs/deployment-maturity.md decision 7): the rate
+        // of this counter is what says "at capacity" to an alert rule, and what TQL-OPS-9012
+        // is judged on.
+        meter.counter(EdgeMetrics.REFUSED).increment(java.util.Map.of("code", code.toString()));
         String sentence = stream
                 ? "The runtime is at its event-stream capacity"
                 : "The runtime is at capacity";

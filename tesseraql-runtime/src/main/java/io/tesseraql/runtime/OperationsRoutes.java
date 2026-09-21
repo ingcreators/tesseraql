@@ -177,7 +177,7 @@ final class OperationsRoutes {
     record MetricsSettings(boolean enabled, boolean unauthenticated,
             io.tesseraql.core.telemetry.AggregatingMeter meter,
             io.tesseraql.opsui.PollSourceStatus pollSources,
-            io.tesseraql.opsui.RuntimeMetrics runtime) {
+            io.tesseraql.opsui.RuntimeMetrics runtime, EdgeMetrics edge) {
     }
 
     OperationsRoutes(OpsActions actions, JobRepository repository,
@@ -292,7 +292,10 @@ final class OperationsRoutes {
                 // Heap, GC, threads and the pool (docs/audit-hardening.md Decision 9):
                 // request rates and latency histograms could not answer "is it out of
                 // heap" or "is the pool exhausted", which is what gets asked first.
-                        + (metrics.runtime() == null ? "" : metrics.runtime().render()));
+                        + (metrics.runtime() == null ? "" : metrics.runtime().render())
+                // The edge's capacity signals (docs/deployment-maturity.md decision 7): the
+                // requests in flight against the bound, the refusals by code, the lanes.
+                        + (metrics.edge() == null ? "" : metrics.edge().render()));
             });
         }
 

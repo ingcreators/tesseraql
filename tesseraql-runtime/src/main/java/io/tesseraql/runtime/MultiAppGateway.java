@@ -162,7 +162,13 @@ public final class MultiAppGateway implements AutoCloseable {
                 settings.trustedProxies(), this::targetPort, host::surfacePort, rootTarget)
                 .maxConcurrentPerMember(perMember)
                 .maxStreamsPerMember(perMemberStreams)
-                .memberReadiness(host::memberReadiness);
+                .memberReadiness(host::memberReadiness)
+                // A refusal at the front counts on the member it was for, and the forwards in
+                // flight read on that member's scrape beside its own in-flight count
+                // (docs/deployment-maturity.md decision 7).
+                .refusalListener(host::gatewayRefused);
+        host.gatewaySignals(new MultiAppHost.GatewaySignals(relay::forwardsInFlight,
+                relay::streamForwardsInFlight));
         this.server = vertx.createHttpServer(StackRelay.frontOptions(frontPort,
                 settings.http2(), idleTimeoutSeconds(stackSettings)));
         server.requestHandler(relay::handle);
@@ -525,6 +531,9 @@ public final class MultiAppGateway implements AutoCloseable {
         if (relay.inFlight() > 0) {
             LOG.warn("Stack stop drain bound {} reached with {} request(s) still in flight;"
                     + " closing the front now", bound, relay.inFlight());
+            // Paged before anything closes: the members' outboxes are still open here, and a
+            // surviving node delivers TQL-OPS-9013 (docs/deployment-maturity.md decision 9).
+            host.stopCut(relay.inFlight(), bound);
         }
         closeFront();
         host.close();

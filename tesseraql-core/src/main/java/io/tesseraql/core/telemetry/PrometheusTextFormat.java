@@ -75,6 +75,27 @@ public final class PrometheusTextFormat {
         return out.toString();
     }
 
+    /**
+     * Renders one counter family from values read at scrape time rather than aggregated by the
+     * meter (docs/deployment-maturity.md decision 7): a lane's lifetime rejection count lives on
+     * the lane, and rendering it as a gauge would hand {@code rate()} a family Prometheus refuses
+     * to treat as monotonic. The {@code _total} suffix is applied here, as for the meter's own
+     * counters. An empty sample list renders nothing.
+     */
+    public static String counter(String name, java.util.List<GaugeSample> samples) {
+        if (samples.isEmpty()) {
+            return "";
+        }
+        String metric = sanitize(name) + "_total";
+        StringBuilder out = new StringBuilder();
+        out.append("# TYPE ").append(metric).append(" counter\n");
+        for (GaugeSample sample : samples) {
+            out.append(metric).append(labels(sample.attributes(), null))
+                    .append(' ').append(number(sample.value())).append('\n');
+        }
+        return out.toString();
+    }
+
     /** Integral values render without a decimal point, like the histogram bounds. */
     private static String number(double value) {
         return value == Math.floor(value) && !Double.isInfinite(value)

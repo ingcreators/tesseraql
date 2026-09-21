@@ -62,6 +62,9 @@ class StackRelayTest {
     /** A front bounded to two forwards per member, for the capacity refusal. */
     private static HttpServer boundedFront;
     private static String boundedBase;
+    private static StackRelay boundedRelay;
+    /** What the bounded front refused, by member and code, as a host would count it. */
+    private static final List<String> refusals = new java.util.concurrent.CopyOnWriteArrayList<>();
     /** The same, bounded to one stream forward, so the stream share can be saturated. */
     private static HttpServer streamBoundedFront;
     private static String streamBoundedBase;
@@ -109,10 +112,11 @@ class StackRelayTest {
         h2Front.requestHandler(h2Relay::handle);
         h2Base = "http://localhost:" + await(h2Front.listen()).actualPort() + "/" + APP;
 
-        StackRelay bounded = new StackRelay(client, CATALOGUE, appId -> originPort)
-                .maxConcurrentPerMember(2);
+        boundedRelay = new StackRelay(client, CATALOGUE, appId -> originPort)
+                .maxConcurrentPerMember(2)
+                .refusalListener((app, code) -> refusals.add(app + " " + code));
         boundedFront = vertx.createHttpServer(StackRelay.frontOptions(0, false));
-        boundedFront.requestHandler(bounded::handle);
+        boundedFront.requestHandler(boundedRelay::handle);
         boundedBase = "http://localhost:" + await(boundedFront.listen()).actualPort()
                 + "/" + APP;
 
@@ -184,12 +188,17 @@ class StackRelayTest {
                 java.util.concurrent.CompletableFuture.supplyAsync(
                         () -> getBounded("/slow")));
         Thread.sleep(400);
+        assertThat(boundedRelay.forwardsInFlight(APP))
+                .as("the two forwards hold the member's whole share").isEqualTo(2);
 
         HttpResponse<String> refused = getBounded("/slow");
 
         assertThat(refused.statusCode()).isEqualTo(503);
         assertThat(refused.body()).contains("TQL-RATE-4294");
         assertThat(refused.headers().firstValue("Retry-After")).contains("1");
+        // Counted on the member it was for (docs/deployment-maturity.md decision 7): a refusal
+        // at the front is that member's capacity, and its scrape is where the rate is read.
+        assertThat(refusals).contains(APP + " TQL-RATE-4294");
 
         for (java.util.concurrent.CompletableFuture<HttpResponse<String>> held : holding) {
             assertThat(held.get().statusCode()).isEqualTo(200);

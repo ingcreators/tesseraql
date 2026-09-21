@@ -547,13 +547,26 @@ reasons stay on the console page.
 | `tesseraql_poll_source_consecutive_failures` | current import-failure streak | `tesseraql_poll_source_consecutive_failures >= 3` |
 | `tesseraql_poll_source_last_poll_age_seconds` | seconds since the last poll; absent until one completes | `tesseraql_poll_source_last_poll_age_seconds > 3600` |
 | `tesseraql_egress_denied_total` | `http:` refusals per denied host | `rate(tesseraql_egress_denied_total[5m]) > 0` |
+| `tesseraql_http_in_flight{kind}` | requests (`request`) and event streams (`stream`) holding a permit at this runtime's gate; `forward` and `streamForward` are the gateway's share for this member | `sum by (instance) (tesseraql_http_in_flight{kind="request"}) > 30` |
+| `tesseraql_http_refused_total{code}` | admission refusals by code: `TQL-RATE-4293`/`4295` at the member, `4294`/`4296` at the front | `rate(tesseraql_http_refused_total[5m]) > 1` |
+| `tesseraql_lane_in_use{lane}`, `tesseraql_lane_rejected_total{lane}` | a lane's units in flight against its `maxConcurrency`, and what it refused | `increase(tesseraql_lane_rejected_total[5m]) > 0` |
+| `tesseraql_pool_threads_awaiting{pool}` | threads waiting for a connection: the pool, not the database, is the constraint | `tesseraql_pool_threads_awaiting > 0` for a minute |
+
+The last four are the capacity signals: which bound is binding, and what was refused because
+of it. The same conditions page through the alerts channel as `TQL-OPS-9011` and `9012`
+([notifications](notifications.md#operations-alerts)), so an operator without a Prometheus
+still hears them.
 
 The scrape is **bearer + `ops.metrics.view` policy** by default (labels reveal route ids);
 give the scraper a token via `bearer_token_file`, or set
 `tesseraql.metrics.unauthenticated: true` for a cluster-internal scrape the network already
 guards. OTLP push (`tesseraql.otel.otlp.endpoint`) is independent and now carries the same
 histograms. A ready-made Grafana dashboard ships at
-[deploy/grafana/tesseraql-dashboard.json](https://github.com/ingcreators/tesseraql/blob/main/deploy/grafana/tesseraql-dashboard.json).
+[deploy/grafana/tesseraql-dashboard.json](https://github.com/ingcreators/tesseraql/blob/main/deploy/grafana/tesseraql-dashboard.json),
+with a Capacity row over the four families above, and the alerting rules at
+[deploy/prometheus/tesseraql-alerts.yml](https://github.com/ingcreators/tesseraql/blob/main/deploy/prometheus/tesseraql-alerts.yml)
+carry the sample alerts of this table. Every expression in both names a family the sources
+declare; a test holds that.
 
 ## Next
 

@@ -120,6 +120,91 @@
           "legendFormat": "{{routeId}}"
         }
       ]
+    },
+    {
+      "title": "Capacity",
+      "type": "row",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 24
+      },
+      "panels": []
+    },
+    {
+      "title": "In flight by kind",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 25
+      },
+      "targets": [
+        {
+          "expr": "sum by (kind) (tesseraql_http_in_flight)",
+          "legendFormat": "{{kind}}"
+        }
+      ]
+    },
+    {
+      "title": "Refusals by code",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 25
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (code) (rate(tesseraql_http_refused_total[5m]))",
+          "legendFormat": "{{code}}"
+        }
+      ]
+    },
+    {
+      "title": "Pool: threads awaiting a connection",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 33
+      },
+      "targets": [
+        {
+          "expr": "sum by (pool) (tesseraql_pool_threads_awaiting)",
+          "legendFormat": "{{pool}}"
+        }
+      ]
+    },
+    {
+      "title": "Lanes: in use, and rejections",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 33
+      },
+      "targets": [
+        {
+          "expr": "sum by (lane) (tesseraql_lane_in_use)",
+          "legendFormat": "{{lane}} in use"
+        },
+        {
+          "expr": "sum by (lane) (increase(tesseraql_lane_rejected_total[5m]))",
+          "legendFormat": "{{lane}} rejected (5m)"
+        }
+      ]
     }
   ]
 }
