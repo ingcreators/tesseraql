@@ -1,6 +1,6 @@
 # A stack on Kubernetes: the image, the drain, the probes, the chart, the harness and the alerts
 
-> **Status: designed 2026-09-20 (#1408); S1 shipped 2026-09-20 (#1409); S2 shipped 2026-09-21 (#1410).** Phase 33 of `docs/roadmap.md` owes
+> **Status: designed 2026-09-20 (#1408); S1 shipped 2026-09-20 (#1409); S2 shipped 2026-09-21 (#1410); S3 shipped 2026-09-21 (#1411).** Phase 33 of `docs/roadmap.md` owes
 > "Kubernetes manifests and a Helm chart (probes, graceful drain of lanes and in-flight jobs,
 > rolling-deploy guidance on top of reload safety), official container images, a
 > `tesseraql bench` load harness for routes, a capacity/tuning guide, and alert routing through
@@ -48,6 +48,27 @@
 > so the seven-day prune re-pages a condition that outlived the node that paged it. Guards:
 > `AlertNotifySweepTest`, `OpsDashboardTest` (+4), `HttpAdmissionIntegrationTest` (+1),
 > `MetricsEndpointIntegrationTest` (+1), `StackRelayTest` (+1), `PrometheusRulesLedgerTest`.
+>
+> **S3** — `BenchCommand` + `BenchHarness` in the developer CLI (closed loop by workers, open
+> loop by rate with the workers as the in-flight bound, every sample kept, nearest-rank
+> percentiles, refusals classified by the `TQL-RATE` code in the body, `--expect` → exit 3,
+> the scrape read before and after when it can be); `BenchScenario` + `BenchScenarios`
+> (`kind: bench`, the checks the linter's `BenchRules` and the verb share: `TQL-YAML-1413`
+> malformed, `1414` unknown route, `1415` undeclared param, `1416` write without
+> `writes: allowed`); `tesseraql-bench-v1.schema.json` shipped by `tesseraql new` and mapped in
+> `.vscode/settings.json`; `TokenCommand.signInAndExchange` extracted for `--login`;
+> `docs/capacity.md` published under "Running in production"; `app-layout.md`, `cli-surface.md`
+> (twenty-six), CHANGELOG, `reference-cli.md` and `reference-error-codes.md` regenerated. Two
+> deviations from the text above: the bearer is `--token-file`, `TESSERAQL_TOKEN` or
+> `--login`, never `--token` on the command line (the repository's stance since `deploy`: a
+> token in the process list is a credential nobody asked for), and `reference-yaml-surface.md`
+> is unchanged because that page renders the route, job, view and shared-definition schemas
+> only — suites are not on it either, and a bench scenario is documented on the capacity page.
+> Guards: `BenchHarnessTest` (6), `BenchCommandTest` (8, a `com.sun.net.httpserver` stub with
+> scripted latencies and a rotating refusal code), `BenchIntegrationTest` (a booted runtime with
+> `maxInFlight` 4: eight workers see 4293 and two do not, and the scrape's counter moved by the
+> same count), `AppLinterBenchTest` (6), `OptionSetShapeTest` and `DocumentedCommandLineTest`
+> unchanged and green with the verb on the roster.
 
 The runtime already stops the way an orchestrator wants: SIGTERM flips readiness to 503, keeps
 serving, asks every run and every stream to stop, waits for what is in flight under a declared

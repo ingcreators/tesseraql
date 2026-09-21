@@ -92,6 +92,10 @@ class SchemaBlindNodeTest {
                 "TestSuite.PrincipalSpec.claims is Map<String, Object>: a token's claims");
         FREE_FORM.put("tesseraql-tests-v1.schema.json#/properties/tests/items/properties/params",
                 "TestSuite.TestCase.params is Map<String, Object>: bind values");
+        FREE_FORM.put("tesseraql-bench-v1.schema.json#/properties/requests/items/properties/params",
+                "BenchScenario.Request.params is Map<String, Object>: the route's declared inputs");
+        FREE_FORM.put("tesseraql-bench-v1.schema.json#/properties/requests/items/properties/body",
+                "BenchScenario.Request.body is Object: the JSON body a write sends");
         FREE_FORM.put("tesseraql-tests-v1.schema.json"
                 + "#/properties/tests/items/properties/expect/properties/rows/items",
                 "TestSuite.Expectation.rows is List<Map<String, Object>>: a result row");

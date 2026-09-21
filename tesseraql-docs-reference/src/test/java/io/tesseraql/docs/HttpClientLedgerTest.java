@@ -45,6 +45,10 @@ class HttpClientLedgerTest {
     private static final Path REPO = Path.of("..");
 
     private static final Set<String> LEDGER = new TreeSet<>(List.of(
+            // The load harness (docs/deployment-maturity.md decision 8): its client IS the load
+            // it offers a running node from outside, on virtual threads, at a concurrency the
+            // operator chose — neither route egress nor an intra-stack hop.
+            "tesseraql-cli/src/main/java/io/tesseraql/cli/BenchHarness.java",
             "tesseraql-cli/src/main/java/io/tesseraql/cli/DeployCommand.java",
             "tesseraql-cli/src/main/java/io/tesseraql/cli/TokenCommand.java",
             "tesseraql-cli/src/main/java/io/tesseraql/cli/UpdateNotifier.java",

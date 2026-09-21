@@ -103,6 +103,9 @@ public final class AppScaffolder {
                         absoluteResource("/schema/tesseraql-config-v1.schema.json")),
                 new ScaffoldedFile(".vscode/tesseraql-tests-v1.schema.json",
                         absoluteResource("/schema/tesseraql-tests-v1.schema.json")),
+                // A load scenario is authored YAML too (docs/deployment-maturity.md decision 8).
+                new ScaffoldedFile(".vscode/tesseraql-bench-v1.schema.json",
+                        absoluteResource("/schema/tesseraql-bench-v1.schema.json")),
                 new ScaffoldedFile(".vscode/tesseraql-messages-v1.schema.json",
                         absoluteResource("/schema/tesseraql-messages-v1.schema.json")),
                 new ScaffoldedFile(".vscode/settings.json", VSCODE_SETTINGS_JSON),
@@ -154,6 +157,9 @@ public final class AppScaffolder {
                 ],
                 ".vscode/tesseraql-tests-v1.schema.json": [
                   "tests/**/*.yml"
+                ],
+                ".vscode/tesseraql-bench-v1.schema.json": [
+                  "bench/**/*.yml"
                 ],
                 ".vscode/tesseraql-messages-v1.schema.json": [
                   "messages/*.yml"

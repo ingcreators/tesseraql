@@ -99,6 +99,7 @@ export const SECTIONS = [
     items: [
       'deployment',
       'hosting',
+      'capacity',
       'promotion',
       'upgrading',
       'proxy',
