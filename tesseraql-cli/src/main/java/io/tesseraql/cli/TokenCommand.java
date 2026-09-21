@@ -156,6 +156,40 @@ public final class TokenCommand implements Callable<Integer> {
             return 2;
         }
 
+        try {
+            Minted minted = signInAndExchange(url, login, secret, tenant, otp, appName,
+                    actingRole);
+            System.err.println("Bearer token for " + login + " at " + minted.base()
+                    + ", expiring " + minted.expiresAt()
+                    + " - the application chose the claims and the lifetime, and cannot"
+                    + " revoke it before it expires.");
+            System.out.println(minted.token());
+            return 0;
+        } catch (ExchangeFailed failed) {
+            System.err.println(failed.getMessage());
+            return 1;
+        }
+    }
+
+    /** A token a running application minted: where, the token, and when it expires. */
+    record Minted(String base, String token, String expiresAt) {
+    }
+
+    /** Why a sign-in or an exchange produced no token: one operator sentence. */
+    static final class ExchangeFailed extends java.io.IOException {
+
+        ExchangeFailed(String message) {
+            super(message);
+        }
+    }
+
+    /**
+     * Signs in to {@code url} as {@code login} and exchanges the session for a token — the flow
+     * behind {@code token --url}, shared with {@code bench --login} (docs/deployment-maturity.md
+     * decision 8: the bearer is scoped by the token, not by the harness). Nothing is stored.
+     */
+    static Minted signInAndExchange(String url, String login, String secret, String tenant,
+            String otp, String appName, String actingRole) throws Exception {
         String base = url.endsWith("/") ? url.substring(0, url.length() - 1) : url;
         // Redirects are not followed: a 3xx here means the base URL is wrong, or something in
         // front rewrote the call. Following it would drop the cookie the next request needs and
@@ -177,32 +211,28 @@ public final class TokenCommand implements Callable<Integer> {
         HttpResponse<String> session = send(client, base + "/_tesseraql/login",
                 MAPPER.writeValueAsString(credentials), null, null);
         if (session.statusCode() == 429) {
-            System.err.println("Too many attempts; retry after "
+            throw new ExchangeFailed("Too many attempts; retry after "
                     + session.headers().firstValue("Retry-After").orElse("a while") + "s.");
-            return 1;
         }
         if (session.statusCode() / 100 == 3) {
-            System.err.println("Sign-in redirected to "
+            throw new ExchangeFailed("Sign-in redirected to "
                     + session.headers().firstValue("Location").orElse("somewhere else")
                     + " — check --url, including the base path if the application has one.");
-            return 1;
         }
         if (session.statusCode() != 200) {
-            System.err.println("Sign-in failed (HTTP " + session.statusCode() + "): "
+            throw new ExchangeFailed("Sign-in failed (HTTP " + session.statusCode() + "): "
                     + summarize(session.body()));
-            return 1;
         }
         String cookie = sessionCookie(session);
         if (cookie == null) {
-            System.err.println("Signed in, but the response carried no session cookie — "
+            throw new ExchangeFailed("Signed in, but the response carried no session cookie — "
                     + base + " may not be a TesseraQL application.");
-            return 1;
         }
         String csrf = MAPPER.readTree(session.body()).path("csrfToken").asText(null);
         if (csrf == null || csrf.isBlank()) {
-            System.err.println("Signed in, but the response carried no csrfToken. The exchange "
-                    + "endpoint requires it, and this application is older than the field.");
-            return 1;
+            throw new ExchangeFailed("Signed in, but the response carried no csrfToken. The"
+                    + " exchange endpoint requires it, and this application is older than the"
+                    + " field.");
         }
 
         // The capacity statement (docs/application-roles.md) and the member statement
@@ -220,26 +250,20 @@ public final class TokenCommand implements Callable<Integer> {
         HttpResponse<String> minted = send(client, base + "/_tesseraql/token", exchangeBody,
                 cookie, csrf);
         if (minted.statusCode() == 403 && actingRole != null) {
-            System.err.println("The account does not hold application role '" + actingRole
+            throw new ExchangeFailed("The account does not hold application role '" + actingRole
                     + "', so a token cannot be minted acting as it (TQL-SEC-4148).");
-            return 1;
         }
         if (minted.statusCode() == 404) {
-            System.err.println("This application does not issue tokens: set "
+            throw new ExchangeFailed("This application does not issue tokens: set "
                     + "tesseraql.security.token.enabled to true in its configuration.");
-            return 1;
         }
         if (minted.statusCode() != 200) {
-            System.err.println("Exchange failed (HTTP " + minted.statusCode() + "): "
+            throw new ExchangeFailed("Exchange failed (HTTP " + minted.statusCode() + "): "
                     + summarize(minted.body()));
-            return 1;
         }
         var answer = MAPPER.readTree(minted.body());
-        System.err.println("Bearer token for " + login + " at " + base + ", expiring "
-                + answer.path("expiresAt").asText() + " - the application chose the claims and "
-                + "the lifetime, and cannot revoke it before it expires.");
-        System.out.println(answer.path("token").asText());
-        return 0;
+        return new Minted(base, answer.path("token").asText(),
+                answer.path("expiresAt").asText());
     }
 
     /** The options that only mean something when minting locally, as the user spelled them. */

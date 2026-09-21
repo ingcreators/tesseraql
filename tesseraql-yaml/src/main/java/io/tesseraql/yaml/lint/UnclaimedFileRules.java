@@ -50,7 +50,7 @@ final class UnclaimedFileRules implements LintRule {
                             + "|head|options), or <name>.view.yml for a view";
         });
         for (String tree : List.of("batch", "workflow", "scope", "consume", "mcp", "attachments",
-                "tests")) {
+                "tests", "bench")) {
             sweepYamlTree(appHome, tree, findings,
                     (rel, stem, isYaml) -> isYaml ? "expected .yml, not .yaml" : null);
         }

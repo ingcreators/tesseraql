@@ -29,6 +29,7 @@ import picocli.CommandLine.Option;
                 TokenCommand.class,
                 TestCommand.class,
                 CoverageCommand.class,
+                BenchCommand.class,
                 GenerateCommand.class,
                 SchemaCommand.class,
                 SymbolsCommand.class,

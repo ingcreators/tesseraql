@@ -81,6 +81,7 @@ public final class AppLinter {
                 new ModuleDeclarationRules(),
                 new InputRules(),
                 new DeclaredKindRules(),
+                new BenchRules(),
                 new UnclaimedFileRules());
     }
 

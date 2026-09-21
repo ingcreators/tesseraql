@@ -281,6 +281,46 @@ public final class SimpleYamlParser {
         return document;
     }
 
+    /**
+     * Parses a bench scenario ({@code bench/<name>.yml}, docs/deployment-maturity.md decision 8):
+     * the version, the kind and at least one request with a route are required, because a run
+     * against nothing is not a run.
+     */
+    public io.tesseraql.yaml.bench.BenchScenario parseBench(Path file) {
+        io.tesseraql.yaml.bench.BenchScenario scenario;
+        try {
+            scenario = mapper.readValue(readFile(file),
+                    io.tesseraql.yaml.bench.BenchScenario.class);
+        } catch (IOException | RuntimeException ex) {
+            throw schemaError("bench scenario", file.toString(), ex);
+        }
+        if (scenario == null) {
+            throw new TqlException(io.tesseraql.yaml.bench.BenchScenario.MALFORMED,
+                    "Empty bench scenario: " + file);
+        }
+        if (!EXPECTED_VERSION.equals(scenario.version())) {
+            throw new TqlException(io.tesseraql.yaml.bench.BenchScenario.MALFORMED,
+                    "Bench scenario " + file + " must declare version: " + EXPECTED_VERSION);
+        }
+        if (!io.tesseraql.yaml.bench.BenchScenario.KIND.equals(scenario.kind())) {
+            throw new TqlException(io.tesseraql.yaml.bench.BenchScenario.MALFORMED,
+                    "Bench scenario " + file + " must declare kind: "
+                            + io.tesseraql.yaml.bench.BenchScenario.KIND);
+        }
+        if (scenario.requests().isEmpty()) {
+            throw new TqlException(io.tesseraql.yaml.bench.BenchScenario.MALFORMED,
+                    "Bench scenario " + file + " declares no requests: — a run drives at least"
+                            + " one route");
+        }
+        for (io.tesseraql.yaml.bench.BenchScenario.Request request : scenario.requests()) {
+            if (request.route() == null || request.route().isBlank()) {
+                throw new TqlException(io.tesseraql.yaml.bench.BenchScenario.MALFORMED,
+                        "Bench scenario " + file + " has a request without route:");
+            }
+        }
+        return scenario;
+    }
+
     /** Parses a job YAML file. */
     public JobDefinition parseJob(Path file) {
         String content = readFile(file);

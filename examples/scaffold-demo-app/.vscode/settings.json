@@ -43,6 +43,9 @@
     ".vscode/tesseraql-tests-v1.schema.json": [
       "tests/**/*.yml"
     ],
+    ".vscode/tesseraql-bench-v1.schema.json": [
+      "bench/**/*.yml"
+    ],
     ".vscode/tesseraql-messages-v1.schema.json": [
       "messages/*.yml"
     ]

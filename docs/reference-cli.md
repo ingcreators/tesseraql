@@ -5,7 +5,7 @@ Every `tesseraql` subcommand, generated from the command model the binary itself
 
 Most commands take `--app <dir>`, the application home they act on. The build gates — `lint`, `test`, `coverage`, `generate`, `schema`, `migrate`, `identity-schema`, `package`, `release-diff`, `governance`, `admission` and `verify` — call the same engine as the matching `tesseraql:` Maven goal (`tesseraql:package-app` for `package`, `tesseraql:verify-evidence` for `verify`, `tesseraql:report` for `test --report`), so a CLI loop and a CI pipeline do the same work. Every other subcommand is the CLI's alone, and `tesseraql:release-evidence` is CI's alone.
 
-[`dev`](#dev) · [`host`](#host) · [`deploy`](#deploy) · [`routes`](#routes) · [`new`](#new) · [`scaffold`](#scaffold) · [`lint`](#lint) · [`token`](#token) · [`test`](#test) · [`coverage`](#coverage) · [`generate`](#generate) · [`schema`](#schema) · [`symbols`](#symbols) · [`release-diff`](#release-diff) · [`governance`](#governance) · [`admission`](#admission) · [`migrate`](#migrate) · [`job`](#job) · [`identity-schema`](#identity-schema) · [`package`](#package) · [`verify`](#verify) · [`modules`](#modules) · [`embedded-db`](#embedded-db) · [`duckdb`](#duckdb) · [`mcp`](#mcp)
+[`dev`](#dev) · [`host`](#host) · [`deploy`](#deploy) · [`routes`](#routes) · [`new`](#new) · [`scaffold`](#scaffold) · [`lint`](#lint) · [`token`](#token) · [`test`](#test) · [`coverage`](#coverage) · [`bench`](#bench) · [`generate`](#generate) · [`schema`](#schema) · [`symbols`](#symbols) · [`release-diff`](#release-diff) · [`governance`](#governance) · [`admission`](#admission) · [`migrate`](#migrate) · [`job`](#job) · [`identity-schema`](#identity-schema) · [`package`](#package) · [`verify`](#verify) · [`modules`](#modules) · [`embedded-db`](#embedded-db) · [`duckdb`](#duckdb) · [`mcp`](#mcp)
 
 ## The deployment roster
 
@@ -281,6 +281,30 @@ Run suites and enforce the SQL coverage gate.
 | `--env <profile>` | — | Environment profile: merges config/env/<profile>.yml between the base config and the Studio overlay (also TESSERAQL_ENV). |
 | `--repo <dir>` | — | Local artifact repository to resolve modules from — a bag produced by 'tesseraql modules fetch' on a connected machine (also -Dmaven.repo.local). Combine with --offline to resolve nothing over the network. |
 | `--offline` | — | Resolve modules only from the local repository, never over the network. Pair with --repo to resolve from a bag produced by 'tesseraql modules fetch'. |
+
+## `bench`
+
+Drive an application's declared routes with load and report percentiles and refusals by code.
+
+| Argument | Required? | Description |
+| --- | --- | --- |
+| `--app <app>` | yes | Path to the app home; the routes and their inputs come from its manifest. |
+| `--url <base-url>` | yes | Base URL of the running application, including the base path if it has one (/<name> on a stack). |
+| `--route <id>` | — | A GET route to drive, filled from its declared inputs' defaults; repeatable. A write needs a scenario. |
+| `--scenario <file>` | — | A kind: bench scenario (bench/<name>.yml): the requests, their weights and the run's shape. |
+| `--concurrency <n>` | — | Workers in the closed loop; with --rate, the bound on requests in flight (default 10, or the scenario's). |
+| `--duration <duration>` | — | How long to run, e.g. 30s or 2m (default 30s, or the scenario's). |
+| `--ramp-up <duration>` | — | Start the workers spread across this span (default none, or the scenario's). |
+| `--rate <per-second>` | — | Open loop: offer this many requests per second instead of the closed loop's workers. |
+| `--token-file <file>` | — | A file holding the bearer token (else TESSERAQL_TOKEN); a token holding ops.metrics.view also reads the scrape before and after the run. |
+| `--login <id>` | — | Sign in as this login and exchange for a token, as token --url does; the password comes from TESSERAQL_PASSWORD or a prompt. |
+| `--format <format>` | — | Output format: text, json (default: text). Default: `text`. |
+| `--expect <checks>` | — | Thresholds, comma-separated (p95<250ms, refused<1%, errors<=0, throughput>500); one not met exits 3. |
+| `--no-scrape` | — | Do not read /_tesseraql/metrics before and after the run. |
+| `--env <profile>` | — | Environment profile: merges config/env/<profile>.yml between the base config and the Studio overlay (also TESSERAQL_ENV). |
+| `--repo <dir>` | — | Local artifact repository to resolve modules from — a bag produced by 'tesseraql modules fetch' on a connected machine (also -Dmaven.repo.local). Combine with --offline to resolve nothing over the network. |
+| `--offline` | — | Resolve modules only from the local repository, never over the network. Pair with --repo to resolve from a bag produced by 'tesseraql modules fetch'. |
+| `--modules <dir>` | — | Directory of optional plugin module jars (e.g. the pdf/excel file-format codecs), composed with the application's declared tesseraql.modules. |
 
 ## `generate`
 

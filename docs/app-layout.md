@@ -22,6 +22,7 @@ web/                    routes; the directory tree mirrors the URL space one-to-
     get.yml             response.html.view references the document below by its id
     list.view.yml       kind: view document, colocated; id-unique app-wide
 batch/                  job definitions (yml + colocated sql)
+bench/                  load scenarios for tesseraql bench (capacity.md): kind: bench documents
 mcp/                    MCP tools, resources, UI resources and prompts (app-mcp.md), each
                         with its colocated sql or template. Sub-folders organize the files
                         and name nothing: a tool is its declared id, a resource its uri

@@ -88,6 +88,9 @@ class LintRegistryOrderTest {
                         // The declared kinds on both surfaces, judged by the predicate the
                         // compiler refuses from (docs/temporal-semantics.md T3).
                         "DeclaredKindRules",
+                        // Bench scenarios, against the routes the manifest declares
+                        // (docs/deployment-maturity.md decision 8).
+                        "BenchRules",
                         // Last: the sweep for files no loader claims at all.
                         "UnclaimedFileRules");
     }

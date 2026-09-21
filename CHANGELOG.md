@@ -8,6 +8,25 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **`tesseraql bench` and the capacity guide.** The twenty-sixth developer verb drives an
+  application's own declared routes against a running node — `--route <id>` filled from the
+  route's declared defaults, or a `kind: bench` scenario under `bench/` with weighted
+  requests and the run's shape — closed-loop by `--concurrency` or open-loop by `--rate`,
+  JDK-only on virtual threads, and answers with exact percentiles from every kept sample, the
+  status mix, and the refusals classified by their `TQL-RATE` code with the ceiling each
+  names (4293 the in-flight bound, 4295 the stream bound, 4294/4296 the front door's share,
+  4291 a route's own limit). Writes are refused unless the scenario declares `writes:
+  allowed`, and then carry an `Idempotency-Key` per request; the bearer comes from
+  `--token-file`, `TESSERAQL_TOKEN` or `--login`; with a scrape it can read, the capacity
+  signals' movement is printed beside the percentiles; `--expect 'p95<250ms,refused<1%'`
+  exits 3 when a threshold is not met; `--format json` for a pipeline. `tesseraql lint`
+  checks a scenario like a suite: `TQL-YAML-1414` an unknown route, `1415` a param the route
+  does not declare, `1416` a write without the declaration, `1413` a malformed scenario. The
+  scenario has an editor schema, shipped by `tesseraql new`. `docs/capacity.md` is the guide:
+  Little's law over the declared knobs, the signals that say which bound is binding, the
+  bench method, one measured example labelled as one box's numbers, and replicas from a
+  node's knee. Record: `docs/deployment-maturity.md` (S3).
+
 - **The scrape says how full the node is, and an alert pages once.** Four families join
   `/_tesseraql/metrics`: `tesseraql_http_in_flight{kind}` (requests and event streams holding
   a permit at the gate, and the gateway's `forward`/`streamForward` share of this member),

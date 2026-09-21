@@ -531,7 +531,7 @@ Path dir = Path.of(".");
 ```
 
 `home = dir.resolve(appName)`. Renaming that to `--app` would make one command's `--app` mean *the
-parent of* an application home while twenty-five others mean the home itself — the one-flag-two-kinds
+parent of* an application home while twenty-six others mean the home itself — the one-flag-two-kinds
 failure Decision 1 exists to prevent, introduced by the rename meant to tidy it.
 
 **It becomes `--stack`.** A directory that a new application is created *inside* is, by definition, a
