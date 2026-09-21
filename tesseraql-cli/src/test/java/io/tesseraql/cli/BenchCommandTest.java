@@ -45,31 +45,34 @@ class BenchCommandTest {
         stub = HttpServer.create(new java.net.InetSocketAddress("localhost", 0), 0);
         stub.setExecutor(java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor());
         stub.createContext("/api/items", exchange -> {
+            // The peak is measured over the processing phase only: a worker sends its next
+            // request once it holds this answer, which is before this handler has returned, so
+            // counting until the return overshoots the worker count on a slow runner.
             int held = inFlight.incrementAndGet();
             peakInFlight.accumulateAndGet(held, Math::max);
+            int n = requests.incrementAndGet();
+            if ("POST".equals(exchange.getRequestMethod())) {
+                posts.incrementAndGet();
+                String key = exchange.getRequestHeaders().getFirst("Idempotency-Key");
+                if (key != null) {
+                    idempotencyKeys.add(key);
+                }
+            }
             try {
-                int n = requests.incrementAndGet();
-                if ("POST".equals(exchange.getRequestMethod())) {
-                    posts.incrementAndGet();
-                    String key = exchange.getRequestHeaders().getFirst("Idempotency-Key");
-                    if (key != null) {
-                        idempotencyKeys.add(key);
-                    }
-                }
                 Thread.sleep(2);
-                // Every fourth request is refused, the code rotating so each is classified.
-                if (n % 4 == 0) {
-                    String code = CODES[(n / 4) % CODES.length];
-                    refused.incrementAndGet();
-                    answer(exchange, 503, "{\"error\":{\"code\":\"" + code
-                            + "\",\"message\":\"at capacity\"}}");
-                } else {
-                    answer(exchange, 200, "{\"data\":[]}");
-                }
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
             } finally {
                 inFlight.decrementAndGet();
+            }
+            // Every fourth request is refused, the code rotating so each is classified.
+            if (n % 4 == 0) {
+                String code = CODES[(n / 4) % CODES.length];
+                refused.incrementAndGet();
+                answer(exchange, 503, "{\"error\":{\"code\":\"" + code
+                        + "\",\"message\":\"at capacity\"}}");
+            } else {
+                answer(exchange, 200, "{\"data\":[]}");
             }
         });
         stub.createContext("/_tesseraql/metrics", exchange -> answer(exchange, 200,
