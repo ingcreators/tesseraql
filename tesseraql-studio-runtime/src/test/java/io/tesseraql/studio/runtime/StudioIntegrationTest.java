@@ -1923,7 +1923,7 @@ class StudioIntegrationTest {
                 .contains("class=\"hc-command__input\"").contains("role=\"combobox\"")
                 .contains(
                         "class=\"hc-command__item\" role=\"option\" data-value=\"/_tesseraql/studio/user-admin/ui/docs/schema\"")
-                .contains("data-tql-open-dialog=\"#studio-command\"")
+                .contains("commandfor=\"studio-command\" command=\"show-modal\"")
                 .contains("hx-get=\"/_tesseraql/studio/user-admin/ui/command\"")
                 .contains("hx-trigger=\"intersect once\"")
                 .contains("class=\"hc-command__empty\"");
@@ -3507,7 +3507,7 @@ class StudioIntegrationTest {
 
     @Test
     void uiFlagsBooleanTogglesAreSwitchesAndRemoveIsConfirmed() throws Exception {
-        // UX-refresh slice 6: a boolean flag is the kit's switch (submit-on-change stand-in),
+        // UX-refresh slice 6: a boolean flag is the kit's switch (the kit's submit-on-change),
         // and removing a LIVE flag gates on a confirm.
         Path flags = appHome.resolve("config/flags.yml");
         try {
@@ -3515,7 +3515,7 @@ class StudioIntegrationTest {
             String page = get("/_tesseraql/studio/user-admin/ui/flags", true).body();
             assertThat(page)
                     .contains("class=\"hc-switch\" type=\"checkbox\" role=\"switch\"")
-                    .contains("data-tql-submit-on-change")
+                    .contains("data-hc-submit-on-change")
                     .contains("data-hc-confirm-title=\"Remove flag\"")
                     .contains("data-hc-confirm-variant=\"error\"");
         } finally {

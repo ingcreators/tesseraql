@@ -40,7 +40,7 @@
                 <!-- A boolean flag is the kit's switch (docs/studio-ux-refresh.md slice 6): the
                      visual state IS the flag, and flipping it submits the form (the posted
                      hidden value is the opposite — each render bakes the next toggle). The
-                     data-tql-submit-on-change bootstrap stand-in owns the submit; the checkbox
+                     kit's data-hc-submit-on-change (hc 0.4.1) owns the submit; the checkbox
                      itself is unnamed so only the explicit value posts. -->
                 <th:block th:if="${flag.type == 'boolean'}">
                   <form th:if="${f.editable}" method="post" th:action="@{/_tesseraql/studio/ui/flags/set}">
@@ -50,7 +50,7 @@
                     <input type="hidden" name="value" th:value="${flag.on} ? 'false' : 'true'">
                     <label class="hc-switch-label">
                       <input class="hc-switch" type="checkbox" role="switch" data-size="sm"
-                             data-variant="success" data-tql-submit-on-change
+                             data-variant="success" data-hc-submit-on-change
                              th:checked="${flag.on}"
                              th:attr="aria-label=|Turn ${flag.name} ${flag.on ? 'off' : 'on'}|">
                       <span th:text="${flag.on} ? 'on' : 'off'">on</span>

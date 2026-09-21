@@ -184,7 +184,7 @@
          alike, from the reserved `_shortcuts` variable. -->
     <th:block th:if="${_shortcuts != null && !#lists.isEmpty(_shortcuts.pins)}">
       <div class="tql-nav__section" role="group" aria-labelledby="tql-nav-pinned">
-        <p class="tql-nav__group" id="tql-nav-pinned">Pinned</p>
+        <p class="hc-shell__group" id="tql-nav-pinned">Pinned</p>
         <a class="hc-item" th:each="pin : ${_shortcuts.pins}" th:href="${pin.href}">
           <span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#pin}"/></svg></span>
           <span class="hc-item__title hc-shell__label" th:text="${pin.label}">pin</span>
@@ -252,13 +252,14 @@
           th:replace="~{tql/shell :: shell-impl(${title}, ~{tql/shell :: studio-nav}, ${header}, ${content}, true, 'compact')}"/>
 <th:block th:fragment="studio-nav">
   <!-- The command palette (docs/studio-ux-refresh.md slice 7): the kit's hc-command in its
-       dialog form — ⌘K/Ctrl+K via the behavior's data-hotkey, plus this visible trigger (the
-       data-tql-open-dialog bootstrap opener; dialogs have no declarative opener yet). The
+       dialog form — ⌘K/Ctrl+K via the behavior's data-hotkey, plus this visible trigger: the
+       platform's invoker command (commandfor + command="show-modal", the shape hc 0.4.1
+       blesses), which the bootstrap shims on engines without the API. The
        Navigate group mirrors this sidebar's destinations; the routes / jobs / new-route-here
        groups load lazily from the studio app the first time the palette becomes visible
        (hx-trigger="intersect once" — nothing is fetched until the palette is opened).
        Selection is wired by the bootstrap's hc:commandselect listener: item values are URLs. -->
-  <button type="button" class="hc-item" data-tql-open-dialog="#studio-command">
+  <button type="button" class="hc-item" commandfor="studio-command" command="show-modal">
     <span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#search}"/></svg></span>
     <span class="hc-item__title hc-shell__label">Search <kbd class="hc-kbd">&#8984;K</kbd></span>
   </button>
@@ -312,7 +313,7 @@
   </dialog>
   <a class="hc-item" th:href="@{/_tesseraql/studio/ui}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#compass}"/></svg></span><span class="hc-item__title hc-shell__label">Explorer</span></a>
   <div class="tql-nav__section" role="group" aria-labelledby="tql-nav-docs">
-    <p class="tql-nav__group" id="tql-nav-docs">Documentation</p>
+    <p class="hc-shell__group" id="tql-nav-docs">Documentation</p>
     <a class="hc-item" th:href="@{/_tesseraql/studio/ui/docs}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#book-open}"/></svg></span><span class="hc-item__title hc-shell__label">Overview</span></a>
     <a class="hc-item" th:href="@{/_tesseraql/studio/ui/docs/schema}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#database}"/></svg></span><span class="hc-item__title hc-shell__label">Schema</span></a>
     <a class="hc-item" th:href="@{/_tesseraql/studio/ui/docs/domains}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#waypoints}"/></svg></span><span class="hc-item__title hc-shell__label">Domains</span></a>
@@ -323,7 +324,7 @@
     <a class="hc-item" th:href="@{/_tesseraql/studio/ui/docs/export}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#share-2}"/></svg></span><span class="hc-item__title hc-shell__label">Export</span></a>
   </div>
   <div class="tql-nav__section" role="group" aria-labelledby="tql-nav-authoring">
-    <p class="tql-nav__group" id="tql-nav-authoring">Authoring</p>
+    <p class="hc-shell__group" id="tql-nav-authoring">Authoring</p>
     <a class="hc-item" th:href="@{/_tesseraql/studio/ui/pages}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#compass}"/></svg></span><span class="hc-item__title hc-shell__label">Pages</span></a>
     <a class="hc-item" th:href="@{/_tesseraql/studio/ui/scaffold}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#blocks}"/></svg></span><span class="hc-item__title hc-shell__label">Scaffold</span></a>
     <a class="hc-item" th:href="@{/_tesseraql/studio/ui/sql-builder}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#wrench}"/></svg></span><span class="hc-item__title hc-shell__label">SQL builder</span></a>
@@ -339,7 +340,7 @@
     <a class="hc-item" th:href="@{/_tesseraql/studio/ui/copilot}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#bot}"/></svg></span><span class="hc-item__title hc-shell__label">Copilot</span></a>
   </div>
   <div class="tql-nav__section" role="group" aria-labelledby="tql-nav-governance">
-    <p class="tql-nav__group" id="tql-nav-governance">Governance</p>
+    <p class="hc-shell__group" id="tql-nav-governance">Governance</p>
     <a class="hc-item" th:href="@{/_tesseraql/studio/ui/drafts}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#file-pen}"/></svg></span><span class="hc-item__title hc-shell__label">Drafts</span></a>
     <a class="hc-item" th:href="@{/_tesseraql/studio/ui/audit}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#scroll-text}"/></svg></span><span class="hc-item__title hc-shell__label">Audit</span></a>
     <a class="hc-item" th:href="@{/_tesseraql/studio/ui/health}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#shield-check}"/></svg></span><span class="hc-item__title hc-shell__label">Health</span></a>
@@ -350,7 +351,7 @@
     <a class="hc-item" th:href="@{/_tesseraql/studio/ui/connectors}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#plug}"/></svg></span><span class="hc-item__title hc-shell__label">Connectors</span></a>
   </div>
   <div class="tql-nav__section" role="group" aria-labelledby="tql-nav-system">
-    <p class="tql-nav__group" id="tql-nav-system">System</p>
+    <p class="hc-shell__group" id="tql-nav-system">System</p>
     <a class="hc-item" th:if="${_system != null && _system.consoleHref != null}" th:attr="href=${_system.consoleHref}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#activity}"/></svg></span><span class="hc-item__title hc-shell__label">Operations</span></a>
     <a class="hc-item" th:if="${_system != null && _system.iamHref != null}" th:attr="href=${_system.iamHref}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#users}"/></svg></span><span class="hc-item__title hc-shell__label">IAM Admin</span></a>
   </div>
@@ -366,7 +367,7 @@
 <th:block th:fragment="ops-shell-nav(shell)">
   <a class="hc-item" th:href="@{/_tesseraql/ops/console}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#activity}"/></svg></span><span class="hc-item__title hc-shell__label">Overview</span></a>
   <div class="tql-nav__section" role="group" aria-labelledby="ops-nav-apps">
-    <p class="tql-nav__group" id="ops-nav-apps">Applications</p>
+    <p class="hc-shell__group" id="ops-nav-apps">Applications</p>
     <a class="hc-item" th:each="entry : ${shell.entries}" th:attr="href=@{${entry.href}}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#blocks}"/></svg></span><span class="hc-item__title hc-shell__label" th:text="${entry.label}">app</span></a>
   </div>
   <a class="hc-item" th:href="@{/_tesseraql/ops/console/token}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#lock}"/></svg></span><span class="hc-item__title hc-shell__label">Token</span></a>
@@ -374,7 +375,7 @@
        page); reach only — the endpoint re-checks the atom against the package it receives. -->
   <a class="hc-item" th:if="${shell.deploy}" th:href="@{/_tesseraql/ops/console/deploy}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#rocket}"/></svg></span><span class="hc-item__title hc-shell__label">Deploy</span></a>
   <div class="tql-nav__section" role="group" aria-labelledby="ops-nav-system">
-    <p class="tql-nav__group" id="ops-nav-system">System</p>
+    <p class="hc-shell__group" id="ops-nav-system">System</p>
     <a class="hc-item" th:if="${_system != null && _system.studioHref != null}" th:attr="href=${_system.studioHref}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#layout-dashboard}"/></svg></span><span class="hc-item__title hc-shell__label">Studio</span></a>
     <a class="hc-item" th:if="${_system != null && _system.iamHref != null}" th:attr="href=${_system.iamHref}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#users}"/></svg></span><span class="hc-item__title hc-shell__label">IAM Admin</span></a>
   </div>
@@ -387,7 +388,7 @@
 <th:block th:fragment="ops-member-nav(shell)">
   <a class="hc-item" th:href="@{/_tesseraql/ops/console}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#activity}"/></svg></span><span class="hc-item__title hc-shell__label">Stack</span></a>
   <div class="tql-nav__section" role="group" aria-labelledby="ops-nav-member">
-    <p class="tql-nav__group" id="ops-nav-member" th:text="${shell.label}">app</p>
+    <p class="hc-shell__group" id="ops-nav-member" th:text="${shell.label}">app</p>
     <a class="hc-item" th:attr="href=@{|${shell.base}${shell.slotQuery}|}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#layout-dashboard}"/></svg></span><span class="hc-item__title hc-shell__label">Overview</span></a>
     <a class="hc-item" th:attr="href=@{|${shell.base}/jobs${shell.slotQuery}|}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#timer}"/></svg></span><span class="hc-item__title hc-shell__label">Jobs</span></a>
     <a class="hc-item" th:attr="href=@{|${shell.base}/traces${shell.slotQuery}|}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#waypoints}"/></svg></span><span class="hc-item__title hc-shell__label">Traces</span></a>
@@ -399,7 +400,7 @@
   <a class="hc-item" th:href="@{/_tesseraql/ops/console/token}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#lock}"/></svg></span><span class="hc-item__title hc-shell__label">Token</span></a>
   <a class="hc-item" th:if="${shell.deploy}" th:href="@{/_tesseraql/ops/console/deploy}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#rocket}"/></svg></span><span class="hc-item__title hc-shell__label">Deploy</span></a>
   <div class="tql-nav__section" role="group" aria-labelledby="ops-nav-system">
-    <p class="tql-nav__group" id="ops-nav-system">System</p>
+    <p class="hc-shell__group" id="ops-nav-system">System</p>
     <a class="hc-item" th:if="${_system != null && _system.studioHref != null}" th:attr="href=${_system.studioHref}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#layout-dashboard}"/></svg></span><span class="hc-item__title hc-shell__label">Studio</span></a>
     <a class="hc-item" th:if="${_system != null && _system.iamHref != null}" th:attr="href=${_system.iamHref}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#users}"/></svg></span><span class="hc-item__title hc-shell__label">IAM Admin</span></a>
   </div>

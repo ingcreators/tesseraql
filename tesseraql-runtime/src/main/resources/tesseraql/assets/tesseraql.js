@@ -179,37 +179,33 @@ document.addEventListener("keydown", (event) => {
 // (data-hc-show-switch / data-hc-show-when — hc-briefs.md brief 6, shipped and adopted);
 // the local data-tql-switch/-show-for stand-in is retired.
 
-// Submit-on-change (slice 6): a control marked data-tql-submit-on-change submits its form when
-// flipped — the Studio flags page's hc-switch toggles post through their plain form this way.
-// Declarative; without JavaScript the switch simply does not auto-submit. A stand-in for the
-// kit behaviour briefed as hc-briefs.md brief 15; retire it when data-hc-submit-on-change ships.
-document.addEventListener("change", (event) => {
-    if (event.target instanceof Element
-            && event.target.matches("[data-tql-submit-on-change]")
-            && event.target.form) {
-        event.target.form.requestSubmit();
-    }
-});
+// Submit-on-change is the KIT's behavior since hc 0.4.1 (data-hc-submit-on-change /
+// installSubmitOnChange — hc-briefs.md brief 15, shipped and adopted); the local
+// data-tql-submit-on-change stand-in is retired.
 
-// Command palette glue (docs/studio-ux-refresh.md slice 7). Two small declarative pieces the
-// kit does not carry today:
-// 1. A visible opener — native <dialog> has no declarative opener, and installCommand only
-//    wires the ⌘K hotkey; data-tql-open-dialog="<selector>" opens the named dialog modally.
-//    Emitted by the route compiler too (tql/view/list.html: the Filters button and every
-//    applied chip), so it is markup contract, not Studio glue; briefed as hc-briefs.md brief
-//    14, and retiring it when the kit ships an opener is a recorded markup change.
-// 2. Navigation — installCommand dispatches hc:commandselect and never touches the network;
-//    palette item values here are same-app URLs, so selection navigates.
-document.addEventListener("click", (event) => {
-    const trigger = event.target instanceof Element
-        ? event.target.closest("[data-tql-open-dialog]") : null;
-    if (trigger) {
-        const dialog = document.querySelector(trigger.getAttribute("data-tql-open-dialog"));
-        if (dialog instanceof HTMLDialogElement) {
-            dialog.showModal();
+// Dialog openers are the platform's invoker commands — <button type="button" commandfor="<id>"
+// command="show-modal"> — which hc 0.4.1 blesses in place of a kit attribute (hc-briefs.md brief
+// 14): the browser calls showModal(), traps focus and returns it to the opener on close. The
+// route compiler emits the command on every list page's Filters button and applied chips, and
+// the Studio shell on the command-palette trigger. An engine without the Invoker Commands API
+// (Safari before 26, Firefox before 144, Chrome and Edge before 135) leaves such a button inert,
+// so this shim performs the one command the framework emits; it is feature-detected and never
+// installed where the platform answers (docs/hypermedia-ui.md "Browser support").
+if (!("commandForElement" in HTMLButtonElement.prototype)) {
+    document.addEventListener("click", (event) => {
+        const trigger = event.target instanceof Element
+            ? event.target.closest("button[commandfor][command=\"show-modal\"]") : null;
+        if (trigger && !trigger.disabled) {
+            const dialog = document.getElementById(trigger.getAttribute("commandfor"));
+            if (dialog instanceof HTMLDialogElement && !dialog.open) {
+                dialog.showModal();
+            }
         }
-    }
-});
+    });
+}
+// Command palette navigation (docs/studio-ux-refresh.md slice 7): installCommand dispatches
+// hc:commandselect and never touches the network; palette item values here are same-app URLs,
+// so selection navigates.
 document.addEventListener("hc:commandselect", (event) => {
     const value = event.detail && event.detail.value;
     if (typeof value === "string" && value.startsWith("/")) {

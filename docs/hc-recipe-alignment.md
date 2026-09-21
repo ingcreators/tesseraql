@@ -24,6 +24,14 @@
 >   companion, the search dialog, and the purchase-request supplier dogfood. The
 >   manifest guard now pins `installRemoteDialog`/`installCloseDialog` and the three
 >   recipes — the Studio drift gap this ledger flagged is closed.
+> - **hc 0.4.1 swept 2026-09-21**: the repository's `recipes/` gained no contract between
+>   v0.4.0 and v0.4.1 (the rule below: sweep the repository, never the WebJAR). The one
+>   recipe that changed, chat-messages, gave its composer `data-hc-submit-on-enter` and
+>   `data-autosize`; the copilot's composer is a single-line input, where Enter already
+>   submits and there is nothing to grow, so there is nothing to adopt. The release's four
+>   new glue behaviors (`data-hc-print`, `data-hc-count`, `data-hc-select-all`,
+>   `data-autosize`) are components rather than recipes and wait for a declaration that
+>   renders them.
 >
 > hypermedia-components 0.4.0 shipped nine new recipe contracts (#1081 adopted the
 > bump). Two were settled the same week: network-retry became the shell host (#1083)

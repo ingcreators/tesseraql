@@ -578,6 +578,14 @@ write by hand.
 (found 2026-09-19, audit-low-leads slice 23b — docs/audit-low-leads.md F102).
 Stand-in to retire: `tesseraql.css`, the `.hc-shell[data-sidebar-collapsed] .hc-item` rule.*
 
+> **Status: shipped and adopted.** Landed in **hc 0.4.1** (upstream #617): under
+> `[data-sidebar-collapsed]` at the desktop breakpoint the kit centers each `.hc-item`, zeroes
+> its gap and inline padding and stops an `.hc-item__content` wrapper from growing — inside
+> `@layer hc.components`, where it composes with `hc-item`'s own rules — and a new
+> `.hc-shell__group` caption is muted small text when expanded and visually hidden in the rail.
+> TesseraQL bumped to 0.4.1, DELETED both rail rules and the `.tql-nav__group` rule from
+> `tesseraql.css`, and the shell's captions are `.hc-shell__group`.
+
 ### Problem
 
 The shell's collapsed rail (`data-sidebar-collapsed`) narrows the grid column and hides
@@ -603,6 +611,25 @@ route compiler in `tql/view/list.html` (the Filters button and each applied filt
 the Studio shell's command-palette trigger, so its retirement is a recorded markup-contract
 change.*
 
+> **Status: answered upstream and adopted — with the platform's answer, not the proposed
+> attribute.** hc 0.4.1 (upstream #618) ships no `data-hc-open-dialog`: the premise "a native
+> `<dialog>` has no declarative opener" no longer holds, because HTML's invoker commands —
+> `<button type="button" commandfor="<dialog id>" command="show-modal">` — reached Baseline in
+> 2025 (Chrome and Edge 135, Firefox 144, Safari 26) and do what the brief asked: `showModal()`
+> on activation, focus trap and Escape from the browser, focus returned to the opener on close.
+> The kit's docs, templates and fixtures now open every dialog that way (`command="close"`
+> closes from anywhere, including inside an htmx form), and the maintainer chose to ship no
+> fallback — an older engine leaves the button inert. TesseraQL adopted the markup — the route
+> compiler emits `commandfor="<view>-filters" command="show-modal"` on the Filters button and
+> the applied chips, the Studio shell on the palette trigger, a recorded markup-contract change
+> — and DELETED the `[data-tql-open-dialog]` listener. What stays in `tesseraql.js` is a
+> stand-in for the platform, not for the kit: a feature-detected shim that performs
+> `show-modal` where `HTMLButtonElement` has no `commandForElement`, because the Filters
+> dialog is the only way to compose a filter and an iPad 7th generation never gets Safari 26.
+> The proposed `inline` mode (`show()`) has no native command and was dropped; a non-modal
+> open stays a script call. See [hypermedia-ui.md](hypermedia-ui.md) "Opening a dialog" and
+> "Browser support".
+
 ### Problem
 
 A native `<dialog>` has no declarative opener: `showModal()` is script-only. `installCommand`
@@ -623,6 +650,20 @@ fallback is the dialog's own `open` attribute where a consumer wants one.
 (found 2026-09-19, audit-low-leads slice 23b — docs/audit-low-leads.md F102).
 Stand-in to retire: `tesseraql.js`'s `[data-tql-submit-on-change]` change listener (the Studio
 flags page's `hc-switch` toggles).*
+
+> **Status: shipped and adopted.** Landed in **hc 0.4.1** (upstream #619) as
+> `data-hc-submit-on-change` / `installSubmitOnChange()`, as proposed plus two extensions: the
+> attribute may sit on a container (a `<fieldset>` of switches — descendants' `change` events
+> bubble to it, one form submits) and its value may name a different event
+> (`data-hc-submit-on-change="hc:otpcomplete"` posts a verification code the moment it fills).
+> On `change` the behavior calls `form.requestSubmit()`, so `hx-sync`, the dirty guard, the
+> CSRF header and `data-hc-close-dialog-on-success` apply as if a Save button had been pressed;
+> a control with its own htmx verb, or a form whose `hx-trigger` contains `change`, is left to
+> htmx — decided once. A sibling `data-hc-submit-on-enter` / `installSubmitOnEnter()` shipped
+> from the same audit (Enter in a textarea submits, Shift/Alt+Enter insert the newline, an
+> Enter that ends an IME composition is ignored). TesseraQL bumped to 0.4.1, renamed the Studio
+> flags page's switches to `data-hc-submit-on-change` and DELETED the `change` listener; the
+> manifest guard pins `installSubmitOnChange`.
 
 ### Problem
 

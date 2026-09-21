@@ -41,6 +41,7 @@ class HypermediaComponentsManifestTest {
             "installCloseDialog", // close-on-success for remote-dialog compositions
             "installSessionExpiry", // the 401 re-login dialog's replay bridge (shell host)
             "installDirtyGuard", // the form view's unsaved-changes guard (data-hc-dirty-guard)
+            "installSubmitOnChange", // the Studio flags page's switches post themselves
             "installUploadProgress"); // the import page's and the deploy form's progress bar
 
     /** Custom events the framework listens for / documents. */
@@ -144,8 +145,9 @@ class HypermediaComponentsManifestTest {
      * htmx contract ({@code docs/hypermedia-ui.md}) or an upstream brief
      * ({@code docs/hc-briefs.md}) — so a hand-rolled behaviour is either contract or a named
      * stand-in awaiting the kit, never glue nobody wrote down (AGENTS.md rule 11;
-     * docs/audit-low-leads.md slice 23, F102). Three were: the dialog opener the route compiler
-     * emits on every list page's Filters button, submit-on-change and the save hotkey.
+     * docs/audit-low-leads.md slice 23, F102). Three were; hc 0.4.1 answered two (the dialog
+     * opener became the platform's invoker command, submit-on-change the kit's behavior) and the
+     * save hotkey remains, recorded as app policy.
      */
     @Test
     void everyBootstrapAttributeIsRecordedInTheDocs() throws Exception {
