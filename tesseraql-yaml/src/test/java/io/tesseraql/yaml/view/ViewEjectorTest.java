@@ -161,6 +161,12 @@ class ViewEjectorTest {
                 .doesNotContain("hx-post=\"/items/create\"");
         assertThat(file.content()).contains("id=\"items-new-form\"");
         assertThat(file.content()).contains("name=\"name\" required maxlength=\"200\"");
+        // The bound made visible (docs/hypermedia-ui.md "Bounded text fields"): the kit's count
+        // on the string input, its output pre-rendered from the prefill.
+        assertThat(file.content())
+                .contains("maxlength=\"200\" data-hc-count aria-describedby=\"")
+                .contains("<output class=\"hc-field__hint\" id=\"")
+                .contains("#strings.length(v)} / 200|\">0 / 200</output>");
         assertThat(file.content()).contains("<option value=\"OPEN\"")
                 .contains(">OPEN</option>");
         assertThat(file.content()).contains("th:text=\"#{tql.view.submit}\"");

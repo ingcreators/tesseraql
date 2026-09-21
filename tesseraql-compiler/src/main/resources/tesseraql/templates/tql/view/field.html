@@ -48,16 +48,28 @@
              th:attr="hx-get=${f.lookup.load} ? @{${f.lookup.resolve}}" hx-trigger="load"
              hx-target="closest [data-hc-lookup]" hx-swap="outerHTML" hx-include="this">
     </th:block>
+    <!-- A bounded text field shows its count (docs/hypermedia-ui.md "Bounded text fields"):
+         the kit's data-hc-count on the control and an <output for> beneath it, pre-rendered as
+         used / max so it is right before any script runs; a textarea also grows with its
+         content (data-autosize, the kit's CSS-only auto-grow). The count applies to the two
+         widgets a string bound reaches — text and textarea — never to a number or a date. -->
     <th:block th:case="'textarea'">
       <textarea class="hc-input" th:id="|field-${f.name}|" th:name="${f.name}" rows="4"
-                th:required="${f.required}" th:attr="maxlength=${f.maxLength}"
+                data-autosize th:required="${f.required}"
+                th:attr="maxlength=${f.maxLength},data-hc-count=${f.maxLength != null} ? '',aria-describedby=${f.maxLength != null} ? |field-${f.name}-count|"
                 th:text="${f.value}"></textarea>
+      <output class="hc-field__hint" th:if="${f.maxLength != null}" th:id="|field-${f.name}-count|"
+              th:for="|field-${f.name}|"
+              th:text="|${f.value == null ? 0 : #strings.length(f.value)} / ${f.maxLength}|">0 / 200</output>
     </th:block>
     <th:block th:case="*">
       <input th:class="${f.widget == 'date' or f.widget == 'datetime-local'} ? 'hc-datepicker' : 'hc-input'"
              th:id="|field-${f.name}|" th:type="${f.widget}" th:name="${f.name}"
              th:value="${f.value}" th:required="${f.required}"
-             th:attr="maxlength=${f.maxLength},min=${f.min},max=${f.max},step=${f.step}">
+             th:attr="maxlength=${f.maxLength},min=${f.min},max=${f.max},step=${f.step},data-hc-count=${f.widget == 'text' and f.maxLength != null} ? '',aria-describedby=${f.widget == 'text' and f.maxLength != null} ? |field-${f.name}-count|">
+      <output class="hc-field__hint" th:if="${f.widget == 'text' and f.maxLength != null}"
+              th:id="|field-${f.name}-count|" th:for="|field-${f.name}|"
+              th:text="|${f.value == null ? 0 : #strings.length(f.value)} / ${f.maxLength}|">0 / 200</output>
     </th:block>
   </div>
 </th:block>

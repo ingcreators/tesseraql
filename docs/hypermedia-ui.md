@@ -304,6 +304,25 @@ the same line the kit's autosave recipe draws. And the baseline compares canonic
 values (`FormData`), so display regrouping by `installFormat` is never "dirty". A
 hand-written console form opts in with the same single attribute.
 
+## Bounded text fields
+
+A `text` or `textarea` field whose declaration carries `maxLength` renders the kit's character
+count: the control gets `data-hc-count` and `aria-describedby`, and an
+`<output class="hc-field__hint" for="<control id>">` beneath it shows `used / max`. The server
+renders the initial text — `0 / 200` on a create form, the current length on an edit form,
+counted in UTF-16 code units the way `maxlength` counts — so it is right before any script runs
+and without one. The kit's `installCount` then keeps it current, marks the last 10%
+`data-count-state="near"`, and announces it once per typing pause rather than per keystroke,
+because an `<output>` is a live region. The wording is the kit catalog's `count.of`, so the
+Japanese pack applies without a TesseraQL key. A number or a date carries no count, and the
+lookup field's hint slot stays with the resolved reference.
+
+A `textarea` widget also carries `data-autosize`: the kit's CSS (`field-sizing: content`) grows
+it with its content from the `rows` floor to `--hc-input-autosize-max` (50vh), with no script
+and no resize handle; an engine without `field-sizing` keeps the rows and the handle. The
+workflow comment on a detail view grows the same way. Both are markup the route compiler emits
+from `tql/view/field.html` and the ejector freezes into a hand-owned template alike.
+
 ## Edit conflict
 
 A command route that declares `lock:` gets the kit's `edit-conflict` contract from that one key

@@ -270,7 +270,7 @@ server-side:
 
 | `input:` declaration | derived rendering |
 | --- | --- |
-| `type: string` | `text` widget (`textarea` opt-in), `maxlength` from `maxLength` |
+| `type: string` | `text` widget (`textarea` opt-in, auto-growing), `maxlength` from `maxLength` with a live `used / max` count beneath the field |
 | `type: integer` / `number` | `number` widget, `min`/`max` attributes |
 | `type: boolean` | `checkbox` (with the hidden-false companion the recipe requires) |
 | `type: date` / `datetime` | `date` / `datetime-local` widget |

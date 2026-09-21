@@ -43,6 +43,7 @@ class HypermediaComponentsManifestTest {
             "installDirtyGuard", // the form view's unsaved-changes guard (data-hc-dirty-guard)
             "installSubmitOnChange", // the Studio flags page's switches post themselves
             "installInvokerCommands", // the dialog opener below the floor (commandfor fallback)
+            "installCount", // the bounded text field's used / max output (data-hc-count)
             "installUploadProgress"); // the import page's and the deploy form's progress bar
 
     /** Custom events the framework listens for / documents. */

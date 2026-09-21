@@ -46,7 +46,7 @@
       <div class="hc-field" th:if="${v.workflow.comment != null}">
         <label class="hc-field__label" th:for="|${v.id}-wf-comment|"
                th:text="${v.workflow.comment.label}">Comment</label>
-        <textarea class="hc-input" rows="2" name="comment"
+        <textarea class="hc-input" rows="2" name="comment" data-autosize
                   th:id="|${v.id}-wf-comment|" maxlength="2000"></textarea>
         <p class="hc-field__hint" th:text="${v.workflow.comment.hint}">Required for: Reject</p>
       </div>

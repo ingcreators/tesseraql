@@ -460,8 +460,10 @@ public final class ViewEjector {
             }
             case "textarea" -> html.append("        <textarea class=\"hc-input\" id=\"")
                     .append(id).append("\" name=\"").append(field.name()).append("\" rows=\"4\"")
+                    .append(" data-autosize")
                     .append(field.required() ? " required" : "")
                     .append(attr("maxlength", field.maxLength()))
+                    .append(countAttributes(field, id))
                     .append(" th:text=\"${").append(prefill(field)).append("}\">")
                     .append("</textarea>\n");
             default -> html.append("        <input class=\"")
@@ -473,11 +475,41 @@ public final class ViewEjector {
                     .append("\" name=\"").append(field.name()).append("\"")
                     .append(field.required() ? " required" : "")
                     .append(attr("maxlength", field.maxLength()))
+                    .append(countAttributes(field, id))
                     .append(attr("min", field.min())).append(attr("max", field.max()))
                     .append(field.step() == null ? "" : " step=\"" + field.step() + "\"")
                     .append(" th:value=\"${").append(prefill(field)).append("}\">\n");
         }
+        countOutput(html, field, id);
         html.append("      </div>\n");
+    }
+
+    /**
+     * The character count beneath a bounded text field (docs/hypermedia-ui.md "Bounded text
+     * fields"): the kit's {@code data-hc-count} on the control, described by an
+     * {@code <output for>} the template pre-renders as {@code used / max} from the prefill, so
+     * it is right before any script runs. Only the two widgets a string bound reaches carry
+     * it — the same rule as {@code tql/view/field.html}.
+     */
+    private static String countAttributes(ViewFields.FieldDef field, String id) {
+        return counted(field) ? " data-hc-count aria-describedby=\"" + id + "-count\"" : "";
+    }
+
+    private static void countOutput(StringBuilder html, ViewFields.FieldDef field, String id) {
+        if (!counted(field)) {
+            return;
+        }
+        html.append("        <output class=\"hc-field__hint\" id=\"").append(id)
+                .append("-count\" for=\"").append(id).append("\" th:with=\"v=${")
+                .append(prefill(field))
+                .append("}\" th:text=\"|${v == null ? 0 : #strings.length(v)} / ")
+                .append(field.maxLength()).append("|\">0 / ").append(field.maxLength())
+                .append("</output>\n");
+    }
+
+    private static boolean counted(ViewFields.FieldDef field) {
+        return field.maxLength() != null
+                && ("textarea".equals(field.widget()) || "text".equals(field.widget()));
     }
 
     /**

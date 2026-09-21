@@ -8,6 +8,20 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Bounded text fields show their count, and textareas grow.** A `text` or `textarea` field
+  whose declaration carries `maxLength` renders the kit's character count beneath it —
+  `data-hc-count` and `aria-describedby` on the control, an `<output for>` the server
+  pre-renders as `used / max` (the current length on an edit form, in UTF-16 code units as
+  `maxlength` counts) — and every `textarea` widget carries `data-autosize`, the kit's CSS-only
+  auto-grow; the detail view's workflow comment grows the same way. The ejector freezes the
+  same markup into a hand-owned template. Two of hc 0.4.1's four glue behaviors, adopted
+  where a declaration already renders the place; the other two are deferred with their
+  triggers named in `docs/hc-recipe-alignment.md` (`data-hc-select-all`: no declaration
+  renders a checklist; `data-hc-print`: printable documents are server-rendered PDFs and no
+  declaration renders a print action). `HtmlResponseRendererViewTest` and `ViewEjectorTest`
+  pin the markup; the manifest guard pins `installCount`; `docs/hypermedia-ui.md` "Bounded
+  text fields".
+
 - **`supplier-edi-app`, the other side of the procurement demo's exchange.** A new gallery
   member: a `poll:`-triggered `file-import` job (`batch/edi/receipt-notices`) lists the SFTP
   drop `procurement-app` pushes its receipt notice to — under `tesseraql.connectors.poll`,
