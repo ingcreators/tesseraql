@@ -358,4 +358,7 @@ export const EXCLUDED = [
   // Phase 32's remaining half: a source declares how long its rows are held, a command's
   // invalidates: reaches the hold through the catalog's table stamps - designed 2026-09-20.
   'caching.md',
+  // The procurement demo finished: three printable documents and the EDI companion -
+  // designed 2026-09-21.
+  'procurement-documents-and-edi.md',
 ];

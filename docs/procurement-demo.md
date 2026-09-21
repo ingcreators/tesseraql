@@ -10,8 +10,9 @@
 > managed-mode transition whose command updated zero rows silently advanced
 > (`TQL-WORKFLOW-3204` now enforces the documented row-authority contract). The
 > comparison pivot stayed per-supplier totals by design — dynamic columns are outside
-> plain-SQL reach; PDFs are deferred to a dedicated documents step resolving the
-> `tesseraql-pdf` module story once for all three documents.
+> plain-SQL reach. The three PDFs and slice 8 are designed together in
+> `docs/procurement-documents-and-edi.md` (2026-09-21): the font the documents need, the
+> receipt-notice feed over SFTP, and the `supplier-edi-app` companion, in four slices.
 
 ## Why this app exists
 
