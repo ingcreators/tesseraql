@@ -481,7 +481,7 @@ every-engine close. A dialog fetched from the server is the kit's `installRemote
 
 The route compiler emits this command on every list page's Filters button and applied-filter
 chip, so it is part of the compiler's markup contract. No inline script is involved and the
-strict CSP holds; the one engine gap is covered by the bootstrap, see "Browser support" below.
+strict CSP holds; the one engine gap is covered by the kit, see "Browser support" below.
 
 ## Marking the current navigation item
 
@@ -625,18 +625,18 @@ lock's conflict page is the only HTML answer a failing post has.
 
 ## Browser support
 
-TesseraQL targets evergreen browsers, and the floor is set by the newest platform feature the
-emitted markup relies on: the invoker commands above, Baseline 2025 — Chrome and Edge 135,
-Firefox 144, Safari 26 (iOS and iPadOS 26; on the Mac, Safari 26 reaches macOS Sonoma 14 and
-later). The kit ships no fallback for them. TesseraQL does, because the Filters dialog is the
-only way to compose a filter and some fleets never reach that floor — an iPad 7th generation
-stays on Safari 18 for good, a Mac on Ventura on Safari 17. The bootstrap
-(`/assets/_tesseraql/tesseraql.js`) carries a feature-detected shim that performs
-`command="show-modal"` where `HTMLButtonElement` has no `commandForElement`; it is never
-installed where the platform answers, and it covers that one command, not the API. The shim is
-a named stand-in: brief 16 in hc-briefs.md asks the kit to own the fallback, as it already does
-for CSS anchor positioning, and the shim goes when that ships. Everything else the framework
-emits — `<dialog>`, `popover`, cascade layers, the kit's OKLCH color — is older than that floor.
+TesseraQL targets evergreen browsers and inherits the kit's floor, which the kit states once on
+its [Browser support](https://ingcreators.com/hypermedia-components/fundamentals/browser-support/)
+page: the Popover API — Chromium 114, Firefox 125, Safari 17 — below which nothing has a
+fallback. Every newer feature the emitted markup relies on follows the kit's rule: a functional
+loss gets a scripted, feature-detected, self-retiring fallback in the behaviors bundle, a
+cosmetic loss gets none. The invoker commands above (Baseline 2025 — Chrome and Edge 135,
+Firefox 144, Safari 26) are the functional case. The Filters dialog is the only way to compose a
+filter, and some fleets never reach that floor — an iPad 7th generation stays on Safari 18 for
+good, a Mac on Ventura on Safari 17. So the kit's `installInvokerCommands` (hc 0.4.2) performs
+`show-modal` and `close` where `HTMLButtonElement` has no `commandForElement`, and installs
+nothing where the platform answers. TesseraQL carried that shim itself for one release; it is
+gone, and the bootstrap adds no browser requirement of its own.
 
 ## Next
 

@@ -32,6 +32,8 @@
 >   new glue behaviors (`data-hc-print`, `data-hc-count`, `data-hc-select-all`,
 >   `data-autosize`) are components rather than recipes and wait for a declaration that
 >   renders them.
+> - **hc 0.4.2 swept 2026-09-21**: no recipe or template changed between v0.4.1 and v0.4.2
+>   (a behavior, its tests and the *Browser support* page); nothing to adopt beyond the bump.
 >
 > hypermedia-components 0.4.0 shipped nine new recipe contracts (#1081 adopted the
 > bump). Two were settled the same week: network-retry became the shell host (#1083)

@@ -187,25 +187,10 @@ document.addEventListener("keydown", (event) => {
 // command="show-modal"> — which hc 0.4.1 blesses in place of a kit attribute (hc-briefs.md brief
 // 14): the browser calls showModal(), traps focus and returns it to the opener on close. The
 // route compiler emits the command on every list page's Filters button and applied chips, and
-// the Studio shell on the command-palette trigger. An engine without the Invoker Commands API
-// (Safari before 26, Firefox before 144, Chrome and Edge before 135) leaves such a button inert,
-// so this shim performs the one command the framework emits; it is feature-detected and never
-// installed where the platform answers (docs/hypermedia-ui.md "Browser support"). A stand-in
-// awaiting the kit: briefed as hc-briefs.md brief 16 (hypermedia-components#624,
-// installInvokerCommands — the kit already carries such a fallback for CSS anchor positioning);
-// delete it when the kit owns the fallback.
-if (!("commandForElement" in HTMLButtonElement.prototype)) {
-    document.addEventListener("click", (event) => {
-        const trigger = event.target instanceof Element
-            ? event.target.closest("button[commandfor][command=\"show-modal\"]") : null;
-        if (trigger && !trigger.disabled) {
-            const dialog = document.getElementById(trigger.getAttribute("commandfor"));
-            if (dialog instanceof HTMLDialogElement && !dialog.open) {
-                dialog.showModal();
-            }
-        }
-    });
-}
+// the Studio shell on the command-palette trigger. On an engine without the Invoker Commands
+// API the KIT's installInvokerCommands performs the command, feature-detected and self-retiring
+// (hc 0.4.2 — hc-briefs.md brief 16, shipped and adopted); the local shim is retired.
+
 // Command palette navigation (docs/studio-ux-refresh.md slice 7): installCommand dispatches
 // hc:commandselect and never touches the network; palette item values here are same-app URLs,
 // so selection navigates.

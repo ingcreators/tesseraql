@@ -687,6 +687,17 @@ Stand-in to retire: `tesseraql.js`'s `commandfor` shim (the `"commandForElement"
 HTMLButtonElement.prototype` block), and the "TesseraQL does" sentence in
 [hypermedia-ui.md](hypermedia-ui.md) "Browser support".*
 
+> **Status: shipped and adopted.** Landed in **hc 0.4.2** (upstream #625) as
+> `installInvokerCommands()`, as proposed — nothing installed where `HTMLButtonElement.prototype`
+> has `commandForElement`, otherwise one delegated click listener performing `show-modal` and
+> `close`, the edge cases (disabled, submit, `defaultPrevented`, already open) left alone, proved
+> on every CI leg by a spec that deletes the API before the bundle loads. The decision reversed
+> #613's "no fallback"; the inconsistency with the anchor-positioning fallback was the deciding
+> argument, and the audit it prompted produced the kit's *Browser support* page, which states the
+> floor once (the Popover API) and found no other functional loss above it. TesseraQL bumped to
+> 0.4.2 and DELETED the shim; "Browser support" in [hypermedia-ui.md](hypermedia-ui.md) now
+> inherits the kit's floor and its rule.
+
 ### Problem
 
 hc 0.4.1 blesses `<button type="button" commandfor="<id>" command="show-modal">` / `"close"` as

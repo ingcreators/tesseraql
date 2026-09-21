@@ -207,6 +207,17 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **Hypermedia Components 0.4.2, and the shim goes.** The bump is a drop-in (diffed WebJAR to
+  WebJAR: nothing removed; one behavior added, `installInvokerCommands`; the email artifacts
+  differ by their version stamp alone; no recipe or template changed in the repository). It
+  answers brief 16: the kit now carries the feature-detected fallback for `commandfor` /
+  `command="show-modal"` and `"close"` — installed only where `HTMLButtonElement` has no
+  `commandForElement`, self-retiring — and states its browser floor once on a *Browser support*
+  page (the Popover API; a functional loss above it gets a scripted fallback, a cosmetic one
+  none). So the bootstrap's `commandfor` shim from the 0.4.1 entry below is deleted, the
+  manifest guard pins `installInvokerCommands`, and `docs/hypermedia-ui.md` "Browser support"
+  inherits the kit's floor instead of stating its own. No markup changes.
+
 - **Hypermedia Components 0.4.1, and the three briefs it answers.** The bump is a drop-in
   (diffed WebJAR to WebJAR: nothing removed; `.hc-shell__group`, one token, five behaviors and
   two catalog keys added; the email artifacts differ by their version stamp alone), and the
