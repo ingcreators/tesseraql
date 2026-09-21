@@ -110,6 +110,23 @@ public final class ErrorResponseRenderer implements Step {
         this.securityHeaders = securityHeaders == null ? Map.of() : Map.copyOf(securityHeaders);
     }
 
+    /**
+     * The status a failure answers: a {@code query-export}'s {@code statusWhen:} arm declares
+     * its own and carries it in the refusal's details (docs/file-transfers.md); every other
+     * failure maps by its code as {@link #httpStatus(TqlErrorCode)} says, an uncoded one as
+     * the internal error. The runner reads this too, so an arm's 404 is logged as the refusal
+     * it is and not as a route failure.
+     */
+    public static int httpStatus(Throwable failure) {
+        TqlErrorCode code = failure instanceof TqlException tql ? tql.code() : INTERNAL_ERROR;
+        if (failure instanceof TqlException tql
+                && io.tesseraql.pipeline.sql.SqlStep.EXPORT_STATUS.equals(code)
+                && tql.details().get("status") instanceof Integer declared) {
+            return declared;
+        }
+        return httpStatus(code);
+    }
+
     /** Applies the app's default security headers to an HTML error response. */
     private void applySecurityHeaders(Exchange exchange) {
         securityHeaders.forEach((name, value) -> exchange.response().header(name, value));
@@ -122,7 +139,7 @@ public final class ErrorResponseRenderer implements Step {
         TqlErrorCode code = cause instanceof TqlException tql
                 ? tql.code()
                 : INTERNAL_ERROR;
-        int status = httpStatus(code);
+        int status = httpStatus(cause);
         String tag = exchange.getProperty(TesseraqlProperties.LOCALE,
                 i18n.defaultTag(), String.class);
 
@@ -651,6 +668,10 @@ public final class ErrorResponseRenderer implements Step {
                 // situation from the outside, and answering them apart would tell the holder of
                 // a token that is not theirs which tokens exist.
                 case 2860, 2861, 2862, 2864, 2866, 2867 -> 409;
+                // A query-export's statusWhen: arm answers the status it declares — read from the
+                // refusal's details by httpStatus(Throwable); this is the code's own answer, the
+                // arm most routes write ("no row: 404"), for a reader of the mapping alone.
+                case 2863 -> 404;
                 // No code for "nothing in the upload could be imported": that answer is the
                 // report itself with a 422 status, not an error envelope. An envelope would
                 // replace the very thing the caller needs — which rows were refused and why.

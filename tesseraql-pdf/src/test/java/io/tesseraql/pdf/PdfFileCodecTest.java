@@ -193,6 +193,48 @@ class PdfFileCodecTest {
         assertThat(text).contains("rows:true sql:true");
     }
 
+    /**
+     * A print template's {@code #{key}} reads the messages the export carries — the app's
+     * catalogs in the document's locale — and shows the standard absent marker for a key no
+     * catalog holds. Before the resolver existed every message expression rendered as that
+     * marker, while docs/printable-documents.md promised the opposite.
+     */
+    @Test
+    void aTemplateReadsTheDocumentsMessages() throws Exception {
+        Path routeDir = Files.createDirectories(appHome.resolve("web/users/messages"));
+        Path template = routeDir.resolve("messages.html");
+        Files.writeString(template, """
+                <html xmlns:th="http://www.thymeleaf.org">
+                <head><style>body { font-family: 'TesseraQL Sample Gothic'; }</style></head>
+                <body>
+                  <h1 th:text="#{doc.title}">title</h1>
+                  <p th:text="#{doc.missing}">missing</p>
+                </body>
+                </html>
+                """);
+        io.tesseraql.core.files.DocumentMessages messages = tag -> key -> "doc.title".equals(key)
+                ? ("ja".equals(tag) ? "見積書" : "Quotation")
+                : null;
+
+        ByteArrayOutputStream japanese = new ByteArrayOutputStream();
+        codec.write(japanese, new FileWriteSpec(List.of(), null, template, null, appHome, "ja",
+                null).withMessages(messages),
+                io.tesseraql.core.files.ExportModel.repeatable(rows(), java.util.Map.of()));
+        assertThat(extractText(japanese.toByteArray())).contains("見積書", "??doc.missing_ja??");
+
+        ByteArrayOutputStream english = new ByteArrayOutputStream();
+        codec.write(english, new FileWriteSpec(List.of(), null, template, null, appHome, "en",
+                null).withMessages(messages),
+                io.tesseraql.core.files.ExportModel.repeatable(rows(), java.util.Map.of()));
+        assertThat(extractText(english.toByteArray())).contains("Quotation");
+
+        // A spec carrying no messages resolves nothing, and says so in the document.
+        ByteArrayOutputStream bare = new ByteArrayOutputStream();
+        codec.write(bare, new FileWriteSpec(List.of(), null, template, null, appHome, null, null),
+                io.tesseraql.core.files.ExportModel.repeatable(rows(), java.util.Map.of()));
+        assertThat(extractText(bare.toByteArray())).contains("??doc.title_en??");
+    }
+
     @Test
     void gridExportRendersASqlTimeAsWallClockText() throws Exception {
         Map<String, Object> row = new LinkedHashMap<>();

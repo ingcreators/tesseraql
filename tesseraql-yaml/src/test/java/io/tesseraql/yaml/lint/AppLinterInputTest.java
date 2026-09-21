@@ -354,6 +354,28 @@ class AppLinterInputTest {
         assertThat(codes(new AppLinter().lint(dir))).contains("TQL-YAML-1020");
     }
 
+    /** An export's status arms are judged by the same lint as a renderer's. */
+    @Test
+    void aBrokenExportStatusWhenIsAnError(@TempDir Path dir) throws Exception {
+        writeRoute(dir, "get", "");
+        Files.writeString(dir.resolve("web/items/get.yml"), """
+                version: tesseraql/v1
+                id: items.probe
+                kind: route
+                recipe: query-export
+                export:
+                  format: csv
+                  statusWhen:
+                    - when: "main.rowCount =="
+                      status: 404
+                sources:
+                  main:
+                    sql:
+                      file: list.sql
+                """);
+        assertThat(codes(new AppLinter().lint(dir))).contains("TQL-YAML-1020");
+    }
+
     @Test
     void wellFormedConstraintsAreClean(@TempDir Path dir) throws Exception {
         writeRoute(dir, "get", """

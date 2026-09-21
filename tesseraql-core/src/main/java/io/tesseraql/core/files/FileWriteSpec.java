@@ -39,22 +39,31 @@ import java.util.List;
  */
 public record FileWriteSpec(List<ColumnMapping> columns, String sheet, Path template,
         CellRef startCell, Path resources, String locale, String timezone, String groupBy,
-        String splitBy, boolean bom) {
+        String splitBy, boolean bom, DocumentMessages messages) {
 
     public FileWriteSpec(List<ColumnMapping> columns, String sheet, Path template,
             CellRef startCell) {
-        this(columns, sheet, template, startCell, null, null, null, null, null, false);
+        this(columns, sheet, template, startCell, null, null, null, null, null, false, null);
     }
 
     public FileWriteSpec(List<ColumnMapping> columns, String sheet, Path template,
             CellRef startCell, String locale, String timezone) {
-        this(columns, sheet, template, startCell, null, locale, timezone, null, null, false);
+        this(columns, sheet, template, startCell, null, locale, timezone, null, null, false,
+                null);
     }
 
     public FileWriteSpec(List<ColumnMapping> columns, String sheet, Path template,
             CellRef startCell, Path resources, String locale, String timezone) {
         this(columns, sheet, template, startCell, resources, locale, timezone, null, null,
-                false);
+                false, null);
+    }
+
+    /** The spec without document messages — the positional shape every caller before them wrote. */
+    public FileWriteSpec(List<ColumnMapping> columns, String sheet, Path template,
+            CellRef startCell, Path resources, String locale, String timezone, String groupBy,
+            String splitBy, boolean bom) {
+        this(columns, sheet, template, startCell, resources, locale, timezone, groupBy, splitBy,
+                bom, null);
     }
 
     public FileWriteSpec {
@@ -92,6 +101,16 @@ public record FileWriteSpec(List<ColumnMapping> columns, String sheet, Path temp
     /** This spec with the per-request locale and time zone resolved. */
     public FileWriteSpec withFormatting(String resolvedLocale, String resolvedTimezone) {
         return new FileWriteSpec(columns, sheet, template, startCell, resources,
-                resolvedLocale, resolvedTimezone, groupBy, splitBy, bom);
+                resolvedLocale, resolvedTimezone, groupBy, splitBy, bom, messages);
+    }
+
+    /**
+     * This spec with the message texts a print template reads through {@code #{key}}: the
+     * application's catalogs over the framework's, resolved per document in the export's
+     * locale (docs/printable-documents.md). Null leaves every message expression unresolved.
+     */
+    public FileWriteSpec withMessages(DocumentMessages resolved) {
+        return new FileWriteSpec(columns, sheet, template, startCell, resources, locale,
+                timezone, groupBy, splitBy, bom, resolved);
     }
 }

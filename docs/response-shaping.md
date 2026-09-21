@@ -244,7 +244,9 @@ response:
         status: 404
 ```
 
-The first truthy arm wins (else the declared `status`). Works on `response.html` too;
+The first truthy arm wins (else the declared `status`). Works on `response.html` too, and as
+`export.statusWhen` on a `query-export` ([file transfers](file-transfers.md#the-export-block)),
+where the arms are judged over the sources before the extraction opens;
 conditions are pre-compiled at build (`TQL-YAML-1020`; a `headersWhen:` guard that does not
 parse is `TQL-SQL-2101` at lint), and each arm's status rides into the generated OpenAPI as a
 response entry.

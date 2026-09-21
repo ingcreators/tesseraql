@@ -148,7 +148,8 @@ final class InputRules implements LintRule {
             }
         }
         var response = route.definition().response();
-        for (io.tesseraql.yaml.model.ResponseSpec.StatusWhen arm : statusArms(response)) {
+        for (io.tesseraql.yaml.model.ResponseSpec.StatusWhen arm : statusArms(response,
+                route.definition().fileExport())) {
             try {
                 io.tesseraql.core.expr.ExpressionParser.parse(arm.when(), context.functions());
             } catch (RuntimeException ex) {
@@ -338,15 +339,19 @@ final class InputRules implements LintRule {
         return guards;
     }
 
-    /** Both renderers' statusWhen arms (json + html), empty when absent. */
+    /** Both renderers' statusWhen arms (json + html) and an export's, empty when absent. */
     private static java.util.List<io.tesseraql.yaml.model.ResponseSpec.StatusWhen> statusArms(
-            io.tesseraql.yaml.model.ResponseSpec response) {
+            io.tesseraql.yaml.model.ResponseSpec response,
+            io.tesseraql.yaml.model.ExportSpec export) {
         java.util.List<io.tesseraql.yaml.model.ResponseSpec.StatusWhen> arms = new ArrayList<>();
         if (response != null && response.json() != null) {
             arms.addAll(response.json().statusWhen());
         }
         if (response != null && response.html() != null) {
             arms.addAll(response.html().statusWhen());
+        }
+        if (export != null) {
+            arms.addAll(export.statusWhen());
         }
         return arms;
     }

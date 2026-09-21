@@ -43,6 +43,31 @@ class ExportDeclarationsTest {
                 null, null, null, null, null);
     }
 
+    /**
+     * A status arm is judged on a query-export only: a file-export answers 202 before a row is
+     * read and a job step answers no request, so each refuses the key naming itself.
+     */
+    @Test
+    void aStatusArmIsJudgedOnAQueryExportOnly() {
+        ExportSpec arms = new ExportSpec("csv", null, null, null, null, List.of(), null, null,
+                null, null, null, null, null, null,
+                List.of(new io.tesseraql.yaml.model.ResponseSpec.StatusWhen(
+                        "header.rowCount == 0", 404)));
+        Site step = new Site("t", "job 'nightly' step 'report'", Surface.JOB, Set.of(),
+                false, false);
+
+        assertThat(refusals(ROUTE, arms)).isEmpty();
+        assertThat(refusals(FILE_EXPORT, arms)).singleElement().satisfies(violation -> {
+            assertThat(violation.code().toString()).isEqualTo("TQL-YAML-1041");
+            assertThat(violation.message()).contains("export.statusWhen", "file-export",
+                    "query-export only");
+        });
+        assertThat(refusals(step, arms)).singleElement().satisfies(violation -> {
+            assertThat(violation.code().toString()).isEqualTo("TQL-YAML-1041");
+            assertThat(violation.message()).contains("export.statusWhen", "job step");
+        });
+    }
+
     private static List<Violation> refusals(Site site, ExportSpec spec) {
         return ExportDeclarations.violations(site, spec, null, null).stream()
                 .filter(violation -> violation.kind() == Kind.INVALID).toList();

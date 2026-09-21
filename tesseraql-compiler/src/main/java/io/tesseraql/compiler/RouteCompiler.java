@@ -1614,7 +1614,8 @@ public final class RouteCompiler {
                 formatting("locale", spec == null ? null : spec.locale()),
                 formatting("timezone", spec == null ? null : spec.timezone()),
                 declaredExportRowCap(spec, format), exportQueries(definition, routeDir),
-                httpSourceNames(definition), enrichProcessors(routeDir, definition)))
+                httpSourceNames(definition), enrichProcessors(routeDir, definition),
+                spec == null ? java.util.List.of() : spec.statusWhen(), functions))
                 .process(exportSql);
     }
 

@@ -37,7 +37,7 @@ public final class JsonResponseRenderer implements Step {
     private final ObjectMapper mapper = io.tesseraql.yaml.JsonMappers.constrained();
 
     /** A pre-compiled statusWhen arm (roadmap Phase 41): first truthy condition wins. */
-    record CompiledStatus(io.tesseraql.core.expr.Expr when, int status) {
+    record CompiledStatus(io.tesseraql.core.expr.Expr when, int status, String source) {
 
         /**
          * The declared arms, pre-compiled so a syntax error fails the build. Shared with
@@ -49,7 +49,7 @@ public final class JsonResponseRenderer implements Step {
             return arms.stream()
                     .map(arm -> new CompiledStatus(
                             io.tesseraql.core.expr.ExpressionParser.parse(arm.when(), functions),
-                            arm.status()))
+                            arm.status(), arm.when()))
                     .toList();
         }
 

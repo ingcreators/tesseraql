@@ -185,7 +185,8 @@ final class PipelineRunner {
      */
     private static void logFailure(Pipeline pipeline, Exception failure) {
         TqlErrorCode code = failure instanceof TqlException tql ? tql.code() : null;
-        int status = code == null ? 500 : ErrorResponseRenderer.httpStatus(code);
+        // The status the renderer will answer, a statusWhen: arm's own included.
+        int status = code == null ? 500 : ErrorResponseRenderer.httpStatus(failure);
         if (status >= 500) {
             LOG.error("Route '{}' failed with {}", pipeline.id(),
                     code == null ? failure.getClass().getName() : code, failure);

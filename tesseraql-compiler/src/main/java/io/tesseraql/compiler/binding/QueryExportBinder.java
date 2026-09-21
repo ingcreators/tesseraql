@@ -22,12 +22,15 @@ public final class QueryExportBinder implements Step {
     private final java.util.List<io.tesseraql.core.files.ExportQuery> queries;
     private final java.util.Set<String> httpSources;
     private final java.util.List<EnrichProcessor> enrichments;
+    private final io.tesseraql.pipeline.sql.SqlStep.ExportStatusWhen statusWhen;
 
     public QueryExportBinder(FileCodec codec, FileWriteSpec writeSpec,
             FormatDeclaration locale, FormatDeclaration timezone,
             io.tesseraql.core.files.ExportRowCap rowCap,
             java.util.List<io.tesseraql.core.files.ExportQuery> queries,
-            java.util.Set<String> httpSources, java.util.List<EnrichProcessor> enrichments) {
+            java.util.Set<String> httpSources, java.util.List<EnrichProcessor> enrichments,
+            java.util.List<io.tesseraql.yaml.model.ResponseSpec.StatusWhen> statusArms,
+            io.tesseraql.core.expr.ExpressionFunctions functions) {
         this.codec = codec;
         this.writeSpec = writeSpec;
         this.locale = locale;
@@ -36,6 +39,33 @@ public final class QueryExportBinder implements Step {
         this.queries = java.util.List.copyOf(queries);
         this.httpSources = java.util.Set.copyOf(httpSources);
         this.enrichments = java.util.List.copyOf(enrichments);
+        this.statusWhen = judge(statusArms, functions);
+    }
+
+    /**
+     * The export's status arms, pre-compiled like a renderer's (a syntax error fails the build)
+     * and judged by the SQL step over the sources it has read so far: the first truthy arm
+     * answers its status, with its condition as written. Null when the route declares none.
+     */
+    private static io.tesseraql.pipeline.sql.SqlStep.ExportStatusWhen judge(
+            java.util.List<io.tesseraql.yaml.model.ResponseSpec.StatusWhen> arms,
+            io.tesseraql.core.expr.ExpressionFunctions functions) {
+        java.util.List<JsonResponseRenderer.CompiledStatus> compiled = JsonResponseRenderer.CompiledStatus
+                .compileAll(arms, functions);
+        if (compiled.isEmpty()) {
+            return null;
+        }
+        return scope -> {
+            io.tesseraql.core.expr.EvaluationContext evaluation = new io.tesseraql.core.expr.EvaluationContext(
+                    scope);
+            for (JsonResponseRenderer.CompiledStatus arm : compiled) {
+                if (arm.when().evalBoolean(evaluation)) {
+                    return new io.tesseraql.pipeline.sql.SqlStep.ExportStatusArm(arm.status(),
+                            arm.source());
+                }
+            }
+            return null;
+        };
     }
 
     @Override
@@ -51,5 +81,8 @@ public final class QueryExportBinder implements Step {
         exchange.setProperty(TesseraqlProperties.EXPORT_VALUES,
                 ExportSources.values(exchange, httpSources));
         ExportEnrichment.bind(exchange, enrichments);
+        if (statusWhen != null) {
+            exchange.setProperty(TesseraqlProperties.EXPORT_STATUS_WHEN, statusWhen);
+        }
     }
 }
