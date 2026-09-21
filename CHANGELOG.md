@@ -8,6 +8,23 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **An official runtime image, and a container stop that ends.**
+  `ghcr.io/ingcreators/tesseraql-host:<version>` — also `<major.minor>` and `latest`, for
+  `linux/amd64` and `linux/arm64` — is published from every release tag by the `host-image`
+  job: the host and the operator verbs from `deploy/Dockerfile.host`, no application, no heap
+  size (set `JAVA_TOOL_OPTIONS=-XX:MaxRAMPercentage=75.0` beside the container's memory limit),
+  and a `HEALTHCHECK` over `bash`'s `/dev/tcp` that passes. `deploy/Dockerfile` is now the
+  derived-image template: `FROM` that image, a `tesseraql package` archive unpacked under
+  `/stack/<name>` (`BASE`, `APP_DIR`, `APP_NAME` build arguments), the optional
+  class-data-sharing training line kept — a deployment builds none of the framework. The
+  origin's `/_tesseraql/health/ready` rolls up its members: `503 {"status":"DRAINING"}` while
+  the stack stops, `503 {"status":"DOWN"}` when every member's roll-up is down, otherwise `200`
+  naming the members that are not `UP` (`{"status":"DEGRADED","down":["orders"]}`). The
+  `deploy-image` job runs the container now: both images built, the gallery application that
+  declares a module packaged and hosted against a database, the origin and the member ready,
+  the image's own health check `healthy`, and `docker stop -t 60` returning exit `143` inside
+  twenty seconds with the drain logged. Record: `docs/deployment-maturity.md` (S1).
+
 - **Every writer with a commit declares what it made stale.** `invalidates:` — the
   declaration a command and an MCP tool already carry — is legal on a `webhook`, a
   `queue-consume` route (which mounted nothing after its command) and a `file-import` route,
@@ -59,6 +76,18 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **`deploy/Dockerfile` changes meaning.** It built the framework from source and baked a
+  source tree as `/stack/app`; it derives from the official runtime image and unpacks a
+  package as `/stack/<name>` now (`APP_HOME` is gone; `BASE`, `APP_DIR` and `APP_NAME`
+  replace it), and the Kamal template's `builder.args` and volume follow. The close that
+  follows the drain is bounded at three seconds per transport — it waited under the start
+  timeout, thirty seconds for the host's Vert.x and sixty each for the gateway's client and
+  Vert.x — with an abandoned close logged at WARN, so a stop exits `143` inside the margin a
+  grace period leaves after the drain. The Kamal template sets `stop_timeout` and
+  `drain_timeout` to 60: a copied `deploy.yml` without them keeps Docker's ten seconds, which
+  cut the 45 s drain short (`deployment.md` had named `deploy_timeout`, the readiness wait, as
+  the knob).
+
 - **`invalidates:` reaches held sources through the catalog's table stamps.** The per-table
   version row (`tql_catalog_version`, its name kept) is raised for a catalog's tables and a
   held source's alike, by one `Invalidations` bean the command processor calls after the
@@ -68,6 +97,31 @@ All notable changes to TesseraQL are documented here. The format follows
   that rebuilds a route drops the hold. Pre-1.0 internal.
 
 ### Fixed
+
+- **The container health check could never pass.** Both Dockerfiles' `HEALTHCHECK` called
+  `curl`, which `eclipse-temurin:25-jre` does not ship: every container read `unhealthy` from
+  its second minute. The check is a bash script over `/dev/tcp` now, and CI waits for
+  `healthy` on every pull request.
+
+- **The baked image refused an application that declares a module.** `.dockerignore` drops
+  `work/`, so the copied source tree carried no resolved module set and the host refused it at
+  start (`TQL-APP-4216`): the gallery's `user-admin-app`, which declares `tesseraql-pdf`, could
+  not be shipped by the documented recipe. The template unpacks a package, which carries the
+  set, and CI ships that gallery application.
+
+- **The origin readiness never consulted a member.** `/_tesseraql/health/ready` at the origin
+  — the path the Kamal template and the image probe — answered from the gateway's draining
+  flag alone: with the database stopped it answered `UP` in a millisecond while every member
+  answered `DOWN` and a route answered 500 after thirty seconds. It rolls up the members now.
+
+- **A member's readiness answered `DOWN` to any prober slower than three seconds.** Nothing
+  refreshes the held roll-up but a poll, and the staleness rule read three TTLs since the last
+  *completion* as a failed refresh — so the first poll after four seconds of silence was
+  `DOWN`, and a Kubernetes readiness probe at its default period of ten seconds would never
+  have seen the pod ready. Staleness counts from the last refresh *attempt* now: a poll after
+  a quiet spell answers the held status and starts a refresh, and `DOWN` is the answer only
+  when a refresh started three TTLs ago has not landed (`ReadinessMemo`, shared by the
+  member's path and the origin's roll-up).
 
 - **A reviewed import's confirm dropped what the request attached.** The commit leg froze a
   copy of the confirming request that kept the row statement and the parked read spec but

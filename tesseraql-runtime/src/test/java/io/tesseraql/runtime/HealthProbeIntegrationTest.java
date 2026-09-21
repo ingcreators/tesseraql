@@ -70,8 +70,28 @@ class HealthProbeIntegrationTest {
         assertThat(get("/_tesseraql/health").statusCode()).isEqualTo(200);
     }
 
+    /**
+     * A probe on a Kubernetes cadence is answered from the held roll-up
+     * (docs/deployment-maturity.md decision 3, row 6). Measured before this row existed: the
+     * first poll after four seconds of silence answered {@code DOWN}, because nothing refreshes
+     * the memo but a poll and the staleness rule counted the prober's own gap as a failed
+     * refresh — a readiness probe at the default period of ten seconds never saw the pod ready.
+     */
     @Test
     @Order(2)
+    void aProbeSlowerThanThreeTtlsIsStillAnsweredUp() throws Exception {
+        Thread.sleep(5_000);
+        HttpResponse<String> ready = get("/_tesseraql/health/ready");
+        assertThat(ready.statusCode()).as("after 5 s of silence: %s", ready.body())
+                .isEqualTo(200);
+        assertThat(MAPPER.readTree(ready.body()).get("status").asText()).isEqualTo("UP");
+        Thread.sleep(10_000);
+        assertThat(get("/_tesseraql/health/ready").statusCode())
+                .as("after 10 s of silence, the Kubernetes default period").isEqualTo(200);
+    }
+
+    @Test
+    @Order(3)
     void readinessDegradesToDownWhenTheDatabaseStopsWhileLivenessStaysUp() throws Exception {
         POSTGRES.stop();
 

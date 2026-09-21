@@ -6,7 +6,6 @@ import io.vertx.core.Context;
 import io.vertx.core.http.HttpMethod;
 import io.vertx.ext.web.RoutingContext;
 import java.util.Optional;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Answers liveness and readiness on the platform router, without a worker
@@ -30,9 +29,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * one where refreshing it hangs — a database that accepts connections and never answers holds the
  * probe for {@code connectionTimeout}, thirty seconds by default. Answering {@code UP} confidently
  * for thirty seconds would be worse than the route this replaces, which at least hung and let the
- * orchestrator's own timeout fire. So the memo is served while it is younger than
- * {@link #STALE_AFTER_TTLS} times the TTL, and beyond that readiness answers {@code DOWN}: the
- * runtime does not know that it is ready, and not knowing is not readiness.
+ * orchestrator's own timeout fire. The rule that decides when the memo stops being an answer —
+ * and the correction that made it count from the refresh attempt rather than from a prober's
+ * own silence — lives in {@link ReadinessMemo}, which this shares with the origin's roll-up.
  */
 final class HealthRoutes {
 
@@ -44,33 +43,19 @@ final class HealthRoutes {
      */
     private static final int AFTER_THE_GATE = Integer.MIN_VALUE + 1;
 
-    /**
-     * How many TTLs an unrefreshed roll-up is still an answer.
-     *
-     * <p>One would flap: a refresh legitimately takes as long as the probe it performs, so the
-     * memo is routinely a little older than its TTL while the next one is being computed. Three
-     * means two consecutive refreshes failed to land, which is not a hiccup. An operator whose
-     * probes are legitimately slower than this raises {@code tesseraql.diagnostics.readinessTtl},
-     * the number that already governs how fresh readiness is.
-     */
-    private static final int STALE_AFTER_TTLS = 3;
-
     private static final String UP = "{\"status\":\"UP\"}";
 
-    private final OpsDashboard dashboard;
-    private final long ttlMillis;
-    /** At most one refresh at a time: a burst of polls must not become a burst of probes. */
-    private final AtomicBoolean refreshing = new AtomicBoolean();
+    /** The runtime's one readiness memo, shared with the origin's roll-up over every member. */
+    private final ReadinessMemo memo;
 
-    private HealthRoutes(OpsDashboard dashboard) {
-        this.dashboard = dashboard;
-        this.ttlMillis = Math.max(1, dashboard.healthTtl().toMillis());
+    private HealthRoutes(ReadinessMemo memo) {
+        this.memo = memo;
     }
 
     /** Mounts liveness and readiness on the started platform router, under the app's base path. */
-    static void install(RuntimeContext runtimeContext, OpsDashboard dashboard) {
+    static void install(RuntimeContext runtimeContext, ReadinessMemo memo) {
         io.vertx.ext.web.Router router = HttpEdgeBeans.router(runtimeContext);
-        HealthRoutes health = new HealthRoutes(dashboard);
+        HealthRoutes health = new HealthRoutes(memo);
         String mount = io.tesseraql.pipeline.BasePath
                 .of(runtimeContext.beans()) + "/_tesseraql/health";
         // Liveness is a constant: it says the process is running, and it must never consult a
@@ -87,25 +72,20 @@ final class HealthRoutes {
     }
 
     private void readiness(RoutingContext ctx) {
-        Optional<OpsDashboard.HeldHealth> held = dashboard.heldHealth();
+        Optional<OpsDashboard.HeldHealth> held = memo.held();
         if (held.isEmpty()) {
             // Nothing has been computed yet, which happens once per process. This one request
             // waits for the first roll-up — on a thread of its own, never on the event loop.
             firstRollUp(ctx);
             return;
         }
-        long age = held.get().ageMillis();
-        if (age >= ttlMillis) {
-            refresh();
-        }
-        String status = age >= ttlMillis * STALE_AFTER_TTLS ? "DOWN" : held.get().report().status();
-        answer(ctx, status);
+        answer(ctx, memo.status(held.get()));
     }
 
     private void firstRollUp(RoutingContext ctx) {
         Context connection = ctx.vertx().getOrCreateContext();
         Thread.ofVirtual().name("tql-readiness-first").start(() -> {
-            String status = rollUp();
+            String status = memo.rollUp();
             try {
                 connection.runOnContext(reply -> answer(ctx, status));
             } catch (java.util.concurrent.RejectedExecutionException closed) {
@@ -115,36 +95,6 @@ final class HealthRoutes {
                 // process the same way the SSE producer's did.
             }
         });
-    }
-
-    /**
-     * Recomputes behind the answer already given.
-     *
-     * <p>The poll that finds the memo due does not wait for the new one: it is answered from what
-     * is held, and the next poll gets the fresher result. That is what makes readiness cost the
-     * event loop and nothing else, and the staleness rule above is what keeps it honest when the
-     * refresh never returns.
-     */
-    private void refresh() {
-        if (!refreshing.compareAndSet(false, true)) {
-            return;
-        }
-        Thread.ofVirtual().name("tql-readiness-refresh").start(() -> {
-            try {
-                rollUp();
-            } finally {
-                refreshing.set(false);
-            }
-        });
-    }
-
-    /** The roll-up, or {@code DOWN} when computing it threw — never a 500 out of a probe. */
-    private String rollUp() {
-        try {
-            return dashboard.health().status();
-        } catch (RuntimeException unavailable) {
-            return "DOWN";
-        }
     }
 
     private static void answer(RoutingContext ctx, String status) {

@@ -14,16 +14,28 @@ registry:
   password:
     - KAMAL_REGISTRY_PASSWORD
 
+# Before `kamal deploy`: `tesseraql package --app . --out build/myapp.tqlapp`, unpacked under
+# build/stack/myapp (docs/deployment.md, "Shipping apps"). The image derives from the official
+# runtime image and carries that package; nothing is compiled in the build.
 builder:
   arch: amd64
   dockerfile: deploy/Dockerfile
   args:
-    APP_HOME: .               # the app repo root is the app home
+    BASE: ghcr.io/ingcreators/tesseraql-host:latest   # pin a version in production
+    APP_DIR: build/stack/myapp
+    APP_NAME: myapp           # tesseraql.app.name: the directory under /stack and the address (/myapp/)
+
+# The stop grace (docs/deployment.md, "Bootstrap and migrations"): on SIGTERM the runtime
+# drains in-flight work for up to tesseraql.shutdown.timeout (45s by default) and then closes.
+# Kamal's default for a proxied role is Docker's ten seconds, which kills the drain two thirds
+# of the way through; both waits sit above the bound plus the close's margin.
+drain_timeout: 60
+stop_timeout: 60
 
 proxy:
   app_port: 8080
   healthcheck:
-    path: /_tesseraql/health/ready  # readiness (503 on DOWN); details stay behind the ops API
+    path: /_tesseraql/health/ready  # 503 while draining or when every member is DOWN; details stay behind the ops API
   # No public TLS: cloudflared connects outbound to Cloudflare; the proxy only does
   # zero-downtime container swaps on localhost.
   ssl: false
@@ -36,7 +48,7 @@ env:
     - DB_PASSWORD             # referenced from config as ${secret.env.DB_PASSWORD}
 
 volumes:
-  - tesseraql-work:/stack/app/work  # spools, drafts, fetched .tqlapp packages
+  - tesseraql-work:/stack/myapp/work  # spools and the upload staging area
 
 accessories:
   cloudflared:

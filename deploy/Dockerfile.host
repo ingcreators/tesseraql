@@ -1,0 +1,62 @@
+# The official runtime image, ghcr.io/ingcreators/tesseraql-host (docs/deployment-maturity.md
+# decision 2): the deployment distribution — the host and the operator verbs, none of the
+# workshop, the embedded-database supervisor or the artifact-resolver stack
+# (docs/runtime-footprint.md decision 1) — and no application. A deployment derives its image
+# from this one and unpacks its packages under /stack; deploy/Dockerfile is that template.
+#
+# Built on every pull request by ci.yml (deploy-image) and published from each release tag by
+# release.yml (host-image) for linux/amd64 and linux/arm64. The build stage runs once, on the
+# builder's own platform, and only the JRE stage is per platform: nothing compiles under
+# emulation.
+#
+#   docker build -f deploy/Dockerfile.host -t tesseraql-host:local .
+
+FROM --platform=$BUILDPLATFORM maven:3.9-eclipse-temurin-25 AS build
+WORKDIR /build
+COPY . .
+# The wrapper chooses its archive format by whether unzip is on PATH (mvnw:178-182): without
+# it, it silently fetches the .tar.gz instead of the .zip, which has a different SHA-256 than the
+# one .mvn/wrapper/maven-wrapper.properties pins - and the failure reads "your Maven distribution
+# might be compromised". This base image ships tar but not unzip.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends unzip \
+    && rm -rf /var/lib/apt/lists/*
+# install (not package): the second invocation resolves the reactor's own modules from the
+# container-local repository, and package alone leaves them unresolvable, so
+# copy-dependencies fails on the io.tesseraql:* coordinates.
+RUN ./mvnw -ntp -DskipTests -pl tesseraql-host -am install \
+    && ./mvnw -ntp -DskipTests -pl tesseraql-host dependency:copy-dependencies \
+         -DincludeScope=runtime -DoutputDirectory=target/dependency
+
+FROM eclipse-temurin:25-jre
+LABEL org.opencontainers.image.source="https://github.com/ingcreators/tesseraql" \
+      org.opencontainers.image.description="The TesseraQL runtime: tesseraql host serving the applications under /stack"
+RUN useradd --system --home /opt/tesseraql tesseraql
+WORKDIR /opt/tesseraql
+COPY --from=build /build/tesseraql-host/target/tesseraql-host-*.jar lib/
+COPY --from=build /build/tesseraql-host/target/dependency/*.jar lib/
+# Liveness over bash's /dev/tcp: this base ships no curl, and the check that called one could
+# never pass. Kubernetes ignores HEALTHCHECK; docker run, Compose and Kamal read it.
+COPY --chmod=0755 deploy/health.sh bin/health
+# /stack is where a derived image unpacks its packages and where each member's work directory
+# is written, so the runtime user owns it. No VOLUME here, on purpose: a volume is inherited by
+# a derived image, and the legacy builder discards what that image's steps write beneath one.
+# The derived template declares its own, over the member's work directory. lib/ is writable for
+# the class-data-sharing archive a derived image trains (or the first exit creates) under the
+# ENTRYPOINT's flags.
+RUN mkdir -p /stack && chown -R tesseraql /opt/tesseraql /stack
+USER tesseraql
+EXPOSE 8080
+HEALTHCHECK --interval=15s --timeout=3s --start-period=30s CMD ["/opt/tesseraql/bin/health"]
+
+# AutoCreateSharedArchive: use the archive when one exists and matches, run without one when it
+# does not, write one at exit where lib/ is writable — never a warning on start. The training
+# run a derived image performs uses the same flags, so what it records is what runs. The
+# object-header flag is part of the archive's identity (docs/jvm-baseline.md decision 4).
+ENTRYPOINT ["java", \
+  "-XX:+UseCompactObjectHeaders", \
+  "--sun-misc-unsafe-memory-access=allow", \
+  "-XX:+AutoCreateSharedArchive", \
+  "-XX:SharedArchiveFile=/opt/tesseraql/lib/cds.jsa", \
+  "-cp", "lib/*", "io.tesseraql.cli.TesseraqlHostCli"]
+CMD ["host", "--stack", "/stack", "--port", "8080"]

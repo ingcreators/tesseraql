@@ -435,9 +435,12 @@ no published runtime image, a container health check that cannot pass, a baked i
 refuses an application declaring a module, every platform's default stop grace shorter than
 the drain bound, an origin readiness that never consults a member, a member readiness that
 answers `DOWN` to any prober slower than three seconds, and an alert sweep that pages once per
-node. Five slices, the user naming each: **S1** the official
-`tesseraql-host` image and a stop that ends on every platform; **S2** the capacity signals on
-the scrape, cluster-wide alert deduplication and four new alert conditions; **S3**
+node. Five slices, the user naming each: the official `tesseraql-host` image and a stop that
+ends on every platform (**S1 shipped 2026-09-20, #1409**: `ghcr.io/ingcreators/tesseraql-host`
+from every release tag, `deploy/Dockerfile` as the derived template over a packaged
+application, a health check that passes, the origin readiness over its members, staleness
+counted from the refresh attempt, the bounded close, the Kamal stop keys, and a `deploy-image`
+job that runs the container); **S2** the capacity signals on the scrape, cluster-wide alert deduplication and four new alert conditions; **S3**
 `tesseraql bench` and the capacity guide; **S4** the Helm chart, the rendered manifests and
 the Kubernetes page; **S5** the M10 proof on a two-replica kind cluster in CI.
 

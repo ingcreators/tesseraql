@@ -1,6 +1,6 @@
 # A stack on Kubernetes: the image, the drain, the probes, the chart, the harness and the alerts
 
-> **Status: designed 2026-09-20; no slice started.** Phase 33 of `docs/roadmap.md` owes
+> **Status: designed 2026-09-20 (#1408); S1 shipped 2026-09-20 (#1409).** Phase 33 of `docs/roadmap.md` owes
 > "Kubernetes manifests and a Helm chart (probes, graceful drain of lanes and in-flight jobs,
 > rolling-deploy guidance on top of reload safety), official container images, a
 > `tesseraql bench` load harness for routes, a capacity/tuning guide, and alert routing through
@@ -11,6 +11,24 @@
 > and the stop path on every platform; **S2** the signals and the alerts; **S3** `tesseraql bench`
 > and the capacity guide; **S4** the chart, the manifests and the Kubernetes page; **S5** the M10
 > proof on a two-replica kind cluster.
+>
+> **S1** — `deploy/Dockerfile.host` (the official image: the host closure, the `tesseraql` user,
+> `/stack` owned and empty, the bash health check, no application and no archive) and
+> `deploy/Dockerfile` as the derived template (`BASE`, `APP_DIR`, `APP_NAME`; an unpacked
+> `.tqlapp`; the optional training line); `release.yml` `host-image` (buildx, two platforms,
+> three tags, `packages: write`, republish on dispatch); `ci.yml` `deploy-image` rebuilt around
+> the packaged `user-admin-app` and a running container; `StackReadiness`,
+> `StackRelay.memberReadiness` and `MultiAppHost.memberReadiness` (the origin roll-up, decision
+> 3); `ReadinessMemo` (staleness from the attempt, row 6); `BoundedClose` (decision 4); the Kamal
+> template's `stop_timeout`/`drain_timeout` and build arguments; `deployment.md`, `hosting.md`,
+> the README. Two deviations from the text below: the base image declares no `VOLUME` (an
+> inherited volume is where the legacy builder discards what a derived image writes beneath it;
+> the derived template declares its own over the member's work directory), and the post-drain
+> bound is three seconds rather than five, because four closes sit in sequence on the gateway's
+> stop path and all four must fit the fifteen-second margin. Guards: `BoundedCloseTest`,
+> `ReadinessMemoTest`, `StackReadinessTest`, `StackRelayTest` (two rows),
+> `StackReadinessIntegrationTest`, `HealthProbeIntegrationTest` (the ten-second row),
+> `WorkflowLedgerTest` (`--push` counts as a push), and the `deploy-image` job itself.
 
 The runtime already stops the way an orchestrator wants: SIGTERM flips readiness to 503, keeps
 serving, asks every run and every stream to stop, waits for what is in flight under a declared

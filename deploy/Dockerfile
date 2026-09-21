@@ -1,73 +1,38 @@
-# TesseraQL runtime image with one (or more) apps baked in (docs/deployment.md, pattern A).
+# Your application's image (docs/deployment.md, "Shipping apps"): derived from the official
+# runtime image, with the package you built unpacked under /stack — one directory per
+# application, named as the application declares itself. No source build and no resolver: a
+# package carries the modules it declared (docs/hosting.md, "Modules are resolved before the
+# host starts"), which is what a copied source tree could not, and why an application that
+# declared one used to be refused at start.
 #
-#   docker build -f deploy/Dockerfile --build-arg APP_HOME=examples/user-admin-app -t myapp .
+#   tesseraql package --app . --out build/orders.tqlapp
+#   unzip -q build/orders.tqlapp -d build/stack/orders
+#   docker build -f deploy/Dockerfile \
+#     --build-arg BASE=ghcr.io/ingcreators/tesseraql-host:0.19.0 \
+#     --build-arg APP_DIR=build/stack/orders --build-arg APP_NAME=orders -t my-org/orders .
 #
-# APP_HOME is the app directory (config/, web/, db/, ...) baked into the image, as the one
-# member of the stack directory /stack the container hosts (docs/hosting.md): the application
-# answers at /<its name>/, and the gateway answers the origin's /_tesseraql/health itself. To
-# run several applications, bake them side by side under /stack or mount an install root.
+# To run several applications, COPY each package beside the first under /stack. BASE pins the
+# framework version; the repository's own CI builds this file against the image it just built
+# (BASE=tesseraql-host:local) with a packaged gallery application, and stops the container.
+ARG BASE=ghcr.io/ingcreators/tesseraql-host:latest
+FROM ${BASE}
 
-FROM maven:3.9-eclipse-temurin-25 AS build
-WORKDIR /build
-COPY . .
-# The wrapper chooses its archive format by whether unzip is on PATH (mvnw:178-182): without
-# it, it silently fetches the .tar.gz instead of the .zip, which has a different SHA-256 than the
-# one .mvn/wrapper/maven-wrapper.properties pins - and the failure reads "your Maven distribution
-# might be compromised". This base image ships tar but not unzip.
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends unzip \
-    && rm -rf /var/lib/apt/lists/*
-# install (not package): the second invocation resolves the reactor's own modules from the
-# container-local repository, and package alone leaves them unresolvable, so
-# copy-dependencies fails on the io.tesseraql:* coordinates. Dockerfile.demo learned this
-# already; this image did not, and nothing in CI builds it, so it went unnoticed.
-RUN ./mvnw -ntp -DskipTests -pl tesseraql-host -am install \
-    && ./mvnw -ntp -DskipTests -pl tesseraql-host dependency:copy-dependencies \
-         -DincludeScope=runtime -DoutputDirectory=target/dependency
+# The unpacked package, and the name the application declares as tesseraql.app.name — the
+# directory the host serves it from and the address it answers at (/<name>/).
+ARG APP_DIR
+ARG APP_NAME
+COPY --chown=tesseraql ${APP_DIR} /stack/${APP_NAME}
 
-# The deployment distribution, not the developer CLI (docs/runtime-footprint.md decision 1):
-# tesseraql-host's dependency set carries the runtime and the operator verbs, and none of the
-# workshop, the embedded-database supervisor, or the artifact-resolver stack.
-FROM eclipse-temurin:25-jre
-RUN useradd --system --home /opt/tesseraql tesseraql
-WORKDIR /opt/tesseraql
-COPY --from=build /build/tesseraql-host/target/tesseraql-host-*.jar lib/
-COPY --from=build /build/tesseraql-host/target/dependency/*.jar lib/
+# The work directory holds spools and the upload staging area; mount a volume over it so
+# generated exports survive container replacement.
+RUN mkdir -p /stack/${APP_NAME}/work
+VOLUME /stack/${APP_NAME}/work
 
-ARG APP_HOME
-COPY ${APP_HOME} /stack/app
-
-# The work directory holds spools, drafts and fetched apps; mount a volume over it so
-# generated exports and downloaded .tqlapp packages survive container replacement.
-RUN mkdir -p /stack/app/work && chown -R tesseraql /stack
-VOLUME /stack/app/work
-
-# A class-data-sharing archive, trained here on the baked app's own routes so the classpath it
-# records is the one the container runs (docs/jvm-baseline.md decision 4): time-to-ready -25%,
-# resident memory -20%. Built once here rather than created at run time, because a container
-# filesystem is often read-only and every replica would otherwise pay for its own. If the
-# archive stops matching, the JVM warns and runs without it.
-# The training run carries the same JVM flags as the ENTRYPOINT below. An archive records the
-# object-header layout it was built with, and the JVM refuses one whose UseCompactObjectHeaders
-# setting differs from the running JVM's — so training without the flag would produce an archive
-# that is rejected, loudly, on every start.
-#
-# A training run that cannot read the baked app must not fail the image build: a missing archive
-# is silent at run time, so the container simply starts without one.
+# A class-data-sharing archive trained on this application's routes (docs/jvm-baseline.md
+# decision 4): time-to-ready -25%, resident memory -20%. Optional: a training run that cannot
+# read the application must not fail the image build — the image simply starts without one, and
+# the same flags on the base's ENTRYPOINT write one at the first exit where lib/ is writable.
 RUN java -XX:+UseCompactObjectHeaders \
       -XX:+AutoCreateSharedArchive -XX:SharedArchiveFile=/opt/tesseraql/lib/cds.jsa \
-      -cp 'lib/*' io.tesseraql.cli.TesseraqlHostCli routes --app /stack/app > /dev/null 2>&1 \
-      && chown tesseraql /opt/tesseraql/lib/cds.jsa \
+      -cp 'lib/*' io.tesseraql.cli.TesseraqlHostCli routes --app /stack/${APP_NAME} > /dev/null 2>&1 \
     || echo 'CDS training run failed; this image starts without a shared archive'
-
-USER tesseraql
-EXPOSE 8080
-HEALTHCHECK --interval=15s --timeout=3s --start-period=30s \
-  CMD curl -fsS http://localhost:8080/_tesseraql/health/live || exit 1
-
-ENTRYPOINT ["java", \
-  "-XX:+UseCompactObjectHeaders", \
-  "--sun-misc-unsafe-memory-access=allow", \
-  "-XX:SharedArchiveFile=/opt/tesseraql/lib/cds.jsa", \
-  "-cp", "lib/*", "io.tesseraql.cli.TesseraqlHostCli"]
-CMD ["host", "--stack", "/stack", "--port", "8080"]

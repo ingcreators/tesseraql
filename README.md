@@ -86,10 +86,14 @@ curl -s -H "Authorization: Bearer $TOKEN" "http://localhost:8080/user-admin/api/
 curl -s -H "Authorization: Bearer $TOKEN" -o users.pdf "http://localhost:8080/user-admin/api/users/print"
 ```
 
-Or build a container image with the app baked in:
+Or build a container image from the official runtime image, with the packaged app unpacked in:
 
 ```bash
-docker build -f deploy/Dockerfile --build-arg APP_HOME=examples/user-admin-app -t user-admin .
+$TQL modules resolve --app examples/user-admin-app   # the gallery commits no modules.lock
+$TQL package --app examples/user-admin-app --out build/user-admin.tqlapp
+unzip -q build/user-admin.tqlapp -d build/stack/user-admin
+docker build -f deploy/Dockerfile --build-arg BASE=ghcr.io/ingcreators/tesseraql-host:latest \
+  --build-arg APP_DIR=build/stack/user-admin --build-arg APP_NAME=user-admin -t user-admin .
 ```
 
 See [docs/deployment.md](docs/deployment.md) for the Kamal 2 + Cloudflare Tunnel deployment

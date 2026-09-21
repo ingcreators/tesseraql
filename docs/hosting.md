@@ -98,7 +98,7 @@ refusal names. Placing it is one step, and each distribution reads one place:
 
 | Distribution | Where the jar goes |
 | --- | --- |
-| Container image | `/opt/tesseraql/lib/` (the image starts with `-cp 'lib/*'`) |
+| Container image | `COPY` it into `/opt/tesseraql/lib/` in the derived image (the runtime image starts with `-cp 'lib/*'`) |
 | Developer CLI, `tesseraql-host` archive | `lib/ext/` beside the launcher, or any path in `TESSERAQL_CLASSPATH` |
 | Windows app image | `app\ext\`, plus an `app.classpath=$APPDIR\ext\<jar>` line **inside the `[Application]` section** of `app\tesseraql-host.cfg`, beside the one already there — appended at the end of the file it lands in `[JavaOptions]` and is read as a JVM option, so the classpath never grows |
 
@@ -159,7 +159,8 @@ hosting, because resolution reaches Maven repositories and a production host boo
 host distribution carries no resolver at all. `tesseraql package` resolves the closure its
 `modules.lock` pins and carries it inside the archive under `.tesseraql/modules/`, so deploying a
 package is the whole step; an installed application loads that set and never consults
-`work/modules`.
+`work/modules`. The container template (`deploy/Dockerfile`) unpacks a package for this reason:
+a copied source tree carries no module set, and an image built from one was refused at start.
 
 An application installed as a directory rather than a package is the case that still needs the
 operator step, run on a machine that has the developer CLI:

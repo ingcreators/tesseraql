@@ -14,17 +14,26 @@ users → Cloudflare (DNS / CDN / WAF / Access)
            │ tunnel (outbound-only; no open HTTP ports on the host)
            ▼
 host: cloudflared → kamal-proxy → tesseraql runtime (:8080)
-                                     └ volume: /stack/app/work
+                                     └ volume: /stack/<name>/work
 managed PostgreSQL (sessions, jobs, outbox, file transfers all multi-node safe)
 ```
 
 - `GET /_tesseraql/health/live` is the unauthenticated liveness endpoint (the process answers;
-it never touches a dependency), and `GET /_tesseraql/health/ready` — also what the bare
-`/_tesseraql/health` serves — is the readiness roll-up: it probes every configured datasource
-live and answers `503 {"status":"DOWN"}` when one fails, `WARN` on active alerts, `UP`
-otherwise (status word only). Point container health checks at
-`/_tesseraql/health/live` and load-balancer/proxy checks at `/_tesseraql/health/ready`; the
-  detailed health/metrics stay behind the authorized ops API.
+it never touches a dependency). An application's `GET /<name>/_tesseraql/health/ready` — also
+what its bare `/<name>/_tesseraql/health` serves — is that application's readiness roll-up: it
+probes every configured datasource and answers `503 {"status":"DOWN"}` when one fails, `WARN`
+on active alerts, `UP` otherwise (status word only). The roll-up is held and refreshed behind
+the answer, so a probe on any cadence — Kubernetes' default is every ten seconds — is answered
+from the last roll-up and starts the next; `DOWN` is also the answer when a refresh has hung for
+three times `tesseraql.diagnostics.readinessTtl` (`1s` by default). The origin's
+`GET /_tesseraql/health/ready` is the stack's readiness over every member. It answers
+`503 {"status":"DRAINING"}` while the stack stops and `503 {"status":"DOWN"}` when every
+member's roll-up is down. Otherwise it answers `200` and names the members that are not `UP`
+(`{"status":"DEGRADED","down":["orders"]}`). A partial outage stays routable on purpose: two
+nodes share every member's database, so a readiness that failed on any one member would empty
+the pool for the healthy ones too. Point container health checks at `/_tesseraql/health/live` and
+load-balancer/proxy checks at the origin's `/_tesseraql/health/ready`; the detailed
+health/metrics stay behind the authorized ops API.
 - Put a Cloudflare Access policy on `/_tesseraql/*` so the system consoles sit behind both the
   Cloudflare login and the app's own authentication.
 - Sessions are `jdbc` by default (shared `tql_session`, logins survive container
@@ -34,10 +43,29 @@ otherwise (status word only). Point container health checks at
 
 ## Shipping apps
 
-**A. Baked image (default).** The [app home](app-layout.md) is COPYed into the image; deploying the app is
-`kamal deploy`. The running container maps one-to-one to a git commit, CI gates
+**A. Derived image (default).** The official runtime image,
+`ghcr.io/ingcreators/tesseraql-host:<version>` — also tagged `<major.minor>` and `latest`, for
+`linux/amd64` and `linux/arm64`, published from every release tag — carries the host and the
+operator verbs and no application. Your image derives from it and unpacks the package you built
+under `/stack/<name>`; `deploy/Dockerfile` is that template:
+
+```sh
+tesseraql package --app . --out build/orders.tqlapp
+unzip -q build/orders.tqlapp -d build/stack/orders
+docker build -f deploy/Dockerfile \
+  --build-arg BASE=ghcr.io/ingcreators/tesseraql-host:0.19.0 \
+  --build-arg APP_DIR=build/stack/orders --build-arg APP_NAME=orders -t my-org/orders .
+```
+
+A package rather than the source tree, because the package carries the modules the
+application declared — drivers, the pdf/excel/s3 codecs — and the host refuses to start an
+application that declares modules and carries none
+([hosting.md](hosting.md#modules-are-resolved-before-the-host-starts)). Deploying the app is
+then `kamal deploy`. The running container maps one-to-one to a git commit, CI gates
 (`lint`, `test`, `governance`, `release-evidence`) run before the build, and rollback is the
-previous image.
+previous image. The image sets no heap size: give the container a memory limit and
+`JAVA_TOOL_OPTIONS=-XX:MaxRAMPercentage=75.0`. Its `HEALTHCHECK` probes liveness over `bash`'s
+`/dev/tcp` (the base image ships no HTTP client); Kubernetes ignores it and probes over HTTP.
 
 **B. Several applications on one host.** `tesseraql host --stack <dir>` starts every application
 the directory holds in its own runtime behind one port — its own runtime context, datasource
@@ -90,9 +118,15 @@ schema for the length of the window.
 
 The stack also stops gracefully: on SIGTERM, `host` flips the gateway's readiness to 503 while
 liveness stays 200, keeps serving until in-flight work drains, and then closes every runtime
-under its own `tesseraql.shutdown.timeout`. Give the platform a grace period —
-`terminationGracePeriodSeconds`, Kamal's `deploy_timeout`, and kin — longer than the slowest
-member's declared timeout, or the platform's SIGKILL cuts the drain short.
+under its own `tesseraql.shutdown.timeout` (`45s` by default). The close that follows the drain
+is bounded too — five seconds per transport, an abandoned close logged — so the process exits
+`143` within a few seconds of the drain. Give the platform a grace period longer than the
+slowest member's declared timeout plus that margin, or the platform's SIGKILL cuts the drain
+short; every platform's default is shorter. `docker stop` waits ten seconds (`docker stop -t 60`;
+Compose's `stop_grace_period: 60s`), Kamal stops a proxied role with Docker's ten unless
+`stop_timeout` says otherwise (the shipped template sets `stop_timeout` and `drain_timeout` to
+60), and Kubernetes' `terminationGracePeriodSeconds` is 30 and includes any `preStop` hook. CI
+stops the container image with `docker stop -t 60` on every pull request and reads the exit code.
 
 ## Multi-server notes
 

@@ -270,6 +270,13 @@ final class StackRelay {
     private volatile boolean draining;
 
     /**
+     * Each hosted runtime's held readiness, by slot, for the origin's roll-up
+     * (docs/deployment-maturity.md decision 3); {@code null} answers readiness from the flag
+     * alone, which is the shape a test with no host builds.
+     */
+    private volatile java.util.function.Supplier<Map<String, String>> memberReadiness;
+
+    /**
      * How many forwards one member may have in flight (docs/http-threading.md decision 5).
      *
      * <p>There was no declared bound and there was an undeclared one: the outbound client's own
@@ -380,6 +387,12 @@ final class StackRelay {
      */
     void beginDrain() {
         draining = true;
+    }
+
+    /** Wires the members' held readiness into the origin's answer; see {@link StackReadiness}. */
+    StackRelay memberReadiness(java.util.function.Supplier<Map<String, String>> readiness) {
+        this.memberReadiness = readiness;
+        return this;
     }
 
     /**
@@ -497,7 +510,9 @@ final class StackRelay {
             // framework's /_tesseraql/ fence at origin scope, which the name grammar's
             // segment-safety rule keeps unreachable by any application. Liveness is the process
             // answering; readiness is whether new traffic should be routed here, which a
-            // draining stack answers no to while it finishes what it accepted.
+            // draining stack answers no to while it finishes what it accepted — and which a
+            // stack whose every member is down answers no to as well (StackReadiness): this is
+            // the path the templates probe, and it used to consult no member at all.
             if ("/_tesseraql/health/live".equals(rawPath)) {
                 request.response().setStatusCode(200)
                         .putHeader("Content-Type", "application/json; charset=utf-8")
@@ -505,10 +520,12 @@ final class StackRelay {
                 return;
             }
             if ("/_tesseraql/health/ready".equals(rawPath)) {
-                boolean stopping = draining;
-                request.response().setStatusCode(stopping ? 503 : 200)
+                java.util.function.Supplier<Map<String, String>> members = memberReadiness;
+                StackReadiness readiness = StackReadiness.of(draining,
+                        members == null ? Map.of() : members.get());
+                request.response().setStatusCode(readiness.routable() ? 200 : 503)
                         .putHeader("Content-Type", "application/json; charset=utf-8")
-                        .end(stopping ? "{\"status\":\"DRAINING\"}" : "{\"status\":\"UP\"}");
+                        .end(readiness.json());
                 return;
             }
             // The root does exactly one thing — redirect — and configuration chooses only the

@@ -65,6 +65,12 @@ class StackRelayTest {
     /** The same, bounded to one stream forward, so the stream share can be saturated. */
     private static HttpServer streamBoundedFront;
     private static String streamBoundedBase;
+    /** A front whose origin readiness rolls up member statuses the test sets. */
+    private static StackRelay readinessRelay;
+    private static HttpServer readinessFront;
+    private static String readinessBase;
+    private static final java.util.concurrent.atomic.AtomicReference<Map<String, String>> memberStatuses = new java.util.concurrent.atomic.AtomicReference<>(
+            Map.of());
     /** The same relay with cleartext HTTP/2 on, at both ends together. */
     private static HttpClient h2Client;
     private static HttpServer h2Front;
@@ -117,10 +123,20 @@ class StackRelayTest {
         streamBoundedFront.requestHandler(streamBounded::handle);
         streamBoundedBase = "http://localhost:"
                 + await(streamBoundedFront.listen()).actualPort() + "/" + APP;
+        // The origin's readiness over members whose held status the test sets
+        // (docs/deployment-maturity.md decision 3).
+        readinessRelay = new StackRelay(client, CATALOGUE, appId -> originPort)
+                .memberReadiness(memberStatuses::get);
+        readinessFront = vertx.createHttpServer(StackRelay.frontOptions(0, false));
+        readinessFront.requestHandler(readinessRelay::handle);
+        readinessBase = "http://localhost:" + await(readinessFront.listen()).actualPort();
     }
 
     @AfterAll
     static void stop() throws Exception {
+        if (readinessFront != null) {
+            await(readinessFront.close());
+        }
         if (streamBoundedFront != null) {
             await(streamBoundedFront.close());
         }
@@ -1139,6 +1155,61 @@ class StackRelayTest {
 
     private static HttpResponse<String> send(HttpRequest.Builder request) throws Exception {
         return sendOver(Version.HTTP_1_1, request);
+    }
+
+    /**
+     * The origin's readiness rolls up its members (docs/deployment-maturity.md decision 3):
+     * every member down sheds, one member down among others is degraded and still routable.
+     * The variant that answers the flag alone is red on the first assertion.
+     */
+    @Test
+    void theOriginReadinessRollsUpItsMembers() throws Exception {
+        memberStatuses.set(Map.of("orders", "DOWN", "portal", "DOWN"));
+        HttpResponse<String> down = send(HttpRequest.newBuilder(
+                URI.create(readinessBase + "/_tesseraql/health/ready")));
+        assertThat(down.statusCode()).as("every member down: %s", down.body()).isEqualTo(503);
+        assertThat(down.body()).isEqualTo("{\"status\":\"DOWN\",\"down\":[\"orders\",\"portal\"]}");
+
+        memberStatuses.set(Map.of("orders", "DOWN", "billing", "UP", "portal", "UP"));
+        HttpResponse<String> degraded = send(HttpRequest.newBuilder(
+                URI.create(readinessBase + "/_tesseraql/health/ready")));
+        assertThat(degraded.statusCode())
+                .as("one member down among others stays routable: %s", degraded.body())
+                .isEqualTo(200);
+        assertThat(degraded.body()).isEqualTo("{\"status\":\"DEGRADED\",\"down\":[\"orders\"]}");
+
+        memberStatuses.set(Map.of("orders", "UP", "billing", "UP", "portal", "UP"));
+        HttpResponse<String> up = send(HttpRequest.newBuilder(
+                URI.create(readinessBase + "/_tesseraql/health/ready")));
+        assertThat(up.statusCode()).isEqualTo(200);
+        assertThat(up.body()).isEqualTo("{\"status\":\"UP\"}");
+        // Liveness is the process answering, whatever the members say.
+        assertThat(send(HttpRequest.newBuilder(
+                URI.create(readinessBase + "/_tesseraql/health/live"))).statusCode())
+                .isEqualTo(200);
+    }
+
+    /**
+     * Draining answers 503 whatever the members say: stop routing to me, do not kill me. On a
+     * relay of its own, because a relay has no "stop draining" and the roll-up case shares
+     * {@link #readinessRelay} — the two run in either order.
+     */
+    @Test
+    void aDrainingOriginAnswersDrainingWhateverItsMembersSay() throws Exception {
+        StackRelay draining = new StackRelay(client, CATALOGUE, appId -> originPort)
+                .memberReadiness(() -> Map.of("orders", "UP"));
+        HttpServer drainingFront = vertx.createHttpServer(StackRelay.frontOptions(0, false));
+        drainingFront.requestHandler(draining::handle);
+        String drainingBase = "http://localhost:" + await(drainingFront.listen()).actualPort();
+        try {
+            draining.beginDrain();
+            HttpResponse<String> answer = send(HttpRequest.newBuilder(
+                    URI.create(drainingBase + "/_tesseraql/health/ready")));
+            assertThat(answer.statusCode()).isEqualTo(503);
+            assertThat(answer.body()).isEqualTo("{\"status\":\"DRAINING\"}");
+        } finally {
+            await(drainingFront.close());
+        }
     }
 
     /** Sends pinned to one protocol, so a case says which wire it exercised. */

@@ -408,7 +408,9 @@ class WorkflowLedgerTest {
         for (Path workflow : workflows()) {
             List<String> lines = Files.readAllLines(workflow);
             for (JobBody job : bodies(lines)) {
-                if (job.body().stream().noneMatch(text -> text.contains("docker push"))) {
+                // docker push, or buildx's --push, which pushes without spelling the verb.
+                if (job.body().stream().noneMatch(text -> text.contains("docker push")
+                        || text.contains("--push"))) {
                     continue;
                 }
                 // A job's block sits two levels in, so its entries are at six; the

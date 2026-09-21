@@ -31,6 +31,9 @@ RUN useradd --system --create-home tesseraql
 WORKDIR /home/tesseraql
 COPY --from=build /src/tesseraql-cli/target/*.jar lib/
 COPY --from=build /src/tesseraql-cli/target/dependency/*.jar lib/
+# Liveness over bash's /dev/tcp: this base ships no curl, and the check that called one could
+# never pass (docs/deployment-maturity.md, row 1).
+COPY --chmod=0755 deploy/health.sh bin/health
 ARG APP_HOME=examples/inventory-app
 COPY ${APP_HOME} /stack/app
 RUN mkdir -p /stack/app/work && chown -R tesseraql /stack
@@ -47,8 +50,7 @@ RUN java -XX:+UseCompactObjectHeaders \
 USER tesseraql
 VOLUME /stack/app/work
 EXPOSE 8080
-HEALTHCHECK --interval=15s --timeout=3s --start-period=90s \
-  CMD curl -fsS http://localhost:8080/_tesseraql/health/live || exit 1
+HEALTHCHECK --interval=15s --timeout=3s --start-period=90s CMD ["/home/tesseraql/bin/health"]
 ENTRYPOINT ["java", \
   "-XX:+UseCompactObjectHeaders", \
   "--sun-misc-unsafe-memory-access=allow", \
