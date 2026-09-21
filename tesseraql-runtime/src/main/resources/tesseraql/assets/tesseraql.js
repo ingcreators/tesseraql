@@ -190,7 +190,10 @@ document.addEventListener("keydown", (event) => {
 // the Studio shell on the command-palette trigger. An engine without the Invoker Commands API
 // (Safari before 26, Firefox before 144, Chrome and Edge before 135) leaves such a button inert,
 // so this shim performs the one command the framework emits; it is feature-detected and never
-// installed where the platform answers (docs/hypermedia-ui.md "Browser support").
+// installed where the platform answers (docs/hypermedia-ui.md "Browser support"). A stand-in
+// awaiting the kit: briefed as hc-briefs.md brief 16 (hypermedia-components#624,
+// installInvokerCommands — the kit already carries such a fallback for CSS anchor positioning);
+// delete it when the kit owns the fallback.
 if (!("commandForElement" in HTMLButtonElement.prototype)) {
     document.addEventListener("click", (event) => {
         const trigger = event.target instanceof Element

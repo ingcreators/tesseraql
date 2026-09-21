@@ -224,8 +224,10 @@ All notable changes to TesseraQL are documented here. The format follows
   dialog is the only way to compose a filter and an iPad 7th generation stays on Safari 18
   for good: the bootstrap keeps a feature-detected shim that performs `show-modal` where
   `HTMLButtonElement` has no `commandForElement`, and is never installed where the platform
-  answers. `docs/hypermedia-ui.md` gains "Opening a dialog" and "Browser support", the first
-  written browser floor; the manifest guard pins `installSubmitOnChange`. The 0.4.1 recipe
+  answers — a named stand-in: brief 16 (hypermedia-components#624) asks the kit to own that
+  fallback, as it already does for CSS anchor positioning. `docs/hypermedia-ui.md` gains
+  "Opening a dialog" and "Browser support", the first written browser floor; the manifest
+  guard pins `installSubmitOnChange`. The 0.4.1 recipe
   sweep — the repository, not the WebJAR — found no recipe added; the one that changed,
   chat-messages, grew two textarea attributes the copilot's single-line composer has no use
   for.

@@ -679,6 +679,74 @@ form that htmx already drives on change (`hx-trigger="change"`), the same verb e
 confirm behaviour carries. Without JavaScript the control simply does not auto-submit, which is
 the honest degradation.
 
+## Brief 16 — `installInvokerCommands`: a feature-detected fallback for the invoker commands the kit blesses
+
+*Filed: [ingcreators/hypermedia-components#624](https://github.com/ingcreators/hypermedia-components/issues/624)
+(found 2026-09-21, hc 0.4.1 adoption — #1419, the answer to brief 14).
+Stand-in to retire: `tesseraql.js`'s `commandfor` shim (the `"commandForElement" in
+HTMLButtonElement.prototype` block), and the "TesseraQL does" sentence in
+[hypermedia-ui.md](hypermedia-ui.md) "Browser support".*
+
+### Problem
+
+hc 0.4.1 blesses `<button type="button" commandfor="<id>" command="show-modal">` / `"close"` as
+the way to open and close a dialog already in the page — the dialog page, the data-grid-page
+template's Filters button and applied chips, every fixture — and ships no fallback: "on an older
+engine the button does nothing, which is the honest degradation for a modal open — there is no
+scriptless one." The first consumer to adopt it found that degradation is a functional loss, not
+a cosmetic one, on a floor that is permanent for real fleets. In the data-grid-page shape the
+Filters dialog is the only way to compose a filter, so below the floor a list cannot be filtered
+at all; and Safari 26 needs iOS / iPadOS 26, which the iPad 7th generation (2019) never gets, so
+that fleet stays on Safari 18 for good. TesseraQL therefore carries an eight-line shim —
+feature-detected, delegated, `showModal()` on click — which is the shape brief 14 described for
+the opener itself: every consumer with such a fleet writes the same listener and re-decides the
+detection, the command set and the edge cases alone.
+
+### Why this belongs upstream
+
+The markup is the kit's blessing, so the degradation policy for it is the kit's to own; a
+consumer shim over a kit-blessed contract is the glue briefs 13–15 exist to remove. And the kit
+already ships this kind of fallback: `anchor-fallback.js` feature-detects CSS Anchor Positioning
+(`CSS.supports('anchor-name', '--x')`, Baseline **2026**) and places popovers, menus and tooltips
+by script on engines without it. Invoker commands are Baseline **2025**. A scripted fallback for
+the newer feature and none for the older is inconsistent, and "there is no scriptless one" does
+not decide it — the anchor fallback is not scriptless either. The kit can also prove the
+degradation path on every CI leg without an old engine: the existing `invoker-commands.spec.mjs`
+fixtures, run after deleting `commandForElement` from `HTMLButtonElement.prototype`.
+
+### Proposed
+
+`installInvokerCommands()`, auto-installed, idempotent, returns an uninstaller, claimed as
+platform glue in the manifest. At install, if `"commandForElement" in
+HTMLButtonElement.prototype`, install nothing (the native path stays alone — no double
+`showModal()`). Otherwise one delegated `click` listener that ignores `defaultPrevented`,
+disabled buttons and submit buttons, resolves the target by id from the button's root node, and
+performs the built-in commands the kit blesses: `show-modal` → `showModal()` on a `<dialog>`
+not already open, `close` → `close()` on one that is. Out of scope: the `command` event and
+custom `--` commands (a consumer needing the full API can load `invokers-polyfill`, MIT, ~21 KB,
+which has no WebJar). Docs: the dialog page's and the data-grid-page template's Baseline notes say
+the fallback exists; one row in the behaviors reference; a manifest entry. Optionally a single
+fundamentals page stating the kit's browser floor and which features carry a fallback.
+
+### CSP
+
+- Behavior in the bundle; **no inline JS**.
+
+### Acceptance criteria
+
+- With the API present, no listener is installed and the native command runs alone.
+- Without it (the prototype members deleted before the bundle loads), `show-modal` opens the
+  dialog modally and `close` closes it; a disabled button, a submit button, a `defaultPrevented`
+  click and an already-open dialog do nothing.
+- Idempotent; the uninstaller removes the listener; no markup change anywhere.
+
+### TesseraQL stand-in to retire
+
+The `commandfor` shim in `tesseraql.js` — delete once the kit owns the fallback, and reword the
+"Browser support" section of [hypermedia-ui.md](hypermedia-ui.md) to say the kit carries it.
+
+---
+
 ## Notes
 
 - The Studio source editor's Ctrl/Cmd+S (`data-tql-hotkey-save` in `tesseraql.js`) is **app
