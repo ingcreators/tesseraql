@@ -100,6 +100,7 @@ GET  /api/rfqs/{id}/comparison        # submitted quotes ranked, distance from l
 POST /api/orders                      # non-lowest pick needs a reason (422 otherwise)
 POST /api/orders/{id}/submit          # orderApproval decision routes the lane
 POST /api/orders/{id}/submit_decision # dispatch: issue (auto lane) or approve_issue (head review)
+GET  /api/orders/{id}/print           # the purchase order (注文書) as PDF, buyer and supplier alike
 ```
 
 (`issue` and `approve_issue` stay individually callable — the dispatch is the UI's
@@ -121,6 +122,7 @@ Shipment and receipt:
 POST /api/orders/{id}/shipment        # supplier registers (confirmed orders only)
 POST /api/orders/{id}/ship            # fails without the registered shipment
 POST /api/orders/{id}/receive         # the requester closes the chain
+GET  /api/orders/{id}/delivery-note   # the delivery note (納品書) as PDF, once a shipment is registered
 GET  /api/shipments/export            # CSV download
 GET  /dashboard                       # the chain at a glance
 ```
@@ -155,14 +157,17 @@ Then:
    answers as a row outside the caller's reach, never as a document.
 4. **hara** opens `/api/rfqs/{id}/comparison`, picks the *non-lowest* quote → a written
    reason is demanded (422); with the reason, the `orderApproval` decision routes the
-   order to `ota`'s desk (within 3% it would have issued itself).
+   order to `ota`'s desk (within 3% it would have issued itself). Once issued,
+   `GET /api/orders/{id}/print` is the 注文書 — the same document for **hara** who placed
+   it and for the supplier it names; the other supplier's token answers 404.
 5. The supplier proposes a +3-day delivery date through the one-action `propose`
    dispatch: within the tolerance table it auto-confirms. Tighten `/api/tolerances` to
    1 day and the next proposal lands as a review task instead — **the decision reads
    the table live, no deploy**, and the supplier's client never learns which lane fired.
 6. The supplier registers the shipment and ships (shipping without registering answers
-   3204); **sato** receives — the chain closes, `/api/shipments/export` has the CSV,
-   and `/dashboard` shows the story.
+   3204); `GET /api/orders/{id}/delivery-note` is the 納品書 from that moment on (404
+   before the shipment exists); **sato** receives — the chain closes,
+   `/api/shipments/export` has the CSV, and `/dashboard` shows the story.
 
 ## Test it
 

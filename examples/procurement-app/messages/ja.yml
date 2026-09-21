@@ -31,3 +31,23 @@ procurement:
       from: 発行者
       total: 合計 (税抜)
       note: 納期は各明細の回答納期です。単価は税抜です。
+    order:
+      title: 注文書
+      number: 注文番号
+      orderedOn: 発注日
+      subject: 件名
+      to: 御中
+      from: 発注者
+      deliverTo: 納品先
+      total: 注文金額 (税抜)
+      note: 納期は各明細の納期です。単価は税抜です。
+    deliveryNote:
+      title: 納品書
+      number: 納品書番号
+      orderNumber: 注文番号
+      shippedOn: 出荷日
+      carrier: 運送会社
+      subject: 件名
+      to: 御中
+      from: 発行者
+      note: 検収の上、受領日をご記録ください。

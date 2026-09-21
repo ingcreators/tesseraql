@@ -12,7 +12,7 @@ an empty PostgreSQL applies the app's migrations on start, so there is no manual
 | [`purchase-request-app`](purchase-request-app) | The approval-workflow starter (template gallery, roadmap Phase 47): a `kind: workflow` document drives draft → submitted → approved/rejected in managed mode — synthesized transition endpoints, guards, task assignment, and the history shown on a declarative detail view. |
 | [`inventory-app`](inventory-app) | The inventory starter: declarative views end to end — searchable/paginated list, a dashboard (stats, bar chart, low-stock table), forms, and a stock adjustment guarded by a declarative validation rule. |
 | [`helpdesk-app`](helpdesk-app) | The helpdesk starter: an app-mode workflow over the ticket's own `status` column, plus a transactional `notify:` on ticket creation that the declarative suite asserts without SMTP. |
-| [`procurement-app`](procurement-app) | The suite-scale example: four workflows (requisition, RFQ, quote, order) over thirty routes, with shared decisions, rules, and scopes — what a real department application looks like. |
+| [`procurement-app`](procurement-app) | The suite-scale example: four workflows (requisition, RFQ, quote, order) over thirty routes, with shared decisions, rules, and scopes, and three printable documents (quotation, purchase order, delivery note) rendered from header-and-lines templates in the request's language — what a real department application looks like. |
 | [`juchu-kanri-app`](juchu-kanri-app) | Japanese identifiers end to end: table and column names in Japanese, used verbatim as input names, binds, and URL parameters ([identifiers](../docs/identifiers.md)). |
 
 Every app follows the same conventions, so what you learn from one transfers to the others.

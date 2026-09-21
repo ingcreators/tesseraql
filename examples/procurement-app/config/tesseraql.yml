@@ -108,6 +108,15 @@ tesseraql:
         anyOf:
           - role: SUPPLIER
           - role: ADMIN
+      # The purchase order and the delivery note (docs/procurement-documents-and-edi.md
+      # decision 5) print from both sides of the portal through one route each: the policy
+      # grants the surface, quotes_scope confines a supplier to their own orders.
+      doc.read:
+        anyOf:
+          - role: PROCUREMENT
+          - role: PROCUREMENT_HEAD
+          - role: SUPPLIER
+          - role: ADMIN
 
   # Managed workflow state: instances/tasks/history live in the framework's tql_workflow_*
   # tables, so the business table stays clean (docs/approval-workflow.md).

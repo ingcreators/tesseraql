@@ -31,3 +31,23 @@ procurement:
       from: Issued by
       total: Total (excl. tax)
       note: Delivery dates are quoted per line. Unit prices exclude tax.
+    order:
+      title: Purchase order
+      number: Order no.
+      orderedOn: Ordered on
+      subject: Subject
+      to: "Attn:"
+      from: Ordered by
+      deliverTo: Deliver to
+      total: Order total (excl. tax)
+      note: Delivery dates are per line. Unit prices exclude tax.
+    deliveryNote:
+      title: Delivery note
+      number: Delivery note no.
+      orderNumber: Order no.
+      shippedOn: Shipped on
+      carrier: Carrier
+      subject: Subject
+      to: "Attn:"
+      from: Issued by
+      note: Please inspect the goods and record the date of receipt.

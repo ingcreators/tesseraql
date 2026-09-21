@@ -1,6 +1,6 @@
 # The procurement demo, finished: three printable documents and the EDI companion
 
-> **Status: designed 2026-09-21; nothing shipped.** `docs/procurement-demo.md` closed slices
+> **Status: designed 2026-09-21; S1 shipped 2026-09-21 (#1415).** `docs/procurement-demo.md` closed slices
 > 1–7 and left two things open: the three PDFs (見積書, 注文書, 納品書), "deferred to a
 > dedicated documents step resolving the `tesseraql-pdf` module story once for all three
 > documents", and slice 8, the EDI companion, "named so it is a decision, not scope drift". Both
@@ -13,6 +13,22 @@
 > font lacks the glyphs the documents need — and the decisions below. Four slices, the user
 > naming each: **S1** the font and the quotation; **S2** the order and the delivery note; **S3**
 > the receipt-notice feed; **S4** the companion application and the crossing.
+>
+> **S1** — `scripts/sample-font.py` and the level-1 sample font in its four homes (the
+> pdf module's test resources were a fourth copy fact 1 missed); the quotation route,
+> template and SQL; `tesseraql.modules` and `tesseraql.i18n` on the app; four suite cases;
+> `ProcurementDocumentsIntegrationTest` with the read-back proof. Two framework defects the
+> document surfaced were fixed in the slice rather than filed: a print template's `#{key}`
+> rendered as `??key_locale??` because the PDF codec's engine had no message resolver
+> (`DocumentMessages` on the write spec, `DocumentMessageResolver` in the codec, Thymeleaf's
+> standard resolver kept behind it); and a row outside the caller's reach was a 500 from
+> the template's own dereference of an empty header (`export.statusWhen` on a
+> query-export, `TQL-LD-2863` carrying the declared status, refused on a file-export and a
+> job step by `TQL-YAML-1041`). Two deviations from the text below: the h1 carries no
+> letter-spacing, because PDFBox reads a spaced title back as separate glyphs and the
+> read-back is the proof; and the subset keeps the Latin ligature code points (U+FB00–FB06),
+> because a ligature glyph without its own code point extracts as nothing ("office" read
+> back as "o ce"). The engine logs nothing for a missing glyph — measured, filed below.
 
 ## Why finish it
 
