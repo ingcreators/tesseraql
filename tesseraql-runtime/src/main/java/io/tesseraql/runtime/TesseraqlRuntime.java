@@ -94,6 +94,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
     private final AutoCloseable pinningSource;
     private final AutoCloseable otelSdk;
     private final io.tesseraql.opsui.OpsDashboard opsDashboard;
+    private final ReadinessMemo readiness;
     private final io.tesseraql.core.outbox.OutboxEventSink outboxSink;
     private final AppModules appModules;
     /**
@@ -115,7 +116,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
             io.tesseraql.core.threading.ExecutionLanes executionLanes,
             TenantDataSources tenantDataSources, io.tesseraql.yaml.config.AppConfig config,
             AutoCloseable pinningSource, AutoCloseable otelSdk,
-            io.tesseraql.opsui.OpsDashboard opsDashboard,
+            io.tesseraql.opsui.OpsDashboard opsDashboard, ReadinessMemo readiness,
             io.tesseraql.core.outbox.OutboxEventSink outboxSink, AppModules appModules) {
         this.runtimeContext = runtimeContext;
         this.dataSources = dataSources;
@@ -134,6 +135,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
         this.pinningSource = pinningSource;
         this.otelSdk = otelSdk;
         this.opsDashboard = opsDashboard;
+        this.readiness = readiness;
         this.outboxSink = outboxSink;
         this.appModules = appModules;
     }
@@ -141,6 +143,14 @@ public final class TesseraqlRuntime implements AutoCloseable {
     /** The operations dashboard for this runtime (health, metrics, traces, alerts). */
     public io.tesseraql.opsui.OpsDashboard opsDashboard() {
         return opsDashboard;
+    }
+
+    /**
+     * This runtime's readiness memo — what its own {@code /_tesseraql/health/ready} answers from,
+     * and what the origin's roll-up reads for it (docs/deployment-maturity.md decision 3).
+     */
+    ReadinessMemo readiness() {
+        return readiness;
     }
 
     /** Starts the runtime against {@code appHome}, using the configured {@code server.port}. */
@@ -1394,6 +1404,9 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     jobRepository, lanes, slowSqlLog, effectiveTracer,
                     pinningMonitor, outboxStore, eventChannelStore,
                     pollSourceStatus, calendarStatus, dataSource, dataSources);
+            // One memo per runtime: the member's own readiness path and the origin's roll-up
+            // read the same state and keep it fresh (docs/deployment-maturity.md decision 3).
+            ReadinessMemo readiness = ReadinessMemo.over(opsDashboard);
             // The app's db/migration runs before anything queries its schema: fresh installs,
             // upgrades and canary activations all converge here (design ch. 31, 32).
             // The history key is the application's own declaration, not this runtime's idea of its
@@ -1589,8 +1602,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
             // Liveness and readiness, answered on the router off the roll-up the dashboard holds
             // (docs/http-threading.md decision 3): the surface that has to be answerable when
             // nothing else is must not need the resource everything else is waiting for.
-            io.tesseraql.opsui.OpsDashboard health = opsDashboard;
-            sseEndpoints.add(() -> HealthRoutes.install(context, health));
+            sseEndpoints.add(() -> HealthRoutes.install(context, readiness));
             // Compiled routes, served on the router off the worker pool (docs/http-edge.md
             // decision 1). Mounted ahead of the remaining hand-written surfaces rather than
             // instead of them: a
@@ -2067,7 +2079,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
             LOG.info("TesseraQL runtime started on port {} for app {}", boundPort, appHome);
             return new TesseraqlRuntime(context, dataSources, boundPort, jobRepository, jobExecutor,
                     outboxStore, jobs, jobOwners, appName, hostedApps, lanes, tenantDataSources,
-                    manifest.config(), pinningSource, otelSdk, opsDashboard, outboxSink, modules);
+                    manifest.config(), pinningSource, otelSdk, opsDashboard, readiness,
+                    outboxSink, modules);
         } catch (Exception | Error ex) {
             // A failed boot releases what it took (docs/audit-hardening.md Decision 5). Closing
             // the TesseraQL objects is not enough: everything registered through addService above

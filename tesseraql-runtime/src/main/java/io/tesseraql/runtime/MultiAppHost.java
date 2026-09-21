@@ -821,6 +821,21 @@ public final class MultiAppHost implements AutoCloseable, StackReconciler.HostOp
     }
 
     /**
+     * Every slot's readiness as its runtime holds it, keyed by slot — members by name, a staged
+     * canary as {@code <name>#canary}, the stack surface as {@code portal} — for the origin's
+     * roll-up (docs/deployment-maturity.md decision 3). A runtime with no roll-up yet reads
+     * {@code UNKNOWN}, and asking it has started one. A map read per slot, never a probe.
+     */
+    Map<String, String> memberReadiness() {
+        Map<String, String> statuses = new java.util.TreeMap<>();
+        for (Map.Entry<String, Slot> slot : slots.entrySet()) {
+            String name = SURFACE_SLOT.equals(slot.getKey()) ? "portal" : slot.getKey();
+            statuses.put(name, slot.getValue().runtime().readiness().poll().orElse("UNKNOWN"));
+        }
+        return statuses;
+    }
+
+    /**
      * The entry the staged canary runtime was started from, or {@code null} when none is staged
      * — what the reconciler diffs the on-disk candidate against.
      */
@@ -976,15 +991,12 @@ public final class MultiAppHost implements AutoCloseable, StackReconciler.HostOp
         // Last, and only here: every runtime served on this instance and none of them closed it,
         // which is what let one application be stopped or replaced without taking the transport
         // out from under its neighbours (docs/http-threading.md decision 4).
+        // Under the post-drain bound, not the start timeout: the platform's grace period is
+        // derived from the drain bound plus a margin, and this wait has to fit inside the margin
+        // (docs/deployment-maturity.md decision 4).
         if (context.vertx() != null) {
-            try {
-                context.vertx().close().toCompletionStage().toCompletableFuture()
-                        .get(30, java.util.concurrent.TimeUnit.SECONDS);
-            } catch (InterruptedException interrupted) {
-                Thread.currentThread().interrupt();
-            } catch (Exception ex) {
-                LOG.warn("Failed to close the host's Vert.x instance: {}", ex.getMessage(), ex);
-            }
+            BoundedClose.await(context.vertx().close().toCompletionStage().toCompletableFuture(),
+                    BoundedClose.BOUND, "the host's Vert.x instance");
         }
     }
 

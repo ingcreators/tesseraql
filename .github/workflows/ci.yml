@@ -211,38 +211,82 @@ jobs:
           fi
           echo "work/modules: $(wc -l < cache-jars.txt) jar(s), none of the $(wc -l < ledger-jars.txt) the runtime carries"
 
-  # The default shipping pattern in docs/deployment.md is a baked image, and nothing built
-  # deploy/Dockerfile: it had been unbuildable since the copy-dependencies step started
-  # needing the reactor installed, and the failure was invisible because the demo image
-  # (built only on release tags) had already been fixed. This job builds the documented
-  # image and runs the CLI inside it, so the deployment path breaks in a pull request
-  # rather than in someone's deploy.
+  # The default shipping pattern in docs/deployment.md is a derived image: the official
+  # runtime image (deploy/Dockerfile.host) with a packaged application unpacked under /stack
+  # (deploy/Dockerfile). Nothing used to run the container: the baked image's HEALTHCHECK
+  # called a curl the base image never carried, an application that declared a module was
+  # refused at start, and a job that ran `routes` inside the image and stopped there saw
+  # neither (docs/deployment-maturity.md, rows 1-3). This job builds both images, packages
+  # the gallery application that declares a module, runs the container against a database,
+  # waits for the image's own health check to pass, and stops it inside the grace period —
+  # so the deployment path breaks in a pull request rather than in someone's deploy.
   deploy-image:
     name: Deployment image
-    timeout-minutes: 20
+    timeout-minutes: 30
     runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: user_admin
+          POSTGRES_PASSWORD: user_admin
+          POSTGRES_DB: user_admin
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U user_admin"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
 
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Build the baked image
+      - name: Set up Java
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+          verify-signature: true
+
+      - name: Build the runtime image
+        run: docker build -f deploy/Dockerfile.host -t tesseraql-host:local .
+
+      # The package needs the developer CLI: `package` resolves the lock's closure and bundles
+      # it under .tesseraql/modules, which is what lets the derived image host an application
+      # that declares a module. Installed with the BOM, as the dist job does, so the module's
+      # own coordinate resolves from the local repository.
+      - name: Build the developer CLI
+        run: ./mvnw -B -ntp -pl tesseraql-cli,tesseraql-bom -am -Pdist -DskipTests install
+
+      - name: Package the gallery application that declares a module
+        run: |
+          TQL="java -jar $(ls tesseraql-cli/target/tesseraql-cli-*-all.jar)"
+          $TQL modules resolve --app examples/user-admin-app
+          $TQL package --app examples/user-admin-app --out stack-build/user-admin.tqlapp
+          unzip -q stack-build/user-admin.tqlapp -d stack-build/user-admin
+          test -d stack-build/user-admin/.tesseraql/modules \
+            || { echo "the package carries no bundled module set" >&2; exit 1; }
+
+      - name: Build the derived image
         run: |
           docker build -f deploy/Dockerfile \
-            --build-arg APP_HOME=examples/scaffold-demo-app \
+            --build-arg BASE=tesseraql-host:local \
+            --build-arg APP_DIR=stack-build/user-admin \
+            --build-arg APP_NAME=user-admin \
             -t tesseraql-deploy-check .
 
       - name: Run the CLI inside the image
         run: |
-          # No database is involved: this proves the image's classpath resolves and the app
-          # compiles, which is what the unbuildable image would have hidden.
-          #
           # The output is asserted, not just the exit code — the same reasoning as the
           # jpackage smoke test: a launcher that starts, prints nothing and exits 0 passes
           # an exit-code-only check while being useless.
-          out=$(docker run --rm tesseraql-deploy-check routes --app /stack/app)
+          out=$(docker run --rm tesseraql-deploy-check routes --app /stack/user-admin)
           printf '%s\n' "$out"
-          grep -q 'items.search' <<<"$out" \
+          grep -q 'users.search' <<<"$out" \
             || { echo "the image listed no routes" >&2; exit 1; }
 
       - name: Assert the shared archive was trained into the image
@@ -252,11 +296,66 @@ jobs:
           # An archive the running JVM refuses (a flag mismatch between the training run and
           # the entrypoint) is worse than none: it costs four error lines per start and buys
           # nothing. Assert the CDS logger stays quiet.
-          noise=$(docker run --rm tesseraql-deploy-check routes --app /stack/app 2>&1 >/dev/null \
+          noise=$(docker run --rm tesseraql-deploy-check routes --app /stack/user-admin 2>&1 >/dev/null \
                   | grep -c '\[cds\]' || true)
           [ "${noise:-0}" = "0" ] || {
-            docker run --rm tesseraql-deploy-check routes --app /stack/app 2>&1 >/dev/null
+            docker run --rm tesseraql-deploy-check routes --app /stack/user-admin 2>&1 >/dev/null
             echo "the shared archive was refused at run time" >&2; exit 1; }
+
+      # The container against the service database, on the host network so the application's
+      # default DB_HOST (localhost) reaches the runner's published port. Readiness at the
+      # origin is the roll-up over the member (docs/deployment-maturity.md decision 3).
+      - name: Run the container and wait for readiness
+        run: |
+          docker run -d --network host --name stack tesseraql-deploy-check
+          for i in $(seq 1 90); do
+            if curl -sf http://localhost:8080/_tesseraql/health/ready | grep -q '"UP"'; then break; fi
+            [ "$(docker inspect --format '{{.State.Running}}' stack)" = "true" ] \
+              || { echo 'the container exited'; docker logs stack; exit 1; }
+            sleep 1
+          done
+          curl -sf http://localhost:8080/_tesseraql/health/ready | grep -q '"UP"' \
+            || { echo 'the origin never answered ready'; docker logs stack; exit 1; }
+          curl -sf http://localhost:8080/user-admin/_tesseraql/health/ready > /dev/null \
+            || { echo 'the member never answered ready'; docker logs stack; exit 1; }
+
+      # The image's own health check, which Docker runs from the start period on: a check that
+      # cannot pass reads `unhealthy` here rather than in someone's Compose file.
+      - name: Wait for the image's health check to pass
+        run: |
+          status=starting
+          for i in $(seq 1 90); do
+            status=$(docker inspect --format '{{.State.Health.Status}}' stack)
+            [ "$status" = "healthy" ] && break
+            sleep 1
+          done
+          [ "$status" = "healthy" ] || {
+            echo "the health check reads $status:" >&2
+            docker inspect --format '{{json .State.Health}}' stack >&2; exit 1; }
+
+      # The stop path (docs/runtime-replace.md, the stack's own stop; docs/deployment-maturity.md
+      # decision 4): SIGTERM reaches the ordered drain, the JVM exits 143 well inside a grace
+      # period derived as the drain bound plus a margin, and nothing was cut at the bound.
+      - name: Stop the container inside the grace period
+        run: |
+          start=$(date +%s)
+          docker stop -t 60 stack
+          elapsed=$(( $(date +%s) - start ))
+          code=$(docker inspect --format '{{.State.ExitCode}}' stack)
+          echo "stopped in ${elapsed}s with exit code ${code}"
+          [ "$code" = "143" ] \
+            || { echo 'the stop did not end with the JVM handling SIGTERM' >&2; docker logs stack; exit 1; }
+          [ "$elapsed" -lt 20 ] \
+            || { echo 'the stop outlived the post-drain margin' >&2; docker logs stack; exit 1; }
+          docker logs stack 2>&1 | grep -q 'Stack stopping' \
+            || { echo 'SIGTERM did not reach the ordered drain (no "Stack stopping" line)' >&2; docker logs stack; exit 1; }
+          if docker logs stack 2>&1 | grep -q 'still in flight'; then
+            echo 'the drain cut requests at the bound' >&2; docker logs stack; exit 1
+          fi
+
+      - name: Container log on failure
+        if: failure()
+        run: docker logs stack 2>&1 || true
 
   # The documentation site (docs/docs-site.md): the same build command Cloudflare
   # Workers Builds runs, so green CI implies a clean build (the deploy step, wrangler,

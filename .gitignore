@@ -24,6 +24,8 @@ Thumbs.db
 # Runtime-generated files inside example app homes (system apps unpacked into work/ on serve,
 # the report overlay, the spool) - never committed.
 examples/*/work/
+# The unpacked packages ci.yml's deploy-image job derives an image from (deploy/Dockerfile).
+stack-build/
 # The stack's own work directory `tesseraql dev --stack examples` writes (the portal's tree).
 examples/work/
 examples/*/.tesseraql/

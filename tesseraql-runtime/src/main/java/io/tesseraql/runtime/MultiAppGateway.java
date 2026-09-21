@@ -161,7 +161,8 @@ public final class MultiAppGateway implements AutoCloseable {
                 host::entry, host::ingressStrip,
                 settings.trustedProxies(), this::targetPort, host::surfacePort, rootTarget)
                 .maxConcurrentPerMember(perMember)
-                .maxStreamsPerMember(perMemberStreams);
+                .maxStreamsPerMember(perMemberStreams)
+                .memberReadiness(host::memberReadiness);
         this.server = vertx.createHttpServer(StackRelay.frontOptions(frontPort,
                 settings.http2(), idleTimeoutSeconds(stackSettings)));
         server.requestHandler(relay::handle);
@@ -537,16 +538,9 @@ public final class MultiAppGateway implements AutoCloseable {
     }
 
     private void closeFront() {
-        try {
-            if (server != null) {
-                server.close().toCompletionStage().toCompletableFuture()
-                        .get(START_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-            }
-        } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
-        } catch (RuntimeException | java.util.concurrent.ExecutionException
-                | java.util.concurrent.TimeoutException ignored) {
-            LOG.debug("Gateway server did not close cleanly", ignored);
+        if (server != null) {
+            BoundedClose.await(server.close().toCompletionStage().toCompletableFuture(),
+                    BoundedClose.BOUND, "the gateway's front server");
         }
     }
 
@@ -556,27 +550,16 @@ public final class MultiAppGateway implements AutoCloseable {
      * the point.
      */
     private void closeClientAndVertx() {
-        try {
-            if (client != null) {
-                client.close().toCompletionStage().toCompletableFuture()
-                        .get(START_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-            }
-        } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
-        } catch (RuntimeException | java.util.concurrent.ExecutionException
-                | java.util.concurrent.TimeoutException ignored) {
-            LOG.debug("Gateway client did not close cleanly", ignored);
+        // Each under the post-drain bound rather than the start timeout: these waits sit inside
+        // the margin the platform's grace period leaves after the drain
+        // (docs/deployment-maturity.md decision 4).
+        if (client != null) {
+            BoundedClose.await(client.close().toCompletionStage().toCompletableFuture(),
+                    BoundedClose.BOUND, "the gateway's outbound client");
         }
-        try {
-            if (vertx != null) {
-                vertx.close().toCompletionStage().toCompletableFuture()
-                        .get(START_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-            }
-        } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
-        } catch (RuntimeException | java.util.concurrent.ExecutionException
-                | java.util.concurrent.TimeoutException ignored) {
-            LOG.debug("Gateway Vert.x instance did not close cleanly", ignored);
+        if (vertx != null) {
+            BoundedClose.await(vertx.close().toCompletionStage().toCompletableFuture(),
+                    BoundedClose.BOUND, "the gateway's Vert.x instance");
         }
     }
 }

@@ -113,7 +113,7 @@ Keys are declared in `config/application.yml` and `config/tesseraql.yml`, overri
 | `tesseraql.diagnostics.errorRateWarnPercent` | [OpsDashboards.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/OpsDashboards.java) | — |
 | `tesseraql.diagnostics.pinning.enabled` | [RuntimePools.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/RuntimePools.java) | — |
 | `tesseraql.diagnostics.pinning.thresholdMillis` | [RuntimePools.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/RuntimePools.java) | — |
-| `tesseraql.diagnostics.readinessTtl` | [OpsDashboards.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/OpsDashboards.java) | — |
+| `tesseraql.diagnostics.readinessTtl` | [OpsDashboards.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/OpsDashboards.java) | [deployment](deployment.md) |
 | `tesseraql.diagnostics.slowRateWarnPercent` | [OpsDashboards.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/OpsDashboards.java) | — |
 | `tesseraql.diagnostics.slowSpanMillis` | [OpsDashboards.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/OpsDashboards.java) | — |
 | `tesseraql.diagnostics.slowSqlCapacity` | [RuntimePools.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/RuntimePools.java) | — |
