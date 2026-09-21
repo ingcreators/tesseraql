@@ -1,0 +1,10 @@
+# The port this application binds, internal to the stack: 0 = ephemeral. The front
+# door is the dev/host gateway's --port.
+server:
+  port: 0
+
+db:
+  main:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/supplier_edi}
+    username: ${DB_USER:postgres}
+    password: ${DB_PASSWORD:postgres}

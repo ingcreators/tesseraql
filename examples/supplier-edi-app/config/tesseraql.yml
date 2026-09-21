@@ -1,0 +1,60 @@
+tesseraql:
+  app:
+    name: supplier-edi
+
+  datasources:
+    main:
+      jdbcUrl: ${db.main.url}
+      username: ${db.main.username}
+      password: ${db.main.password}
+
+  # The receipt-notice intake (batch/edi/receipt-notices, docs/procurement-documents-and-edi.md
+  # decisions 2 and 4): the buyer's feed arrives on the partner's SFTP drop, and this
+  # application polls it under its own deny-by-default policy — the host, the credential, and
+  # the host key the server must present. The committed known_hosts pins no key; the README's
+  # ssh-keyscan step pins the demo server's, and until it does every poll cycle refuses the
+  # server (a WARNING and the poll source's status on the operations console) rather than
+  # trust it on first use.
+  connectors:
+    poll:
+      allowedHosts:
+        - localhost
+      knownHostsFile: security/known_hosts
+      credentials:
+        partner-drop:
+          username: edi
+          password: ${secret.env.EDI_SFTP_PASSWORD:edi-secret}
+
+  security:
+    # Path-matched route security defaults (docs/route-defaults.md): the API surface is
+    # bearer, everything else is a browser page.
+    defaults:
+      routes:
+        - match: /api/**
+          auth: bearer
+        - match: /**
+          auth: browser
+          csrf: auto
+
+    # The security header block every HTML response sends (docs/response-shaping.md
+    # "Default response headers"); a route overrides per header name, `unset` suppresses.
+    responseHeaders:
+      Content-Security-Policy: "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
+      X-Content-Type-Options: nosniff
+      X-Frame-Options: DENY
+      Referrer-Policy: no-referrer
+    jwt:
+      secret: ${JWT_SECRET:dev-only-secret-change-me-in-production}
+      # Which tokens are for this application. Without it, any token the issuer
+      # minted for any other relying party would be accepted (TQL-SEC-4048).
+      audience:
+        - https://supplier-edi.example.com
+      rolesClaim: roles
+      permissionsClaim: permissions
+    # Deny-by-default, defined here (the marketplace admission bar, docs/admission.md): the
+    # supplier's back office reads what the buyer sent.
+    policies:
+      notices.read:
+        anyOf:
+          - role: SUPPLIER
+          - role: ADMIN

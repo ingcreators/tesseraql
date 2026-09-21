@@ -190,6 +190,9 @@ Then:
 
    Before the keyscan the run ends `FAILED` with `TQL-BATCH-5315` and the execution row
    says why; the operations console's transfers page holds the produced file either way.
+   The other side is `../supplier-edi-app`: run the whole stack (`cd .. && tesseraql dev
+   --embedded-db`), pin the key there too, and within a poll cycle `/supplier-edi/notices`
+   lists the delivery note — two applications, two databases, one file between them.
 
 ## Test it
 

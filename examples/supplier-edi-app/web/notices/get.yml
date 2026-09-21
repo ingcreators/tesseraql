@@ -1,0 +1,29 @@
+version: tesseraql/v1
+id: notices.page
+kind: route
+recipe: query-html
+
+input:
+  q:
+    type: string
+    required: false
+    maxLength: 100
+
+security:
+  policy: notices.read
+
+pagination:
+  size: 20
+  count: true
+
+sources:
+  main:
+    sql:
+      file: notices.sql
+      mode: query
+      params:
+        q: query.q
+response:
+  html:
+    status: 200
+    view: notices

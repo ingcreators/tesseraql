@@ -1,0 +1,20 @@
+version: tesseraql/v1
+id: api.notices.list
+kind: route
+recipe: query-json
+
+security:
+  policy: notices.read
+
+sources:
+  main:
+    sql:
+      file: notices.sql
+      mode: query
+response:
+  json:
+    status: 200
+    body:
+      data: main.rows
+      meta:
+        count: main.rowCount

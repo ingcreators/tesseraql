@@ -1,0 +1,37 @@
+version: tesseraql/v1
+id: edi.receiptNotices
+kind: job
+recipe: file-import
+
+# The receipt-notice intake (docs/procurement-documents-and-edi.md decisions 2 and 4): the
+# buyer's feed lands on the partner's SFTP drop as receipt-notice-<date>.csv; this poll
+# source lists the drop under the poll policy block in config/tesseraql.yml, waits for a
+# file to be stable, claims it once across replicas, and feeds every row through the upsert.
+# The columns are the buyer's export's, in its order; the per-row statement casts the dates.
+trigger:
+  poll:
+    transport: sftp
+    host: localhost
+    port: 2222
+    path: drop
+    credential: partner-drop
+    include: "receipt-notice-*.csv"
+    delay: 30s
+    consumeOnce: true
+
+import:
+  format: csv
+  columns:
+    - delivery_note_no
+    - order_id
+    - partner_id
+    - partner_name
+    - ship_date
+    - carrier
+    - received_at
+  onError: skip
+
+pipeline:
+  - id: row
+    sql:
+      file: upsert-notice.sql

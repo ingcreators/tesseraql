@@ -8,6 +8,18 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **`supplier-edi-app`, the other side of the procurement demo's exchange.** A new gallery
+  member: a `poll:`-triggered `file-import` job (`batch/edi/receipt-notices`) lists the SFTP
+  drop `procurement-app` pushes its receipt notice to — under `tesseraql.connectors.poll`,
+  the host allow-listed, the credential named, the host key pinned by a `security/known_hosts`
+  the repository commits with no key in it, `consumeOnce` so a file is imported by one
+  replica — and upserts every row by the delivery note's number; a declarative list at
+  `/notices` and its JSON twin show what arrived. `SupplierEdiIntegrationTest` hosts both
+  members and an in-process SFTP server: the buyer's run lands the file, the companion
+  imports it, the list shows the note, and the buyer's rerun updates the row rather than
+  duplicating it. Record:
+  `docs/procurement-documents-and-edi.md` (S4).
+
 - **The procurement demo delivers its receipt notice over SFTP.** `edi.receiptNotice`
   (`batch/edi/receipt-notice`) is a `batch-pipeline` job: an export step writes the
   delivery notes received on the business date as the shipment export's CSV, and a `push:`

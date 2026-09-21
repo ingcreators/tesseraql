@@ -39,6 +39,7 @@ final class TestClaims {
             "https://scaffold-demo.example.com",
             "https://purchase-request.example.com",
             "https://procurement.example.com",
+            "https://supplier-edi.example.com",
             "https://helpdesk.example.com",
             "https://app.example.com");
 

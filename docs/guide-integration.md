@@ -49,6 +49,9 @@ events live, and where you retry one. Set this up before you need it.
   writes the day's CSV, a `push:` step delivers it to an SFTP drop under the push policy
   block — allow-listed host, a named credential, a pinned host key — and a run before the
   pin fails rather than trusts.
+- **Receiving a partner's file.** `examples/supplier-edi-app` is the other side of that
+  exchange: a `poll:` trigger on a `file-import` job lists the same drop under the poll
+  policy block, claims each file once and upserts every row.
 - **Polling a directory from a job step.** Declare a poll source on the trigger instead; the
   framework handles the claim, the move-on-success, and the failure directory.
 - **Publishing the event in the same step as the write.** Use `publish:` so the outbox

@@ -13,6 +13,7 @@ an empty PostgreSQL applies the app's migrations on start, so there is no manual
 | [`inventory-app`](inventory-app) | The inventory starter: declarative views end to end — searchable/paginated list, a dashboard (stats, bar chart, low-stock table), forms, and a stock adjustment guarded by a declarative validation rule. |
 | [`helpdesk-app`](helpdesk-app) | The helpdesk starter: an app-mode workflow over the ticket's own `status` column, plus a transactional `notify:` on ticket creation that the declarative suite asserts without SMTP. |
 | [`procurement-app`](procurement-app) | The suite-scale example: four workflows (requisition, RFQ, quote, order) over thirty routes, with shared decisions, rules, and scopes, and three printable documents (quotation, purchase order, delivery note) rendered from header-and-lines templates in the request's language — what a real department application looks like. |
+| [`supplier-edi-app`](supplier-edi-app) | The other side of an exchange: a `poll:`-triggered `file-import` job reads the receipt notice `procurement-app` pushes to an SFTP drop — allow-listed host, named credential, pinned host key, one replica per file — upserts every row, and lists what arrived. |
 | [`juchu-kanri-app`](juchu-kanri-app) | Japanese identifiers end to end: table and column names in Japanese, used verbatim as input names, binds, and URL parameters ([identifiers](../docs/identifiers.md)). |
 
 Every app follows the same conventions, so what you learn from one transfers to the others.
