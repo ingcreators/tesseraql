@@ -1260,8 +1260,11 @@ class StackRelayTest {
 
     /**
      * The same shedding over h2c, where the wire has no {@code Connection} header: the draining
-     * front answers the request in flight and then sends GOAWAY, so the connection ends and the
-     * client's next stream opens a new one.
+     * front answers the request in flight, whole, and shuts the connection down — GOAWAY, then
+     * the close once the stream has finished — so the client's next stream opens a new
+     * connection. The body is collected on the event loop: registered from the test thread
+     * after the headers, it missed the frames that had already arrived and read nothing, in
+     * about one run of six, whatever the front did.
      */
     @Test
     void aDrainingH2FrontGoesAwayAfterTheStreamInFlight() throws Exception {
@@ -1275,31 +1278,37 @@ class StackRelayTest {
             io.vertx.core.http.HttpClientConnection connection = await(agent.connect(
                     new io.vertx.core.http.HttpConnectOptions().setHost("localhost")
                             .setPort(port)));
-            java.util.concurrent.CountDownLatch closed = new java.util.concurrent.CountDownLatch(1);
-            java.util.concurrent.atomic.AtomicBoolean wentAway = new java.util.concurrent.atomic.AtomicBoolean();
-            connection.goAwayHandler(frame -> wentAway.set(true));
+            java.util.concurrent.CountDownLatch wentAway = new java.util.concurrent.CountDownLatch(
+                    1);
+            java.util.concurrent.CountDownLatch closed = new java.util.concurrent.CountDownLatch(
+                    1);
+            connection.goAwayHandler(frame -> wentAway.countDown());
             connection.closeHandler(v -> closed.countDown());
 
-            io.vertx.core.http.HttpClientResponse before = await(await(connection.request(
-                    new io.vertx.core.http.RequestOptions().setURI("/" + APP + "/hello")))
-                    .send());
-            await(before.body());
-            assertThat(before.statusCode()).isEqualTo(200);
-            assertThat(wentAway).as("before the drain the connection stays").isFalse();
+            assertThat(exchange(connection, "/" + APP + "/hello")).isEqualTo("200 ok");
+            assertThat(wentAway.getCount()).as("before the drain the connection stays")
+                    .isEqualTo(1);
 
             draining.beginDrain();
-            io.vertx.core.http.HttpClientResponse after = await(await(connection.request(
-                    new io.vertx.core.http.RequestOptions().setURI("/" + APP + "/hello")))
-                    .send());
-            assertThat(after.statusCode()).isEqualTo(200);
-            assertThat(await(after.body()).toString()).isEqualTo("ok");
+            assertThat(exchange(connection, "/" + APP + "/hello"))
+                    .as("whole through the drain").isEqualTo("200 ok");
+            assertThat(wentAway.await(5, TimeUnit.SECONDS))
+                    .as("the client was told GOAWAY once the drain began").isTrue();
             assertThat(closed.await(5, TimeUnit.SECONDS))
                     .as("the connection ended after the stream in flight").isTrue();
-            assertThat(wentAway).as("it ended with GOAWAY, not a reset").isTrue();
         } finally {
             await(agent.close());
             await(drainingFront.close());
         }
+    }
+
+    /** One request on an open client connection, the body collected on the event loop. */
+    private static String exchange(io.vertx.core.http.HttpClientConnection connection,
+            String path) throws Exception {
+        return await(connection.request(new io.vertx.core.http.RequestOptions().setURI(path))
+                .compose(io.vertx.core.http.HttpClientRequest::send)
+                .compose(response -> response.body()
+                        .map(body -> response.statusCode() + " " + body.toString())));
     }
 
     /** One HTTP/1.1 exchange on an open socket: the head, then a content-length body. */

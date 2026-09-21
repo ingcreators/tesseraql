@@ -406,9 +406,10 @@ final class StackRelay {
      * mid-flight when it ran out: dropped requests on every rolling update, for exactly the
      * clients that pool connections. An HTTP/1.x response said {@code Connection: close} and the
      * connection now closes, so the client opens a new one for its next request — through the
-     * Service, to a node that is ready. An HTTP/2 connection shuts down gracefully: GOAWAY,
-     * the streams still in flight finishing first. Vert.x writes the header a caller sets but
-     * decides the close from the request's own keep-alive, which is why the close is explicit.
+     * Service, to a node that is ready; Vert.x writes the header a caller sets but decides the
+     * close from the request's own keep-alive, which is why the close is explicit. An HTTP/2
+     * connection shuts down gracefully: GOAWAY, the streams still in flight finishing first,
+     * then the close.
      */
     private static void shed(HttpServerRequest request) {
         if (request.version() == HttpVersion.HTTP_2) {
@@ -542,7 +543,7 @@ final class StackRelay {
         java.util.concurrent.atomic.AtomicReference<java.util.concurrent.Semaphore> held = new java.util.concurrent.atomic.AtomicReference<>();
         // Decided at arrival: a request accepted during the drain is the connection's last.
         // The HTTP/1.x client is told so on the response, and the release below ends the
-        // connection once that response is written.
+        // connection once that response is written (see shed).
         boolean shed = draining;
         if (shed && request.version() != HttpVersion.HTTP_2) {
             request.response().putHeader("Connection", "close");

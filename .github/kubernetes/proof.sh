@@ -177,11 +177,13 @@ phase_firings() {
   local windows
   windows=$(sort -u "$WORK/tick-windows.txt" | wc -l)
   echo "firings: $windows distinct fire times, none doubled"
-  for pod in $(pods); do
-    "$KUBECTL" logs "$pod" | grep -q "Scheduled job probe.tick" \
-      || fail "$pod never scheduled probe.tick"
-  done
-  echo "firings: both replicas scheduled the job"
+  # Both replicas ran firings, read from the execution rows' owner (the pod's name) rather
+  # than from the pods' logs: the load through the rollout rotates a pod's log past its boot
+  # lines, and the replicas that ran before the rollout are gone.
+  local owners
+  owners=$(psql_count "select count(distinct owner_node) from tql_job_execution where job_id = 'probe.tick'")
+  echo "firings: $owners replica(s) ran the job: $(psql_count "select string_agg(distinct owner_node, ', ') from tql_job_execution where job_id = 'probe.tick'")"
+  [ "${owners:-0}" -ge 2 ] || fail "only ${owners:-0} replica ran probe.tick; the schedule did not run on both"
 }
 
 # Shared sessions: a session minted through pod A's origin sign-in reads a browser route on pod

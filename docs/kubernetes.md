@@ -102,8 +102,9 @@ and closes. The close after the drain is bounded too, three seconds per transpor
 the grace period is the bound plus 15: the process exits `143` inside it. There is no `preStop`
 sleep. The idiom exists for servers that stop accepting at the signal; this one keeps answering
 through the drain, so a request routed after the signal is served rather than lost. From the
-signal on, every response also ends its connection: `Connection: close` on HTTP/1.1, GOAWAY on
-HTTP/2. A client that pools connections reconnects through the Service to a pod that stays,
+signal on, every response also ends its connection: `Connection: close` on HTTP/1.1, GOAWAY
+and then the close once the stream is done on HTTP/2. A client that pools connections
+reconnects through the Service to a pod that stays,
 so the in-flight count reaches zero within a round trip of the signal. A stop takes the whole
 bound only when a request runs that long, and a rolling update takes up to the bound per pod.
 

@@ -115,10 +115,16 @@
 > stops routing new connections, not held ones. `StackRelay` now sheds every connection
 > after its first response under the drain (`Connection: close` and an explicit close on
 > HTTP/1.x, since Vert.x writes the header but decides the close from the request's own
-> keep-alive; GOAWAY on HTTP/2), so the count reaches zero within a round trip and the
-> first sentence holds. (2) The ops API's execution rows carry no fire time, so the proof
+> keep-alive; GOAWAY and then the close on HTTP/2), so the count reaches zero within a round
+> trip and the
+> first sentence holds. (The first CI run's one red test was the h2 case's own race — its
+> body handler registered from the test thread after the headers, missing frames already
+> arrived, in about one run of six whatever the front did; the body is composed on the
+> event loop now.) (2) The ops API's execution rows carry no fire time, so the proof
 > buckets `startTime` by ten-second window, refuses a doubled window, requires enough
-> windows to have spanned the rollout, and reads both pods' logs for the schedule. (3) The
+> windows to have spanned the rollout, and reads the rows' `owner_node` for both replicas
+> having run it — not the pods' logs, which the load through the rollout rotates past
+> their boot lines (the first CI run's one red step). (3) The
 > chart's Service could not pin a port, so `service.nodePort` exists and renders only when
 > set; the committed rendering is unchanged. (4) A second defect, S4's: the chart's
 > `profile` value could never boot a stack — `TESSERAQL_ENV` is process-wide, and the

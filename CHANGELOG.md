@@ -15,7 +15,7 @@ All notable changes to TesseraQL are documented here. The format follows
   under `.github/kubernetes/app/`), installs the chart with two replicas on a kind cluster
   with two workers, and asserts Milestone M10's four sentences and the stop, each as a step
   of its own: zero non-200 through `kubectl rollout restart` under `tesseraql bench` at eight
-  workers; one execution per fire time of the fixed-delay job, both replicas scheduling it; a
+  workers; one execution per fire time of the fixed-delay job, both replicas having run it; a
   session signed in on pod A reading a browser route on pod B; one `TQL-OPS-9006` row across
   two pods after an unreachable channel dead-letters; a pod deleted with a slow request in
   flight answering it and exiting 143 inside the grace. The chart gains `service.nodePort`,
@@ -183,8 +183,8 @@ All notable changes to TesseraQL are documented here. The format follows
   upstream with keep-alive — held the in-flight count above zero until the bound, and the
   bound cut whatever it was mid-flight with: dropped requests on exactly the rolling updates
   the drain exists for. From the signal on, every HTTP/1.1 response says `Connection: close`
-  and the connection closes after it; an HTTP/2 connection gets GOAWAY after its response,
-  the streams in flight finishing first. The client reconnects through the Service to a pod
+  and the connection closes after it; an HTTP/2 connection shuts down gracefully, GOAWAY and
+  then the close once the streams in flight are done. The client reconnects through the Service to a pod
   that stays, and the in-flight count reaches zero within a round trip. Found by the M10
   proof's first sentence; `StackRelayTest` holds both wires.
 
