@@ -85,6 +85,23 @@ class MetricsEndpointIntegrationTest {
                 .contains("tesseraql_route_duration_seconds_count");
     }
 
+    /**
+     * The edge's capacity families (docs/deployment-maturity.md decision 7) render with the
+     * labels the record names; the refusal counter appears with its first refusal, which this
+     * runtime, at its default bound, has not made.
+     */
+    @Test
+    void scrapeCarriesTheEdgeCapacityGauges() throws Exception {
+        HttpResponse<String> scrape = get("/_tesseraql/metrics", token(List.of("OPS")));
+
+        assertThat(scrape.body())
+                .contains("# TYPE tesseraql_http_in_flight gauge")
+                // The scrape itself holds the one request permit while it is answered.
+                .contains("tesseraql_http_in_flight{kind=\"request\"} 1")
+                .contains("tesseraql_http_in_flight{kind=\"stream\"} 0")
+                .doesNotContain("tesseraql_http_refused_total");
+    }
+
     @Test
     void scrapeCarriesThePollSourceGaugesFromTheRegistry() throws Exception {
         // The bundled job's sftp host is not allow-listed, so the source is refused at

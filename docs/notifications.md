@@ -444,9 +444,16 @@ channel:
   with `deadline`/`businessDate`). Checked every `tesseraql.batch.slaSweepInterval`
   (default `60s`); each miss alerts once — per execution, or per business date
 - `ops.alert` — a dashboard alert was raised (error-rate, slow-rate, lane saturation,
-  batch-failure-rate, pinning, dead letters); payload `code`, `severity`, `message`.
-  Checked every `tesseraql.notifications.alerts.checkInterval` (default `60s`); each code
-  notifies once while it stays raised.
+  batch-failure-rate, pinning, dead letters, readiness `DOWN`, a saturated pool, admission
+  refusals at capacity, a stop that cut requests); payload `code`, `severity`, `message`,
+  `node` (`tesseraql.batch.nodeId`; hostname and pid by default) and `scope`. Checked every
+  `tesseraql.notifications.alerts.checkInterval` (default `60s`); each code notifies once
+  while it stays raised. A `node` scope condition is this node's, so it pages per node. A
+  `database` scope condition (`TQL-OPS-9004`, `9006`, `9008`) is the same on every node that
+  shares the database, so it is claimed through the scheduled-firing claim table and pages once
+  for the cluster; the node that paged is the one that reports its clearing.
+- `ops.alertCleared` — the code above cleared: the same payload, once. A page that never says
+  "over" is a page an operator learns to ignore.
 
 ## Testing notifications in declarative suites
 
@@ -511,6 +518,10 @@ the build like any other kind.
 | `TQL-TPL-2003` | lint: mail body/subject `${...}` root outside the mail model (warning) |
 | `TQL-BATCH-5317` | a scheduled entry declares both `delay:` and `deliverAt:`, or an unusable instant |
 | `TQL-OPS-9006` | alert: outbox events are dead-lettered |
+| `TQL-OPS-9010` | alert: this node's readiness roll-up is `DOWN`, so the orchestrator has stopped routing to it |
+| `TQL-OPS-9011` | alert: a pool had threads waiting for a connection at every sample across a check interval |
+| `TQL-OPS-9012` | alert: admission refusals over the check interval exceeded `tesseraql.diagnostics.refusalRateWarnPerSecond` (default `1`); the runtime is at capacity |
+| `TQL-OPS-9013` | alert: a stop reached its drain bound with requests still in flight and cut them |
 
 ## Next
 

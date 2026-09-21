@@ -8,6 +8,23 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **The scrape says how full the node is, and an alert pages once.** Four families join
+  `/_tesseraql/metrics`: `tesseraql_http_in_flight{kind}` (requests and event streams holding
+  a permit at the gate, and the gateway's `forward`/`streamForward` share of this member),
+  `tesseraql_http_refused_total{code}` (admission refusals by code: `TQL-RATE-4293`/`4295` at
+  the member, `4294`/`4296` at the front — a WARN line nobody scraped until now),
+  `tesseraql_lane_in_use{lane}` and `tesseraql_lane_rejected_total{lane}`. Four alert
+  conditions join the channel: `TQL-OPS-9010` this node's readiness is `DOWN`, `9011` a pool
+  had threads waiting for a connection at every sample across a check interval, `9012`
+  admission refusals over the interval above `tesseraql.diagnostics.refusalRateWarnPerSecond`
+  (default one per second), `9013` a stop reached its drain bound with requests still in
+  flight and cut them — paged before the pools close, so a surviving node delivers it. Every
+  `ops.alert` names its `node` and `scope`; `ops.alertCleared` follows once a code clears,
+  with the same payload. `deploy/prometheus/tesseraql-alerts.yml` carries the capacity, job
+  and poll-source rules for an operator who alerts from metrics, and the Grafana dashboard
+  gains a Capacity row; `PrometheusRulesLedgerTest` holds every expression in both against
+  the families the sources declare. Record: `docs/deployment-maturity.md` (S2).
+
 - **An official runtime image, and a container stop that ends.**
   `ghcr.io/ingcreators/tesseraql-host:<version>` — also `<major.minor>` and `latest`, for
   `linux/amd64` and `linux/arm64` — is published from every release tag by the `host-image`
@@ -75,6 +92,15 @@ All notable changes to TesseraQL are documented here. The format follows
   Phase 32.
 
 ### Changed
+
+- **A database-wide alert pages once per cluster, not once per node.** `TQL-OPS-9004` (batch
+  failure rate), `9006` (dead-lettered outbox events) and `9008` (dead-lettered queue events)
+  read the shared database, so N nodes paged N times for one dead letter. The alert sweep
+  claims `<app>:alert:<code>` through the scheduled-firing claim table now: one node wins and
+  pages, the others stay quiet and retry the claim each tick, and the node that paged is the
+  one that announces the clearing and releases the claim. A node that dies holding a claim
+  leaves it until the table's seven-day prune. Node-local codes keep paging per node, now
+  with the node named. An operator who counted on N pages for one dead letter gets one.
 
 - **`deploy/Dockerfile` changes meaning.** It built the framework from source and baked a
   source tree as `/stack/app`; it derives from the official runtime image and unpacks a

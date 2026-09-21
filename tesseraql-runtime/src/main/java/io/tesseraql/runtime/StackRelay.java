@@ -277,6 +277,13 @@ final class StackRelay {
     private volatile java.util.function.Supplier<Map<String, String>> memberReadiness;
 
     /**
+     * Told of each refusal at the front, by member and code, so the member's scrape counts it
+     * (docs/deployment-maturity.md decision 7); {@code null} counts nowhere, the shape a test with
+     * no host builds.
+     */
+    private volatile java.util.function.BiConsumer<String, io.tesseraql.core.error.TqlErrorCode> refused;
+
+    /**
      * How many forwards one member may have in flight (docs/http-threading.md decision 5).
      *
      * <p>There was no declared bound and there was an undeclared one: the outbound client's own
@@ -387,6 +394,25 @@ final class StackRelay {
      */
     void beginDrain() {
         draining = true;
+    }
+
+    /** Wires where a refusal at the front is counted, by the member it was for and its code. */
+    StackRelay refusalListener(
+            java.util.function.BiConsumer<String, io.tesseraql.core.error.TqlErrorCode> listener) {
+        this.refused = listener;
+        return this;
+    }
+
+    /** Forwards to {@code appName} in flight at the front, against its share; zero before any. */
+    int forwardsInFlight(String appName) {
+        java.util.concurrent.Semaphore permits = memberPermits.get(appName);
+        return permits == null ? 0 : maxConcurrentPerMember - permits.availablePermits();
+    }
+
+    /** Stream forwards to {@code appName} in flight at the front, against its share. */
+    int streamForwardsInFlight(String appName) {
+        java.util.concurrent.Semaphore permits = streamPermits.get(appName);
+        return permits == null ? 0 : maxStreamsPerMember - permits.availablePermits();
     }
 
     /** Wires the members' held readiness into the origin's answer; see {@link StackReadiness}. */
@@ -606,6 +632,11 @@ final class StackRelay {
                     : memberPermits.computeIfAbsent(appName,
                             name -> new java.util.concurrent.Semaphore(maxConcurrentPerMember));
             if (!permits.tryAcquire()) {
+                java.util.function.BiConsumer<String, io.tesseraql.core.error.TqlErrorCode> counted = refused;
+                if (counted != null) {
+                    counted.accept(appName,
+                            stream ? MEMBER_STREAMS_AT_CAPACITY : MEMBER_AT_CAPACITY);
+                }
                 // A stream is told to wait longer: what it is waiting for is another stream
                 // ending, not a query finishing. The header is honest for an API client and is
                 // read by no browser client — an EventSource retries on its own timer.

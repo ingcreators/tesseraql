@@ -549,10 +549,62 @@ public final class MultiAppHost implements AutoCloseable, StackReconciler.HostOp
     private TesseraqlRuntime startRuntime(InstalledApp entry,
             io.tesseraql.yaml.config.AppConfig config, int port) {
         Path appHome = installRoot.resolve(entry.path()).normalize();
-        return TesseraqlRuntime.start(appHome, port,
+        TesseraqlRuntime runtime = TesseraqlRuntime.start(appHome, port,
                 context.forApplication(entry.basePath(), embedded
                         ? carryingDeclaredQuery(dev.embeddedDb(), config)
                         : null));
+        wireGateway(entry.name(), runtime);
+        return runtime;
+    }
+
+    /**
+     * The gateway's per-member share of the front — forwards in flight, by kind — read on each
+     * member's own scrape beside its in-flight count (docs/deployment-maturity.md decision 7).
+     */
+    record GatewaySignals(java.util.function.ToIntFunction<String> forwards,
+            java.util.function.ToIntFunction<String> streamForwards) {
+    }
+
+    private volatile GatewaySignals gateway;
+
+    /** Wires the gateway's signals into every member runtime, present and future. */
+    void gatewaySignals(GatewaySignals signals) {
+        this.gateway = signals;
+        for (Slot slot : slots.values()) {
+            if (slot.entry() != null) {
+                wireGateway(slot.entry().name(), slot.runtime());
+            }
+        }
+    }
+
+    private void wireGateway(String appName, TesseraqlRuntime runtime) {
+        GatewaySignals signals = gateway;
+        if (signals != null && runtime != null) {
+            runtime.edgeMetrics().gatewayForwards(
+                    () -> signals.forwards().applyAsInt(appName),
+                    () -> signals.streamForwards().applyAsInt(appName));
+        }
+    }
+
+    /** A refusal at the front, counted on the member it was for; a member not hosted is dropped. */
+    void gatewayRefused(String appName, io.tesseraql.core.error.TqlErrorCode code) {
+        Slot slot = slots.get(appName);
+        if (slot != null && slot.runtime() != null) {
+            slot.runtime().edgeMetrics().refused(code);
+        }
+    }
+
+    /**
+     * The stack's stop cut requests at its bound: every hosted runtime records it and the one
+     * page a leaving process can still send goes out before the pools close
+     * ({@code TQL-OPS-9013}, docs/deployment-maturity.md decision 9).
+     */
+    void stopCut(int requests, java.time.Duration bound) {
+        for (Slot slot : slots.values()) {
+            if (slot.runtime() != null) {
+                slot.runtime().stopCut(requests, bound);
+            }
+        }
     }
 
     /**

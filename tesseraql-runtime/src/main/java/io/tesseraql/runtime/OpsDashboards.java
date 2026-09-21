@@ -29,7 +29,8 @@ final class OpsDashboards {
             io.tesseraql.operations.messaging.JdbcEventChannelStore eventChannelStore,
             io.tesseraql.opsui.PollSourceStatus pollSourceStatus,
             io.tesseraql.opsui.CalendarStatus calendarStatus,
-            javax.sql.DataSource dataSource, Map<String, HikariDataSource> dataSources) {
+            javax.sql.DataSource dataSource, Map<String, HikariDataSource> dataSources,
+            io.tesseraql.core.telemetry.AggregatingMeter meter, long alertIntervalMillis) {
         return new io.tesseraql.opsui.OpsDashboard(jobRepository, lanes, slowSqlLog,
                 traceLogOf(effectiveTracer),
                 config.getString("tesseraql.diagnostics.slowSpanMillis")
@@ -42,7 +43,12 @@ final class OpsDashboards {
                                 .map(Double::parseDouble).orElse(20.0),
                         config
                                 .getString("tesseraql.diagnostics.batchFailureWarnPercent")
-                                .map(Double::parseDouble).orElse(10.0)),
+                                .map(Double::parseDouble).orElse(10.0),
+                        // Refusals per second, sustained over the alert interval, that read as
+                        // "at capacity" (docs/deployment-maturity.md decision 9).
+                        config
+                                .getString("tesseraql.diagnostics.refusalRateWarnPerSecond")
+                                .map(Double::parseDouble).orElse(1.0)),
                 pinningMonitor)
                 // Dead-lettered deliveries surface as an operational alert (Phase 20).
                 .outboxCounts(outboxStore::countByStatus)
@@ -57,6 +63,12 @@ final class OpsDashboards {
                 // probed live; any failure rolls health up to DOWN so a load balancer
                 // actually sheds traffic.
                 .datasourceProbe(() -> probeDatasources(dataSource, dataSources))
+                // The pool that is the constraint, the runtime at capacity, and the interval both
+                // are judged over (docs/deployment-maturity.md decision 9); the readiness memo and
+                // a cut stop reach the dashboard on their own.
+                .poolStats(() -> TesseraqlRuntime.poolStats(dataSources))
+                .refusals(() -> EdgeMetrics.refusedTotal(meter))
+                .alertInterval(java.time.Duration.ofMillis(alertIntervalMillis))
                 // An unauthenticated endpoint doing real work per poll is a lever; a memo
                 // bounds it to one probe per TTL however fast the polls arrive
                 // (docs/audit-hardening.md Decision 9).

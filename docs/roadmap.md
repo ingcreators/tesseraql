@@ -440,7 +440,11 @@ ends on every platform (**S1 shipped 2026-09-20, #1409**: `ghcr.io/ingcreators/t
 from every release tag, `deploy/Dockerfile` as the derived template over a packaged
 application, a health check that passes, the origin readiness over its members, staleness
 counted from the refresh attempt, the bounded close, the Kamal stop keys, and a `deploy-image`
-job that runs the container); **S2** the capacity signals on the scrape, cluster-wide alert deduplication and four new alert conditions; **S3**
+job that runs the container); the capacity signals on the scrape, cluster-wide alert
+deduplication and four new alert conditions (**S2 shipped 2026-09-21, #1410**:
+`tesseraql_http_in_flight`, `tesseraql_http_refused_total`, the lane gauges,
+`TQL-OPS-9010`-`9013`, `ops.alertCleared`, a database-wide alert claimed once per cluster,
+the Prometheus rules file and the dashboard's Capacity row); **S3**
 `tesseraql bench` and the capacity guide; **S4** the Helm chart, the rendered manifests and
 the Kubernetes page; **S5** the M10 proof on a two-replica kind cluster in CI.
 

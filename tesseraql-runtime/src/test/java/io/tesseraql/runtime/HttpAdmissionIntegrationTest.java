@@ -94,6 +94,46 @@ class HttpAdmissionIntegrationTest {
     }
 
     /**
+     * The refusal is on the scrape as well as in the log, by code, and the in-flight gauge reads
+     * the held permits (docs/deployment-maturity.md decision 7). Read after the saturating
+     * requests have ended: the scrape takes a permit like any request, so it cannot be answered
+     * while the bound is spent — and its own permit is then the one the gauge reads.
+     */
+    @Test
+    void theRefusalCountsByCodeAndTheGaugeReadsTheHeldPermits() throws Exception {
+        List<CompletableFuture<HttpResponse<String>>> saturating = List.of(
+                CompletableFuture.supplyAsync(() -> get("/api/nap")),
+                CompletableFuture.supplyAsync(() -> get("/api/nap")));
+        awaitInFlight();
+        assertThat(get("/api/nap").statusCode()).isEqualTo(503);
+        for (CompletableFuture<HttpResponse<String>> request : saturating) {
+            request.get();
+        }
+
+        String scrape = "";
+        for (int attempt = 0; attempt < 20; attempt++) {
+            scrape = get("/_tesseraql/metrics").body();
+            if (scrape.contains("tesseraql_http_in_flight{kind=\"request\"} 1")) {
+                break;
+            }
+            // The saturating permits are released as their responses end; a scrape can arrive
+            // a moment before the last release lands.
+            Thread.sleep(100);
+        }
+        assertThat(scrape)
+                .as("the scrape's own permit is the one in flight")
+                .contains("# TYPE tesseraql_http_in_flight gauge")
+                .contains("tesseraql_http_in_flight{kind=\"request\"} 1")
+                .contains("tesseraql_http_in_flight{kind=\"stream\"} ")
+                .contains("# TYPE tesseraql_http_refused_total counter");
+        java.util.regex.Matcher refused = java.util.regex.Pattern
+                .compile("tesseraql_http_refused_total\\{code=\"TQL-RATE-4293\"\\} (\\d+)")
+                .matcher(scrape);
+        assertThat(refused.find()).as("the counter carries the code: %s", scrape).isTrue();
+        assertThat(Long.parseLong(refused.group(1))).isGreaterThanOrEqualTo(1L);
+    }
+
+    /**
      * Health is not refused while the runtime is at its bound.
      *
      * <p>It is checked before the permit: health is the one surface whose whole purpose is to be
@@ -455,6 +495,9 @@ class HttpAdmissionIntegrationTest {
                   http:
                     workerThreads: 1
                     maxInFlight: 2
+                  metrics:
+                    enabled: true
+                    unauthenticated: true
                   datasources:
                     main:
                       jdbcUrl: %s

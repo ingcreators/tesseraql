@@ -356,6 +356,11 @@ final class RouteEdge {
         });
     }
 
+    /** Requests being served right now; what a cut at the bound reports (TQL-OPS-9013). */
+    int inFlight() {
+        return inFlight.get();
+    }
+
     /**
      * Waits for the requests this edge is serving, up to {@code millis}.
      *

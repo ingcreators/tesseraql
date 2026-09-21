@@ -1,0 +1,104 @@
+# Alerting rules for a TesseraQL runtime's scrape (docs/deployment.md, "Metrics"). The capacity
+# conditions here are the ones the runtime also pages through its alerts channel
+# (TQL-OPS-9011 and 9012, docs/notifications.md) — an operator who alerts from metrics gets this
+# file, one who does not gets the channel, and both see the same conditions. A readiness that
+# went DOWN (9010) and a stop that cut requests (9013) are events rather than levels on the
+# scrape; they reach an operator through the channel, and a node that stopped scraping reaches
+# one through `up`.
+#
+# Load with `rule_files: [tesseraql-alerts.yml]`. Every expression names a family the scrape
+# renders; tesseraql-docs-reference's PrometheusRulesLedgerTest holds that against the sources.
+groups:
+  - name: tesseraql-capacity
+    rules:
+      - alert: TesseraqlAtCapacity
+        # docs/deployment-maturity.md decision 9, TQL-OPS-9012: refusals sustained over the
+        # interval are the runtime at capacity, not a burst.
+        expr: sum by (instance) (rate(tesseraql_http_refused_total[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+          code: TQL-OPS-9012
+        annotations:
+          summary: "{{ $labels.instance }} is refusing requests at capacity"
+          description: "Admission refused more than one request per second for five minutes (TQL-RATE-4293/4295 at the member, 4294/4296 at the front). Raise workerThreads and maxInFlight together, or add a replica (docs/capacity.md)."
+      - alert: TesseraqlPoolSaturated
+        # TQL-OPS-9011: borrowers waiting for a whole interval means the pool, not the database,
+        # is the constraint.
+        expr: tesseraql_pool_threads_awaiting > 0
+        for: 1m
+        labels:
+          severity: warning
+          code: TQL-OPS-9011
+        annotations:
+          summary: "{{ $labels.instance }} pool {{ $labels.pool }} has borrowers waiting"
+          description: "Threads have been waiting for a connection for a minute. Raise maximumPoolSize with workerThreads, or find the statement holding the pool (the slow SQL log)."
+      - alert: TesseraqlLaneRejecting
+        # TQL-OPS-9002: a lane at capacity refuses rather than queues.
+        expr: increase(tesseraql_lane_rejected_total[5m]) > 0
+        labels:
+          severity: warning
+          code: TQL-OPS-9002
+        annotations:
+          summary: "{{ $labels.instance }} lane {{ $labels.lane }} rejected work"
+          description: "The lane refused units at its maxConcurrency in the last five minutes; tesseraql_lane_in_use shows how full it runs."
+      - alert: TesseraqlInFlightHigh
+        # The queue you can see: requests held against maxInFlight. The bound is a declared
+        # number, so the threshold is one to set per deployment (docs/capacity.md).
+        expr: sum by (instance) (tesseraql_http_in_flight{kind="request"}) > 30
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.instance }} holds many requests in flight"
+          description: "More than thirty requests have been in flight for five minutes; compare with tesseraql.http.maxInFlight (workerThreads x 4 by default) and the route p95."
+  - name: tesseraql-node
+    rules:
+      - alert: TesseraqlScrapeGone
+        expr: up{job="tesseraql"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.instance }} is not answering the scrape"
+          description: "The runtime's metrics endpoint has not answered for two minutes; the readiness probe decides routing, this decides paging."
+  - name: tesseraql-jobs
+    rules:
+      - alert: TesseraqlJobFailed
+        # docs/deployment.md: alert on a failed run, and on the expected nightly run not appearing.
+        expr: increase(tesseraql_job_runs_total{status="FAILED"}[1d]) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "job {{ $labels.job }} of {{ $labels.app }} failed"
+          description: "A batch run finished FAILED in the last day; the ops console's jobs page has the execution and its error."
+      - alert: TesseraqlPollSourceNotPolling
+        expr: tesseraql_poll_source_wired == 0
+        labels:
+          severity: warning
+          code: TQL-OPS-9007
+        annotations:
+          summary: "poll source of job {{ $labels.jobId }} is not polling"
+          description: "The source was refused at wire time; the console's jobs page names the reason."
+      - alert: TesseraqlPollSourceFailing
+        expr: tesseraql_poll_source_consecutive_failures >= 3
+        labels:
+          severity: warning
+          code: TQL-OPS-9007
+        annotations:
+          summary: "poll source of job {{ $labels.jobId }} keeps failing"
+          description: "Three or more consecutive imports failed."
+      - alert: TesseraqlPollSourceStale
+        expr: tesseraql_poll_source_last_poll_age_seconds > 3600
+        labels:
+          severity: warning
+        annotations:
+          summary: "poll source of job {{ $labels.jobId }} has not polled for an hour"
+          description: "The last poll is older than an hour; the schedule or the source is stuck."
+      - alert: TesseraqlEgressDenied
+        expr: rate(tesseraql_egress_denied_total[5m]) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.instance }} is denying egress to {{ $labels.host }}"
+          description: "An http: step reached a host the allow-list refuses; either the allow-list or the step is wrong."
