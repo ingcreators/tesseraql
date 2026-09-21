@@ -8,3 +8,26 @@ procurement:
     unpriced: すべての明細に単価を入力してから見積を提出してください。
   ship:
     unregistered: 出荷登録を行ってから出荷してください。
+  # The printable documents (docs/procurement-documents-and-edi.md): one label set, read
+  # by the print templates through #{...} in the export's locale.
+  doc:
+    currency: 円
+    line:
+      no: "#"
+      item: 品名
+      qty: 数量
+      unit: 単位
+      unitPrice: 単価
+      amount: 金額
+      promisedDate: 納期
+    quote:
+      title: 見積書
+      number: 見積番号
+      issuedOn: 見積日
+      notSubmitted: (未提出)
+      dueOn: 見積期限
+      subject: 件名
+      to: 御中
+      from: 発行者
+      total: 合計 (税抜)
+      note: 納期は各明細の回答納期です。単価は税抜です。

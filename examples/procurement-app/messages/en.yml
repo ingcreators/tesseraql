@@ -8,3 +8,26 @@ procurement:
     unpriced: Every line needs a price before the quote can be submitted.
   ship:
     unregistered: Register the shipment before shipping the order.
+  # The printable documents (docs/procurement-documents-and-edi.md): one label set, read
+  # by the print templates through #{...} in the export's locale.
+  doc:
+    currency: JPY
+    line:
+      no: "#"
+      item: Item
+      qty: Qty
+      unit: Unit
+      unitPrice: Unit price
+      amount: Amount
+      promisedDate: Delivery
+    quote:
+      title: Quotation
+      number: Quotation no.
+      issuedOn: Issued on
+      notSubmitted: (not submitted)
+      dueOn: Valid until
+      subject: Subject
+      to: "Attn:"
+      from: Issued by
+      total: Total (excl. tax)
+      note: Delivery dates are quoted per line. Unit prices exclude tax.

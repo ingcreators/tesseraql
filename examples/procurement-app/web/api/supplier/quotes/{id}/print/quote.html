@@ -1,0 +1,98 @@
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+  <title th:text="#{procurement.doc.quote.title}">見積書</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 20mm 15mm;
+      @bottom-center { content: "Page " counter(page) " / " counter(pages); font-size: 8pt; }
+    }
+    body { font-family: 'TesseraQL Sample Gothic'; font-size: 10pt; color: #222222; }
+    h1 { font-size: 22pt; text-align: center; margin: 0 0 12mm 0; }
+    .meta { width: 100%; margin-bottom: 8mm; }
+    .meta td { vertical-align: top; padding: 0; }
+    .meta .right { text-align: right; width: 40%; }
+    .to { font-size: 13pt; border-bottom: 0.5pt solid #222222; padding-bottom: 2pt; margin-bottom: 4mm; }
+    .subject { margin-bottom: 4mm; }
+    .total { font-size: 12pt; margin: 4mm 0 6mm 0; }
+    .total strong { font-size: 14pt; }
+    .issuer { line-height: 1.5; }
+    table.lines { width: 100%; border-collapse: collapse; }
+    table.lines thead { display: table-header-group; }
+    table.lines th, table.lines td { border: 0.5pt solid #444444; padding: 3pt 5pt; }
+    table.lines th { background-color: #eeeeee; text-align: left; }
+    td.num, th.num { text-align: right; }
+    .note { margin-top: 6mm; font-size: 8pt; color: #555555; }
+  </style>
+</head>
+<body>
+  <h1 th:text="#{procurement.doc.quote.title}">見積書</h1>
+
+  <table class="meta">
+    <tr>
+      <td>
+        <div class="to">
+          <span th:text="${header.first.department_name}">技術部</span>
+          <span th:text="#{procurement.doc.quote.to}">御中</span>
+        </div>
+        <div class="subject">
+          <span th:text="#{procurement.doc.quote.subject}">件名</span>:
+          <span th:text="${header.first.rfq_title}">件名</span>
+          (<span th:text="${header.first.rfq_id}">RFQ</span>)
+        </div>
+        <div class="total">
+          <span th:text="#{procurement.doc.quote.total}">合計 (税抜)</span>:
+          <strong th:text="${#numbers.formatDecimal(header.first.total_amount, 1, 'COMMA', 0, 'POINT')}">0</strong>
+          <span th:text="#{procurement.doc.currency}">円</span>
+        </div>
+      </td>
+      <td class="right">
+        <div>
+          <span th:text="#{procurement.doc.quote.number}">見積番号</span>:
+          <span th:text="${header.first.id}">Q-…</span>
+        </div>
+        <div>
+          <span th:text="#{procurement.doc.quote.issuedOn}">見積日</span>:
+          <span th:text="${header.first.submitted_on} ?: #{procurement.doc.quote.notSubmitted}">2026/09/21</span>
+        </div>
+        <div>
+          <span th:text="#{procurement.doc.quote.dueOn}">見積期限</span>:
+          <span th:text="${header.first.quote_due_on}">2026/09/30</span>
+        </div>
+        <div class="issuer" style="margin-top: 4mm;">
+          <div th:text="#{procurement.doc.quote.from}">発行者</div>
+          <div th:text="${header.first.partner_name}">仕入先</div>
+          <div th:text="${header.first.contact_email}">quotes@example.com</div>
+        </div>
+      </td>
+    </tr>
+  </table>
+
+  <table class="lines">
+    <thead>
+      <tr>
+        <th th:text="#{procurement.doc.line.no}">#</th>
+        <th th:text="#{procurement.doc.line.item}">品名</th>
+        <th class="num" th:text="#{procurement.doc.line.qty}">数量</th>
+        <th th:text="#{procurement.doc.line.unit}">単位</th>
+        <th class="num" th:text="#{procurement.doc.line.unitPrice}">単価</th>
+        <th class="num" th:text="#{procurement.doc.line.amount}">金額</th>
+        <th th:text="#{procurement.doc.line.promisedDate}">納期</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr th:each="row : ${main.rows}">
+        <td th:text="${row.line_no}">1</td>
+        <td th:text="${row.item_name}">品名</td>
+        <td class="num" th:text="${row.qty}">1</td>
+        <td th:text="${row.unit}">個</td>
+        <td class="num" th:text="${row.unit_price}">0</td>
+        <td class="num" th:text="${row.amount}">0</td>
+        <td th:text="${row.promised_date}">2026/09/01</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="note" th:text="#{procurement.doc.quote.note}">納期は各明細の回答納期です。</p>
+</body>
+</html>

@@ -62,15 +62,31 @@ import java.util.List;
  *                   no mark, because a mark is a declaration a reader must expect and many
  *                   machine readers do not. The linter refuses it on {@code excel} and
  *                   {@code pdf} ({@code INAPPLICABLE_EXPORT_OPTION})
+ * @param statusWhen conditional statuses a {@code query-export} answers instead of a document:
+ *                   the first arm whose condition is truthy over the route's sources
+ *                   ({@code header.rowCount == 0}) — judged before the extraction opens,
+ *                   and again with {@code main.rowCount} once the rows are written. A
+ *                   {@code file-export} answers 202 before its rows are read and a job step
+ *                   answers no request, so both refuse the key ({@code TQL-YAML-1041})
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record ExportSpec(String format, String filename, String template, String sheet,
         String startCell, List<ColumnSpec> columns, String locale, String timezone,
         AfterSpec after, Integer maxRows, String onOverflow, String groupBy, String splitBy,
-        Boolean bom) {
+        Boolean bom, List<ResponseSpec.StatusWhen> statusWhen) {
 
     public ExportSpec {
         columns = columns == null ? List.of() : List.copyOf(columns);
+        statusWhen = statusWhen == null ? List.of() : List.copyOf(statusWhen);
+    }
+
+    /** The block without status arms — the positional shape every caller before them wrote. */
+    public ExportSpec(String format, String filename, String template, String sheet,
+            String startCell, List<ColumnSpec> columns, String locale, String timezone,
+            AfterSpec after, Integer maxRows, String onOverflow, String groupBy,
+            String splitBy, Boolean bom) {
+        this(format, filename, template, sheet, startCell, columns, locale, timezone, after,
+                maxRows, onOverflow, groupBy, splitBy, bom, List.of());
     }
 
     /** This block with its columns replaced — how the loader stamps a column's {@code domain:}. */
@@ -79,7 +95,7 @@ public record ExportSpec(String format, String filename, String template, String
             return this;
         }
         return new ExportSpec(format, filename, template, sheet, startCell, resolved, locale,
-                timezone, after, maxRows, onOverflow, groupBy, splitBy, bom);
+                timezone, after, maxRows, onOverflow, groupBy, splitBy, bom, statusWhen);
     }
 
     /**
@@ -93,7 +109,28 @@ public record ExportSpec(String format, String filename, String template, String
                 startCell == null || startCell.isBlank()
                         ? null
                         : io.tesseraql.core.files.CellRef.parse(startCell),
-                resources, null, null, groupBy, splitBy, Boolean.TRUE.equals(bom));
+                resources, null, null, groupBy, splitBy, Boolean.TRUE.equals(bom),
+                messages(resources));
+    }
+
+    /**
+     * The message texts a print template reads through {@code #{key}}: the app home's
+     * {@code messages/} catalogs over the framework's built-ins, read once per document in
+     * the locale the document renders in (docs/printable-documents.md). The live catalog
+     * re-parses only when the directory changes, so a Studio message edit reaches the next
+     * document without a restart. No app home, no messages.
+     */
+    private static io.tesseraql.core.files.DocumentMessages messages(Path resources) {
+        if (resources == null) {
+            return null;
+        }
+        Path messagesDir = resources.resolve("messages");
+        return tag -> {
+            io.tesseraql.yaml.i18n.MessageCatalog catalog = io.tesseraql.yaml.i18n.MessageCatalog
+                    .live(messagesDir)
+                    .withFallback(io.tesseraql.yaml.i18n.I18nSettings.builtinCatalog());
+            return key -> catalog.resolve(tag, key);
+        };
     }
 
     /**

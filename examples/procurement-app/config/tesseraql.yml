@@ -2,6 +2,25 @@ tesseraql:
   app:
     name: procurement
 
+  # The printable documents (docs/procurement-documents-and-edi.md) render through the
+  # opt-in pdf codec, which reaches the application as a module: `tesseraql dev` resolves
+  # it into work/modules and a package carries it (docs/printable-documents.md). No
+  # modules.lock is committed — a first-party module at the framework's own SNAPSHOT
+  # version changes checksum on every build, and a lock pins one.
+  modules:
+    - io.tesseraql:tesseraql-pdf
+
+  # Japanese first, English second (docs/internationalization.md): ?lang=en switches a
+  # page or a printed document; a document's export reads the resolved locale as
+  # `locale: request.locale`.
+  i18n:
+    defaultLocale: ja
+    locales: [ja, en]
+    preference:
+      - query.lang
+      - preference.ui.locale
+      - principal.claim.locale
+
   datasources:
     main:
       jdbcUrl: ${db.main.url}

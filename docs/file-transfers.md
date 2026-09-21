@@ -110,6 +110,9 @@ export:
   maxRows: 5000               # formats that hold every row: the ceiling (see below)
   groupBy: department         # a workbook report template reads the rows as groups (see below)
   splitBy: customer_id        # one document per value, delivered as one ZIP named for the stem (see below)
+  statusWhen:                 # query-export only: the first truthy arm answers its status, not a document
+    - when: header.rowCount == 0
+      status: 404
   after:                      # file-export only: the follow-up statement
     timing: extract           # extract (default) | download
     sql:
@@ -211,6 +214,15 @@ sources:
   `locale:`; a split export marks every file in the bundle, and an export with no rows still
   carries it, before its header. The linter refuses it on `excel` and `pdf` (`TQL-YAML-1005`),
   which are not text streams.
+- `statusWhen:` answers a status instead of a document on a `query-export`: the first arm
+  whose condition is truthy decides it. The arms are judged over the route's `sources:`
+  (`header.rowCount == 0`) before the extraction opens, so a template never renders a header
+  that has no row, and again with `main.rowCount` once the rows are written, when a matched
+  arm discards the document it wrote. The answer is the error envelope with `TQL-LD-2863` and
+  the declared status, the condition in its details. A `file-export` answers 202 before its
+  rows are read and a job step answers no request, so both refuse the key (`TQL-YAML-1041`);
+  the JSON and HTML renderers carry the same block under `response:`
+  ([response shaping](response-shaping.md#conditional-statuses-statuswhen)).
 - Excel output has three template modes: no `template:` renders a plain grid; a template plus
   `startCell:` is placement mode — the template carries layout and styles while the YAML says
   where each column lands (`- { name: qty, column: D }`); a jx:-annotated template without

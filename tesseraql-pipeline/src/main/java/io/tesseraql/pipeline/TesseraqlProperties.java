@@ -77,6 +77,11 @@ public final class TesseraqlProperties {
     public static final String EXPORT_QUERIES = "TesseraqlExportQueries";
     /** An export's already-resolved {@code http:} source results (export-pipeline, dec. 2). */
     public static final String EXPORT_VALUES = "TesseraqlExportValues";
+    /**
+     * The {@code export.statusWhen} judge a {@code query-export} answers a status through, as a
+     * {@code SqlStep.ExportStatusWhen} (docs/file-transfers.md); absent when none is declared.
+     */
+    public static final String EXPORT_STATUS_WHEN = "TesseraqlExportStatusWhen";
 
     /** The enrichment an export folds into its rows, a window at a time (docs/lookups.md). */
     public static final String EXPORT_ENRICHER = "TesseraqlExportEnricher";

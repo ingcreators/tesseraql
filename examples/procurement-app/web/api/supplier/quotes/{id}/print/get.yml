@@ -1,0 +1,47 @@
+version: tesseraql/v1
+id: api.supplier.quotes.print
+kind: route
+recipe: query-export
+
+input:
+  id:
+    type: string
+    required: true
+    maxLength: 140
+
+security:
+  policy: sup.read
+
+# The quotation (見積書), docs/procurement-documents-and-edi.md decision 5: a supplier prints
+# their own quote. quotes_scope confines both sources, so a competitor's quote is outside the
+# caller's row reach — the same declaration the portal's JSON routes carry. The document
+# renders in the request's locale: Japanese by default, ?lang=en for the English document.
+export:
+  format: pdf
+  filename: quote-{path.id}.pdf
+  template: quote.html
+  locale: request.locale
+  # A quote outside the caller's row reach has no header row: a 404, never a blank page.
+  statusWhen:
+    - when: header.rowCount == 0
+      status: 404
+  columns:
+    - { name: line_no }
+    - { name: item_name }
+    - { name: qty, type: number, format: "#,##0.##" }
+    - { name: unit }
+    - { name: unit_price, type: number, format: "#,##0" }
+    - { name: amount, type: number, format: "#,##0" }
+    - { name: promised_date, type: date, format: yyyy/MM/dd }
+
+sources:
+  main:
+    sql:
+      file: quote-lines.sql
+      params:
+        id: path.id
+  header:
+    sql:
+      file: quote-header.sql
+      params:
+        id: path.id

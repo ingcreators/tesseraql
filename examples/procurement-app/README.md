@@ -58,6 +58,10 @@ Part of the template gallery; held to the marketplace admission profile
 tesseraql dev --app-name procurement --embedded-db     # embedded PostgreSQL, auto-seeded
 ```
 
+The first run resolves the printable-documents codec the app declares
+(`tesseraql.modules: [io.tesseraql:tesseraql-pdf]`) into `work/modules`; the sample CJK
+font under `fonts/` embeds into every document.
+
 Mint a dev bearer token (`tesseraql token --app . --role PROCUREMENT`, or `REQUESTER`
 with `--claim 'departments=["engineering"]'`) and walk the flow:
 
@@ -86,6 +90,7 @@ GET  /api/supplier/rfqs               # issued RFQs this partner is invited to
 POST /api/supplier/quotes             # start a quote (copies the lines; idempotent)
 POST /api/supplier/quotes/{id}/lines  # price a line (keeps the submit-guard counter)
 POST /api/supplier/quotes/{id}/submit # guarded: every line priced
+GET  /api/supplier/quotes/{id}/print  # the quotation (見積書) as PDF; ?lang=en for English
 ```
 
 Comparison and ordering (procurement):
@@ -144,7 +149,10 @@ Then:
    opens with a 168-hour reminder deadline.
 3. **kita** and **minami** each see only their own invitation (`/api/supplier/rfqs`),
    start quotes (the lines copy from the requisition), price them, and submit — an
-   unpriced submit is guarded, and neither can touch the other's rows (3204).
+   unpriced submit is guarded, and neither can touch the other's rows (3204). Each
+   prints their own quotation — `GET /api/supplier/quotes/{id}/print` answers the
+   見積書 as a PDF (`?lang=en` for the English document), and a competitor's quote id
+   answers as a row outside the caller's reach, never as a document.
 4. **hara** opens `/api/rfqs/{id}/comparison`, picks the *non-lowest* quote → a written
    reason is demanded (422); with the reason, the `orderApproval` decision routes the
    order to `ota`'s desk (within 3% it would have issued itself).

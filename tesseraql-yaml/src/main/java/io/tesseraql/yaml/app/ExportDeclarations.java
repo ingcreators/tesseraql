@@ -304,6 +304,18 @@ public final class ExportDeclarations {
                     site.prefix("export.after") + "a follow-up needs its statement - declare"
                             + " after.sql: { file: ... }"));
         }
+        if (site.surface() != Surface.QUERY_EXPORT && !spec.statusWhen().isEmpty()) {
+            // Only a query-export, which writes the whole document before it answers, has a
+            // status to decide: a file-export answers 202 and a transfer before a row is
+            // read, and a job step answers no request (docs/procurement-documents-and-edi.md).
+            out.add(new Violation(INCOMPLETE, Kind.INVALID, "export.statusWhen",
+                    site.prefix("export.statusWhen")
+                            + (site.surface() == Surface.FILE_EXPORT
+                                    ? "a file-export answers 202 and a transfer before its"
+                                            + " rows are read;"
+                                    : "a job step answers no request;")
+                            + " statusWhen: is judged on query-export only"));
+        }
         if (template && !csv) {
             templateFile(site, spec.template(), pdf, appHome, directory, out);
         }

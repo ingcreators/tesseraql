@@ -229,12 +229,13 @@ paper over it with a rule.
 ### 6 — One sample font, at JIS level 1, in every place the sample font lives
 
 The level-1 subset of fact 2 replaces `TesseraQLSampleGothic-Regular.ttf` in
-`examples/user-admin-app/fonts/`, `tesseraql-runtime/src/test/resources/fonts/` and the new
+`examples/user-admin-app/fonts/`, `tesseraql-runtime/src/test/resources/fonts/`,
+`tesseraql-pdf/src/test/resources/fonts/` (a fourth copy fact 1 missed) and the new
 `examples/procurement-app/fonts/`: the same family name, the same OFL text, one README stating
 the character set. Its recipe is committed as `scripts/sample-font.py` (fontTools: instance
 `NotoSansJP[wght].ttf` at 400, subset to the Shift_JIS-derived ranges, rename the family,
 keep every layout feature) so the file is reproducible from the source font, which is not
-committed. The cost is 1.27 MB per copy, three copies. The alternative — the wide font for
+committed. The cost is 1.27 MB per copy, four copies. The alternative — the wide font for
 procurement only, the seed subset elsewhere — keeps 2.5 MB out of the repository at the price of
 two fonts under one family name with different coverage, and is recorded as the user's call.
 The reason for level 1 rather than the seeds' own glyphs: the tour types free text (a
@@ -298,18 +299,25 @@ slice confirms it.
 
 - A print template rendering a code point its embedded fonts lack draws `.notdef` and reports
   nothing. Data cannot be linted, but the engine can count missing glyphs at render time; a
-  WARNING naming the route and the count would have caught fact 1. S1 measures whether the
-  engine logs it today.
-- A `query-export` whose `header` source returns no row renders a document with an empty
-  header; `statusWhen` is a JSON route's. S1 measures what the route answers for a 納品書
-  before the shipment exists.
+  WARNING naming the route and the count would have caught fact 1. **S1 measured it: the
+  engine logs nothing** — the old font rendered the quotation with boxed titles and the log
+  held only `Loading font(TesseraQL Sample Gothic)`. Filed; the read-back test is the guard.
+- A `query-export` whose `header` source returns no row: **S1 measured a 500**, not a blank
+  page — `TQL-LD-2831` from the template's own dereference of `header.first`. Fixed in S1,
+  not filed: `export.statusWhen` on a query-export (the renderers' block, judged over the
+  sources before the extraction opens and again with `main.rowCount` after it; `TQL-LD-2863`
+  carries the declared status; a file-export and a job step refuse the key, `TQL-YAML-1041`).
+- A print template's `#{key}` rendered as `??key_locale??`: **S1 found the PDF codec's engine
+  had no message resolver** while `printable-documents.md` promised the export's locale.
+  Fixed in S1, not filed: the write spec carries the application's catalogs
+  (`DocumentMessages`), resolved once per document in the locale it renders in.
 - No suite target plans a `push:` step the way `http:` plans an outbound call; coverage stops at
   the export SQL. S3 records the gap.
 - Whether `file-import` strips a byte-order mark the framework's own `bom: true` export writes.
   S4 measures it once.
 - `PollLoop` retries a failing source every `delay` with no backoff — the remaining designed
   slices of `docs/poll-connector-hardening.md`, not this campaign.
-- Fonts are per application home; a stack cannot share one. Three copies is the cost paid here.
+- Fonts are per application home; a stack cannot share one. Four copies is the cost paid here.
 
 ## The slices
 

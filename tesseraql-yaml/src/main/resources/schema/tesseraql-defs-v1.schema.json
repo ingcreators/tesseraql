@@ -165,6 +165,10 @@
           "bom": {
             "type": "boolean",
             "description": "Whether a `csv` export opens with the UTF-8 byte-order mark (`EF BB BF`), so a spreadsheet that sniffs the mark decodes the file as UTF-8 rather than in its system code page. Off by default: a mark is a declaration a reader must expect, and readers such as PostgreSQL `COPY` and Python's `csv` module take it as part of the first header cell. It is never derived from `locale:`; a split export carries one per ZIP entry; an export with no rows still carries it. The linter refuses it on `excel` and `pdf` (TQL-YAML-1005), which are not text streams."
+          },
+          "statusWhen": {
+            "$ref": "#/$defs/statusWhen",
+            "description": "Conditional statuses a `query-export` answers instead of a document: the first entry whose expression is truthy over the route's sources (`header.rowCount == 0`) decides the status, judged before the extraction opens — so a template never renders a header with no row — and again with `main.rowCount` once the rows are written. The answer is the error envelope with TQL-LD-2863 and the declared status. A `file-export` answers 202 before its rows are read and a job step answers no request, so both refuse the key (TQL-YAML-1041)."
           }
         },
         "additionalProperties": false,

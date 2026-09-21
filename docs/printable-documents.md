@@ -45,6 +45,21 @@ export's ([file transfers](file-transfers.md)): a detail route under `/orders/{i
 names its document `order-{path.id}.pdf`, and a `response.file:` page's `filename:` resolves
 the same way.
 
+A document printed for a row outside the caller's reach — a detail route whose header source
+returns nothing — answers a status, never a blank page or a template error:
+
+```yaml
+export:
+  format: pdf
+  template: order.html
+  statusWhen:
+    - when: header.rowCount == 0
+      status: 404
+```
+
+The arms are judged before the template runs
+([file transfers](file-transfers.md#the-export-block)).
+
 `file-export` works the same way for asynchronous extraction (`{path}/{transferId}/file`
 downloads the finished document), including `after:` follow-up statements.
 
@@ -54,7 +69,8 @@ A print template is an app-authored XHTML file (well-formed XML, `.html`), coloc
 route and rendered through the standard template engine before PDF conversion. It renders in
 the export's `locale:` when one is declared (a literal, a request source or the configured
 default) and in English otherwise, so its `#numbers` and `#dates` utilities, `${#locale}` and
-`#{…}` message expressions follow the export; the row values were formatted with the same
+`#{…}` message expressions read the application's `messages/` catalogs over the framework's
+built-ins in that locale; the row values were formatted with the same
 locale before they reached the model. A template that cannot be rendered fails the export with
 `TQL-LD-2831` naming the template.
 The model is:

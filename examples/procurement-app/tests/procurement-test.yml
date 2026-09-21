@@ -451,6 +451,67 @@ tests:
           submitted_quotes: 2
           in_transit: 0
 
+  # The quotation (docs/procurement-documents-and-edi.md decision 5): the header source
+  # is the supplier's own quote, a competitor reaches no row, procurement reads every
+  # quote; the lines carry the extended amount. The document coverage kind counts the
+  # print route covered through these.
+  - name: the quotation header is the supplier's own quote
+    sql:
+      file: web/api/supplier/quotes/{id}/print/quote-header.sql
+    params:
+      id: Q-RFQ-2002-P-200
+    principal:
+      roles: [SUPPLIER]
+      claims:
+        partner: P-200
+    expect:
+      rowCount: 1
+      rows:
+        - partner_name: ミナミオフィスサプライ株式会社
+          department_name: 技術部
+          total_amount: "618000.00"
+
+  - name: a competitor's quotation has no header to print
+    sql:
+      file: web/api/supplier/quotes/{id}/print/quote-header.sql
+    params:
+      id: Q-RFQ-2002-P-200
+    principal:
+      roles: [SUPPLIER]
+      claims:
+        partner: P-100
+    expect:
+      rowCount: 0
+
+  - name: procurement reads any quotation header
+    sql:
+      file: web/api/supplier/quotes/{id}/print/quote-header.sql
+    params:
+      id: Q-RFQ-2002-P-200
+    principal:
+      roles: [PROCUREMENT]
+    expect:
+      rowCount: 1
+
+  - name: the quotation lines carry the extended amount
+    sql:
+      file: web/api/supplier/quotes/{id}/print/quote-lines.sql
+    params:
+      id: Q-RFQ-2002-P-200
+    principal:
+      roles: [SUPPLIER]
+      claims:
+        partner: P-200
+    expect:
+      rowCount: 2
+      rows:
+        - line_no: 1
+          item_name: 開発用ワークステーション
+          amount: "490000.00"
+        - line_no: 2
+          item_name: 27インチモニター
+          amount: "128000.00"
+
   # Slice 7: the catalogs resolve in both locales.
   - name: the rule messages resolve in Japanese
     messages:

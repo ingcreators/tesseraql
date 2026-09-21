@@ -32,11 +32,19 @@ final class PdfTemplates {
     private PdfTemplates() {
     }
 
-    /** Renders {@code templateName} (relative to {@code root}) against the model. */
+    /**
+     * Renders {@code templateName} (relative to {@code root}) against the model, its
+     * {@code #{key}} expressions resolved through {@code messages} — the export's own lookup for
+     * the locale it renders in, or null, which leaves every key unresolved.
+     */
     static String render(Path root, String templateName, Map<String, Object> model,
-            Locale locale) {
+            Locale locale, java.util.function.Function<String, String> messages) {
+        Context context = new Context(locale, model);
+        if (messages != null) {
+            context.setVariable(DocumentMessageResolver.VARIABLE, messages);
+        }
         return ENGINES.computeIfAbsent(root.toAbsolutePath().normalize(), PdfTemplates::engine)
-                .process(templateName, new Context(locale, model));
+                .process(templateName, context);
     }
 
     /** Renders the built-in grid template against the model. */
@@ -71,6 +79,13 @@ final class PdfTemplates {
 
         TemplateEngine engine = new TemplateEngine();
         engine.addTemplateResolver(shared);
+        // The document's own messages first (the application's catalogs the export carries),
+        // then Thymeleaf's standard resolver, which reads a properties file beside the
+        // template — the shape a template-local text keeps working in.
+        engine.addMessageResolver(new DocumentMessageResolver());
+        org.thymeleaf.messageresolver.StandardMessageResolver beside = new org.thymeleaf.messageresolver.StandardMessageResolver();
+        beside.setOrder(1);
+        engine.addMessageResolver(beside);
         if (root != null) {
             FileTemplateResolver files = new FileTemplateResolver();
             files.setPrefix(root.toString() + java.io.File.separator);

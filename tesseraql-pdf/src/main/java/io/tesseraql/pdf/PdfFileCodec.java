@@ -160,6 +160,7 @@ public final class PdfFileCodec implements FileCodec {
                 .orElseThrow(() -> new TqlException(OUTSIDE_ROOT, "PDF template '"
                         + spec.templateName() + "' is outside the app resource root"));
         return PdfTemplates.render(root.root(),
-                root.root().relativize(confined).toString().replace('\\', '/'), model, locale);
+                root.root().relativize(confined).toString().replace('\\', '/'), model, locale,
+                spec.messages() == null ? null : spec.messages().forLocale(locale.toLanguageTag()));
     }
 }

@@ -58,6 +58,24 @@ public class SqlStep implements Step {
     private static final TqlErrorCode SERIALIZATION_CODE = new TqlErrorCode(TqlDomain.SQL, 4093);
     /** TQL-LD-0001: result materialization exceeded the configured maxRows. */
     private static final TqlErrorCode MATERIALIZATION_OVERFLOW = new TqlErrorCode(TqlDomain.LD, 1);
+    /**
+     * TQL-LD-2863: a {@code query-export}'s {@code statusWhen:} arm matched, so the route answers
+     * the status the arm declares instead of a document. The status rides in the details
+     * ({@code status}, with the condition as {@code when}); the error renderer answers it, the
+     * code's own mapping is for nothing else (docs/file-transfers.md).
+     */
+    public static final TqlErrorCode EXPORT_STATUS = new TqlErrorCode(TqlDomain.LD, 2863);
+
+    /** The judge a query-export's compiled {@code export.statusWhen} arms travel as. */
+    @FunctionalInterface
+    public interface ExportStatusWhen {
+        /** The first arm truthy over the scope, or null when none is. */
+        ExportStatusArm judge(Map<String, Object> scope);
+    }
+
+    /** A matched {@code statusWhen} arm: the status to answer, and its condition as written. */
+    public record ExportStatusArm(int status, String when) {
+    }
     private static final System.Logger LOG = System.getLogger(SqlStep.class.getName());
 
     private final Map<Path, List<SqlNode>> exportQueryNodes = new java.util.concurrent.ConcurrentHashMap<>();
@@ -312,6 +330,10 @@ public class SqlStep implements Step {
                                 io.tesseraql.core.files.ExportRowCap.class));
                 Map<String, Object> values = composedValues(exchange, connection,
                         statements, tempStore, cap, spools, statement);
+                // The status arms, judged over the named sources before the extraction opens:
+                // a header with no row answers its status here, and the template that would
+                // have dereferenced it never runs (docs/file-transfers.md, statusWhen:).
+                answerStatusWhen(exchange, values, -1);
                 SpoolKind kind = "csv".equals(codec.format()) ? SpoolKind.CSV : SpoolKind.BINARY;
                 SpoolWriter writer = tempStore.createWriter(kind);
                 try {
@@ -363,6 +385,14 @@ public class SqlStep implements Step {
                         failed.addSuppressed(deleting);
                     }
                     throw failed;
+                }
+                // Judged again with the extraction's count, for an arm over main.rowCount: a
+                // matched arm discards the document it just wrote and answers the status.
+                try {
+                    answerStatusWhen(exchange, values, ref.rows());
+                } catch (TqlException answered) {
+                    tempStore.delete(ref);
+                    throw answered;
                 }
                 if (profile.autoCommitOff()) {
                     connection.commit();
@@ -425,6 +455,37 @@ public class SqlStep implements Step {
                         ? io.tesseraql.core.files.SplitExport.zipName(filename)
                         : filename));
         exchange.addOnCompletion(done -> tempStore.delete(ref));
+    }
+
+    /**
+     * Answers a {@code statusWhen} arm as the refusal the error renderer turns into that status:
+     * the scope is the request's context, the named sources under their names, and — once the
+     * extraction has run — {@code main.rowCount}. Before it, an arm over {@code main} reads null
+     * and stays quiet.
+     */
+    @SuppressWarnings("unchecked")
+    private static void answerStatusWhen(Exchange exchange, Map<String, Object> sources,
+            long mainRows) {
+        ExportStatusWhen judge = exchange.getProperty(TesseraqlProperties.EXPORT_STATUS_WHEN,
+                ExportStatusWhen.class);
+        if (judge == null) {
+            return;
+        }
+        Map<String, Object> scope = new LinkedHashMap<>(exchange.getProperty(
+                TesseraqlProperties.CONTEXT, Map.of(), Map.class));
+        scope.putAll(sources);
+        if (mainRows >= 0) {
+            scope.put("main", Map.of("rowCount", mainRows));
+        }
+        ExportStatusArm arm = judge.judge(scope);
+        if (arm == null) {
+            return;
+        }
+        throw TqlException.builder(EXPORT_STATUS)
+                .message("The export answered " + arm.status() + " by its statusWhen: arm '"
+                        + arm.when() + "'")
+                .details(Map.of("status", arm.status(), "when", arm.when()))
+                .build();
     }
 
     /**
