@@ -1,6 +1,6 @@
 # The procurement demo, finished: three printable documents and the EDI companion
 
-> **Status: designed 2026-09-21; S1 shipped 2026-09-21 (#1415); S2 shipped 2026-09-21 (#1416).** `docs/procurement-demo.md` closed slices
+> **Status: designed 2026-09-21; S1 shipped 2026-09-21 (#1415); S2 shipped 2026-09-21 (#1416); S3 shipped 2026-09-21 (#1417); S4 built 2026-09-21 — the procurement demo is finished.** `docs/procurement-demo.md` closed slices
 > 1–7 and left two things open: the three PDFs (見積書, 注文書, 納品書), "deferred to a
 > dedicated documents step resolving the `tesseraql-pdf` module story once for all three
 > documents", and slice 8, the EDI companion, "named so it is a decision, not scope drift". Both
@@ -35,6 +35,27 @@
 > decision 8); the integration test's three more cases, inserting an order and a shipment and
 > reading the documents back from both sides of the portal; the README's steps 4 and 6, the
 > gallery row, the pointer from `printable-documents.md`. As the text below says; no deviation.
+>
+> **S3** — the job, `receipt-notice.sql`, the push policy block, `security/known_hosts` with
+> its comment line, the README's step 7, the suite's feed case, `docs/guide-integration.md`;
+> `ProcurementReceiptNoticeIntegrationTest`, the module's first SFTP test with strict host-key
+> checking on (the in-process sshd's generated key — an EC nistp521 — pinned as
+> `[localhost]:<port> <type> <key>`), and its negative twin: the committed, key-less file is
+> `reject HostKey` → `TQL-BATCH-5315`, nothing delivered. As the text below says; no deviation.
+>
+> **S4** — `examples/supplier-edi-app` (decision 2, as written: one migration with a seeded
+> notice, the poll job, the upsert, `/notices` and `/api/notices`, `notices.read`, the poll
+> policy block with its key-less `security/known_hosts`, a suite of five cases, a README);
+> the gallery registration (README table, `GalleryAppsIntegrationTest`, the integration
+> guide's receiving side); the procurement tour's finale; `ProcurementAppCopy` and
+> `SupplierEdiIntegrationTest` over one `MultiAppHost`. Two things the crossing measured
+> against the text below: a buyer's rerun re-delivers a file with a new modified time, which
+> the consume-once claim (name, size, modified time) reads as a new file — the companion
+> imports it again and the upsert updates the row, so "the same file dropped again is
+> skipped" in decision 7 is not what happens and `docs/connectors.md`'s sentence saying so is
+> corrected; and the byte-order-mark measurement closed as already handled (below). One
+> fixture fact: a host serves what its catalogue lists, so the test registers both members
+> in an `AppCatalog` and a reader's token carries `tql.app.use.supplier-edi`.
 
 ## Why finish it
 
@@ -335,8 +356,16 @@ slice confirms it.
   (`DocumentMessages`), resolved once per document in the locale it renders in.
 - No suite target plans a `push:` step the way `http:` plans an outbound call; coverage stops at
   the export SQL. S3 records the gap.
-- Whether `file-import` strips a byte-order mark the framework's own `bom: true` export writes.
-  S4 measures it once.
+- Whether `file-import` strips a byte-order mark the framework's own `bom: true` export writes:
+  **S4 measured it — it does.** `CsvFileCodec` reads through Apache Commons' `BOMInputStream`,
+  so a marked file's first header cell is its name, not U+FEFF plus its name;
+  `SupplierEdiIntegrationTest`'s second case drops a marked file on the drop and reads the
+  row back. Nothing to file.
+- `docs/connectors.md` promised that a partner re-sending a byte-identical file is skipped;
+  the consume-once claim keys on name, size and modified time, and an upload gives the file
+  a new modified time, so a re-sent file is a new file (S4 measured it on the crossing: the
+  buyer's rerun re-delivers, the companion imports again, the upsert updates the row). The
+  sentence is corrected in S4; the claim's job — one listing, one replica — is unchanged.
 - `PollLoop` retries a failing source every `delay` with no backoff — the remaining designed
   slices of `docs/poll-connector-hardening.md`, not this campaign.
 - Fonts are per application home; a stack cannot share one. Four copies is the cost paid here.

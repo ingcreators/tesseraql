@@ -1,7 +1,8 @@
 # The procurement demo application
 
-> **Status: slices 1–7 implemented** (#523–#528 and the polish slice; slice 8, the EDI
-> companion, remains an explicit open decision). The app lives at
+> **Status: complete.** Slices 1–7 shipped 2026-07-31 (#523–#529); the three PDFs and
+> slice 8, the EDI companion, shipped 2026-09-21 in the four slices of
+> `docs/procurement-documents-and-edi.md`. The app lives at
 > `examples/procurement-app`, held to the gallery bar. Composition findings the build
 > surfaced — each fixed in the framework, never worked around: suites could not run
 > scoped SQL (`principal:` on test cases + the production resolver moved to
@@ -10,9 +11,9 @@
 > managed-mode transition whose command updated zero rows silently advanced
 > (`TQL-WORKFLOW-3204` now enforces the documented row-authority contract). The
 > comparison pivot stayed per-supplier totals by design — dynamic columns are outside
-> plain-SQL reach. The three PDFs and slice 8 are designed together in
-> `docs/procurement-documents-and-edi.md` (2026-09-21): the font the documents need, the
-> receipt-notice feed over SFTP, and the `supplier-edi-app` companion, in four slices.
+> plain-SQL reach. The three PDFs and slice 8 are recorded in
+> `docs/procurement-documents-and-edi.md`: the font the documents needed, the
+> receipt-notice feed over SFTP, and the `supplier-edi-app` companion.
 
 ## Why this app exists
 

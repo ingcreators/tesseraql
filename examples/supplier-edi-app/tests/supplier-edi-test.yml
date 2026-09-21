@@ -1,0 +1,70 @@
+version: tesseraql/v1
+tests:
+  # The list serves the seeded notice; the search narrows by the note's number or the order.
+  - name: the notice list serves the seeded notice
+    sql:
+      file: web/notices/notices.sql
+    params: {}
+    expect:
+      rowCount: 1
+      rows:
+        - delivery_note_no: DN-2026-000
+
+  - name: the search narrows by the order
+    sql:
+      file: web/notices/notices.sql
+    params:
+      q: ORD-SEED
+    expect:
+      rowCount: 1
+
+  - name: the search that matches nothing lists nothing
+    sql:
+      file: web/notices/notices.sql
+    params:
+      q: no-such-note
+    expect:
+      rowCount: 0
+
+  # The intake's per-row statement (the file-poll coverage kind): a new note inserts, the
+  # same note re-sent updates the row it wrote — a rerun on the buyer's side never duplicates.
+  - name: a new notice inserts one row
+    sql:
+      file: batch/edi/receipt-notices/upsert-notice.sql
+    params:
+      delivery_note_no: DN-2026-001
+      order_id: ORD-1
+      partner_id: P-200
+      partner_name: ミナミオフィスサプライ株式会社
+      ship_date: "2026-09-25"
+      carrier: ヤマト運輸
+      received_at: "2026-09-21 10:30:00"
+    expect:
+      updateCount: 1
+    verify:
+      - sql:
+          file: web/api/notices/notices.sql
+        expect:
+          rowCount: 2
+
+  - name: a re-sent notice updates its row
+    sql:
+      file: batch/edi/receipt-notices/upsert-notice.sql
+    params:
+      delivery_note_no: DN-2026-000
+      order_id: ORD-SEED
+      partner_id: P-200
+      partner_name: ミナミオフィスサプライ株式会社
+      ship_date: "2026-09-10"
+      carrier: 佐川急便
+      received_at: "2026-09-12 09:15:00"
+    expect:
+      updateCount: 1
+    verify:
+      - sql:
+          file: web/api/notices/notices.sql
+        expect:
+          rowCount: 1
+          rows:
+            - delivery_note_no: DN-2026-000
+              carrier: 佐川急便

@@ -1,0 +1,13 @@
+version: tesseraql/v1
+id: notices
+kind: view
+recipe: list
+title: Receipt notices
+search: q
+columns:
+  - { name: delivery_note_no, label: "Delivery note" }
+  - { name: order_id, label: "Order" }
+  - { name: ship_date, label: "Shipped" }
+  - { name: carrier }
+  - { name: received_at, label: "Received" }
+  - { name: imported_at, label: "Imported" }

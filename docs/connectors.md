@@ -395,8 +395,9 @@ Lint warns (`TQL-YAML-1310`) when any source leaves it off, `local` included.
 
 **It changes what a re-sent file means, which is why it is opt-in.** A file is identified by name,
 size and modified time — not by path, which would suppress a partner's daily `orders.csv` forever
-after the first one. So a partner re-sending a *byte-identical* file is skipped rather than
-imported again, for as long as the claim is retained:
+after the first one. So the same listing seen again — by this replica on a later cycle, or by another replica —
+is skipped for as long as the claim is retained; a partner re-uploading the same bytes
+under the same name is a new file, because the upload gave it a new modified time:
 
 ```yaml
 tesseraql:
