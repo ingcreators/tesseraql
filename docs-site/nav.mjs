@@ -100,6 +100,7 @@ export const SECTIONS = [
       'deployment',
       'hosting',
       'capacity',
+      'kubernetes',
       'promotion',
       'upgrading',
       'proxy',

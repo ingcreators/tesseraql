@@ -1,0 +1,13 @@
+{{- if .Values.stackFile }}
+# The stack's own settings (docs/hosting.md), mounted over the baked /stack as
+# tesseraql-stack.yml; ${VAR} and ${secret.…} resolve in it at boot.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "tesseraql.fullname" . }}-stack
+  labels:
+    {{- include "tesseraql.labels" . | nindent 4 }}
+data:
+  tesseraql-stack.yml: |
+    {{- .Values.stackFile | nindent 4 }}
+{{- end }}

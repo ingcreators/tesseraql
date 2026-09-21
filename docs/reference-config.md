@@ -471,7 +471,7 @@ Keys are declared in `config/application.yml` and `config/tesseraql.yml`, overri
 | Key | Read by | Documented in |
 | --- | --- | --- |
 | `tesseraql.shutdown.forceOnTimeout` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
-| `tesseraql.shutdown.timeout` | [MultiAppHost.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/MultiAppHost.java), [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [deployment](deployment.md), [hosting](hosting.md) |
+| `tesseraql.shutdown.timeout` | [MultiAppHost.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/MultiAppHost.java), [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [deployment](deployment.md), [hosting](hosting.md), [kubernetes](kubernetes.md) |
 
 ## tesseraql.sql
 
@@ -498,7 +498,7 @@ Keys are declared in `config/application.yml` and `config/tesseraql.yml`, overri
 | --- | --- | --- |
 | `tesseraql.temp.bucket` | [TempStores.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TempStores.java), [ObjectStorageEgressRules.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/ObjectStorageEgressRules.java) | [deployment](deployment.md) |
 | `tesseraql.temp.maxBytes` | [TempStores.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TempStores.java) | [deployment](deployment.md) |
-| `tesseraql.temp.store` | [TempStores.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TempStores.java), [ObjectStorageEgressRules.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/ObjectStorageEgressRules.java) | [file-transfers](file-transfers.md), [jobs](jobs.md), [troubleshooting](troubleshooting.md) |
+| `tesseraql.temp.store` | [TempStores.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TempStores.java), [ObjectStorageEgressRules.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/ObjectStorageEgressRules.java) | [file-transfers](file-transfers.md), [jobs](jobs.md), [kubernetes](kubernetes.md), +1 more |
 
 ## tesseraql.transfers
 

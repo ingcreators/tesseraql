@@ -8,6 +8,26 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **A Helm chart and Kubernetes manifests.** `deploy/helm/tesseraql/` deploys a stack's derived
+  image: one Deployment with `maxSurge: 1` / `maxUnavailable: 0`, a PodDisruptionBudget of one
+  when there is more than one replica, a preferred anti-affinity across nodes, the probes with
+  the numbers the runtime was measured against (startup every 2 s × 30, liveness every 10 s × 3,
+  readiness every 5 s × 2 on the stack's roll-up), `terminationGracePeriodSeconds` derived as
+  the declared drain bound plus fifteen and no `preStop` sleep, `forceOnTimeout: false`
+  refused at render with its sentence, the stack file as a ConfigMap over the baked `/stack`
+  (a change rolls the pods), a Secret mounted at `/run/secrets`, an optional HPA and an optional
+  pre-upgrade migration Job per member. The chart hands the members `TESSERAQL_NODE_ID` (the
+  pod's name, read by the runtime directly now), `TESSERAQL_SHUTDOWN_TIMEOUT`,
+  `TESSERAQL_TEMP_STORE`, `JAVA_TOOL_OPTIONS` and `TESSERAQL_ENV`; `docs/kubernetes.md` says
+  which two the member's configuration declares. `deploy/kubernetes/tesseraql.yaml` is the
+  chart's rendering with the default values and an example image, for an operator without Helm;
+  a new `kubernetes.yml` workflow lints the chart, proves the committed rendering is the
+  chart's, validates it with kubeconform and reads the render's arithmetic on every pull
+  request that touches either; `release.yml` publishes the chart to
+  `oci://ghcr.io/ingcreators/charts/tesseraql`, versioned with the framework.
+  `KubernetesChartLedgerTest` holds the grace, the rolling contract, the probe numbers and the
+  page against the rendering in `verify`. Record: `docs/deployment-maturity.md` (S4).
+
 - **`tesseraql bench` and the capacity guide.** The twenty-sixth developer verb drives an
   application's own declared routes against a running node — `--route <id>` filled from the
   route's declared defaults, or a `kind: bench` scenario under `bench/` with weighted

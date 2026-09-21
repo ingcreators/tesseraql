@@ -1,0 +1,118 @@
+{{- if not .Values.forceOnTimeout }}
+{{- fail "forceOnTimeout: false is an unbounded drain, and no grace period can cover one: a stop that waits forever meets the platform's SIGKILL at terminationGracePeriodSeconds, with the requests it was waiting for cut anyway. Keep the bound and raise shutdownTimeoutSeconds instead (docs/kubernetes.md)." }}
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "tesseraql.fullname" . }}
+  labels:
+    {{- include "tesseraql.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.hpa.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  # Surge one, never below the count (docs/kubernetes.md, "The rolling contract"): the new pod
+  # serves before an old one leaves, and the database arbitrates the overlap.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      {{- include "tesseraql.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "tesseraql.selectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      annotations:
+        # A changed stack file rolls the pods: a subPath mount never sees a ConfigMap update.
+        checksum/stack-file: {{ .Values.stackFile | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      # The drain bound the members declare plus fifteen seconds for the close that follows it
+      # (docs/kubernetes.md, "The drain"). The grace counts from the signal and would include a
+      # preStop hook, which is why there is none: the runtime keeps serving through the drain.
+      terminationGracePeriodSeconds: {{ add (int .Values.shutdownTimeoutSeconds) 15 }}
+      serviceAccountName: {{ include "tesseraql.serviceAccountName" . }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.affinity }}
+      affinity:
+        {{- toYaml .Values.affinity | nindent 8 }}
+      {{- else }}
+      # Replicas prefer different nodes, so one node's failure is not the stack's.
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    {{- include "tesseraql.selectorLabels" . | nindent 20 }}
+      {{- end }}
+      containers:
+        - name: tesseraql
+          image: {{ include "tesseraql.image" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["host", "--stack", "/stack", "--port", "8080"]
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            {{- include "tesseraql.env" . | nindent 12 }}
+          {{- with include "tesseraql.envFrom" . }}
+          {{- . | nindent 10 }}
+          {{- end }}
+          # Liveness is the process answering; readiness is the stack's roll-up over its members,
+          # 503 while draining and when every member is down (docs/kubernetes.md, "The probes").
+          startupProbe:
+            httpGet:
+              path: /_tesseraql/health/live
+              port: http
+            periodSeconds: {{ .Values.probes.startup.periodSeconds }}
+            failureThreshold: {{ .Values.probes.startup.failureThreshold }}
+          livenessProbe:
+            httpGet:
+              path: /_tesseraql/health/live
+              port: http
+            periodSeconds: {{ .Values.probes.liveness.periodSeconds }}
+            failureThreshold: {{ .Values.probes.liveness.failureThreshold }}
+          readinessProbe:
+            httpGet:
+              path: /_tesseraql/health/ready
+              port: http
+            periodSeconds: {{ .Values.probes.readiness.periodSeconds }}
+            failureThreshold: {{ .Values.probes.readiness.failureThreshold }}
+            successThreshold: {{ .Values.probes.readiness.successThreshold }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          {{- with include "tesseraql.volumeMounts" . }}
+          {{- . | nindent 10 }}
+          {{- end }}
+      {{- with include "tesseraql.volumes" . }}
+      {{- . | nindent 6 }}
+      {{- end }}

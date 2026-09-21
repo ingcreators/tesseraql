@@ -1,0 +1,159 @@
+---
+# Source: tesseraql/templates/pdb.yaml
+# A voluntary disruption — a node drain — never takes the last pod; node failure is the
+# replicas' and the anti-affinity's business.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: tesseraql
+  labels:
+    app.kubernetes.io/name: tesseraql
+    app.kubernetes.io/instance: tesseraql
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: tesseraql
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: tesseraql
+      app.kubernetes.io/instance: tesseraql
+---
+# Source: tesseraql/templates/serviceaccount.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: tesseraql
+  labels:
+    app.kubernetes.io/name: tesseraql
+    app.kubernetes.io/instance: tesseraql
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: tesseraql
+# The runtime never calls the Kubernetes API; a mounted token would be a credential for nothing.
+automountServiceAccountToken: false
+---
+# Source: tesseraql/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: tesseraql
+  labels:
+    app.kubernetes.io/name: tesseraql
+    app.kubernetes.io/instance: tesseraql
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: tesseraql
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: tesseraql
+    app.kubernetes.io/instance: tesseraql
+---
+# Source: tesseraql/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tesseraql
+  labels:
+    app.kubernetes.io/name: tesseraql
+    app.kubernetes.io/instance: tesseraql
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: tesseraql
+spec:
+  replicas: 2
+  # Surge one, never below the count (docs/kubernetes.md, "The rolling contract"): the new pod
+  # serves before an old one leaves, and the database arbitrates the overlap.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: tesseraql
+      app.kubernetes.io/instance: tesseraql
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: tesseraql
+        app.kubernetes.io/instance: tesseraql
+      annotations:
+        # A changed stack file rolls the pods: a subPath mount never sees a ConfigMap update.
+        checksum/stack-file: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+    spec:
+      # The drain bound the members declare plus fifteen seconds for the close that follows it
+      # (docs/kubernetes.md, "The drain"). The grace counts from the signal and would include a
+      # preStop hook, which is why there is none: the runtime keeps serving through the drain.
+      terminationGracePeriodSeconds: 60
+      serviceAccountName: tesseraql
+      securityContext:
+        runAsGroup: 999
+        runAsNonRoot: true
+        runAsUser: 999
+        seccompProfile:
+          type: RuntimeDefault
+      # Replicas prefer different nodes, so one node's failure is not the stack's.
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: tesseraql
+                    app.kubernetes.io/instance: tesseraql
+      containers:
+        - name: tesseraql
+          image: "ghcr.io/example/orders-stack:1.0.0"
+          imagePullPolicy: IfNotPresent
+          args: ["host", "--stack", "/stack", "--port", "8080"]
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: TESSERAQL_NODE_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: TESSERAQL_SHUTDOWN_TIMEOUT
+              value: "45s"
+            - name: TESSERAQL_TEMP_STORE
+              value: "db"
+            - name: JAVA_TOOL_OPTIONS
+              value: "-XX:MaxRAMPercentage=75.0"
+          # Liveness is the process answering; readiness is the stack's roll-up over its members,
+          # 503 while draining and when every member is down (docs/kubernetes.md, "The probes").
+          startupProbe:
+            httpGet:
+              path: /_tesseraql/health/live
+              port: http
+            periodSeconds: 2
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /_tesseraql/health/live
+              port: http
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /_tesseraql/health/ready
+              port: http
+            periodSeconds: 5
+            failureThreshold: 2
+            successThreshold: 1
+          resources:
+            limits:
+              memory: 1Gi
+            requests:
+              cpu: 500m
+              memory: 768Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]

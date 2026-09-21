@@ -19,10 +19,24 @@ public final class NodeIdentity {
     private NodeIdentity() {
     }
 
-    /** The configured node id, or one derived from the host and process. */
+    /** The configured node id, the environment's, or one derived from the host and process. */
     public static String resolve(String configured) {
+        return resolve(configured, System.getenv("TESSERAQL_NODE_ID"));
+    }
+
+    /**
+     * The same with the environment's name given explicitly. An orchestrator that names the pod
+     * hands the name over as {@code TESSERAQL_NODE_ID} (the chart sets it from the pod's name,
+     * docs/kubernetes.md), so a heartbeat, a reaper verdict and an alert payload name something
+     * {@code kubectl} can find, and the name survives a container restart inside the pod, where
+     * the pid does not. The configuration still wins, for the operator who names slots.
+     */
+    public static String resolve(String configured, String fromEnvironment) {
         if (configured != null && !configured.isBlank()) {
             return trim(configured.trim());
+        }
+        if (fromEnvironment != null && !fromEnvironment.isBlank()) {
+            return trim(fromEnvironment.trim());
         }
         return trim(hostname() + "-" + ProcessHandle.current().pid());
     }

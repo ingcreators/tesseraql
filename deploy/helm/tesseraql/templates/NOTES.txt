@@ -1,0 +1,25 @@
+{{ include "tesseraql.fullname" . }}: {{ .Values.replicaCount }} replica(s) of {{ include "tesseraql.image" . }}, serving the stack under /stack on port 8080.
+
+The image is your deployment's derived image (deploy/Dockerfile): the official runtime image
+with your packages unpacked under /stack. Readiness is the stack's roll-up over its members,
+so a pod joins the Service once every member's database answers.
+
+Reach it inside the cluster:
+  http://{{ include "tesseraql.fullname" . }}.{{ .Release.Namespace }}.svc:{{ .Values.service.port }}/
+{{- if .Values.ingress.enabled }}
+{{- range .Values.ingress.hosts }}
+and through the Ingress at http{{ if $.Values.ingress.tls }}s{{ end }}://{{ .host }}/
+{{- end }}
+{{- end }}
+
+Each member declares what the chart hands it (docs/kubernetes.md, "What the chart hands the
+members"): in config/env/<profile>.yml, or wherever the member keeps production settings,
+  tesseraql:
+    shutdown:
+      timeout: ${TESSERAQL_SHUTDOWN_TIMEOUT:45s}
+    temp:
+      store: ${TESSERAQL_TEMP_STORE:file}
+The pod's name reaches the runtime as TESSERAQL_NODE_ID on its own.
+
+A rolling update surges one pod and never drops below {{ .Values.replicaCount }}; a stop drains
+for up to {{ .Values.shutdownTimeoutSeconds }}s and the grace period is {{ add (int .Values.shutdownTimeoutSeconds) 15 }}s.

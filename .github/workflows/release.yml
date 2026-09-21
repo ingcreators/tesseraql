@@ -4,12 +4,12 @@ on:
   push:
     tags:
       - 'v*'
-  # (Re)publish the demo and runtime images for an existing release - e.g. after a
-  # Dockerfile fix that postdates the tag. Only the two image jobs run.
+  # (Re)publish the demo and runtime images and the chart for an existing release - e.g. after
+  # a Dockerfile or chart fix that postdates the tag. Only the image and chart jobs run.
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing release tag to publish the demo and runtime images for
+        description: Existing release tag to publish the images and the chart for
         required: true
 
 permissions:
@@ -348,3 +348,47 @@ jobs:
           IMAGE="ghcr.io/${IMAGE_OWNER}/tesseraql-host"
           docker buildx build --platform linux/amd64,linux/arm64 -f deploy/Dockerfile.host \
             -t "$IMAGE:$VERSION" -t "$IMAGE:${VERSION%.*}" -t "$IMAGE:latest" --push .
+
+  # The chart, versioned with the framework and pushed as an OCI artefact beside the images
+  # (docs/deployment-maturity.md decision 6): oci://ghcr.io/<owner>/charts/tesseraql:<version>.
+  # The chart's content comes from the ref the workflow ran from, like the image recipes, so a
+  # chart fix that postdates a tag can still publish that tag's chart.
+  chart:
+    name: Publish the chart
+    timeout-minutes: 15
+    runs-on: ubuntu-latest
+    needs: release
+    if: always() && (github.event_name == 'workflow_dispatch' || needs.release.result == 'success')
+
+    # helm push writes to GHCR, which needs packages: write (WorkflowLedgerTest holds this).
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout the release sources
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+          fetch-depth: 0
+
+      - name: Use the workflow's chart
+        env:
+          WORKFLOW_SHA: ${{ github.sha }}
+        run: git checkout "$WORKFLOW_SHA" -- deploy/helm
+
+      - name: Log in to GHCR
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USER: ${{ github.actor }}
+        run: echo "$GHCR_TOKEN" | helm registry login ghcr.io -u "$GHCR_USER" --password-stdin
+
+      - name: Package and push
+        env:
+          RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
+          IMAGE_OWNER: ${{ github.repository_owner }}
+        run: |
+          VERSION="${RELEASE_TAG#v}"
+          helm lint deploy/helm/tesseraql --set image.repository=ghcr.io/example/orders-stack
+          helm package deploy/helm/tesseraql --version "$VERSION" --app-version "$VERSION" --destination dist
+          helm push "dist/tesseraql-$VERSION.tgz" "oci://ghcr.io/${IMAGE_OWNER}/charts"
