@@ -125,9 +125,10 @@ class SupplierEdiIntegrationTest {
         assertThat(imported.get("partner_name").asText()).isEqualTo("ミナミオフィスサプライ株式会社");
         assertThat(imported.get("carrier").asText()).isEqualTo("ヤマト運輸");
         String importedAt = imported.get("imported_at").asText();
-        // The consumer moved the file out of the drop once it was ingested.
-        assertThat(sftpRoot.resolve("drop/receipt-notice-2026-09-21.csv")).doesNotExist();
-        assertThat(sftpRoot.resolve("drop/.done/receipt-notice-2026-09-21.csv")).exists();
+        // The consumer moves the file out of the drop once it is ingested — after the import's
+        // transaction made the row visible — so the move is awaited as the row was, never
+        // assumed.
+        awaitMovedToDone("receipt-notice-2026-09-21.csv");
 
         // The buyer reruns the feed: the same name, the same bytes, a new upload — so a new
         // modified time, which is a new file to the consume-once claim (name, size and
@@ -165,6 +166,23 @@ class SupplierEdiIntegrationTest {
 
         JsonNode imported = awaitNotice("DN-2026-002");
         assertThat(imported.get("order_id").asText()).isEqualTo("ORD-BOM");
+    }
+
+    /**
+     * The consume-once claim's last step: the ingested file leaves {@code drop/} for
+     * {@code drop/.done/}. It follows the import's transaction, so the row can be visible while
+     * the file is still in the drop; poll for the move as {@link #awaitNotice} polls for the row.
+     */
+    private static void awaitMovedToDone(String fileName) throws Exception {
+        Path inDrop = sftpRoot.resolve("drop/" + fileName);
+        Path done = sftpRoot.resolve("drop/.done/" + fileName);
+        long deadline = System.currentTimeMillis() + 30_000;
+        while ((Files.exists(inDrop) || !Files.exists(done))
+                && System.currentTimeMillis() < deadline) {
+            Thread.sleep(200);
+        }
+        assertThat(inDrop).doesNotExist();
+        assertThat(done).exists();
     }
 
     private static JsonNode awaitNotice(String deliveryNoteNo) throws Exception {
