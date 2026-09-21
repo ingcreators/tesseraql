@@ -42,6 +42,7 @@ class HypermediaComponentsManifestTest {
             "installSessionExpiry", // the 401 re-login dialog's replay bridge (shell host)
             "installDirtyGuard", // the form view's unsaved-changes guard (data-hc-dirty-guard)
             "installSubmitOnChange", // the Studio flags page's switches post themselves
+            "installInvokerCommands", // the dialog opener below the floor (commandfor fallback)
             "installUploadProgress"); // the import page's and the deploy form's progress bar
 
     /** Custom events the framework listens for / documents. */
