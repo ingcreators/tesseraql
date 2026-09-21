@@ -1,0 +1,5 @@
+# The SSH host keys the receipt-notice feed may deliver to (tesseraql.connectors.push
+# .knownHostsFile, docs/connectors.md). Nothing is pinned here on purpose: a host key is the
+# operator's, never the repository's. Pin the demo drop's before the first run —
+#   ssh-keyscan -p 2222 localhost >> security/known_hosts
+# — and until then the push refuses the server rather than trust it on first use.

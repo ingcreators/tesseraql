@@ -1,0 +1,44 @@
+version: tesseraql/v1
+id: edi.receiptNotice
+kind: job
+recipe: batch-pipeline
+
+# The receipt notice (検収通知), docs/procurement-documents-and-edi.md decisions 1, 3 and 4:
+# the buyer tells the supplier which delivery notes were received on the business date — the
+# shipment export's columns, written as a CSV the partner's program reads (no byte-order
+# mark) and delivered whole to the partner's SFTP drop by the push step, under the push
+# policy block in config/tesseraql.yml. Nightly, and on demand from the operations API for
+# the tour; a rerun re-delivers under the same name, an overwrite.
+trigger:
+  schedule:
+    cron: "0 30 18 * * ?"
+
+input:
+  businessDate:
+    type: string
+    required: false
+
+pipeline:
+  - id: notice
+    sql:
+      file: receipt-notice.sql
+      mode: query
+    export:
+      format: csv
+      filename: receipt-notice-{batch.businessDate}.csv
+      columns:
+        - { name: delivery_note_no }
+        - { name: order_id }
+        - { name: partner_id }
+        - { name: partner_name }
+        - { name: ship_date, type: date, format: yyyy-MM-dd }
+        - { name: carrier }
+        - { name: received_at, type: datetime, format: yyyy-MM-dd HH:mm:ss }
+  - id: deliver
+    push:
+      transport: sftp
+      host: localhost
+      port: 2222
+      path: drop
+      credential: partner-drop
+      file: steps.notice.transferId

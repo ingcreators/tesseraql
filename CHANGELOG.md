@@ -8,6 +8,18 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **The procurement demo delivers its receipt notice over SFTP.** `edi.receiptNotice`
+  (`batch/edi/receipt-notice`) is a `batch-pipeline` job: an export step writes the
+  delivery notes received on the business date as the shipment export's CSV, and a `push:`
+  step delivers it whole to the partner's drop under `tesseraql.connectors.push` — the host
+  allow-listed, the credential named, the host key pinned by `security/known_hosts`, which
+  the repository commits with no key in it: the README's `ssh-keyscan` step pins the demo
+  server's, and until then the job fails with `TQL-BATCH-5315` rather than deliver to a
+  server it cannot verify. `ProcurementReceiptNoticeIntegrationTest` is the first SFTP test
+  that pins a host key: the file lands whole with the row, and the same run against the
+  committed, key-less file fails without delivering. Record:
+  `docs/procurement-documents-and-edi.md` (S3).
+
 - **The procurement demo prints its purchase order and its delivery note.**
   `GET /api/orders/{id}/print` is the 注文書 and `GET /api/orders/{id}/delivery-note` the
   納品書 — each a `query-export` PDF with a header source beside the lines, labels from the

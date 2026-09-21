@@ -1,6 +1,6 @@
 # The procurement demo, finished: three printable documents and the EDI companion
 
-> **Status: designed 2026-09-21; S1 shipped 2026-09-21 (#1415).** `docs/procurement-demo.md` closed slices
+> **Status: designed 2026-09-21; S1 shipped 2026-09-21 (#1415); S2 shipped 2026-09-21 (#1416).** `docs/procurement-demo.md` closed slices
 > 1–7 and left two things open: the three PDFs (見積書, 注文書, 納品書), "deferred to a
 > dedicated documents step resolving the `tesseraql-pdf` module story once for all three
 > documents", and slice 8, the EDI companion, "named so it is a decision, not scope drift". Both
@@ -29,6 +29,12 @@
 > read-back is the proof; and the subset keeps the Latin ligature code points (U+FB00–FB06),
 > because a ligature glyph without its own code point extracts as nothing ("office" read
 > back as "o ce"). The engine logs nothing for a missing glyph — measured, filed below.
+>
+> **S2** — the `doc.read` policy; the 注文書 and 納品書 routes, templates and SQL; the labels in
+> both catalogs; four suite cases over the seeds (the shape and the scope — no order is seeded,
+> decision 8); the integration test's three more cases, inserting an order and a shipment and
+> reading the documents back from both sides of the portal; the README's steps 4 and 6, the
+> gallery row, the pointer from `printable-documents.md`. As the text below says; no deviation.
 
 ## Why finish it
 

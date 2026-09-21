@@ -560,6 +560,18 @@ tests:
     expect:
       rowCount: 0
 
+  # The receipt-notice feed (batch/edi/receipt-notice): the shipment export's columns on
+  # the business date. No shipment is seeded, so this proves the shape and the bind; the
+  # runtime test inserts a received shipment and reads the delivered file.
+  - name: the receipt notice lists the delivery notes received on the business date
+    sql:
+      file: batch/edi/receipt-notice/receipt-notice.sql
+    params:
+      batch:
+        businessDate: "2026-09-21"
+    expect:
+      rowCount: 0
+
   # Slice 7: the catalogs resolve in both locales.
   - name: the rule messages resolve in Japanese
     messages:
