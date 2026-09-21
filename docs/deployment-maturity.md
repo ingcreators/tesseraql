@@ -1,6 +1,6 @@
 # A stack on Kubernetes: the image, the drain, the probes, the chart, the harness and the alerts
 
-> **Status: designed 2026-09-20 (#1408); S1 shipped 2026-09-20 (#1409); S2 shipped 2026-09-21 (#1410); S3 shipped 2026-09-21 (#1411); S4 shipped 2026-09-21 (#1412).** Phase 33 of `docs/roadmap.md` owes
+> **Status: designed 2026-09-20 (#1408); S1 shipped 2026-09-20 (#1409); S2 shipped 2026-09-21 (#1410); S3 shipped 2026-09-21 (#1411); S4 shipped 2026-09-21 (#1412); S5 shipped 2026-09-21 (#1413) — Phase 33 complete, M10 proven.** Phase 33 of `docs/roadmap.md` owes
 > "Kubernetes manifests and a Helm chart (probes, graceful drain of lanes and in-flight jobs,
 > rolling-deploy guidance on top of reload safety), official container images, a
 > `tesseraql bench` load harness for routes, a capacity/tuning guide, and alert routing through
@@ -93,6 +93,52 @@
 > and numbers equal to values.yaml and the 60 s startup budget, the example image, the
 > placeholder version and the release's `--version`, every top-level value named on the page),
 > `NodeIdentityTest`, `WorkflowLedgerTest` (+1 rule), the `kubernetes.yml` job itself.
+>
+> **S5** — the `two-node` job of `kubernetes.yml` (decision 10), on `deploy/**`,
+> `.github/kubernetes/**`, the workflow itself, weekly and on dispatch: a kind cluster with
+> two workers (`.github/kubernetes/kind.yaml`, NodePort 30080 published), PostgreSQL as a
+> Deployment, the runtime image built as `deploy-image` builds it and the probe image derived
+> from it, `helm install` with `.github/kubernetes/values.yaml` (two replicas, the `kind`
+> profile, a 20 s bound, the fixed NodePort), the administrator seeded from a pod by the
+> image's own `identity-schema` with the password in a Secret, then the phases of
+> `.github/kubernetes/proof.sh`, each a step so a red run names the sentence. The probe
+> application is `examples/user-admin-app` copied by the workflow plus
+> `.github/kubernetes/app/`: the `kind` profile (the `alerts-loop` webhook channel aimed at
+> the application's own `hooks/alerts` route and the verifier behind it, the `dead-end`
+> channel at `dead-end.invalid`, a 2 s outbox dispatch with three attempts, a 5 s alert
+> check), `probe.tick` every ten seconds with a notify step to the dead end, `probe.fast` and
+> `probe.slow` (`pg_sleep`, public), and a migration for `probe_ticks` and `probe_alerts`.
+> Three findings on the way, the first a defect. (1) The front kept serving a pooled
+> connection through the drain: a keep-alive client pinned to the stopping pod held the
+> in-flight count above zero until the bound and lost what the bound cut — decision 4's
+> "under steady traffic a stop takes the whole bound" was that client, and the platform
+> stops routing new connections, not held ones. `StackRelay` now sheds every connection
+> after its first response under the drain (`Connection: close` and an explicit close on
+> HTTP/1.x, since Vert.x writes the header but decides the close from the request's own
+> keep-alive; GOAWAY on HTTP/2), so the count reaches zero within a round trip and the
+> first sentence holds. (2) The ops API's execution rows carry no fire time, so the proof
+> buckets `startTime` by ten-second window, refuses a doubled window, requires enough
+> windows to have spanned the rollout, and reads both pods' logs for the schedule. (3) The
+> chart's Service could not pin a port, so `service.nodePort` exists and renders only when
+> set; the committed rendering is unchanged. (4) A second defect, S4's: the chart's
+> `profile` value could never boot a stack — `TESSERAQL_ENV` is process-wide, and the
+> framework's bundled applications, which carry no `config/env/`, refused it as a missing
+> profile file (`TQL-YAML-1202`) the moment the host mounted them. An application with no
+> `config/env/` now declares no environments and runs its base configuration under any
+> profile; the fail-fast stays for a profile a declared `config/env/` does not hold
+> (`EnvironmentProfileTest` +1). (5) A third defect, of the boot: two replicas starting
+> together on a fresh PostgreSQL both pass a store's `create … if not exists` check, both
+> create, and the loser is told a unique violation on `pg_type_typname_nsp_index` (state
+> 23505) rather than the duplicate-table state `SqlScripts` tolerated — one of the two
+> rehearsal nodes died at boot on `tql_user_shortcut`; a unique violation on a create is
+> now the other replica having won (`SqlScriptsTest` +1). The rehearsal itself ran on plain
+> Docker — two probe containers named like the chart's Service on one network, the
+> administrator seeded by the image, the session across nodes, the ops API's executions,
+> the single 9006 row, a stop with a slow request in flight — because kind cannot run on the
+> developer machine's cgroup v1 Docker host; the kind proof runs in CI only. Guards:
+> `StackRelayTest` (+2, both wires), `KubernetesChartLedgerTest` (+1: every phase a step,
+> the port the cluster publishes, the schedule), `EnvironmentProfileTest` (+1),
+> `SqlScriptsTest` (+1), and the job itself. Phase 33 is complete and M10 proven.
 
 The runtime already stops the way an orchestrator wants: SIGTERM flips readiness to 503, keeps
 serving, asks every run and every stream to stop, waits for what is in flight under a declared

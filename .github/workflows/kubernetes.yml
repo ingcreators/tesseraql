@@ -5,18 +5,26 @@ name: Kubernetes
 # rendering is the chart's, validate it against the Kubernetes schema, and read the render's
 # arithmetic — the grace is the drain bound plus the margin, an unbounded drain does not render,
 # the stack file and the secrets land where the runtime reads them. Container-free and cheap.
+#
+# Then the M10 proof (decision 10): a kind cluster with two workers on the runner, the probe
+# application's image built from the runtime image just built, two replicas installed with the
+# chart, and the milestone's four sentences asserted with the stop — ten minutes and a real
+# cluster, so it runs on deploy/** and its own inputs, weekly, and on dispatch, never as a
+# per-pull-request unit for the rest of the repository.
 on:
   pull_request:
     paths:
-      - 'deploy/helm/**'
-      - 'deploy/kubernetes/**'
+      - 'deploy/**'
+      - '.github/kubernetes/**'
       - '.github/workflows/kubernetes.yml'
   push:
     branches: [main]
     paths:
-      - 'deploy/helm/**'
-      - 'deploy/kubernetes/**'
+      - 'deploy/**'
+      - '.github/kubernetes/**'
       - '.github/workflows/kubernetes.yml'
+  schedule:
+    - cron: '0 4 * * 1'
   workflow_dispatch:
 
 permissions:
@@ -94,3 +102,77 @@ jobs:
           grep -q 'name: TESSERAQL_SECRETS_DIR' full.yaml
           grep -q -- '"migrate", "apply", "--app", "/stack/orders"' full.yaml
           kubeconform -strict -summary -kubernetes-version 1.31.0 -schema-location default full.yaml
+
+  two-node:
+    name: M10 on a two-replica kind cluster
+    timeout-minutes: 45
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Java
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+          verify-signature: true
+
+      # The runtime image the way deploy-image builds it, then the probe application — the
+      # gallery application copied, plus the job, the channels and the routes under
+      # .github/kubernetes/app/ — linted and packaged under its kind profile and unpacked into
+      # the derived image. Both images are what the cluster runs; nothing is pulled.
+      - name: Build the runtime image
+        run: docker build -f deploy/Dockerfile.host -t tesseraql-host:local .
+
+      - name: Build the developer CLI
+        run: ./mvnw -B -ntp -pl tesseraql-cli,tesseraql-bom -am -Pdist -DskipTests install
+
+      - name: Assemble, lint and package the probe application
+        run: |
+          TQL="java -jar $(ls tesseraql-cli/target/tesseraql-cli-*-all.jar)"
+          mkdir -p stack-build
+          cp -R examples/user-admin-app stack-build/probe
+          cp -R .github/kubernetes/app/. stack-build/probe/
+          $TQL modules resolve --app stack-build/probe
+          $TQL lint --app stack-build/probe --env kind
+          $TQL package --app stack-build/probe --env kind --out stack-build/probe.tqlapp
+          unzip -q stack-build/probe.tqlapp -d stack-build/user-admin
+
+      - name: Build the probe image
+        run: |
+          docker build -f deploy/Dockerfile \
+            --build-arg BASE=tesseraql-host:local \
+            --build-arg APP_DIR=stack-build/user-admin \
+            --build-arg APP_NAME=user-admin \
+            -t tesseraql-probe:local .
+
+      # Each sentence of the milestone is a phase of .github/kubernetes/proof.sh and a step
+      # here, so a red run names the sentence. The runner ships kind, kubectl and helm
+      # (docs/deployment-maturity.md row 23).
+      - name: The cluster, the database and the images
+        run: bash .github/kubernetes/proof.sh cluster
+
+      - name: Two replicas on two nodes, ready, with an administrator
+        run: bash .github/kubernetes/proof.sh install
+
+      - name: Rolling deploys without dropped requests
+        run: bash .github/kubernetes/proof.sh rolling
+
+      - name: Exactly-once scheduled firings
+        run: bash .github/kubernetes/proof.sh firings
+
+      - name: Shared sessions
+        run: bash .github/kubernetes/proof.sh sessions
+
+      - name: Alerts delivered, once per cluster
+        run: bash .github/kubernetes/proof.sh alerts
+
+      - name: The stop finishes the request in flight and exits 143
+        run: bash .github/kubernetes/proof.sh stop
+
+      - name: What the cluster says
+        if: failure()
+        run: bash .github/kubernetes/proof.sh logs

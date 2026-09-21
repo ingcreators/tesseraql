@@ -336,7 +336,10 @@ full dev → staging → prod loop): `--env staging` on `tesseraql dev` (or `TES
 (`application.yml` → `tesseraql.yml`) and Studio's `overlay.yml` — the profile is the
 environment's tuning, and dev-time Studio edits still win on top. A named profile whose file
 does not exist fails startup fast: a typo'd environment must never silently run another
-environment's config. No profile means no layer — existing apps are unchanged.
+environment's config. An application with no `config/env/` directory declares no
+environments and runs its base configuration under any profile, which is what lets one
+`TESSERAQL_ENV` govern a stack whose members, and whose bundled applications, differ. No
+profile means no layer — existing apps are unchanged.
 
 This replaces ad-hoc `${...}` indirection for the common cases: put the per-environment
 datasource, pool sizing, metrics/audit switches and timeouts in `config/env/<profile>.yml`

@@ -1,0 +1,21 @@
+version: tesseraql/v1
+id: probe.fast
+kind: route
+recipe: query-json
+
+# The load's route: public, one round trip to the database, so every non-200 the harness sees
+# through a rolling restart is the platform's or the runtime's (docs/deployment-maturity.md
+# decision 10, "rolling deploys without dropped requests").
+security:
+  auth: public
+
+sources:
+  main:
+    sql:
+      file: fast.sql
+      mode: query
+
+response:
+  json:
+    body:
+      data: main.rows

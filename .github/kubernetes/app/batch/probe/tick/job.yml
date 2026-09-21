@@ -1,0 +1,23 @@
+version: tesseraql/v1
+id: probe.tick
+kind: job
+recipe: batch-pipeline
+
+# Every ten seconds on every replica; the claim in tql_job_claim gives each window to exactly
+# one of them (docs/deployment-maturity.md decision 10, "exactly-once scheduled firings").
+trigger:
+  schedule:
+    fixedDelay: 10s
+
+pipeline:
+  - id: tick
+    sql:
+      file: tick.sql
+      mode: update
+  # A delivery that can never succeed, so the outbox dead-letters it and the alerts channel
+  # pages TQL-OPS-9006 — once per cluster, which the proof counts.
+  - id: unreachable
+    notify:
+      channel: dead-end
+      payload:
+        ticks: steps.tick.affectedRows

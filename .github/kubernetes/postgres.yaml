@@ -1,0 +1,57 @@
+# The database the two replicas share in the M10 proof (docs/deployment-maturity.md decision
+# 10): one PostgreSQL pod on an emptyDir, reached as `postgres` inside the cluster. Not a
+# production shape — the proof is about the stack's replicas agreeing through one database, and
+# any database they can both reach will do.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: POSTGRES_USER
+              value: user_admin
+            - name: POSTGRES_PASSWORD
+              value: user_admin
+            - name: POSTGRES_DB
+              value: user_admin
+          ports:
+            - name: postgres
+              containerPort: 5432
+          # Over TCP on purpose: the image's entrypoint runs a socket-only server while it
+          # initialises, which a socket check reports ready before the real server listens.
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-h", "127.0.0.1", "-U", "user_admin"]
+            periodSeconds: 2
+            failureThreshold: 30
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+      volumes:
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+spec:
+  selector:
+    app: postgres
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres

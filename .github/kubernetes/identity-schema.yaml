@@ -1,0 +1,49 @@
+# The proof's administrator (docs/deployment-maturity.md decision 10): the managed IAM schema
+# and one account, seeded from inside the cluster by the probe image itself — the runtime image
+# carries `identity-schema` — with the password read from a Secret mounted as a file, never from
+# an argument or an environment variable. The permissions are the bootstrap baseline plus the
+# gallery application's own users.read, so the session the proof mints can read a browser
+# route on the other pod.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: identity-schema
+spec:
+  restartPolicy: Never
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 999
+    runAsGroup: 999
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: identity-schema
+      image: tesseraql-probe:local
+      imagePullPolicy: Never
+      args:
+        - identity-schema
+        - --app
+        - /stack/user-admin
+        - --admin-login
+        - admin
+        - --admin-password-file
+        - /run/proof/password
+        - --admin-permissions
+        - tql.app.use.*,tql.ops.view.*,tql.ops.run.*,tql.iam.admin.view,tql.iam.admin.write,user-admin.users.read
+      env:
+        - name: DB_HOST
+          value: postgres
+        - name: TESSERAQL_ENV
+          value: kind
+      volumeMounts:
+        - name: proof-admin
+          mountPath: /run/proof
+          readOnly: true
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+  volumes:
+    - name: proof-admin
+      secret:
+        secretName: proof-admin

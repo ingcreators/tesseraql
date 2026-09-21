@@ -426,7 +426,9 @@ rolling-deploy guidance on top of reload safety), official container images, a
 through the Phase 20 channels.
 
 **Milestone M10** — two-node HA on Kubernetes: rolling deploys without dropped requests,
-exactly-once scheduled firings, shared sessions, alerts delivered.
+exactly-once scheduled firings, shared sessions, alerts delivered. **Proven 2026-09-21
+(#1413)** by the `two-node` job of `kubernetes.yml`, on a two-replica kind cluster, weekly
+and on every change under `deploy/**`.
 
 **Designed in [deployment-maturity.md](deployment-maturity.md)** (2026-09-20). Most of the
 drain and every shared-state arbitration the milestone needs already stand, each with an
@@ -449,8 +451,13 @@ capacity guide (**S3 shipped 2026-09-21, #1411**: the twenty-sixth developer ver
 scenarios with their lint arms and editor schema, `--expect` → exit 3, `docs/capacity.md`);
 the Helm chart, the rendered manifests and the Kubernetes page (**S4 shipped 2026-09-21,
 #1412**: `deploy/helm/tesseraql/`, `deploy/kubernetes/` rendered and drift-checked by the
-`kubernetes.yml` workflow, the chart published from every tag, `docs/kubernetes.md`); **S4** the Helm chart, the rendered manifests and
-the Kubernetes page; **S5** the M10 proof on a two-replica kind cluster in CI.
+`kubernetes.yml` workflow, the chart published from every tag, `docs/kubernetes.md`); the M10
+proof (**S5 shipped 2026-09-21, #1413**: the `two-node` job of `kubernetes.yml` — a kind
+cluster with two workers, the probe application under `.github/kubernetes/app/`,
+`tesseraql bench` through a rolling restart, one execution per fire time, a session across
+pods, one `TQL-OPS-9006` row across two pods, a deleted pod's exit 143 — and the front
+shedding keep-alive connections during the drain, the defect the proof found). Phase 33 is
+complete.
 
 ## Horizon 6 — the 1.0 contract (0.8.x → 1.0)
 

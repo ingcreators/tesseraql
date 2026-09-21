@@ -79,13 +79,26 @@ public final class SqlScripts {
                     boolean tolerated = code == 955 || code == 1430 || code == 1060
                             || code == 1061 || code == 2714 || code == 2705 || code == 1913
                             || code == 42121 || code == 42111
-                            || "42701".equals(state) || "42P07".equals(state);
+                            || "42701".equals(state) || "42P07".equals(state)
+                            || ("23505".equals(state) && creates(sql));
                     if (!tolerated) {
                         throw ex;
                     }
                 }
             }
         }
+    }
+
+    /**
+     * Whether the statement creates an object. Two replicas booting together on a fresh
+     * PostgreSQL both pass the {@code IF NOT EXISTS} check and both create, and the loser is
+     * told a unique violation on the catalogue ({@code pg_type_typname_nsp_index}) rather
+     * than the duplicate-table state above — the other replica having won, which on a create
+     * is the tolerated already-exists case and on any other statement is data, and still
+     * fails (docs/deployment-maturity.md, S5: one of two pods died at boot on it).
+     */
+    private static boolean creates(String sql) {
+        return sql.stripLeading().regionMatches(true, 0, "create", 0, "create".length());
     }
 
     /** Splits a script into statements: line comments stripped, separated on {@code ;}. */

@@ -42,6 +42,47 @@ class SqlScriptsTest {
                 .doesNotThrowAnyException();
     }
 
+    /**
+     * Two replicas booting together on a fresh PostgreSQL (docs/deployment-maturity.md, S5):
+     * both pass the {@code IF NOT EXISTS} check, both create, and the loser is told a unique
+     * violation on {@code pg_type_typname_nsp_index} — state 23505, not the duplicate-table
+     * state the class tolerates — and one of two pods died at boot on it. A unique violation
+     * on a create is the other replica having won; on anything else it is data, and fails.
+     */
+    @Test
+    void aUniqueViolationOnACreateIsTheOtherReplicaHavingWon() {
+        assertThatCode(() -> SqlScripts.applyScript(refusing("23505"),
+                "create table if not exists tql_probe (id varchar(64) primary key);"))
+                .doesNotThrowAnyException();
+        assertThatThrownBy(() -> SqlScripts.applyScript(refusing("23505"),
+                "insert into tql_probe (id) values ('x');"))
+                .isInstanceOf(SQLException.class);
+    }
+
+    /** A datasource whose every statement fails with the given SQLState. */
+    private static DataSource refusing(String state) {
+        java.sql.Statement statement = proxy(java.sql.Statement.class, (method, args) -> {
+            if ("execute".equals(method.getName())) {
+                throw new SQLException("duplicate key value violates unique constraint", state);
+            }
+            return null;
+        });
+        java.sql.Connection connection = proxy(java.sql.Connection.class,
+                (method, args) -> "createStatement".equals(method.getName()) ? statement : null);
+        return proxy(DataSource.class,
+                (method, args) -> "getConnection".equals(method.getName()) ? connection : null);
+    }
+
+    private static <T> T proxy(Class<T> type, Answer answer) {
+        return type.cast(java.lang.reflect.Proxy.newProxyInstance(type.getClassLoader(),
+                new Class<?>[]{type}, (proxied, method, args) -> answer.answer(method, args)));
+    }
+
+    @FunctionalInterface
+    private interface Answer {
+        Object answer(java.lang.reflect.Method method, Object[] args) throws Throwable;
+    }
+
     @Test
     void aBareCreateTableIsNotToleratedTwice() throws SQLException {
         DataSource dataSource = h2("sqlscripts-bare");

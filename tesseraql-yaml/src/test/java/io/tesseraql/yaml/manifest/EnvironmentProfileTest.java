@@ -82,4 +82,29 @@ class EnvironmentProfileTest {
                 .isInstanceOf(TqlException.class)
                 .hasMessageContaining("Invalid environment profile name");
     }
+
+    /**
+     * An application with no {@code config/env/} declares no environments and runs its base
+     * configuration under any profile (docs/deployment-maturity.md, S5): a host sets one
+     * {@code TESSERAQL_ENV} for every application it runs, the framework's bundled ones
+     * included, and those used to refuse it as a missing profile file. The fail-fast above
+     * is for a typo among declared environments, and stays.
+     */
+    @Test
+    void anApplicationWithoutEnvironmentsRunsItsBaseConfigurationUnderAnyProfile(
+            @TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/application.yml"), """
+                tesseraql:
+                  app:
+                    name: bundled
+                  sql:
+                    timeoutSeconds: 30
+                """);
+        System.setProperty("tesseraql.env", "prod");
+
+        var config = new ManifestLoader().load(dir).config();
+        assertThat(config.getString("tesseraql.sql.timeoutSeconds")).contains("30");
+        assertThat(config.getString("tesseraql.app.name")).contains("bundled");
+    }
 }
