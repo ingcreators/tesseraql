@@ -127,6 +127,14 @@ GET  /api/shipments/export            # CSV download
 GET  /dashboard                       # the chain at a glance
 ```
 
+The receipt-notice feed (`batch/edi/receipt-notice`, a `batch-pipeline` job): the delivery
+notes received on the business date, as the export's CSV, pushed to the partner's SFTP drop
+under `tesseraql.connectors.push` — nightly, or on demand:
+
+```
+POST /_tesseraql/ops/batch/jobs/edi.receiptNotice/run   # {"businessDate": "2026-09-21"}; needs tql.ops.run.procurement
+```
+
 ## The tour — one requisition, three logins
 
 The demo script (docs/procurement-demo.md): walk one purchase requisition from creation
@@ -168,6 +176,20 @@ Then:
    3204); `GET /api/orders/{id}/delivery-note` is the 納品書 from that moment on (404
    before the shipment exists); **sato** receives — the chain closes,
    `/api/shipments/export` has the CSV, and `/dashboard` shows the story.
+7. The receipt notice crosses to the supplier. Start the demo drop once and pin its host
+   key — the feed refuses a server it cannot verify — then run the feed for today:
+
+   ```bash
+   docker run --rm -d --name edi-drop -p 2222:22 atmoz/sftp edi:edi-secret:::drop
+   ssh-keyscan -p 2222 localhost >> security/known_hosts
+   OPS=$(tesseraql token --app . --sub ops --permission tql.ops.run.procurement --permission tql.ops.view.procurement)
+   curl -X POST -H "Authorization: Bearer $OPS" -H "Content-Type: application/json" -d '{}' \
+        http://localhost:8080/procurement/_tesseraql/ops/batch/jobs/edi.receiptNotice/run
+   docker exec edi-drop ls /home/edi/drop        # receipt-notice-<today>.csv, whole
+   ```
+
+   Before the keyscan the run ends `FAILED` with `TQL-BATCH-5315` and the execution row
+   says why; the operations console's transfers page holds the produced file either way.
 
 ## Test it
 

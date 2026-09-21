@@ -118,6 +118,22 @@ tesseraql:
           - role: SUPPLIER
           - role: ADMIN
 
+  # The receipt-notice feed (batch/edi/receipt-notice, docs/procurement-documents-and-edi.md
+  # decision 4) delivers to the partner's SFTP drop under its own deny-by-default policy:
+  # the host, the credential, and the host key the server must present. The committed
+  # known_hosts pins no key — the README's ssh-keyscan step pins the demo server's — and
+  # until it does the push fails its job (TQL-BATCH-5315) rather than deliver to a server
+  # it cannot verify.
+  connectors:
+    push:
+      allowedHosts:
+        - localhost
+      knownHostsFile: security/known_hosts
+      credentials:
+        partner-drop:
+          username: edi
+          password: ${secret.env.EDI_SFTP_PASSWORD:edi-secret}
+
   # Managed workflow state: instances/tasks/history live in the framework's tql_workflow_*
   # tables, so the business table stays clean (docs/approval-workflow.md).
   workflow:

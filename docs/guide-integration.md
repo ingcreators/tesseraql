@@ -44,6 +44,11 @@ events live, and where you retry one. Set this up before you need it.
 
 ## What people usually get wrong
 
+- **Pushing a produced file to a partner.** The procurement example's receipt-notice feed
+  (`examples/procurement-app/batch/edi/receipt-notice`) is the worked shape: an export step
+  writes the day's CSV, a `push:` step delivers it to an SFTP drop under the push policy
+  block — allow-listed host, a named credential, a pinned host key — and a run before the
+  pin fails rather than trusts.
 - **Polling a directory from a job step.** Declare a poll source on the trigger instead; the
   framework handles the claim, the move-on-success, and the failure directory.
 - **Publishing the event in the same step as the write.** Use `publish:` so the outbox
