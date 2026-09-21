@@ -257,6 +257,47 @@ Pinning the constants is what makes the guard fire at the only moment it can. De
 
 **Accepted costs, said out loud.** The file-path ledger cannot detect a wrong *value* — it only pins which files may build a server's options; value coverage is the pinned-defaults test's job, and splitting the two is what keeps the ledger in the idiom the repository already maintains. The pinned list is hand-curated and covers eleven constants, not all seventy-three settings `HttpServerOptions` carries; an exhaustive verdict map over the options' JSON was considered and rejected — it is deterministic, but it commits the repository to re-adjudicating every Vert.x settings addition, and fourteen getters have no JSON key at all, so even the exhaustive form would carry a blind spot at far greater cost. `BodyHandler` and the gateway's `PoolOptions` are covered by constant-pinning and construction-site discipline only, because `BodyHandler` exposes five defaults and zero getters — a configured handler can never be read back by any mechanism. And the gateway's front door still inherits most transport settings: under the shipped image the socket a client connects to is that front door, not a member's server, so decision 5's form bounds are declared on a server that in that deployment shape never terminates a client connection. This decision records that gap and pins its construction site; it does not close it.
 
+## Decision 13 — A route's permits return before its response ends
+
+**What is true today.** `RouteEdge.serve` runs the pipeline and `respond()` on a virtual thread
+and drains the exchange's completions — the audit row, the per-route concurrency permit, the
+lane permit, the telemetry span, a streamed body's spool — in that thread's `finally`, after
+`respond()` has returned. For a buffered answer `respond()` returns as soon as `end(buffer)` is
+*scheduled* on the event loop, so the answer can reach the client before the drain has run. A
+client that sends its next request the moment the answer arrives can then meet its own permit
+still held: under `maxInFlight: 1` the route refuses it with `TQL-RATE-4291`. The failure-path
+test met exactly this on CI (PR #1422, attempt 2) — its baseline request was the refusal, the
+previous test method's permit still being out. The order is an artefact of the drain's history.
+[vertx-native.md](vertx-native.md) decision 5 put the drain in the runner's `finally`, and the
+edge moved it after `respond()` because inside `run()` it deleted a streamed body's spool before
+the body was read. Neither position is the right one.
+
+**What changes.** The drain moves into `respond()`, to the one point that satisfies both
+constraints: after the body has been read to its end, before the bytes that let the client see
+the answer complete are written. A buffered answer drains, then schedules `end(buffer)`. A
+streamed answer holds one chunk back: the loop writes chunk *n* only once chunk *n+1* has been
+read. When the read reaches the end the stream is closed, the drain runs, and only then the last
+chunk and the `end()` go to the wire — the spool is deleted after its last read and the permit
+is back before the last byte. A `HEAD` of a streamed body drains after closing the body unread,
+and the unrendered-failure path drains before writing its 500. The edge's `finally` keeps its
+drain for the abort paths — a stream cut mid-body, a failure inside `respond()` — and costs
+nothing on the others, because a drain runs once (decision 5 again). The runtime-wide gate
+(`HttpAdmission`, `TQL-RATE-4293`) does not move: it bounds held responses, the transport-level
+count decision 8 reclaims at the transport, and it returns from the routing context's end handler
+as before.
+
+**Accepted costs, said out loud.** The telemetry span no longer covers the write of a buffered
+answer or the last chunk of a streamed one — microseconds on the event loop, and the span's
+subject is the route's work, not the socket. The audit row commits before the answer is sent
+rather than after; an answer the client never receives still leaves its row, which is the safer
+of the two orders. A streamed answer holds one extra 64 KB chunk in memory.
+
+**Risk.** The permit is returned while the last write is in flight, so under `maxInFlight: 1`
+the next request can start its pipeline before the previous answer's last bytes leave. The bound
+was always on pipelines running, never on answers on the wire, and the runtime-wide gate still
+counts the latter. `HttpEdgeFailurePathIntegrationTest` sends twenty back-to-back requests from
+one client, each on the previous answer, and every one must be the route's own error.
+
 ## Slices
 
 Each slice is one pull request. Sizes are the review's, after it re-sized four of them.
@@ -396,6 +437,25 @@ Two things must be verified before the slice opens rather than assumed, because 
 **Tests.** `IamAdminIntegrationTest` already exercises this surface. Seed the fixture above one page and assert the grid renders one page, the pager renders, and the posted form carries no more than a page of `ids` — FAILS TODAY, the grid renders every row. Add one case that the second page renders a disjoint set, and one that a bulk action applied on page two acts on that page's rows. No new container class.
 
 **Risk.** Changes a shipped admin surface's behaviour and its select-all contract. Pre-1.0, so a CHANGELOG `### Changed` line records what changed and why, with no migration instructions. The real risk is the contract-source question above; it is the first thing the slice settles.
+
+### 13. `fix(http): a route's permits return before its response ends` [S]
+
+**Closes:** the CI race met on PR #1422, attempt 2 — `HttpEdgeFailurePathIntegrationTest`
+refused by its own predecessor's permit; no F-number.
+**Depends on:** —
+
+`RouteEdge.respond` drains the exchange after the body is read to its end and before the bytes
+that complete the answer are written: a buffered answer drains then ends; a streamed one holds
+one chunk back and drains between the last read and the last write; a `HEAD` drains after
+closing the body unread; the unrendered-failure path drains before its 500. The edge's `finally`
+keeps a drain for the abort paths, which costs nothing elsewhere because a drain runs once.
+
+**Tests.** `HttpEdgeFailurePathIntegrationTest.aPermitTakenOnTheFailurePathIsGivenBack` asserts
+its baseline is not a refusal and sends twenty back-to-back requests, each on the previous
+answer; every one is the route's own error. The download and export suites hold the streamed
+path's bytes and length unchanged.
+
+**Risk.** As decision 13 states it.
 
 ## What the refutation review replaced
 

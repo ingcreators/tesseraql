@@ -331,10 +331,14 @@ final class RouteEdge {
         inFlight.incrementAndGet();
         Thread.ofVirtual().name("tql-route-" + routeId).start(() -> {
             try {
-                // The drain is deferred to this thread's finally: respond() reads the body — a
-                // streamed one to its last byte — before the completions delete its backing
-                // file, release the route's permits and end its span. Draining inside run()
-                // did all three before a byte reached the wire (docs/vertx-native.md).
+                // The runner does not drain: respond() does, once the body is read to its last
+                // byte and before the bytes that let the client see the answer complete are
+                // written — so the completions delete the backing file and return the route's
+                // permits after the last read and before the last write
+                // (docs/http-edge-robustness.md decision 13). Draining inside run() did it
+                // before a byte reached the wire; draining after respond() returned did it
+                // after the client could already hold the answer, and a request sent on that
+                // answer was refused by its own predecessor's permit.
                 PipelineRunner.run(pipeline, exchange, false);
                 respond(ctx, connection, exchange);
             } catch (Throwable unrendered) {
@@ -344,8 +348,12 @@ final class RouteEdge {
                 // surface must never give. Found while giving every framework pipeline its clauses
                 // explicitly (docs/camel-removal.md slice 2b).
                 LOG.error("Route {} failed with nothing to render it", routeId, unrendered);
+                exchange.drain();
                 failed(ctx, connection);
             } finally {
+                // The abort paths — a stream cut mid-body, a failure inside respond() — arrive
+                // here undrained; a drain runs once (docs/vertx-native.md decision 5), so a
+                // path that already drained pays nothing.
                 exchange.drain();
                 if (inFlight.decrementAndGet() == 0) {
                     synchronized (idle) {
@@ -547,6 +555,10 @@ final class RouteEdge {
                 : body instanceof byte[] bytes
                         ? Buffer.buffer(bytes)
                         : Buffer.buffer(exchange.getBody(String.class));
+        // The body is in hand, so the completions run before the answer is written: the permit
+        // a request the client sends on this answer needs is back before the answer can arrive
+        // (docs/http-edge-robustness.md decision 13).
+        exchange.drain();
         connection.runOnContext(reply -> {
             if (ctx.response().ended()) {
                 return;
@@ -583,6 +595,7 @@ final class RouteEdge {
             } catch (IOException ignored) {
                 // Nothing was read; a close failure changes nothing on the wire.
             }
+            exchange.drain();
             connection.runOnContext(reply -> {
                 if (!response.ended()) {
                     headers(response, status, wire);
@@ -603,12 +616,19 @@ final class RouteEdge {
                 response.setChunked(true);
             }
         });
+        // One chunk is held back: chunk n is written only once chunk n+1 has been read, so
+        // when the read reaches the end the stream is closed and the completions have run —
+        // the spool deleted after its last read, the permits returned — before the last chunk
+        // and the end reach the wire (docs/http-edge-robustness.md decision 13).
+        Buffer last = null;
         try (InputStream in = body) {
             byte[] chunk = new byte[CHUNK_BYTES];
             int read;
             while (!gone.get() && (read = in.read(chunk)) > 0) {
-                write(connection, gone, response, Buffer.buffer(java.util.Arrays.copyOf(chunk,
-                        read)));
+                if (last != null) {
+                    write(connection, gone, response, last);
+                }
+                last = Buffer.buffer(java.util.Arrays.copyOf(chunk, read));
             }
         } catch (IOException | RuntimeException unreadable) {
             // The head and some chunks are already on the wire, so no error body can follow.
@@ -621,6 +641,10 @@ final class RouteEdge {
                     exchange.getFromRouteId(), unreadable);
             connection.runOnContext(abort -> ctx.request().connection().close());
             return;
+        }
+        exchange.drain();
+        if (last != null) {
+            write(connection, gone, response, last);
         }
         connection.runOnContext(end -> {
             if (!gone.get() && !response.ended()) {

@@ -288,6 +288,21 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A route's permits return before its response ends.** A request's completions — the audit
+  row, the route's `maxInFlight` permit, its lane permit, the telemetry span, a streamed body's
+  spool — drained after `respond()` had returned, which for a buffered answer is after `end()`
+  was scheduled on the event loop; a client could hold the answer while its permit was still
+  out, and a request sent that instant was refused with `TQL-RATE-4291` under `maxInFlight: 1`.
+  `HttpEdgeFailurePathIntegrationTest` met the window on CI. The drain now runs inside
+  `respond()`, after the body is read to its end and before the bytes that complete the answer
+  are written: a buffered answer drains then ends, a streamed one holds one chunk back and
+  drains between the last read and the last write, a `HEAD` drains after closing the body
+  unread, the unrendered-failure path drains before its 500; the edge's `finally` keeps a drain
+  for the abort paths, free elsewhere because a drain runs once. The runtime-wide gate
+  (`TQL-RATE-4293`) is unchanged. Record: `docs/http-edge-robustness.md` decision 13; the test
+  asserts its baseline is not a refusal and sends twenty back-to-back requests, expecting the
+  route's own error every time.
+
 - **A print template's `#{key}` reads the application's catalogs.** The PDF codec's template
   engine had no message resolver, so every message expression in a print template rendered as
   Thymeleaf's `??key_locale??` marker while `docs/printable-documents.md` promised the export's
