@@ -1,0 +1,45 @@
+version: tesseraql/v1
+id: api.orders.print
+kind: route
+recipe: query-export
+
+input:
+  id:
+    type: string
+    required: true
+    maxLength: 64
+
+security:
+  policy: doc.read
+
+# The purchase order (注文書), docs/procurement-documents-and-edi.md decision 5: the buyer issues
+# it and the supplier receives it, both from this route — quotes_scope on both sources confines
+# a supplier to their own orders. An order outside the caller's reach has no header row: 404.
+export:
+  format: pdf
+  filename: order-{path.id}.pdf
+  template: order.html
+  locale: request.locale
+  statusWhen:
+    - when: header.rowCount == 0
+      status: 404
+  columns:
+    - { name: line_no }
+    - { name: item_name }
+    - { name: qty, type: number, format: "#,##0.##" }
+    - { name: unit }
+    - { name: unit_price, type: number, format: "#,##0" }
+    - { name: amount, type: number, format: "#,##0" }
+    - { name: promised_date, type: date, format: yyyy/MM/dd }
+
+sources:
+  main:
+    sql:
+      file: order-lines.sql
+      params:
+        id: path.id
+  header:
+    sql:
+      file: order-header.sql
+      params:
+        id: path.id

@@ -214,6 +214,10 @@ all three. See [file-transfers.md](file-transfers.md#large-results) for the orde
 the `{key}` rule.
 
 `sources:` is how an invoice reads its customer without denormalizing them onto every line.
+The procurement example prints three such documents — a quotation, a purchase order and a
+delivery note under `examples/procurement-app/web/api/` — each a header source beside the
+lines, labels from the application's catalogs, and a `statusWhen:` arm for a row outside
+the caller's reach.
 
 ## Next
 

@@ -1,0 +1,42 @@
+version: tesseraql/v1
+id: api.orders.deliveryNote
+kind: route
+recipe: query-export
+
+input:
+  id:
+    type: string
+    required: true
+    maxLength: 64
+
+security:
+  policy: doc.read
+
+# The delivery note (納品書), docs/procurement-documents-and-edi.md decision 5: issued by the
+# supplier at shipment, read by the requester at receipt, from one route. The header is the
+# registered shipment: before the supplier registers one, or outside the caller's reach, 404.
+export:
+  format: pdf
+  filename: delivery-note-{path.id}.pdf
+  template: delivery-note.html
+  locale: request.locale
+  statusWhen:
+    - when: header.rowCount == 0
+      status: 404
+  columns:
+    - { name: line_no }
+    - { name: item_name }
+    - { name: qty, type: number, format: "#,##0.##" }
+    - { name: unit }
+
+sources:
+  main:
+    sql:
+      file: delivery-note-lines.sql
+      params:
+        id: path.id
+  header:
+    sql:
+      file: delivery-note-header.sql
+      params:
+        id: path.id

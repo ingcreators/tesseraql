@@ -512,6 +512,54 @@ tests:
           item_name: 27インチモニター
           amount: "128000.00"
 
+  # The purchase order and the delivery note: the same three postures over the two header
+  # sources. No order is seeded (the tour creates one over RFQ-2002's quotes, and a seeded
+  # order would collide with it), so these prove the shape and the scope; the runtime test
+  # inserts an order and reads the documents back.
+  - name: procurement reads a purchase order header by id
+    sql:
+      file: web/api/orders/{id}/print/order-header.sql
+    params:
+      id: ORD-NONE
+    principal:
+      roles: [PROCUREMENT]
+    expect:
+      rowCount: 0
+
+  - name: a supplier reads only their own purchase orders
+    sql:
+      file: web/api/orders/{id}/print/order-lines.sql
+    params:
+      id: ORD-NONE
+    principal:
+      roles: [SUPPLIER]
+      claims:
+        partner: P-200
+    expect:
+      rowCount: 0
+
+  - name: a delivery note needs a registered shipment
+    sql:
+      file: web/api/orders/{id}/delivery-note/delivery-note-header.sql
+    params:
+      id: ORD-NONE
+    principal:
+      roles: [SUPPLIER]
+      claims:
+        partner: P-200
+    expect:
+      rowCount: 0
+
+  - name: the delivery note lists the ordered lines
+    sql:
+      file: web/api/orders/{id}/delivery-note/delivery-note-lines.sql
+    params:
+      id: ORD-NONE
+    principal:
+      roles: [PROCUREMENT]
+    expect:
+      rowCount: 0
+
   # Slice 7: the catalogs resolve in both locales.
   - name: the rule messages resolve in Japanese
     messages:

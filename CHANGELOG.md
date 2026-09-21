@@ -8,6 +8,17 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **The procurement demo prints its purchase order and its delivery note.**
+  `GET /api/orders/{id}/print` is the 注文書 and `GET /api/orders/{id}/delivery-note` the
+  納品書 — each a `query-export` PDF with a header source beside the lines, labels from the
+  application's catalogs in the request's language, and one route for both sides of the
+  portal: a new `doc.read` policy grants the surface and `quotes_scope` confines a supplier
+  to their own orders, so the buyer who placed an order and the supplier it names print
+  the same document and a competitor's token answers 404. The delivery note's header is the
+  registered shipment, so it is 404 until the supplier registers one.
+  `ProcurementDocumentsIntegrationTest` inserts an order and a shipment and reads all three
+  documents back. Record: `docs/procurement-documents-and-edi.md` (S2).
+
 - **The procurement demo prints its quotation.** `GET /api/supplier/quotes/{id}/print`
   answers the 見積書 as a PDF: a `query-export` with `format: pdf`, a header source beside
   the lines, `locale: request.locale` so `?lang=en` prints the English document from the
