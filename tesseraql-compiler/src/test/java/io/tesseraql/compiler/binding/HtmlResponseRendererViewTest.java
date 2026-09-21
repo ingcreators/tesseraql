@@ -851,6 +851,14 @@ class HtmlResponseRendererViewTest {
         // The string input carries the same constraints InputBinder enforces server-side.
         assertThat(html).contains("name=\"name\"").contains("required")
                 .contains("maxlength=\"200\"");
+        // The declared bound made visible (docs/hypermedia-ui.md "Bounded text fields"): the
+        // kit's count on the string input, its output pre-rendered as used / max; the integer
+        // input carries none, a number having no string bound.
+        assertThat(html).contains("data-hc-count")
+                .contains("aria-describedby=\"field-name-count\"")
+                .contains("id=\"field-name-count\" for=\"field-name\"")
+                .contains(">0 / 200</output>")
+                .doesNotContain("field-quantity-count");
         // integer -> number widget with min; enum -> select with its options; boolean -> checkbox.
         assertThat(html).contains("type=\"number\"").contains("min=\"0\"");
         assertThat(html).contains("<select").contains(">OPEN<").contains(">CLOSED<");
@@ -875,6 +883,8 @@ class HtmlResponseRendererViewTest {
                 """);
         String html = render(renderer, Map.of());
         assertThat(html).contains("<textarea").contains(">Item name</label>");
+        // A textarea grows with its content and, bounded by the route's maxLength, counts.
+        assertThat(html).contains("data-autosize").contains(">0 / 200</output>");
         // Unselected inputs are not rendered.
         assertThat(html).doesNotContain("name=\"quantity\"");
     }

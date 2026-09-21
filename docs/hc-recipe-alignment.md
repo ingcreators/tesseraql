@@ -30,8 +30,8 @@
 >   `data-autosize`; the copilot's composer is a single-line input, where Enter already
 >   submits and there is nothing to grow, so there is nothing to adopt. The release's four
 >   new glue behaviors (`data-hc-print`, `data-hc-count`, `data-hc-select-all`,
->   `data-autosize`) are components rather than recipes and wait for a declaration that
->   renders them.
+>   `data-autosize`) are components rather than recipes; weighed below in "The 0.4.1 glue
+>   behaviors" — two adopted, two deferred with their triggers named.
 > - **hc 0.4.2 swept 2026-09-21**: no recipe or template changed between v0.4.1 and v0.4.2
 >   (a behavior, its tests and the *Browser support* page); nothing to adopt beyond the bump.
 >
@@ -228,6 +228,44 @@ dashboard's correct shape, not this recipe's. **Trigger: the first HTML async ki
 most plausibly the list surface growing an "export this filtered set" action**, which is
 where the card, the terminal-stop rule, and the tombstone become user-visible. Until
 then there is nothing for the card to render.
+
+## The 0.4.1 glue behaviors — weighed 2026-09-21
+
+Four small declarative pieces hc 0.4.1 added, components rather than recipes, judged by the
+same question as the recipes above: does a declaration already render the place they belong?
+
+| Behavior | Verdict | Anchor |
+| --- | --- | --- |
+| `data-hc-count` | **Adopted** (#1422) | `maxLength` on a `text` or `textarea` input |
+| `data-autosize` | **Adopted** (#1422) | every `textarea` widget, and the workflow comment |
+| `data-hc-select-all` | **Deferred**, trigger named | no declaration renders a checklist |
+| `data-hc-print` | **Deferred**, trigger named | no declaration renders a print action |
+
+**`data-hc-count` — adopted.** The field pattern already emits `maxlength` from the declared
+`maxLength`, so the count is the same declaration made visible: `tql/view/field.html` renders
+`data-hc-count` and `aria-describedby` on the control and an `<output for>` the server
+pre-renders as `used / max`, on the two widgets a string bound reaches (`text`, `textarea`);
+the ejector freezes the same markup. The wording is the kit catalog's `count.of`, Japanese
+pack included. Not applied to the lookup field (its hint slot carries the resolved reference)
+nor to the workflow comment (its 2000-character cap is framework policy rather than a declared
+bound, and its hint slot names the transitions that require a comment).
+
+**`data-autosize` — adopted.** CSS only, so the adoption is one attribute on every `textarea`
+the compiler or the ejector emits, plus the detail view's workflow comment.
+
+**`data-hc-select-all` — deferred.** The framework renders no checklist: the field pattern has
+no multi-valued widget (`ViewSpec.WIDGETS` is single-valued throughout), IAM Admin renders no
+permission matrix, and export has no column picker. The grid's bulk selection is
+`hc-datagrid`'s own header checkbox, which the kit says needs none of this. The Studio pages
+with several checkboxes are per-row toggles (a column's *apply* box, a slot's *required* box),
+not a set one master should govern. **Trigger: the first declaration that renders a set of
+checkboxes** — a multi-valued enum input, or an export column picker.
+
+**`data-hc-print` — deferred.** TesseraQL's printable documents are server-rendered PDFs
+([printable-documents.md](printable-documents.md)); the kit's behavior prints the HTML page,
+and no declaration renders a print action on a page. The shell already links `hc.print.css`,
+so the day a detail view declares one the button is a single attribute. **Trigger: a `print:`
+action on a detail view.**
 
 ## The pre-0.4.0 catalog — the recipes this ledger never weighed
 
