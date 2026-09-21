@@ -8,6 +8,21 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Two replicas on Kubernetes, proven.** The `two-node` job of `kubernetes.yml` — weekly, on
+  dispatch and on every change under `deploy/**` — builds the runtime image and a probe
+  application's image from it (`examples/user-admin-app` plus a fixed-delay job, an alerts
+  channel aimed at the application's own `recipe: webhook` route, and a fast and a slow route,
+  under `.github/kubernetes/app/`), installs the chart with two replicas on a kind cluster
+  with two workers, and asserts Milestone M10's four sentences and the stop, each as a step
+  of its own: zero non-200 through `kubectl rollout restart` under `tesseraql bench` at eight
+  workers; one execution per fire time of the fixed-delay job, both replicas having run it; a
+  session signed in on pod A reading a browser route on pod B; one `TQL-OPS-9006` row across
+  two pods after an unreachable channel dead-letters; a pod deleted with a slow request in
+  flight answering it and exiting 143 inside the grace. The chart gains `service.nodePort`,
+  rendered only when set. `KubernetesChartLedgerTest` holds the job's steps, the port the
+  cluster publishes and the schedule. Record: `docs/deployment-maturity.md` (S5) — Phase 33
+  complete.
+
 - **A Helm chart and Kubernetes manifests.** `deploy/helm/tesseraql/` deploys a stack's derived
   image: one Deployment with `maxSurge: 1` / `maxUnavailable: 0`, a PodDisruptionBudget of one
   when there is more than one replica, a preferred anti-affinity across nodes, the probes with
@@ -162,6 +177,35 @@ All notable changes to TesseraQL are documented here. The format follows
   that rebuilds a route drops the hold. Pre-1.0 internal.
 
 ### Fixed
+
+- **A keep-alive client is shed during the drain.** The stack's front kept serving a pooled
+  connection through the whole drain, so a client that never let go — a load tool, an
+  upstream with keep-alive — held the in-flight count above zero until the bound, and the
+  bound cut whatever it was mid-flight with: dropped requests on exactly the rolling updates
+  the drain exists for. From the signal on, every HTTP/1.1 response says `Connection: close`
+  and the connection closes after it; an HTTP/2 connection shuts down gracefully, GOAWAY and
+  then the close once the streams in flight are done. The client reconnects through the Service to a pod
+  that stays, and the in-flight count reaches zero within a round trip. The front then closes
+  only once it has been quiet for a whole linger: the count covers what the relay accepted,
+  not a client's next request already on the wire, and a close at the first zero cut exactly
+  those — two in half a million through a rolling restart. Found by the M10 proof's first
+  sentence; `StackRelayTest` holds both wires and `QuietDrainTest` the linger.
+
+- **One `TESSERAQL_ENV` governs a stack.** An application with no `config/env/` directory
+  declares no environments and runs its base configuration under any profile. The framework's
+  bundled applications — the portal, the account pages, IAM Admin — used to refuse the host's
+  profile as a missing profile file (`TQL-YAML-1202`), so the chart's `profile` value, and
+  `TESSERAQL_ENV` on any host, could never boot a stack. The fail-fast stays for a profile a
+  member's `config/env/` does not hold: a typo among declared environments still refuses the
+  start. Found by the M10 proof's rehearsal; `EnvironmentProfileTest` holds the case.
+
+- **Two replicas booting together on a fresh database both come up.** Each store's
+  idempotent `create … if not exists` ran on both replicas at once; on PostgreSQL both pass
+  the check, both create, and the loser is told a unique violation on the catalogue
+  (`pg_type_typname_nsp_index`) rather than the duplicate-table state the bootstrap
+  tolerated, so one of two pods died at boot and came back on its restart. A unique
+  violation on a create is now the other replica having won; on any other statement it is
+  data and still fails. Found by the M10 proof's rehearsal; `SqlScriptsTest` holds the case.
 
 - **The container health check could never pass.** Both Dockerfiles' `HEALTHCHECK` called
   `curl`, which `eclipse-temurin:25-jre` does not ship: every container read `unhealthy` from

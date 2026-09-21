@@ -1221,6 +1221,119 @@ class StackRelayTest {
         }
     }
 
+    /**
+     * A draining front sheds keep-alive connections (docs/deployment-maturity.md decision 10,
+     * the M10 proof): a client pinned to a stopping node would otherwise keep sending on the
+     * connection it has, hold the in-flight count above zero for the whole bound, and lose
+     * whatever was mid-flight when the bound cut it. From the drain on, every HTTP/1.1 response
+     * says {@code Connection: close} and the server closes after it, so the client's next
+     * request opens a new connection — through the Service, to a node that stays. Before the
+     * drain the same connection is kept.
+     */
+    @Test
+    void aDrainingFrontShedsAKeepAliveConnectionAfterItsNextResponse() throws Exception {
+        StackRelay draining = new StackRelay(client, CATALOGUE, appId -> originPort);
+        HttpServer drainingFront = vertx.createHttpServer(StackRelay.frontOptions(0, false));
+        drainingFront.requestHandler(draining::handle);
+        int port = await(drainingFront.listen()).actualPort();
+        try (java.net.Socket socket = new java.net.Socket("localhost", port)) {
+            socket.setSoTimeout(5_000);
+            String kept = rawGet(socket, "/" + APP + "/hello");
+            assertThat(kept).startsWith("HTTP/1.1 200");
+            assertThat(kept.toLowerCase(java.util.Locale.ROOT))
+                    .as("before the drain the connection is kept")
+                    .doesNotContain("connection: close");
+
+            draining.beginDrain();
+            String shed = rawGet(socket, "/" + APP + "/hello");
+            assertThat(shed).startsWith("HTTP/1.1 200");
+            assertThat(shed.toLowerCase(java.util.Locale.ROOT))
+                    .as("the response after the drain began tells the client to reconnect")
+                    .contains("connection: close");
+            assertThat(socket.getInputStream().read())
+                    .as("the server closed the connection after that response")
+                    .isEqualTo(-1);
+        } finally {
+            await(drainingFront.close());
+        }
+    }
+
+    /**
+     * The same shedding over h2c, where the wire has no {@code Connection} header: the draining
+     * front answers the request in flight, whole, and shuts the connection down — GOAWAY, then
+     * the close once the stream has finished — so the client's next stream opens a new
+     * connection. The body is collected on the event loop: registered from the test thread
+     * after the headers, it missed the frames that had already arrived and read nothing, in
+     * about one run of six, whatever the front did.
+     */
+    @Test
+    void aDrainingH2FrontGoesAwayAfterTheStreamInFlight() throws Exception {
+        StackRelay draining = new StackRelay(h2Client, CATALOGUE, appId -> originPort);
+        HttpServer drainingFront = vertx.createHttpServer(StackRelay.frontOptions(0, true));
+        drainingFront.requestHandler(draining::handle);
+        int port = await(drainingFront.listen()).actualPort();
+        io.vertx.core.http.HttpClientAgent agent = vertx.createHttpClient(
+                StackRelay.outboundOptions(true));
+        try {
+            io.vertx.core.http.HttpClientConnection connection = await(agent.connect(
+                    new io.vertx.core.http.HttpConnectOptions().setHost("localhost")
+                            .setPort(port)));
+            java.util.concurrent.CountDownLatch wentAway = new java.util.concurrent.CountDownLatch(
+                    1);
+            java.util.concurrent.CountDownLatch closed = new java.util.concurrent.CountDownLatch(
+                    1);
+            connection.goAwayHandler(frame -> wentAway.countDown());
+            connection.closeHandler(v -> closed.countDown());
+
+            assertThat(exchange(connection, "/" + APP + "/hello")).isEqualTo("200 ok");
+            assertThat(wentAway.getCount()).as("before the drain the connection stays")
+                    .isEqualTo(1);
+
+            draining.beginDrain();
+            assertThat(exchange(connection, "/" + APP + "/hello"))
+                    .as("whole through the drain").isEqualTo("200 ok");
+            assertThat(wentAway.await(5, TimeUnit.SECONDS))
+                    .as("the client was told GOAWAY once the drain began").isTrue();
+            assertThat(closed.await(5, TimeUnit.SECONDS))
+                    .as("the connection ended after the stream in flight").isTrue();
+        } finally {
+            await(agent.close());
+            await(drainingFront.close());
+        }
+    }
+
+    /** One request on an open client connection, the body collected on the event loop. */
+    private static String exchange(io.vertx.core.http.HttpClientConnection connection,
+            String path) throws Exception {
+        return await(connection.request(new io.vertx.core.http.RequestOptions().setURI(path))
+                .compose(io.vertx.core.http.HttpClientRequest::send)
+                .compose(response -> response.body()
+                        .map(body -> response.statusCode() + " " + body.toString())));
+    }
+
+    /** One HTTP/1.1 exchange on an open socket: the head, then a content-length body. */
+    private static String rawGet(java.net.Socket socket, String path) throws Exception {
+        socket.getOutputStream().write(("GET " + path + " HTTP/1.1\r\nHost: localhost\r\n\r\n")
+                .getBytes(StandardCharsets.ISO_8859_1));
+        socket.getOutputStream().flush();
+        InputStream in = socket.getInputStream();
+        StringBuilder head = new StringBuilder();
+        while (!head.toString().endsWith("\r\n\r\n")) {
+            int next = in.read();
+            if (next < 0) {
+                throw new java.io.EOFException("closed before the head ended: " + head);
+            }
+            head.append((char) next);
+        }
+        int length = 0;
+        for (String line : head.toString().split("\r\n")) {
+            if (line.toLowerCase(java.util.Locale.ROOT).startsWith("content-length:")) {
+                length = Integer.parseInt(line.substring("content-length:".length()).trim());
+            }
+        }
+        return head + new String(in.readNBytes(length), StandardCharsets.UTF_8);
+    }
+
     /** Sends pinned to one protocol, so a case says which wire it exercised. */
     private static HttpResponse<String> sendOver(Version version, HttpRequest.Builder request)
             throws Exception {

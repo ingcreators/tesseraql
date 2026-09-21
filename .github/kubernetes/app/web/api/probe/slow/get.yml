@@ -1,0 +1,29 @@
+version: tesseraql/v1
+id: probe.slow
+kind: route
+recipe: query-json
+
+# A request that is still in flight when the pod is deleted: the drain completes it before the
+# process exits 143 (docs/deployment-maturity.md decision 10, "the stop").
+security:
+  auth: public
+
+input:
+  seconds:
+    type: integer
+    default: 15
+    min: 1
+    max: 60
+
+sources:
+  main:
+    sql:
+      file: slow.sql
+      mode: query
+      params:
+        seconds: query.seconds
+
+response:
+  json:
+    body:
+      data: main.rows

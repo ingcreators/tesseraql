@@ -1,0 +1,34 @@
+version: tesseraql/v1
+id: probe.alertReceived
+kind: route
+recipe: webhook
+
+# The alerts channel's target: the framework's own alert, signed by the alerts-loop channel and
+# verified here, stored where the proof can count it (docs/deployment-maturity.md decision 10).
+# The delivery envelope is the framework's (source, eventId, app, payload), so the route
+# declares the one field it validates and reads the rest from the raw body.
+webhook:
+  provider: alerts
+
+input:
+  eventId:
+    type: string
+    required: true
+
+inputPolicy:
+  unknownFields: ignore
+
+steps:
+  - id: main
+    sql:
+      file: store-alert.sql
+      mode: update
+      params:
+        eventId: body.eventId
+        code: body.payload.code
+        node: body.payload.node
+        scope: body.payload.scope
+
+response:
+  json:
+    status: 202

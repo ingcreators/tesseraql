@@ -89,6 +89,34 @@ class KubernetesChartLedgerTest {
                 .doesNotContain("helm.sh/chart").doesNotContain("app.kubernetes.io/version");
     }
 
+    /**
+     * The M10 proof (docs/deployment-maturity.md decision 10): the workflow's {@code two-node}
+     * job runs every phase of the proof script as a step of its own, so a red run names the
+     * sentence; the proof's values put the origin on the NodePort the kind cluster publishes;
+     * and the job is scheduled, since a real cluster is not a per-pull-request unit.
+     */
+    @Test
+    void theTwoNodeJobRunsEveryPhaseOfTheProofOnAScheduleToo() throws IOException {
+        String workflow = Files.readString(WORKFLOW);
+        assertThat(workflow).contains("  two-node:").contains("schedule:");
+        for (String phase : new String[]{"cluster", "install", "rolling", "firings", "sessions",
+                "alerts", "stop", "logs"}) {
+            assertThat(workflow).as("the %s phase is a step", phase)
+                    .contains("bash .github/kubernetes/proof.sh " + phase);
+        }
+        String script = Files.readString(REPO.resolve(".github/kubernetes/proof.sh"));
+        for (String phase : new String[]{"rolling", "firings", "sessions", "alerts", "stop"}) {
+            assertThat(script).contains("phase_" + phase + "()");
+        }
+        String values = Files.readString(REPO.resolve(".github/kubernetes/values.yaml"));
+        String kind = Files.readString(REPO.resolve(".github/kubernetes/kind.yaml"));
+        assertThat(values).contains("type: NodePort").contains("nodePort: 30080");
+        assertThat(kind).as("the cluster publishes the port the values pin")
+                .contains("containerPort: 30080");
+        assertThat(Files.readString(REPO.resolve("deploy/helm/tesseraql/templates/service.yaml")))
+                .contains("nodePort: {{ .Values.service.nodePort }}");
+    }
+
     @Test
     void thePageDocumentsEveryTopLevelValue() throws IOException {
         String page = Files.readString(PAGE);

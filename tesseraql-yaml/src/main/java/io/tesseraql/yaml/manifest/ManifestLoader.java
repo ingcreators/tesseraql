@@ -453,13 +453,20 @@ public final class ManifestLoader {
         deepMerge(merged, parseTreeIfPresent(home.resolve("config/tesseraql.yml")));
         String profile = activeProfile();
         if (profile != null) {
-            Path profileFile = home.resolve("config/env/" + profile + ".yml");
-            if (!Files.isRegularFile(profileFile)) {
+            Path profiles = home.resolve("config/env");
+            Path profileFile = profiles.resolve(profile + ".yml");
+            if (Files.isRegularFile(profileFile)) {
+                deepMerge(merged, parseTreeIfPresent(profileFile));
+            } else if (Files.isDirectory(profiles)) {
                 // Fail fast: a typo'd environment must never silently run another env's config.
                 throw new TqlException(LOAD_ERROR, "Environment profile '" + profile
                         + "' is active but config/env/" + profile + ".yml does not exist");
             }
-            deepMerge(merged, parseTreeIfPresent(profileFile));
+            // An application with no config/env/ at all declares no environments, and runs
+            // its base configuration under any profile: the framework's own bundled
+            // applications, and a stack member with nothing to tune, hosted under the one
+            // TESSERAQL_ENV a deployment sets (docs/deployment-maturity.md, S5). There is no
+            // other environment's configuration for it to run by mistake.
         }
         deepMerge(merged, parseTreeIfPresent(home.resolve("config/overlay.yml")));
 

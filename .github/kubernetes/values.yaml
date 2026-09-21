@@ -1,0 +1,30 @@
+# The chart's values for the M10 proof (docs/deployment-maturity.md decision 10): the probe
+# image kind loaded, the kind profile, the shared database by its Service name, a shorter drain
+# bound than production's so the proof runs in minutes, the origin on a fixed NodePort the
+# cluster publishes to the runner, and requests the runner's nodes can grant twice.
+image:
+  repository: tesseraql-probe
+  tag: local
+  pullPolicy: Never
+
+replicaCount: 2
+
+profile: kind
+
+env:
+  - name: DB_HOST
+    value: postgres
+
+shutdownTimeoutSeconds: 20
+
+service:
+  type: NodePort
+  port: 8080
+  nodePort: 30080
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    memory: 1Gi

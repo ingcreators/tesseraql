@@ -1,0 +1,14 @@
+# The two-node cluster the M10 proof runs on (docs/deployment-maturity.md decision 10): a
+# control plane and two workers, so the chart's preferred anti-affinity puts the two replicas on
+# different nodes, and the NodePort the load reaches the stack through published on the runner.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: two-node
+nodes:
+  - role: control-plane
+    extraPortMappings:
+      - containerPort: 30080
+        hostPort: 30080
+        protocol: TCP
+  - role: worker
+  - role: worker

@@ -1,0 +1,39 @@
+# The probe application's profile for the M10 proof (docs/deployment-maturity.md decision 10):
+# user-admin-app as the workflow copies it, plus what the four sentences need. Selected by
+# TESSERAQL_ENV=kind, which the chart hands every member as `profile: kind`; merged over the
+# gallery application's own configuration at boot, a list replacing a list.
+tesseraql:
+  metrics:
+    enabled: true
+  notifications:
+    channels:
+      # The alerts channel: the application's own webhook route, so the framework receives its
+      # own alert into a table the proof can count. `tesseraql` is the chart's Service.
+      alerts-loop:
+        type: webhook
+        url: http://tesseraql:8080/user-admin/hooks/alerts
+        secret: ${PROBE_WEBHOOK_SECRET:probe-only-webhook-secret}
+      # A channel no delivery can reach: .invalid never resolves, so every attempt fails and the
+      # event dead-letters after maxAttempts — the condition TQL-OPS-9006 pages for.
+      dead-end:
+        type: webhook
+        url: http://dead-end.invalid/hook
+    alerts:
+      channel: alerts-loop
+      checkInterval: 5s
+  outbox:
+    dispatch:
+      fixedDelay: 2s
+      maxAttempts: 3
+  connectors:
+    webhooks:
+      # The verifier behind the hooks/alerts route: the key the alerts-loop channel signs with.
+      alerts:
+        secret: ${PROBE_WEBHOOK_SECRET:probe-only-webhook-secret}
+  http:
+    outbound:
+      allowedHosts:
+        - api.directory.example
+        - localhost
+        - tesseraql
+        - dead-end.invalid

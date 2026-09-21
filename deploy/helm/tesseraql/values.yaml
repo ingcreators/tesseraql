@@ -38,8 +38,9 @@ secretsMount:
 # The drain bound the members declare — tesseraql.shutdown.timeout, 45s by default. The grace
 # period is this plus 15 s for the close that follows the drain, and TESSERAQL_SHUTDOWN_TIMEOUT
 # carries the same number to a member that declares
-# `tesseraql.shutdown.timeout: ${TESSERAQL_SHUTDOWN_TIMEOUT:45s}`. Under steady traffic a
-# stop takes the whole bound; a rolling update takes up to this per pod.
+# `tesseraql.shutdown.timeout: ${TESSERAQL_SHUTDOWN_TIMEOUT:45s}`. A stop takes the whole bound
+# only for a request that runs that long (a keep-alive client is shed at its next response);
+# a rolling update takes up to this per pod.
 shutdownTimeoutSeconds: 45
 # false is an unbounded drain, and no grace period can cover one; the chart refuses to render it.
 forceOnTimeout: true
@@ -57,6 +58,8 @@ profile: ""
 service:
   type: ClusterIP
   port: 8080
+  # With type NodePort, the port every node publishes; unset, the cluster picks one.
+  nodePort: null
 
 ingress:
   enabled: false

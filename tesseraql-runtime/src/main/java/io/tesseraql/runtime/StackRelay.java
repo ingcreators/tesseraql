@@ -390,10 +390,33 @@ final class StackRelay {
 
     /**
      * Starts the ordered stop: readiness flips to 503 so a balancer stops sending new traffic,
-     * while everything that still arrives is served in full.
+     * while everything that still arrives is served in full — and every connection is shed
+     * after its next response, so a keep-alive client reconnects to a node that stays.
      */
     void beginDrain() {
         draining = true;
+    }
+
+    /**
+     * Ends the connection behind a response written during the drain (the M10 proof,
+     * docs/deployment-maturity.md decision 10). A keep-alive client pinned to a stopping node
+     * would otherwise keep sending on the connection it has — the platform stops routing new
+     * connections to the node, not the ones it already holds — so the in-flight count would
+     * never reach zero, the drain would run to its bound, and the bound would cut whatever was
+     * mid-flight when it ran out: dropped requests on every rolling update, for exactly the
+     * clients that pool connections. An HTTP/1.x response said {@code Connection: close} and the
+     * connection now closes, so the client opens a new one for its next request — through the
+     * Service, to a node that is ready; Vert.x writes the header a caller sets but decides the
+     * close from the request's own keep-alive, which is why the close is explicit. An HTTP/2
+     * connection shuts down gracefully: GOAWAY, the streams still in flight finishing first,
+     * then the close.
+     */
+    private static void shed(HttpServerRequest request) {
+        if (request.version() == HttpVersion.HTTP_2) {
+            request.connection().shutdown();
+        } else {
+            request.connection().close();
+        }
     }
 
     /** Wires where a refusal at the front is counted, by the member it was for and its code. */
@@ -518,12 +541,22 @@ final class StackRelay {
         // keeps one endHandler per response, so registering again would replace the drain's own
         // and leak the count the stack's stop waits on.
         java.util.concurrent.atomic.AtomicReference<java.util.concurrent.Semaphore> held = new java.util.concurrent.atomic.AtomicReference<>();
+        // Decided at arrival: a request accepted during the drain is the connection's last.
+        // The HTTP/1.x client is told so on the response, and the release below ends the
+        // connection once that response is written (see shed).
+        boolean shed = draining;
+        if (shed && request.version() != HttpVersion.HTTP_2) {
+            request.response().putHeader("Connection", "close");
+        }
         Runnable release = () -> {
             if (released.compareAndSet(false, true)) {
                 inFlight.decrementAndGet();
                 java.util.concurrent.Semaphore permit = held.getAndSet(null);
                 if (permit != null) {
                     permit.release();
+                }
+                if (shed) {
+                    shed(request);
                 }
             }
         };

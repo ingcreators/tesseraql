@@ -43,8 +43,8 @@ the image and apply it with `kubectl apply -f`.
 | `forceOnTimeout` | `true` | `false` is an unbounded drain, and the chart refuses to render it |
 | `tempStore` | `db` | where spools live, so an export one replica produced is served by any other |
 | `javaToolOptions` | `-XX:MaxRAMPercentage=75.0` | the heap as a share of the container's limit; the image sets no `-Xmx` |
-| `profile` | empty | `TESSERAQL_ENV`: the configuration profile every member selects |
-| `service`, `ingress` | `ClusterIP` on 8080, off | how traffic reaches the origin |
+| `profile` | empty | `TESSERAQL_ENV`: the configuration profile every member selects; a member with no `config/env/` runs its base configuration |
+| `service`, `ingress` | `ClusterIP` on 8080, off | how traffic reaches the origin; `service.nodePort` pins the port a `NodePort` publishes |
 | `resources` | 500 m and 768 Mi requested, 1 Gi limit | from a measured node; size yours by the knee ([capacity](capacity.md)) |
 | `probes` | the numbers below | the startup, liveness and readiness cadences |
 | `pdb` | on, `minAvailable: 1` | rendered when there is more than one replica |
@@ -101,8 +101,14 @@ every job run and stream to stop, waits for what is in flight under `shutdownTim
 and closes. The close after the drain is bounded too, three seconds per transport, which is why
 the grace period is the bound plus 15: the process exits `143` inside it. There is no `preStop`
 sleep. The idiom exists for servers that stop accepting at the signal; this one keeps answering
-through the drain, so a request routed after the signal is served rather than lost. Under steady
-traffic a stop takes the whole bound, and a rolling update takes up to the bound per pod.
+through the drain, so a request routed after the signal is served rather than lost. From the
+signal on, every response also ends its connection: `Connection: close` on HTTP/1.1, GOAWAY
+and then the close once the stream is done on HTTP/2. A client that pools connections
+reconnects through the Service to a pod that stays,
+so the in-flight count reaches zero within a round trip of the signal, and the front closes
+once it has been quiet for a moment, so a request already on the wire is answered rather
+than cut. A stop takes the whole
+bound only when a request runs that long, and a rolling update takes up to the bound per pod.
 
 `forceOnTimeout: false` is an unbounded drain, and no grace period can cover one: a stop that
 waits forever meets the platform's `SIGKILL` at the grace with the requests it was waiting for
@@ -131,6 +137,19 @@ claim-arbitrated against the old pod's, and the schema it migrated at boot must 
 expand/contract for the length of the window ([deployment](deployment.md#bootstrap-and-migrations)).
 The optional migration hook runs `migrate apply` per member before the upgrade proceeds, so a
 failed migration fails `helm upgrade` with its message instead of crash-looping a pod.
+
+The contract is proven, not promised. The `two-node` job of the repository's `kubernetes.yml`
+workflow installs the chart with two replicas on a kind cluster with two workers, every week
+and on every change under `deploy/`, and asserts each sentence as a step of its own:
+
+- eight workers of `tesseraql bench` see no answer but a 200 through a rolling restart;
+- a job every ten seconds runs once per fire time, on one replica or the other;
+- a session signed in on one pod reads a browser route on the other;
+- an alert raised from a dead-lettered event reaches the channel once across both pods;
+- a pod deleted with a slow request in flight answers it and exits `143` inside the grace.
+
+The probe application and the script are under `.github/kubernetes/`, and both run on a
+developer's machine with the same three binaries.
 
 ## The shared install root
 
