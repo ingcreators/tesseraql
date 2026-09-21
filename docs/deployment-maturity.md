@@ -116,8 +116,9 @@
 > after its first response under the drain (`Connection: close` and an explicit close on
 > HTTP/1.x, since Vert.x writes the header but decides the close from the request's own
 > keep-alive; GOAWAY and then the close on HTTP/2), so the count reaches zero within a round
-> trip and the
-> first sentence holds. (The first CI run's one red test was the h2 case's own race — its
+> trip; and the front closes only after a whole quiet linger (`QuietDrain`, 250 ms), because
+> the count covers what the relay accepted and not a client's next request already on the
+> wire — the second CI run's two errors in half a million — so the first sentence holds. (The first CI run's one red test was the h2 case's own race — its
 > body handler registered from the test thread after the headers, missing frames already
 > arrived, in about one run of six whatever the front did; the body is composed on the
 > event loop now.) (2) The ops API's execution rows carry no fire time, so the proof

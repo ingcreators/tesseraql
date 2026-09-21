@@ -519,15 +519,10 @@ public final class MultiAppGateway implements AutoCloseable {
         int inFlight = relay.inFlight();
         LOG.info("Stack stopping: readiness now answers 503; draining {} in-flight request(s)"
                 + " for up to {}", inFlight, bound);
-        long deadline = System.nanoTime() + bound.toNanos();
-        while (relay.inFlight() > 0 && System.nanoTime() < deadline) {
-            try {
-                Thread.sleep(50);
-            } catch (InterruptedException interrupted) {
-                Thread.currentThread().interrupt();
-                break;
-            }
-        }
+        // Zero, then quiet for a whole linger (QuietDrain): the count covers what the relay
+        // accepted, not a keep-alive client's next request already on the wire, and a close at
+        // the first zero cut exactly those.
+        QuietDrain.await(relay::inFlight, bound, QuietDrain::sleep, System::nanoTime);
         if (relay.inFlight() > 0) {
             LOG.warn("Stack stop drain bound {} reached with {} request(s) still in flight;"
                     + " closing the front now", bound, relay.inFlight());

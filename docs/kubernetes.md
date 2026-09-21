@@ -105,7 +105,9 @@ through the drain, so a request routed after the signal is served rather than lo
 signal on, every response also ends its connection: `Connection: close` on HTTP/1.1, GOAWAY
 and then the close once the stream is done on HTTP/2. A client that pools connections
 reconnects through the Service to a pod that stays,
-so the in-flight count reaches zero within a round trip of the signal. A stop takes the whole
+so the in-flight count reaches zero within a round trip of the signal, and the front closes
+once it has been quiet for a moment, so a request already on the wire is answered rather
+than cut. A stop takes the whole
 bound only when a request runs that long, and a rolling update takes up to the bound per pod.
 
 `forceOnTimeout: false` is an unbounded drain, and no grace period can cover one: a stop that

@@ -185,8 +185,11 @@ All notable changes to TesseraQL are documented here. The format follows
   the drain exists for. From the signal on, every HTTP/1.1 response says `Connection: close`
   and the connection closes after it; an HTTP/2 connection shuts down gracefully, GOAWAY and
   then the close once the streams in flight are done. The client reconnects through the Service to a pod
-  that stays, and the in-flight count reaches zero within a round trip. Found by the M10
-  proof's first sentence; `StackRelayTest` holds both wires.
+  that stays, and the in-flight count reaches zero within a round trip. The front then closes
+  only once it has been quiet for a whole linger: the count covers what the relay accepted,
+  not a client's next request already on the wire, and a close at the first zero cut exactly
+  those — two in half a million through a rolling restart. Found by the M10 proof's first
+  sentence; `StackRelayTest` holds both wires and `QuietDrainTest` the linger.
 
 - **One `TESSERAQL_ENV` governs a stack.** An application with no `config/env/` directory
   declares no environments and runs its base configuration under any profile. The framework's
