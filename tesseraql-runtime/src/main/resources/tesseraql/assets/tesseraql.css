@@ -79,20 +79,12 @@ a:hover{text-decoration-thickness:2px}
 .tql-fieldset{margin:0;padding:var(--hc-space-2,.5rem) var(--hc-space-3,.75rem);border:1px solid var(--hc-color-border);border-radius:var(--hc-control-radius)}
 .tql-fieldset > legend{padding-inline:var(--hc-space-1,.25rem)}
 
-/* Studio sidebar section headers and grouping (shell studio-nav). hc ships no nav-group primitive,
-   so these are app rules: clusters get breathing room and a muted uppercase caption. This file loads
-   after hc.min.css and is unlayered, so it wins over the kit at equal specificity without an @layer. */
+/* Studio sidebar grouping (shell studio-nav): clusters get breathing room. The captions between
+   items are the kit's `.hc-shell__group` and the collapsed icon rail centers its own items, both
+   since hc 0.4.1 (hc-briefs.md brief 13, shipped and adopted) — the caption rule and the rail
+   stand-in that lived here are retired. This file loads after hc.min.css and is unlayered, so it
+   wins over the kit at equal specificity without an @layer. */
 .tql-nav__section{margin-block-start:var(--hc-space-4,1rem)}
-.tql-nav__group{margin:0 0 var(--hc-space-1,.25rem);padding-inline:var(--hc-item-padding-x,.5rem);font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--hc-color-text-muted,#8a8f98)}
-/* Collapsed icon rail — desktop only; the mobile breakpoint shows the full off-canvas sidebar.
-   hc already visually-hides `.hc-shell__label` here, so we only center each item on its glyph and
-   drop the now-empty section captions (same visually-hidden recipe hc uses for labels). The
-   `.hc-item` centering is a stand-in over an hc internal, briefed upstream as hc-briefs.md brief
-   13; retire it when the kit centers its rail items itself. */
-@media (width >= 60rem){
-  .hc-shell[data-sidebar-collapsed] .hc-item{justify-content:center;padding-inline:0}
-  .hc-shell[data-sidebar-collapsed] .tql-nav__group{position:absolute;inline-size:1px;block-size:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
-}
 
 /* The operational grid page (docs/list-surface.md decision 1, `layout: page`): the chrome —
    title, search bar, status line, pager — stays put and only the grid scrolls. The kit's

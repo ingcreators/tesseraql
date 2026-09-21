@@ -40,7 +40,7 @@
            th:attr="hx-get=${v.path},hx-target=|#${v.id}-table|,hx-select=|#${v.id}-table|,hx-include=|#${v.id}-table input[type='hidden']|"
            hx-trigger="input changed delay:300ms, search" hx-swap="outerHTML">
     <button th:if="${v.filterFields != null}" type="button" class="hc-button"
-            data-variant="ghost" th:attr="data-tql-open-dialog=|#${v.id}-filters|"
+            data-variant="ghost" command="show-modal" th:attr="commandfor=|${v.id}-filters|"
             th:text="#{tql.view.filters}">Filters</button>
     <span class="hc-chip" th:if="${v.sortSet != null}" th:text="${v.sortSet}">Sort (2)</span>
   </div>
@@ -50,8 +50,8 @@
   <div class="hc-filterbar" th:if="${v.filterBar != null}">
     <ul class="hc-filterbar__list">
       <li class="hc-filterbar__item" th:each="chip : ${v.filterBar.chips}">
-        <button class="hc-filterbar__chip" type="button"
-                th:attr="data-tql-open-dialog=|#${v.id}-filters|">
+        <button class="hc-filterbar__chip" type="button" command="show-modal"
+                th:attr="commandfor=|${v.id}-filters|">
           <span class="hc-filterbar__label" th:text="${chip.label}">Status</span>
           <span class="hc-filterbar__value" th:text="${chip.value}">open</span>
         </button>

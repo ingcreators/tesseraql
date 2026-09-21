@@ -207,6 +207,29 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **Hypermedia Components 0.4.1, and the three briefs it answers.** The bump is a drop-in
+  (diffed WebJAR to WebJAR: nothing removed; `.hc-shell__group`, one token, five behaviors and
+  two catalog keys added; the email artifacts differ by their version stamp alone), and the
+  release answers the three briefs TesseraQL filed from its 0.4.0 review, so three stand-ins
+  go. The shell's sidebar captions are the kit's `.hc-shell__group` and the collapsed rail
+  centers its own items, so `tesseraql.css` loses its caption rule and both rail rules (brief
+  13). The Studio flags page's switches carry the kit's `data-hc-submit-on-change` and the
+  bootstrap's `change` listener is gone (brief 15). And the dialog opener is the platform's:
+  upstream answered brief 14 with HTML's invoker commands rather than a kit attribute, so
+  **the route compiler now emits `commandfor="<view>-filters" command="show-modal"` on every
+  list page's Filters button and applied-filter chip where it emitted
+  `data-tql-open-dialog="#<view>-filters"`**, and the Studio shell's command-palette trigger
+  follows — a markup-contract change. The kit ships no fallback for the command (Baseline
+  2025: Chrome and Edge 135, Firefox 144, Safari 26); TesseraQL does, because the Filters
+  dialog is the only way to compose a filter and an iPad 7th generation stays on Safari 18
+  for good: the bootstrap keeps a feature-detected shim that performs `show-modal` where
+  `HTMLButtonElement` has no `commandForElement`, and is never installed where the platform
+  answers. `docs/hypermedia-ui.md` gains "Opening a dialog" and "Browser support", the first
+  written browser floor; the manifest guard pins `installSubmitOnChange`. The 0.4.1 recipe
+  sweep — the repository, not the WebJAR — found no recipe added; the one that changed,
+  chat-messages, grew two textarea attributes the copilot's single-line composer has no use
+  for.
+
 - **A database-wide alert pages once per cluster, not once per node.** `TQL-OPS-9004` (batch
   failure rate), `9006` (dead-lettered outbox events) and `9008` (dead-lettered queue events)
   read the shared database, so N nodes paged N times for one dead letter. The alert sweep

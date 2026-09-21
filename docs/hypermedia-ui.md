@@ -460,6 +460,29 @@ a file with nothing importable and the `409` of a spent token carry `data-tql-im
 and an over-cap upload's `413` carries the field-errors marker every other refusal uses. Without
 a marker htmx discards a `4xx` body, which is why each fragment kind states itself.
 
+## Opening a dialog
+
+A dialog that is already in the page — the list page's filter form, the Studio command
+palette — is opened by the platform's invoker command, the shape Hypermedia Components 0.4.1
+blesses in place of any kit or app attribute:
+
+```html
+<button type="button" class="hc-button" commandfor="orders-filters" command="show-modal">Filters</button>
+<dialog class="hc-dialog" id="orders-filters" aria-labelledby="orders-filters-title">…</dialog>
+```
+
+The browser calls `showModal()`, traps focus, closes on Escape and returns focus to the opener.
+`commandfor` names the dialog's `id` (no `#`), and the button must be `type="button"` — a submit
+button ignores its command and submits its form. Inside the dialog, `command="close"` on a
+button closes it from anywhere, including inside an htmx-driven form where a
+`formmethod="dialog"` button would be captured by htmx; `<form method="dialog">` remains the
+every-engine close. A dialog fetched from the server is the kit's `installRemoteDialog` (see
+"Edit conflict" above and [reference-lookup.md](reference-lookup.md)) and needs no opener.
+
+The route compiler emits this command on every list page's Filters button and applied-filter
+chip, so it is part of the compiler's markup contract. No inline script is involved and the
+strict CSP holds; the one engine gap is covered by the bootstrap, see "Browser support" below.
+
 ## Marking the current navigation item
 
 The kit's auto-installed `installNavCurrent` behavior marks the current sidebar item with
@@ -599,6 +622,20 @@ the JSON envelope; with no template, every caller gets the JSON envelope. A brok
 template never masks the original failure — the response falls back to JSON. The branch is a
 top-level GET by construction, so a failing form post keeps the JSON envelope: the declared
 lock's conflict page is the only HTML answer a failing post has.
+
+## Browser support
+
+TesseraQL targets evergreen browsers, and the floor is set by the newest platform feature the
+emitted markup relies on: the invoker commands above, Baseline 2025 — Chrome and Edge 135,
+Firefox 144, Safari 26 (iOS and iPadOS 26; on the Mac, Safari 26 reaches macOS Sonoma 14 and
+later). The kit ships no fallback for them. TesseraQL does, because the Filters dialog is the
+only way to compose a filter and some fleets never reach that floor — an iPad 7th generation
+stays on Safari 18 for good, a Mac on Ventura on Safari 17. The bootstrap
+(`/assets/_tesseraql/tesseraql.js`) carries a feature-detected shim that performs
+`command="show-modal"` where `HTMLButtonElement` has no `commandForElement`; it is never
+installed where the platform answers, and it covers that one command, not the API. Everything
+else the framework emits — `<dialog>`, `popover`, cascade layers, the kit's OKLCH color — is
+older than that floor.
 
 ## Next
 
