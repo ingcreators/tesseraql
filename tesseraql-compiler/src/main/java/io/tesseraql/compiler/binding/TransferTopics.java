@@ -11,8 +11,9 @@ import io.tesseraql.security.Principal;
  * <p>Read here, on the request, and carried with the run — because the run outlives the request.
  * A live-view signal is scoped to the emitting principal's tenant the way
  * {@link TopicEmitProcessor} scopes a command's, and the background thread that finishes the
- * transfer has no principal to read it from. The {@code download}-timed follow-up reads it on
- * the request that fetches the file, for the same reason.
+ * transfer has no principal to read it from. A {@code download}-timed follow-up reads it from
+ * the transfer row the export recorded it on, for the same reason: the fetch that runs it is a
+ * later request, and may be the operations console's, with no route behind it.
  */
 final class TransferTopics {
 

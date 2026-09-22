@@ -198,8 +198,8 @@ class LiveViewIntegrationTest {
 
     /**
      * A {@code download}-timed follow-up writes nothing until the file is fetched: the run's
-     * completion puts no frame on the stream, the first fetch does — the fetching request
-     * carries the route's topics to the statement it runs.
+     * completion puts no frame on the stream, the first fetch does — announcing the topics the
+     * transfer recorded when it started, scoped to the tenant that started it.
      */
     @Test
     void anExportsDownloadTimedFollowUpEmitsOnTheFirstFetch() throws Exception {

@@ -416,9 +416,9 @@ changed. Both fire when the `after:` statement commits — with the extraction u
 with the first-download claim under `download` — and never on a rollback, a stopped run, a HEAD
 or a later fetch, which run nothing. A `file-export` with no `after:` writes nothing and cannot
 declare either (`TQL-YAML-1038`, `TQL-FIELD-4620`): a list with `refreshOn:` over the exported
-rows would have nothing to refetch. One fetch announces nothing: the operations console's
-transfers page takes the claim and runs the statement like any first fetch, but the console
-serves every application's transfers and knows no route's declaration.
+rows would have nothing to refetch. The transfer records what its follow-up announces when it
+starts, so every first fetch announces alike — the route's own file leg and the operations
+console's transfers page, which serves every application's transfers and knows no route.
 
 ```yaml
 export:
