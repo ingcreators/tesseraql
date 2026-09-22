@@ -211,6 +211,13 @@ public final class TesseraqlProperties {
     /** Marker bean: present when the bundled account surface is mounted (roadmap Phase 48). */
     public static final String ACCOUNT_SURFACE_BEAN = "tesseraqlAccountSurface";
     /**
+     * Marker bean: present when the bundled "My exports" page is mounted on this runtime AND the
+     * application declares a {@code file-export} route (docs/job-inbox.md decision 6) — the shell
+     * links the page where an export can start, and never origin-absolute: the page is this
+     * runtime's, because the transfers it lists are the application's.
+     */
+    public static final String EXPORTS_SURFACE_BEAN = "tesseraqlExportsSurface";
+    /**
      * Registry bean name for the shell chrome's system-surface links ({@code Map<String,String>}):
      * where this runtime's pages should link the operations console, Studio and IAM Admin —
      * topology-aware, because a hosted member's console lives at the stack's origin scope while

@@ -169,11 +169,18 @@ public final class RequestBinder implements Step {
         if (appHome != null) {
             context.put("flags", io.tesseraql.yaml.flags.FlagsSpec.live(appHome).values());
         }
-        // The negotiated request locale (roadmap Phase 22), resolvable as request.locale.
+        // The negotiated request locale (roadmap Phase 22), resolvable as request.locale — and
+        // the prefix this request's URLs acquire on their way out (docs/job-inbox.md decision
+        // 5), resolvable as request.basePath: the base path plus the activation segment, what
+        // BasePath.url prefixes, for the one caller that has to compose a wire URL with no
+        // exchange in hand — a service provider handed the value as a param.
+        Map<String, Object> request = new LinkedHashMap<>();
         String locale = exchange.getProperty(TesseraqlProperties.LOCALE, String.class);
         if (locale != null) {
-            context.put("request", Map.of("locale", locale));
+            request.put("locale", locale);
         }
+        request.put("basePath", io.tesseraql.pipeline.BasePath.of(exchange));
+        context.put("request", request);
         // Declared app preferences (config/preferences.yml, roadmap Phase 48), resolvable as
         // preference.<key>: the signed-in user's stored app.<key> when present, else the
         // declared default. Only DECLARED keys appear - the namespace is bounded by the

@@ -13,10 +13,15 @@
 > principal, carried on the request records so the reviewed commit's frozen copy cannot drop
 > it; the owner index; the two owner queries; the operations console's transfers page says
 > who: **shipped, #1432** (every decision as recommended; a revert probe confirmed the new
-> guard sees the frozen copy dropping the owner). **S2** — the page: a bundled `exports` app at `/_tesseraql/exports`, mounted with the
-> application whose transfers it lists — a hosted member included — rendering the shipped job
-> card per row over the caller's own exports; the account menu links it where an export can
-> start. **S3** — the region remembers: a list page's job region is filled at render with the
+> guard sees the frozen copy dropping the owner). **S2** — the page: a bundled `exports` app
+> at `/_tesseraql/exports`, mounted with the application whose transfers it lists — a hosted
+> member included — rendering the shipped job card per row over the caller's own exports; the
+> account menu links it where an export can start: **shipped, #1433** (every decision as
+> recommended; two details the slice settled: `mine` gained a direction-narrowed overload so
+> the page lists exports without filtering after the cap, and the card is built through a
+> public `TransferCards` façade because `JobCards` and its row locator are package-private;
+> a revert probe confirmed the base-path guard sees `request.basePath` missing).
+> **S3** — the region remembers: a list page's job region is filled at render with the
 > caller's exports of that route that still need them, and a kick-off adds a card instead of
 > replacing one. Each slice ships its docs and its CHANGELOG entry.
 

@@ -813,19 +813,23 @@ public final class JdbcFileTransferService implements FileTransferService {
 
     @Override
     public List<TransferStatus> mine(String appName, String subject, String tenantId,
-            int limit) {
+            String direction, int limit) {
         if (subject == null || subject.isBlank()) {
             return List.of();
         }
-        return owned("t.app_name = ? and t.subject = ?" + tenantClause(tenantId), statement -> {
-            statement.setString(1, appName);
-            statement.setString(2, subject);
-            int next = 3;
-            if (tenantId != null) {
-                statement.setString(next++, tenantId);
-            }
-            statement.setInt(next, limit);
-        });
+        return owned("t.app_name = ? and t.subject = ?" + tenantClause(tenantId)
+                + (direction == null ? "" : " and t.direction = ?"), statement -> {
+                    statement.setString(1, appName);
+                    statement.setString(2, subject);
+                    int next = 3;
+                    if (tenantId != null) {
+                        statement.setString(next++, tenantId);
+                    }
+                    if (direction != null) {
+                        statement.setString(next++, direction);
+                    }
+                    statement.setInt(next, limit);
+                });
     }
 
     @Override

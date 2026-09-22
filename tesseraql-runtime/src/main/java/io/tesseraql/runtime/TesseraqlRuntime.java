@@ -1500,6 +1500,14 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 }
                 hostedApps.add(mounted.name());
             }
+            // The "My exports" marker (docs/job-inbox.md decision 6): the shell links the page
+            // where an export can start — this runtime mounted the bundled page and the
+            // application declares a file-export route. A runtime with no export routes shows
+            // no menu entry for a page that would say nothing; the page stays reachable by URL.
+            if (hostedApps.contains("exports") && manifest.routes().stream()
+                    .anyMatch(route -> route.definition().fileExport() != null)) {
+                context.bind(TesseraqlProperties.EXPORTS_SURFACE_BEAN, Boolean.TRUE);
+            }
             // Where this runtime's pages link the system surfaces (docs/stack-shells.md
             // structural decision 2): the ops console is the stack's, so a hosted member links
             // the origin scope — the one origin-absolute URL a member page carries — while the
@@ -1688,6 +1696,10 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             passwordLoginEnabled, context, appHome, appName, inviteUrl,
                             inviteChannel, jobs, jobOwners, jobRepository, outboxStore,
                             fileTransfers, calendarDecisions, pollSourceStatus));
+            // The bundled "My exports" page's provider (docs/job-inbox.md decision 5): this
+            // runtime's own application, whose file-export routes the cards poll through.
+            ExportsProviders.register(serviceProviders, fileTransfers, manifest, appName,
+                    appHome);
             // The portal's provider, only where the host handed this runtime the member list —
             // i.e. only on the stack surface runtime (docs/root-portal.md).
             if (stackMembers != null) {

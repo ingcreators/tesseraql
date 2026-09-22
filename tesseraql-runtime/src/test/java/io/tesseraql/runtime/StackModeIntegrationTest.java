@@ -178,6 +178,22 @@ class StackModeIntegrationTest {
     }
 
     /**
+     * The "My exports" page is the member's (docs/job-inbox.md decision 4): a transfer's record
+     * is the application's, so the page mounts with the application under its prefix — unlike
+     * the account surface, which is the stack's and answers once at the origin.
+     */
+    @Test
+    void aMemberServesItsOwnExportsPageUnderItsPrefix() throws Exception {
+        HttpResponse<String> page = get("/shop-a/_tesseraql/exports", sessionCookie);
+
+        assertThat(page.statusCode()).as(page.body()).isEqualTo(200);
+        assertThat(page.body()).contains("My exports");
+        assertThat(get("/shop-a/_tesseraql/account", sessionCookie).statusCode())
+                .as("the account surface stays the origin's: no member copy")
+                .isNotEqualTo(200);
+    }
+
+    /**
      * {@code href}/{@code src}/{@code action} values that address the origin, not the app —
      * anything rooted outside the application's derived {@code /<name>} prefix, now that the
      * address is the name rather than an {@code /apps/} wrapper.

@@ -510,7 +510,9 @@ searching leave a running card standing; a second kick-off replaces it. A plain 
 on the transfer's own page with the same card. A `file-export` route that declares
 `idempotency:` answers a replayed key with the same card, so a double-clicked or retried Export
 starts one transfer. Once the retention sweep has reclaimed a finished export's file, its card
-and its status say expired rather than done with a dead link.
+and its status say expired rather than done with a dead link. An export outlives the page that
+started it: the signed-in user's exports are listed at `/_tesseraql/exports`, the same card per
+row ([file transfers](file-transfers.md#my-exports)).
 
 ## Opening a dialog
 

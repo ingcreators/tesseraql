@@ -66,7 +66,10 @@ _account = { name, initials, accountHref: /_tesseraql/account, logoutHref: /_tes
 ```
 
 and the shared shell renders an `hc-avatar` button with an `hc-popover` menu (account
-settings, sign out) in the header. [Studio](studio.md), the docs portal, and the [ops console](ops-console.md) inherit
+settings, sign out) in the header. Where the application declares a `file-export` route, the
+menu also links the signed-in user's exports at `/_tesseraql/exports`
+([file transfers](file-transfers.md#my-exports)) — this runtime's own page, never the origin's,
+because the transfers it lists are the application's. [Studio](studio.md), the docs portal, and the [ops console](ops-console.md) inherit
 it through the same shell — one consistent chrome, zero app code. Apps that replaced
 the shell keep the documented `_account` contract, exactly like `_menu`. Requests
 authenticated by bearer/API-key/mTLS (no browser session) leave `_account` unset and

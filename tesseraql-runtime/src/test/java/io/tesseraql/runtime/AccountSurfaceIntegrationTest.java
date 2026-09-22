@@ -93,6 +93,10 @@ class AccountSurfaceIntegrationTest {
                 .contains("Account settings")
                 .contains("Sign out")
                 .contains("/_tesseraql/logout");
+        // The "My exports" item renders only where an export can start (docs/job-inbox.md
+        // decision 6): this application declares no file-export route, so no entry.
+        assertThat(page.body()).doesNotContain("My exports")
+                .doesNotContain("/_tesseraql/exports");
     }
 
     @Test
