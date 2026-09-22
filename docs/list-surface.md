@@ -98,7 +98,9 @@ Diverged, deliberately:
 - **Named views are contract presets, not user-created saved views.** User-created views
   wait for the same per-user store.
 - **No import affordance.** Export already has a pipeline and can occupy the toolbar via
-  slots; import is not this design's problem.
+  slots; import is not this design's problem. *(Export grew its own declaration later:
+  `exports:` on the list view, [list-export.md](list-export.md), 2026-09-22 — in the
+  navigation strip beside the count rather than a toolbar slot, for the reason recorded there.)*
 
 ## Decision 1 — one list template that scales down; `layout: page` now, the default later
 
