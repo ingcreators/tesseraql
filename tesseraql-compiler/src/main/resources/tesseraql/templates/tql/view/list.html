@@ -2,9 +2,13 @@
 <!-- The framework list-view pattern: the operational grid page (docs/list-surface.md, the
      flip). The chrome — title, presets, search bar, condition chips, status line, pager —
      stays put and only the grid scrolls (the .tql-list-page fill chain in tesseraql.css);
-     page links swap the table region in place and push the URL, so every page state stays a
-     bookmarkable address. The status line and pager live INSIDE the swapped region, so a
-     search, sort or page swap updates them together with the rows. Regions render only when
+     page and sort links swap the table region in place and push the URL, the search box
+     swaps it and replaces the URL, so every list state stays a bookmarkable address. The
+     status line and pager live INSIDE the swapped region, so a search, sort or page swap
+     updates them together with the rows; the chrome outside it that carries the list's state
+     — the filter dialog's hidden sort/dir/search, the condition chips — is refreshed out of
+     band by the same swaps (hx-select-oob on the section, inherited by every request inside
+     it), so nothing a swap changes is left over from the page render. Regions render only when
      the contract declares them — a minimal list is still a quiet page. The `v` model shape
      and this markup are the public rendering contract; an app overrides the pattern by
      shipping templates/tql/view/list.html (customization ladder L2), or fills the
@@ -12,7 +16,8 @@
 <html xmlns:th="http://www.thymeleaf.org"
       th:replace="~{tql/shell :: shell(${v.title}, ~{}, ~{}, ~{:: #page-content})}">
 <div id="page-content" class="tql-page-fill hc-stack">
-<section class="tql-list-page hc-stack" th:fragment="view(v)">
+<section class="tql-list-page hc-stack" th:fragment="view(v)"
+         th:attr="hx-select-oob=${v.filterFields != null} ? |#${v.id}-filters-state,#${v.id}-filterbar| : null">
   <div class="hc-cluster">
     <h2 th:text="${v.title}">List</h2>
     <!-- Named view presets (docs/list-surface.md decision 8): real links, no storage —
@@ -38,7 +43,8 @@
            th:name="${v.search.param}" th:value="${v.search.value}"
            th:placeholder="#{tql.view.search}"
            th:attr="hx-get=${v.path},hx-target=|#${v.id}-table|,hx-select=|#${v.id}-table|,hx-include=|#${v.id}-table input[type='hidden']|"
-           hx-trigger="input changed delay:300ms, search" hx-swap="outerHTML">
+           hx-trigger="input changed delay:300ms, search" hx-swap="outerHTML"
+           hx-replace-url="true">
     <button th:if="${v.filterFields != null}" type="button" class="hc-button"
             data-variant="ghost" command="show-modal" th:attr="commandfor=|${v.id}-filters|"
             th:text="#{tql.view.filters}">Filters</button>
@@ -46,8 +52,10 @@
   </div>
   <!-- Applied conditions (docs/list-surface.md decision 6): each remove control is a real
        link to the same URL minus that condition, so dropping a filter works without
-       JavaScript; the kit's filterbar collapses itself when nothing is applied. -->
-  <div class="hc-filterbar" th:if="${v.filterBar != null}">
+       JavaScript; the kit's filterbar collapses itself when nothing is applied. Named, because
+       the remove links carry the search and sort of the render and a search or sort swap
+       refreshes this bar out of band (the section's hx-select-oob). -->
+  <div class="hc-filterbar" th:id="|${v.id}-filterbar|" th:if="${v.filterBar != null}">
     <ul class="hc-filterbar__list">
       <li class="hc-filterbar__item" th:each="chip : ${v.filterBar.chips}">
         <button class="hc-filterbar__chip" type="button" command="show-modal"
@@ -210,15 +218,21 @@
   <dialog class="hc-dialog" th:id="|${v.id}-filters|" th:if="${v.filterFields != null}"
           th:attr="aria-labelledby=|${v.id}-filters-title|">
     <form method="get" th:action="${v.path}">
+      <!-- The list state the dialog carries into its navigation — sort, dir, the search term —
+           lives outside the swapped region, so a search or sort swap refreshes this block out of
+           band (the section's hx-select-oob): Apply after a typed search or a sort click keeps
+           them, instead of the page render's copies. -->
+      <div th:id="|${v.id}-filters-state|" hidden>
+        <input type="hidden" name="sort" th:if="${v.sort != ''}" th:value="${v.sort}">
+        <input type="hidden" name="dir" th:if="${v.dir != ''}" th:value="${v.dir}">
+        <input type="hidden" th:if="${v.search != null and v.search.value != ''}"
+               th:name="${v.search.param}" th:value="${v.search.value}">
+      </div>
       <div class="hc-dialog__header">
         <h2 class="hc-dialog__title" th:id="|${v.id}-filters-title|"
             th:text="#{tql.view.filters}">Filters</h2>
       </div>
       <div class="hc-dialog__body hc-stack">
-        <input type="hidden" name="sort" th:if="${v.sort != ''}" th:value="${v.sort}">
-        <input type="hidden" name="dir" th:if="${v.dir != ''}" th:value="${v.dir}">
-        <input type="hidden" th:if="${v.search != null and v.search.value != ''}"
-               th:name="${v.search.param}" th:value="${v.search.value}">
         <th:block th:each="f : ${v.filterFields}">
           <th:block th:insert="~{tql/view/field :: field(${f})}"/>
         </th:block>
