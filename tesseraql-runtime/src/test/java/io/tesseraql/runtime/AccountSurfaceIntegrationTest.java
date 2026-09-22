@@ -139,8 +139,15 @@ class AccountSurfaceIntegrationTest {
             assertThat(home.body()).contains("lang=\"ja\"");
             // And the account page shows the choice as selected.
             // (the option tag wraps across source lines, so match the selected suffix)
-            assertThat(get(runtime, sessionCookie, "/_tesseraql/account").body())
-                    .contains("selected=\"selected\">\u65e5\u672c\u8a9e");
+            String account = get(runtime, sessionCookie, "/_tesseraql/account").body();
+            assertThat(account).contains("selected=\"selected\">\u65e5\u672c\u8a9e");
+            // The shell's account popover follows the locale too (docs/job-inbox.md, filed:
+            // its two items were literal English): \u30a2\u30ab\u30a6\u30f3\u30c8\u8a2d\u5b9a and \u30b5\u30a4\u30f3\u30a2\u30a6\u30c8.
+            assertThat(account)
+                    .contains("\u30a2\u30ab\u30a6\u30f3\u30c8\u8a2d\u5b9a")
+                    .contains("\u30b5\u30a4\u30f3\u30a2\u30a6\u30c8")
+                    .doesNotContain(">Account settings<")
+                    .doesNotContain(">Sign out<");
         } finally {
             preferenceStore().remove(null, "account-user", "ui.locale");
         }

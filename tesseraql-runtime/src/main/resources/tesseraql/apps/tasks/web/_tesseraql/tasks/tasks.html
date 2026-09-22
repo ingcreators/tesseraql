@@ -6,10 +6,10 @@
      is open in, not the transition owed. -->
 <html xmlns:th="http://www.thymeleaf.org"
       th:replace="~{tql/shell :: shell(#{tql.tasks.pageTitle}, ~{:: #tasks-nav}, ~{}, ~{:: #page-content})}">
+<!-- One nav item, itself: the inbox and the account pages are the stack's under a host, and
+     the shell's account chip and bell reach them by the right rule wherever this page mounts. -->
 <th:block id="tasks-nav">
   <a class="hc-item" th:href="@{/_tesseraql/tasks}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#list-checks}"/></svg></span><span class="hc-item__title" th:text="#{tql.tasks.title}">Tasks</span></a>
-  <a class="hc-item" th:href="@{/_tesseraql/inbox}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#bell}"/></svg></span><span class="hc-item__title" th:text="#{tql.inbox.title}">Inbox</span></a>
-  <a class="hc-item" th:href="@{/_tesseraql/account}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#users}"/></svg></span><span class="hc-item__title" th:text="#{tql.account.title}">Account</span></a>
 </th:block>
 <div id="page-content" class="hc-stack">
   <section class="hc-card">

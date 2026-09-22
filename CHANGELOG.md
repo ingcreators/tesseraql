@@ -280,6 +280,16 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **The task queue is its own bundled app, mounted with the application.** `/_tesseraql/tasks`
+  moves out of the account app into a bundled `tasks` app (`tesseraql.apps.tasks.enabled` the
+  kill switch), served by the runtime that serves the application — a hosted member included —
+  because a workflow task is the application's business data and the queue links into the
+  application's detail pages. In the account app it was skipped on every hosted member and
+  answered at the origin against the origin's own datasource, listing no member's tasks; the
+  URL is unchanged, the page's nav is one item, and the shell's account chip and bell reach the
+  account and inbox pages by the right rule wherever it mounts (`docs/workflow-surface.md`
+  decision 6; `docs/job-inbox.md`, filed).
+
 - **Markup contract: the export kick-off adds a card.** The `file-export` button on
   `tql/view/list.html` swaps `afterbegin` into the job region (it swapped `innerHTML`), and the
   region renders the caller's pending cards at page render; a level-2 override of the pattern
@@ -385,6 +395,17 @@ All notable changes to TesseraQL are documented here. The format follows
   that rebuilds a route drops the hold. Pre-1.0 internal.
 
 ### Fixed
+
+- **The transfer page wears the shell's chrome.** The page a no-JS kick-off or a bookmarked
+  status URL lands on — the job card inside the application's shell — rendered the shell with
+  none of its chrome: no application menu, no account chip, no inbox bell, no pins, no theme.
+  It now runs the same chrome passes every YAML page does, from the request's own principal
+  and tenant; the bare card an htmx poll swaps is unchanged (`docs/job-inbox.md`, filed).
+
+- **The account popover follows the locale.** Its two items, "Account settings" and "Sign out",
+  were literal English on every shell page; they render through the catalog now
+  (`tql.account.settings`, the existing `tql.account.signOut`), so a Japanese session sees
+  アカウント設定 and サインアウト (`docs/job-inbox.md`, filed).
 
 - **The in-place search and sort keep the address bar and the filter dialog honest.** The grid
   page's search box replaces the URL with each swap (one history entry per search box, never

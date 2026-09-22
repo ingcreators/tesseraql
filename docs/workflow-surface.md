@@ -24,7 +24,12 @@
 > `TQL-WORKFLOW-3120` refuses any `comment:` value but `required`.
 >
 > **Slice 3 (the task queue) shipped the same day — the campaign is complete.** The
-> bundled page is `/_tesseraql/tasks` in the account app (the inbox's sibling), backed by
+> bundled page is `/_tesseraql/tasks` — since 2026-09-22 its own bundled `tasks` app, mounted
+> by the runtime that serves the application, a hosted member included, because a workflow
+> task is the application's business data and the queue links into the application's detail
+> pages (it rode the account app before, which a hosted member never mounts, so under a stack
+> it answered at the origin against the origin's own datasource; `tesseraql.apps.tasks.enabled:
+> false` turns it off) — backed by
 > the new `WorkflowTaskStore.listOpenTasks` and the V3 `(assignee, status)` /
 > `(candidate_group, status)` indexes (the outbox V11 recipe — V1's "no index keeps the
 > DDL portable" comment predates it). Row links resolve through the detail views that

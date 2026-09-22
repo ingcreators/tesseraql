@@ -284,6 +284,7 @@ tql:
     title: "Account"
     pageTitle: "Account · TesseraQL"
     profile: "Profile"
+    settings: "Account settings"
     saved:
       language: "Language saved. It applies from your next page."
       appearance: "Appearance saved."

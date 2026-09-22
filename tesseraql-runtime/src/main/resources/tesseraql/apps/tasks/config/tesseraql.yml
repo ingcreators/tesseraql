@@ -1,0 +1,20 @@
+tesseraql:
+  # Its own name, matching the name it is mounted under (docs/cli-surface.md Decision 6).
+  app:
+    name: tasks
+  security:
+    # Path-matched route security defaults (docs/route-defaults.md): the queue is a
+    # browser-session surface — the subject it lists is always the session principal's.
+    defaults:
+      routes:
+        - match: /**
+          auth: browser
+          csrf: auto
+    # The security header block every HTML page of this bundled app sends
+    # (docs/response-shaping.md "Default response headers"); the one config key the mount
+    # honors from a bundled app (SystemApps whitelist).
+    responseHeaders:
+      Content-Security-Policy: "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
+      X-Content-Type-Options: nosniff
+      X-Frame-Options: DENY
+      Referrer-Policy: no-referrer

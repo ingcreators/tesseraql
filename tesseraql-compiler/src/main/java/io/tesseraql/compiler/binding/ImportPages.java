@@ -71,6 +71,26 @@ final class ImportPages {
                 io.tesseraql.pipeline.BasePath.of(exchange.beans())
                         + io.tesseraql.pipeline.BasePath.activationSegment(exchange));
         Path root = appHome == null ? Path.of(".") : appHome;
+        if (!CARD.equals(template)) {
+            // The page composes the shell, so it gets the shell's chrome — the app menu, the
+            // account chip, the inbox bell, the pins, the theme — the way every YAML page does
+            // (docs/job-inbox.md, filed: it rendered the shell with none of them). The status
+            // route runs no request binder, so the evaluation context the chrome reads
+            // `principal.*` from is built here from the request's own properties.
+            Map<String, Object> facts = new LinkedHashMap<>();
+            facts.put("principal", exchange.getProperty(TesseraqlProperties.PRINCIPAL));
+            facts.put("tenant", exchange.getProperty(TesseraqlProperties.TENANT));
+            ShellChrome chrome = new ShellChrome(exchange,
+                    new io.tesseraql.core.expr.EvaluationContext(facts), model, csrf);
+            chrome.menu(root);
+            chrome.system();
+            chrome.account();
+            chrome.acting();
+            chrome.readThemePreference();
+            chrome.inbox();
+            chrome.shortcuts(null);
+            chrome.themeAndUiDefaults();
+        }
         // The card is selected out of its file, the page is rendered whole. A fragment file
         // carries a doctype and its own documentation above the fragment, and a swap that
         // shipped those would put a second document inside the page it swapped into.

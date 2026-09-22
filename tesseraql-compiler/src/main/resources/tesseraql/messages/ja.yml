@@ -278,6 +278,7 @@ tql:
     title: "アカウント"
     pageTitle: "アカウント · TesseraQL"
     profile: "プロフィール"
+    settings: "アカウント設定"
     saved:
       language: "言語を保存しました。次のページから適用されます。"
       appearance: "外観を保存しました。"

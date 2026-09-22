@@ -254,9 +254,12 @@ class ImportPageIntegrationTest {
         HttpResponse<String> page = send(HttpRequest.newBuilder(uri(target))
                 .header("Cookie", cookie).header("Accept", "text/html").build());
 
-        // The no-JS leg lands on a real page: the same card, with the shell around it.
+        // The no-JS leg lands on a real page: the same card, with the shell around it — and the
+        // shell's chrome with it (docs/job-inbox.md, filed): the account chip of the session
+        // that confirmed the import, not a bare shell.
         assertThat(page.statusCode()).isEqualTo(200);
-        assertThat(page.body()).contains("<title>").contains("data-hc-job");
+        assertThat(page.body()).contains("<title>").contains("data-hc-job")
+                .contains("hc-avatar").contains("tql-account-menu");
     }
 
     @Test
