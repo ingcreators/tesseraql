@@ -1,0 +1,7 @@
+# The bundled "My exports" page (docs/job-inbox.md decision 4): the signed-in user's exports of
+# this application, served at /_tesseraql/exports by the runtime that serves the application —
+# a hosted member included, because a transfer's record is the application's. Session-only by
+# design.
+config/tesseraql.yml
+web/_tesseraql/exports/get.yml
+web/_tesseraql/exports/exports.html

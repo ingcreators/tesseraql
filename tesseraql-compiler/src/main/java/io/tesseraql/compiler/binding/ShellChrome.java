@@ -136,6 +136,14 @@ final class ShellChrome {
                     account.put("accountHref",
                             io.tesseraql.pipeline.BasePath.url(exchange, "/_tesseraql/account"));
                 }
+                // The signed-in user's exports of this application (docs/job-inbox.md
+                // decision 6): linked only where the bundled page is mounted AND an export can
+                // start here, and always this runtime's own — the page is the member's, never
+                // the origin's, because the transfers it lists are the application's.
+                if (exchange.beans().lookup(TesseraqlProperties.EXPORTS_SURFACE_BEAN) != null) {
+                    account.put("exportsHref",
+                            io.tesseraql.pipeline.BasePath.url(exchange, "/_tesseraql/exports"));
+                }
                 // Sign-out stays this runtime's own route: the member validates the same shared
                 // session either way, and a drained member must still be able to sign out.
                 account.put("logoutHref",

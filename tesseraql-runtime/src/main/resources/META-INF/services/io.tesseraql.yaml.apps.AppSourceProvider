@@ -1,2 +1,3 @@
 io.tesseraql.runtime.AuthUiAppProvider
 io.tesseraql.runtime.AccountAppProvider
+io.tesseraql.runtime.ExportsAppProvider

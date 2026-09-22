@@ -8,6 +8,18 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **My exports.** A bundled page at `/_tesseraql/exports` lists the signed-in user's exports of
+  this application, newest first, as the job card per row — a running card polls the route's
+  own status and offers Cancel, a done card downloads from its file leg, a reclaimed file says
+  expired, a transfer whose route is no longer declared renders without links. The page is the
+  application's: it mounts with the application, a hosted member included under its prefix,
+  because a transfer's record is the application's — the account surface is the stack's and
+  would list nothing. The shell's account menu links it wherever the application declares a
+  `file-export` route; `tesseraql.apps.exports.enabled: false` removes it. `request.basePath`
+  resolves in route expressions — the base path plus the activation segment, what a
+  framework-built URL acquires on its way out — so a service provider can compose wire URLs
+  without an exchange. `docs/file-transfers.md` "My exports"; `docs/job-inbox.md` is the record.
+
 - **A transfer records who started it.** `tql_file_transfer` gains `subject` (V17, with an
   owner index): the requesting principal's stable subject on a route's export start, its
   one-shot import and its reviewed commit — the confirm's frozen request copy carries it the

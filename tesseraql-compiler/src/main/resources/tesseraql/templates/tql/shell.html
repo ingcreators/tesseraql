@@ -160,6 +160,10 @@
           <span class="hc-menu__label" th:text="${_account.name}">User</span>
           <a class="hc-menu__item" th:if="${_account.accountHref != null}"
              th:href="${_account.accountHref}">Account settings</a>
+          <!-- The signed-in user's exports of THIS application (docs/job-inbox.md decision 6):
+               rendered only where an export can start here, and this runtime's own page. -->
+          <a class="hc-menu__item" th:if="${_account.exportsHref != null}"
+             th:href="${_account.exportsHref}" th:text="#{tql.exports.menu}">My exports</a>
           <!-- Sign-out is a state change: a CSRF-carrying POST, never a GET link. -->
           <form method="post" th:action="${_account.logoutHref}">
             <input type="hidden" name="_csrf" th:value="${_csrf}">

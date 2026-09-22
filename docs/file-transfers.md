@@ -553,6 +553,18 @@ Import-side `import:` keys beyond `format`, `columns`, and `onError` (the per-ro
 Status polling works exactly as for exports (same `{path}/{transferId}` shape), minus the file
 URL.
 
+## My exports
+
+The signed-in user's exports of this application, at `/_tesseraql/exports`: every export they
+started, newest first, as the job card above — a running card polls the route's own status and
+offers Cancel, a done card downloads from the route's file leg, a reclaimed file says expired.
+The page is the application's, served by the runtime that serves the application, a hosted
+member included under its prefix, because a transfer's record is the application's. The
+shell's account menu links it wherever the application declares a `file-export` route. A
+transfer whose route is no longer declared renders without links. `tesseraql.apps.exports.enabled:
+false` removes the page; the row keeps recording who started what
+([job-inbox.md](job-inbox.md)).
+
 ## Formats and optional modules
 
 `csv` is built in. The other formats are opt-in modules resolved through the standard module

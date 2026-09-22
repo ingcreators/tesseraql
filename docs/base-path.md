@@ -194,6 +194,11 @@ The one deliberate exception is pins and recents, which the browser captures fro
 location bar. Those are wire URLs by origin, they are compared against the request URI, and they
 are per-user state in a database, so re-deriving them costs more than it settles.
 
+A route expression can ask for the prefix itself as `request.basePath` — the base path plus the
+activation segment, what `BasePath.url` prefixes — for the one caller that has to compose a wire
+URL with no exchange in hand: a service provider handed the value as a param, such as the
+bundled exports page's job cards ([job-inbox.md](job-inbox.md) decision 5).
+
 ### 8. The framework's own JavaScript resolves against the module, not the origin
 
 Slice 3 found the surface no link builder reaches: the bundled `.js` assets, which import

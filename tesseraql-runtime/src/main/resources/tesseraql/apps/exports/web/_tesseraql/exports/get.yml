@@ -1,0 +1,28 @@
+version: tesseraql/v1
+id: tql.exports.home
+kind: route
+recipe: query-html
+
+# The signed-in user's exports of this application (docs/job-inbox.md decision 4): every
+# export they started, newest first, as the job card the status poll answers with. The subject
+# is always the session principal's and the tenant the request's — the page can only ever list
+# the caller's own — and the base path rides along because the cards carry wire URLs into the
+# route's own subtree, which the provider composes without an exchange in hand.
+
+sources:
+  main:
+    service:
+      name: exports.mine
+      params:
+        subject: principal.subject
+        tenant: tenant.id
+        base: request.basePath
+        locale: request.locale
+response:
+  html:
+    status: 200
+    template: exports.html
+    model:
+      exports: main
+    headers:
+      Cache-Control: "no-store"

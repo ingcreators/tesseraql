@@ -485,7 +485,18 @@ public interface FileTransferService {
      * belongs to nobody. Who may <em>read</em> a transfer is unchanged by this listing; every
      * link a surface renders from it goes through the route's own subtree.
      */
-    List<TransferStatus> mine(String appName, String subject, String tenantId, int limit);
+    default List<TransferStatus> mine(String appName, String subject, String tenantId,
+            int limit) {
+        return mine(appName, subject, tenantId, null, limit);
+    }
+
+    /**
+     * {@link #mine}, narrowed to one direction ({@code EXPORT} or {@code IMPORT}) when
+     * {@code direction} is not null: the "My exports" page lists exports alone
+     * (docs/job-inbox.md decision 9), and filtering after the cap would under-fill it.
+     */
+    List<TransferStatus> mine(String appName, String subject, String tenantId, String direction,
+            int limit);
 
     /**
      * One subject's exports of one route that still need them (docs/job-inbox.md decision 8):

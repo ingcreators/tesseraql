@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<!-- The signed-in user's exports (docs/job-inbox.md decisions 4 and 5): the job card per row —
+     the kit's async-job recipe applied per row, the upstream's own definition of a job inbox —
+     over the caller's own exports of this application. A running card polls the route's own
+     status subtree on the server's cadence and stops when the run does; a done card downloads
+     from the route's file leg; a reclaimed file says expired. Whose a transfer is decides what
+     this page lists; who may read it is the route's decision, made again on every click.
+
+     No JavaScript: the cards are plain markup, Cancel is a form that posts, and a state arrives
+     by refreshing the page. -->
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: shell(#{tql.exports.pageTitle}, ~{:: #exports-nav}, ~{}, ~{:: #page-content})}">
+<th:block id="exports-nav">
+  <a class="hc-item" th:href="@{/_tesseraql/exports}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#arrow-left-right}"/></svg></span><span class="hc-item__title" th:text="#{tql.exports.title}">Exports</span></a>
+</th:block>
+<div id="page-content" class="hc-stack">
+  <section class="hc-card">
+    <div class="hc-card__header">
+      <h1 th:text="#{tql.exports.heading}">My exports</h1>
+      <span class="hc-spacer"></span>
+      <p th:if="${exports.enabled}" th:text="${exports.truncated} ? #{tql.exports.countOrMore(${exports.count})} : #{tql.exports.count(${exports.count})}">0 export(s)</p>
+    </div>
+    <div class="hc-card__body hc-stack">
+    <div class="hc-empty" th:unless="${exports.enabled}">
+      <p class="hc-empty__title" th:text="#{tql.exports.unavailable}">File transfers are not available on this runtime.</p>
+    </div>
+    <th:block th:if="${exports.enabled}">
+      <!-- Over the cap the count above hedges (the result-cap stance): the latest are here,
+           the rest are history the operations console still lists. -->
+      <div class="hc-alert" data-variant="warning" role="status" th:if="${exports.truncated}">
+        <p class="hc-alert__title" th:text="#{tql.exports.truncated}">Showing your latest 50 exports.</p>
+      </div>
+      <div class="hc-empty" th:if="${#lists.isEmpty(exports.rows)}">
+        <p class="hc-empty__title" th:text="#{tql.exports.none}">Nothing exported yet.</p>
+        <p class="hc-empty__description" th:text="#{tql.exports.noneDescription}">An export you start from a list lands here; its file stays until retention reclaims it.</p>
+      </div>
+      <ul class="hc-stack tql-plain-list" th:unless="${#lists.isEmpty(exports.rows)}">
+        <li th:each="row : ${exports.rows}" class="hc-stack">
+          <!-- The heading line the card does not carry: the file, the route, when. -->
+          <div class="hc-cluster">
+            <strong th:text="${row.filename}">tickets.csv</strong>
+            <span class="hc-field__message" th:text="${row.route}">tickets.export</span>
+            <span class="hc-spacer"></span>
+            <small class="hc-field__message" th:text="#{tql.exports.started(${#temporals.format(row.createdAt, 'yyyy-MM-dd HH:mm', #locale)})}">started 2026-09-22 10:02</small>
+          </div>
+          <th:block th:if="${row.card != null}" th:insert="~{tql/view/job-card :: card(${row.card})}"/>
+          <!-- The route that produced it is no longer declared (decision 5): the transfer
+               happened, and a URL into a subtree that does not exist would be a lie. -->
+          <p class="hc-field__message" th:if="${row.card == null}" th:text="#{tql.exports.routeGone}">The route that produced this export is no longer declared.</p>
+        </li>
+      </ul>
+    </th:block>
+    </div>
+  </section>
+</div>
+</html>
