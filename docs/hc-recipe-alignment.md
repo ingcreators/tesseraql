@@ -38,11 +38,11 @@
 >   (#1425) designed "export this filtered set" — `exports:` on a list view, the question as
 >   the export route's query string, the shipped card in its own region on the grid page —
 >   and S1 (#1426) and S2 (#1427) shipped it the same day. The row is closed.
-> - **The job inbox designed 2026-09-22**: [job-inbox.md](job-inbox.md) — the upstream's own
->   definition ("this recipe applied per row"), on list-export's precondition: the transfer
->   row records who started it, a bundled "My exports" page mounted with the application
->   renders the shipped card per row, and the grid page's job region is filled from the store
->   at render. Three slices; the user names each.
+> - **The job inbox designed and shipped 2026-09-22**: [job-inbox.md](job-inbox.md) — the
+>   upstream's own definition ("this recipe applied per row"), on list-export's precondition:
+>   the transfer row records who started it (S1 #1432), a bundled "My exports" page mounted
+>   with the application renders the shipped card per row (S2 #1433), and the grid page's job
+>   region is filled from the store at render (S3 #1434).
 >
 > hypermedia-components 0.4.0 shipped nine new recipe contracts (#1081 adopted the
 > bump). Two were settled the same week: network-retry became the shell host (#1083)
@@ -218,7 +218,8 @@ campaign's trap).
 
 ## async-job — designed, as the import commit leg
 
-> **The job inbox — designed 2026-09-22: [job-inbox.md](job-inbox.md).** The contract's
+> **The job inbox — designed and shipped 2026-09-22: [job-inbox.md](job-inbox.md), S1 #1432
+> (the column), S2 #1433 (the page), S3 #1434 (the region remembers).** The contract's
 > "list of my recent jobs is this recipe applied per row" waited on a transfer that knows its
 > subject; the record starts from that column (`tql_file_transfer.subject`, the principal's
 > stable subject, carried on the request records), then a bundled `exports` app at

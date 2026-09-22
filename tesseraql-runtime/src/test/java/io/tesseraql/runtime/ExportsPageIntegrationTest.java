@@ -151,6 +151,75 @@ class ExportsPageIntegrationTest {
         }
     }
 
+    /**
+     * The grid page's job region remembers (docs/job-inbox.md decision 8): the caller's
+     * exports of this list's route that still need them are rendered at page render, so a
+     * return to the page — or a snapshot page turn's whole-document POST — finds the card the
+     * htmx kick-off swapped in; a second kick-off joins the first instead of replacing it; a
+     * fetched file leaves the region and stays on the page that lists everything.
+     */
+    @Test
+    void theGridPagesJobRegionRemembersTheCallersPendingExports() throws Exception {
+        Session user = signIn(runtime, "user-r");
+        String first = startExportFromThePage(runtime, "/tickets/export", user);
+        awaitTerminal(runtime, "/tickets/export/" + first, user);
+
+        // Back on the page: the region holds the card, built from the store, not from a swap.
+        String page = get(runtime, "/tickets", user).body();
+        assertThat(page)
+                .contains("id=\"tickets-export-job\"")
+                .contains("id=\"tql-job-" + first + "\"")
+                .contains("hx-get=\"/tickets/export/" + first + "\"")
+                .contains("href=\"/tickets/export/" + first + "/file\"")
+                // The kick-off adds its card above the ones the region holds.
+                .contains("hx-swap=\"afterbegin\"")
+                .doesNotContain("hx-swap=\"innerHTML\"");
+
+        // A second export joins the first.
+        String second = startExportFromThePage(runtime, "/tickets/export", user);
+        awaitTerminal(runtime, "/tickets/export/" + second, user);
+        String both = get(runtime, "/tickets", user).body();
+        assertThat(both)
+                .contains("id=\"tql-job-" + second + "\"")
+                .contains("id=\"tql-job-" + first + "\"");
+        // Newest first: the second card precedes the first in the region.
+        assertThat(both.indexOf("tql-job-" + second)).isLessThan(both.indexOf("tql-job-" + first));
+
+        // Somebody else's grid page holds none of them: the region is theirs alone.
+        assertThat(get(runtime, "/tickets", userB).body()).doesNotContain("tql-job-");
+
+        // Fetched, dealt with: the region lets the file go; the exports page still lists it.
+        assertThat(HTTP.send(HttpRequest.newBuilder(uri(runtime, "/tickets/export/" + first
+                + "/file")).header("Cookie", user.cookie()).build(),
+                HttpResponse.BodyHandlers.ofString()).statusCode()).isEqualTo(200);
+        String after = get(runtime, "/tickets", user).body();
+        assertThat(after)
+                .doesNotContain("tql-job-" + first)
+                .contains("tql-job-" + second);
+        assertThat(get(runtime, "/_tesseraql/exports", user).body())
+                .contains("tql-job-" + first)
+                .contains("tql-job-" + second);
+    }
+
+    /** The htmx kick-off from the grid page: the card comes back, 202, into the region. */
+    private static String startExportFromThePage(TesseraqlRuntime target, String path,
+            Session session) throws Exception {
+        HttpResponse<String> response = HTTP.send(HttpRequest.newBuilder(uri(target, path))
+                .header("Cookie", session.cookie())
+                .header("X-CSRF-Token", session.csrf())
+                .header("HX-Request", "true")
+                .header("Accept", "text/html")
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .POST(HttpRequest.BodyPublishers.ofString("_csrf=" + session.csrf()))
+                .build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(response.statusCode()).as(response.body()).isEqualTo(202);
+        assertThat(response.body()).contains("data-hc-job");
+        java.util.regex.Matcher id = java.util.regex.Pattern.compile("id=\"tql-job-([^\"]+)\"")
+                .matcher(response.body());
+        assertThat(id.find()).as("the card's transfer id").isTrue();
+        return id.group(1);
+    }
+
     private static Session signIn(TesseraqlRuntime target, String subject) {
         SessionStore sessions = target.context().lookup(
                 TesseraqlProperties.SESSION_STORE_BEAN, SessionStore.class);
@@ -270,6 +339,38 @@ class ExportsPageIntegrationTest {
                 """);
         Files.writeString(route.resolve("tickets.sql"),
                 "select id, subject from tickets order by id\n;\n");
+        // The grid page that starts the export (docs/job-inbox.md decision 8): its job region
+        // is filled at render with the caller's pending exports of the routes it names.
+        Path list = home.resolve("web/tickets");
+        Files.writeString(list.resolve("get.yml"), """
+                version: tesseraql/v1
+                id: tickets.page
+                kind: route
+                recipe: query-html
+                pagination: { size: 20, count: true }
+                sources:
+                  main:
+                    sql:
+                      file: list.sql
+                      mode: query
+                response:
+                  html:
+                    view: tickets
+                """);
+        Files.writeString(list.resolve("list.sql"),
+                "select id, subject from tickets order by id\n;\n");
+        Files.writeString(list.resolve("list.view.yml"), """
+                version: tesseraql/v1
+                id: tickets
+                kind: view
+                recipe: list
+                key: id
+                title: Tickets
+                exports: [/tickets/export]
+                columns:
+                  - { name: id, label: "#" }
+                  - { name: subject }
+                """);
         return home;
     }
 }

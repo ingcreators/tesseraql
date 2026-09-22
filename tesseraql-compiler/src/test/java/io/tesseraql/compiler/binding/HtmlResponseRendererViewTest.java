@@ -1143,6 +1143,85 @@ class HtmlResponseRendererViewTest {
         return exchange.getBody(String.class);
     }
 
+    /**
+     * The job region remembers (docs/job-inbox.md decision 8): with a transfer service, an
+     * application name and a principal, the caller's pending exports of the file-export target
+     * render as cards at page render, their URLs prefixed with what the request binder
+     * published as {@code request.basePath}; without a principal the region renders empty,
+     * because nobody's exports are nobody's to show.
+     */
+    @Test
+    void theJobRegionRendersTheCallersPendingExportsAndNothingForAnonymous(@TempDir Path dir)
+            throws Exception {
+        Files.createDirectories(dir);
+        Files.writeString(dir.resolve("page.view.yml"), EXPORTING_LIST);
+        List<io.tesseraql.yaml.manifest.RouteFile> routes = List.of(
+                exportRoute(dir, "POST", "/items/export", "file-export", null));
+        ViewBinding binding = ViewBinding.of(dir, "page", listRoute(null), path -> null,
+                id -> dir.resolve("page.view.yml"), CODECS,
+                path -> routes.stream().filter(r -> r.urlPath().equals(path)).toList(),
+                "demo-app");
+        HtmlResponseRenderer renderer = new HtmlResponseRenderer(new HtmlResponse(200, null,
+                "page", null, null, Map.of(), Map.of(), Map.of(), null), dir, dir, "en", binding);
+        io.tesseraql.core.files.FileTransferService.TransferStatus pending = new io.tesseraql.core.files.FileTransferService.TransferStatus(
+                "t-1", "items.export", "demo-app", "EXPORT", "COMPLETED", 2, null, List.of(),
+                "items.csv", false, null, null, false, null);
+        List<List<Object>> asked = new java.util.ArrayList<>();
+        io.tesseraql.core.files.FileTransferService transfers = (io.tesseraql.core.files.FileTransferService) java.lang.reflect.Proxy
+                .newProxyInstance(getClass().getClassLoader(),
+                        new Class<?>[]{io.tesseraql.core.files.FileTransferService.class},
+                        (proxy, method, args) -> {
+                            if ("pending".equals(method.getName())) {
+                                asked.add(java.util.Arrays.asList(args));
+                                return List.of(pending);
+                            }
+                            throw new UnsupportedOperationException(method.getName());
+                        });
+        io.tesseraql.pipeline.Beans beans = new io.tesseraql.pipeline.Beans() {
+            @Override
+            public <T> T lookup(String name, Class<T> type) {
+                return TesseraqlProperties.FILE_TRANSFER_BEAN.equals(name)
+                        ? type.cast(transfers)
+                        : null;
+            }
+        };
+
+        // Signed in: the region holds the card, its URLs the route's subtree under the prefix.
+        Map<String, Object> context = new java.util.LinkedHashMap<>();
+        context.put("main", Map.of("rows", List.of(Map.of("id", 1))));
+        context.put("params", Map.of("q", "vpn", "status", "OPEN", "sort", "-created_at"));
+        context.put("principal", new io.tesseraql.security.Principal("u-42", "u-42", "U",
+                null, List.of(), List.of(), List.of(), Map.of()));
+        context.put("request", Map.of("basePath", "/erp"));
+        Exchange exchange = new Exchange(beans);
+        exchange.setProperty(TesseraqlProperties.CONTEXT, context);
+        exchange.request().uri("/items");
+        renderer.process(exchange);
+        String html = exchange.getBody(String.class);
+        assertThat(html)
+                .contains("id=\"page-export-job\"")
+                .contains("id=\"tql-job-t-1\"")
+                .contains("hx-get=\"/erp/items/export/t-1\"")
+                .contains("href=\"/erp/items/export/t-1/file\"")
+                .contains("hx-swap=\"afterbegin\"");
+        // Asked for this application, this route, this subject, at most five.
+        assertThat(asked).hasSize(1);
+        assertThat(asked.get(0)).containsExactly("demo-app", "items.export", "u-42", null, 5);
+
+        // Anonymous: nothing asked, nothing rendered, the region still there for a kick-off.
+        asked.clear();
+        Map<String, Object> anonymous = new java.util.LinkedHashMap<>(context);
+        anonymous.remove("principal");
+        Exchange open = new Exchange(beans);
+        open.setProperty(TesseraqlProperties.CONTEXT, anonymous);
+        open.request().uri("/items");
+        renderer.process(open);
+        assertThat(open.getBody(String.class))
+                .contains("id=\"page-export-job\"")
+                .doesNotContain("tql-job-");
+        assertThat(asked).isEmpty();
+    }
+
     @Test
     void aQueryExportRendersALinkCarryingTheListsQuestion(@TempDir Path dir) throws Exception {
         // Decision 2: the search, the filter and the sort travel as the route's query; the page

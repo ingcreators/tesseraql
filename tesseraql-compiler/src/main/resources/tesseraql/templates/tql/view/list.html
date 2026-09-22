@@ -73,9 +73,11 @@
   <!-- The export job region (docs/list-export.md decision 5): the running card an htmx kick-off
        answers swaps in here and then polls itself, stopping by rendering without a trigger.
        Outside the grid form, because the card carries its own Cancel form; outside the swapped
-       table region, so a page, sort or search swap leaves a running card standing. Empty until
-       a kick-off fills it; a second kick-off replaces the card. -->
-  <div th:id="|${v.id}-export-job|" th:if="${v.exportForm}"></div>
+       table region, so a page, sort or search swap leaves a running card standing. Filled at
+       render with the caller's exports of this list's routes that still need them — running,
+       or done and not yet fetched (docs/job-inbox.md decision 8) — so a return to the page or a
+       snapshot page turn finds the card; a kick-off adds its card above them. -->
+  <div th:id="|${v.id}-export-job|" th:if="${v.exportForm}"><th:block th:if="${v.exportJobs != null}" th:each="c : ${v.exportJobs}"><th:block th:insert="~{tql/view/job-card :: card(${c})}"/></th:block></div>
   <!-- The export kick-off form (docs/list-export.md decision 3): the file-export controls in
        the strip below belong to it by `form=`, because the grid form wraps the region and a
        form cannot nest. It carries the framework's two fields and nothing else — the question
@@ -259,12 +261,14 @@
        th:href="@{${e.href}}" th:text="${e.label}">Export</a>
     <!-- The htmx face of the kick-off (docs/list-export.md decisions 3-5): the same URL,
          the kick-off form's two fields and nothing else (the enclosing grid form's values are
-         collected by default and filtered out here), the answer swapped into the job region,
-         the button disabled for the request. -->
+         collected by default and filtered out here), the answer added at the top of the job
+         region — above the cards the region already holds (docs/job-inbox.md decision 8), so
+         a second export joins the first instead of replacing it — the button disabled for the
+         request. -->
     <button th:if="${e.method == 'POST'}" type="submit" class="hc-button" data-variant="ghost"
             data-size="sm" th:formaction="@{${e.href}}"
             th:attr="form=|${v.id}-export|,hx-post=@{${e.href}},hx-include=|#${v.id}-export|,hx-target=|#${v.id}-export-job|"
-            hx-params="_csrf,_idempotency" hx-swap="innerHTML" hx-disabled-elt="this"
+            hx-params="_csrf,_idempotency" hx-swap="afterbegin" hx-disabled-elt="this"
             th:text="${e.label}">Export</button>
   </th:block>
 </th:block>

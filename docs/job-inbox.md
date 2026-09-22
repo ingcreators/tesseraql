@@ -1,7 +1,8 @@
 # The job inbox: the transfer row records who started it, and "My exports" lists the signed-in user's exports of this application
 
-> **Status: designed 2026-09-22, measured against main `6f5f68773` (0.19.0-SNAPSHOT). Three
-> implementation slices; the user names each move.** This is the trigger
+> **Status: designed 2026-09-22, measured against main `6f5f68773` (0.19.0-SNAPSHOT); all
+> three slices shipped the same day (#1432, #1433, #1434) — the campaign is complete.** This
+> is the trigger
 > [list-export.md](list-export.md) decision 11 named for a job inbox — "*the first gallery
 > flow in which an export outlives the page that started it*; the snapshot pager's
 > whole-document POST is where that will first be felt" — and its precondition, stated
@@ -23,7 +24,11 @@
 > a revert probe confirmed the base-path guard sees `request.basePath` missing).
 > **S3** — the region remembers: a list page's job region is filled at render with the
 > caller's exports of that route that still need them, and a kick-off adds a card instead of
-> replacing one. Each slice ships its docs and its CHANGELOG entry.
+> replacing one: **shipped, #1434** (as recommended; the guards landed in
+> `ExportsPageIntegrationTest` and the renderer's view test rather than
+> `ListExportIntegrationTest`, whose routes are public and whose region therefore stays empty —
+> that literal is asserted there unchanged; the region renders on one line so an empty region
+> is byte-identical to before). Each slice ships its docs and its CHANGELOG entry.
 
 ## What was measured
 

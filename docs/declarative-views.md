@@ -233,7 +233,10 @@ sort` allowlist narrower than the list's, a required input the kick-off never se
 parameter the list route lacks. A control renders only for a principal the export route admits,
 and the route re-authorizes the click. A `file-export` button posts as a plain form, and its
 answer for a browser is the transfer's own page with the job card
-([file transfers](file-transfers.md)).
+([file transfers](file-transfers.md)). The grid page's job region remembers: it renders the
+signed-in user's exports of the named `file-export` routes that are still running or not yet
+fetched, so the card is there when the user comes back, and the user's exports of the whole
+application are listed at `/_tesseraql/exports` ([file transfers](file-transfers.md#my-exports)).
 
 ### Work queues: `pagination: { strategy: snapshot }`
 
