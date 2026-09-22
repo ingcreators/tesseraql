@@ -8,6 +8,17 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **A transfer records who started it.** `tql_file_transfer` gains `subject` (V17, with an
+  owner index): the requesting principal's stable subject on a route's export start, its
+  one-shot import and its reviewed commit — the confirm's frozen request copy carries it the
+  way it carries the topics and the pool — and null for a polled import, a job step's export
+  or a public route's caller, which belong to nobody. Who may read a transfer is unchanged:
+  the column is an owner for the surfaces that list a user's own transfers, never a reader
+  gate, and the `{transferId}` subtree keeps answering for the route, the app and the tenant.
+  The operations console's transfers page and its JSON say who as *By*; the transfer status
+  carries `createdAt`; `FileTransferService` gains the two owner queries the surfaces that
+  follow read, `mine` and `pending`. `docs/job-inbox.md` is the record.
+
 - **The export kick-off answers the job card.** An htmx kick-off of a `file-export` from the
   grid page answers `202` and the self-polling job card, swapped into the page's own job region —
   outside the grid form and outside the swapped table region, so paging, sorting and searching
@@ -248,6 +259,13 @@ All notable changes to TesseraQL are documented here. The format follows
   Phase 32.
 
 ### Changed
+
+- **`ExportRequest` and `ImportRequest` carry who starts them.** Both records gain a `subject`
+  component and a `by(subject)` wither beside `announcing`, `invalidating` and `on`, so the
+  transfer service records the owner from the request it is given rather than reading a
+  principal it does not have on the background thread; `TransferStatus` gains `createdAt` and
+  `TransferSummary` gains `subject`. The delegating constructors keep every earlier shape
+  compiling (`docs/job-inbox.md` decision 1).
 
 - **Markup contract: the grid page names the chrome its swaps refresh.** The list section
   carries `hx-select-oob="#<id>-filters-state,#<id>-filterbar"` when filters are declared

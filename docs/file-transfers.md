@@ -375,7 +375,7 @@ subtree:
   `FAILED` or `STOPPED`), `rowCount`, `filename` (for a `splitBy:` export, the bundle's name),
   `downloaded`, `expired` (the retention sweep has reclaimed the file: the job card renders its
   tombstone, and the file leg answers the same 409 as a run that produced no file), and
-  `fileUrl` once completed. A `FAILED` export carries `code` — the framework's
+  `fileUrl` once completed. `createdAt` says when it started, as an ISO-8601 instant. A `FAILED` export carries `code` — the framework's
   error code the run recorded, such as `TQL-LD-2802` for a document that could not be written
   or `TQL-LD-2810` for a statement that failed — and `reason`, the framework's own sentence for
   it. The driver's text never reaches this face; it is on the execution row, behind the
@@ -572,6 +572,12 @@ There is nothing special to do: the route's `security:` block applies to the who
 the start request, the `{transferId}` status endpoint, and the `{transferId}/file` download are
 all guarded by the same declaration. Query routes' data-scoping rules apply to extraction
 queries like any other query.
+
+A transfer records who started it — the requesting principal's subject, on the route's export
+start, its one-shot import and its reviewed commit; nothing for a polled import, a job step's
+export or a public route's caller ([job-inbox.md](job-inbox.md)). That is an owner for the
+surfaces that list a user's own transfers, never a reader gate: whoever the route admits reads
+the subtree, so a colleague under the same policy can still fetch a link the exporter shared.
 
 ## Error codes
 

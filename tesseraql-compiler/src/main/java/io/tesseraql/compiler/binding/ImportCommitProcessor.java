@@ -106,6 +106,9 @@ public final class ImportCommitProcessor implements Step {
                             rowSqlFile, onError, null)
                             .announcing(emit, TransferTopics.tenant(exchange))
                             .invalidating(invalidates)
+                            // The owner the commit records (docs/job-inbox.md decision 1):
+                            // the same subject it checks the batch against, above.
+                            .by(TransferOwner.of(exchange))
                             .on(TransferPools.of(exchange)));
         } catch (TqlException refusal) {
             // A refusal that declared human-safe text is one the confirming caller is meant to

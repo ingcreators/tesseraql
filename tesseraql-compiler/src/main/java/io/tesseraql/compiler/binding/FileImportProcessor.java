@@ -128,6 +128,9 @@ public final class FileImportProcessor implements Step {
                     // (docs/csv-import.md decision 6).
                     .announcing(emit, TransferTopics.tenant(exchange))
                     .invalidating(invalidates)
+                    // And whose it is (docs/job-inbox.md decision 1): the one-shot import
+                    // records it now, the reviewed one on the commit's frozen copy.
+                    .by(TransferOwner.of(exchange))
                     // And the pool its row statement runs on: the tenant's in a per-tenant
                     // mode, resolved here so an unknown tenant is refused before any row
                     // (docs/multi-tenancy.md).

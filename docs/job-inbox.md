@@ -12,7 +12,8 @@
 > **S1** — the column: `subject` on the transfer row, recorded at every start that has a
 > principal, carried on the request records so the reviewed commit's frozen copy cannot drop
 > it; the owner index; the two owner queries; the operations console's transfers page says
-> who. **S2** — the page: a bundled `exports` app at `/_tesseraql/exports`, mounted with the
+> who: **shipped, #1432** (every decision as recommended; a revert probe confirmed the new
+> guard sees the frozen copy dropping the owner). **S2** — the page: a bundled `exports` app at `/_tesseraql/exports`, mounted with the
 > application whose transfers it lists — a hosted member included — rendering the shipped job
 > card per row over the caller's own exports; the account menu links it where an export can
 > start. **S3** — the region remembers: a list page's job region is filled at render with the

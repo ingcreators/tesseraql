@@ -33,10 +33,13 @@ public interface FileTransferService {
      * @param invalidates the tables the route's {@code invalidates:} names (docs/caching.md):
      *                 dropped from the catalogs and the hold when the import's transaction
      *                 commits, never on a rollback
+     * @param subject  who starts it (docs/job-inbox.md decision 1): the requesting principal's
+     *                 stable subject, recorded on the transfer as its owner for listing; null
+     *                 for a transfer nobody started — a polled import, a public route's caller
      */
     record ImportRequest(String routeId, String appName, String format, FileReadSpec readSpec,
             Path rowSqlFile, String onError, RowContract contract, List<String> emit,
-            List<String> invalidates, String tenantId, TransferPool pool) {
+            List<String> invalidates, String tenantId, TransferPool pool, String subject) {
 
         /** The shape before an import could hold its rows to a contract. */
         public ImportRequest(String routeId, String appName, String format, FileReadSpec readSpec,
@@ -48,7 +51,7 @@ public interface FileTransferService {
         public ImportRequest(String routeId, String appName, String format, FileReadSpec readSpec,
                 Path rowSqlFile, String onError, RowContract contract) {
             this(routeId, appName, format, readSpec, rowSqlFile, onError, contract, List.of(),
-                    List.of(), null, null);
+                    List.of(), null, null, null);
         }
 
         public ImportRequest {
@@ -61,7 +64,7 @@ public interface FileTransferService {
         /** This request with the route's live-view topics and the caller's tenant attached. */
         public ImportRequest announcing(List<String> topics, String tenant) {
             return new ImportRequest(routeId, appName, format, readSpec, rowSqlFile, onError,
-                    contract, topics, invalidates, tenant, pool);
+                    contract, topics, invalidates, tenant, pool, subject);
         }
 
         /**
@@ -71,13 +74,23 @@ public interface FileTransferService {
          */
         public ImportRequest invalidating(List<String> tables) {
             return new ImportRequest(routeId, appName, format, readSpec, rowSqlFile, onError,
-                    contract, emit, tables, tenantId, pool);
+                    contract, emit, tables, tenantId, pool, subject);
         }
 
         /** This request with the pool its row statement runs on (docs/multi-tenancy.md). */
         public ImportRequest on(TransferPool pool) {
             return new ImportRequest(routeId, appName, format, readSpec, rowSqlFile, onError,
-                    contract, emit, invalidates, tenantId, pool);
+                    contract, emit, invalidates, tenantId, pool, subject);
+        }
+
+        /**
+         * This request with who starts it attached (docs/job-inbox.md decision 1): the
+         * transfer records it as its owner. The reviewed commit's frozen copy carries it like
+         * the topics and the pool, so the confirmer the commit checked is the owner it records.
+         */
+        public ImportRequest by(String subject) {
+            return new ImportRequest(routeId, appName, format, readSpec, rowSqlFile, onError,
+                    contract, emit, invalidates, tenantId, pool, subject);
         }
     }
 
@@ -121,13 +134,16 @@ public interface FileTransferService {
      *                rollback
      * @param tenantId the tenant the announcement is scoped to — the requesting principal's,
      *                read on the request because the run outlives it
+     * @param subject who starts it (docs/job-inbox.md decision 1): the requesting principal's
+     *                stable subject, recorded on the transfer as its owner for listing — never a
+     *                reader gate — or null for a transfer nobody started (a job step's export)
      */
     record ExportRequest(String routeId, String appName, String format, FileWriteSpec writeSpec,
             String filename, Path querySqlFile, Map<String, Object> params,
             String afterTiming, Path afterSqlFile, ExportRowCap rowCap,
             List<ExportQuery> queries, Map<String, Object> values,
             RowEnricher enricher, int enrichWindow, List<String> emit,
-            List<String> invalidates, String tenantId, TransferPool pool) {
+            List<String> invalidates, String tenantId, TransferPool pool, String subject) {
 
         /** The shape before an export's follow-up announced itself (docs/list-export.md). */
         public ExportRequest(String routeId, String appName, String format,
@@ -137,7 +153,7 @@ public interface FileTransferService {
                 RowEnricher enricher, int enrichWindow, TransferPool pool) {
             this(routeId, appName, format, writeSpec, filename, querySqlFile, params, afterTiming,
                     afterSqlFile, rowCap, queries, values, enricher, enrichWindow, List.of(),
-                    List.of(), null, pool);
+                    List.of(), null, pool, null);
         }
 
         /** The shape before an export carried its pool (docs/multi-tenancy.md). */
@@ -172,7 +188,18 @@ public interface FileTransferService {
         public ExportRequest on(TransferPool pool) {
             return new ExportRequest(routeId, appName, format, writeSpec, filename, querySqlFile,
                     params, afterTiming, afterSqlFile, rowCap, queries, values, enricher,
-                    enrichWindow, emit, invalidates, tenantId, pool);
+                    enrichWindow, emit, invalidates, tenantId, pool, subject);
+        }
+
+        /**
+         * This request with who starts it attached (docs/job-inbox.md decision 1): the
+         * transfer records it as its owner, and the surfaces that list a subject's own
+         * transfers read it back. Null — a caller with no principal — records nothing.
+         */
+        public ExportRequest by(String subject) {
+            return new ExportRequest(routeId, appName, format, writeSpec, filename, querySqlFile,
+                    params, afterTiming, afterSqlFile, rowCap, queries, values, enricher,
+                    enrichWindow, emit, invalidates, tenantId, pool, subject);
         }
 
         /**
@@ -183,7 +210,7 @@ public interface FileTransferService {
         public ExportRequest announcing(List<String> topics, String tenant) {
             return new ExportRequest(routeId, appName, format, writeSpec, filename, querySqlFile,
                     params, afterTiming, afterSqlFile, rowCap, queries, values, enricher,
-                    enrichWindow, topics, invalidates, tenant, pool);
+                    enrichWindow, topics, invalidates, tenant, pool, subject);
         }
 
         /**
@@ -193,7 +220,7 @@ public interface FileTransferService {
         public ExportRequest invalidating(List<String> tables) {
             return new ExportRequest(routeId, appName, format, writeSpec, filename, querySqlFile,
                     params, afterTiming, afterSqlFile, rowCap, queries, values, enricher,
-                    enrichWindow, emit, tables, tenantId, pool);
+                    enrichWindow, emit, tables, tenantId, pool, subject);
         }
     }
 
@@ -266,17 +293,20 @@ public interface FileTransferService {
      *                      sweep (docs/list-export.md decision 5): the row stays as history, the
      *                      bytes are gone, and a surface that would offer the file says expired
      *                      instead of done with a dead link
+     * @param createdAt     when the transfer started (docs/job-inbox.md decision 3), for a
+     *                      surface that lists a subject's own; null on the shapes that predate it
      */
     record TransferStatus(String transferId, String routeId, String appName, String direction,
             String status, long rows, Long expectedRows, List<RowError> errors, String filename,
-            boolean downloaded, String exitMessage, String tenantId, boolean fileReclaimed) {
+            boolean downloaded, String exitMessage, String tenantId, boolean fileReclaimed,
+            java.time.Instant createdAt) {
 
         /** The shape before a transfer knew its file had been reclaimed. */
         public TransferStatus(String transferId, String routeId, String appName, String direction,
                 String status, long rows, Long expectedRows, List<RowError> errors, String filename,
                 boolean downloaded, String exitMessage, String tenantId) {
             this(transferId, routeId, appName, direction, status, rows, expectedRows, errors,
-                    filename, downloaded, exitMessage, tenantId, false);
+                    filename, downloaded, exitMessage, tenantId, false, null);
         }
 
         /** The shape before a transfer carried the tenant it was resolved for. */
@@ -326,11 +356,12 @@ public interface FileTransferService {
     /**
      * One transfer in the operations overview, tagged with its owning app for scoping.
      * {@code expired} marks a completed export whose produced bytes the retention sweep has
-     * reclaimed — the row stays as history, the download answers 409.
+     * reclaimed — the row stays as history, the download answers 409. {@code subject} is who
+     * started it (docs/job-inbox.md decision 7), null for a transfer nobody started.
      */
     record TransferSummary(String transferId, String routeId, String appName, String direction,
             String format, String status, long rows, String filename, boolean downloaded,
-            boolean expired, java.time.Instant createdAt) {
+            boolean expired, java.time.Instant createdAt, String subject) {
     }
 
     /**
@@ -445,6 +476,24 @@ public interface FileTransferService {
 
     /** The most recent transfers, newest first (for the operations console). */
     List<TransferSummary> recent(int limit);
+
+    /**
+     * One subject's transfers of one application, newest first, at most {@code limit} rows —
+     * both directions (docs/job-inbox.md decision 3). The tenant is part of "own" the way the
+     * route's subtree reads it: a row recorded under another tenant, or under none where the
+     * caller has one, is not listed. A null subject lists nothing: a transfer nobody started
+     * belongs to nobody. Who may <em>read</em> a transfer is unchanged by this listing; every
+     * link a surface renders from it goes through the route's own subtree.
+     */
+    List<TransferStatus> mine(String appName, String subject, String tenantId, int limit);
+
+    /**
+     * One subject's exports of one route that still need them (docs/job-inbox.md decision 8):
+     * running, or completed with a file nobody has fetched yet. Newest first, at most
+     * {@code limit}; the tenant rule of {@link #mine}.
+     */
+    List<TransferStatus> pending(String appName, String routeId, String subject, String tenantId,
+            int limit);
 
     /**
      * Reclaims the produced files of transfers created before {@code cutoff}

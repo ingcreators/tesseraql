@@ -108,7 +108,9 @@ where the transfer had one, reads the transfer as unknown (`TQL-LD-2822`). The f
 resolves the tenant like the other two, so `required: true` holds on the one URL that serves the
 bytes. Until 0.18.0 the subtree was scoped to app and route only and the file leg carried
 security alone (G31). A transfer recorded before 0.18.0 has no tenant and, under tenancy, is
-reachable by no tenant — recorded, not shimmed.
+reachable by no tenant — recorded, not shimmed. The owner queries that list a subject's own
+transfers ([job-inbox.md](job-inbox.md)) carry the tenant with the same rule: the caller's
+tenant, or none on both sides.
 
 The vocabulary is refused, not guessed: an enabled tenancy whose `mode` is not one of the three
 above, or whose `resolver.type` is not `header`, `claim` or `host`, does not boot
