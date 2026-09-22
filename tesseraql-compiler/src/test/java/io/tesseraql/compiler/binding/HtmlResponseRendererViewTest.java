@@ -1122,6 +1122,28 @@ class HtmlResponseRendererViewTest {
                 .contains(">Export</button>");
         assertThat(html.indexOf("id=\"page-export\""))
                 .isLessThan(html.indexOf("class=\"tql-list-page__form\""));
+        // The htmx face (decisions 4-5): the same URL, the kick-off form's two fields only, the
+        // answer into the job region — which sits before the kick-off form and the grid form,
+        // outside the swapped table region, and renders empty.
+        assertThat(html)
+                .contains("hx-post=\"/items/export?q=vpn&amp;status=OPEN&amp;sort=-created_at\"")
+                .contains("hx-include=\"#page-export\"")
+                .contains("hx-params=\"_csrf,_idempotency\"")
+                .contains("hx-target=\"#page-export-job\"").contains("hx-disabled-elt=\"this\"")
+                .contains("<div id=\"page-export-job\"></div>");
+        assertThat(html.indexOf("id=\"page-export-job\""))
+                .isLessThan(html.indexOf("id=\"page-export\" method"))
+                .isLessThan(html.indexOf("id=\"page-table\""));
+    }
+
+    @Test
+    void aQueryExportAloneRendersNoJobRegionAndNoKickoffForm(@TempDir Path dir)
+            throws Exception {
+        HtmlResponseRenderer renderer = exportRenderer(dir, EXPORTING_LIST, listRoute(null),
+                List.of(exportRoute(dir, "GET", "/items/export", "query-export", null)));
+        String html = renderList(renderer, Map.of());
+        assertThat(html).doesNotContain("page-export-job").doesNotContain("id=\"page-export\"")
+                .doesNotContain("hx-post=\"/items/export");
     }
 
     @Test

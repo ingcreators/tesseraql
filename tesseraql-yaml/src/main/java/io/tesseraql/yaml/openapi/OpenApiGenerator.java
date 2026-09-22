@@ -577,6 +577,7 @@ public final class OpenApiGenerator {
         statusProperties.put("errors", ordered("type", "array", "items", Map.of("type", "object")));
         statusProperties.put("filename", Map.of("type", "string"));
         statusProperties.put("downloaded", Map.of("type", "boolean"));
+        statusProperties.put("expired", Map.of("type", "boolean"));
         statusProperties.put("fileUrl", Map.of("type", "string"));
 
         Map<String, Object> review = new TreeMap<>();

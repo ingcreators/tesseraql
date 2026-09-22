@@ -1789,6 +1789,10 @@ public final class RouteCompiler {
         }
         PipelineBuilder route = pipelines.pipeline(routeId);
         applyCommonGovernance(route, routeFile);
+        // A declared idempotency: replays the kick-off's answer (docs/list-export.md decision
+        // 10): a double-clicked or retried Export starts one transfer and both clicks see the
+        // same card. The one browser-facing builder that carried neither step.
+        applyIdempotencyBegin(route, definition);
         PipelineBuilder exportStep = route
                 .process(new RequestBinder(definition, routeFile.urlPath(),
                         compiledAppHome, functions));
@@ -1801,7 +1805,8 @@ public final class RouteCompiler {
                 spec.filename(), querySql, afterTiming, afterSql,
                 declaredExportRowCap(spec, format),
                 exportQueries(definition, routeDir), httpSourceNames(definition),
-                enrichProcessors(routeDir, definition)));
+                enrichProcessors(routeDir, definition), appHome, i18n.defaultTag()));
+        applyIdempotencyComplete(exportStep, definition);
         mountTransferStatus(context, appHome, routeFile, routeId);
 
         if (mountRest) {

@@ -729,7 +729,11 @@ public final class JdbcFileTransferService implements FileTransferService {
                 transferId, transfer.routeId(), transfer.appName(), transfer.direction(),
                 executionStatus, transfer.rowCount(), transfer.expectedRows(),
                 transfer.errors(), transfer.filename(), transfer.downloadedAt() != null,
-                exitMessage, transfer.tenantId()));
+                exitMessage, transfer.tenantId(),
+                // A completed export with no spool left: retention reclaimed it — the same
+                // reading the console's summary makes (docs/list-export.md decision 5).
+                "EXPORT".equals(transfer.direction()) && "COMPLETED".equals(executionStatus)
+                        && transfer.spoolUri() == null));
     }
 
     /** The connected vendor (for label normalization and the row-limit clause), detected once. */

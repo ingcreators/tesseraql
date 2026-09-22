@@ -92,6 +92,9 @@ public final class FileTransferStatusProcessor implements Step {
         if ("EXPORT".equals(status.direction())) {
             body.put("filename", status.filename());
             body.put("downloaded", status.downloaded());
+            // The retention sweep's mark (docs/list-export.md decision 5): the file leg refuses
+            // once the bytes are gone, and a poller learns it here without that round trip.
+            body.put("expired", status.fileReclaimed());
             if ("COMPLETED".equals(status.status())) {
                 // A wire URL, prefixed like the 202's: unprefixed it was a 404 through the
                 // gateway on every stack deployment (docs/export-hygiene.md P8).

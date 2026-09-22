@@ -373,7 +373,9 @@ subtree:
 - `POST {path}` → `{ "transferId": ..., "statusUrl": "{path}/{transferId}", "fileUrl": "{path}/{transferId}/file" }`
 - `GET {path}/{transferId}` — the transfer state: `status` (`RUNNING`, then `COMPLETED`,
   `FAILED` or `STOPPED`), `rowCount`, `filename` (for a `splitBy:` export, the bundle's name),
-  `downloaded`, and `fileUrl` once completed. A `FAILED` export carries `code` — the framework's
+  `downloaded`, `expired` (the retention sweep has reclaimed the file: the job card renders its
+  tombstone, and the file leg answers the same 409 as a run that produced no file), and
+  `fileUrl` once completed. A `FAILED` export carries `code` — the framework's
   error code the run recorded, such as `TQL-LD-2802` for a document that could not be written
   or `TQL-LD-2810` for a statement that failed — and `reason`, the framework's own sentence for
   it. The driver's text never reaches this face; it is on the execution row, behind the
