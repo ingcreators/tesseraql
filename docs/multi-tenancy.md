@@ -92,9 +92,12 @@ A **file transfer** is that request's SQL too ([file transfers](file-transfers.m
 `file-export` extracts from the tenant's pool and a `file-import` writes its rows there, both
 refused for an unknown tenant before any transfer row exists. An export's `after:` statement
 runs on the same pool at either timing — the transfer records its tenant so a first download,
-a later request, resolves it again. The transfer's own record and its execution verdict stay on
-`main` with the other framework tables, so in these modes a run is two connections: the rows
-commit first, then the verdict. A failure between the two leaves rows that landed under a
+a later request, resolves it again. It records what that statement announces, too, so the
+fetch needs no route to read it from
+([file transfers](file-transfers.md#asynchronous-export-file-export)). The transfer's own
+record and its execution verdict stay on `main` with the other framework tables, so in these
+modes a run is two connections: the rows commit first, then the verdict. A failure between
+the two leaves rows that landed under a
 RUNNING record the reaper closes as abandoned and the log names — never a COMPLETED verdict over
 rows that did not land. Until 0.18.0 both recipes ran on the main pool in every mode, 202 and
 COMPLETED, for an unknown tenant too (`docs/audit-low-leads.md`, G24).

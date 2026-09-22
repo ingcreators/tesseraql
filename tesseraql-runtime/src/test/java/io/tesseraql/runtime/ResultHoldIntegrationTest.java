@@ -299,7 +299,7 @@ class ResultHoldIntegrationTest {
     /**
      * A {@code download}-timed follow-up writes nothing until the file is fetched, so the hold
      * stands through the run's completion and drops with the first fetch — the fetch is where
-     * the statement commits, and the fetching request carries the route's declaration to it.
+     * the statement commits, announcing what the transfer recorded when it started.
      */
     @Test
     void anExportsDownloadTimedFollowUpDropsTheHoldOnTheFirstFetch() throws Exception {
@@ -321,6 +321,40 @@ class ResultHoldIntegrationTest {
         assertThat(statements(marker)).isEqualTo(2);
 
         // A second fetch streams the file and runs nothing, so it drops nothing.
+        assertThat(get(runtime, "/items/export-on-download/" + transferId + "/file", "alpha")
+                .statusCode()).isEqualTo(200);
+        get(runtime, "/items?tag=" + marker, "alpha");
+        assertThat(statements(marker)).isEqualTo(2);
+    }
+
+    /**
+     * The operations surface's fetch announces exactly as the route's file leg does: the
+     * transfer recorded what its follow-up announces when it started (docs/list-export.md), so
+     * a fetch with no route behind it drops the hold too. It used to claim, run the statement
+     * and tell no list and no hold. The API face and the console face share one handler; the
+     * API face takes the bearer ops token this test holds.
+     */
+    @Test
+    void anOperationsFetchOfADownloadTimedExportDropsTheHoldToo() throws Exception {
+        String marker = "hold-export-console";
+        get(runtime, "/items?tag=" + marker, "alpha");
+        assertThat(statements(marker)).isEqualTo(1);
+
+        String transferId = startExport(runtime, "/items/export-on-download");
+        JsonNode done = awaitTerminal(runtime, "/items/export-on-download/" + transferId);
+        assertThat(done.get("status").asText()).as(done.toString()).isEqualTo("COMPLETED");
+        get(runtime, "/items?tag=" + marker, "alpha");
+        assertThat(statements(marker)).as("completed, nothing fetched: nothing written")
+                .isEqualTo(1);
+
+        HttpResponse<String> file = ops(runtime, "GET",
+                "/_tesseraql/ops/batch/transfers/" + transferId + "/file");
+        assertThat(file.statusCode()).as(file.body()).isEqualTo(200);
+        assertThat(file.body()).startsWith("id,");
+        get(runtime, "/items?tag=" + marker, "alpha");
+        assertThat(statements(marker)).isEqualTo(2);
+
+        // The route's own leg, second: the claim is spent, so it streams and drops nothing.
         assertThat(get(runtime, "/items/export-on-download/" + transferId + "/file", "alpha")
                 .statusCode()).isEqualTo(200);
         get(runtime, "/items?tag=" + marker, "alpha");

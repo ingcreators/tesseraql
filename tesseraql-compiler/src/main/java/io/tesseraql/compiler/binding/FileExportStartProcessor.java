@@ -110,7 +110,7 @@ public final class FileExportStartProcessor implements Step {
                 // outlives it: an extraction-timed follow-up announces itself when its
                 // transaction commits on the background thread, not when this response goes
                 // out (docs/list-export.md, the after: commit). The download-timed one is
-                // carried by the fetch that runs it, in FileDownloadProcessor.
+                // announced from the transfer row, which records them at start.
                 .announcing(emit, TransferTopics.tenant(exchange))
                 .invalidating(invalidates)
                 .on(TransferPools.of(exchange)));

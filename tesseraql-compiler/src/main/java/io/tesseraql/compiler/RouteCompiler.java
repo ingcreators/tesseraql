@@ -1824,10 +1824,11 @@ public final class RouteCompiler {
         // (docs/audit-low-leads.md G31).
         applyCommonGovernance(fileRoute, routeId + ".file", "GET",
                 routeFile.urlPath() + "/{transferId}/file", definition);
-        // The download-timed follow-up runs on the fetch, so the fetch carries the same
-        // declaration to the claim it commits with (docs/list-export.md).
+        // The download-timed follow-up runs on the fetch and announces from the transfer row,
+        // which recorded the route's declaration at start (docs/list-export.md) — the same row
+        // the operations console's fetch reads, so this leg carries nothing of its own.
         fileRoute.process(new io.tesseraql.compiler.binding.FileDownloadProcessor(appName,
-                routeId, definition.emit(), definition.invalidates()));
+                routeId));
     }
 
     /**

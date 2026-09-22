@@ -378,6 +378,9 @@ public final class JdbcFileTransferService implements FileTransferService {
             io.tesseraql.core.util.SqlScripts.applyForVendor(dataSource,
                     JdbcFileTransferService.class,
                     "/tesseraql/db/migration/operations/V15__transfer_tenant.sql");
+            io.tesseraql.core.util.SqlScripts.applyForVendor(dataSource,
+                    JdbcFileTransferService.class,
+                    "/tesseraql/db/migration/operations/V16__transfer_announcement.sql");
         } catch (SQLException ex) {
             throw new TqlException(TRANSFER_ERROR,
                     "Failed to create file transfer schema: " + ex.getMessage(), ex);
@@ -410,7 +413,7 @@ public final class JdbcFileTransferService implements FileTransferService {
                 null);
         insertTransfer(transferId, request.routeId(), request.appName(), "IMPORT",
                 request.format(), null, null, null, Map.of(), expectedRows,
-                request.pool().tenantId());
+                request.pool().tenantId(), List.of(), List.of(), null);
         executor.submit(guarded(transferId, () -> {
             try {
                 runImport(transferId, request, codec, upload, expectedRejects);
@@ -456,7 +459,12 @@ public final class JdbcFileTransferService implements FileTransferService {
                 split ? io.tesseraql.core.files.SplitExport.zipName(filename) : filename,
                 request.afterTiming(),
                 request.afterSqlFile() == null ? null : request.afterSqlFile().toString(),
-                request.params(), null, request.pool().tenantId());
+                request.params(), null, request.pool().tenantId(),
+                // What the follow-up announces rides the row, not the fetch
+                // (docs/list-export.md): a download-timed statement runs on a later request
+                // — the route's file leg or the operations console's — which need know no
+                // route to announce what this one declared.
+                request.emit(), request.invalidates(), request.tenantId());
         executor.submit(guarded(transferId, () -> runExport(transferId, request, codec, filename)));
         return transferId;
     }
@@ -799,13 +807,13 @@ public final class JdbcFileTransferService implements FileTransferService {
     }
 
     @Override
-    public Optional<Download> download(String transferId, Announcement announcement) {
-        return open(transferId, true, announcement);
+    public Optional<Download> download(String transferId) {
+        return open(transferId, true);
     }
 
     @Override
     public Optional<Download> inspect(String transferId) {
-        return open(transferId, false, Announcement.NONE);
+        return open(transferId, false);
     }
 
     /**
@@ -816,8 +824,7 @@ public final class JdbcFileTransferService implements FileTransferService {
      * recorded as the download and fired the follow-up whose documented meaning is "the bytes
      * were fetched".
      */
-    private Optional<Download> open(String transferId, boolean claim,
-            Announcement announcement) {
+    private Optional<Download> open(String transferId, boolean claim) {
         TransferRow transfer = findTransfer(transferId).orElse(null);
         if (transfer == null || !"EXPORT".equals(transfer.direction())
                 || transfer.spoolUri() == null
@@ -855,7 +862,7 @@ public final class JdbcFileTransferService implements FileTransferService {
         // as if it had.
         if (claim) {
             try {
-                claimAndFollowUp(transferId, transfer, announcement);
+                claimAndFollowUp(transferId, transfer);
             } catch (RuntimeException ex) {
                 closeQuietly(content);
                 throw ex;
@@ -880,13 +887,15 @@ public final class JdbcFileTransferService implements FileTransferService {
      * a statement that ran and a claim not recorded, and the next fetch runs the statement again:
      * the same shape the extraction's own bookkeeping accepts, named at WARNING when it happens.
      *
-     * <p>Once the claim and the statement are committed, the fetch announces what the route
-     * declared (docs/list-export.md): the statement is the one write a {@code download}-timed
-     * export ever makes, so its topics and its tables are announced here and nowhere else — the
-     * completion of the run announced nothing, correctly, because nothing had been written.
+     * <p>Once the claim and the statement are committed, the fetch announces what the transfer
+     * recorded when it started (docs/list-export.md): the statement is the one write a
+     * {@code download}-timed export ever makes, so its topics and its tables are announced here
+     * and nowhere else — the completion of the run announced nothing, correctly, because
+     * nothing had been written. The row carries the declaration rather than the fetch, so the
+     * operations console's fetch, which knows no route, announces exactly as the route's own
+     * file leg does.
      */
-    private void claimAndFollowUp(String transferId, TransferRow transfer,
-            Announcement announcement) {
+    private void claimAndFollowUp(String transferId, TransferRow transfer) {
         boolean followUp = AFTER_DOWNLOAD.equals(transfer.afterTiming())
                 && transfer.afterSqlFile() != null;
         // The tenant's pool is resolved before the claim, so a tenant that no longer resolves
@@ -924,7 +933,7 @@ public final class JdbcFileTransferService implements FileTransferService {
         }
         if (statementRan[0]) {
             announce("Export " + transfer.routeId() + " (first download of " + transferId + ")",
-                    announcement.emit(), announcement.tenantId(), announcement.invalidates());
+                    transfer.emit(), transfer.emitTenantId(), transfer.invalidates());
         }
     }
 
@@ -2090,17 +2099,25 @@ public final class JdbcFileTransferService implements FileTransferService {
 
     // --- tql_file_transfer persistence ---
 
+    /**
+     * @param emit         the route's live-view topics a download-timed follow-up announces,
+     *                     recorded at start because the fetch that runs it may know no route
+     *                     (docs/list-export.md); empty on an import and on a step's export
+     * @param invalidates  the tables that follow-up drops catalogs and held results by
+     * @param emitTenantId the tenant the topics are scoped to — the starting principal's
+     */
     private record TransferRow(String routeId, String appName, String direction, String format,
             String filename, String spoolUri, long rowCount, Long expectedRows,
             List<RowError> errors, String afterTiming, String afterSqlFile,
-            Map<String, Object> params, Timestamp downloadedAt, String tenantId) {
+            Map<String, Object> params, Timestamp downloadedAt, String tenantId,
+            List<String> emit, List<String> invalidates, String emitTenantId) {
     }
 
     private void insertTransfer(String transferId, String routeId, String appName,
             String direction, String format, String filename, String afterTiming,
             String afterSqlFile, Map<String, Object> params) {
         insertTransfer(transferId, routeId, appName, direction, format, filename, afterTiming,
-                afterSqlFile, params, null, null);
+                afterSqlFile, params, null, null, List.of(), List.of(), null);
     }
 
     /**
@@ -2108,18 +2125,23 @@ public final class JdbcFileTransferService implements FileTransferService {
      *                     starts — a reviewed import parsed the whole file already. Null
      *                     otherwise, and the progress card then counts up without a total
      *                     rather than showing a guessed one (docs/csv-import.md decision 6).
+     * @param emit         what a download-timed follow-up announces, with {@code invalidates}
+     *                     and {@code emitTenantId} (docs/list-export.md); an empty list is
+     *                     stored as null, so an import's row says nothing rather than {@code []}
      */
     private void insertTransfer(String transferId, String routeId, String appName,
             String direction, String format, String filename, String afterTiming,
             String afterSqlFile, Map<String, Object> params, Long expectedRows,
-            String tenantId) {
+            String tenantId, List<String> emit, List<String> invalidates,
+            String emitTenantId) {
         try (Connection connection = dataSource.getConnection();
                 PreparedStatement statement = connection.prepareStatement("""
                         insert into tql_file_transfer
                           (transfer_id, route_id, app_name, direction, format, filename,
                            after_timing, after_sql_file, params_json, row_count, created_at,
-                           expected_rows, tenant_id)
-                        values (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)""")) {
+                           expected_rows, tenant_id, emit_json, invalidates_json,
+                           emit_tenant_id)
+                        values (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)""")) {
             applyTimeout(statement);
             statement.setString(1, transferId);
             statement.setString(2, routeId);
@@ -2137,6 +2159,9 @@ public final class JdbcFileTransferService implements FileTransferService {
                 statement.setLong(11, expectedRows);
             }
             statement.setString(12, tenantId);
+            statement.setString(13, emit.isEmpty() ? null : toJson(emit));
+            statement.setString(14, invalidates.isEmpty() ? null : toJson(invalidates));
+            statement.setString(15, emitTenantId);
             statement.executeUpdate();
         } catch (SQLException ex) {
             throw new TqlException(TRANSFER_ERROR,
@@ -2257,7 +2282,10 @@ public final class JdbcFileTransferService implements FileTransferService {
                         rs.getString("after_sql_file"),
                         fromJsonParams(rs.getString("params_json")),
                         rs.getTimestamp("downloaded_at"),
-                        rs.getString("tenant_id")));
+                        rs.getString("tenant_id"),
+                        fromJsonNames(rs.getString("emit_json")),
+                        fromJsonNames(rs.getString("invalidates_json")),
+                        rs.getString("emit_tenant_id")));
             }
         } catch (SQLException ex) {
             throw new TqlException(TRANSFER_ERROR,
@@ -2329,6 +2357,19 @@ public final class JdbcFileTransferService implements FileTransferService {
             });
         } catch (IOException ex) {
             return Map.of();
+        }
+    }
+
+    /** A recorded list of names — topics or tables; null, blank and unreadable read as none. */
+    private List<String> fromJsonNames(String json) {
+        if (json == null || json.isBlank()) {
+            return List.of();
+        }
+        try {
+            return mapper.readValue(json, new TypeReference<List<String>>() {
+            });
+        } catch (IOException ex) {
+            return List.of();
         }
     }
 }
