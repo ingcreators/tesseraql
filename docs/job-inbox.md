@@ -361,16 +361,25 @@ region remembers) and `### Changed` (markup contract: the kick-off adds a card).
 ## Filed, not fixed
 
 - **The account popover's "Account settings" and "Sign out" are literal English** (row 13),
-  not catalog keys, on a shell every page of every application renders. The new item is a
-  key; the two beside it are one small slice of their own, not this design's.
+  not catalog keys, on a shell every page of every application renders — **closed the same
+  day, #1443** (the filed-quirks PR, with the two entries below): `tql.account.settings` is
+  new, `tql.account.signOut` already
+  existed for the sessions table, and the popover renders both through the catalog;
+  `AccountSurfaceIntegrationTest`'s language case asserts the Japanese popover.
 - **The account app's tasks page reads this runtime's `main`** (row 8, decision 4): under a
-  stack that is the origin's, and no member's tasks are listed. Recorded so the same
-  limitation is not reported as this page's.
+  stack that is the origin's, and no member's tasks are listed — **closed the same day**, in
+  this design's own shape: `/_tesseraql/tasks` is its own bundled `tasks` app
+  (`TasksAppProvider`, `tesseraql.apps.tasks.enabled`), mounted with the application, a hosted
+  member included, because a workflow task is the application's business data and the queue
+  links into the application's detail pages; its nav is one item, itself.
+  `StackModeIntegrationTest` asserts a member serves it under its prefix.
 - **The transfer page renders the shell without its menu and account chip** (row 10): a
-  Java-rendered page that `Templates.render` builds with three variables. It is the no-JS
-  landing for a kick-off and the target of a bookmarked status URL, and it works; it just
-  looks like nowhere. A `ShellChrome` pass over its model is a short slice when someone
-  minds.
+  Java-rendered page that `Templates.render` builds with three variables — **closed the same
+  day**: `ImportPages.render` runs the `ShellChrome` passes over the page's model (menu,
+  system links, account, acting role, theme, inbox bell, pins, UI defaults) from an
+  evaluation context built off the request's principal and tenant, since the status route
+  runs no request binder; the bare card fragment is untouched.
+  `ImportPageIntegrationTest` asserts the account chip on the no-JS landing page.
 - **A transfer recorded before S1 has no owner** and appears in no inbox; the console shows
   a dash. Recorded, not shimmed (the pre-0.18.0 tenant precedent).
 

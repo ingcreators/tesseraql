@@ -194,6 +194,22 @@ class StackModeIntegrationTest {
     }
 
     /**
+     * The task queue is the member's too (docs/workflow-surface.md decision 6, docs/job-inbox.md
+     * filed): a workflow task is the application's business data and the queue links into the
+     * application's detail pages, so the page mounts with the application under its prefix —
+     * it used to ride the account app, answering at the origin against the origin's own
+     * datasource and listing no member's tasks. This member declares no workflow, so the page
+     * says so honestly; the point is that it answers here at all.
+     */
+    @Test
+    void aMemberServesItsOwnTaskQueueUnderItsPrefix() throws Exception {
+        HttpResponse<String> page = get("/shop-a/_tesseraql/tasks", sessionCookie);
+
+        assertThat(page.statusCode()).as(page.body()).isEqualTo(200);
+        assertThat(page.body()).contains("My tasks");
+    }
+
+    /**
      * {@code href}/{@code src}/{@code action} values that address the origin, not the app —
      * anything rooted outside the application's derived {@code /<name>} prefix, now that the
      * address is the name rather than an {@code /apps/} wrapper.

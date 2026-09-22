@@ -1,0 +1,8 @@
+# The bundled task queue (docs/workflow-surface.md decision 6): the signed-in user's open
+# workflow tasks of this application, served at /_tesseraql/tasks by the runtime that serves the
+# application — a hosted member included, because a workflow task is the application's business
+# data and the detail pages the queue links into are the application's routes. Session-only by
+# design.
+config/tesseraql.yml
+web/_tesseraql/tasks/get.yml
+web/_tesseraql/tasks/tasks.html
