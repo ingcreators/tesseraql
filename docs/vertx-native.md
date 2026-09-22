@@ -365,6 +365,13 @@ The drain moves onto `Exchange`, as a `close()`-shaped call the runner makes in 
 exchange that is built and run outside a pipeline then drains what was registered on it instead of
 leaking it silently.
 
+Where the edge calls it moved twice after this. Inside the runner it deleted a streamed body's
+spool before the body was read, so the edge deferred it to its own `finally`, after `respond()` —
+and there it ran after the client could already hold the answer, so a request sent on that answer
+could be refused by its own permit. It now runs inside `respond()`, after the body is read to its
+end and before the last bytes are written
+([http-edge-robustness.md](http-edge-robustness.md) decision 13).
+
 ### 6. The transport is passed, not looked up
 
 `TesseraqlHttpServer` takes the `Vertx` (or the `VertxOptions` to build one) as constructor

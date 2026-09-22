@@ -77,18 +77,24 @@ class HttpEdgeFailurePathIntegrationTest {
     }
 
     /**
-     * A permit taken on the failure path is given back.
+     * A permit taken on the failure path is given back — before the answer it was taken for
+     * ends.
      *
      * <p>{@code maxInFlight: 1} and a route that always fails: without the completion drain the
      * first request would take the permit and keep it, and the second would be refused with
-     * {@code TQL-RATE-4291} instead of the failure it actually has. Three sequential requests is
-     * two more than it takes to see that.
+     * {@code TQL-RATE-4291} instead of the failure it actually has. And with the drain running
+     * only after the answer had left, a request sent the moment the previous answer arrived
+     * could still be refused, inside that gap — which this test met on CI, its baseline being
+     * the refusal of the previous test method's permit. So the baseline is asserted too, and
+     * twenty back-to-back requests from one client, each sent on the previous answer, all
+     * produce the route's own error (docs/http-edge-robustness.md decision 13).
      */
     @Test
     void aPermitTakenOnTheFailurePathIsGivenBack() {
         String expected = get(PATH).body();
+        assertThat(expected).doesNotContain("TQL-RATE-4291");
 
-        for (int attempt = 0; attempt < 3; attempt++) {
+        for (int attempt = 0; attempt < 20; attempt++) {
             HttpResponse<String> again = get(PATH);
             assertThat(again.body()).doesNotContain("TQL-RATE-4291");
             assertThat(again.body()).isEqualTo(expected);
