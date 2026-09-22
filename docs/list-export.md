@@ -11,7 +11,13 @@
 > page's navigation strip with the count it can vouch for, and in both result-cap surfaces as
 > their escape hatch; a `query-export` target renders the link, a `file-export` target the
 > kick-off form, and the export start leg answers a native form post with the redirect the
-> transfer page already serves; the inventory and helpdesk dogfoods.
+> transfer page already serves; the inventory and helpdesk dogfoods: **shipped, #1426** (every
+> decision as recommended). Three details the slice settled: the judgement lives in one
+> `ViewExports` class both altitudes call, with `RouteCompiler.requireExportTargets` as the
+> boot twin and `ViewBinding.of` refusing only an unresolvable target; the policy gate is
+> pinned by the renderer test's `permits` predicate rather than the integration test, whose
+> routes are public; and the ejector hands the ejected control the route's method through
+> `ViewEjects`, so a `file-export` ejects as a one-button form.
 >
 > **S2** — the card on the page: the htmx kick-off answers 202 and the running card into its
 > own region, one shared kick-off answer for imports and exports, `_idempotency` on the
