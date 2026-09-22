@@ -59,6 +59,12 @@ tql:
     truncatedBody: "{max} 行を超えて一致しています。検索または絞り込みで残りを確認してください。"
     truncatedSorted: "{max} 行を超えて一致しています（{sort} 順）。検索または絞り込みで残りを確認してください。"
     truncatedCount: "{max}+ 件"
+    truncatedBodyExport: "{max} 行を超えて一致しています。検索または絞り込みで残りを確認するか、全件をエクスポートしてください。"
+    truncatedSortedExport: "{max} 行を超えて一致しています（{sort} 順）。検索または絞り込みで残りを確認するか、全件をエクスポートしてください。"
+    overCapBodyExport: "検索を {cap} 行以内に絞り込んでから一覧を処理するか、全件をエクスポートしてください。"
+    export: エクスポート
+    exportRows: "{count} 件をエクスポート"
+    exportAll: 該当する全件をエクスポート
   inbox:
     title: "受信箱"
     pageTitle: "受信箱 · TesseraQL"

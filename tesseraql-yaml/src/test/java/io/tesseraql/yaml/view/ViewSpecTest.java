@@ -624,6 +624,72 @@ class ViewSpecTest {
     }
 
     @Test
+    void exportsAcceptBarePathsAndLabelledMappingsInOrder(@TempDir Path dir) throws Exception {
+        // docs/list-export.md decision 1: the filters: spelling — a route path, or a mapping.
+        Path file = write(dir, "e.view.yml", """
+                version: tesseraql/v1
+                kind: view
+                recipe: list
+                exports:
+                  - /things/export
+                  - { action: /things/export.xlsx, label: Excel }
+                """);
+        ViewSpec spec = ViewSpec.parse(file);
+        assertThat(spec.exports()).extracting(ViewSpec.Export::action)
+                .containsExactly("/things/export", "/things/export.xlsx");
+        assertThat(spec.exports().get(0).label()).isNull();
+        assertThat(spec.exports().get(1).label()).isEqualTo("Excel");
+    }
+
+    @Test
+    void anExportRequiresItsActionAndRefusesUnknownKeysAndDuplicates(@TempDir Path dir)
+            throws Exception {
+        Path noAction = write(dir, "a.view.yml", """
+                version: tesseraql/v1
+                kind: view
+                recipe: list
+                exports:
+                  - { label: Excel }
+                """);
+        assertThatThrownBy(() -> ViewSpec.parse(noAction))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("an exports: entry requires action:");
+        Path unknown = write(dir, "b.view.yml", """
+                version: tesseraql/v1
+                kind: view
+                recipe: list
+                exports:
+                  - { action: /things/export, format: csv }
+                """);
+        assertThatThrownBy(() -> ViewSpec.parse(unknown))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("TQL-VIEW-3314")
+                .hasMessageContaining("an exports: entry does not accept format:");
+        Path twice = write(dir, "c.view.yml", """
+                version: tesseraql/v1
+                kind: view
+                recipe: list
+                exports: [/things/export, { action: /things/export, label: Again }]
+                """);
+        assertThatThrownBy(() -> ViewSpec.parse(twice))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("exports: names route /things/export twice");
+    }
+
+    @Test
+    void rejectsExportsOffAList(@TempDir Path dir) throws Exception {
+        Path file = write(dir, "d.view.yml", """
+                version: tesseraql/v1
+                kind: view
+                recipe: detail
+                exports: [/things/export]
+                """);
+        assertThatThrownBy(() -> ViewSpec.parse(file))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("exports: is a list-view key");
+    }
+
+    @Test
     void rejectsFiltersOffAList(@TempDir Path dir) throws Exception {
         Path file = write(dir, "x.view.yml", """
                 version: tesseraql/v1

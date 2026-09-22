@@ -63,6 +63,12 @@ tql:
     truncatedBody: "More than {max} rows match. Narrow the search or filters to see the rest."
     truncatedSorted: "More than {max} rows match, sorted by {sort}. Narrow the search or filters to see the rest."
     truncatedCount: "{max}+ results"
+    truncatedBodyExport: "More than {max} rows match. Narrow the search or filters to see the rest, or export the full set."
+    truncatedSortedExport: "More than {max} rows match, sorted by {sort}. Narrow the search or filters to see the rest, or export the full set."
+    overCapBodyExport: "Narrow the search to at most {cap} rows, then work the list — or export the full set."
+    export: Export
+    exportRows: "Export {count} rows"
+    exportAll: Export all matching rows
   inbox:
     title: "Inbox"
     pageTitle: "Inbox · TesseraQL"

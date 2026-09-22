@@ -1714,7 +1714,7 @@ public final class RouteCompiler {
                 ? null
                 : io.tesseraql.compiler.binding.ViewBinding.of(appHome, html.view(),
                         routeFile.definition(), this::postRouteByPath, this::viewPathById,
-                        codecs);
+                        codecs, this::routesByPath);
         return new HtmlResponseRenderer(withDefaultHeaders(html), appHome,
                 routeFile.source().getParent(), i18n.defaultTag(), viewBinding, java.util.Map.of(),
                 functions).basePath(basePath());
@@ -1953,11 +1953,14 @@ public final class RouteCompiler {
             // A declarative view (roadmap Phase 39): compile the response.html.view reference —
             // parse + validate the document and derive a form's fields from its action route's
             // input: block — so a bad view fails the build, not the request.
+            if (html != null && html.view() != null) {
+                requireExportTargets(routeFile, html.view());
+            }
             io.tesseraql.compiler.binding.ViewBinding viewBinding = html != null
                     && html.view() != null
                             ? io.tesseraql.compiler.binding.ViewBinding.of(appHome,
                                     html.view(), routeFile.definition(), this::postRouteByPath,
-                                    this::viewPathById, codecs)
+                                    this::viewPathById, codecs, this::routesByPath)
                             : null;
             // A workflow-declaring detail view gains its facts step after the row loads and
             // before the renderer (docs/workflow-surface.md decision 2).
@@ -1970,9 +1973,10 @@ public final class RouteCompiler {
             java.util.Map<String, io.tesseraql.compiler.binding.ViewBinding> boundViews = new java.util.LinkedHashMap<>();
             if (html != null) {
                 for (String id : html.views()) {
+                    requireExportTargets(routeFile, id);
                     boundViews.put(id, io.tesseraql.compiler.binding.ViewBinding.of(appHome,
                             id, routeFile.definition(), this::postRouteByPath,
-                            this::viewPathById, codecs));
+                            this::viewPathById, codecs, this::routesByPath));
                 }
             }
             applySessionRotation(route, routeFile.definition())
@@ -2034,6 +2038,38 @@ public final class RouteCompiler {
             }
         }
         return null;
+    }
+
+    /** Every route mounted at a path — a GET and a POST may share one. */
+    private java.util.List<RouteFile> routesByPath(String path) {
+        java.util.List<RouteFile> routes = new java.util.ArrayList<>();
+        for (RouteFile candidate : manifest.routes()) {
+            if (candidate.urlPath().equals(path)) {
+                routes.add(candidate);
+            }
+        }
+        return routes;
+    }
+
+    /**
+     * The boot twin of the list-export lint (docs/list-export.md decision 6): every
+     * {@code exports:} entry of a view this route renders names an export route that accepts
+     * the route's question, or the build fails with {@code TQL-VIEW-3331} and the linter's
+     * sentence — before any page renders a control that would answer 400 on its first click.
+     */
+    private void requireExportTargets(RouteFile routeFile, String viewId) {
+        Path file = viewPathById(viewId);
+        if (file == null) {
+            return; // the binding's own refusal names the unresolved id
+        }
+        io.tesseraql.yaml.view.ViewSpec spec = io.tesseraql.yaml.view.ViewSpec.parse(file);
+        io.tesseraql.yaml.view.ViewExports
+                .violations(spec, routeFile.definition(), routeFile.urlPath(),
+                        this::routesByPath)
+                .stream().findFirst().ifPresent(violation -> {
+                    throw new TqlException(io.tesseraql.yaml.view.ViewExports.UNMATCHED_EXPORT,
+                            violation.message());
+                });
     }
 
     /** Builds the common route head: REST endpoint, security, request binding, SQL execution. */

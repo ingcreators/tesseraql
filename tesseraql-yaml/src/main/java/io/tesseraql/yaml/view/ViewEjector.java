@@ -56,9 +56,23 @@ public final class ViewEjector {
     public static ScaffoldedFile eject(Path appHome, Path routeDir, String viewRef,
             ViewSpec spec, List<ViewFields.FieldDef> fields, String targetPath,
             java.util.function.Function<String, String> embedTemplate, String lockColumn) {
+        return eject(appHome, routeDir, viewRef, spec, fields, targetPath, embedTemplate,
+                lockColumn, path -> "GET");
+    }
+
+    /**
+     * The variant that knows the export routes (docs/list-export.md decision 1):
+     * {@code exportMethod} answers the HTTP method of the route an {@code exports:} entry names,
+     * so the ejected control is a link for a {@code query-export} and a posting form for a
+     * {@code file-export}. The shorter overloads assume a link.
+     */
+    public static ScaffoldedFile eject(Path appHome, Path routeDir, String viewRef,
+            ViewSpec spec, List<ViewFields.FieldDef> fields, String targetPath,
+            java.util.function.Function<String, String> embedTemplate, String lockColumn,
+            java.util.function.Function<String, String> exportMethod) {
         java.util.Map<String, String> codes = catalogByColumn(appHome, viewRef, spec);
         String body = switch (spec.view()) {
-            case ViewSpec.LIST -> list(appHome, routeDir, spec, codes);
+            case ViewSpec.LIST -> list(appHome, routeDir, spec, codes, exportMethod);
             case ViewSpec.DETAIL -> detail(appHome, routeDir, spec, codes, embedTemplate);
             case ViewSpec.FORM -> form(appHome, routeDir, spec, fields, lockColumn);
             case ViewSpec.DASHBOARD -> dashboard(appHome, routeDir, spec, codes, embedTemplate);
@@ -104,12 +118,14 @@ public final class ViewEjector {
     }
 
     private static String list(Path appHome, Path routeDir, ViewSpec spec,
-            java.util.Map<String, String> codes) {
+            java.util.Map<String, String> codes,
+            java.util.function.Function<String, String> exportMethod) {
         require(!spec.columns().isEmpty(),
                 "a list view needs explicit columns: before ejecting — the template pins them");
         StringBuilder html = pageOpen(spec);
         html.append("<section class=\"hc-card\">\n");
         titleCluster(html, appHome, routeDir, spec);
+        exportControls(html, spec, exportMethod);
         html.append("  <div class=\"hc-datagrid\">\n"
                 + "    <div class=\"hc-datagrid__scroll\">\n"
                 + "      <table class=\"hc-datagrid__table\">\n"
@@ -135,6 +151,40 @@ public final class ViewEjector {
         slot(html, appHome, routeDir, spec, "footer", "  ");
         html.append("</section>\n");
         return pageClose(html);
+    }
+
+    /**
+     * The export controls pinned (docs/list-export.md decision 3): a link per
+     * {@code query-export}, a one-button form per {@code file-export}. The ejected grid is
+     * static — it carries no search, sort or pagination (the ejector's recorded
+     * simplification) — so these carry no conditions either: the route answers its whole
+     * question. A page that wants the filtered set keeps the declarative view.
+     */
+    private static void exportControls(StringBuilder html, ViewSpec spec,
+            java.util.function.Function<String, String> exportMethod) {
+        if (spec.exports().isEmpty()) {
+            return;
+        }
+        html.append("  <div class=\"hc-cluster\">\n");
+        for (ViewSpec.Export export : spec.exports()) {
+            String label = export.label() != null ? export.label() : "Export";
+            String method = exportMethod.apply(export.action());
+            if ("POST".equalsIgnoreCase(method)) {
+                html.append("    <form method=\"post\" th:action=\"@{")
+                        .append(escape(export.action())).append("}\">\n"
+                                + "      <input type=\"hidden\" name=\"_csrf\""
+                                + " th:if=\"${_csrf != null}\" th:value=\"${_csrf}\">\n"
+                                + "      <button type=\"submit\" class=\"hc-button\""
+                                + " data-variant=\"ghost\" data-size=\"sm\">")
+                        .append(escape(label)).append("</button>\n"
+                                + "    </form>\n");
+            } else {
+                html.append("    <a class=\"hc-button\" data-variant=\"ghost\" data-size=\"sm\""
+                        + " th:href=\"@{").append(escape(export.action())).append("}\">")
+                        .append(escape(label)).append("</a>\n");
+            }
+        }
+        html.append("  </div>\n");
     }
 
     private static String detail(Path appHome, Path routeDir, ViewSpec spec,

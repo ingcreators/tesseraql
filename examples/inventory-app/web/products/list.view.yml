@@ -8,6 +8,9 @@ search: q
 # topic when its transaction commits, and this list refetches itself over the existing event
 # stream — on every open page, not only the tab that pressed the button.
 refreshOn: prices.imported
+# The filtered set as a file (docs/list-export.md): a synchronous CSV download of the search
+# the page shows, beside the reviewed import that feeds this list.
+exports: [/products/export]
 columns:
   - { name: sku, label: SKU, sortable: true }
   - { name: name, sortable: true }

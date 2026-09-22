@@ -559,6 +559,7 @@ Schema for TesseraQL declarative view documents (*.view.yml): what a route rende
 | `filters` | array of any | The grid page's declared filters (docs/declarative-views.md): route inputs rendered as condition chips and a filter dialog. Each entry is an input name, or a name/label mapping. List views only. |
 | `presets` | array of [object](#presets) | Named view presets (docs/declarative-views.md): contract-declared param sets the grid page renders as real links - the active one is marked, re-clicking it resets, and no storage is involved. List views only. |
 | `actions` | array of [object](#actions) | Bulk actions over the grid page's row selection (docs/declarative-views.md): declaring any renders the selection column and bar. Requires key:; list views only. |
+| `exports` | array of any | Exports of the filtered set (docs/declarative-views.md): the grid page renders one control per entry beside the count - a download link for a query-export, a kick-off button for a file-export - carrying the list's current search, filters and sort as the route's query. The route must declare the list's inputs (TQL-VIEW-3331). List views only. |
 
 ### presets
 

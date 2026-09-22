@@ -76,6 +76,24 @@ public final class ViewBinding {
     private final String lockColumn;
 
     /**
+     * The export routes a list's {@code exports:} name (docs/list-export.md decision 1),
+     * resolved at build time: the label as authored (null for the count-naming default), the
+     * route's method, its base-relative path with its {@code {param}} segments still to fill,
+     * and its security — judged per principal at render (decision 7).
+     */
+    record ExportTarget(String label, String method, String path,
+            io.tesseraql.yaml.model.SecuritySpec security) {
+    }
+
+    private final List<ExportTarget> exports;
+
+    /**
+     * The list route's declared inputs a kick-off carries (docs/list-export.md decision 2):
+     * every one but the framework's window and selection fields, in declaration order.
+     */
+    private final List<String> exportInputs;
+
+    /**
      * What an import view renders around its report: the address it uploads to, the file types
      * that address accepts, and the columns it expects.
      *
@@ -93,9 +111,11 @@ public final class ViewBinding {
             Map<String, io.tesseraql.yaml.model.ResponseSpec.FieldPolicy> readPolicies,
             Map<String, String> catalogByColumn, List<ViewFields.FieldDef> filterFields,
             io.tesseraql.yaml.model.PageSpec pagination, ImportTarget importTarget,
-            String lockColumn) {
+            String lockColumn, List<ExportTarget> exports, List<String> exportInputs) {
         this.importTarget = importTarget;
         this.lockColumn = lockColumn;
+        this.exports = exports;
+        this.exportInputs = exportInputs;
         this.spec = spec;
         this.entryTemplate = entryTemplate;
         this.fields = fields;
@@ -152,7 +172,24 @@ public final class ViewBinding {
     public static ViewBinding of(Path appHome, String viewRef, RouteDefinition route,
             Function<String, RouteDefinition> postRouteByPath, Function<String, Path> viewById,
             io.tesseraql.core.files.FileCodecs codecs) {
-        return bind(appHome, viewRef, route, postRouteByPath, viewById, codecs, true);
+        return of(appHome, viewRef, route, postRouteByPath, viewById, codecs, path -> List.of());
+    }
+
+    /**
+     * {@link #of} with the routes a list's {@code exports:} may name (docs/list-export.md
+     * decision 1): {@code routesByPath} answers every route mounted at a path — a GET and a
+     * POST may share one — and the binding keeps the export shape found there. An entry no
+     * export route answers is refused here with the lint's code; the compiler judges the
+     * whole declaration first ({@code ViewExports}), so this refusal is the lint's twin, not
+     * a second rule. The shorter overload knows no routes, so a view declaring
+     * {@code exports:} cannot bind through it.
+     */
+    public static ViewBinding of(Path appHome, String viewRef, RouteDefinition route,
+            Function<String, RouteDefinition> postRouteByPath, Function<String, Path> viewById,
+            io.tesseraql.core.files.FileCodecs codecs,
+            Function<String, List<io.tesseraql.yaml.manifest.RouteFile>> routesByPath) {
+        return bind(appHome, viewRef, route, postRouteByPath, viewById, codecs, routesByPath,
+                true);
     }
 
     /**
@@ -163,7 +200,9 @@ public final class ViewBinding {
      */
     private static ViewBinding bind(Path appHome, String viewRef, RouteDefinition route,
             Function<String, RouteDefinition> postRouteByPath, Function<String, Path> viewById,
-            io.tesseraql.core.files.FileCodecs codecs, boolean judgeSources) {
+            io.tesseraql.core.files.FileCodecs codecs,
+            Function<String, List<io.tesseraql.yaml.manifest.RouteFile>> routesByPath,
+            boolean judgeSources) {
         Path home = appHome.toAbsolutePath().normalize();
         Path file = viewById.apply(viewRef);
         if (file == null) {
@@ -189,9 +228,9 @@ public final class ViewBinding {
                 ? formFields(viewRef, spec, postRouteByPath)
                 : List.of();
         Map<Integer, Embed> childEmbeds = childEmbeds(home, viewRef, spec, route,
-                postRouteByPath, viewById, codecs);
+                postRouteByPath, viewById, codecs, routesByPath);
         Map<Integer, Embed> panelEmbeds = panelEmbeds(home, viewRef, spec, route,
-                postRouteByPath, viewById, codecs);
+                postRouteByPath, viewById, codecs, routesByPath);
         ReadSide readSide = readSide(home, viewRef, spec, childEmbeds, panelEmbeds);
         String entry = spec.template() != null
                 ? TemplateResolution.resolve(home, viewDir, spec.template())
@@ -213,6 +252,13 @@ public final class ViewBinding {
                     + " column '" + lock + "' carries a read policy — a masked or hidden lock"
                     + " cannot be sent back unchanged, so the form could never be saved");
         }
+        // The list route's inputs a kick-off carries (docs/list-export.md decision 2): the
+        // question is what the route bound, not what the chrome shows.
+        List<String> exportInputs = route == null || route.input() == null
+                ? List.of()
+                : route.input().keySet().stream()
+                        .filter(name -> !io.tesseraql.yaml.view.ViewExports.WINDOW.contains(name))
+                        .toList();
         return new ViewBinding(spec, entry, fields, resolveSlots(home, viewDir, spec), home,
                 Map.copyOf(childEmbeds), Map.copyOf(panelEmbeds), readSide.policies(),
                 readSide.catalogs(), filterFields,
@@ -220,7 +266,33 @@ public final class ViewBinding {
                 ViewSpec.IMPORT.equals(spec.view())
                         ? importTarget(viewRef, spec, postRouteByPath, codecs)
                         : null,
-                lock);
+                lock, exportTargets(viewRef, spec, routesByPath), exportInputs);
+    }
+
+    /**
+     * The export routes a list's {@code exports:} name, resolved through {@code routesByPath}
+     * (docs/list-export.md decision 1). An entry no export route answers is the lint's
+     * refusal, raised with its code; the compiler's twin judged the full declaration already.
+     */
+    private static List<ExportTarget> exportTargets(String viewRef, ViewSpec spec,
+            Function<String, List<io.tesseraql.yaml.manifest.RouteFile>> routesByPath) {
+        if (spec.exports().isEmpty()) {
+            return List.of();
+        }
+        List<ExportTarget> targets = new ArrayList<>();
+        for (ViewSpec.Export export : spec.exports()) {
+            io.tesseraql.yaml.manifest.RouteFile route = io.tesseraql.yaml.view.ViewExports
+                    .target(export.action(), routesByPath)
+                    .orElseThrow(() -> new TqlException(
+                            io.tesseraql.yaml.view.ViewExports.UNMATCHED_EXPORT,
+                            "view " + viewRef + ": export " + export.action()
+                                    + " targets no query-export GET route or file-export POST"
+                                    + " route"));
+            targets.add(new ExportTarget(export.label(),
+                    route.httpMethod().toUpperCase(Locale.ROOT), route.urlPath(),
+                    route.definition().security()));
+        }
+        return List.copyOf(targets);
     }
 
     /**
@@ -302,13 +374,14 @@ public final class ViewBinding {
      */
     private static Map<Integer, Embed> childEmbeds(Path home, String viewRef, ViewSpec spec,
             RouteDefinition route, Function<String, RouteDefinition> postRouteByPath,
-            Function<String, Path> viewById, io.tesseraql.core.files.FileCodecs codecs) {
+            Function<String, Path> viewById, io.tesseraql.core.files.FileCodecs codecs,
+            Function<String, List<io.tesseraql.yaml.manifest.RouteFile>> routesByPath) {
         Map<Integer, Embed> childEmbeds = new LinkedHashMap<>();
         for (int index = 0; index < spec.children().size(); index++) {
             ViewSpec.Child child = spec.children().get(index);
             if (child.view() != null) {
                 childEmbeds.put(index, embed(home, viewRef, child.view(), child.source(),
-                        route, postRouteByPath, viewById, codecs));
+                        route, postRouteByPath, viewById, codecs, routesByPath));
             }
         }
         return childEmbeds;
@@ -317,13 +390,14 @@ public final class ViewBinding {
     /** The same for a dashboard's {@code panels:}: the embedding ones. */
     private static Map<Integer, Embed> panelEmbeds(Path home, String viewRef, ViewSpec spec,
             RouteDefinition route, Function<String, RouteDefinition> postRouteByPath,
-            Function<String, Path> viewById, io.tesseraql.core.files.FileCodecs codecs) {
+            Function<String, Path> viewById, io.tesseraql.core.files.FileCodecs codecs,
+            Function<String, List<io.tesseraql.yaml.manifest.RouteFile>> routesByPath) {
         Map<Integer, Embed> panelEmbeds = new LinkedHashMap<>();
         for (int index = 0; index < spec.panels().size(); index++) {
             ViewSpec.Panel panel = spec.panels().get(index);
             if (panel.view() != null) {
                 panelEmbeds.put(index, embed(home, viewRef, panel.view(), panel.source(),
-                        route, postRouteByPath, viewById, codecs));
+                        route, postRouteByPath, viewById, codecs, routesByPath));
             }
         }
         return panelEmbeds;
@@ -403,7 +477,8 @@ public final class ViewBinding {
     private static Embed embed(Path home, String hostRef, String embeddedId,
             String sourceOverride, RouteDefinition route,
             Function<String, RouteDefinition> postRouteByPath, Function<String, Path> viewById,
-            io.tesseraql.core.files.FileCodecs codecs) {
+            io.tesseraql.core.files.FileCodecs codecs,
+            Function<String, List<io.tesseraql.yaml.manifest.RouteFile>> routesByPath) {
         Path file = viewById.apply(embeddedId);
         if (file == null) {
             throw new TqlException(UNRESOLVED_VIEW, "View " + hostRef + ": embedded view "
@@ -418,8 +493,8 @@ public final class ViewBinding {
         }
         // The host judged this document's sources with its own (the override in the
         // document's stead), so the embedded binding is built, not judged again.
-        return new Embed(bind(home, embeddedId, route, postRouteByPath, viewById, codecs, false),
-                sourceOverride);
+        return new Embed(bind(home, embeddedId, route, postRouteByPath, viewById, codecs,
+                routesByPath, false), sourceOverride);
     }
 
     /**
@@ -551,7 +626,7 @@ public final class ViewBinding {
         } else if (ViewSpec.DASHBOARD.equals(spec.view())) {
             dashboardModel(v, catalog, locale, context, pagePath, permits);
         } else {
-            listModel(v, catalog, locale, context, data, pagePath);
+            listModel(v, catalog, locale, context, data, pagePath, permits);
         }
         return v;
     }
@@ -934,10 +1009,15 @@ public final class ViewBinding {
 
     /** A list's model: the pager, the sort/search state, and the column/cell matrix. */
     private void listModel(Map<String, Object> v, MessageCatalog catalog, Locale locale,
-            Map<String, Object> context, Map<String, Object> data, String pagePath) {
+            Map<String, Object> context, Map<String, Object> data, String pagePath,
+            java.util.function.Predicate<String> permits) {
         List<Map<String, Object>> rows = rows(data);
         List<ViewSpec.Column> columns = columnsOf(spec.columns(), rows);
         Map<String, Object> params = params(context);
+        // The export routes this principal may use (docs/list-export.md decision 7), judged
+        // first: the two result-cap surfaces name the export as their escape hatch only when
+        // one will actually render.
+        List<ExportTarget> visibleExports = visibleExports(context, permits);
         v.put("path", pagePath);
         live(v, pagePath, spec.id() + "-table", true);
         List<String> snapshotTokens = null;
@@ -986,8 +1066,13 @@ public final class ViewBinding {
                     Map<String, Object> overCap = new LinkedHashMap<>();
                     overCap.put("title", message(catalog, locale, "tql.view.overCap",
                             "More than {cap} rows match.").replace("{cap}", cap));
-                    overCap.put("body", message(catalog, locale, "tql.view.overCapBody",
-                            "Narrow the search to at most {cap} rows, then work the list.")
+                    overCap.put("body", (visibleExports.isEmpty()
+                            ? message(catalog, locale, "tql.view.overCapBody",
+                                    "Narrow the search to at most {cap} rows, then work the"
+                                            + " list.")
+                            : message(catalog, locale, "tql.view.overCapBodyExport",
+                                    "Narrow the search to at most {cap} rows, then work the"
+                                            + " list — or export the full set."))
                             .replace("{cap}", cap));
                     v.put("overCap", overCap);
                     v.put("snapshotKeys", List.of());
@@ -1010,8 +1095,8 @@ public final class ViewBinding {
                 // A warn-mode maxRows truncation (docs/hc-recipe-alignment.md, result-cap
                 // mode A): the shown rows ARE the cap, so the banner names their count and
                 // the declared sort, and the status line hedges the total as "cap+".
-                v.put("truncated",
-                        truncatedBanner(catalog, locale, params, columns, rows.size()));
+                v.put("truncated", truncatedBanner(catalog, locale, params, columns,
+                        rows.size(), !visibleExports.isEmpty()));
             }
         }
         if (page != null && page.get("next") == null && page.get("totalRows") != null) {
@@ -1049,6 +1134,7 @@ public final class ViewBinding {
         }
         filterModel(v, catalog, locale, context, params, pagePath);
         presetModel(v, catalog, locale, params, pagePath);
+        exportModel(v, catalog, locale, params, page, visibleExports);
         List<Map<String, Object>> rendered = renderedColumns(catalog, locale, columns);
         // The header contract every sortable grid shares, studio tables included.
         io.tesseraql.yaml.view.SortState state = io.tesseraql.yaml.view.SortState.of(sort, dir,
@@ -1398,7 +1484,8 @@ public final class ViewBinding {
      * The count line hedges the total as "N+"; the exact total is the query the cap avoided.
      */
     private static Map<String, Object> truncatedBanner(MessageCatalog catalog, Locale locale,
-            Map<String, Object> params, List<ViewSpec.Column> columns, int shown) {
+            Map<String, Object> params, List<ViewSpec.Column> columns, int shown,
+            boolean exportable) {
         String max = String.valueOf(shown);
         String sortLabel = null;
         String sort = str(params.get("sort"));
@@ -1410,14 +1497,27 @@ public final class ViewBinding {
         Map<String, Object> banner = new LinkedHashMap<>();
         banner.put("title", message(catalog, locale, "tql.view.truncated",
                 "Showing the first {max} rows.").replace("{max}", max));
-        String body = sortLabel == null
-                ? message(catalog, locale, "tql.view.truncatedBody",
-                        "More than {max} rows match. Narrow the search or filters to see"
-                                + " the rest.")
-                : message(catalog, locale, "tql.view.truncatedSorted",
-                        "More than {max} rows match, sorted by {sort}. Narrow the search or"
-                                + " filters to see the rest.")
-                        .replace("{sort}", sortLabel);
+        // With an export declared the banner names it as the way to the full set — the
+        // result-cap contract's own escape hatch (docs/list-export.md decision 8).
+        String body;
+        if (sortLabel == null) {
+            body = exportable
+                    ? message(catalog, locale, "tql.view.truncatedBodyExport",
+                            "More than {max} rows match. Narrow the search or filters to see"
+                                    + " the rest, or export the full set.")
+                    : message(catalog, locale, "tql.view.truncatedBody",
+                            "More than {max} rows match. Narrow the search or filters to see"
+                                    + " the rest.");
+        } else {
+            body = (exportable
+                    ? message(catalog, locale, "tql.view.truncatedSortedExport",
+                            "More than {max} rows match, sorted by {sort}. Narrow the search"
+                                    + " or filters to see the rest, or export the full set.")
+                    : message(catalog, locale, "tql.view.truncatedSorted",
+                            "More than {max} rows match, sorted by {sort}. Narrow the search or"
+                                    + " filters to see the rest."))
+                    .replace("{sort}", sortLabel);
+        }
         banner.put("body", body.replace("{max}", max));
         banner.put("count", message(catalog, locale, "tql.view.truncatedCount",
                 "{max}+ results").replace("{max}", max));
@@ -1501,6 +1601,112 @@ public final class ViewBinding {
             }
         }
         return value;
+    }
+
+    /**
+     * The export routes this principal may use (docs/list-export.md decision 7): a route whose
+     * policy the engine refuses is not rendered, nor one that wants a principal the request has
+     * none of; a public route always is. A courtesy of the page — the route re-authorizes the
+     * click — so a control never answers 403 the way the bulk actions' can.
+     */
+    private List<ExportTarget> visibleExports(Map<String, Object> context,
+            java.util.function.Predicate<String> permits) {
+        if (exports.isEmpty()) {
+            return List.of();
+        }
+        List<ExportTarget> visible = new ArrayList<>();
+        for (ExportTarget target : exports) {
+            io.tesseraql.yaml.model.SecuritySpec security = target.security();
+            String policy = security == null ? null : security.policy();
+            if (policy != null && !policy.isBlank() && !permits.test(policy)) {
+                continue;
+            }
+            String auth = security == null ? null : security.auth();
+            if (auth != null && !auth.isBlank() && !"public".equals(auth)
+                    && context.get("principal") == null) {
+                continue;
+            }
+            visible.add(target);
+        }
+        return visible;
+    }
+
+    /**
+     * The export controls (docs/list-export.md decisions 2 and 3): one entry per visible
+     * route, its URL the route's path plus the list's question, its label the count the list
+     * can vouch for — exact on a counted page or a snapshot, "all matching" under a mode A
+     * truncation, bare where the list has no total. An authored label renders through the
+     * catalog like an action's.
+     */
+    private void exportModel(Map<String, Object> v, MessageCatalog catalog, Locale locale,
+            Map<String, Object> params, Map<String, Object> page, List<ExportTarget> visible) {
+        if (visible.isEmpty()) {
+            return;
+        }
+        Object total = page == null ? null : page.get("totalRows");
+        String defaultLabel;
+        if (v.get("truncated") != null) {
+            defaultLabel = message(catalog, locale, "tql.view.exportAll",
+                    "Export all matching rows");
+        } else if (total != null) {
+            defaultLabel = message(catalog, locale, "tql.view.exportRows", "Export {count} rows")
+                    .replace("{count}", String.valueOf(total));
+        } else {
+            defaultLabel = message(catalog, locale, "tql.view.export", "Export");
+        }
+        List<Map<String, Object>> entries = new ArrayList<>();
+        boolean form = false;
+        for (ExportTarget target : visible) {
+            Map<String, Object> e = new LinkedHashMap<>();
+            e.put("label", target.label() == null
+                    ? defaultLabel
+                    : message(catalog, locale, target.label(), target.label()));
+            e.put("method", target.method());
+            e.put("href", exportHref(target.path(), params));
+            form |= "POST".equals(target.method());
+            entries.add(e);
+        }
+        v.put("exports", entries);
+        if (form) {
+            v.put("exportForm", true);
+        }
+    }
+
+    /**
+     * The route's path with the list's path parameters filled, plus the question as its query
+     * (docs/list-export.md decision 2): every declared input the request bound, the window and
+     * the membership excepted, a repeated field per element of an array input. Base-relative;
+     * the template's link expression prefixes the base path.
+     */
+    private String exportHref(String path, Map<String, Object> params) {
+        java.util.Set<String> consumed = new java.util.HashSet<>();
+        String resolved = path;
+        for (String parameter : io.tesseraql.yaml.view.ViewExports.pathParams(path)) {
+            resolved = resolved.replace("{" + parameter + "}",
+                    io.tesseraql.pipeline.BasePath.encodeSegment(str(params.get(parameter))));
+            consumed.add(parameter);
+        }
+        StringBuilder query = new StringBuilder();
+        for (String name : exportInputs) {
+            if (consumed.contains(name)) {
+                continue;
+            }
+            Object raw = params.get(name);
+            if (raw instanceof List<?> values) {
+                for (Object value : values) {
+                    String text = str(value);
+                    if (!text.isEmpty()) {
+                        query.append('&').append(name).append('=').append(encode(text));
+                    }
+                }
+                continue;
+            }
+            String value = str(raw);
+            if (!value.isEmpty()) {
+                query.append('&').append(name).append('=').append(encode(value));
+            }
+        }
+        return href(resolved, query.toString());
     }
 
     /** The non-filter state: sort/dir, size, and the search term. */

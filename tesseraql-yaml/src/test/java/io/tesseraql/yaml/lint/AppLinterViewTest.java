@@ -140,6 +140,248 @@ class AppLinterViewTest {
         assertThat(viewCodes(new AppLinter().lint(dir))).contains("TQL-VIEW-3325");
     }
 
+    /**
+     * The export lint's fixture (docs/list-export.md decision 6): a list route with a question
+     * — a search, a filter, a sort — and an export route at the path the view names.
+     */
+    private static void writeExportApp(Path dir, String viewYaml, String exportDir,
+            String exportFile, String exportYaml) throws Exception {
+        Files.createDirectories(dir.resolve("web/items"));
+        Files.writeString(dir.resolve("web/items/list.sql"),
+                "select id, name, status from items /*# order by {sort} */\n");
+        Files.writeString(dir.resolve("web/items/get.yml"), """
+                version: tesseraql/v1
+                id: items.page
+                kind: route
+                recipe: query-html
+                input:
+                  q: { type: string, required: false, maxLength: 100 }
+                  status: { type: string, required: false, enum: [OPEN, CLOSED] }
+                  sort:
+                    type: sort
+                    columns: [name, status]
+                    default: name
+                sources:
+                  main:
+                    sql:
+                      file: list.sql
+                      params:
+                        q: query.q
+                        status: query.status
+                        sort: params.sortSql
+                response:
+                  html:
+                    view: items
+                """);
+        Files.writeString(dir.resolve("web/items/items.view.yml"), viewYaml);
+        Files.createDirectories(dir.resolve(exportDir));
+        Files.writeString(dir.resolve(exportDir).resolve(exportFile), exportYaml);
+    }
+
+    /** The export route that accepts the list's question: its inputs, its statement. */
+    private static final String MATCHING_EXPORT = """
+            version: tesseraql/v1
+            id: items.export
+            kind: route
+            recipe: %s
+            input:
+              q: { type: string, required: false, maxLength: 100 }
+              status: { type: string, required: false, enum: [OPEN, CLOSED] }
+              sort:
+                type: sort
+                columns: [name, status]
+                default: name
+            export:
+              format: csv
+              filename: items.csv
+            sources:
+              main:
+                sql:
+                  file: ../list.sql
+                  params:
+                    q: query.q
+                    status: query.status
+                    sort: params.sortSql
+            """;
+
+    private static final String EXPORTING_VIEW = """
+            version: tesseraql/v1
+            kind: view
+            recipe: list
+            search: q
+            filters: [status]
+            exports: [/items/export]
+            """;
+
+    private static List<String> exportFindings(List<LintFinding> findings) {
+        return findings.stream().filter(f -> "TQL-VIEW-3331".equals(f.code()))
+                .map(LintFinding::message).toList();
+    }
+
+    @Test
+    void anExportTargetingAQueryExportGetOrAFileExportPostLintsClean(@TempDir Path dir)
+            throws Exception {
+        writeExportApp(dir, EXPORTING_VIEW, "web/items/export", "get.yml",
+                MATCHING_EXPORT.formatted("query-export"));
+        assertThat(viewCodes(new AppLinter().lint(dir))).isEmpty();
+        writeExportApp(dir.resolve("async"), EXPORTING_VIEW, "web/items/export", "post.yml",
+                MATCHING_EXPORT.formatted("file-export"));
+        assertThat(viewCodes(new AppLinter().lint(dir.resolve("async")))).isEmpty();
+    }
+
+    @Test
+    void anExportMustTargetAnExportRoute(@TempDir Path dir) throws Exception {
+        // A path nothing answers, and a path a command route answers: neither is an export.
+        writeExportApp(dir, """
+                version: tesseraql/v1
+                kind: view
+                recipe: list
+                exports: [/items/ghost, /items/create]
+                """, "web/items/create", "post.yml", """
+                version: tesseraql/v1
+                id: items.create
+                kind: route
+                recipe: command-json
+                input:
+                  name: { type: string, required: true }
+                steps:
+                  - id: main
+                    sql:
+                      file: insert.sql
+                      mode: update
+                      params:
+                        name: params.name
+                """);
+        Files.writeString(dir.resolve("web/items/create/insert.sql"),
+                "insert into items (name) values (/* name */ 'x')\n");
+        List<String> findings = exportFindings(new AppLinter().lint(dir));
+        assertThat(findings).hasSize(2);
+        assertThat(findings.get(0)).contains("export /items/ghost")
+                .contains("targets no query-export GET route or file-export POST route");
+        assertThat(findings.get(1)).contains("export /items/create")
+                .contains("mounted there: POST command-json");
+    }
+
+    @Test
+    void anExportRouteMustDeclareTheListsInputsWithTheirTypes(@TempDir Path dir)
+            throws Exception {
+        // status missing, q typed integer: each is a condition the kick-off would lose.
+        writeExportApp(dir, EXPORTING_VIEW, "web/items/export", "get.yml", """
+                version: tesseraql/v1
+                id: items.export
+                kind: route
+                recipe: query-export
+                input:
+                  q: { type: integer, required: false }
+                  sort:
+                    type: sort
+                    columns: [name, status]
+                    default: name
+                export:
+                  format: csv
+                sources:
+                  main:
+                    sql:
+                      file: ../list.sql
+                """);
+        List<String> findings = exportFindings(new AppLinter().lint(dir));
+        assertThat(findings).hasSize(2);
+        assertThat(findings).anySatisfy(message -> assertThat(message)
+                .contains("does not declare the list's input 'status'"));
+        assertThat(findings).anySatisfy(message -> assertThat(message)
+                .contains("declares 'q' as integer where the list declares string"));
+    }
+
+    @Test
+    void anExportRoutesSortAllowlistMustAdmitTheListsColumns(@TempDir Path dir)
+            throws Exception {
+        writeExportApp(dir, EXPORTING_VIEW, "web/items/export", "get.yml", """
+                version: tesseraql/v1
+                id: items.export
+                kind: route
+                recipe: query-export
+                input:
+                  q: { type: string, required: false, maxLength: 100 }
+                  status: { type: string, required: false, enum: [OPEN, CLOSED] }
+                  sort:
+                    type: sort
+                    columns: [name]
+                    default: name
+                export:
+                  format: csv
+                sources:
+                  main:
+                    sql:
+                      file: ../list.sql
+                """);
+        assertThat(exportFindings(new AppLinter().lint(dir))).singleElement().asString()
+                .contains("sort allowlist lacks 'status', which the list's sort admits");
+    }
+
+    @Test
+    void anExportRouteMayNotRequireWhatTheKickoffNeverSends(@TempDir Path dir)
+            throws Exception {
+        writeExportApp(dir, EXPORTING_VIEW, "web/items/export", "get.yml", """
+                version: tesseraql/v1
+                id: items.export
+                kind: route
+                recipe: query-export
+                input:
+                  q: { type: string, required: false, maxLength: 100 }
+                  status: { type: string, required: false, enum: [OPEN, CLOSED] }
+                  sort:
+                    type: sort
+                    columns: [name, status]
+                    default: name
+                  region: { type: string, required: true }
+                export:
+                  format: csv
+                sources:
+                  main:
+                    sql:
+                      file: ../list.sql
+                """);
+        assertThat(exportFindings(new AppLinter().lint(dir))).singleElement().asString()
+                .contains("requires 'region', which the kick-off never sends");
+    }
+
+    @Test
+    void anExportRouteMayNotDeclareAPathParameterTheListLacks(@TempDir Path dir)
+            throws Exception {
+        writeExportApp(dir, """
+                version: tesseraql/v1
+                kind: view
+                recipe: list
+                search: q
+                filters: [status]
+                exports: ["/items/{region}/export"]
+                """, "web/items/{region}/export", "get.yml", """
+                version: tesseraql/v1
+                id: items.export
+                kind: route
+                recipe: query-export
+                input:
+                  q: { type: string, required: false, maxLength: 100 }
+                  status: { type: string, required: false, enum: [OPEN, CLOSED] }
+                  sort:
+                    type: sort
+                    columns: [name, status]
+                    default: name
+                  region: { type: string, required: false }
+                export:
+                  format: csv
+                sources:
+                  main:
+                    sql:
+                      file: ../../list.sql
+                """);
+        List<LintFinding> findings = new AppLinter().lint(dir);
+        assertThat(exportFindings(findings)).as(String.valueOf(findings)).singleElement()
+                .asString()
+                .contains("declares path parameter {region}, which the list route's path does"
+                        + " not");
+    }
+
     @Test
     void aBulkActionTargetingARealPostRouteLintsClean(@TempDir Path dir) throws Exception {
         writeApp(dir, """

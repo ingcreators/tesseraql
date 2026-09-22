@@ -52,6 +52,32 @@ class ViewEjectorTest {
     }
 
     @Test
+    void anEjectedListPinsItsExportControls(@TempDir Path dir) throws Exception {
+        // docs/list-export.md decision 3: a link for a query-export, a one-button form for a
+        // file-export, neither carrying conditions — the ejected grid is static.
+        ViewSpec spec = parse(dir, """
+                version: tesseraql/v1
+                kind: view
+                recipe: list
+                title: Items
+                columns:
+                  - name: name
+                exports:
+                  - /items/export
+                  - { action: /items/export-async, label: Excel }
+                """);
+        ScaffoldedFile file = ViewEjector.eject(dir, dir, "page.view.yml", spec, List.of(),
+                "web/items/page.html", id -> null, null,
+                path -> path.endsWith("-async") ? "POST" : "GET");
+        assertThat(file.content())
+                .contains("<a class=\"hc-button\" data-variant=\"ghost\" data-size=\"sm\""
+                        + " th:href=\"@{/items/export}\">Export</a>")
+                .contains("<form method=\"post\" th:action=\"@{/items/export-async}\">")
+                .contains("name=\"_csrf\"")
+                .contains(">Excel</button>");
+    }
+
+    @Test
     void ejectsJapaneseColumnsAndLinkPlaceholders(@TempDir Path dir) throws Exception {
         // An ASCII-only placeholder pattern left {受注番号} as literal braces in the
         // ejected href (docs/unicode-identifiers.md).

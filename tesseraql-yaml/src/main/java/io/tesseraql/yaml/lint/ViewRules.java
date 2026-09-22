@@ -114,6 +114,7 @@ final class ViewRules implements LintRule {
                 // (RouteCompiler binds it with the same route) — the same judgement, then.
                 lintViewSources(manifest, route.definition(), part.spec(), routeSource,
                         findings);
+                lintViewExports(manifest, route, part.spec(), routeSource, findings);
             }
             if (html.view() == null) {
                 continue;
@@ -174,6 +175,7 @@ final class ViewRules implements LintRule {
                                         + ", which matches no POST route"));
                     }
                 }
+                lintViewExports(manifest, route, spec, source, findings);
                 for (io.tesseraql.yaml.view.ViewSpec.Preset preset : spec.presets()) {
                     for (String param : preset.params().keySet()) {
                         boolean framework = java.util.Set.of("sort", "dir", "size")
@@ -360,6 +362,26 @@ final class ViewRules implements LintRule {
             findings.add(new LintFinding(
                     io.tesseraql.yaml.view.ViewSources.UNDECLARED.toString(), ERROR, source,
                     undeclared.message()));
+        }
+    }
+
+    /**
+     * A list view's {@code exports:} each name an export route that accepts the list's
+     * question (TQL-VIEW-3331). The judgement is {@link io.tesseraql.yaml.view.ViewExports}',
+     * the one the compiler refuses with, so the lint cannot pass a view the boot refuses.
+     */
+    private static void lintViewExports(AppManifest manifest, RouteFile route,
+            io.tesseraql.yaml.view.ViewSpec spec, String source, List<LintFinding> findings) {
+        if (spec.exports().isEmpty()) {
+            return;
+        }
+        for (io.tesseraql.yaml.view.ViewExports.Violation violation : io.tesseraql.yaml.view.ViewExports
+                .violations(spec, route.definition(), route.urlPath(), path -> manifest.routes()
+                        .stream().filter(candidate -> candidate.urlPath().equals(path))
+                        .toList())) {
+            findings.add(new LintFinding(
+                    io.tesseraql.yaml.view.ViewExports.UNMATCHED_EXPORT.toString(), ERROR, source,
+                    violation.message()));
         }
     }
 

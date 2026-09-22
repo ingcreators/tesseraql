@@ -204,6 +204,35 @@ tokens pass through as tokens for now. The no-JS submit answers post/redirect/ge
 match a POST route (`TQL-VIEW-3325`); tokens prove nothing — the route's own security and
 SQL decide what the ids may touch.
 
+### Exporting the filtered set: `exports:`
+
+A list names the routes that answer its question as a file:
+
+```yaml
+exports:
+  - /tickets/export                          # a query-export GET or a file-export POST route
+  - { action: /tickets/export.xlsx, label: Excel }
+```
+
+The grid page renders one control per entry in the navigation strip, beside the count: a
+download link for a `query-export`, a button that starts the transfer for a `file-export`.
+Each carries the list's current question as the route's query string — the search term, every
+applied filter and the sort — and never the page or a snapshot's membership. The default label
+names the count the list can vouch for: "Export 56 rows" on a counted page, "Export all
+matching rows" under a truncation banner, "Export" where the list has no total. An authored
+`label:` renders through the catalog. The truncation banner and the over-cap reject block offer
+the same control, because the export is the way to the full set.
+
+The export route declares the list route's inputs. The recommended shape is the same `input:`
+block and the same SQL file: the framework appends the page window at execution, so the
+statement is otherwise the whole answer. The build refuses a route that would answer a
+different question (`TQL-VIEW-3331`) — a missing or differently typed list input, a `type:
+sort` allowlist narrower than the list's, a required input the kick-off never sends, a path
+parameter the list route lacks. A control renders only for a principal the export route admits,
+and the route re-authorizes the click. A `file-export` button posts as a plain form, and its
+answer for a browser is the transfer's own page with the job card
+([file transfers](file-transfers.md)).
+
 ### Work queues: `pagination: { strategy: snapshot }`
 
 A work queue wants the opposite of a live re-query: acting on page 1 must not slide rows

@@ -1,0 +1,26 @@
+version: tesseraql/v1
+id: products.export
+kind: route
+recipe: query-export
+
+# The products list's question as a CSV download (docs/list-export.md): the list view names
+# this route under exports:, and the grid page's link carries the search it shows. The inputs
+# are the list route's, verbatim, and the statement is the same file.
+input:
+  q: { type: string, required: false, maxLength: 100 }
+  sort: { type: string, required: false }
+  dir: { type: string, required: false, enum: [asc, desc] }
+
+security:
+  policy: inv.read
+
+export:
+  format: csv
+  filename: products.csv
+
+sources:
+  main:
+    sql:
+      file: ../products.sql
+      params:
+        q: query.q

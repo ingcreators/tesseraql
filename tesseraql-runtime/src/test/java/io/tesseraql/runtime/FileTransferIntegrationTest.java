@@ -148,6 +148,38 @@ class FileTransferIntegrationTest {
         assertThat(file.body()).contains("order_no").contains("o-1").contains("o-2");
     }
 
+    /**
+     * docs/list-export.md decision 4: a browser's plain form post — HTML wanted, no htmx —
+     * lands on the transfer's own page instead of a JSON document; a caller that names the JSON
+     * contract, or nothing, keeps the 202 this recipe has always answered.
+     */
+    @Test
+    void aBrowserFormPostToAFileExportLandsOnTheTransferPage() throws Exception {
+        // No seed: the extract-timed route beside this test counts its own rows, and an export
+        // of nothing still completes — the answer's shape is what is measured here.
+        HttpResponse<String> browser = HTTP.send(HttpRequest.newBuilder(
+                URI.create("http://localhost:" + runtime.port() + "/api/orders/export"))
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .header("Accept", "text/html,application/xhtml+xml,*/*;q=0.8")
+                .POST(HttpRequest.BodyPublishers.ofString(""))
+                .build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(browser.statusCode()).isEqualTo(303);
+        String location = browser.headers().firstValue("location").orElse("");
+        assertThat(location).startsWith("/api/orders/export/");
+        JsonNode status = awaitTerminal(location);
+        assertThat(status.get("status").asText()).isEqualTo("COMPLETED");
+
+        HttpResponse<String> json = HTTP.send(HttpRequest.newBuilder(
+                URI.create("http://localhost:" + runtime.port() + "/api/orders/export"))
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .header("Accept", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(""))
+                .build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(json.statusCode()).isEqualTo(202);
+        assertThat(MAPPER.readTree(json.body()).get("statusUrl").asText())
+                .startsWith("/api/orders/export/");
+    }
+
     @Test
     void aSplitExportDeliversTheBundleItIs() throws Exception {
         String transferId = startTransfer("/api/orders/export-split", "");

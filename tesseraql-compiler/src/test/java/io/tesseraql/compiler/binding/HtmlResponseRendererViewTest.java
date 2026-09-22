@@ -1011,6 +1011,195 @@ class HtmlResponseRendererViewTest {
                 .isInstanceOf(TqlException.class).hasMessageContaining("matches no POST route");
     }
 
+    // The export controls (docs/list-export.md decisions 1-3, 7, 8).
+
+    /**
+     * The question's inputs in declaration order — a YAML mapping loads as an ordered map, and
+     * the controls' query follows that order, so the fixture must keep it too.
+     */
+    private static Map<String, Object> questionInputs() {
+        Map<String, Object> inputs = new java.util.LinkedHashMap<>();
+        inputs.put("q", Map.of("type", "string"));
+        inputs.put("status", Map.of("type", "string", "enum", List.of("OPEN", "CLOSED")));
+        inputs.put("sort", Map.of("type", "string"));
+        inputs.put("dir", Map.of("type", "string", "enum", List.of("asc", "desc")));
+        return inputs;
+    }
+
+    /** The list route whose question the controls carry: a search, a filter, a sort. */
+    private static RouteDefinition listRoute(Map<String, Object> pagination) {
+        Map<String, Object> definition = new java.util.LinkedHashMap<>();
+        definition.put("id", "items.page");
+        definition.put("kind", "route");
+        definition.put("recipe", "query-html");
+        definition.put("input", questionInputs());
+        if (pagination != null) {
+            definition.put("pagination", pagination);
+        }
+        return MAPPER.convertValue(definition, RouteDefinition.class);
+    }
+
+    /** An export route at {@code path} declaring the list's inputs, with the given security. */
+    private static io.tesseraql.yaml.manifest.RouteFile exportRoute(Path dir, String method,
+            String path, String recipe, Map<String, Object> security) {
+        Map<String, Object> definition = new java.util.LinkedHashMap<>();
+        definition.put("id", "items.export");
+        definition.put("kind", "route");
+        definition.put("recipe", recipe);
+        definition.put("input", questionInputs());
+        definition.put("export", Map.of("format", "csv"));
+        if (security != null) {
+            definition.put("security", security);
+        }
+        return new io.tesseraql.yaml.manifest.RouteFile(method, path,
+                dir.resolve("export.yml"), MAPPER.convertValue(definition, RouteDefinition.class));
+    }
+
+    private static HtmlResponseRenderer exportRenderer(Path dir, String viewYaml,
+            RouteDefinition route, List<io.tesseraql.yaml.manifest.RouteFile> routes)
+            throws Exception {
+        Files.createDirectories(dir);
+        Files.writeString(dir.resolve("page.view.yml"), viewYaml);
+        ViewBinding binding = ViewBinding.of(dir, "page", route, path -> null,
+                id -> dir.resolve("page.view.yml"), CODECS,
+                path -> routes.stream().filter(r -> r.urlPath().equals(path)).toList());
+        return new HtmlResponseRenderer(new HtmlResponse(200, null, "page", null, null,
+                Map.of(), Map.of(), Map.of(), null), dir, dir, "en", binding);
+    }
+
+    private static final String EXPORTING_LIST = """
+            version: tesseraql/v1
+            kind: view
+            recipe: list
+            search: q
+            filters: [status]
+            exports: [/items/export]
+            """;
+
+    private static String renderList(HtmlResponseRenderer renderer, Map<String, Object> extra)
+            throws Exception {
+        Map<String, Object> context = new java.util.LinkedHashMap<>();
+        context.put("main", Map.of("rows", List.of(Map.of("id", 1), Map.of("id", 2))));
+        context.put("params", Map.of("q", "vpn", "status", "OPEN", "sort", "-created_at"));
+        context.putAll(extra);
+        Exchange exchange = new Exchange(Beans.NONE);
+        exchange.setProperty(TesseraqlProperties.CONTEXT, context);
+        exchange.request().uri("/items?q=vpn&status=OPEN&sort=-created_at&size=20&page=2");
+        renderer.process(exchange);
+        return exchange.getBody(String.class);
+    }
+
+    @Test
+    void aQueryExportRendersALinkCarryingTheListsQuestion(@TempDir Path dir) throws Exception {
+        // Decision 2: the search, the filter and the sort travel as the route's query; the page
+        // window does not. Decision 3: the control sits in the strip, beside the count.
+        HtmlResponseRenderer renderer = exportRenderer(dir, EXPORTING_LIST, listRoute(null),
+                List.of(exportRoute(dir, "GET", "/items/export", "query-export", null)));
+        String html = renderList(renderer, Map.of(
+                "page", Map.of("number", 2, "size", 20, "totalRows", 56)));
+        assertThat(html)
+                .contains("href=\"/items/export?q=vpn&amp;status=OPEN&amp;sort=-created_at\"");
+        assertThat(html).doesNotContain("size=20").doesNotContain("page=2\"");
+        assertThat(html).contains(">Export 56 rows</a>");
+        // The count and the control share the strip, inside the swapped region (two rows on
+        // page 2 of size 20 read as 21–22 of 56).
+        assertThat(html).containsSubsequence("id=\"page-table\"", "21–22 of 56",
+                "Export 56 rows", "hc-pagination");
+        assertThat(html).doesNotContain("id=\"page-export\"");
+    }
+
+    @Test
+    void aFileExportRendersTheKickoffFormAndItsButton(@TempDir Path dir) throws Exception {
+        // Decision 3: the button belongs, by form=, to a small form that precedes the grid form
+        // — a form cannot nest — and carries the same question in its formaction.
+        HtmlResponseRenderer renderer = exportRenderer(dir, EXPORTING_LIST, listRoute(null),
+                List.of(exportRoute(dir, "POST", "/items/export", "file-export", null)));
+        String html = renderList(renderer, Map.of());
+        assertThat(html).contains("<form id=\"page-export\" method=\"post\">")
+                .contains("name=\"_idempotency\"");
+        assertThat(html).contains("form=\"page-export\"")
+                .contains("formaction=\"/items/export?q=vpn&amp;status=OPEN&amp;sort=-created_at\"")
+                .contains(">Export</button>");
+        assertThat(html.indexOf("id=\"page-export\""))
+                .isLessThan(html.indexOf("class=\"tql-list-page__form\""));
+    }
+
+    @Test
+    void theExportLabelHedgesAsTheStatusLineDoes(@TempDir Path dir) throws Exception {
+        // Decision 3: an exact total names itself; a truncated one says "all matching"; no
+        // total says nothing. An authored label renders as written.
+        HtmlResponseRenderer renderer = exportRenderer(dir, EXPORTING_LIST, listRoute(null),
+                List.of(exportRoute(dir, "GET", "/items/export", "query-export", null)));
+        assertThat(renderList(renderer, Map.of("page", Map.of("number", 1, "size", 20,
+                "totalRows", 56)))).contains(">Export 56 rows</a>");
+        assertThat(renderList(renderer, Map.of("page", Map.of("number", 1, "size", 20),
+                "main", Map.of("rows", List.of(Map.of("id", 1)), "truncated", true))))
+                .contains(">Export all matching rows</a>")
+                .contains("or export the full set.");
+        assertThat(renderList(renderer, Map.of())).contains(">Export</a>");
+        HtmlResponseRenderer labelled = exportRenderer(dir.resolve("labelled"), """
+                version: tesseraql/v1
+                kind: view
+                recipe: list
+                exports:
+                  - { action: /items/export, label: Spreadsheet }
+                """, listRoute(null),
+                List.of(exportRoute(dir, "GET", "/items/export", "query-export", null)));
+        assertThat(renderList(labelled, Map.of("page", Map.of("number", 1, "size", 20,
+                "totalRows", 56)))).contains(">Spreadsheet</a>");
+    }
+
+    @Test
+    void theOverCapRejectBlockCarriesTheExportControl(@TempDir Path dir) throws Exception {
+        // Decision 8: over the snapshot cap the page shows no rows and no pager, so the reject
+        // block's actions part carries the control its copy names.
+        HtmlResponseRenderer renderer = exportRenderer(dir, """
+                version: tesseraql/v1
+                kind: view
+                recipe: list
+                key: id
+                search: q
+                exports: [/items/export]
+                """, listRoute(Map.of("strategy", "snapshot", "size", 20, "cap", 500)),
+                List.of(exportRoute(dir, "GET", "/items/export", "query-export", null)));
+        String html = renderList(renderer, Map.of("page", Map.of("hasNext", true)));
+        assertThat(html).contains("hc-empty__actions")
+                .contains("or export the full set.")
+                .containsSubsequence("data-hc-result-cap", "href=\"/items/export?q=vpn");
+        assertThat(html).contains(">Export</a>").doesNotContain("Export 5");
+    }
+
+    @Test
+    void anExportThePrincipalMayNotUseIsNotRendered(@TempDir Path dir) throws Exception {
+        // Decision 7: a policy no engine permits (Beans.NONE has none) hides the control, and
+        // a route wanting a principal hides it from an anonymous request; a public one shows.
+        HtmlResponseRenderer gated = exportRenderer(dir, EXPORTING_LIST, listRoute(null),
+                List.of(exportRoute(dir, "GET", "/items/export", "query-export",
+                        Map.of("auth", "browser", "policy", "items.export"))));
+        assertThat(renderList(gated, Map.of())).doesNotContain("/items/export");
+        HtmlResponseRenderer authenticated = exportRenderer(dir.resolve("auth"),
+                EXPORTING_LIST, listRoute(null),
+                List.of(exportRoute(dir, "GET", "/items/export", "query-export",
+                        Map.of("auth", "browser"))));
+        assertThat(renderList(authenticated, Map.of())).doesNotContain("/items/export");
+        assertThat(renderList(authenticated, Map.of("principal", Map.of("subject", "u1"))))
+                .contains("/items/export?q=vpn");
+        HtmlResponseRenderer open = exportRenderer(dir.resolve("open"), EXPORTING_LIST,
+                listRoute(null), List.of(exportRoute(dir, "GET", "/items/export",
+                        "query-export", Map.of("auth", "public"))));
+        assertThat(renderList(open, Map.of())).contains("/items/export?q=vpn");
+    }
+
+    @Test
+    void anExportNamingNoExportRouteFailsTheBind(@TempDir Path dir) throws Exception {
+        Files.writeString(dir.resolve("page.view.yml"), EXPORTING_LIST);
+        assertThatThrownBy(() -> ViewBinding.of(dir, "page", listRoute(null), path -> null,
+                id -> dir.resolve("page.view.yml"), CODECS))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("TQL-VIEW-3331")
+                .hasMessageContaining("export /items/export targets no query-export GET route");
+    }
+
     @Test
     void aDetailViewRendersLabelledValuesAndChildren(@TempDir Path dir) throws Exception {
         // The declaring route carries a named query the child composes under the parent row.

@@ -1,0 +1,35 @@
+version: tesseraql/v1
+id: tickets.export
+kind: route
+recipe: file-export
+
+# The ticket list's question as a file (docs/list-export.md): the list view names this route
+# under exports:, and the grid page's kick-off carries the current search, filters and sort as
+# this route's query. The inputs are the list route's, verbatim, and the statement is the
+# same file — only the page window differs, because the framework appends it at execution.
+input:
+  q: { type: string, required: false, maxLength: 100 }
+  status: { type: string, required: false, maxLength: 32 }
+  priority: { type: string, required: false, enum: [low, normal, high] }
+  sort:
+    type: sort
+    columns: [subject, priority, status, created_at]
+    default: "-created_at"
+  dir: { type: string, required: false, enum: [asc, desc] }
+
+security:
+  policy: help.read
+
+export:
+  format: csv
+  filename: tickets.csv
+
+sources:
+  main:
+    sql:
+      file: ../tickets.sql
+      params:
+        q: query.q
+        status: query.status
+        priority: query.priority
+        sort: params.sortSql

@@ -21,6 +21,13 @@ asynchronous extraction by changing the recipe, not the column layout.
   per-row SQL run in the background while the client polls for the outcome, including per-row
   rejections.
 
+A declarative list names either export recipe under `exports:`
+([declarative views](declarative-views.md)): the grid page renders a download link for a
+`query-export` and a kick-off button for a `file-export`, each carrying the list's current
+search, filters and sort as the route's query. A browser's plain form post to a `file-export`
+route lands on the transfer's own page, where the job card below renders; scripted callers
+keep the JSON 202.
+
 An uploaded import rides the runtime's request-body bound,
 `tesseraql.http.maxBodyBytes` (default 10 MB; see deployment.md) — a feed larger than that
 needs the bound raised, and the refusal is a 413 naming the key rather than a mystery.
