@@ -8,6 +8,14 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **The grid page's job region remembers.** A list page renders the signed-in user's exports of
+  its `file-export` routes that still need them — running, or done and not yet fetched, at most
+  five per route, newest first — in its job region at render, as the same job card the kick-off
+  answers with, so a return to the page or a snapshot page turn's whole-document POST finds the
+  card; a kick-off adds its card above the others instead of replacing them. A public page, or
+  a runtime without file transfers, renders the region empty as before. `docs/job-inbox.md`
+  decision 8; the two entries `docs/list-export.md` filed about a hidden or lost card close here.
+
 - **My exports.** A bundled page at `/_tesseraql/exports` lists the signed-in user's exports of
   this application, newest first, as the job card per row — a running card polls the route's
   own status and offers Cancel, a done card downloads from its file leg, a reclaimed file says
@@ -271,6 +279,14 @@ All notable changes to TesseraQL are documented here. The format follows
   Phase 32.
 
 ### Changed
+
+- **Markup contract: the export kick-off adds a card.** The `file-export` button on
+  `tql/view/list.html` swaps `afterbegin` into the job region (it swapped `innerHTML`), and the
+  region renders the caller's pending cards at page render; a level-2 override of the pattern
+  keeps replacing the card, and remembers nothing, until it adopts the attribute and the
+  region's `v.exportJobs` loop. `ViewBinding.of` takes the application name and
+  `ViewBinding.model` the transfer service for it; the shorter overloads render the region
+  empty (`docs/job-inbox.md` decision 8).
 
 - **`ExportRequest` and `ImportRequest` carry who starts them.** Both records gain a `subject`
   component and a `by(subject)` wither beside `announcing`, `invalidating` and `on`, so the

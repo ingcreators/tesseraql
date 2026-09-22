@@ -216,12 +216,18 @@ public final class HtmlResponseRenderer implements Step {
         // request binder enforces; without an engine, policy-gated fields fail safe (hidden).
         java.util.function.Predicate<String> permits = policyId -> policyEngine != null
                 && policyEngine.permits(policyId, requestPrincipal);
+        // The transfer service, for a list page's job region (docs/job-inbox.md decision 8):
+        // the caller's pending exports of the view's file-export targets, rendered as cards at
+        // render time so a return to the page finds them. Absent on a runtime without one.
+        io.tesseraql.core.files.FileTransferService transfers = exchange.beans().lookup(
+                TesseraqlProperties.FILE_TRANSFER_BEAN,
+                io.tesseraql.core.files.FileTransferService.class);
         if (viewBinding != null) {
             // A declarative view (roadmap Phase 39): the reserved `v` model is the whole contract
             // between the route and the tql/view/* pattern fragments. The request path anchors
             // the list pattern's self-rendering search/sort links.
             model.put("v", viewBinding.model(viewContext, java.util.Locale.forLanguageTag(tag),
-                    pagePath, permits));
+                    pagePath, permits, transfers));
         }
         if (!boundViews.isEmpty()) {
             // Declarative parts on a hand-owned template (wave 2c): each bound view renders
@@ -230,7 +236,7 @@ public final class HtmlResponseRenderer implements Step {
             java.util.Locale viewLocale = java.util.Locale.forLanguageTag(tag);
             Map<String, Object> boundContext = viewContext;
             boundViews.forEach((id, binding) -> views.put(id,
-                    binding.model(boundContext, viewLocale, pagePath, permits)));
+                    binding.model(boundContext, viewLocale, pagePath, permits, transfers)));
             model.put("views", views);
         }
 

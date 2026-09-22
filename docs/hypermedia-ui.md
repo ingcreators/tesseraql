@@ -506,7 +506,11 @@ The htmx answer is `202` and the running job card — the card an import's confi
 the export's done state a `Download` link. It polls itself on the cadence the server wrote and
 stops by rendering without a trigger. The region sits outside the grid form, because the card
 carries its own Cancel form, and outside the swapped table region, so paging, sorting and
-searching leave a running card standing; a second kick-off replaces it. A plain form post lands
+searching leave a running card standing. The region also remembers. At page render it holds
+the signed-in user's exports of the list's routes that still need them — running, or done and
+not yet fetched, at most five per route — so a return to the page or a snapshot page turn
+finds the card. A kick-off adds its card above them (`hx-swap="afterbegin"`) instead of
+replacing them. A plain form post lands
 on the transfer's own page with the same card. A `file-export` route that declares
 `idempotency:` answers a replayed key with the same card, so a double-clicked or retried Export
 starts one transfer. Once the retention sweep has reclaimed a finished export's file, its card

@@ -1714,7 +1714,7 @@ public final class RouteCompiler {
                 ? null
                 : io.tesseraql.compiler.binding.ViewBinding.of(appHome, html.view(),
                         routeFile.definition(), this::postRouteByPath, this::viewPathById,
-                        codecs, this::routesByPath);
+                        codecs, this::routesByPath, appName);
         return new HtmlResponseRenderer(withDefaultHeaders(html), appHome,
                 routeFile.source().getParent(), i18n.defaultTag(), viewBinding, java.util.Map.of(),
                 functions).basePath(basePath());
@@ -1973,7 +1973,7 @@ public final class RouteCompiler {
                     && html.view() != null
                             ? io.tesseraql.compiler.binding.ViewBinding.of(appHome,
                                     html.view(), routeFile.definition(), this::postRouteByPath,
-                                    this::viewPathById, codecs, this::routesByPath)
+                                    this::viewPathById, codecs, this::routesByPath, appName)
                             : null;
             // A workflow-declaring detail view gains its facts step after the row loads and
             // before the renderer (docs/workflow-surface.md decision 2).
@@ -1989,7 +1989,7 @@ public final class RouteCompiler {
                     requireExportTargets(routeFile, id);
                     boundViews.put(id, io.tesseraql.compiler.binding.ViewBinding.of(appHome,
                             id, routeFile.definition(), this::postRouteByPath,
-                            this::viewPathById, codecs, this::routesByPath));
+                            this::viewPathById, codecs, this::routesByPath, appName));
                 }
             }
             applySessionRotation(route, routeFile.definition())

@@ -82,10 +82,20 @@ public final class ViewBinding {
      * and its security — judged per principal at render (decision 7).
      */
     record ExportTarget(String label, String method, String path,
-            io.tesseraql.yaml.model.SecuritySpec security) {
+            io.tesseraql.yaml.model.SecuritySpec security, String routeId) {
     }
 
     private final List<ExportTarget> exports;
+
+    /**
+     * The application this view was compiled for, or null on a binding built without one (the
+     * ejector's previews, the renderer tests): what the job region's owner query asks for
+     * (docs/job-inbox.md decision 8), beside the export route's id and the caller's subject.
+     */
+    private final String appName;
+
+    /** How many of the caller's pending exports the grid page's job region holds per target. */
+    private static final int PENDING_CAP = 5;
 
     /**
      * The list route's declared inputs a kick-off carries (docs/list-export.md decision 2):
@@ -111,11 +121,13 @@ public final class ViewBinding {
             Map<String, io.tesseraql.yaml.model.ResponseSpec.FieldPolicy> readPolicies,
             Map<String, String> catalogByColumn, List<ViewFields.FieldDef> filterFields,
             io.tesseraql.yaml.model.PageSpec pagination, ImportTarget importTarget,
-            String lockColumn, List<ExportTarget> exports, List<String> exportInputs) {
+            String lockColumn, List<ExportTarget> exports, List<String> exportInputs,
+            String appName) {
         this.importTarget = importTarget;
         this.lockColumn = lockColumn;
         this.exports = exports;
         this.exportInputs = exportInputs;
+        this.appName = appName;
         this.spec = spec;
         this.entryTemplate = entryTemplate;
         this.fields = fields;
@@ -188,8 +200,23 @@ public final class ViewBinding {
             Function<String, RouteDefinition> postRouteByPath, Function<String, Path> viewById,
             io.tesseraql.core.files.FileCodecs codecs,
             Function<String, List<io.tesseraql.yaml.manifest.RouteFile>> routesByPath) {
+        return of(appHome, viewRef, route, postRouteByPath, viewById, codecs, routesByPath,
+                null);
+    }
+
+    /**
+     * {@link #of} for the application named {@code appName}: what the grid page's job region
+     * asks the transfer service for (docs/job-inbox.md decision 8) — the caller's own exports
+     * of this application's export routes that still need them. The shorter overloads bind
+     * without one and render the region empty.
+     */
+    public static ViewBinding of(Path appHome, String viewRef, RouteDefinition route,
+            Function<String, RouteDefinition> postRouteByPath, Function<String, Path> viewById,
+            io.tesseraql.core.files.FileCodecs codecs,
+            Function<String, List<io.tesseraql.yaml.manifest.RouteFile>> routesByPath,
+            String appName) {
         return bind(appHome, viewRef, route, postRouteByPath, viewById, codecs, routesByPath,
-                true);
+                appName, true);
     }
 
     /**
@@ -202,7 +229,7 @@ public final class ViewBinding {
             Function<String, RouteDefinition> postRouteByPath, Function<String, Path> viewById,
             io.tesseraql.core.files.FileCodecs codecs,
             Function<String, List<io.tesseraql.yaml.manifest.RouteFile>> routesByPath,
-            boolean judgeSources) {
+            String appName, boolean judgeSources) {
         Path home = appHome.toAbsolutePath().normalize();
         Path file = viewById.apply(viewRef);
         if (file == null) {
@@ -266,7 +293,7 @@ public final class ViewBinding {
                 ViewSpec.IMPORT.equals(spec.view())
                         ? importTarget(viewRef, spec, postRouteByPath, codecs)
                         : null,
-                lock, exportTargets(viewRef, spec, routesByPath), exportInputs);
+                lock, exportTargets(viewRef, spec, routesByPath), exportInputs, appName);
     }
 
     /**
@@ -290,7 +317,7 @@ public final class ViewBinding {
                                     + " route"));
             targets.add(new ExportTarget(export.label(),
                     route.httpMethod().toUpperCase(Locale.ROOT), route.urlPath(),
-                    route.definition().security()));
+                    route.definition().security(), route.definition().id()));
         }
         return List.copyOf(targets);
     }
@@ -494,7 +521,7 @@ public final class ViewBinding {
         // The host judged this document's sources with its own (the override in the
         // document's stead), so the embedded binding is built, not judged again.
         return new Embed(bind(home, embeddedId, route, postRouteByPath, viewById, codecs,
-                routesByPath, false), sourceOverride);
+                routesByPath, null, false), sourceOverride);
     }
 
     /**
@@ -609,6 +636,18 @@ public final class ViewBinding {
      */
     public Map<String, Object> model(Map<String, Object> context, Locale locale,
             String pagePath, java.util.function.Predicate<String> permits) {
+        return model(context, locale, pagePath, permits, null);
+    }
+
+    /**
+     * The variant with the transfer service (docs/job-inbox.md decision 8): a list page's job
+     * region is filled at render with the caller's exports of its file-export targets that
+     * still need them, so a return to the page or a snapshot page turn finds the card. Null —
+     * the build-time render paths, a runtime without transfers — renders the region empty.
+     */
+    public Map<String, Object> model(Map<String, Object> context, Locale locale,
+            String pagePath, java.util.function.Predicate<String> permits,
+            io.tesseraql.core.files.FileTransferService transfers) {
         MessageCatalog catalog = MessageCatalog.live(appHome.resolve("messages"))
                 .withFallback(I18nSettings.builtinCatalog());
         Map<String, Object> v = new LinkedHashMap<>();
@@ -627,7 +666,7 @@ public final class ViewBinding {
         } else if (ViewSpec.DASHBOARD.equals(spec.view())) {
             dashboardModel(v, catalog, locale, context, pagePath, permits);
         } else {
-            listModel(v, catalog, locale, context, data, pagePath, permits);
+            listModel(v, catalog, locale, context, data, pagePath, permits, transfers);
         }
         return v;
     }
@@ -1011,7 +1050,8 @@ public final class ViewBinding {
     /** A list's model: the pager, the sort/search state, and the column/cell matrix. */
     private void listModel(Map<String, Object> v, MessageCatalog catalog, Locale locale,
             Map<String, Object> context, Map<String, Object> data, String pagePath,
-            java.util.function.Predicate<String> permits) {
+            java.util.function.Predicate<String> permits,
+            io.tesseraql.core.files.FileTransferService transfers) {
         List<Map<String, Object>> rows = rows(data);
         List<ViewSpec.Column> columns = columnsOf(spec.columns(), rows);
         Map<String, Object> params = params(context);
@@ -1136,6 +1176,7 @@ public final class ViewBinding {
         filterModel(v, catalog, locale, context, params, pagePath);
         presetModel(v, catalog, locale, params, pagePath);
         exportModel(v, catalog, locale, params, page, visibleExports);
+        exportJobs(v, catalog, locale, context, params, visibleExports, transfers);
         List<Map<String, Object>> rendered = renderedColumns(catalog, locale, columns);
         // The header contract every sortable grid shares, studio tables included.
         io.tesseraql.yaml.view.SortState state = io.tesseraql.yaml.view.SortState.of(sort, dir,
@@ -1674,19 +1715,72 @@ public final class ViewBinding {
     }
 
     /**
+     * The caller's exports of each visible file-export target that still need them
+     * (docs/job-inbox.md decision 8): running, or done and not yet fetched — at most five per
+     * target, newest first, as the job card the kick-off answers with, so a return to the page
+     * or a snapshot page turn finds the card the region held, and a second kick-off joins the
+     * first. Nothing without a transfer service, an application name, a principal or a
+     * kick-off form; the URLs are wire URLs, prefixed with what the request binder published
+     * as {@code request.basePath}, because the card emits them verbatim.
+     */
+    private void exportJobs(Map<String, Object> v, MessageCatalog catalog, Locale locale,
+            Map<String, Object> context, Map<String, Object> params, List<ExportTarget> visible,
+            io.tesseraql.core.files.FileTransferService transfers) {
+        if (transfers == null || appName == null || v.get("exportForm") == null) {
+            return;
+        }
+        String subject = context.get("principal") instanceof io.tesseraql.security.Principal p
+                && p.subject() != null && !p.subject().isBlank()
+                        ? p.subject()
+                        : null;
+        if (subject == null) {
+            return;
+        }
+        String tenant = context.get("tenant") instanceof io.tesseraql.core.tenant.TenantContext t
+                ? t.id()
+                : null;
+        String base = context.get("request") instanceof Map<?, ?> request
+                && request.get("basePath") != null
+                        ? String.valueOf(request.get("basePath"))
+                        : "";
+        List<Map<String, Object>> cards = new ArrayList<>();
+        for (ExportTarget target : visible) {
+            if (!"POST".equals(target.method())) {
+                continue;
+            }
+            String path = filledPath(target.path(), params);
+            for (io.tesseraql.core.files.FileTransferService.TransferStatus status : transfers
+                    .pending(appName, target.routeId(), subject, tenant, PENDING_CAP)) {
+                String statusUrl = io.tesseraql.core.http.PercentEncoding.uriLiteral(
+                        io.tesseraql.core.http.BasePaths.join(base,
+                                path + "/" + status.transferId()));
+                cards.add(JobCards.of(status, statusUrl, statusUrl + "/cancel", row -> null,
+                        catalog, locale));
+            }
+        }
+        v.put("exportJobs", cards);
+    }
+
+    /** The route's path with the list's path parameters filled, each as an encoded segment. */
+    private static String filledPath(String path, Map<String, Object> params) {
+        String resolved = path;
+        for (String parameter : io.tesseraql.yaml.view.ViewExports.pathParams(path)) {
+            resolved = resolved.replace("{" + parameter + "}",
+                    io.tesseraql.pipeline.BasePath.encodeSegment(str(params.get(parameter))));
+        }
+        return resolved;
+    }
+
+    /**
      * The route's path with the list's path parameters filled, plus the question as its query
      * (docs/list-export.md decision 2): every declared input the request bound, the window and
      * the membership excepted, a repeated field per element of an array input. Base-relative;
      * the template's link expression prefixes the base path.
      */
     private String exportHref(String path, Map<String, Object> params) {
-        java.util.Set<String> consumed = new java.util.HashSet<>();
-        String resolved = path;
-        for (String parameter : io.tesseraql.yaml.view.ViewExports.pathParams(path)) {
-            resolved = resolved.replace("{" + parameter + "}",
-                    io.tesseraql.pipeline.BasePath.encodeSegment(str(params.get(parameter))));
-            consumed.add(parameter);
-        }
+        java.util.Set<String> consumed = new java.util.HashSet<>(
+                io.tesseraql.yaml.view.ViewExports.pathParams(path));
+        String resolved = filledPath(path, params);
         StringBuilder query = new StringBuilder();
         for (String name : exportInputs) {
             if (consumed.contains(name)) {
