@@ -1,0 +1,339 @@
+package io.tesseraql.runtime;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.io.IOException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.Statement;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Comparator;
+import java.util.stream.Stream;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.postgresql.PostgreSQLContainer;
+
+/**
+ * The list surface's "export this filtered set" end to end (docs/list-export.md): a grid page
+ * declaring {@code exports:} renders a link for its {@code query-export} and a kick-off button
+ * for its {@code file-export}, each carrying the search, the filter and the sort the page shows
+ * — never the page window — and the file either one answers holds every matching row in the
+ * sorted order, not the twenty on screen. A browser's plain form post lands on the transfer's
+ * page; a scripted caller keeps the JSON 202.
+ */
+@Testcontainers
+class ListExportIntegrationTest {
+
+    @Container
+    static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
+
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final HttpClient HTTP = HttpClient.newHttpClient();
+
+    /** The question the page shows: open tickets about the VPN, newest first. */
+    private static final String QUESTION = "q=vpn&status=open&sort=-created_at";
+
+    static TesseraqlRuntime runtime;
+    static Path appHome;
+
+    @BeforeAll
+    static void start() throws Exception {
+        seedDatabase();
+        appHome = prepareAppHome();
+        runtime = TesseraqlRuntime.start(appHome, 0);
+    }
+
+    @AfterAll
+    static void stop() throws IOException {
+        if (runtime != null) {
+            runtime.close();
+        }
+        if (appHome != null) {
+            deleteRecursively(appHome);
+        }
+    }
+
+    @Test
+    void theControlsCarryTheListsQuestionAndNotItsPageWindow() throws Exception {
+        HttpResponse<String> page = get("/tickets?" + QUESTION + "&page=2&size=20", "text/html");
+
+        assertThat(page.statusCode()).isEqualTo(200);
+        String html = page.body();
+        // Decision 2: the declared inputs the request bound, in declaration order; no page, no
+        // size. Decision 3: the exact count on a counted page names itself.
+        assertThat(html)
+                .contains("href=\"/tickets/export?q=vpn&amp;status=open&amp;sort=-created_at\"")
+                .contains(
+                        "formaction=\"/tickets/export-async?q=vpn&amp;status=open&amp;sort=-created_at\"")
+                .contains(">Export 30 rows</a>").contains(">Export 30 rows</button>")
+                .doesNotContain("export?q=vpn&amp;status=open&amp;sort=-created_at&amp;")
+                .contains("21–30 of 30");
+        // The kick-off form precedes the grid form and carries the framework's fields only.
+        assertThat(html).contains("<form id=\"tickets-export\" method=\"post\">")
+                .contains("name=\"_idempotency\"").contains("form=\"tickets-export\"");
+        assertThat(html.indexOf("id=\"tickets-export\""))
+                .isLessThan(html.indexOf("class=\"tql-list-page__form\""));
+    }
+
+    @Test
+    void theLinkDownloadsEveryMatchingRowInTheSortedOrder() throws Exception {
+        HttpResponse<String> csv = get("/tickets/export?" + QUESTION, "*/*");
+
+        assertThat(csv.statusCode()).isEqualTo(200);
+        assertThat(csv.headers().firstValue("content-type").orElse("")).contains("text/csv");
+        assertThat(csv.headers().firstValue("content-disposition").orElse(""))
+                .contains("tickets.csv");
+        assertRows(csv.body());
+    }
+
+    @Test
+    void aBrowsersKickoffLandsOnTheTransferPageAndTheFileHoldsTheSameRows() throws Exception {
+        // Decision 4: the plain form post — HTML wanted, no htmx — is post/redirect/get to the
+        // transfer's own page; the file the transfer produces is the question's whole answer.
+        HttpResponse<String> kickoff = postForm("/tickets/export-async?" + QUESTION,
+                "_idempotency=k-1", "text/html,application/xhtml+xml,*/*;q=0.8");
+
+        assertThat(kickoff.statusCode()).isEqualTo(303);
+        String location = kickoff.headers().firstValue("location").orElse("");
+        assertThat(location).startsWith("/tickets/export-async/");
+        JsonNode status = awaitTerminal(location);
+        assertThat(status.get("status").asText()).isEqualTo("COMPLETED");
+        assertThat(status.get("rowCount").asLong()).isEqualTo(30);
+
+        HttpResponse<String> card = get(location, "text/html");
+        assertThat(card.statusCode()).isEqualTo(200);
+        assertThat(card.body()).contains("data-hc-job").contains("data-state=\"done\"")
+                .contains("<html");
+
+        HttpResponse<String> file = get(location + "/file", "*/*");
+        assertThat(file.statusCode()).isEqualTo(200);
+        assertRows(file.body());
+    }
+
+    @Test
+    void aScriptedKickoffKeepsTheJson202() throws Exception {
+        HttpResponse<String> kickoff = postForm("/tickets/export-async?" + QUESTION, "",
+                "application/json");
+
+        assertThat(kickoff.statusCode()).isEqualTo(202);
+        JsonNode body = MAPPER.readTree(kickoff.body());
+        assertThat(body.get("statusUrl").asText())
+                .isEqualTo("/tickets/export-async/" + body.get("transferId").asText());
+        assertThat(awaitTerminal(body.get("statusUrl").asText()).get("rowCount").asLong())
+                .isEqualTo(30);
+    }
+
+    /** Thirty open VPN tickets, newest first: ids 30 down to 1, and nothing else. */
+    private static void assertRows(String csv) {
+        String[] lines = csv.strip().split("\r?\n");
+        assertThat(lines).hasSize(31);
+        assertThat(lines[0]).startsWith("id,subject,status,created_at");
+        assertThat(lines[1]).startsWith("30,");
+        assertThat(lines[30]).startsWith("1,");
+        assertThat(csv).doesNotContain("closed").doesNotContain("Printer");
+    }
+
+    private static HttpResponse<String> get(String path, String accept) throws Exception {
+        return HTTP.send(HttpRequest.newBuilder(
+                URI.create("http://localhost:" + runtime.port() + path))
+                .header("Accept", accept).build(), HttpResponse.BodyHandlers.ofString());
+    }
+
+    private static HttpResponse<String> postForm(String path, String body, String accept)
+            throws Exception {
+        return HTTP.send(HttpRequest.newBuilder(
+                URI.create("http://localhost:" + runtime.port() + path))
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .header("Accept", accept)
+                .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
+                .build(), HttpResponse.BodyHandlers.ofString());
+    }
+
+    private static JsonNode awaitTerminal(String statusPath) throws Exception {
+        Instant deadline = Instant.now().plus(Duration.ofSeconds(20));
+        while (true) {
+            JsonNode status = MAPPER.readTree(get(statusPath, "application/json").body());
+            String value = status.get("status").asText();
+            if (!"RUNNING".equals(value) && !"STARTED".equals(value)) {
+                return status;
+            }
+            if (Instant.now().isAfter(deadline)) {
+                throw new AssertionError("Transfer did not finish: " + status);
+            }
+            Thread.sleep(100);
+        }
+    }
+
+    private static void seedDatabase() throws Exception {
+        try (Connection connection = DriverManager.getConnection(
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+                Statement statement = connection.createStatement()) {
+            statement.execute("create table tickets (id int primary key,"
+                    + " subject varchar(100) not null, status varchar(20) not null,"
+                    + " created_at timestamp not null)");
+            // Thirty open VPN tickets (the question's answer, more than one page), ten open
+            // tickets about something else, five closed VPN tickets.
+            for (int id = 1; id <= 30; id++) {
+                statement.execute("insert into tickets values (" + id + ", 'VPN drops #" + id
+                        + "', 'open', timestamp '2026-01-01' + interval '" + id + " hours')");
+            }
+            for (int id = 31; id <= 40; id++) {
+                statement.execute("insert into tickets values (" + id + ", 'Printer jam #" + id
+                        + "', 'open', timestamp '2026-01-01' + interval '" + id + " hours')");
+            }
+            for (int id = 41; id <= 45; id++) {
+                statement.execute("insert into tickets values (" + id + ", 'VPN fixed #" + id
+                        + "', 'closed', timestamp '2026-01-01' + interval '" + id + " hours')");
+            }
+        }
+    }
+
+    private static final String INPUTS = """
+            input:
+              q: { type: string, required: false, maxLength: 100 }
+              status: { type: string, required: false, maxLength: 20 }
+              sort:
+                type: sort
+                columns: [subject, status, created_at]
+                default: "-created_at"
+              dir: { type: string, required: false, enum: [asc, desc] }
+            """;
+
+    /** Indented for a {@code sources.main.sql} block whose {@code file:} sits at six spaces. */
+    private static final String PARAMS = """
+                  params:
+                    q: query.q
+                    status: query.status
+                    sort: params.sortSql
+            """;
+
+    private static Path prepareAppHome() throws IOException {
+        Path home = Files.createTempDirectory("tesseraql-list-export-it");
+        Files.createDirectories(home.resolve("config"));
+        Files.writeString(home.resolve("config/application.yml"), """
+                server:
+                  port: 0
+
+                tesseraql:
+                  app:
+                    name: list-export-app
+                  datasources:
+                    main:
+                      jdbcUrl: %s
+                      username: %s
+                      password: %s
+                """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
+                POSTGRES.getPassword()));
+        Path list = home.resolve("web/tickets");
+        Files.createDirectories(list);
+        Files.writeString(list.resolve("get.yml"), """
+                version: tesseraql/v1
+                id: tickets.page
+                kind: route
+                recipe: query-html
+                %s
+                pagination: { size: 20, count: true }
+                sources:
+                  main:
+                    sql:
+                      file: tickets.sql
+                      mode: query
+                %s
+                response:
+                  html:
+                    view: tickets
+                """.formatted(INPUTS.stripTrailing(), PARAMS.stripTrailing()));
+        Files.writeString(list.resolve("tickets.sql"), """
+                select id, subject, status, created_at
+                from tickets
+                where 1 = 1
+                /*%if q */
+                  and lower(subject) like lower('%' || /* q */ 'vpn' || '%')
+                /*%end*/
+                /*%if status */
+                  and status = /* status */ 'open'
+                /*%end*/
+                /*# order by {sort} */
+                ;
+                """);
+        Files.writeString(list.resolve("list.view.yml"), """
+                version: tesseraql/v1
+                id: tickets
+                kind: view
+                recipe: list
+                key: id
+                title: Tickets
+                search: q
+                filters: [status]
+                exports: [/tickets/export, /tickets/export-async]
+                columns:
+                  - { name: id, label: "#" }
+                  - { name: subject, sortable: true }
+                  - { name: status }
+                  - { name: created_at, sortable: true }
+                """);
+        Path sync = home.resolve("web/tickets/export");
+        Files.createDirectories(sync);
+        Files.writeString(sync.resolve("get.yml"), """
+                version: tesseraql/v1
+                id: tickets.export
+                kind: route
+                recipe: query-export
+                %s
+                export:
+                  format: csv
+                  filename: tickets.csv
+                sources:
+                  main:
+                    sql:
+                      file: ../tickets.sql
+                %s
+                """.formatted(INPUTS.stripTrailing(), PARAMS.stripTrailing()));
+        Path async = home.resolve("web/tickets/export-async");
+        Files.createDirectories(async);
+        Files.writeString(async.resolve("post.yml"), """
+                version: tesseraql/v1
+                id: tickets.exportAsync
+                kind: route
+                recipe: file-export
+                %s
+                export:
+                  format: csv
+                  filename: tickets.csv
+                sources:
+                  main:
+                    sql:
+                      file: ../tickets.sql
+                %s
+                """.formatted(INPUTS.stripTrailing(), PARAMS.stripTrailing()));
+        return home;
+    }
+
+    private static void deleteRecursively(Path root) throws IOException {
+        if (!Files.exists(root)) {
+            return;
+        }
+        try (Stream<Path> files = Files.walk(root)) {
+            files.sorted(Comparator.reverseOrder()).forEach(path -> {
+                try {
+                    Files.delete(path);
+                } catch (IOException ignored) {
+                    // best-effort cleanup
+                }
+            });
+        }
+    }
+}

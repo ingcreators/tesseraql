@@ -236,6 +236,55 @@ class JudgedOnceCompileTest {
 
     // ---- harness ----
 
+    /**
+     * docs/list-export.md decision 6: a list view's export route that would refuse the list's
+     * question fails the build with the lint's code and sentence, before a page renders a
+     * control that answers 400 on its first click.
+     */
+    @Test
+    void anExportRouteRefusingTheListsQuestionIsRefusedAtCompile(@TempDir Path dir)
+            throws Exception {
+        Files.createDirectories(dir.resolve("web/items/export"));
+        Files.writeString(dir.resolve("web/items/items.view.yml"), """
+                version: tesseraql/v1
+                kind: view
+                recipe: list
+                search: q
+                exports: [/items/export]
+                """);
+        Files.writeString(dir.resolve("web/items/export/get.yml"), """
+                version: tesseraql/v1
+                id: items.export
+                kind: route
+                recipe: query-export
+                security:
+                  auth: public
+                export:
+                  format: csv
+                sources:
+                  main:
+                    sql:
+                      file: ../list.sql
+                """);
+        assertThatThrownBy(() -> compile(dir, "query-html", "public", """
+                input:
+                  q: { type: string, required: false }
+                sources:
+                  main:
+                    sql:
+                      file: list.sql
+                      params:
+                        q: query.q
+                response:
+                  html:
+                    view: items
+                """))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("TQL-VIEW-3331")
+                .hasMessageContaining("view items: export /items/export")
+                .hasMessageContaining("does not declare the list's input 'q'");
+    }
+
     private static Map<String, List<String>> compile(Path dir, String recipe, String auth,
             String body) throws Exception {
         Files.createDirectories(dir.resolve("config"));

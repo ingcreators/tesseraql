@@ -129,8 +129,15 @@ public final class ViewEjects {
         };
         // The header comment names the FILE the pattern was pinned from — the id lives inside
         // it, the file name is what locates it on disk.
+        // The export controls pin as the routes they name answer (docs/list-export.md
+        // decision 1): a link for a query-export, a posting form for a file-export.
+        java.util.function.Function<String, String> exportMethod = path -> ViewExports
+                .target(path, candidate -> manifest.routes().stream()
+                        .filter(route -> route.urlPath().equals(candidate)).toList())
+                .map(io.tesseraql.yaml.manifest.RouteFile::httpMethod)
+                .orElse("GET");
         ScaffoldedFile ejected = ViewEjector.eject(home, viewDir, fileName, spec, fields,
-                targetPath, embedTemplate, lockColumn);
+                targetPath, embedTemplate, lockColumn, exportMethod);
         ScaffoldWriter.Report report = new ScaffoldWriter().apply(home, List.of(ejected), force);
         if (report.blocked()) {
             return new Result(normalized, targetPath, true);

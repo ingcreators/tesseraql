@@ -178,11 +178,8 @@ public final class ImportCommitProcessor implements Step {
             FileTransferService transfers) {
         String target = io.tesseraql.pipeline.BasePath.url(exchange, urlPath + "/" + transferId);
         if (!"true".equals(exchange.request().header("HX-Request"))) {
-            exchange.response().header(io.tesseraql.pipeline.Headers.CONTENT_TYPE,
-                    "text/plain; charset=utf-8");
-            exchange.setBody("");
-            exchange.response().status(303);
-            exchange.response().header("Location", target);
+            // The no-JS leg is the export start leg's too (docs/list-export.md decision 4).
+            TransferKickoff.redirectToTransfer(exchange, urlPath, transferId);
             return;
         }
         FileTransferService.TransferStatus status = transfers.status(transferId).orElse(null);

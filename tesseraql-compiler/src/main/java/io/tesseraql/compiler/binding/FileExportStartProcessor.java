@@ -94,6 +94,8 @@ public final class FileExportStartProcessor implements Step {
                 ExportEnrichment.enricher(exchange, enrichments),
                 ExportEnrichment.window(enrichments))
                 .on(TransferPools.of(exchange)));
-        FileImportProcessor.respondAccepted(exchange, urlPath, transferId, true);
+        // A browser's form post lands on the transfer's page (docs/list-export.md decision 4);
+        // scripted callers keep the JSON 202 this recipe has always answered.
+        TransferKickoff.respondExportStarted(exchange, urlPath, transferId);
     }
 }

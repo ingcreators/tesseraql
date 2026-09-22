@@ -8,6 +8,23 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **A list view exports its filtered set.** `exports:` on a list view names `query-export` or
+  `file-export` routes (a bare path, or `{ action, label }`); the grid page renders one control
+  per entry in the navigation strip beside the count — a download link for the synchronous
+  recipe, a button that starts the transfer for the asynchronous one — carrying the list's
+  current search, filters and sort as the route's query string, never the page window or a
+  snapshot's membership. The default label names the count the list can vouch for ("Export 56
+  rows", "Export all matching rows" under a truncation, "Export" where there is no total); the
+  truncation banner and the over-cap reject block offer the same control as the way to the full
+  set. The export route declares the list's inputs and may share its statement — a route that
+  would answer a different question is `TQL-VIEW-3331` at lint and at build (a missing or
+  differently typed list input, a sort allowlist narrower than the list's, a required input the
+  kick-off never sends, a path parameter the list lacks). A control renders only for a
+  principal the export route admits. A browser's plain form post to a `file-export` route now
+  lands on the transfer's own page instead of a JSON document; scripted callers keep the 202.
+  Dogfoods: `inventory-app`'s products list exports its search as CSV, `helpdesk-app`'s ticket
+  list starts an asynchronous CSV export of its filters. `docs/list-export.md` is the record.
+
 - **Bounded text fields show their count, and textareas grow.** A `text` or `textarea` field
   whose declaration carries `maxLength` renders the kit's character count beneath it —
   `data-hc-count` and `aria-describedby` on the control, an `<output for>` the server
@@ -220,6 +237,17 @@ All notable changes to TesseraQL are documented here. The format follows
   Phase 32.
 
 ### Changed
+
+- **Markup contract: the grid page carries the export controls.** `tql/view/list.html`'s
+  navigation strip (the status line and pager cluster, which now renders when a list declares
+  `exports:` even without pagination) and both result-cap surfaces render the export controls,
+  and a small kick-off form (`<id>-export`, carrying `_csrf` and `_idempotency`) precedes the
+  grid form when a `file-export` is declared; the controls are one `exportControls(v)` fragment
+  of the pattern. An application's level-2 override of `tql/view/list.html` renders no export
+  until it adopts the strip, the form and the fragment — the override lint checks the fragment
+  signature, not the contents. The ejected list pins a bare control per entry (a link for a
+  `query-export`, a one-button form for a `file-export`) with no conditions, like the static
+  grid it sits above.
 
 - **Hypermedia Components 0.4.2, and the shim goes.** The bump is a drop-in (diffed WebJAR to
   WebJAR: nothing removed; one behavior added, `installInvokerCommands`; the email artifacts

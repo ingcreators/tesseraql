@@ -141,6 +141,24 @@
         "additionalProperties": false
       },
       "description": "Bulk actions over the grid page's row selection (docs/declarative-views.md): declaring any renders the selection column and bar. Requires key:; list views only."
+    },
+    "exports": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          { "type": "string", "description": "The path of a query-export GET route or a file-export POST route (the shorthand for action: alone)." },
+          {
+            "type": "object",
+            "required": ["action"],
+            "properties": {
+              "action": { "type": "string", "description": "The path of a query-export GET route or a file-export POST route that answers this list's question as a file." },
+              "label": { "type": "string", "description": "The control's label; a message key resolves through the catalog. Absent, the label names the count the list can vouch for." }
+            },
+            "additionalProperties": false
+          }
+        ]
+      },
+      "description": "Exports of the filtered set (docs/declarative-views.md): the grid page renders one control per entry beside the count - a download link for a query-export, a kick-off button for a file-export - carrying the list's current search, filters and sort as the route's query. The route must declare the list's inputs (TQL-VIEW-3331). List views only."
     }
   },
   "additionalProperties": false

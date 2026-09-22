@@ -36,7 +36,11 @@ public record ViewSpec(String id,
         // The workflow whose transitions region and stepper this detail view renders
         // (docs/workflow-surface.md decision 1) — an explicit declaration or nothing,
         // never inferred from table names. Legal only on recipe: detail.
-        String workflow) {
+        String workflow,
+        // The routes that answer this list's question as a file (docs/list-export.md
+        // decision 1): a query-export renders as a link, a file-export as the kick-off form,
+        // each carrying the list's current conditions. Legal only on recipe: list.
+        List<Export> exports) {
 
     /** Structurally invalid view document (docs/declarative-views.md, TQL-VIEW-3301). */
     public static final TqlErrorCode INVALID_VIEW = new TqlErrorCode(TqlDomain.VIEW, 3301);
@@ -114,6 +118,7 @@ public record ViewSpec(String id,
     private static final java.util.Set<String> FILTER_KEYS = keysOf(Filter.class);
     private static final java.util.Set<String> PRESET_KEYS = keysOf(Preset.class);
     private static final java.util.Set<String> ACTION_KEYS = keysOf(Action.class);
+    private static final java.util.Set<String> EXPORT_KEYS = keysOf(Export.class);
     private static final java.util.Set<String> COLUMN_KEYS = keysOf(Column.class);
     private static final java.util.Set<String> CHILD_KEYS = keysOf(Child.class);
     private static final java.util.Set<String> PANEL_KEYS = keysOf(Panel.class);
@@ -217,6 +222,18 @@ public record ViewSpec(String id,
     }
 
     /**
+     * A grid-page export (docs/list-export.md decision 1): the path of a {@code query-export}
+     * GET route or a {@code file-export} POST route that answers this list's question as a
+     * file. The page renders one control per entry beside the count — a link for the
+     * synchronous recipe, a kick-off button for the asynchronous one — carrying the list's
+     * current search, filters and sort as the route's query string (decision 2). A bare string
+     * entry is the shorthand for {@code action:} alone; {@code label} replaces the default
+     * label, which names the count the list can vouch for.
+     */
+    public record Export(String label, String action) {
+    }
+
+    /**
      * A detail view's child: a named query rendered through the shared table pattern (the
      * inline {@code columns:} shorthand), or — with {@code view:} — an embedded view document
      * (docs/view-composition.md wave 2b) whose data comes from this route's context; the
@@ -270,6 +287,7 @@ public record ViewSpec(String id,
         panels = panels == null ? List.of() : List.copyOf(panels);
         slots = slots == null ? Map.of() : OrderedCopies.map(slots);
         key = key == null ? List.of() : List.copyOf(key);
+        exports = exports == null ? List.of() : List.copyOf(exports);
     }
 
     /**
@@ -330,6 +348,10 @@ public record ViewSpec(String id,
             throw invalid(name, "actions: requires key: (the selection posts row tokens"
                     + " built from it)");
         }
+        List<Export> exports = parseExports(name, tree.get("exports"));
+        if (!exports.isEmpty() && !LIST.equals(view)) {
+            throw invalid(name, "exports: is a list-view key");
+        }
         String action = str(tree.get("action"));
         if (FORM.equals(view) && (action == null || action.isBlank())) {
             throw invalid(name, "a form view must declare action: (the command route it posts to)");
@@ -365,7 +387,41 @@ public record ViewSpec(String id,
                 parseFields(name, tree.get("fields")), parseColumns(name, tree.get("columns")),
                 parseChildren(name, tree.get("children")), parsePanels(name, tree.get("panels")),
                 parseSlots(name, tree.get("slots")), str(tree.get("template")),
-                str(tree.get("refreshOn")), key, filters, presets, actions, workflow);
+                str(tree.get("refreshOn")), key, filters, presets, actions, workflow, exports);
+    }
+
+    /**
+     * The declared exports (docs/list-export.md decision 1): bare route paths or
+     * {@code {action, label}} mappings, order preserved, a path named twice refused.
+     */
+    private static List<Export> parseExports(String source, Object raw) {
+        if (raw == null) {
+            return List.of();
+        }
+        if (!(raw instanceof List<?> list)) {
+            throw invalid(source, "exports: must be a list");
+        }
+        List<Export> exports = new ArrayList<>();
+        for (Object entry : list) {
+            Export export;
+            if (entry instanceof Map<?, ?> map) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> mapping = (Map<String, Object>) map;
+                rejectUnknown(source, mapping, EXPORT_KEYS, "an exports: entry");
+                export = new Export(str(mapping.get("label")), str(mapping.get("action")));
+            } else {
+                export = new Export(null, str(entry));
+            }
+            if (export.action() == null || export.action().isBlank()) {
+                throw invalid(source, "an exports: entry requires action: (the path of the"
+                        + " query-export or file-export route that answers this list's question)");
+            }
+            if (exports.stream().anyMatch(other -> other.action().equals(export.action()))) {
+                throw invalid(source, "exports: names route " + export.action() + " twice");
+            }
+            exports.add(export);
+        }
+        return List.copyOf(exports);
     }
 
     /** The declared bulk actions (docs/list-surface.md decision 9), order preserved. */

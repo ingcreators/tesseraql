@@ -11,6 +11,9 @@ presets:
     params: { status: open }
   - name: High priority
     params: { priority: high, sort: "-created_at" }
+# The filtered set as a file (docs/list-export.md): the asynchronous export, kicked off from
+# the page with the conditions it shows.
+exports: [/tickets/export]
 columns:
   - { name: id, label: "#", link: "/tickets/{id}" }
   - { name: subject, sortable: true }
